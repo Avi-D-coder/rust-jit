@@ -166,9 +166,6 @@ impl BodyTypeDeclaration {
                 .checked_add(dependency.heap_bytes())
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(crate::runtime::arena::resource());
-        }
         Ok(bytes)
     }
     /// Cold query proof validation only. Installed operations consume retained
@@ -226,9 +223,6 @@ impl Trace {
         if self.rows.iter().any(|old| old == &stamp) {
             return Ok(());
         }
-        if self.rows.len() >= 16 || stamp.heap_bytes() > 1024 * 1024 {
-            return Err(crate::runtime::arena::resource());
-        }
         self.rows.push(stamp);
         Ok(())
     }
@@ -258,6 +252,80 @@ impl Trace {
 }
 fn pending(demand: BodyTypeDemand) -> QueryPoll<BodyTypeOutcome> {
     QueryPoll::Ready(Ok(BodyTypeOutcome::Pending(demand)))
+}
+
+/// The ordinary module observation of the module that declares `selected`,
+/// when an unqualified Type name in `observation`'s module resolved to a
+/// declaration of a different module (an import or the standard prelude).
+/// None keeps the lexical observation (and its existing demands).
+fn declaring_module_observation(
+    db: &mut Database,
+    trace: &mut Trace,
+    prefix: &LocalTypePrefix,
+    observation: &Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>,
+    selected: &NameDefinition,
+) -> QueryPoll<Option<Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>>> {
+    let none = || QueryPoll::Ready(Ok(None));
+    let Some(context) = checked!(trace.input(db, InputKey::DeclarationContext(selected.identity)))
+    else {
+        return none();
+    };
+    let InputValue::DeclarationContext(context) = context.as_ref() else {
+        return QueryPoll::Ready(Err(error("body Type declaration context variant differs")));
+    };
+    if context.scope == *observation.scope() || context.scope.owner.is_some() {
+        return none();
+    }
+    let Some(source) = checked!(trace.input(db, InputKey::DefinitionSource(selected.identity)))
+    else {
+        return none();
+    };
+    let InputValue::DefinitionSource(parse) = source.as_ref() else {
+        return QueryPoll::Ready(Err(error("body Type declaration source variant differs")));
+    };
+    let Some(environment) = prefix.retained_plan().environment() else {
+        return none();
+    };
+    let completed = Arc::clone(environment.macros().source_environment());
+    let Some(view) = completed.sources().iter().find(|view| {
+        let outline = &view.selection().outline;
+        outline.parse == *parse
+            && outline.crate_key == context.scope.crate_key
+            && context.scope.module_path.starts_with(&outline.module_path)
+    }) else {
+        return none();
+    };
+    let outlined = polled!(trace.query(db, QueryKey::Outline(view.selection().outline.clone())));
+    let QueryValue::Outline(outline) = outlined.as_ref() else {
+        return QueryPoll::Ready(Err(error("body Type declaring outline differs")));
+    };
+    let Some(item) = outline
+        .items
+        .iter()
+        .find(|item| item.def_key.fingerprint() == selected.identity)
+    else {
+        return none();
+    };
+    let request = CurrentModuleNameKey {
+        source: view.selection().outline.clone(),
+        path: view.selection().path.as_str().to_owned(),
+        bucket: crate::db::key::BucketKey {
+            scope: context.scope.clone(),
+            namespace: Namespace::Type,
+            name: item.def_key.declared_name.clone(),
+        },
+    };
+    let found = polled!(trace.query(db, QueryKey::CurrentModuleName(Box::new(request.clone()))));
+    let QueryValue::CurrentModuleName(found) = found.as_ref() else {
+        return QueryPoll::Ready(Err(error("body Type declaring module observation differs")));
+    };
+    if !found.matches_request(&request)
+        || found.completion() != ModuleNameCompletion::Complete
+        || !matches!(found.lookup(), Some(NameLookup::Defined(actual)) if actual == selected)
+    {
+        return none();
+    }
+    QueryPoll::Ready(Ok(Some(Arc::clone(found))))
 }
 
 pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<BodyTypeOutcome> {
@@ -295,7 +363,17 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
                 key: QueryKey::CurrentModuleName(Box::new(request)),
                 fingerprint: QueryValue::CurrentModuleName(Arc::clone(&observation)).fingerprint()
             }));
-            module = Some(observation);
+            // A `use` import or the standard prelude can select a declaration
+            // of another module: join it through that module's own ordinary
+            // observation, exactly as a qualified path's final module does.
+            let declaring = polled!(declaring_module_observation(
+                db,
+                &mut trace,
+                &prefix,
+                &observation,
+                &selected
+            ));
+            module = Some(declaring.unwrap_or(observation));
             selected
         }
         LocalTypePrefixSelection::QualifiedTail => {
@@ -562,10 +640,22 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
                 checked!(facts.item(raw)),
             )
         }
-        None => {
-            if prefix.retained_plan().entered.parent.source().outline.parse != *parse {
+        None if prefix.retained_plan().entered.parent.source().outline.parse != *parse => {
+            // An original (non-generated) declaration of another source file,
+            // selected through its declaring module's ordinary observation
+            // (an import, the standard prelude or a qualified path). It has
+            // no macro hygiene of its own; the use site must still be an
+            // unadjusted root occurrence (checked below).
+            if module.is_none() {
                 return pending(BodyTypeDemand::DeclarationOccurrence(identity));
             }
+            (
+                original,
+                checked!(original_facts.name_item(original)),
+                checked!(original_facts.item(original)),
+            )
+        }
+        None => {
             let root = checked!(original_facts.context(original));
             let root_edition = match root.edition {
                 crate::syntax::token_wire::Edition::E2015 => 2015,

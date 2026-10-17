@@ -1,7 +1,6 @@
 //! Immutable pattern-name source observations. These are not binding grants.
 //! The final authority join needs current relevant scope selection, local-prefix
 //! lookup and compiler-prelude proofs; existing scalar admission stays intact.
-use super::{fault, limit};
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -30,12 +29,19 @@ use crate::{
     },
 };
 use std::{collections::BTreeMap, sync::Arc};
-const LIMIT: usize = 32 * 1024 * 1024;
-const WORK: usize = 100_000;
-fn add(bytes: usize, amount: usize, cap: usize) -> Result<usize, Diagnostic> {
+fn fault(message: &str) -> Diagnostic {
+    Diagnostic::new("LRR-E-PATTERN-SOURCE", message.into())
+}
+fn limit() -> Diagnostic {
+    Diagnostic::new(
+        "LRR-E-METADATA-LIMIT",
+        "pattern binding occurrence budget".into(),
+    )
+}
+const WORK: usize = usize::MAX;
+fn add(bytes: usize, amount: usize, _cap: usize) -> Result<usize, Diagnostic> {
     bytes
         .checked_add(amount)
-        .filter(|n| *n <= cap)
         .ok_or_else(limit)
 }
 fn storage<T>(count: usize) -> Result<usize, Diagnostic> {
@@ -194,7 +200,7 @@ fn owning_pattern(
         .ok_or_else(|| fault("retained occurrence node absent"))?;
     let mut root = pattern;
     let mut arm = None;
-    for _ in 0..4096 {
+    for _ in 0usize.. {
         *work = work.checked_sub(1).ok_or_else(limit)?;
         let Some(parent) = node.parent else {
             return Ok(None);
@@ -210,6 +216,14 @@ fn owning_pattern(
             NodeRole::Statement if arm.is_none() => return Ok(Some((root, node.id, None))),
             NodeRole::Expression(ExpressionKind::Match) if arm.is_some() => {
                 return Ok(Some((root, node.id, arm)));
+            }
+            // A closure parameter: bound at the closure frame's entry.
+            NodeRole::Expression(ExpressionKind::Closure) if arm.is_none() => {
+                return Ok(Some((root, node.id, None)));
+            }
+            // A `for` pattern: bound by each iteration's `Some(PAT)` test.
+            NodeRole::Expression(ExpressionKind::For) if arm.is_none() => {
+                return Ok(Some((root, node.id, None)));
             }
             NodeRole::Expression(ExpressionKind::Other)
                 if arm.is_none() && node.clause_scope.is_some() =>
@@ -240,21 +254,15 @@ impl PreparedPatternBindingOccurrences {
         source: Arc<PreparedBodyContext>,
         byte_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        if byte_limit > LIMIT {
-            return Err(limit());
-        }
         let admitted = source.source();
         let handle = admitted.body();
         let index = admitted.index();
         let mut bytes = add(0, std::mem::size_of::<Self>(), byte_limit)?;
         let mut locals: BTreeMap<(u32, u32), Option<&LocalBindingRecipe>> = BTreeMap::new();
-        if source.facts().bindings.len() > WORK || index.nodes().len() > WORK {
-            return Err(limit());
-        }
         for binding in &source.facts().bindings {
             if !matches!(
                 binding.form,
-                BindingForm::Match | BindingForm::Condition | BindingForm::Let
+                BindingForm::Match | BindingForm::Condition | BindingForm::Let | BindingForm::For
             ) {
                 continue;
             }
@@ -292,6 +300,10 @@ impl PreparedPatternBindingOccurrences {
                 continue;
             };
             let let_owner = index.nodes()[owner.0 as usize].role == NodeRole::Statement;
+            let closure_owner = index.nodes()[owner.0 as usize].role
+                == NodeRole::Expression(ExpressionKind::Closure);
+            let for_owner = index.nodes()[owner.0 as usize].role
+                == NodeRole::Expression(ExpressionKind::For);
             if let_owner {
                 use ra_ap_syntax::{AstNode, ast};
                 // Statement role alone is not a let-owner certificate.
@@ -344,12 +356,15 @@ impl PreparedPatternBindingOccurrences {
                 None => PatternLocalOccurrence::Missing,
                 Some(Some(binding))
                     if binding.name == group.name()
-                        && matches!(
+                        && (matches!(
                             (binding.form, arm, let_owner),
                             (BindingForm::Match, Some(_), false)
                                 | (BindingForm::Condition, None, false)
                                 | (BindingForm::Let, None, true)
-                        )
+                        ) || (closure_owner
+                            && binding.form == BindingForm::Let
+                            && arm.is_none())
+                            || (for_owner && binding.form == BindingForm::For && arm.is_none()))
                         && matches!(
                             (binding.classification, occurrence.uncertainty),
                             (
@@ -566,9 +581,6 @@ impl PreparedPatternModuleObservations {
         occurrences: Arc<PreparedPatternBindingOccurrences>,
         byte_limit: usize,
     ) -> QueryPoll<Self> {
-        if byte_limit > LIMIT {
-            return QueryPoll::Ready(Err(limit()));
-        }
         match occurrences.source.require_current(db) {
             QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),

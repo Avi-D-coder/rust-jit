@@ -23,6 +23,126 @@ pub(super) fn apply_context(
     }
 }
 
+/// A declared parameter's written Type at its argument boundary.
+pub(super) enum WrittenArgumentHint {
+    None,
+    /// Every parameter it names is fixed: its exact descriptor.
+    Exact(crate::runtime::shape::TypeId),
+    /// Known structure with open parts (`Option<T>` before `T` is fixed,
+    /// `(T, u8)`, `Box<dyn Fn()>`): a partial context for the argument's own
+    /// construction.
+    Partial(
+        std::sync::Arc<crate::ir::written_type::WrittenType>,
+        crate::vm::frame::PartialArguments,
+    ),
+}
+
+/// The written parameter Type of `hint` under the callee type arguments
+/// already fixed at this call. Advisory context only: the evaluated contract
+/// still checks the reached argument against the declared Type.
+pub(super) fn written_hint(
+    store: &mut GuestStore,
+    hint: &ArgumentHint,
+    definition: crate::core::digest::Digest,
+    bound: &BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
+) -> Result<WrittenArgumentHint, Diagnostic> {
+    // A bare parameter (`x: T`) the call has already fixed.
+    if let crate::traits::term::TyTerm::Param(key) = &hint.source
+        && key.definition == definition
+        && hint.closed_reference.is_none()
+    {
+        return Ok(match bound.get(key) {
+            Some(ty) => WrittenArgumentHint::Exact(*ty),
+            None => WrittenArgumentHint::None,
+        });
+    }
+    let Some(written) = &hint.written else {
+        return Ok(WrittenArgumentHint::None);
+    };
+    let lookup = |ordinal: u32| {
+        bound
+            .get(&crate::traits::term::ParamKey {
+                definition,
+                ordinal,
+            })
+            .copied()
+    };
+    if let Some(ty) = written.materialize_with(store, &lookup)? {
+        return Ok(WrittenArgumentHint::Exact(ty));
+    }
+    let mut fixed = Vec::new();
+    for (key, ty) in bound.range(
+        crate::traits::term::ParamKey {
+            definition,
+            ordinal: 0,
+        }..=crate::traits::term::ParamKey {
+            definition,
+            ordinal: u32::MAX,
+        },
+    ) {
+        let index = key.ordinal as usize;
+        if fixed.len() <= index {
+            fixed.resize(index + 1, None);
+        }
+        fixed[index] = Some(*ty);
+    }
+    Ok(WrittenArgumentHint::Partial(
+        std::sync::Arc::clone(written),
+        crate::vm::frame::PartialArguments::Fixed(fixed.into()),
+    ))
+}
+
+/// The callee type arguments fixed before argument `upto` is evaluated:
+/// explicit type arguments, then the reached descriptors of the already
+/// evaluated arguments at their declared parameter positions. A
+/// disagreement is left to the evaluated contract, which reports it.
+pub(super) fn bound_call_parameters(
+    frame: &Frame,
+    store: &GuestStore,
+    definition: crate::core::digest::Digest,
+    explicit: &[(u32, ArgumentType)],
+    earlier: &[ArgumentHint],
+    slots: &[SlotId],
+    expected: &BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
+) -> Result<BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>, Diagnostic> {
+    let mut bound = BTreeMap::new();
+    for (ordinal, actual) in explicit {
+        bound.insert(
+            crate::traits::term::ParamKey {
+                definition,
+                ordinal: *ordinal,
+            },
+            actual.descriptor,
+        );
+    }
+    for (hint, slot) in earlier.iter().zip(slots) {
+        let crate::runtime::cell::CellState::Live(value) = store.state(frame.cell(*slot)?)? else {
+            continue;
+        };
+        if value.type_id == 0 {
+            continue;
+        }
+        let mut reached = bound.clone();
+        if crate::frontend::call_contracts::bind_runtime_parameters(
+            &hint.source,
+            crate::runtime::shape::TypeId(value.type_id),
+            store,
+            definition,
+            &mut reached,
+        )
+        .is_ok()
+        {
+            bound = reached;
+        }
+    }
+    // The result context's expectation fills only what the call itself
+    // has not fixed.
+    for (key, ty) in expected {
+        bound.entry(*key).or_insert(*ty);
+    }
+    Ok(bound)
+}
+
 /// Account the opaque source proof retained beside an argument hint as well as
 /// its source term. Descriptor publication never supplies source identity.
 pub(super) fn retained_hint_bytes(hint: &ArgumentHint) -> Result<usize, Diagnostic> {
@@ -30,6 +150,12 @@ pub(super) fn retained_hint_bytes(hint: &ArgumentHint) -> Result<usize, Diagnost
         .source
         .heap_bytes()
         .ok_or_else(crate::runtime::arena::resource)?;
+    if let Some(written) = &hint.written {
+        bytes = bytes
+            .checked_add(written.heap_bytes())
+            .and_then(|n| n.checked_add(std::mem::size_of::<crate::ir::written_type::WrittenType>()))
+            .ok_or_else(crate::runtime::arena::resource)?;
+    }
     if let Some(proof) = &hint.closed_reference {
         bytes = bytes
             .checked_add(proof.allocated_bytes()?)
@@ -61,10 +187,31 @@ pub(super) fn runtime_hint(
         traits::term::{RegionTerm, TyTerm},
     };
     let Some(proof) = &hint.closed_reference else {
-        return Ok((
-            hint.descriptor,
-            hint.descriptor.map(|_| hint.source.clone()),
-        ));
+        // A closed tuple/array parameter gives its written argument the
+        // structural descriptor its fields construct against.
+        let descriptor = match hint.descriptor {
+            Some(descriptor) => Some(descriptor),
+            None if matches!(
+                hint.source,
+                TyTerm::Tuple(_) | TyTerm::Array(..)
+            ) =>
+            {
+                store.intern_structural_term(&hint.source)?
+            }
+            // A closed `&[T]`/`&mut [T]` parameter: like a closed reference
+            // proof, descriptor only (the coercion site's expectation, which
+            // selects unsizing and implicit reborrow); the caller slot keeps
+            // the region its actual evaluation attaches.
+            None if matches!(&hint.source, TyTerm::Ref(_, _, target)
+                if matches!(target.as_ref(), TyTerm::Slice(_)))
+                && crate::frontend::call_contracts::closed_term(&hint.source) =>
+            {
+                let descriptor = store.intern_structural_term(&hint.source)?;
+                return Ok((descriptor, None));
+            }
+            None => None,
+        };
+        return Ok((descriptor, descriptor.map(|_| hint.source.clone())));
     };
     proof.validate_hint(hint)?;
     proof.require_current(db, callee)?;
@@ -101,10 +248,40 @@ pub(super) fn runtime_hint(
             .nodes()
             .get(frame.pc().node as usize)
             .ok_or_else(|| call_fault("reference caller absent"))?;
-        if call.role != NodeRole::Expression(ExpressionKind::Call) {
+        let method = call.role == NodeRole::Expression(ExpressionKind::MethodCall);
+        if call.role != NodeRole::Expression(ExpressionKind::Call) && !method {
             return Err(call_fault(
                 "reference hint requires its indexed ordinary call",
             ));
+        }
+        // A method receiver's autoref borrows its place: a fresh temporary
+        // (literal/call receiver) gets that receiver's local region, a named
+        // place keeps the source its borrow attaches.
+        if method && ordinal == 0 {
+            let receiver = call
+                .operands
+                .first()
+                .and_then(|node| frame.body.nodes().get(node.0 as usize))
+                .ok_or_else(|| call_fault("method receiver node absent"))?;
+            let temporary = matches!(
+                receiver.role,
+                NodeRole::Expression(
+                    ExpressionKind::Literal | ExpressionKind::Call | ExpressionKind::MethodCall
+                )
+            );
+            let source = temporary.then(|| {
+                TyTerm::Ref(
+                    RegionTerm::Local {
+                        definition: frame.body.body().definition,
+                        start: receiver.range.start,
+                        end: receiver.range.end,
+                    },
+                    proof.mutable(),
+                    Box::new(proof.pointee_source().clone()),
+                )
+            });
+            let descriptor = proof.materialize_hint(store)?;
+            return Ok((Some(descriptor), source));
         }
         // Structural call operands also contain the callee expression. The
         // actual ArgList-produced value slot selects the written argument;
@@ -191,7 +368,15 @@ impl RunMachine {
                 )? == target
         } else {
             self.frame.pc().node == site
-                && matches!(Phase::from_code(self.frame.pc().phase), Phase::Operand(_))
+                && (matches!(Phase::from_code(self.frame.pc().phase), Phase::Operand(_))
+                    // A method call's receiver argument completes at its Exit.
+                    || (Phase::from_code(self.frame.pc().phase) == Phase::Exit
+                        && self.frame.body.nodes().get(site as usize).is_some_and(|node| {
+                            node.role
+                                == crate::syntax::body_index::NodeRole::Expression(
+                                    crate::syntax::body_index::ExpressionKind::MethodCall,
+                                )
+                        })))
                 && target.body == self.frame.pc().body
                 && target.phase == Phase::Entry.code()?
                 && self
@@ -228,10 +413,11 @@ impl RunMachine {
         let mut prepared = match prepare_argument_hint(db, &selected.callee, graph, &sources, next)
         {
             QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) => hints,
-            QueryPoll::Ready(Ok(_)) => {
-                return Err(call_fault(
-                    "argument source hints require further type integration",
-                ));
+            QueryPoll::Ready(Ok(other)) => {
+                return Err(call_fault(&format!(
+                    "argument source hints require further type integration: {}",
+                    other.describe()
+                )));
             }
             QueryPoll::Ready(Err(error)) => return Err(error),
             QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
@@ -248,6 +434,42 @@ impl RunMachine {
             &selected.explicit,
             selected.result_hint.as_ref(),
         );
+        // An associated-type projection (`T::V`) is normalized once the
+        // generics it names are bound by the already evaluated arguments.
+        let definition = selected.callee.signature().definition;
+        let needs_bound = hint.written.as_ref().is_some_and(|written| written.has_parameters())
+            || matches!(&hint.source, crate::traits::term::TyTerm::Param(key) if key.definition == definition)
+            || crate::frontend::associated_types::contains_projection(&hint.source);
+        let bound = if needs_bound {
+            bound_call_parameters(
+                &self.frame,
+                &self.store,
+                definition,
+                &selected.explicit,
+                &selected.hints,
+                &selected.argument_slots,
+                &selected.expected,
+            )?
+        } else {
+            BTreeMap::new()
+        };
+        if crate::frontend::associated_types::contains_projection(&hint.source)
+            && let Some(members) = self.members.clone()
+        {
+            let runtime = bound.clone();
+            let mut bound = hint.source.clone();
+            substitute_runtime_parameters(&mut bound, &runtime, &self.store);
+            match crate::frontend::associated_types::normalize(db, graph, &sources, &members, &bound)
+            {
+                QueryPoll::Ready(Ok(Some(normalized))) => {
+                    hint.descriptor = self.store.intern_structural_term(&normalized)?;
+                    hint.source = normalized;
+                }
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+            }
+        }
         let heap = retained_hint_bytes(&hint)?;
         let retained = selected
             .bytes
@@ -257,12 +479,6 @@ impl RunMachine {
             .pending_bytes
             .checked_add(heap)
             .ok_or_else(crate::runtime::arena::resource)?;
-        if pending
-            .checked_add(self.call_bytes)
-            .is_none_or(|n| n > self.call_limits.max_metadata_bytes)
-        {
-            return Err(crate::runtime::arena::resource());
-        }
         let (descriptor, source) = runtime_hint(
             db,
             &self.frame,
@@ -272,11 +488,22 @@ impl RunMachine {
             next,
             slot,
         )?;
+        let written = match descriptor {
+            Some(_) => WrittenArgumentHint::None,
+            None => written_hint(&mut self.store, &hint, definition, &bound)?,
+        };
+        let descriptor = match &written {
+            WrittenArgumentHint::Exact(ty) => Some(*ty),
+            _ => descriptor,
+        };
         self.frame.preflight_source_view(slot, source.as_ref())?;
         // All checked admission precedes mutation. Inline prefix capacity was
         // reserved and charged at identity selection; this adds only its heap.
         self.frame.set_source_view(slot, source)?;
         self.frame.set_hint(slot, descriptor)?;
+        if let WrittenArgumentHint::Partial(written, arguments) = written {
+            self.frame.set_partial_hint_with(slot, written, Some(arguments))?;
+        }
         let identity = self.frame.call_identity(site);
         let selected = self
             .pending
@@ -292,3 +519,41 @@ impl RunMachine {
 #[cfg(test)]
 #[path = "run_reference_local_source_tests.rs"]
 mod reference_local_source_tests;
+
+/// Replace each bound generic parameter with its reached runtime type.
+fn substitute_runtime_parameters(
+    term: &mut crate::traits::term::TyTerm,
+    runtime: &BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
+    store: &GuestStore,
+) {
+    use crate::traits::term::{GenericArg, TyTerm};
+    match term {
+        TyTerm::Param(key) => {
+            if let Some(actual) = runtime
+                .get(key)
+                .and_then(|ty| store.descriptor_source_term(*ty))
+            {
+                *term = actual;
+            }
+        }
+        TyTerm::Projection(key) => {
+            substitute_runtime_parameters(&mut key.trait_ref.self_ty, runtime, store)
+        }
+        TyTerm::Ref(_, _, inner) | TyTerm::Slice(inner) | TyTerm::Array(inner, _) => {
+            substitute_runtime_parameters(inner, runtime, store)
+        }
+        TyTerm::Tuple(items) => {
+            for item in items {
+                substitute_runtime_parameters(item, runtime, store);
+            }
+        }
+        TyTerm::Nominal(_, args) => {
+            for arg in args {
+                if let GenericArg::Type(ty) = arg {
+                    substitute_runtime_parameters(ty, runtime, store);
+                }
+            }
+        }
+        _ => {}
+    }
+}

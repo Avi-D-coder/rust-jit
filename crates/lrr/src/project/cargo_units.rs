@@ -8,9 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-const MAX_GRAPH_BYTES: usize = 16 * 1024 * 1024;
-const MAX_UNITS: usize = 100_000;
-const MAX_GRAPH_DEPTH: usize = 256;
 fn fault(message: impl Into<String>) -> Diagnostic {
     Diagnostic::new("LRR-E-UNIT-GRAPH", message.into())
 }
@@ -381,9 +378,6 @@ pub(crate) fn kind(target: &RawTarget) -> Result<TargetKind, Diagnostic> {
 }
 impl UnitGraph {
     pub fn parse(bytes: &[u8], context: &UnitContext) -> Result<Self, Diagnostic> {
-        if bytes.len() > MAX_GRAPH_BYTES {
-            return Err(fault("unit graph exceeds 16 MiB"));
-        }
         if !is_supported_preparation_target(&context.target)
             || matches!(
                 context.ordinary_role,
@@ -394,11 +388,7 @@ impl UnitGraph {
         }
         let raw: RawGraph = serde_json::from_slice(bytes)
             .map_err(|e| fault(format!("invalid pinned unit graph schema: {e}")))?;
-        if raw.version != 1
-            || raw.units.is_empty()
-            || raw.units.len() > MAX_UNITS
-            || raw.roots.len() != 1
-        {
+        if raw.version != 1 || raw.units.is_empty() || raw.roots.len() != 1 {
             return Err(fault(
                 "unsupported graph version, size, or target selection",
             ));
@@ -459,7 +449,7 @@ impl UnitGraph {
                 if let Some(key) = self.remap[index] {
                     return Ok(key);
                 }
-                if depth >= MAX_GRAPH_DEPTH || self.active[index] {
+                if self.active[index] {
                     return Err(fault("unit graph dependency cycle/depth limit"));
                 }
                 self.active[index] = true;

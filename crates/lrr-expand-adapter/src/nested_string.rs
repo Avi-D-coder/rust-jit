@@ -20,9 +20,6 @@ fn fault(message: &str) -> AdapterError {
     }
 }
 pub fn parse(input: &TokenForest) -> Result<NestedStringInvocation, AdapterError> {
-    if input.allocated_bytes().map_err(|e| fault(&e.to_string()))? > 64 * 1024 * 1024 {
-        return Err(fault("nested macro operand metadata limit"));
-    }
     if !matches!(
         crate::string_arguments::parse_single(input)?,
         crate::string_arguments::StringOperand::NeedExpansion { .. }
@@ -104,9 +101,6 @@ pub fn parse(input: &TokenForest) -> Result<NestedStringInvocation, AdapterError
             .ok_or_else(|| fault("nested macro path name is absent"))?
             .text()
             .to_string();
-        if segments.len() >= 256 || name.len() > 64 * 1024 {
-            return Err(fault("nested macro path limit"));
-        }
         segments.push(name);
         match path.qualifier() {
             Some(parent) => path = parent,

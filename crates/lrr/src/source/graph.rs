@@ -105,12 +105,6 @@ pub fn validate(
         if !visited.insert((path.clone(), directory.clone())) {
             continue;
         }
-        if visited.len() > 100_000 {
-            return Err(Diagnostic::new(
-                "LRR-E-SOURCE-LIMIT",
-                "source module graph exceeds 100,000 contexts".into(),
-            ));
-        }
         let blob = files.get(&path).ok_or_else(|| {
             Diagnostic::new(
                 "LRR-E-SOURCE-MISSING",

@@ -93,6 +93,23 @@ impl SignatureSubstitution {
         let instantiated = instantiate(template, &self.variables, 0)?;
         self.unifier.unify(&instantiated, actual)
     }
+    /// Structural argument constraint with regions erased on both sides: the
+    /// interpreter binds generic parameters from reached argument types after
+    /// rustc's own region checking.
+    pub fn constrain_argument_erased(
+        &mut self,
+        index: usize,
+        actual: &TyTerm,
+    ) -> Result<(), Diagnostic> {
+        let template = self.source_parameter(index).ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "argument contract requires source type resolution".into(),
+            )
+        })?;
+        let instantiated = erase_regions(&instantiate(template, &self.variables, 0)?);
+        self.unifier.unify(&instantiated, &erase_regions(actual))
+    }
     pub fn constrain_result(&mut self, actual: &TyTerm) -> Result<(), Diagnostic> {
         let template = self.source_result().ok_or_else(|| {
             Diagnostic::new(
@@ -104,14 +121,37 @@ impl SignatureSubstitution {
         self.unifier.unify(&instantiated, actual)
     }
 }
+/// Every region becomes `'static`; types and mutability are kept.
+pub(crate) fn erase_regions(term: &TyTerm) -> TyTerm {
+    match term {
+        TyTerm::Ref(_, mutable, target) => TyTerm::Ref(
+            crate::traits::term::RegionTerm::Static,
+            *mutable,
+            Box::new(erase_regions(target)),
+        ),
+        TyTerm::Tuple(fields) => TyTerm::Tuple(fields.iter().map(erase_regions).collect()),
+        TyTerm::Array(element, len) => TyTerm::Array(Box::new(erase_regions(element)), len.clone()),
+        TyTerm::Slice(element) => TyTerm::Slice(Box::new(erase_regions(element))),
+        TyTerm::Nominal(identity, args) => TyTerm::Nominal(
+            *identity,
+            args.iter()
+                .map(|arg| match arg {
+                    GenericArg::Type(ty) => GenericArg::Type(erase_regions(ty)),
+                    GenericArg::Region(_) => {
+                        GenericArg::Region(crate::traits::term::RegionTerm::Static)
+                    }
+                    other => other.clone(),
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
 fn instantiate(
     term: &TyTerm,
     variables: &BTreeMap<ParamKey, InferVarKey>,
-    depth: usize,
+    _depth: usize,
 ) -> Result<TyTerm, Diagnostic> {
-    if depth > 256 {
-        return Err(fault("signature substitution nesting limit exceeded"));
-    }
     let mut substitution = crate::traits::subst::Substitution::default();
     for (key, variable) in variables {
         substitution.insert(*key, GenericArg::Type(TyTerm::Infer(*variable)))?;

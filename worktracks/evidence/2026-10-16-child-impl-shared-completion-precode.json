@@ -1,0 +1,14 @@
+{
+  "schema": "lrr/precode/child-impl-frontier-shared-completion/v2",
+  "predecessor_sha256": "09486c90c720533046cc653132dc980fd435ea59f0ec22ca40a5485c46b86816",
+  "historical_held_packet": "/private/tmp/lrr-child-impl-frontier-v1/COMPONENT.json",
+  "invariant": "Prepare recursive completed-output/scan/header index once per actual ancestor declaration completion; each child only selects its actual output and verifies local parent chain/common canonical projection.",
+  "root_decision": "Per-child syntax_outputs/index rebuilding held from integration; shared immutable AncestorImplCompletion required.",
+  "owned": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+  "peer_owned": "NEW item_impl_completion.rs",
+  "API": "resolve(&AncestorImplCompletion,epoch), require_owner(ancestor_job,epoch,cfg) constant metadata comparison, outputs/scans/root_index/unique_output/contains_header borrowed cache",
+  "authority": "Shared cache constructed only from actual completed Arc + exact existing rootjob/source/cfg/epoch. Root caches by actualjob and checks same nested_completed Arc. Child exactrecord/epoch/scope/projection/parentchain/inventory checks unchanged.",
+  "cost": "One O(subtree scan/index build) per ancestor; perchild O(recordbucket + D log N + parent producer scans + common activeheaderjoin + H log I), no output traversal/reindex/headerinventory scan.",
+  "all_eight": "All prior checks retained; recurring mode6 repeated preparation source defect specifically repaired by borrowed shared index; no runtime/type/body work.",
+  "execution": "No Cargo/compiler/tests; historical v1 source kept held."
+}

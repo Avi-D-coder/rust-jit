@@ -1,0 +1,63 @@
+{
+  "schema": "lrr/source-review/v10-canonical-child-dependency-correction/v1",
+  "status": "Independent read-only exact live delta pass against frozenV9; no code edits/Cargo/compiler/tests. FrozenV10 rebind pending; not runtime acceptance.",
+  "baseline_source": "9f0a2a5f120d347c0ba88ac1f13c1773891b8106ec418cd03dff6456d19bdc72",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "11418ee96a0283b773218d8698a86b36868c0ef52f8fa379bd1c6b7406f2d0f9",
+      "bytes": 520795
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "2d9ff06f9176d604cfac2b5906386cb31ba05cdd1e9c1f780071e70c21b2c504",
+      "bytes": 7463
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "97c9396bd0f53510292ce5cf5653e2f07d165d5840a8b3708eae8f34431cd5e3",
+      "bytes": 139566
+    },
+    {
+      "path": "crates/lrr/src/db/seals.rs",
+      "sha256": "67805a037e93effd10c542bd2cc2b3dec45480a8c724dd8ccfd555e90789e9ea",
+      "bytes": 23713
+    },
+    {
+      "path": "crates/lrr/src/expand/discovery.rs",
+      "sha256": "986281e7f4c343a8bc36621a4b1fde2338df2a14b25bc0cc422b57ab5013296c",
+      "bytes": 19460
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "sha256": "d5b059acb26d9141682abbb7ec1d55b97a25760876f4714ce99c0cd84ef57746",
+      "bytes": 7985
+    }
+  ],
+  "expected_source_discovery_without_unrelated_hook_sha256": "87800a93035da868ff453339f6c28182dc086d46648edfad6686eb5d19049b7e",
+  "automated_source_checks": "Exact V9 SourceDiscovery bytes plus only canonicalchild dependency correction equal live after stripping unrelated existing impl_catalog hook. Complete child resolve and require_parent_chain suffix byte-identical to V9; no authority guard removed. Helpers completeprojection/kernel/cache unchanged by this correction.",
+  "conclusion": "No concrete source blocker found in minimal dependency correction. Removes invented unpublished proofdependency and restores exact existing publication contract while preserving derived child authority. Actual validator build/runtime required.",
+  "dependency_join": "After same actual nested_completed/prepared.completed Arc equality and waiter.resolve success, handler takes same actual root output and dependency=(output.record.key.invocation,output.fingerprint). Root completedjob already recorded thatpair and every real childrecord keyfp\u2192descriptorfp; Discovery BTreeMap dedups identicalpair. DBmemo actualdeclarationfragment loop independently reconstructs exactlysamepair from published rootArc after source/currentcfg/epoch/parent/index/record membership checks; DiscoveryInput stableencode retains output/inventory/intrinsic fingerprints. Strict dependency equality untouched.",
+  "removed_metadata": "Child helper removes only unused fingerprint Digest field/getter and construction StableEncoder over parent/child/projection. It was not a guard or externalpublishedinput. Actual ancestorjob/childItems/selectedparentItems/projection/scope/cfg/cachedcfg/epoch remain retained. Self-based metadata automatically shrinks; actual graph/cache/root accounting unchanged.",
+  "guard_preservation": [
+    "Child and selected parent epoch match actual epoch.",
+    "Exact owner job/cfg/epoch checks in cachedcompletion; current nested_completed Arc equality.",
+    "Unique actual same_record childoutput and scope/cfg/epoch.",
+    "First parent actual selected parent record+epoch; every edge unique scan/actual producer id/grammar/scope; cycle/depth bounded and exactroot reached.",
+    "Same canonical active rawImpl-to-retained scan header relation, actual root completed inventory membership.",
+    "Scheduler complete before release exact scope/frontier and producer/waiter retirement; failurepoisoning unchanged."
+  ],
+  "all8": {
+    "1": "No evaluator.",
+    "2": "Sameactual generated source engine.",
+    "3": "No macro/name/numeric profile.",
+    "4": "Preserves genuine generated-child authority, no originalgate.",
+    "5": "No executablebody/unselectedarm preparation.",
+    "6": "Uses cached actual root, no parser/reconstruction.",
+    "7": "Keeps strict relevant canonical dependency equality; no fullworld scan or uncheckedabsence.",
+    "8": "Retains same Arcs, no deepbody copy/search."
+  },
+  "cost": "One existing GeneratedDeclarations fingerprint over parentinv/inventory/recorddescriptor/epoch, not source text/bodywalk; sourcejobs/cache remain prepared once. No new dependency row after BTree dedup. No measuredperformanceclaim.",
+  "prior_evidence": "Preserve failedV9 exactwrapper terminal exit101,0pass1failed and e694ad41 diagnosis; prior52a03443 review did not cover certificate reconstruction. This pass addresses that concrete omission only, not broader all8closure.",
+  "remaining": "Root frozenV10 exact4leaf comparison/sourceguard; actual validator wrapper/authority/negative+sharedindex tests/regressions, standardmacro/exactonce/suspension/cleanup/invalidation matrix and milestone remainheld."
+}

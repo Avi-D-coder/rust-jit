@@ -12,9 +12,6 @@ fn fault(message: &str) -> AdapterError {
     }
 }
 pub fn parse(input: &TokenForest) -> Result<Vec<ConcatOperand>, AdapterError> {
-    if input.allocated_bytes().map_err(|e| fault(&e.to_string()))? > 64 * 1024 * 1024 {
-        return Err(fault("concat operand input metadata limit"));
-    }
     let mut store = SpanStore::default();
     let tree = store.import(input)?;
     let view = tree.token_trees();
@@ -31,9 +28,6 @@ pub fn parse(input: &TokenForest) -> Result<Vec<ConcatOperand>, AdapterError> {
                 return Err(fault("empty concat operand"));
             }
             break;
-        }
-        if operands.len() >= 100_000 {
-            return Err(fault("concat operand count limit"));
         }
         let first = part
             .first_span()
@@ -63,8 +57,8 @@ pub fn parse(input: &TokenForest) -> Result<Vec<ConcatOperand>, AdapterError> {
             crate::concat::literal_value(
                 &owned,
                 store.owned_span_key(first)?,
-                64 * 1024 * 1024,
-                32 * 1024 * 1024,
+                usize::MAX,
+                usize::MAX,
             )?;
             None
         };
@@ -82,7 +76,6 @@ pub fn parse(input: &TokenForest) -> Result<Vec<ConcatOperand>, AdapterError> {
             .checked_add(bytes)
             .and_then(|n| n.checked_add(nested_bytes))
             .and_then(|n| n.checked_add(std::mem::size_of::<ConcatOperand>()))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("concat operand metadata limit"))?;
         operands.push(ConcatOperand {
             tokens: owned,
@@ -98,9 +91,6 @@ pub fn join(original: &TokenForest, operands: &[TokenForest]) -> Result<TokenFor
     let mut bytes = original
         .allocated_bytes()
         .map_err(|e| fault(&e.to_string()))?;
-    if operands.len() > 100_000 {
-        return Err(fault("concat join operand count limit"));
-    }
     for operand in operands {
         bytes = bytes
             .checked_add(
@@ -108,11 +98,7 @@ pub fn join(original: &TokenForest, operands: &[TokenForest]) -> Result<TokenFor
                     .allocated_bytes()
                     .map_err(|e| fault(&e.to_string()))?,
             )
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("concat join metadata limit"))?;
-    }
-    if bytes > 64 * 1024 * 1024 {
-        return Err(fault("concat join metadata limit"));
     }
     let mut store = SpanStore::default();
     let root = store.import(original)?;
@@ -149,12 +135,5 @@ pub fn join(original: &TokenForest, operands: &[TokenForest]) -> Result<TokenFor
         spans.into_values().collect(),
     )
     .map_err(|e| fault(&e.to_string()))?;
-    if output
-        .allocated_bytes()
-        .map_err(|e| fault(&e.to_string()))?
-        > 64 * 1024 * 1024
-    {
-        return Err(fault("concat joined output metadata limit"));
-    }
     Ok(output)
 }

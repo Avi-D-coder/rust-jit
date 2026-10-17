@@ -1,0 +1,59 @@
+{
+  "component": "common-compiler-module-preparation-v1",
+  "source_fingerprint": "24bc132685aee53f18a5c96569c514ca83b46abdc03cca14072b9ad3c797c63a",
+  "status": "source-only, uncompiled/unexecuted; configured capture/adoption/source refresh consumer and actual fullcore/standard-macro runtime held",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "dff834fd4d4c86e1ee6d2045a562bad5db37e07e8278f055948bc78935c74ad9",
+      "bytes": 505374
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/compiler_preparation.rs",
+      "sha256": "3e0cf2461f8dac2b375a5ce6f4d58c7c2791acbe20fcfec3b4e05327af8d8584",
+      "bytes": 654
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/original_module_discovery_tests.rs",
+      "sha256": "86a74af97537313d81e950d6a7689e08a291ea3394edc046d42e67d20bcacf99",
+      "bytes": 4278
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/compiler_module_preparation_tests.rs",
+      "sha256": "5c557c59699055728eec7427caf7ca0d94857ff8119a31a5b160885a80bd1a4e",
+      "bytes": 5316
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_module_staging_tests.rs",
+      "sha256": "18db6785e93425463cc75e596221b9626bcbbf75f9a9c9ff73383337d67ce62e",
+      "bytes": 8141
+    }
+  ],
+  "dependencies": [
+    "Frozen originalmodule6 manifest4a31c3ec/source201e4878, selectedenv4 and scheduling203 predecessors. This overrides SourceDiscovery and original module test child hook, preserving prior genuine role/source/producer/annotation paths.",
+    "Root SAME typed module graph constructor7 plus one-line source_macro_routes reexport successor: pub(crate) use super::module_aliases::{ModuleGraphPreparation, ModulePreparationDemand}. Actual root leaf is separately frozen; no worker edits to frontend/DB/coordinator.",
+    "Actual combined236 sourcec858687b compile failure E0308 IncludeRoot.path String/PathBuf, zero test bodies: successor original_module_staging_tests corrects only path constructor, preserving failed evidence.",
+    "Root coordinator must service actual demand -> declaration -> SourceCapture/ExpansionCoordinator ModuleRecord -> coherent current configured source/facet/adoption refresh, then call typed preparation again with new source set. No closure from metadata alone."
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/compiler-module-preparation-handoff.md",
+    "sha256": "ca648f0c333e201b29523c39f9abcb0081fd25f1598264d44069e99e2615a2b3",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "test_filters": [
+    "compiler_module_preparation_tests",
+    "original_module_staging_tests"
+  ],
+  "new_test_bodies": 2,
+  "corrected_test_bodies": 1,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+}

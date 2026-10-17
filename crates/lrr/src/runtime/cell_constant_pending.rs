@@ -13,9 +13,9 @@ impl GuestStore {
     pub(crate) fn instantiate_pending_constant(
         &mut self,
         plan: PreparedConstantInstantiation,
-        fuel: &mut RunFuel,
+        steps: &mut RunSteps,
     ) -> Result<PendingConstantResult, Diagnostic> {
-        let ticket = self.instantiate_constant_admitted(plan, fuel)?;
+        let ticket = self.instantiate_constant_admitted(plan, steps)?;
         Ok(PendingConstantResult {
             session: self.pattern_binding_session(),
             epoch: self.budget.epoch(),

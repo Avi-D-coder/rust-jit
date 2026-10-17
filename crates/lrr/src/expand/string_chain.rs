@@ -61,9 +61,6 @@ impl StringExpansionChain {
             .ok_or_else(|| fault("eager chain root absent"))
     }
     pub(crate) fn push(&mut self, key: ExpansionKey, output: Digest) -> Result<(), Diagnostic> {
-        if self.producers.len() >= 256 {
-            return Err(fault("eager string producer depth limit"));
-        }
         self.producers
             .try_reserve(1)
             .map_err(|_| fault("eager string producer allocation"))?;
@@ -80,7 +77,6 @@ impl StringExpansionChain {
         for (key, _) in &self.producers {
             bytes = bytes
                 .checked_add(crate::expand::record::key_heap_bytes(key))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("eager string producer metadata limit"))?;
         }
         Ok(bytes)

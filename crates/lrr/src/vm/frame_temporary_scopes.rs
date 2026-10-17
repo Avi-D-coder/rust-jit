@@ -101,13 +101,19 @@ impl Frame {
                 ));
             }
             Self::require_borrow_source_target(target_source, *target, store)?;
+            // `&[T]` expects its operand only like an unsized rvalue (rustc's
+            // `ExpectRvalueLikeUnsized`): the retained `[T]` view gives an
+            // array operand its element Type, never a `[T]` descriptor.
+            if matches!(store.type_descriptor(*target)?.key.as_ref(), TypeKey::Slice { .. }) {
+                return Ok(None);
+            }
             return Ok(Some(*target));
         }
         // Existing grouping/control hint operations may retain the symbolic
         // view even when they have no numeric result descriptor. A closed
         // primitive target is still exact source context, not width guessing.
         match target_source {
-            None => Ok(None),
+            None | Some(TyTerm::Slice(_)) => Ok(None),
             Some(TyTerm::Primitive(primitive)) => {
                 PrimitiveIdentity::from_recipe(*primitive).map(|identity| Some(identity.id()))
             }
@@ -144,7 +150,9 @@ impl Frame {
         use crate::traits::term::TyTerm;
         match self.slot(reference)?.source.as_ref() {
             Some(TyTerm::Ref(_, _, target))
-                if Self::supported_source(target)
+                if (Self::supported_source(target)
+                    || matches!(target.as_ref(), TyTerm::Slice(element)
+                        if Self::supported_element(element)))
                     && !matches!(target.as_ref(), TyTerm::Param(_)) =>
             {
                 Ok(Some(target.as_ref()))

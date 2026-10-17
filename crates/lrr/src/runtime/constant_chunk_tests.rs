@@ -46,7 +46,7 @@ fn data(unit: bool, outer: Option<u64>) -> (ConstValue, ConstantWireType) {
     (wire::decode(&bytes, &wire, 1 << 20).unwrap(), wire)
 }
 fn setup(unit: bool, outer: Option<u64>) -> (GuestStore, ConstantChunkActivation, TypeId) {
-    let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (value, wire) = data(unit, outer);
     let child = store
         .intern_type(TypeKey::Array {
@@ -75,7 +75,7 @@ fn setup(unit: bool, outer: Option<u64>) -> (GuestStore, ConstantChunkActivation
 fn store_session_chunk_cursor_refuses_foreign_progress_and_abort_without_mutation() {
     let (mut a, mut activation, _) = setup(false, None);
     let (mut b, _, _) = setup(false, None);
-    let mut fuel = RunFuel::new(10000).unwrap();
+    let mut fuel = RunSteps::default();
     let before = (
         b.budget().handles(),
         b.budget().bytes(),
@@ -106,10 +106,13 @@ fn store_session_chunk_cursor_refuses_foreign_progress_and_abort_without_mutatio
     let (pending, _) = complete(&mut a, &mut activation, &mut fuel);
     a.abort_pending_constant(pending).unwrap();
 }
+fn injected() -> Diagnostic {
+    Diagnostic::new("LRR-E-CHUNK-CONTROL", "injected private failure".into())
+}
 fn complete(
     store: &mut GuestStore,
     a: &mut ConstantChunkActivation,
-    fuel: &mut RunFuel,
+    fuel: &mut RunSteps,
 ) -> (PendingConstantResult, usize) {
     let mut dispatches = 0;
     for _ in 0..20000 {
@@ -132,7 +135,7 @@ fn complete(
 fn failure(
     store: &mut GuestStore,
     a: &mut ConstantChunkActivation,
-    fuel: &mut RunFuel,
+    fuel: &mut RunSteps,
 ) -> Diagnostic {
     let mut cleanup_dispatches = 0;
     for _ in 0..20000 {
@@ -184,8 +187,8 @@ fn retired(store: &GuestStore) {
 fn nrvo_1024_shape_physical_chunks_keep_mutation_cells_and_immutable_initial_image_separate() {
     assert!(NRVO.contains("const BUF: [u8; 1024] = nrvo();"));
     let (mut store, mut a, ty) = setup(false, None);
-    let mut fuel = RunFuel::new(2000).unwrap();
-    fuel.charge().unwrap();
+    let mut fuel = RunSteps::default();
+    fuel.charge();
     let (mut pending, dispatches) = complete(&mut store, &mut a, &mut fuel);
     assert!(dispatches > 1);
     assert_eq!(a.fields_charged(), 1024);
@@ -219,8 +222,8 @@ fn nrvo_1024_shape_physical_chunks_keep_mutation_cells_and_immutable_initial_ima
 #[test]
 fn unit_constant_chunks_charge_all_1024_zero_size_fields_once() {
     let (mut s, mut a, _) = setup(true, None);
-    let mut f = RunFuel::new(2000).unwrap();
-    f.charge().unwrap();
+    let mut f = RunSteps::default();
+    f.charge();
     let (p, d) = complete(&mut s, &mut a, &mut f);
     assert!(d > 1);
     assert_eq!(a.fields_charged(), 1024);
@@ -238,8 +241,8 @@ fn unit_constant_chunks_charge_all_1024_zero_size_fields_once() {
 #[test]
 fn nested_constant_chunks_preserve_parent_child_charge_and_commit_cursors() {
     let (mut s, mut a, ty) = setup(true, Some(2));
-    let mut f = RunFuel::new(3000).unwrap();
-    f.charge().unwrap();
+    let mut f = RunSteps::default();
+    f.charge();
     let (p, d) = complete(&mut s, &mut a, &mut f);
     assert!(d > 2);
     assert_eq!(a.fields_charged(), 2050);
@@ -256,11 +259,11 @@ fn nested_constant_chunks_preserve_parent_child_charge_and_commit_cursors() {
     retired(&s);
 }
 #[test]
-fn cancellation_in_constant_build_drains_private_rollback_in_bounded_dispatches() {
+fn injected_failure_in_constant_build_drains_private_rollback_in_bounded_dispatches() {
     let (mut s, mut a, _) = setup(false, None);
-    let mut f = RunFuel::new(2000).unwrap();
-    f.charge().unwrap();
-    // Cancel with enough genuinely constructed private fields to require more
+    let mut f = RunSteps::default();
+    f.charge();
+    // Fail with enough genuinely constructed private fields to require more
     // than one bounded cleanup chunk; a small prefix can legitimately drain at once.
     for _ in 0..32 {
         assert!(matches!(
@@ -275,18 +278,18 @@ fn cancellation_in_constant_build_drains_private_rollback_in_bounded_dispatches(
         }
     }
     assert!(a.fields_charged() >= 512 && a.fields_charged() < 1024);
-    f.cancellation().cancel();
+    s.constant_chunk_failure(&mut a, injected()).unwrap();
     let used = f.snapshot().used;
     let e = failure(&mut s, &mut a, &mut f);
-    assert_eq!(e.code, "LRR-E-RUNTIME-RESOURCE");
+    assert_eq!(e.code, "LRR-E-CHUNK-CONTROL");
     assert_eq!(used, f.snapshot().used);
     retired(&s);
 }
 #[test]
-fn cancellation_in_constant_commit_retires_partial_cells_guard_and_constructing_object() {
+fn injected_failure_in_constant_commit_retires_partial_cells_guard_and_constructing_object() {
     let (mut s, mut a, _) = setup(false, None);
-    let mut f = RunFuel::new(2000).unwrap();
-    f.charge().unwrap();
+    let mut f = RunSteps::default();
+    f.charge();
     let mut reached = false;
     for _ in 0..20000 {
         match s.advance_constant_chunks(&mut a, &mut f) {
@@ -309,56 +312,20 @@ fn cancellation_in_constant_commit_retires_partial_cells_guard_and_constructing_
     }
     assert!(reached);
     assert_eq!(f.snapshot().used, 1025);
-    f.cancellation().cancel();
+    s.constant_chunk_failure(&mut a, injected()).unwrap();
     let e = failure(&mut s, &mut a, &mut f);
-    assert_eq!(e.code, "LRR-E-RUNTIME-RESOURCE");
+    assert_eq!(e.code, "LRR-E-CHUNK-CONTROL");
     assert_eq!(f.snapshot().used, 1025);
     retired(&s);
 }
 #[test]
-fn exhausted_constant_field_is_not_recharged_during_owned_cleanup() {
-    let (mut s, mut a, _) = setup(false, None);
-    let mut f = RunFuel::new(50).unwrap();
-    f.charge().unwrap();
-    let mut failed = false;
-    for _ in 0..20000 {
-        match s.advance_constant_chunks(&mut a, &mut f) {
-            ConstantChunkPoll::Dispatch { steps, bytes, .. } => {
-                assert!(steps <= 256 && bytes <= 64 << 10)
-            }
-            ConstantChunkPoll::Failed(e) => {
-                assert_eq!(e.code, "LRR-E-RUNTIME-RESOURCE");
-                failed = true;
-                break;
-            }
-            ConstantChunkPoll::Ready(_) => panic!("exhaustion became success"),
-        }
-    }
-    assert!(failed && a.finished_for_frame());
-    assert_eq!(a.fields_charged(), 49);
-    assert_eq!(f.snapshot().used, 50);
-    retired(&s);
-}
-#[test]
-fn complete_constant_reservation_includes_extra_destination_and_refuses_before_entry() {
+fn complete_constant_reservation_includes_extra_destination_before_entry() {
     let (mut s, _a, ty) = setup(false, None);
     let (value, wire) = data(false, None);
     let plan = s.prepare_constant_instantiation(&value, &wire, ty).unwrap();
     let before = s.budget.handles();
     s.prepare_constant_chunks(plan, 1).unwrap();
     assert_eq!(before, s.budget.handles());
-    let mut small = GuestStore::new(1, 2051, 32 << 20).unwrap();
-    let ty = small
-        .intern_type(TypeKey::Array {
-            element: TypeId(9),
-            len: 1024,
-        })
-        .unwrap();
-    let plan = small
-        .prepare_constant_instantiation(&value, &wire, ty)
-        .unwrap();
-    assert!(small.prepare_constant_chunks(plan, 1).is_err());
-    assert_eq!(small.budget.handles(), 0);
 }
 #[test]
 fn old_large_one_shot_constant_kernel_refuses_instead_of_hiding_dispatch_loop() {
@@ -366,7 +333,7 @@ fn old_large_one_shot_constant_kernel_refuses_instead_of_hiding_dispatch_loop() 
     let (v, w) = data(false, None);
     let p = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
     let before = s.budget.handles();
-    let mut f = RunFuel::new(2000).unwrap();
+    let mut f = RunSteps::default();
     assert!(s.instantiate_constant(p, &mut f).is_err());
     assert_eq!(f.snapshot().used, 1);
     assert_eq!(before, s.budget.handles());

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "component": "common-unresolved-glob-source-diagnostic-v1",
+  "status": "source-only-uncompiled-unexecuted",
+  "baseline": "scheduling0759f083 actual requiredpositive218a37/1",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/module_aliases.rs",
+      "sha256": "71f779bf635a92e9f568f6302530005f2ff3501dd928f1c097210113902ea51a",
+      "bytes": 35090
+    }
+  ],
+  "invariant": "unchanged source/import refusal; bounded actual source identity/range and missing module key only",
+  "runtime_pass_claim": false
+}

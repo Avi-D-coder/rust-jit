@@ -15,7 +15,7 @@ use crate::{
         call_contracts::{
             ArgumentHint, ArgumentHintPreparation, ArgumentType, ClosedReferenceArgument,
             ContractPreparation, PreparedCallContracts, ReferenceCallArguments,
-            prepare_argument_hint, prepare_contracts, prepare_contracts_with_references,
+            prepare_argument_hint, prepare_contracts_with_references,
         },
         callables::{CallResolver, CallSelection, SourceCallable},
         names::NameNamespaces,
@@ -46,11 +46,32 @@ mod body_sharing_tests;
 #[cfg(test)]
 #[path = "run_borrows.rs"]
 mod borrows;
+#[cfg(test)]
+pub(crate) use borrows::tests::start_discovered_body;
 #[path = "run_constructors.rs"]
 mod constructors;
 #[cfg(test)]
 #[path = "run_discarded_numeric_tests.rs"]
 mod discarded_numeric_tests;
+#[path = "run_facade.rs"]
+mod facade;
+#[path = "run_nominal.rs"]
+mod nominal;
+#[path = "run_drop_inventory.rs"]
+mod drop_inventory;
+#[path = "run_drop_witness.rs"]
+mod drop_witness;
+#[cfg(test)]
+#[path = "run_drop_witness_tests.rs"]
+mod drop_witness_tests;
+#[path = "run_methods.rs"]
+mod methods;
+#[path = "run_operator_calls.rs"]
+mod operator_calls;
+#[path = "run_format_calls.rs"]
+mod format_calls;
+#[path = "run_trait_calls.rs"]
+mod trait_calls;
 #[path = "run_fields.rs"]
 mod fields;
 #[cfg(test)]
@@ -58,6 +79,8 @@ mod fields;
 mod floating_constant_tests;
 #[path = "run_floating_constants.rs"]
 mod floating_constants;
+#[path = "run_module_source_preparation.rs"]
+pub(crate) mod module_source_preparation;
 #[cfg(test)]
 #[path = "run_nested_match_context_tests.rs"]
 mod nested_match_context_tests;
@@ -67,6 +90,15 @@ mod observed_constructor_tests;
 #[cfg(test)]
 #[path = "run_panic_tests.rs"]
 mod panic_tests;
+#[path = "run_pattern_names.rs"]
+mod pattern_names;
+#[path = "run_value_items.rs"]
+mod value_items;
+#[path = "run_value_calls.rs"]
+mod value_calls;
+#[cfg(test)]
+#[path = "run_pattern_tests.rs"]
+mod pattern_tests;
 #[cfg(test)]
 #[path = "run_places.rs"]
 mod places;
@@ -141,6 +173,9 @@ pub struct RunReport {
     pub opcode_counters: OpcodeCounters,
     pub installed_recipes: usize,
     pub installed_lrir_bytes: usize,
+    /// Guest `std::io::_print`/`_eprint` output, in order.
+    #[serde(skip_serializing_if = "GuestOutput::is_empty")]
+    pub output: GuestOutput,
 }
 #[derive(Debug, Serialize)]
 pub struct PanicReport {
@@ -150,6 +185,20 @@ pub struct PanicReport {
     pub status: &'static str,
     pub panic: crate::vm::step::GuestPanic,
     pub opcode_counters: OpcodeCounters,
+    #[serde(skip_serializing_if = "GuestOutput::is_empty")]
+    pub output: GuestOutput,
+}
+/// Guest standard output/error written through the closed library facade.
+/// The development report carries it; the process streams stay the report's.
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct GuestOutput {
+    pub stdout: String,
+    pub stderr: String,
+}
+impl GuestOutput {
+    pub fn is_empty(&self) -> bool {
+        self.stdout.is_empty() && self.stderr.is_empty()
+    }
 }
 pub enum RunPoll {
     Completed(RunReport),
@@ -172,31 +221,83 @@ pub(crate) struct TerminalFacts {
 }
 struct PreparedSourceCall {
     context: Option<crate::vm::context::GenericEnv>,
-    callee: Box<SourceCallable>,
+    /// Shared with a selection cache (operator methods); never deep-copied.
+    callee: Arc<SourceCallable>,
     contracts: PreparedCallContracts,
     body: Arc<BodyIndex>,
     body_lease: Option<crate::db::memo::BodyExecutionLease>,
     retained_bytes: usize,
+    /// A closure call enters its creating function's body at the closure
+    /// (`callee` is that function); see `run_value_calls.rs`.
+    closure: Option<Box<value_calls::ClosureEntry>>,
 }
 #[derive(Clone)]
 struct SelectedArgumentCall {
-    callee: Box<SourceCallable>,
+    /// Shared: a pending selection is cloned at its seal.
+    callee: Arc<SourceCallable>,
     explicit: Vec<(u32, ArgumentType)>,
     typed: Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
     hints: Vec<ArgumentHint>,
     argument_slots: Vec<SlotId>,
     result_hint: Option<ArgumentType>,
+    /// Callee type parameters the reached result context fixes through the
+    /// declared result: the expectation its arguments evaluate under.
+    expected: BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
     bytes: usize,
+    /// Selected for the call's reached types (a method, trait-path or
+    /// generic-owner impl): its arguments and result context cross the
+    /// boundary in their monomorphic views (`Frame::bound_view`).
+    monomorphic: bool,
 }
 struct SuspendedCall {
-    action: crate::vm::action::ActionId,
-    origin: crate::ir::recipe::Origin,
+    continuation: CallContinuation,
     caller: Frame,
     body_lease: crate::db::memo::BodyExecutionLease,
-    resume: PcKey,
-    result: SlotId,
     call: PreparedSourceCall,
     pending: BTreeMap<crate::vm::call::CallIdentity, SelectedArgumentCall>,
+}
+/// What a returning (or unwinding) callee resumes in its suspended caller.
+enum CallContinuation {
+    /// An ordinary recipe call site: its consumed action, result slot and PC.
+    Site {
+        action: crate::vm::action::ActionId,
+        origin: crate::ir::recipe::Origin,
+        resume: PcKey,
+        result: SlotId,
+    },
+    /// Drop glue's `Drop::drop` witness: discard the unit result and resume
+    /// the caller's suspended cleanup activation (and its own continuation).
+    DropWitness(drop_witness::DropWitnessResume),
+    /// An overloaded operator's trait method: its result completes the
+    /// caller's suspended operator operation.
+    Operator,
+    /// A `format_args!` placeholder's trait `fmt`: its output buffer becomes
+    /// the placeholder's text in the caller's suspended format operation.
+    Format { sink: usize },
+}
+impl SuspendedCall {
+    fn action(&self) -> Option<crate::vm::action::ActionId> {
+        match &self.continuation {
+            CallContinuation::Site { action, .. } => Some(*action),
+            CallContinuation::DropWitness(_)
+            | CallContinuation::Operator
+            | CallContinuation::Format { .. } => None,
+        }
+    }
+    #[cfg(test)]
+    fn result(&self) -> SlotId {
+        let CallContinuation::Site { result, .. } = &self.continuation else {
+            panic!("not a call-site continuation")
+        };
+        *result
+    }
+    #[cfg(test)]
+    fn resume(&self) -> PcKey {
+        let CallContinuation::Site { resume, .. } = &self.continuation else {
+            panic!("not a call-site continuation")
+        };
+        resume.clone()
+    }
 }
 fn call_fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
@@ -240,34 +341,6 @@ fn reached_argument_type(
         None => primitive_argument_type(descriptor),
     }
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct CallLimits {
-    pub max_frames: u32,
-    pub max_metadata_bytes: usize,
-}
-impl Default for CallLimits {
-    fn default() -> Self {
-        Self {
-            max_frames: 4096,
-            max_metadata_bytes: 32 * 1024 * 1024,
-        }
-    }
-}
-impl CallLimits {
-    pub fn validate(self) -> Result<Self, Diagnostic> {
-        if self.max_frames == 0
-            || self.max_frames > 100_000
-            || self.max_metadata_bytes == 0
-            || self.max_metadata_bytes > 256 * 1024 * 1024
-        {
-            return Err(Diagnostic::new(
-                "LRR-E-RUNTIME-RESOURCE",
-                "call limits outside supported bounds".into(),
-            ));
-        }
-        Ok(self)
-    }
-}
 /// Discovery-complete graphs are shared immutable source data. The owned
 /// legacy entry still performs its existing context contribution separately;
 /// it must not turn a completed graph into a copy-on-write runtime namespace.
@@ -304,15 +377,11 @@ pub struct RunMachine {
             Box<crate::frontend::runtime_macro_plan::RuntimeIntrinsicPlan>,
         ),
     >,
-    static_panic_plan_bytes: usize,
     runtime_no_item_proofs:
         BTreeMap<(BodyKey, u32, u32), crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
-    runtime_no_item_bytes: usize,
     runtime_calls:
         BTreeMap<PcKey, std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>,
-    runtime_call_bytes: usize,
     floating_plans: BTreeMap<PcKey, crate::frontend::primitive_constants::FloatingConstantRecipe>,
-    floating_plan_bytes: usize,
     primitive_methods: BTreeMap<
         PcKey,
         (
@@ -320,9 +389,34 @@ pub struct RunMachine {
             crate::core::digest::Digest,
         ),
     >,
-    primitive_method_bytes: usize,
     constant_plans: BTreeMap<PcKey, source_constants::SourceConstantPlan>,
-    constant_plan_bytes: usize,
+    pattern_names: BTreeMap<
+        PcKey,
+        (
+            crate::core::digest::Digest,
+            Arc<[crate::vm::pattern::matcher::PatternTarget]>,
+        ),
+    >,
+    /// Value-namespace item values selected per `ValuePath` PC.
+    item_values: BTreeMap<PcKey, crate::vm::frame::item_values_frame::ItemValue>,
+    /// The entered lexical selection of each single-name `ValuePath` PC a
+    /// body-local item may bind (`None`: the module route), selected once.
+    /// The selected static cell of each by-value static read PC.
+    static_reads: BTreeMap<PcKey, crate::runtime::cell::CellId>,
+    /// Body-local function items used as values: their entered admission
+    /// (the same proof a direct call of the path consumes), by identity.
+    local_function_values: BTreeMap<
+        crate::core::digest::Digest,
+        Arc<crate::frontend::callables::ordinary_local::OrdinaryLocalAdmission>,
+    >,
+    lexical_values: BTreeMap<
+        PcKey,
+        Option<(crate::core::digest::Digest, Option<crate::source::manifest::ItemKind>)>,
+    >,
+    /// Run-global static storage: one cell per static, initialized once from
+    /// its const-evaluated initializer, owned by a never-retired anchor.
+    static_cells: BTreeMap<crate::core::digest::Digest, crate::runtime::cell::CellId>,
+    static_anchor: Option<crate::runtime::cell::FrameId>,
     declarative_runtime: super::declarative_runtime::DeclarativeRuntimePlans,
     prepared_call: Option<PreparedSourceCall>,
     returning: Option<returning::ReturnContinuation>,
@@ -330,9 +424,38 @@ pub struct RunMachine {
     pending: BTreeMap<crate::vm::call::CallIdentity, SelectedArgumentCall>,
     pending_bytes: usize,
     calls: Vec<SuspendedCall>,
+    /// Impl members of the run's nominal types (built on first poll).
+    members: Option<Arc<crate::frontend::member_index::MemberIndex>>,
+    /// `<T as Drop>::drop` selected once per nominal declaration; each
+    /// witness entry revalidates it and prepares its own call contracts.
+    drop_witnesses: BTreeMap<crate::core::digest::Digest, Box<SourceCallable>>,
+    /// Operator trait methods selected per operator PC, operator and self
+    /// type; each entry revalidates and prepares its own call contracts.
+    /// Operator methods selected per (site, operator, self type): the shared
+    /// callee and its per-parameter hints.
+    operator_methods: BTreeMap<
+        (PcKey, u32, crate::runtime::shape::TypeId),
+        Arc<operator_calls::OperatorMethod>,
+    >,
+    /// Lang-item trait definitions of operators, by trait name, for the run.
+    operator_traits: BTreeMap<&'static str, crate::core::digest::Digest>,
+    /// Facade formatting entries, by name, for the run.
+    format_entries: BTreeMap<&'static str, Arc<SourceCallable>>,
+    /// Output buffers of in-progress trait-method formatting calls.
+    format_sinks: format_calls::FormatSinks,
+    /// Call sites (PC and call node) whose written qualified path is not a
+    /// trait path.
+    ordinary_call_paths: std::collections::BTreeSet<(PcKey, u32)>,
+    /// Source callables of member functions the impl index selected
+    /// (methods, trait-path and operator impls), by definition identity.
+    member_callees: BTreeMap<crate::core::digest::Digest, Arc<SourceCallable>>,
+    /// Selected unit/tuple struct and enum variant constructors.
+    nominal: nominal::NominalRunFacts,
+    /// Registered closure expressions and selected closure calls.
+    closures: value_calls::ClosureFacts,
+    output: GuestOutput,
     collected: OpcodeCounters,
     call_bytes: usize,
-    call_limits: CallLimits,
     peak_guest_frames: u32,
 }
 impl RunMachine {
@@ -343,7 +466,8 @@ impl RunMachine {
         self.declarative_runtime.plans()
     }
 
-    pub fn start(db: &mut Database, body: BodyKey, fuel_limit: u64) -> QueryPoll<Self> {
+    // E-R5-006: ignored, remove at callers (`_fuel_limit`; no guest step limit).
+    pub fn start(db: &mut Database, body: BodyKey, _fuel_limit: u64) -> QueryPoll<Self> {
         let query_trace_start = db.trace.events.len();
         let outcome = match db.fetch(&SyntaxProvider, QueryKey::BodyStructure(body)) {
             QueryPoll::Ready(Ok(outcome)) => outcome,
@@ -362,13 +486,12 @@ impl RunMachine {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         let initialize = (|| {
-            let mut store = GuestStore::new(1, 2_000_000, 256 * 1024 * 1024)?;
-            let mut frame = Frame::new(
+            let mut store = GuestStore::for_epoch(1)?;
+            let frame = Frame::new(
                 Arc::clone(index),
                 index.pc(NodeId(0), Phase::Entry)?,
                 &mut store,
             )?;
-            frame.set_fuel_limit(fuel_limit)?;
             let installed = InstalledRecipes::new(
                 db.source_revision(),
                 super::telemetry::INSTALLED_LRIR_BUDGET,
@@ -387,27 +510,38 @@ impl RunMachine {
                 graph: None,
                 static_panic_body_bases: BTreeMap::new(),
                 static_panic_plans: BTreeMap::new(),
-                static_panic_plan_bytes: 0,
                 runtime_no_item_proofs: BTreeMap::new(),
-                runtime_no_item_bytes: 0,
                 runtime_calls: BTreeMap::new(),
-                runtime_call_bytes: 0,
                 floating_plans: BTreeMap::new(),
-                floating_plan_bytes: 0,
                 primitive_methods: BTreeMap::new(),
-                primitive_method_bytes: 0,
                 constant_plans: BTreeMap::new(),
-                constant_plan_bytes: 0,
+                pattern_names: BTreeMap::new(),
+                item_values: BTreeMap::new(),
+                lexical_values: BTreeMap::new(),
+                local_function_values: BTreeMap::new(),
+                static_reads: BTreeMap::new(),
+                static_cells: BTreeMap::new(),
+                static_anchor: None,
                 declarative_runtime: Default::default(),
                 prepared_call: None,
                 returning: None,
                 unwinding: None,
                 pending: BTreeMap::new(),
                 pending_bytes: 0,
+                output: GuestOutput::default(),
+                members: None,
+                drop_witnesses: BTreeMap::new(),
+                operator_methods: BTreeMap::new(),
+                operator_traits: BTreeMap::new(),
+                format_entries: BTreeMap::new(),
+                format_sinks: Default::default(),
+                ordinary_call_paths: std::collections::BTreeSet::new(),
+                member_callees: BTreeMap::new(),
+                nominal: Default::default(),
+                closures: Default::default(),
                 calls: vec![],
                 collected: OpcodeCounters::default(),
                 call_bytes: 0,
-                call_limits: CallLimits::default(),
                 peak_guest_frames: 1,
             })
         })();
@@ -416,12 +550,9 @@ impl RunMachine {
     pub fn start_with_sources(
         db: &mut Database,
         body: BodyKey,
-        fuel_limit: u64,
+        fuel_limit: u64, // E-R5-006: ignored, remove at callers
         sources: Vec<PreparedSourceView>,
     ) -> QueryPoll<Self> {
-        if sources.len() > 100_000 {
-            return QueryPoll::Ready(Err(call_fault("call source catalogue limit exceeded")));
-        }
         // This bounded metadata allocation precedes both the body query and
         // guest frame/store creation. Resource refusal must remain typed.
         let mut outlines = Vec::new();
@@ -449,7 +580,7 @@ impl RunMachine {
     pub(crate) fn start_with_test_catalog(
         db: &mut Database,
         body: BodyKey,
-        fuel_limit: u64,
+        fuel_limit: u64, // E-R5-006: ignored, remove at callers
         sources: Vec<PreparedSourceView>,
         catalog: &super::test_catalog::TestCatalog,
     ) -> QueryPoll<Self> {
@@ -470,10 +601,10 @@ impl RunMachine {
     pub fn start_with_discovery(
         db: &mut Database,
         body: BodyKey,
-        fuel_limit: u64,
-        discovery: crate::expand::source_discovery::SourceDiscovery,
+        fuel_limit: u64, // E-R5-006: ignored, remove at callers
+        mut discovery: crate::expand::source_discovery::SourceDiscovery,
     ) -> QueryPoll<Self> {
-        if let Err(error) = discovery.publish(db) {
+        if let Err(error) = discovery.republish(db) {
             return QueryPoll::Ready(Err(error));
         }
         let source_environment = match discovery.completed_source_environment(db) {
@@ -546,7 +677,7 @@ impl RunMachine {
         };
         let sources: Vec<_> = self.sources.iter().collect();
         let resolver = match CallResolver::new(graph, &sources) {
-            Ok(r) => r,
+            Ok(r) => r.with_members(self.members.as_deref()),
             Err(e) => return QueryPoll::Ready(Err(e)),
         };
         let callee = match resolver.source_function(db, self.frame.pc().body.definition, name) {
@@ -559,7 +690,7 @@ impl RunMachine {
             QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
             QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
         };
-        self.prepare_selected_argument_call(db, callee, syntax, argument_slots)
+        self.prepare_selected_argument_call(db, Arc::from(callee), syntax, argument_slots)
     }
     /// Consume the same immutable source selection used by ordinary lowering.
     /// Publication is a reached coordinator action; the pure goal never enters
@@ -604,7 +735,7 @@ impl RunMachine {
                 },
             ));
         }
-        self.finish_selected_argument_call(db, callee, explicit, Some(typed), arguments)
+        self.finish_selected_argument_call(db, Arc::from(callee), explicit, Some(typed), arguments)
             .map(Some)
     }
     fn select_reached_argument_call(
@@ -653,7 +784,12 @@ impl RunMachine {
                 self.runtime_no_item_proofs.values(),
             ) {
                 QueryPoll::Ready(Ok(Some(callee))) => {
-                    return self.prepare_selected_argument_call(db, callee, syntax, arguments);
+                    return self.prepare_selected_argument_call(
+                        db,
+                        Arc::from(callee),
+                        syntax,
+                        arguments,
+                    );
                 }
                 QueryPoll::Ready(Ok(None)) => {}
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -663,46 +799,16 @@ impl RunMachine {
         // A lowered lexical source path must never fall back to a same-named
         // module callable when its entered namespace context was not supplied.
         if !name.contains("::") {
-            use crate::db::dependency::{InputKey, InputValue};
-            let definition = self.frame.pc().body.definition;
-            let source = match db.input(&InputKey::DefinitionSource(definition)).as_deref() {
-                Some(InputValue::DefinitionSource(source)) => source.clone(),
-                _ => return QueryPoll::Ready(Err(call_fault("reached caller source absent"))),
-            };
-            let handle = match db.input(&InputKey::DefinitionBody(definition)).as_deref() {
-                Some(InputValue::DefinitionBody(handle))
-                    if handle.key() == self.frame.pc().body =>
-                {
-                    handle.clone()
-                }
-                _ => {
-                    return QueryPoll::Ready(Err(call_fault(
-                        "reached caller body identity differs",
-                    )));
-                }
-            };
-            let parsed = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(source)) {
-                QueryPoll::Ready(Ok(value)) => value,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
-            let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
-                return QueryPoll::Ready(Err(call_fault("reached caller parse kind differs")));
-            };
-            match parsed.entered_call_requires_lexical_context(
-                &handle,
-                &self.frame.body,
-                self.frame.pc(),
-                name,
-            ) {
-                Ok(true) => {
+            match self.requires_lexical_callee_context(db, name) {
+                QueryPoll::Ready(Ok(true)) => {
                     return QueryPoll::Ready(Err(Diagnostic::new(
                         "LRR-E-CALL-CONTEXT",
                         "lexical callee requires exact entered source context".into(),
                     )));
                 }
-                Ok(false) => {}
-                Err(error) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::Ready(Ok(false)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         }
         self.select_argument_call(db, name, syntax, arguments)
@@ -710,7 +816,7 @@ impl RunMachine {
     fn prepare_selected_argument_call(
         &self,
         db: &mut Database,
-        callee: Box<SourceCallable>,
+        callee: Arc<SourceCallable>,
         syntax: &[String],
         argument_slots: &[SlotId],
     ) -> QueryPoll<SelectedArgumentCall> {
@@ -824,7 +930,7 @@ impl RunMachine {
     fn finish_selected_argument_call(
         &self,
         db: &mut Database,
-        callee: Box<SourceCallable>,
+        callee: Arc<SourceCallable>,
         explicit: Vec<(u32, ArgumentType)>,
         typed: Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
         argument_slots: &[SlotId],
@@ -840,10 +946,11 @@ impl RunMachine {
         } else {
             match prepare_argument_hint(db, &callee, graph, &sources, 0) {
                 QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(h))) => h,
-                QueryPoll::Ready(Ok(_)) => {
-                    return QueryPoll::Ready(Err(call_fault(
-                        "argument source hints require further type integration",
-                    )));
+                QueryPoll::Ready(Ok(other)) => {
+                    return QueryPoll::Ready(Err(call_fault(&format!(
+                        "argument source hints require further type integration: {}",
+                        other.describe()
+                    ))));
                 }
                 QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
                 QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
@@ -916,17 +1023,6 @@ impl RunMachine {
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
         }
-        if self
-            .pending_bytes
-            .checked_add(bytes)
-            .and_then(|n| n.checked_add(self.call_bytes))
-            .is_none_or(|n| n > self.call_limits.max_metadata_bytes)
-        {
-            return QueryPoll::Ready(Err(Diagnostic::new(
-                "LRR-E-RUNTIME-RESOURCE",
-                "call stack metadata budget exceeded".into(),
-            )));
-        }
         if hints
             .try_reserve_exact(hint_capacity.saturating_sub(hints.len()))
             .is_err()
@@ -956,14 +1052,11 @@ impl RunMachine {
             Some(n) => n,
             None => return QueryPoll::Ready(Err(crate::runtime::arena::resource())),
         };
-        if self
-            .pending_bytes
-            .checked_add(bytes)
-            .and_then(|n| n.checked_add(self.call_bytes))
-            .is_none_or(|n| n > self.call_limits.max_metadata_bytes)
-        {
-            return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-        }
+        let expected = match self.expected_result_parameters(db, &callee, result_hint.as_ref()) {
+            QueryPoll::Ready(Ok(expected)) => expected,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         QueryPoll::Ready(Ok(SelectedArgumentCall {
             callee,
             explicit,
@@ -971,8 +1064,66 @@ impl RunMachine {
             hints,
             argument_slots: slots,
             result_hint,
+            expected,
             bytes,
+            monomorphic: false,
         }))
+    }
+    /// The callee type parameters the reached result context fixes through
+    /// the declared result (`Box::new(1234)` where `Box<isize>` is expected
+    /// fixes `T = isize`): the expectation each argument is evaluated under,
+    /// like rustc's expected inputs for an expected output. Advisory only;
+    /// the evaluated contract binds and checks the actual arguments.
+    fn expected_result_parameters(
+        &self,
+        db: &mut Database,
+        callee: &SourceCallable,
+        result: Option<&ArgumentType>,
+    ) -> QueryPoll<BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>> {
+        let mut expected = BTreeMap::new();
+        let signature = callee.signature();
+        let Some(result) = result else {
+            return QueryPoll::Ready(Ok(expected));
+        };
+        if !signature
+            .generics
+            .iter()
+            .any(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
+        {
+            return QueryPoll::Ready(Ok(expected));
+        }
+        let template = match &signature.result_symbolic {
+            Some(term) => term.clone(),
+            None => {
+                let Some(graph) = &self.graph else {
+                    return QueryPoll::Ready(Ok(expected));
+                };
+                let sources: Vec<_> = self.sources.iter().collect();
+                match crate::frontend::source_types::resolve_written_type(
+                    db,
+                    graph,
+                    &sources,
+                    signature,
+                    &signature.result,
+                ) {
+                    QueryPoll::Ready(Ok(Some(term))) => term,
+                    QueryPoll::Ready(_) => return QueryPoll::Ready(Ok(expected)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
+        };
+        if crate::frontend::call_contracts::bind_runtime_parameters(
+            &template,
+            result.descriptor,
+            &self.store,
+            signature.definition,
+            &mut expected,
+        )
+        .is_err()
+        {
+            expected.clear();
+        }
+        QueryPoll::Ready(Ok(expected))
     }
     /// A physical expectation may precede the genuine returned source. Keep
     /// that descriptor in the slot without inventing a region or nominal type.
@@ -985,12 +1136,38 @@ impl RunMachine {
             return Ok(Some(ArgumentType { source, descriptor }));
         }
         // These are the fixed builtin source IDs handled by the same ordinary
-        // primitive conversion. Other descriptors supply no source authority.
+        // primitive conversion.
         if matches!(descriptor.0, 1..=15) {
-            primitive_argument_type(descriptor).map(Some)
-        } else {
-            Ok(None)
+            return primitive_argument_type(descriptor).map(Some);
         }
+        // A written nominal/tuple/array context (`let v: Option<u16> = ..`)
+        // materialized its closed descriptor: its structure is the source.
+        // References carry no region here and supply no source authority.
+        fn reference_free(term: &crate::traits::term::TyTerm) -> bool {
+            use crate::traits::term::{GenericArg, TyTerm};
+            match term {
+                TyTerm::Primitive(_) | TyTerm::Str => true,
+                TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
+                    GenericArg::Type(ty) => reference_free(ty),
+                    _ => true,
+                }),
+                TyTerm::Tuple(items) => items.iter().all(reference_free),
+                TyTerm::Array(item, _) | TyTerm::Slice(item) => reference_free(item),
+                _ => false,
+            }
+        }
+        Ok(self
+            .store
+            .descriptor_source_term(descriptor)
+            .filter(|source| {
+                matches!(
+                    source,
+                    crate::traits::term::TyTerm::Nominal(..)
+                        | crate::traits::term::TyTerm::Tuple(_)
+                        | crate::traits::term::TyTerm::Array(..)
+                ) && reference_free(source)
+            })
+            .map(|source| ArgumentType { source, descriptor }))
     }
     fn prepare_source_call(
         &mut self,
@@ -1017,16 +1194,79 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         };
-        let Some(graph) = &self.graph else {
-            return QueryPoll::Ready(Err(call_fault("call source catalogue absent")));
-        };
-        let sources: Vec<_> = self.sources.iter().collect();
         if let Some(typed) = &selected.typed {
             if let Err(error) = typed.require_current(db, &self.frame.body, self.frame.pc()) {
                 return QueryPoll::Ready(Err(error));
             }
         }
-        let callee = selected.callee;
+        let mut references = Vec::new();
+        if arguments
+            .iter()
+            .any(|argument| matches!(argument.source, crate::traits::term::TyTerm::Ref(..)))
+        {
+            if references.try_reserve_exact(arguments.len()).is_err() {
+                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+            }
+            for (ordinal, argument) in arguments.iter().enumerate() {
+                // Only closed reference parameters consume owning-frame
+                // evidence; generic reference parameters bind structurally.
+                let closed_parameter = selected
+                    .hints
+                    .get(ordinal)
+                    .is_none_or(|hint| hint.closed_reference.is_some());
+                let evidence = if closed_parameter
+                    && matches!(argument.source, crate::traits::term::TyTerm::Ref(..))
+                {
+                    let Some(slot) = selected.argument_slots.get(ordinal) else {
+                        return QueryPoll::Ready(Err(call_fault(
+                            "reference source argument slot absent",
+                        )));
+                    };
+                    // E-R5-006: no byte budget; `usize::MAX` until the
+                    // frontend drops the `capture_budgeted` limit parameter.
+                    match ClosedReferenceArgument::capture_budgeted(
+                        &self.frame,
+                        *slot,
+                        &self.store,
+                        usize::MAX,
+                    ) {
+                        Ok(evidence) => Some(evidence),
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                } else {
+                    None
+                };
+                references.push(evidence);
+            }
+        }
+        let SelectedArgumentCall {
+            callee, explicit, ..
+        } = selected;
+        self.prepare_selected_source_call(
+            db,
+            callee,
+            &explicit,
+            result_hint,
+            arguments,
+            &references,
+        )
+    }
+    /// Shared entry preparation of a selected source callee for already
+    /// evaluated arguments: owner environment, contracts (closed reference
+    /// parameters consume their actual evidence), body and definition context.
+    fn prepare_selected_source_call(
+        &mut self,
+        db: &mut Database,
+        callee: Arc<SourceCallable>,
+        explicit: &[(u32, ArgumentType)],
+        result_hint: Option<&ArgumentType>,
+        arguments: &[ArgumentType],
+        references: &[Option<ClosedReferenceArgument>],
+    ) -> QueryPoll<PreparedSourceCall> {
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Err(call_fault("call source catalogue absent")));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
         // An admitted local owner needs its derived environment before revision-
         // bound contracts. Other source calls retain contract-before-body order.
         // This is reached call preparation, never a signature/type-goal demand.
@@ -1038,7 +1278,7 @@ impl RunMachine {
         {
             if let Err(error) = crate::frontend::call_contracts::preflight_evaluated_call(
                 &callee,
-                &selected.explicit,
+                explicit,
                 result_hint,
                 arguments,
             ) {
@@ -1055,117 +1295,140 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
             Some(body)
+        } else if callee.body().is_some_and(|handle| {
+            db.input(&crate::db::dependency::InputKey::BodyEnvironment(handle.key()))
+                .is_none()
+        }) && matches!(self.graph, Some(RunNames::Completed(_)))
+        {
+            // A module/impl callee selected by ordinary resolution owns the same
+            // derived body environment as an entered-goal callee. Publication
+            // advances the revision, so it precedes revision-bound contracts.
+            if let Err(error) = crate::frontend::call_contracts::preflight_evaluated_call(
+                &callee,
+                explicit,
+                result_hint,
+                arguments,
+            ) {
+                return QueryPoll::Ready(Err(error));
+            }
+            let body = match Self::selected_source_body(db, &callee) {
+                QueryPoll::Ready(Ok(body)) => body,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            match self.prepare_selected_module_source(db, &callee, &body) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            Some(body)
         } else {
             None
         };
-        let mut references = Vec::new();
         let reference_arguments = arguments
             .iter()
             .any(|argument| matches!(argument.source, crate::traits::term::TyTerm::Ref(..)));
-        if reference_arguments {
-            let Some(available) = self
-                .call_limits
-                .max_metadata_bytes
-                .checked_sub(self.call_bytes)
-                .and_then(|bytes| bytes.checked_sub(self.pending_bytes))
-            else {
-                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-            };
-            let Some(mut reference_bytes) = arguments
-                .len()
-                .checked_mul(std::mem::size_of::<Option<ClosedReferenceArgument>>())
-                .filter(|bytes| *bytes <= available)
-            else {
-                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-            };
-            if references.try_reserve_exact(arguments.len()).is_err() {
-                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-            }
-            for (ordinal, argument) in arguments.iter().enumerate() {
-                let evidence = if matches!(argument.source, crate::traits::term::TyTerm::Ref(..)) {
-                    let Some(slot) = selected.argument_slots.get(ordinal) else {
-                        return QueryPoll::Ready(Err(call_fault(
-                            "reference source argument slot absent",
-                        )));
-                    };
-                    match ClosedReferenceArgument::capture_budgeted(
-                        &self.frame,
-                        *slot,
-                        &self.store,
-                        available - reference_bytes,
-                    ) {
-                        Ok(evidence) => {
-                            let bytes = match evidence.allocated_bytes() {
-                                Ok(bytes) => bytes,
-                                Err(error) => return QueryPoll::Ready(Err(error)),
-                            };
-                            reference_bytes = match reference_bytes
-                                .checked_add(bytes)
-                                .filter(|bytes| *bytes <= available)
-                            {
-                                Some(bytes) => bytes,
-                                None => {
-                                    return QueryPoll::Ready(
-                                        Err(crate::runtime::arena::resource()),
-                                    );
-                                }
-                            };
-                            Some(evidence)
-                        }
-                        Err(error) => return QueryPoll::Ready(Err(error)),
-                    }
-                } else {
-                    None
-                };
-                references.push(evidence);
-            }
-        }
         let prepared = if reference_arguments {
             prepare_contracts_with_references(
                 db,
                 &callee,
                 graph,
                 &sources,
-                &selected.explicit,
+                explicit,
                 result_hint,
                 ReferenceCallArguments {
                     store: &self.store,
                     arguments,
-                    references: &references,
+                    references,
                 },
             )
         } else {
-            prepare_contracts(
+            crate::frontend::call_contracts::prepare_contracts_in_store(
                 db,
                 &callee,
                 graph,
                 &sources,
-                &selected.explicit,
+                explicit,
                 result_hint,
                 arguments,
+                &self.store,
             )
         };
-        let contracts = match prepared {
+        let mut contracts = match prepared {
             QueryPoll::Ready(Ok(ContractPreparation::Ready(c))) => c,
-            QueryPoll::Ready(Ok(_)) => {
-                return QueryPoll::Ready(Err(call_fault(
-                    "call contracts require later source type integration",
-                )));
+            QueryPoll::Ready(Ok(other)) => {
+                let detail = match other {
+                    ContractPreparation::NeedType { syntax, .. } => format!(
+                        "type `{}`",
+                        syntax.iter().map(|t| t.text.as_str()).collect::<String>()
+                    ),
+                    ContractPreparation::NeedAlias(alias) => format!("alias {alias:?}"),
+                    ContractPreparation::NeedName(name) => format!("name {name:?}"),
+                    ContractPreparation::Ready(_) => unreachable!("matched above"),
+                };
+                return QueryPoll::Ready(Err(call_fault(&format!(
+                    "call contracts require later source type integration: {detail}"
+                ))));
             }
             QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
             QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
         };
+        // An associated-type result (`-> T::V`) is normalized with the bound
+        // generics; when it cannot be yet, the returned value supplies it.
+        let mut projection_result = false;
+        if callee.signature().result_symbolic.is_none()
+            && contracts.source_result.is_none()
+            && callee.signature().result.len() > 1
+            && let QueryPoll::Ready(Ok(Some(written))) =
+                crate::frontend::source_types::resolve_written_type(
+                    db,
+                    graph,
+                    &sources,
+                    callee.signature(),
+                    &callee.signature().result,
+                )
+            && crate::frontend::associated_types::contains_projection(&written)
+        {
+            projection_result = true;
+            if let Some(members) = self.members.clone() {
+                let bindings = contracts
+                    .runtime_substitution
+                    .iter()
+                    .filter_map(|(key, ty)| {
+                        self.store.descriptor_source_term(*ty).map(|term| (*key, term))
+                    })
+                    .collect();
+                let bound = crate::frontend::associated_types::substitute(&written, &bindings);
+                if let QueryPoll::Ready(Ok(Some(normalized))) =
+                    crate::frontend::associated_types::normalize(
+                        db, graph, &sources, &members, &bound,
+                    )
+                    && crate::frontend::call_contracts::closed_term(&normalized)
+                {
+                    contracts.source_result = Some(normalized);
+                }
+            }
+        }
         // Until symbolic body-hint integration, reject named source return types
         // rather than interpreting a primitive-looking alias as its spelling.
-        if callee.signature().result_symbolic.is_none() && contracts.source_result.is_none() {
+        if callee.signature().result_symbolic.is_none()
+            && contracts.source_result.is_none()
+            && !projection_result
+        {
             let names = match SignatureNames::from_database(db, graph, callee.signature()) {
                 Ok(names) => names,
                 Err(e) => return QueryPoll::Ready(Err(e)),
             };
             if callee.signature().result.len() != 1 {
-                return QueryPoll::Ready(Err(call_fault(
-                    "symbolic return syntax awaits body-hint integration",
-                )));
+                return QueryPoll::Ready(Err(call_fault(&format!(
+                    "symbolic return syntax awaits body-hint integration: `{}`",
+                    callee
+                        .signature()
+                        .result
+                        .iter()
+                        .map(|token| token.text.as_str())
+                        .collect::<String>()
+                ))));
             }
             match names.unqualified(&callee.signature().result[0].text, None) {
                 Ok(SignatureName::Primitive(primitive)) => {
@@ -1193,9 +1456,10 @@ impl RunMachine {
                     }
                 }
                 Ok(_) => {
-                    return QueryPoll::Ready(Err(call_fault(
-                        "symbolic return identity awaits body-hint integration",
-                    )));
+                    return QueryPoll::Ready(Err(call_fault(&format!(
+                        "symbolic return identity awaits body-hint integration: `{}`",
+                        callee.signature().result[0].text
+                    ))));
                 }
                 Err(e) => return QueryPoll::Ready(Err(e)),
             }
@@ -1248,33 +1512,31 @@ impl RunMachine {
                 })
                 .and_then(|n| n.checked_add(context_bytes))
                 .and_then(|n| n.checked_add(4096));
-            if self
-                .calls
-                .len()
-                .checked_add(2)
-                .is_none_or(|frames| frames > self.call_limits.max_frames as usize)
-            {
-                return QueryPoll::Ready(Err(Diagnostic::new(
-                    "LRR-E-RUNTIME-RESOURCE",
-                    "guest frame limit exceeded".into(),
-                )));
-            }
-            let Some(retained_bytes) = bytes.filter(|n| {
-                self.call_bytes
-                    .checked_add(*n)
-                    .and_then(|total| total.checked_add(self.pending_bytes))
-                    .is_some_and(|total| total <= self.call_limits.max_metadata_bytes)
-            }) else {
-                return QueryPoll::Ready(Err(Diagnostic::new(
-                    "LRR-E-RUNTIME-RESOURCE",
-                    "call stack metadata budget exceeded".into(),
-                )));
+            let Some(retained_bytes) = bytes else {
+                return QueryPoll::Ready(Err(call_fault("call metadata size overflow")));
             };
             let context =
                 match crate::vm::context::GenericEnv::capture_current(db, &callee, &contracts) {
                     Ok(context) => context,
                     Err(e) => return QueryPoll::Ready(Err(e)),
                 };
+            // A closed declared result naming a nominal Type (`-> Option<u32>`)
+            // is the body's root result context, as its written Type.
+            let context = match contracts.source_result.as_ref().filter(|term| {
+                crate::frontend::call_contracts::closed_term(term)
+                    && crate::frontend::written_terms::contains_nominal(term)
+            }) {
+                Some(term) => {
+                    match crate::frontend::written_terms::closed_written_type(db, &sources, term) {
+                        QueryPoll::Ready(Ok(written)) => {
+                            context.with_written_result(written.map(Arc::new))
+                        }
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                }
+                None => context,
+            };
             let body_lease = match db.pin_guest_body(body.body()) {
                 QueryPoll::Ready(Ok(lease)) => lease,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -1287,8 +1549,95 @@ impl RunMachine {
                 body,
                 body_lease: Some(body_lease),
                 retained_bytes,
+                closure: None,
             }))
         }
+    }
+    /// Enter an accepted callee frame with its sealed argument packet and
+    /// suspend the current frame under `continuation`. Shared by recipe call
+    /// sites and drop glue's `Drop::drop` witness.
+    fn enter_callee(
+        &mut self,
+        mut call: PreparedSourceCall,
+        mut callee: Frame,
+        args: &crate::vm::call::ArgumentPacket,
+        continuation: CallContinuation,
+    ) -> Result<(), Diagnostic> {
+        self.calls
+            .try_reserve(1)
+            .map_err(|_| call_fault("call continuation allocation failed"))?;
+        let callee_lease = call
+            .body_lease
+            .take()
+            .ok_or_else(|| call_fault("sealed callee source lease absent"))?;
+        if callee_lease.body() != call.body.body() {
+            return Err(call_fault("sealed callee source lease differs"));
+        }
+        let contracts = match &call.closure {
+            Some(closure) => call
+                .contracts
+                .parameter_descriptors
+                .iter()
+                .copied()
+                .zip(closure.mutable.iter().copied())
+                .collect::<Vec<_>>(),
+            None => call
+                .contracts
+                .parameter_descriptors
+                .iter()
+                .zip(&call.callee.signature().parameters)
+                .map(|(ty, param)| {
+                    (
+                        *ty,
+                        param
+                            .pattern
+                            .first()
+                            .is_some_and(|token| token.text == "mut"),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        };
+        // A closure frame has no definition environment of its own.
+        if call.closure.is_none() {
+            callee.install_context(call.context.take().ok_or_else(|| {
+                call_fault("accepted definition environment already consumed")
+            })?)?;
+        }
+        callee.install_parameter_sources(call.contracts.source_parameters.clone())?;
+        callee.initialize_parameters(args, &contracts, &mut self.store)?;
+        if let Some(closure) = &call.closure {
+            callee.bind_closure_captures(
+                &closure.captures,
+                closure.mutable.len(),
+                &closure.closure,
+                &self.store,
+            )?;
+        }
+        let call_bytes = self
+            .call_bytes
+            .checked_add(call.retained_bytes)
+            .ok_or_else(|| call_fault("call metadata size overflow"))?;
+        let depth = self
+            .calls
+            .len()
+            .checked_add(2)
+            .and_then(|depth| u32::try_from(depth).ok())
+            .ok_or_else(|| call_fault("guest frame depth overflow"))?;
+        self.collected.accumulate(self.frame.counters())?;
+        let pending = std::mem::take(&mut self.pending);
+        self.frame.counters = OpcodeCounters::default();
+        let caller = std::mem::replace(&mut self.frame, callee);
+        let body_lease = std::mem::replace(&mut self.body_lease, callee_lease);
+        self.call_bytes = call_bytes;
+        self.peak_guest_frames = self.peak_guest_frames.max(depth);
+        self.calls.push(SuspendedCall {
+            continuation,
+            caller,
+            body_lease,
+            call,
+            pending,
+        });
+        Ok(())
     }
     fn check_source_return(
         &self,
@@ -1297,6 +1646,11 @@ impl RunMachine {
         actual: crate::runtime::shape::TypeId,
     ) -> Result<(), Diagnostic> {
         call.callee.revalidate(db)?;
+        // A closure's result is its body's reached value; no declared
+        // result constrains it here.
+        if call.closure.is_some() {
+            return Ok(());
+        }
         if let Some(proof) = call
             .contracts
             .closed_references
@@ -1305,6 +1659,42 @@ impl RunMachine {
         {
             proof.validate_packet(call.callee.signature(), &call.contracts)?;
             return call.contracts.check_return_descriptor(actual);
+        }
+        // An opaque/trait-object result accepts the returned concrete value.
+        if call
+            .contracts
+            .source_result
+            .as_ref()
+            .is_some_and(crate::frontend::call_contracts::contains_object)
+        {
+            return Ok(());
+        }
+        // A closed nominal/tuple result: the returned value's exact runtime
+        // type must be that declared source type.
+        if let Some(expected) = call
+            .contracts
+            .source_result
+            .as_ref()
+            .filter(|term| {
+                !matches!(term, crate::traits::term::TyTerm::Primitive(_))
+                    && crate::frontend::call_contracts::closed_term(term)
+            })
+        {
+            let found = match self.frame.return_source.as_ref() {
+                Some(found) => Some(found.clone()),
+                None => self.store.descriptor_source_term(actual),
+            };
+            // Regions are not runtime data: a returned `&'x [T]` view meets
+            // its declared `&'a [T]` result up to region names.
+            if found.as_ref().map(crate::frontend::signature_subst::erase_regions)
+                != Some(crate::frontend::signature_subst::erase_regions(expected))
+            {
+                return Err(Diagnostic::new(
+                    "LRR-E-CALL-RETURN-TYPE",
+                    "returned value differs from the closed declared result type".into(),
+                ));
+            }
+            return Ok(());
         }
         if call.contracts.result_descriptor.is_some() {
             call.contracts.check_return_descriptor(actual)?;
@@ -1320,11 +1710,38 @@ impl RunMachine {
             }
             return Ok(());
         }
+        // A normalized associated-type primitive result.
+        if let Some(crate::traits::term::TyTerm::Primitive(primitive)) =
+            call.contracts.source_result.as_ref()
+        {
+            if actual != crate::frontend::call_contracts::primitive_runtime_id(*primitive)? {
+                return Err(Diagnostic::new(
+                    "LRR-E-CALL-RETURN-TYPE",
+                    "returned value differs from the normalized declared result type".into(),
+                ));
+            }
+            return Ok(());
+        }
         let graph = self
             .graph
             .as_ref()
             .ok_or_else(|| call_fault("return source catalogue absent"))?;
         let signature = call.callee.signature();
+        if signature.result.len() > 1
+            && call.contracts.source_result.is_none()
+            && let QueryPoll::Ready(Ok(Some(written))) =
+                crate::frontend::source_types::resolve_written_type(
+                    db,
+                    graph,
+                    &self.sources.iter().collect::<Vec<_>>(),
+                    signature,
+                    &signature.result,
+                )
+            && crate::frontend::associated_types::contains_projection(&written)
+        {
+            // Not yet normalizable: the well-typed returned value supplies it.
+            return Ok(());
+        }
         let names = SignatureNames::from_database(db, graph, signature)?;
         if signature.result.len() != 1 {
             return Err(call_fault(
@@ -1436,22 +1853,12 @@ impl RunMachine {
         {
             return Err(call_fault("static panic source body attachment differs"));
         }
-        if self.static_panic_plans.contains_key(&key) || self.static_panic_plans.len() >= 4096 {
-            return Err(call_fault("duplicate or excessive static panic plans"));
+        if self.static_panic_plans.contains_key(&key) {
+            return Err(call_fault("duplicate static panic plan"));
         }
-        let charge = plan
-            .allocated_bytes()?
-            .checked_add(8192)
-            .ok_or_else(|| call_fault("static panic plan size overflow"))?;
-        let bytes = self
-            .static_panic_plan_bytes
-            .checked_add(charge)
-            .filter(|n| *n <= 32 * 1024 * 1024)
-            .ok_or_else(|| call_fault("static panic plan metadata limit"))?;
         self.static_panic_body_bases
             .insert(identity, handle.range.start);
         self.static_panic_plans.insert(key, (source, plan));
-        self.static_panic_plan_bytes = bytes;
         Ok(())
     }
     pub(crate) fn query_trace_start(&self) -> usize {
@@ -1506,7 +1913,6 @@ impl RunMachine {
     pub(crate) fn diagnostic_source_origin(
         &self,
         span: &crate::syntax::spans::BodySpan,
-        max_path_bytes: usize,
     ) -> Result<Option<crate::syntax::origin::SourceOrigin>, Diagnostic> {
         use crate::syntax::{
             origin::SourceOrigin,
@@ -1556,12 +1962,6 @@ impl RunMachine {
                         return Err(invalid());
                     }
                     continue;
-                }
-                if selection.path.as_str().len() > max_path_bytes {
-                    return Err(Diagnostic::new(
-                        "LRR-E-METADATA-LIMIT",
-                        "guest frame path retention limit".into(),
-                    ));
                 }
                 let mut path = String::new();
                 path.try_reserve_exact(selection.path.as_str().len())
@@ -1651,30 +2051,15 @@ impl RunMachine {
                 "generated fault definition has conflicting owners".into(),
             )
         };
-        let limit = || {
-            Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "generated fault definition retention limit".into(),
-            )
-        };
         let mut found: Option<DefinitionOrigin> = None;
         for source in &self.sources {
-            let Some(item) = source.outline().items.iter().find(|item| {
+            if !source.outline().items.iter().any(|item| {
                 item.def_key.item_kind == crate::source::manifest::ItemKind::Macro
                     && item.def_key.fingerprint() == *definition
-            }) else {
+            }) {
                 continue;
-            };
-            let selected = source.selection();
-            if selected
-                .path
-                .as_str()
-                .len()
-                .checked_add(item.def_key.declared_name.len())
-                .is_none_or(|n| n > 65_536)
-            {
-                return Err(limit());
             }
+            let selected = source.selection();
             // Reads the retained parsed syntax. No parse or provider is invoked.
             let (range, name) = source.macro_definition_header(*definition)?;
             if let Some(old) = &found {
@@ -1690,7 +2075,7 @@ impl RunMachine {
             }
             let mut path = String::new();
             path.try_reserve_exact(selected.path.as_str().len())
-                .map_err(|_| limit())?;
+                .map_err(|_| invalid())?;
             path.push_str(selected.path.as_str());
             found = Some(DefinitionOrigin {
                 identity: *definition,
@@ -1731,37 +2116,14 @@ impl RunMachine {
     pub fn opcode_counters(&self) -> Result<OpcodeCounters, Diagnostic> {
         self.all_counters()
     }
-    pub fn cancellation_token(&self) -> crate::vm::fuel::CancellationToken {
-        self.frame.fuel.cancellation()
-    }
-    pub fn set_deadline(&mut self, deadline: std::time::Instant) {
-        self.frame.fuel.set_deadline(deadline);
-    }
-    pub fn set_call_limits(&mut self, limits: CallLimits) -> Result<(), Diagnostic> {
-        let limits = limits.validate()?;
-        if self.terminal
-            || self.frame.fuel_snapshot().used != 0
-            || !self.calls.is_empty()
-            || !self.pending.is_empty()
-        {
-            return Err(Diagnostic::new(
-                "LRR-E-INTERNAL-IR",
-                "call limits require an unstarted run".into(),
-            ));
-        }
-        self.call_limits = limits;
-        Ok(())
-    }
     pub fn peak_guest_frames(&self) -> u32 {
         self.peak_guest_frames
-    }
-    pub fn call_limits(&self) -> CallLimits {
-        self.call_limits
     }
     pub fn action_snapshot(&self) -> crate::vm::action::ActionSnapshot {
         self.frame.actions.snapshot()
     }
-    pub fn fuel_snapshot(&self) -> crate::vm::fuel::FuelSnapshot {
+    /// Unlimited run-wide step observation (E-R5-006: name kept for callers).
+    pub fn fuel_snapshot(&self) -> crate::vm::steps::StepSnapshot {
         self.frame.fuel_snapshot()
     }
     pub fn poll(&mut self, db: &mut Database) -> RunPoll {
@@ -1780,26 +2142,9 @@ impl RunMachine {
                 RunPoll::Completed(report) => Some(TerminalExecution::Completed {
                     unit: matches!(report.value, ValueSummary::Unit),
                 }),
-                RunPoll::Panicked(report) => {
-                    let message = report.panic.description();
-                    // This additional retained execution record has a fixed 64KiB
-                    // owned budget, separate from recipes and public reports.
-                    if message.len() > 65_536 {
-                        self.terminal_facts = Some(TerminalFacts {
-                            outcome: TerminalExecution::Fault {
-                                code: "LRR-E-METADATA-LIMIT",
-                            },
-                            cleanup_ran: None,
-                        });
-                        return RunPoll::Fault(Diagnostic::new(
-                            "LRR-E-METADATA-LIMIT",
-                            "terminal panic observation exceeds owned budget".into(),
-                        ));
-                    }
-                    Some(TerminalExecution::GuestPanic {
-                        message: message.to_owned(),
-                    })
-                }
+                RunPoll::Panicked(report) => Some(TerminalExecution::GuestPanic {
+                    message: report.panic.description().to_owned(),
+                }),
                 RunPoll::Fault(error) => Some(TerminalExecution::Fault { code: error.code }),
                 RunPoll::NeedInput(_) => None,
             };
@@ -1856,6 +2201,10 @@ impl RunMachine {
         db: &mut Database,
         contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
     ) -> RunPoll {
+        if let Err(error) = self.ensure_drop_inventory(db) {
+            self.terminal = true;
+            return RunPoll::Fault(error);
+        }
         if self.body_lease.body() != self.frame.body.body() {
             self.terminal = true;
             return RunPoll::Fault(Diagnostic::new(
@@ -1903,20 +2252,18 @@ impl RunMachine {
                 return RunPoll::Fault(error);
             }
         }
-        if contexts.len() > 1024
-            || contexts.iter().enumerate().any(|(i, context)| {
-                let source = context.source();
-                !self
-                    .sources
+        if contexts.iter().enumerate().any(|(i, context)| {
+            let source = context.source();
+            !self
+                .sources
+                .iter()
+                .any(|s| s.same_publication(source) && s.selection() == source.selection())
+                || contexts[..i]
                     .iter()
-                    .any(|s| s.same_publication(source) && s.selection() == source.selection())
-                    || contexts[..i]
-                        .iter()
-                        .any(|prior| prior.source().selection() == source.selection())
-            })
-        {
+                    .any(|prior| prior.source().selection() == source.selection())
+        }) {
             return RunPoll::Fault(call_fault(
-                "runtime macro contexts are foreign, duplicate or excessive",
+                "runtime macro contexts are foreign or duplicate",
             ));
         }
 
@@ -1941,6 +2288,42 @@ impl RunMachine {
             }
         }
         loop {
+            // A reached cleanup owner demands its value's `Drop::drop` before
+            // any further cleanup or execution of this frame.
+            if self.frame.drop_witness_demand().is_some() {
+                match self.enter_drop_witness(db) {
+                    QueryPoll::Ready(Ok(())) => continue,
+                    QueryPoll::Ready(Err(error)) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                }
+            }
+            // A reached operator on non-primitive operands demands its trait
+            // method before this frame continues.
+            if self.frame.operator_demanded() {
+                match self.enter_operator_call(db) {
+                    QueryPoll::Ready(Ok(())) => continue,
+                    QueryPoll::Ready(Err(error)) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                }
+            }
+            // A `format_args!` placeholder outside the native family demands
+            // its trait's `fmt` before this frame continues.
+            if self.frame.format_demanded() {
+                match self.enter_format_call(db) {
+                    QueryPoll::Ready(Ok(())) => continue,
+                    QueryPoll::Ready(Err(error)) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                }
+            }
             if self.unwinding.is_some() {
                 match self.advance_panic_cleanup() {
                     Ok(Some(report)) => {
@@ -1969,8 +2352,8 @@ impl RunMachine {
                     }
                 }
             }
-            // Rollback is bounded physical work and gets priority over a
-            // depleted/cancelled run; it can never publish a source value.
+            // Rollback is bounded physical work and gets priority over new
+            // execution; it can never publish a source value.
             if self.frame.source_constant_cleaning() {
                 match self.frame.drain_source_constant_op(&mut self.store) {
                     Ok(false) => continue,
@@ -1985,13 +2368,6 @@ impl RunMachine {
                         return RunPoll::Fault(error);
                     }
                 }
-            }
-            if let Err(error) = self.frame.fuel.require_credit() {
-                if self.frame.has_source_constant_activation() {
-                    return self.fail_source_constant(error);
-                }
-                self.terminal = true;
-                return RunPoll::Fault(error);
             }
             let pc = self.frame.pc().clone();
             let prepared_key = if pc.phase == 0 {
@@ -2085,18 +2461,10 @@ impl RunMachine {
             } else {
                 None
             };
-            let prepared_constant = if !self.installed.contains_pc(&pc) {
-                match self.prepare_source_constant_recipe(db) {
-                    QueryPoll::Ready(Ok(recipe)) => recipe,
-                    QueryPoll::Ready(Err(error)) => {
-                        self.terminal = true;
-                        return RunPoll::Fault(error);
-                    }
-                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
-                }
-            } else {
-                None
-            };
+            // A constant path is an ordinary `ValuePath`: the dispatcher
+            // selects its item and the one pure constant route evaluates it
+            // (`prepare_item_value_path`), wherever the path was written.
+            let prepared_constant: Option<crate::ir::recipe::VerifiedRecipe> = None;
             let prepared_floating =
                 if prepared_constant.is_none() && !self.installed.contains_pc(&pc) {
                     match self.prepare_floating_recipe(db, contexts) {
@@ -2200,6 +2568,26 @@ impl RunMachine {
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
             }
+            match self.prepare_nominal_operations(db, id) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+                QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
+            }
+            match self.prepare_pattern_names(db, id) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+                QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
+            }
+            if let Err(error) = self.register_closures(db, id) {
+                self.terminal = true;
+                return RunPoll::Fault(error);
+            }
             self.frame.runtime_call = self.runtime_calls.get(self.frame.pc()).cloned();
             let (call_ops, call_result, call_result_hint, call_next) =
                 match self.installed.get_current(db, id) {
@@ -2232,6 +2620,7 @@ impl RunMachine {
                                         Op::CallPrepare { .. }
                                             | Op::CallSeal { .. }
                                             | Op::CallAdvance { .. }
+                                            | Op::MethodReceiver { .. }
                                     )
                                 })
                                 .cloned()
@@ -2249,7 +2638,17 @@ impl RunMachine {
                         return RunPoll::Fault(error);
                     }
                 };
+            let method_places: BTreeMap<u32, SlotId> = call_ops
+                .iter()
+                .filter_map(|op| match op {
+                    Op::MethodReceiver { site, place, .. } => Some((site.0, *place)),
+                    _ => None,
+                })
+                .collect();
             for op in call_ops {
+                if matches!(op, Op::MethodReceiver { .. }) {
+                    continue;
+                }
                 if let Err(error) = self.require_runtime_call_operation(&op) {
                     self.terminal = true;
                     return RunPoll::Fault(error);
@@ -2261,6 +2660,126 @@ impl RunMachine {
                         explicit,
                         arguments,
                     } => {
+                        if name == value_calls::VALUE_CALL_NAME {
+                            match self.select_value_call(db, site.0, &arguments) {
+                                QueryPoll::Ready(Ok(false)) => {}
+                                QueryPoll::Ready(Ok(true)) => {
+                                    if let Err(error) =
+                                        self.start_closure_call(site.0, &arguments)
+                                    {
+                                        self.terminal = true;
+                                        return RunPoll::Fault(error);
+                                    }
+                                    continue;
+                                }
+                                QueryPoll::Ready(Err(error)) => {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                            }
+                        }
+                        match self.select_facade_call(db, site.0, &name) {
+                            QueryPoll::Ready(Ok(true)) => {
+                                if let Err(error) = self.start_facade_call(site.0, &arguments) {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                continue;
+                            }
+                            QueryPoll::Ready(Ok(false)) => {}
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        }
+                        match self.select_constructor_call(db, site.0, &name) {
+                            QueryPoll::Ready(Ok(true)) => {
+                                if let Err(error) = self.start_constructor_call(site.0, &arguments)
+                                {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                continue;
+                            }
+                            QueryPoll::Ready(Ok(false)) => {}
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        }
+                        if name.starts_with('.')
+                            && !self.pending.contains_key(&self.frame.call_identity(site.0))
+                        {
+                            let Some(place) = method_places.get(&site.0).copied() else {
+                                self.terminal = true;
+                                return RunPoll::Fault(call_fault(
+                                    "method call has no published receiver place",
+                                ));
+                            };
+                            match self.select_method_call(
+                                db, site.0, &name, &explicit, &arguments, place,
+                            ) {
+                                QueryPoll::Ready(Ok(call)) => {
+                                    self.pending_bytes =
+                                        self.pending_bytes.saturating_add(call.bytes);
+                                    self.pending.insert(self.frame.call_identity(site.0), call);
+                                }
+                                QueryPoll::Ready(Err(error)) => {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                            }
+                        }
+                        // A trait-path call selects its impl from its self
+                        // type; one whose self argument decides it starts
+                        // against the trait's declaration.
+                        if !self.pending.contains_key(&self.frame.call_identity(site.0))
+                            && explicit.is_empty()
+                        {
+                            match self.trait_path_call(db, site.0, &name, &arguments) {
+                                QueryPoll::Ready(Ok(Some(trait_calls::TraitPathCall::Deferred {
+                                    declaration,
+                                    call,
+                                }))) => {
+                                    self.start_deferred_trait_call(
+                                        site.0,
+                                        declaration,
+                                        call,
+                                        &arguments,
+                                    );
+                                    continue;
+                                }
+                                QueryPoll::Ready(Ok(Some(trait_calls::TraitPathCall::Selected(
+                                    callee,
+                                )))) => match self.prepare_selected_argument_call(
+                                    db, callee, &explicit, &arguments,
+                                ) {
+                                    QueryPoll::Ready(Ok(mut call)) => {
+                                        call.monomorphic = true;
+                                        self.pending_bytes =
+                                            self.pending_bytes.saturating_add(call.bytes);
+                                        self.pending.insert(self.frame.call_identity(site.0), call);
+                                    }
+                                    QueryPoll::Ready(Err(error)) => {
+                                        self.terminal = true;
+                                        return RunPoll::Fault(error);
+                                    }
+                                    QueryPoll::NeedInput(input) => {
+                                        return RunPoll::NeedInput(input);
+                                    }
+                                },
+                                QueryPoll::Ready(Ok(None)) => {}
+                                QueryPoll::Ready(Err(error)) => {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                            }
+                        }
                         if !self.pending.contains_key(&self.frame.call_identity(site.0)) {
                             match self.select_reached_argument_call(
                                 db, contexts, site, &name, &explicit, &arguments,
@@ -2308,13 +2827,26 @@ impl RunMachine {
                                 return RunPoll::Fault(error);
                             }
                         };
-                        let call_hints = (|| -> Result<Vec<_>, Diagnostic> {
+                        let call_hints = (|| -> Result<(Vec<_>, Vec<_>), Diagnostic> {
                             let mut result = Vec::new();
+                            let mut partial = Vec::new();
                             result
                                 .try_reserve_exact(arguments.len())
                                 .map_err(|_| crate::runtime::arena::resource())?;
+                            let definition = selected.callee.signature().definition;
+                            // Only explicit type arguments are fixed before
+                            // the first argument evaluates.
+                            let bound = argument_hints::bound_call_parameters(
+                                &self.frame,
+                                &self.store,
+                                definition,
+                                &selected.explicit,
+                                &[],
+                                &[],
+                                &selected.expected,
+                            )?;
                             for (ordinal, slot) in arguments.iter().enumerate() {
-                                let (descriptor, source) = match selected.hints.get(ordinal) {
+                                let (mut descriptor, source) = match selected.hints.get(ordinal) {
                                     Some(hint) => argument_hints::runtime_hint(
                                         db,
                                         &self.frame,
@@ -2326,11 +2858,30 @@ impl RunMachine {
                                     )?,
                                     None => (None, None),
                                 };
+                                if descriptor.is_none()
+                                    && let Some(hint) = selected.hints.get(ordinal)
+                                {
+                                    match argument_hints::written_hint(
+                                        &mut self.store,
+                                        hint,
+                                        definition,
+                                        &bound,
+                                    )? {
+                                        argument_hints::WrittenArgumentHint::Exact(ty) => {
+                                            descriptor = Some(ty)
+                                        }
+                                        argument_hints::WrittenArgumentHint::Partial(
+                                            written,
+                                            fixed,
+                                        ) => partial.push((*slot, written, fixed)),
+                                        argument_hints::WrittenArgumentHint::None => {}
+                                    }
+                                }
                                 result.push((*slot, descriptor, source));
                             }
-                            Ok(result)
+                            Ok((result, partial))
                         })();
-                        let call_hints = match call_hints {
+                        let (call_hints, partial) = match call_hints {
                             Ok(hints) => hints,
                             Err(error) => {
                                 self.terminal = true;
@@ -2341,9 +2892,55 @@ impl RunMachine {
                             ordinary,
                             site: site.0,
                             hints: call_hints,
+                            partial,
                         });
                     }
-                    Op::CallAdvance { site, argument } if call_next.is_some() => {
+                    // A deferred trait-path call selects its impl once its
+                    // self argument completes; earlier arguments take no hint.
+                    Op::CallAdvance { site, argument }
+                        if self
+                            .frame
+                            .trait_calls
+                            .contains_key(&self.frame.call_identity(site.0)) =>
+                    {
+                        let self_ordinal = self.frame.trait_calls
+                            [&self.frame.call_identity(site.0)]
+                            .self_ordinal;
+                        if argument < self_ordinal {
+                            continue;
+                        }
+                        match self.select_deferred_trait_call(
+                            db,
+                            site.0,
+                            argument as usize + 1,
+                        ) {
+                            QueryPoll::Ready(Ok(())) => {}
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        }
+                        if let Some(next) = call_next.as_ref() {
+                            match self.prepare_later_argument_hint(db, site.0, argument, next) {
+                                QueryPoll::Ready(Ok(())) => {}
+                                QueryPoll::Ready(Err(error)) => {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                            }
+                        }
+                    }
+                    Op::CallAdvance { site, argument }
+                        if call_next.is_some()
+                            && !self
+                                .frame
+                                .facade_calls
+                                .contains_key(&self.frame.call_identity(site.0))
+                            && !self.closures.selected(&self.frame.call_identity(site.0))
+                            && self.frame.selected_constructor_call(site.0).is_none() =>
+                    {
                         match self.prepare_later_argument_hint(
                             db,
                             site.0,
@@ -2364,6 +2961,121 @@ impl RunMachine {
                         explicit,
                         arguments,
                     } if self.prepared_call.is_none() => {
+                        if name == value_calls::VALUE_CALL_NAME {
+                            match self.select_value_call(db, site.0, &arguments) {
+                                QueryPoll::Ready(Ok(false)) => {}
+                                QueryPoll::Ready(Ok(true)) => {
+                                    match self.seal_closure_call(db, site.0, &arguments) {
+                                        QueryPoll::Ready(Ok(())) => {}
+                                        QueryPoll::Ready(Err(error)) => {
+                                            self.terminal = true;
+                                            return RunPoll::Fault(error);
+                                        }
+                                        QueryPoll::NeedInput(input) => {
+                                            return RunPoll::NeedInput(input);
+                                        }
+                                    }
+                                    continue;
+                                }
+                                QueryPoll::Ready(Err(error)) => {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                            }
+                        }
+                        match self.select_facade_call(db, site.0, &name) {
+                            QueryPoll::Ready(Ok(true)) => {
+                                if let Err(error) = self.seal_facade_call(site.0, &arguments) {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                continue;
+                            }
+                            QueryPoll::Ready(Ok(false)) => {}
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        }
+                        match self.select_constructor_call(db, site.0, &name) {
+                            QueryPoll::Ready(Ok(true)) => {
+                                if let Err(error) = self.seal_constructor_call(site.0, &arguments)
+                                {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
+                                continue;
+                            }
+                            QueryPoll::Ready(Ok(false)) => {}
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        }
+                        // A deferred trait-path call selects its impl from its
+                        // completed self argument; a zero-argument trait path
+                        // (`Default::default()`) from its expected result.
+                        if !self.pending.contains_key(&self.frame.call_identity(site.0)) {
+                            if self
+                                .frame
+                                .trait_calls
+                                .contains_key(&self.frame.call_identity(site.0))
+                            {
+                                match self.select_deferred_trait_call(db, site.0, arguments.len())
+                                {
+                                    QueryPoll::Ready(Ok(())) => {}
+                                    QueryPoll::Ready(Err(error)) => {
+                                        self.terminal = true;
+                                        return RunPoll::Fault(error);
+                                    }
+                                    QueryPoll::NeedInput(input) => {
+                                        return RunPoll::NeedInput(input);
+                                    }
+                                }
+                            } else if explicit.is_empty() {
+                                match self.trait_path_call(db, site.0, &name, &arguments) {
+                                    QueryPoll::Ready(Ok(Some(
+                                        trait_calls::TraitPathCall::Selected(callee),
+                                    ))) => match self.prepare_selected_argument_call(
+                                        db, callee, &explicit, &arguments,
+                                    ) {
+                                        QueryPoll::Ready(Ok(mut call)) => {
+                                            call.monomorphic = true;
+                                            self.pending_bytes =
+                                                self.pending_bytes.saturating_add(call.bytes);
+                                            self.pending
+                                                .insert(self.frame.call_identity(site.0), call);
+                                        }
+                                        QueryPoll::Ready(Err(error)) => {
+                                            self.terminal = true;
+                                            return RunPoll::Fault(error);
+                                        }
+                                        QueryPoll::NeedInput(input) => {
+                                            return RunPoll::NeedInput(input);
+                                        }
+                                    },
+                                    QueryPoll::Ready(Ok(Some(
+                                        trait_calls::TraitPathCall::Deferred { .. },
+                                    ))) => {
+                                        self.terminal = true;
+                                        return RunPoll::Fault(call_fault(
+                                            "trait call self argument was not reached before its seal",
+                                        ));
+                                    }
+                                    QueryPoll::Ready(Ok(None)) => {}
+                                    QueryPoll::Ready(Err(error)) => {
+                                        self.terminal = true;
+                                        return RunPoll::Fault(error);
+                                    }
+                                    QueryPoll::NeedInput(input) => {
+                                        return RunPoll::NeedInput(input);
+                                    }
+                                }
+                            }
+                        }
                         // Zero-argument calls have no CallPrepare opcode. They
                         // must still select lexical identity at this reached
                         // entry, never fall back to a same-named module item.
@@ -2413,11 +3125,19 @@ impl RunMachine {
                                 return RunPoll::Fault(error);
                             }
                         }
+                        let monomorphic = self
+                            .pending
+                            .get(&self.frame.call_identity(site.0))
+                            .is_some_and(|selected| selected.monomorphic);
                         let mut types = Vec::new();
                         let mut cells = Vec::new();
                         for slot in arguments {
                             let argument = (|| {
                                 let cell = self.frame.cell(slot)?;
+                                // A literal argument inference left unconstrained
+                                // (e.g. to a generic parameter) takes rustc's
+                                // integer/float fallback.
+                                self.store.bind_literal_fallback(cell)?;
                                 let value = self.store.admit_move(cell)?;
                                 let descriptor =
                                     self.store.effective_type(value)?.ok_or_else(|| {
@@ -2426,10 +3146,17 @@ impl RunMachine {
                                             "call argument requires a reached concrete type".into(),
                                         )
                                     })?;
-                                let argument = reached_argument_type(
-                                    descriptor,
-                                    self.frame.source_view(slot)?,
-                                )?;
+                                let view = match self.frame.source_view(slot)? {
+                                    Some(view) => Some(view),
+                                    None => self.store.descriptor_source_term(descriptor),
+                                };
+                                let view = match view {
+                                    Some(view) if monomorphic => {
+                                        Some(self.frame.bound_view(&view, &self.store))
+                                    }
+                                    view => view,
+                                };
+                                let argument = reached_argument_type(descriptor, view)?;
                                 Ok((cell, argument))
                             })();
                             match argument {
@@ -2494,6 +3221,13 @@ impl RunMachine {
                                 }
                             }
                         };
+                        let result_hint = match result_hint {
+                            Some(mut hint) if monomorphic => {
+                                hint.source = self.frame.bound_view(&hint.source, &self.store);
+                                Some(hint)
+                            }
+                            hint => hint,
+                        };
                         match self.prepare_source_call(
                             db,
                             &name,
@@ -2536,6 +3270,12 @@ impl RunMachine {
                                 self.frame.call_cells = cells;
                                 self.prepared_call = Some(call);
                                 self.frame.call_ready = true;
+                                if name == value_calls::VALUE_CALL_NAME
+                                    && let Err(error) = self.frame.retire_value_callee(site.0)
+                                {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
                             }
                             QueryPoll::Ready(Err(e)) => {
                                 self.terminal = true;
@@ -2611,6 +3351,29 @@ impl RunMachine {
                     site,
                     resume,
                     result,
+                } if self.frame.facade_sealed.is_some() => {
+                    if let Err(error) = self.complete_facade_call(action, site, resume, result) {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                }
+                StepOutcome::Call {
+                    action,
+                    site,
+                    resume,
+                    result,
+                } if self.frame.constructor_call_sealed() => {
+                    if let Err(error) = self.complete_constructor_call(action, site, resume, result)
+                    {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                }
+                StepOutcome::Call {
+                    action,
+                    site,
+                    resume,
+                    result,
                 } => {
                     let entered = (|| {
                         if site.0 != self.frame.pc().node {
@@ -2623,23 +3386,17 @@ impl RunMachine {
                             &resume,
                             result,
                         )?;
-                        let mut call = self.prepared_call.take().ok_or_else(|| {
+                        let call = self.prepared_call.take().ok_or_else(|| {
                             call_fault("Call exit has no selected source context")
                         })?;
                         call.callee.revalidate(db)?;
-                        self.calls
-                            .try_reserve(1)
-                            .map_err(|_| call_fault("call continuation allocation failed"))?;
-                        let callee_lease = call
-                            .body_lease
-                            .take()
-                            .ok_or_else(|| call_fault("sealed callee source lease absent"))?;
-                        if callee_lease.body() != call.body.body() {
-                            return Err(call_fault("sealed callee source lease differs"));
-                        }
-                        let mut callee = Frame::new_in_run(
+                        let entry = match &call.closure {
+                            Some(closure) => closure.entry.clone(),
+                            None => call.body.pc(NodeId(0), Phase::Entry)?,
+                        };
+                        let callee = Frame::new_in_run(
                             call.body.clone(),
-                            call.body.pc(NodeId(0), Phase::Entry)?,
+                            entry,
                             &mut self.store,
                             &mut self.frame,
                         )?;
@@ -2648,27 +3405,6 @@ impl RunMachine {
                             .call_arguments
                             .take()
                             .ok_or_else(|| call_fault("Call exit has no argument packet"))?;
-                        let contracts = call
-                            .contracts
-                            .parameter_descriptors
-                            .iter()
-                            .zip(&call.callee.signature().parameters)
-                            .map(|(ty, param)| {
-                                (
-                                    *ty,
-                                    param
-                                        .pattern
-                                        .first()
-                                        .is_some_and(|token| token.text == "mut"),
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        callee.install_context(call.context.take().ok_or_else(|| {
-                            call_fault("accepted definition environment already consumed")
-                        })?)?;
-                        callee
-                            .install_parameter_sources(call.contracts.source_parameters.clone())?;
-                        callee.initialize_parameters(&args, &contracts, &mut self.store)?;
                         if let Some(selected) =
                             self.pending.remove(&self.frame.call_identity(site.0))
                         {
@@ -2677,40 +3413,17 @@ impl RunMachine {
                                     || call_fault("pending context retirement underflow"),
                                 )?;
                         }
-                        let call_bytes = self
-                            .call_bytes
-                            .checked_add(call.retained_bytes)
-                            .filter(|bytes| *bytes <= self.call_limits.max_metadata_bytes)
-                            .ok_or_else(|| {
-                                Diagnostic::new(
-                                    "LRR-E-RUNTIME-RESOURCE",
-                                    "call stack metadata budget exceeded".into(),
-                                )
-                            })?;
-                        let depth = self
-                            .calls
-                            .len()
-                            .checked_add(2)
-                            .and_then(|depth| u32::try_from(depth).ok())
-                            .ok_or_else(|| call_fault("guest frame depth overflow"))?;
-                        self.collected.accumulate(self.frame.counters())?;
-                        let pending = std::mem::take(&mut self.pending);
-                        self.frame.counters = OpcodeCounters::default();
-                        let caller = std::mem::replace(&mut self.frame, callee);
-                        let body_lease = std::mem::replace(&mut self.body_lease, callee_lease);
-                        self.call_bytes = call_bytes;
-                        self.peak_guest_frames = self.peak_guest_frames.max(depth);
-                        self.calls.push(SuspendedCall {
-                            action: consumed.id,
-                            origin: consumed.origin,
-                            caller,
-                            body_lease,
-                            resume: consumed.resume,
-                            result: consumed.result,
+                        self.enter_callee(
                             call,
-                            pending,
-                        });
-                        Ok(())
+                            callee,
+                            &args,
+                            CallContinuation::Site {
+                                action: consumed.id,
+                                origin: consumed.origin,
+                                resume: consumed.resume,
+                                result: consumed.result,
+                            },
+                        )
                     })();
                     if let Err(error) = entered {
                         self.terminal = true;

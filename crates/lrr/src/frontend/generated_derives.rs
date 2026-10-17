@@ -51,7 +51,7 @@ impl GeneratedDeriveResolution {
             },
             cfg,
         )?;
-        if !facts.item.enabled || facts.item.attributes.len() > 4096 {
+        if !facts.item.enabled {
             return Err(fault(
                 "LRR-E-DISCOVERY-LIMIT",
                 "generated derive resolution inactive item or annotation limit",
@@ -160,7 +160,6 @@ impl GeneratedDeriveResolution {
             .and_then(|n| n.checked_add(256));
             bytes = extra
                 .and_then(|n| bytes.checked_add(n))
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-DISCOVERY-LIMIT",

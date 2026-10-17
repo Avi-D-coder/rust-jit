@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "component": "common-parameter-header-ordinal-index-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "source_fingerprint": "f59759c40597a470801ab16ad6b9ae697686093313fd2693ecba6d02e6da5d02",
+  "fingerprint_encoding": "SHA256(sorted path NUL lowercase-sha256 LF)",
+  "payload": "/private/tmp/lrr-parameter-header-ordinal-index-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "e3c1cd0821202bcd1d891b23495645aac7255fb18b24733f3dd5296383dc7172",
+      "bytes": 32748
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_parameter_goal_tests.rs",
+      "sha256": "bd5fa633aaedd055aea7bdd3181451a1be7a2fa7729def7be140f2823b39c200",
+      "bytes": 10027
+    }
+  ],
+  "dependencies": [
+    "immutable Value11 manifest869db97a/source66902db2; this successor replaces declaration_field_types only after actual cached header_identity method",
+    "immutable parameter12 manifest8cbb8058/source360808f7 and exact root tag38 transport; this successor appends one external authority control to source_parameter_goal_tests",
+    "corrected contained Type source and actual standalone Type publication retirement as parameter12 requires"
+  ],
+  "symbols": [
+    "HeaderItem::parameter_fields",
+    "DeclarationFieldTypes::prepare checked ordinal-index capture/accounting/explicit v3 encoding",
+    "DeclarationFieldTypes::parameter direct row selection preserving exact header/token/range checks"
+  ],
+  "witness": "whole unchanged integer-literal-suffix-inference.rs remains primary; added declaration-only LRR ordinal authority control beside original, no source rewriting or runtime contract claim",
+  "controls": "existing source_parameter_goal_tests plus one new nonuniform2/0/1 parameter order control across4editions; wrong ordinal refuses and no child code; all unexecuted",
+  "review": "worktracks/04-calls-source-views/common-entered-value-goals-handoff.md",
+  "holds": [
+    "Receiver/missing-type/variadic positions retain None and existing refusals; receiver runtime/type-source authority not newly claimed",
+    "O(1) indexed row selection is structural evidence, not measured end-to-end performance",
+    "Remaining generic-prefix/source metadata/query closure costs are not claimed removed",
+    "No interpreter/fixture/T-H-M/architecture gate closed"
+  ]
+}

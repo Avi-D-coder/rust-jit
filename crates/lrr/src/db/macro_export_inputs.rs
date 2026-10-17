@@ -7,7 +7,6 @@ use crate::{
         digest::{Digest, StableEncode, StableEncoder},
     },
     db::dependency::{DependencyStamp, InputKey, InputRecord, InputValue},
-    engine::telemetry::CacheBudgets,
     expand::source_declarative::macro_exports::SourceMacroExportFacet,
     source::changes::SourceSelection,
 };
@@ -39,7 +38,6 @@ impl MacroExportSourceReceipt {
         let bytes = std::mem::size_of::<Self>()
             .checked_add(source.metadata_bytes()?)
             .and_then(|n| n.checked_sub(std::mem::size_of::<SourceSelection>()))
-            .filter(|n| *n <= 1024 * 1024)
             .ok_or_else(|| preparation("macro-export receipt metadata bound"))?;
         Ok(Self {
             location: source.location_identity(),
@@ -261,7 +259,6 @@ impl Database {
         let observation_bytes = std::mem::size_of::<MacroExportSourceObservation>()
             .checked_add(selected_source.metadata_bytes()?)
             .and_then(|bytes| bytes.checked_sub(std::mem::size_of::<SourceSelection>()))
-            .filter(|bytes| *bytes <= 1024 * 1024)
             .ok_or_else(|| preparation("macro-export role observation metadata bound"))?;
         Ok(Some(MacroExportSourceObservation {
             source: selected_source,
@@ -294,9 +291,6 @@ impl Database {
         self.require_coordinator()?;
         if self.run_active {
             return Err(preparation("macro-export publication during active run"));
-        }
-        if facets.len() > 256 {
-            return Err(preparation("macro-export receipt count bound"));
         }
         let generation = facets.first().map(|facet| facet.preparation());
         let mut staged = BTreeMap::new();
@@ -344,10 +338,7 @@ impl Database {
         }
         // Conservative transient bound retains the old input owners while
         // admitting new scalar rows. No facet graph is charged as runtime data.
-        let usage = self.cache_usage()?;
-        if account_add(usage.memo_bytes, additional)? > CacheBudgets::default().query_bytes {
-            return Err(preparation("macro-export receipt cache admission bound"));
-        }
+        let _ = additional; // E-R5-006: no byte accounting.
         let revision = self
             .revision
             .checked_add(1)

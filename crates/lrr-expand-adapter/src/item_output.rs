@@ -112,14 +112,8 @@ fn queue_items(
     pending: &mut Vec<(ast::Item, Vec<u32>)>,
     pending_bytes: &mut usize,
 ) -> Result<(), AdapterError> {
-    if parent.len() >= 256 {
-        return Err(fault("generated module depth limit"));
-    }
     let begin = pending.len();
     for (ordinal, item) in container.children().filter_map(ast::Item::cast).enumerate() {
-        if pending.len() >= 1_000_000 {
-            return Err(fault("generated pending declaration count limit"));
-        }
         let length = parent
             .len()
             .checked_add(1)
@@ -130,7 +124,6 @@ fn queue_items(
             .ok_or_else(|| fault("generated pending metadata overflow"))?;
         let total = pending_bytes
             .checked_add(charge)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("generated pending declaration metadata limit"))?;
         let mut path = Vec::new();
         path.try_reserve_exact(length)
@@ -146,10 +139,175 @@ fn queue_items(
     pending[begin..].reverse();
     Ok(())
 }
-pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
-    if input.encoded_len()? > 32 * 1024 * 1024 || input.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("item output input budget"));
+
+struct HeaderItems {
+    pending: Vec<(ast::Item, Vec<u32>)>,
+    pending_bytes: usize,
+    path_bytes: usize,
+    count: usize,
+}
+impl HeaderItems {
+    fn new(root: &syntax::SyntaxNode) -> Result<Self, AdapterError> {
+        let mut value = Self {
+            pending: Vec::new(),
+            pending_bytes: 0,
+            path_bytes: 0,
+            count: 0,
+        };
+        queue_items(root, &[], &mut value.pending, &mut value.pending_bytes)?;
+        Ok(value)
     }
+    fn next(&mut self) -> Result<Option<(ast::Item, Vec<u32>)>, AdapterError> {
+        let Some((item, structural_path)) = self.pending.pop() else {
+            return Ok(None);
+        };
+        let charge = structural_path
+            .len()
+            .checked_mul(std::mem::size_of::<u32>())
+            .and_then(|n| n.checked_add(96))
+            .ok_or_else(|| fault("generated pending metadata overflow"))?;
+        self.pending_bytes = self
+            .pending_bytes
+            .checked_sub(charge)
+            .ok_or_else(|| fault("generated pending metadata underflow"))?;
+        self.path_bytes = self
+            .path_bytes
+            .checked_add(charge)
+            .ok_or_else(|| fault("generated item path metadata limit"))?;
+        if let ast::Item::Module(module) = &item
+            && let Some(body) = module.item_list()
+        {
+            queue_items(
+                body.syntax(),
+                &structural_path,
+                &mut self.pending,
+                &mut self.pending_bytes,
+            )?;
+        }
+        let associated = match &item {
+            ast::Item::Impl(value) => value.assoc_item_list(),
+            ast::Item::Trait(value) => value.assoc_item_list(),
+            _ => None,
+        };
+        if let Some(body) = associated {
+            queue_items(
+                body.syntax(),
+                &structural_path,
+                &mut self.pending,
+                &mut self.pending_bytes,
+            )?;
+        }
+
+        self.count += 1;
+        Ok(Some((item, structural_path)))
+    }
+}
+/// Extract from the already admitted pinned tree and real span map. Both Items
+/// and grammar-specific declaration transport use the same shape/path kernel.
+pub(crate) fn capture_headers(
+    root: &syntax::SyntaxNode,
+    map: &span::SpanMap,
+    store: &SpanStore,
+) -> Result<Vec<Item>, AdapterError> {
+    let mut walk = HeaderItems::new(root)?;
+    let mut headers = Vec::new();
+    while let Some((item, path)) = walk.next()? {
+        let ordinal =
+            u32::try_from(headers.len()).map_err(|_| fault("generated header ordinal overflow"))?;
+        let header = capture_header(&item, path, ordinal, map, store)?;
+        headers
+            .try_reserve(1)
+            .map_err(|_| fault("generated header allocation"))?;
+        headers.push(header);
+    }
+    Ok(headers)
+}
+
+/// Shared pinned-AST header shape. No parse or body preparation occurs here.
+fn capture_header(
+    item: &ast::Item,
+    structural_path: Vec<u32>,
+    ordinal: u32,
+    map: &span::SpanMap,
+    store: &SpanStore,
+) -> Result<Item, AdapterError> {
+    let r = item.syntax().text_range();
+    let mut header_end = u32::from(r.end());
+    let (kind, name) = match item {
+        ast::Item::Fn(i) => {
+            if let Some(body) = i.body() {
+                header_end = u32::from(body.syntax().text_range().start());
+            }
+            (ItemKind::Function, i.name())
+        }
+        ast::Item::Use(_) => (ItemKind::Import, None),
+        ast::Item::ExternCrate(i) => (ItemKind::ExternCrate, i.rename().and_then(|r| r.name())),
+        ast::Item::MacroRules(i) => (ItemKind::MacroRules, i.name()),
+        ast::Item::Module(i) => {
+            if let Some(body) = i.item_list() {
+                header_end = u32::from(body.syntax().text_range().start());
+            }
+            (ItemKind::Module, i.name())
+        }
+        ast::Item::Struct(i) => (ItemKind::Struct, i.name()),
+        ast::Item::Enum(i) => (ItemKind::Enum, i.name()),
+        ast::Item::Trait(i) => {
+            if let Some(body) = i.assoc_item_list() {
+                header_end = u32::from(body.syntax().text_range().start());
+            }
+            (ItemKind::Trait, i.name())
+        }
+        ast::Item::Impl(i) => {
+            if let Some(body) = i.assoc_item_list() {
+                header_end = u32::from(body.syntax().text_range().start());
+            }
+            (ItemKind::Impl, None)
+        }
+        ast::Item::TypeAlias(i) => (ItemKind::Type, i.name()),
+        ast::Item::Const(i) => (ItemKind::Const, i.name()),
+        ast::Item::Static(i) => (ItemKind::Static, i.name()),
+        ast::Item::Union(i) => (ItemKind::Union, i.name()),
+        _ => (ItemKind::Other, None),
+    };
+    let name = name
+        .map(|name| {
+            let r = name.syntax().text_range();
+            Ok(Name {
+                text: name.text().to_string(),
+                start: u32::from(r.start()),
+                end: u32::from(r.end()),
+                span: store.key(map.span_at(r.start()))?,
+            })
+        })
+        .transpose()?;
+    let name = match (item, name) {
+        (ast::Item::ExternCrate(i), None) => {
+            let name = i
+                .name_ref()
+                .ok_or_else(|| fault("extern crate name absent"))?;
+            let r = name.syntax().text_range();
+            Some(Name {
+                text: name.text().to_string(),
+                start: u32::from(r.start()),
+                end: u32::from(r.end()),
+                span: store.key(map.span_at(r.start()))?,
+            })
+        }
+        (_, name) => name,
+    };
+    Ok(Item {
+        ordinal,
+        structural_path,
+        kind,
+        name,
+        start: u32::from(r.start()),
+        end: u32::from(r.end()),
+        header_start: u32::from(r.start()),
+        header_end,
+    })
+}
+
+pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
     let mut store = SpanStore::default();
     let tree = store.import(input)?;
     let (parsed, map) = syntax_bridge::token_tree_to_syntax_node(
@@ -162,13 +320,7 @@ pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
     }
     let root = parsed.syntax_node();
     let length = u32::from(root.text_range().len());
-    if length > 32 * 1024 * 1024 {
-        return Err(fault("item syntax text limit"));
-    }
     let count = map.iter().count();
-    if count > 2_000_000 {
-        return Err(fault("item origin count limit"));
-    }
     let mut origins = Vec::new();
     origins
         .try_reserve_exact(count)
@@ -191,115 +343,11 @@ pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
     let mut macros = Vec::new();
     let mut calls = Vec::new();
     let mut macro_bytes = 0usize;
-    let mut pending = Vec::new();
-    let mut pending_bytes = 0usize;
-    let mut path_bytes = 0usize;
-    queue_items(&root, &[], &mut pending, &mut pending_bytes)?;
-    while let Some((item, structural_path)) = pending.pop() {
-        let charge = structural_path
-            .len()
-            .checked_mul(std::mem::size_of::<u32>())
-            .and_then(|n| n.checked_add(96))
-            .ok_or_else(|| fault("generated pending metadata overflow"))?;
-        pending_bytes = pending_bytes
-            .checked_sub(charge)
-            .ok_or_else(|| fault("generated pending metadata underflow"))?;
-        path_bytes = path_bytes
-            .checked_add(charge)
-            .filter(|n| *n <= 64 * 1024 * 1024)
-            .ok_or_else(|| fault("generated item path metadata limit"))?;
-        if let ast::Item::Module(module) = &item
-            && let Some(body) = module.item_list()
-        {
-            queue_items(
-                body.syntax(),
-                &structural_path,
-                &mut pending,
-                &mut pending_bytes,
-            )?;
-        }
-        let associated = match &item {
-            ast::Item::Impl(value) => value.assoc_item_list(),
-            ast::Item::Trait(value) => value.assoc_item_list(),
-            _ => None,
-        };
-        if let Some(body) = associated {
-            queue_items(
-                body.syntax(),
-                &structural_path,
-                &mut pending,
-                &mut pending_bytes,
-            )?;
-        }
-        if items.len() >= 1_000_000 {
-            return Err(fault("generated header count limit"));
-        }
-        let r = item.syntax().text_range();
-        let mut header_end = u32::from(r.end());
-        let (kind, name) = match &item {
-            ast::Item::Fn(i) => {
-                if let Some(body) = i.body() {
-                    header_end = u32::from(body.syntax().text_range().start());
-                }
-                (ItemKind::Function, i.name())
-            }
-            ast::Item::Use(_) => (ItemKind::Import, None),
-            ast::Item::ExternCrate(i) => (ItemKind::ExternCrate, i.rename().and_then(|r| r.name())),
-            ast::Item::MacroRules(i) => (ItemKind::MacroRules, i.name()),
-            ast::Item::Module(i) => {
-                if let Some(body) = i.item_list() {
-                    header_end = u32::from(body.syntax().text_range().start());
-                }
-                (ItemKind::Module, i.name())
-            }
-            ast::Item::Struct(i) => (ItemKind::Struct, i.name()),
-            ast::Item::Enum(i) => (ItemKind::Enum, i.name()),
-            ast::Item::Trait(i) => {
-                if let Some(body) = i.assoc_item_list() {
-                    header_end = u32::from(body.syntax().text_range().start());
-                }
-                (ItemKind::Trait, i.name())
-            }
-            ast::Item::Impl(i) => {
-                if let Some(body) = i.assoc_item_list() {
-                    header_end = u32::from(body.syntax().text_range().start());
-                }
-                (ItemKind::Impl, None)
-            }
-            ast::Item::TypeAlias(i) => (ItemKind::Type, i.name()),
-            ast::Item::Const(i) => (ItemKind::Const, i.name()),
-            ast::Item::Static(i) => (ItemKind::Static, i.name()),
-            ast::Item::Union(i) => (ItemKind::Union, i.name()),
-            _ => (ItemKind::Other, None),
-        };
-        let name = name
-            .map(|name| {
-                let r = name.syntax().text_range();
-                Ok(Name {
-                    text: name.text().to_string(),
-                    start: u32::from(r.start()),
-                    end: u32::from(r.end()),
-                    span: store.key(map.span_at(r.start()))?,
-                })
-            })
-            .transpose()?;
-        let name = match (&item, name) {
-            (ast::Item::ExternCrate(i), None) => {
-                let name = i
-                    .name_ref()
-                    .ok_or_else(|| fault("extern crate name absent"))?;
-                let r = name.syntax().text_range();
-                Some(Name {
-                    text: name.text().to_string(),
-                    start: u32::from(r.start()),
-                    end: u32::from(r.end()),
-                    span: store.key(map.span_at(r.start()))?,
-                })
-            }
-            (_, name) => name,
-        };
+    let mut walk = HeaderItems::new(&root)?;
+    while let Some((item, structural_path)) = walk.next()? {
         let ordinal =
             u32::try_from(items.len()).map_err(|_| fault("generated header ordinal overflow"))?;
+        let header = capture_header(&item, structural_path, ordinal, &map, &store)?;
         if let ast::Item::MacroRules(declaration) = &item {
             let body = declaration
                 .token_tree()
@@ -332,7 +380,6 @@ pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
             };
             macro_bytes = macro_bytes
                 .checked_add(tokens.encoded_len()?)
-                .filter(|n| *n <= 256 * 1024 * 1024)
                 .ok_or_else(|| fault("generated macro body budget"))?;
             macros
                 .try_reserve(1)
@@ -344,9 +391,6 @@ pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
             });
         }
         if let ast::Item::MacroCall(call) = &item {
-            if calls.len() >= 100_000 {
-                return Err(fault("generated call count limit"));
-            }
             let path = call
                 .path()
                 .ok_or_else(|| fault("generated call path absent"))?;
@@ -388,7 +432,6 @@ pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
             macro_bytes = macro_bytes
                 .checked_add(path.encoded_len()?)
                 .and_then(|n| n.checked_add(input_bytes))
-                .filter(|n| *n <= 256 * 1024 * 1024)
                 .ok_or_else(|| fault("generated call/body token retention limit"))?;
             calls
                 .try_reserve(1)
@@ -404,16 +447,7 @@ pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
         items
             .try_reserve(1)
             .map_err(|_| fault("generated header allocation"))?;
-        items.push(Item {
-            ordinal,
-            structural_path,
-            kind,
-            name,
-            start: u32::from(r.start()),
-            end: u32::from(r.end()),
-            header_start: u32::from(r.start()),
-            header_end,
-        });
+        items.push(header);
     }
     let syntax = owned_syntax(&root)?;
     Ok(Items {
@@ -427,16 +461,8 @@ pub fn materialize(input: &TokenForest) -> Result<Items, AdapterError> {
 }
 
 pub(crate) fn owned_syntax(root: &syntax::SyntaxNode) -> Result<Vec<SyntaxEvent>, AdapterError> {
-    let length = u32::from(root.text_range().len());
+    let _length = u32::from(root.text_range().len());
     let event_count = root.preorder_with_tokens().count();
-    if event_count > 6_000_000
-        || event_count
-            .checked_mul(48)
-            .and_then(|n| n.checked_add(length as usize))
-            .is_none_or(|n| n > 256 * 1024 * 1024)
-    {
-        return Err(fault("owned generated syntax metadata limit"));
-    }
     let mut syntax = Vec::new();
     syntax
         .try_reserve_exact(event_count)

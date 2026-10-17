@@ -9,13 +9,14 @@ pub struct CacheBudgets {
 impl Default for CacheBudgets {
     fn default() -> Self {
         Self {
-            query_bytes: 128 * 1024 * 1024,
-            parse_bytes: 128 * 1024 * 1024,
-            source_input_bytes: 128 * 1024 * 1024,
+            query_bytes: usize::MAX,
+            parse_bytes: usize::MAX,
+            source_input_bytes: usize::MAX,
         }
     }
 }
-pub const INSTALLED_LRIR_BUDGET: usize = 64 * 1024 * 1024;
+// E-R5-006: ignored, remove at callers (installed LRIR has no budget).
+pub const INSTALLED_LRIR_BUDGET: usize = usize::MAX;
 
 /// Capacity-based estimates, not measured allocator/RSS totals.
 #[derive(Debug, Clone, Default, Serialize)]

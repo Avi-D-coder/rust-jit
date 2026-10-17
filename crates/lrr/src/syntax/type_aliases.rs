@@ -64,12 +64,6 @@ impl ParsedFile {
             target,
             symbolic,
         };
-        if recipe.estimated_bytes() > 32 * 1024 * 1024 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "alias recipe exceeds its metadata budget".into(),
-            ));
-        }
         Ok(recipe)
     }
 }

@@ -2,9 +2,6 @@
 //! Parameter identifiers are potential shadows, never guessed Binding patterns.
 use super::*;
 use std::collections::BTreeSet;
-const MAX_WORK: usize = 100_000;
-const MAX_METADATA: usize = 64 * 1024;
-const MAX_WORKLIST_BYTES: usize = 64 * 1024;
 #[derive(Debug, Clone)]
 pub(super) struct ParameterIndependentLength {
     identity: Digest,
@@ -26,7 +23,6 @@ fn metadata() -> Diagnostic {
 fn tick(work: &mut usize) -> Result<(), Diagnostic> {
     *work = work
         .checked_add(1)
-        .filter(|n| *n <= MAX_WORK)
         .ok_or_else(metadata)?;
     Ok(())
 }
@@ -37,11 +33,7 @@ fn insert(names: &mut BTreeSet<String>, name: String, bytes: &mut usize) -> Resu
     *bytes = bytes
         .checked_add(128)
         .and_then(|n| n.checked_add(name.capacity()))
-        .filter(|n| *n <= MAX_METADATA)
         .ok_or_else(metadata)?;
-    if names.len() >= 256 {
-        return Err(metadata());
-    }
     names.insert(name);
     Ok(())
 }
@@ -59,9 +51,6 @@ fn candidates(
         match pat {
             ast::Pat::IdentPat(p) => {
                 let name = required(p.name())?;
-                if name.text().len() > 4096 {
-                    return Err(metadata());
-                }
                 insert(names, semantic(name.text())?, bytes)?;
             }
             ast::Pat::TuplePat(_)
@@ -80,9 +69,6 @@ fn candidates(
     Ok(())
 }
 fn length_name(path: ast::Path) -> Result<String, Diagnostic> {
-    if u32::from(path.syntax().text_range().len()) > 4096 {
-        return Err(metadata());
-    }
     bare(path)
 }
 impl ConstantSource {
@@ -103,13 +89,8 @@ impl ConstantSource {
         let mut work = 0usize;
         let mut bytes = 256usize;
         let mut parameters = BTreeSet::new();
-        let mut count = 0usize;
         for param in params.params() {
             tick(&mut work)?;
-            count += 1;
-            if count > 256 {
-                return Err(metadata());
-            }
             if param
                 .syntax()
                 .children()
@@ -186,9 +167,6 @@ impl ConstantSource {
                     )?;
                     insert(&mut names, name, &mut bytes)?;
                     for arg in required(call.arg_list())?.args() {
-                        if operands.len() >= 256 {
-                            return Err(metadata());
-                        }
                         operands.push(arg);
                     }
                 }
@@ -214,18 +192,10 @@ impl ConstantSource {
                 .len()
                 .checked_add(operands.len())
                 .and_then(|n| n.checked_mul(std::mem::size_of::<ast::Expr>()))
-                .filter(|n| *n <= MAX_WORKLIST_BYTES)
                 .ok_or_else(metadata)?;
             stack
                 .try_reserve_exact(operands.len())
                 .map_err(|_| metadata())?;
-            if stack
-                .capacity()
-                .checked_mul(std::mem::size_of::<ast::Expr>())
-                .is_none_or(|n| n > MAX_WORKLIST_BYTES)
-            {
-                return Err(metadata());
-            }
             stack.extend(operands);
         }
         // Do not inspect prior initializer/callee bodies. Only names from the
@@ -261,7 +231,6 @@ impl ConstantSource {
         }
         bytes
             .checked_add(width as usize)
-            .filter(|n| *n <= MAX_METADATA)
             .ok_or_else(metadata)?;
         // Retain the existing immutable source lease; copy only the bounded
         // original header, never the complete source or unentered body text.
@@ -338,7 +307,6 @@ impl ConstantSource {
         if !roots.contains(&declaration.definition()) {
             *bytes = bytes
                 .checked_add(128)
-                .filter(|n| *n <= MAX_METADATA)
                 .ok_or_else(metadata)?;
             roots.insert(declaration.definition());
         }

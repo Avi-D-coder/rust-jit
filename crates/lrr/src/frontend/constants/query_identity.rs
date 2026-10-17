@@ -8,7 +8,6 @@ use crate::{
     },
     syntax::pure_constants::ConstantPlan,
 };
-const MAX_METADATA: usize = 32 << 20;
 /// Exact identity for the selected pure plan and its expected concrete type.
 /// A caller-supplied admission digest is only identity data. Current source/seal
 /// evidence must be privately minted and replayed by the coordinator/provider.
@@ -39,7 +38,6 @@ impl ConstQueryIdentity {
         expected.metadata_bytes()?;
         std::mem::size_of::<Self>()
             .checked_add(plan.profile().semantics.len())
-            .filter(|bytes| *bytes <= MAX_METADATA)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
@@ -132,7 +130,6 @@ impl ConstQueryIdentity {
     pub fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         std::mem::size_of::<Self>()
             .checked_add(self.profile.semantics.capacity())
-            .filter(|bytes| *bytes <= MAX_METADATA)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",

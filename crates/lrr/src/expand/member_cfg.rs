@@ -36,9 +36,6 @@ fn filter_members(
     source: &SourceIdentity,
     outer: TokenForest,
 ) -> Result<TokenForest, Diagnostic> {
-    if inputs.members.len() > 100_000 {
-        return Err(fault("derive member count limit"));
-    }
     let mut members_seen = BTreeSet::new();
     let mut disabled = BTreeMap::new();
     let mut wrappers = BTreeMap::new();

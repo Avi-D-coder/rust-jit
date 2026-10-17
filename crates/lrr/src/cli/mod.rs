@@ -1,8 +1,11 @@
 mod args;
 mod bundle;
 mod compile_inputs;
+pub(crate) mod crate_graph;
 pub(crate) mod macro_export_modules;
 #[cfg(test)]
+#[path = "probe_tests.rs"]
+mod probe;
 mod type_preparation;
 pub use compile_inputs::capture_macro_export_facet;
 mod explain;
@@ -13,8 +16,19 @@ mod panic_family_stock_tests;
 mod preentry_loader;
 #[cfg(test)]
 mod preentry_loader_tests;
+mod proc_macros;
 #[cfg(test)]
 mod ref_pattern_tests;
+#[cfg(test)]
+mod nominal_value_tests;
+#[cfg(test)]
+mod reborrow_tests;
+#[cfg(test)]
+mod callable_value_tests;
+#[cfg(test)]
+mod value_scope_tests;
+#[cfg(test)]
+mod drop_witness_tests;
 mod render;
 pub(crate) mod retained_entry;
 mod runtime_capture;
@@ -49,202 +63,14 @@ fn capture_standalone_edition(
     path: &std::path::Path,
     test_mode: bool,
     edition: u16,
-) -> Result<
-    (
-        crate::source::changes::PreparedSourceInputs,
-        crate::source::changes::PreparedSourceView,
-        Vec<crate::source::changes::PreparedSourceView>,
-        std::sync::Arc<crate::source::snapshot::Snapshot>,
-    ),
-    Diagnostic,
-> {
-    use crate::{
-        core::digest::StableEncode,
-        db::key::OutlineKey,
-        source::{
-            changes::{
-                PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput,
-            },
-            loader::SourceLoader,
-        },
-        syntax::parse::ParseKey,
-    };
-    let profile = crate::core::profile::ProfileIdentity {
+) -> Result<crate_graph::CapturedWorld, Diagnostic> {
+    crate_graph::capture(
+        path,
+        test_mode,
         edition,
-        ..crate::core::profile::ProfileIdentity::current()
-    };
-    let snapshot = std::sync::Arc::new(
-        SourceLoader::standalone_with_profile(path, profile.clone())?.capture()?,
-    );
-    let project = snapshot.project();
-    let blob = snapshot
-        .files()
-        .get(&project.root_source)
-        .ok_or(Diagnostic::new(
-            "LRR-E-INTERNAL-SNAPSHOT",
-            "captured root source absent".into(),
-        ))?
-        .clone();
-    let mut cfg = snapshot
-        .cfg_by_crate()
-        .get(&project.selected_crate)
-        .ok_or(Diagnostic::new(
-            "LRR-E-INTERNAL-SNAPSHOT",
-            "captured root cfg absent".into(),
-        ))?
-        .clone();
-    if test_mode {
-        cfg.atoms.insert("test".into());
-    }
-    let mut queue = std::collections::VecDeque::from([(
-        project.root_source.clone(),
-        std::path::Path::new(project.root_source.as_str())
-            .parent()
-            .unwrap_or(std::path::Path::new(""))
-            .to_owned(),
-        Vec::<String>::new(),
-    )]);
-    let mut contexts = std::collections::BTreeSet::new();
-    let mut units = Vec::new();
-    let mut selections = Vec::new();
-    let mut metadata_bytes = 0usize;
-    let mut queued_bytes = 0usize;
-    while let Some((path, directory, module_path)) = queue.pop_front() {
-        if !contexts.insert((path.clone(), module_path.clone())) {
-            continue;
-        }
-        if contexts.len() > 100_000 {
-            return Err(Diagnostic::new(
-                "LRR-E-SOURCE-LIMIT",
-                "standalone source context limit".into(),
-            ));
-        }
-        metadata_bytes = module_path
-            .iter()
-            .try_fold(metadata_bytes, |n, name| {
-                n.checked_add(name.len()).and_then(|n| n.checked_add(64))
-            })
-            .and_then(|n| n.checked_add(path.as_str().len()))
-            .and_then(|n| n.checked_add(512))
-            .filter(|n| *n <= 64 * 1024 * 1024)
-            .ok_or(Diagnostic::new(
-                "LRR-E-SOURCE-LIMIT",
-                "standalone source context metadata limit".into(),
-            ))?;
-        let captured = snapshot.files().get(&path).ok_or(Diagnostic::new(
-            "LRR-E-INTERNAL-SNAPSHOT",
-            "module source absent from captured snapshot".into(),
-        ))?;
-        for request in
-            crate::syntax::modules::external_modules_in_profile(captured.text()?, &cfg, &profile)?
-        {
-            let mut child_scope = module_path.clone();
-            child_scope
-                .len()
-                .checked_add(request.module_path.len())
-                .filter(|n| *n <= 256)
-                .ok_or(Diagnostic::new(
-                    "LRR-E-SOURCE-LIMIT",
-                    "standalone module depth limit".into(),
-                ))?;
-            child_scope.extend(request.module_path.iter().cloned());
-            let (child_path, child_directory) =
-                crate::source::graph::module_target(&path, &directory, request, |candidate| {
-                    Ok(snapshot.files().contains_key(candidate))
-                })?;
-            queued_bytes = child_scope
-                .iter()
-                .try_fold(queued_bytes, |n, name| {
-                    n.checked_add(name.len()).and_then(|n| n.checked_add(64))
-                })
-                .and_then(|n| n.checked_add(child_path.as_str().len()))
-                .and_then(|n| n.checked_add(child_directory.as_os_str().len()))
-                .and_then(|n| n.checked_add(256))
-                .filter(|n| *n <= 64 * 1024 * 1024)
-                .ok_or(Diagnostic::new(
-                    "LRR-E-SOURCE-LIMIT",
-                    "standalone queued module metadata limit".into(),
-                ))?;
-            if queue.len() >= 100_000 {
-                return Err(Diagnostic::new(
-                    "LRR-E-SOURCE-LIMIT",
-                    "standalone module queue count limit".into(),
-                ));
-            }
-            queue.try_reserve(1).map_err(|_| {
-                Diagnostic::new(
-                    "LRR-E-SOURCE-LIMIT",
-                    "standalone module queue allocation".into(),
-                )
-            })?;
-            queue.push_back((child_path, child_directory, child_scope));
-        }
-        selections.try_reserve(1).map_err(|_| {
-            Diagnostic::new(
-                "LRR-E-SOURCE-LIMIT",
-                "standalone selection allocation".into(),
-            )
-        })?;
-        selections.push(SourceSelection {
-            path: path.clone(),
-            outline: OutlineKey {
-                parse: ParseKey {
-                    content: captured.content(),
-                    profile: profile.clone(),
-                },
-                crate_key: project.selected_crate,
-                module_path: module_path.clone(),
-                cfg: cfg.fingerprint(),
-            },
-        });
-        units.try_reserve(1).map_err(|_| {
-            Diagnostic::new("LRR-E-SOURCE-LIMIT", "standalone source allocation".into())
-        })?;
-        units.push(SourceUnitInput {
-            path,
-            crate_key: project.selected_crate,
-            module_path,
-            profile: profile.clone(),
-            cfg: cfg.clone(),
-            blob: captured.clone(),
-        });
-    }
-    let prepared = PreparedSourceInputs::refresh(None, units, Default::default())?;
-    let mut views = Vec::new();
-    views.try_reserve_exact(selections.len()).map_err(|_| {
-        Diagnostic::new(
-            "LRR-E-SOURCE-LIMIT",
-            "standalone source view allocation".into(),
-        )
-    })?;
-    for selected in &selections {
-        let SourceSelectionOutcome::Selected(view) = prepared.select(selected)? else {
-            return Err(Diagnostic::new(
-                "LRR-E-INTERNAL-SNAPSHOT",
-                "captured source selection unavailable".into(),
-            ));
-        };
-        views.push(view);
-    }
-    let selection = SourceSelection {
-        path: project.root_source.clone(),
-        outline: OutlineKey {
-            parse: ParseKey {
-                content: blob.content(),
-                profile,
-            },
-            crate_key: project.selected_crate,
-            module_path: vec![],
-            cfg: cfg.fingerprint(),
-        },
-    };
-    let SourceSelectionOutcome::Selected(view) = prepared.select(&selection)? else {
-        return Err(Diagnostic::new(
-            "LRR-E-INTERNAL-SNAPSHOT",
-            "captured root selection unavailable".into(),
-        ));
-    };
-    Ok((prepared, view, views, snapshot))
+        &crate_graph::ExternCrates::default(),
+    )
+    .map(|(world, _)| world)
 }
 #[cfg(test)]
 fn standalone(
@@ -259,24 +85,42 @@ fn standalone_edition(
     authority: Option<&bundle::Authority>,
     edition: u16,
 ) -> Result<StandaloneOutcome, Diagnostic> {
-    standalone_edition_with_capture(path, authority, edition, false, None)
+    standalone_edition_with_capture(
+        path,
+        authority,
+        edition,
+        &crate_graph::ExternCrates::default(),
+        false,
+        None,
+    )
 }
 fn standalone_edition_with_capture(
     path: &std::path::Path,
     authority: Option<&bundle::Authority>,
     edition: u16,
+    externs: &crate_graph::ExternCrates,
     capture: bool,
     context: Option<crate::core::digest::Digest>,
 ) -> Result<StandaloneOutcome, Diagnostic> {
-    let (prepared, view, sources, mut snapshot) =
-        match capture_standalone_edition(path, false, edition) {
-            Ok(inputs) => inputs,
-            Err(error) if capture => {
-                return runtime_capture::Packet::preparation_fault(error, context)
-                    .map(|p| StandaloneOutcome::Captured(Box::new(p)));
-            }
-            Err(error) => return Err(error),
-        };
+    // Explicit preparation of procedural auxiliaries precedes source capture.
+    let captured = proc_macros::prepare(path, edition, false, externs).and_then(|tools| {
+        crate_graph::capture_keyed(
+            path,
+            false,
+            edition,
+            externs,
+            tools.as_ref().map(|tools| tools.root),
+        )
+        .map(|world| (world, tools))
+    });
+    let (((prepared, view, sources, mut snapshot), dependencies), tools) = match captured {
+        Ok(inputs) => inputs,
+        Err(error) if capture => {
+            return runtime_capture::Packet::preparation_fault(error, context)
+                .map(|p| StandaloneOutcome::Captured(Box::new(p)));
+        }
+        Err(error) => return Err(error),
+    };
     let outcome = standalone_captured(
         path,
         prepared,
@@ -288,12 +132,13 @@ fn standalone_edition_with_capture(
             enabled: capture,
             context,
         },
+        tools.as_ref(),
     )
     .map_err(|error| {
         if let Some(authority) = authority {
             authority.report(&error, Some(&snapshot), None);
         }
-        render::attach(error, snapshot)
+        render::attach_captured_worlds(error, snapshot, &dependencies)
     });
     match outcome {
         Err(error) if capture => runtime_capture::Packet::preparation_fault(error, context)
@@ -309,36 +154,79 @@ fn standalone_captured(
     snapshot: &mut std::sync::Arc<crate::source::snapshot::Snapshot>,
     authority: Option<&bundle::Authority>,
     capture: runtime_capture::Request,
+    tools: Option<&proc_macros::StandaloneMacroTools>,
 ) -> Result<StandaloneOutcome, Diagnostic> {
     use crate::{
         db::{memo::Database, poll::QueryPoll},
         engine::run::{RunMachine, RunPoll},
     };
     let owning_edition = view.selection().outline.parse.profile.edition;
+    let stage = crate::core::timing::Span::enter(|| "stage compile inputs".into());
     let (compiler, prepared, view, sources) =
-        compile_inputs::PreparedCompileInputs::prepare(path, prepared, view, sources)?;
+        compile_inputs::PreparedCompileInputs::prepare_with_environment(
+            path,
+            prepared,
+            view,
+            sources,
+            tools.map(|tools| tools.root_environment()).transpose()?,
+        )?;
+    drop(stage);
     let mut db = Database::default();
     prepared.publish(&mut db)?;
     db.begin_expansion_epoch(1)?;
-    let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
+    // One procedural run serves every seal of this request epoch.
+    let mut procedural = tools
+        .map(|tools| proc_macros::ProceduralRun::begin(&mut db, tools))
+        .transpose()?;
+    // The cold Type fixed point publishes the root Type seal that ordinary
+    // constant/static/type demands of reached code observe; it prepares no
+    // executable body.
+    let stage = crate::core::timing::Span::enter(|| "stage type preparation".into());
+    type_preparation::prepare(
+        &compiler,
+        &mut db,
+        &view,
+        &sources,
+        snapshot,
+        procedural.as_mut(),
+    )?;
+    drop(stage);
+    let discovery = crate::expand::source_discovery::SourceDiscovery::new_deferred_imports(
         sources,
         view.outline().root_scope.clone(),
         crate::source::manifest::Namespace::Value,
-        view.selection().outline.crate_key,
+        procedural
+            .as_ref()
+            .map_or(view.selection().outline.crate_key, |run| run.graph()),
         1,
-    )?
-    .with_declarative_compiler(
-        compiler.environment_identity(),
-        crate::expand::source_declarative::engine_version(),
-        compiler.catalog.clone(),
     )?;
-    compiler.discover_diagnostic(&mut discovery, &mut db, snapshot)?;
+    let mut discovery = match &procedural {
+        Some(run) => run.configure(
+            discovery.with_resolved_imports()?,
+            compiler.environment_identity(),
+            compiler.catalog.clone(),
+        )?,
+        None => discovery.with_declarative_compiler(
+            compiler.environment_identity(),
+            crate::expand::source_declarative::engine_version(),
+            compiler.catalog.clone(),
+        )?,
+    };
+    let stage = crate::core::timing::Span::enter(|| "stage discovery".into());
+    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot, procedural.as_mut())?;
+    drop(stage);
+    let stage = crate::core::timing::Span::enter(|| "stage runtime macros+publish".into());
     let macros =
         crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros::from_discovery(
             &view, &discovery,
         )?;
     let contexts = macros.contexts()?;
-    discovery.publish(&mut db)?;
+    match procedural.as_mut() {
+        Some(run) => run.publish(&mut db, &mut discovery)?,
+        None => discovery.publish(&mut db)?,
+    }
+    drop(stage);
+    let stage = crate::core::timing::Span::enter(|| "stage entry".into());
     let callable = match discovery.entry_function(&mut db, "main") {
         QueryPoll::Ready(Ok(crate::frontend::callables::CallSelection::Source(callable))) => {
             callable
@@ -374,7 +262,10 @@ fn standalone_captured(
             "main has no executable body".into(),
         ))?
         .key();
+    drop(stage);
+    let stage = crate::core::timing::Span::enter(|| "stage run start".into());
     let startup = RunMachine::start_with_discovery(&mut db, body, 1_000_000, discovery);
+    drop(stage);
     db.begin_run()?;
     let result = match startup {
         QueryPoll::Ready(Ok(mut run)) => {
@@ -386,7 +277,9 @@ fn standalone_captured(
             match enabled {
                 Err(error) => Err(error),
                 Ok(()) => {
+                    let stage = crate::core::timing::Span::enter(|| "stage run poll".into());
                     let polled = run.poll_with_runtime_macros(&mut db, &contexts);
+                    drop(stage);
                     if capture.enabled {
                         if let RunPoll::Fault(error) = &polled
                             && let Some(authority) = authority
@@ -446,9 +339,16 @@ fn test_source(
     selection: TestSelection<'_>,
     authority: Option<&bundle::Authority>,
     edition: u16,
+    externs: &crate_graph::ExternCrates,
 ) -> Result<StandaloneOutcome, Diagnostic> {
-    let (prepared, view, sources, mut snapshot) =
-        capture_standalone_edition(source, true, edition)?;
+    let tools = proc_macros::prepare(source, edition, true, externs)?;
+    let ((prepared, view, sources, mut snapshot), dependencies) = crate_graph::capture_keyed(
+        source,
+        true,
+        edition,
+        externs,
+        tools.as_ref().map(|tools| tools.root),
+    )?;
     test_source_captured(
         source,
         prepared,
@@ -457,12 +357,13 @@ fn test_source(
         &mut snapshot,
         selection,
         authority,
+        tools.as_ref(),
     )
     .map_err(|error| {
         if let Some(authority) = authority {
             authority.report(&error, Some(&snapshot), None);
         }
-        render::attach(error, snapshot)
+        render::attach_captured_worlds(error, snapshot, &dependencies)
     })
 }
 struct TestSelection<'a> {
@@ -480,6 +381,7 @@ fn test_source_captured(
     snapshot: &mut std::sync::Arc<crate::source::snapshot::Snapshot>,
     selection: TestSelection<'_>,
     authority: Option<&bundle::Authority>,
+    tools: Option<&proc_macros::StandaloneMacroTools>,
 ) -> Result<StandaloneOutcome, Diagnostic> {
     use crate::{db::memo::Database, engine::test_harness::run_sealed_test};
     let TestSelection {
@@ -490,23 +392,54 @@ fn test_source_captured(
         include_ignored,
     } = selection;
     let (compiler, prepared, view, sources) =
-        compile_inputs::PreparedCompileInputs::prepare(source, prepared, view, sources)?;
+        compile_inputs::PreparedCompileInputs::prepare_with_environment(
+            source,
+            prepared,
+            view,
+            sources,
+            tools.map(|tools| tools.root_environment()).transpose()?,
+        )?;
     let mut db = Database::default();
     prepared.publish(&mut db)?;
     db.begin_expansion_epoch(1)?;
-    let mut discovery = crate::expand::source_discovery::SourceDiscovery::for_tests(
+    let mut procedural = tools
+        .map(|tools| proc_macros::ProceduralRun::begin(&mut db, tools))
+        .transpose()?;
+    // The same cold Type fixed point `run` publishes before Value entry: the
+    // root Type seal that reached test code's type demands observe.
+    type_preparation::prepare(
+        &compiler,
+        &mut db,
+        &view,
+        &sources,
+        snapshot,
+        procedural.as_mut(),
+    )?;
+    let discovery = crate::expand::source_discovery::SourceDiscovery::for_tests(
         sources,
         view.outline().root_scope.clone(),
-        view.selection().outline.crate_key,
+        procedural
+            .as_ref()
+            .map_or(view.selection().outline.crate_key, |run| run.graph()),
         1,
-    )?
-    .with_declarative_compiler(
-        compiler.environment_identity(),
-        crate::expand::source_declarative::engine_version(),
-        compiler.catalog.clone(),
     )?;
-    compiler.discover_diagnostic(&mut discovery, &mut db, snapshot)?;
-    discovery.publish(&mut db)?;
+    let mut discovery = match &procedural {
+        Some(run) => run.configure(
+            discovery,
+            compiler.environment_identity(),
+            compiler.catalog.clone(),
+        )?,
+        None => discovery.with_declarative_compiler(
+            compiler.environment_identity(),
+            crate::expand::source_declarative::engine_version(),
+            compiler.catalog.clone(),
+        )?,
+    };
+    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot, procedural.as_mut())?;
+    match procedural.as_mut() {
+        Some(run) => run.publish(&mut db, &mut discovery)?,
+        None => discovery.publish(&mut db)?,
+    }
     let catalog = discovery.test_catalog(&mut db)?;
     let sources = discovery.completed_test_sources()?;
     catalog.require_current(&mut db)?;
@@ -542,7 +475,20 @@ fn test_source_captured(
                 &view, &discovery,
             )?;
         let contexts = macros.contexts()?;
+        let definitions: Vec<_> = selected.iter().map(|case| case.definition).collect();
+        let bodies = retained_entry::prepare_test_bodies(&mut db, &discovery, &sources, &definitions)?;
         for case in selected {
+            let retained;
+            let case = match bodies.get(&case.definition) {
+                Some(body) if case.body.is_some() => {
+                    retained = crate::engine::test_catalog::TestCase {
+                        body: Some(body.clone()),
+                        ..case.clone()
+                    };
+                    &retained
+                }
+                _ => case,
+            };
             let mut result =
                 run_sealed_test(&mut db, &sources, case, 1_000_000, &contexts, &catalog)?;
             if let Some(authority) = authority
@@ -586,6 +532,14 @@ pub fn entry(program: &str) -> i32 {
         .diagnostic_dir
         .as_deref()
         .map(bundle::Authority::explicit);
+    let externs = match crate_graph::ExternCrates::new(args.externs, args.extern_editions) {
+        Ok(externs) => externs,
+        Err(error) => {
+            eprintln!("{error}");
+            return 2;
+        }
+    };
+    let total = crate::core::timing::Span::enter(|| "outside queries".into());
     let result = match args.command {
         args::Command::Explain { code } => return explain::entry(&code),
         args::Command::SourceWorld { source, context } => {
@@ -599,6 +553,7 @@ pub fn entry(program: &str) -> i32 {
             &source,
             authority.as_ref(),
             args.edition,
+            &externs,
             runtime_capture,
             capture_context,
         ),
@@ -620,8 +575,11 @@ pub fn entry(program: &str) -> i32 {
             },
             authority.as_ref(),
             args.edition,
+            &externs,
         ),
     };
+    drop(total);
+    crate::core::timing::report();
     match result {
         Ok(report) => {
             let failed = matches!(&report,StandaloneOutcome::Tests(summary) if summary.results.iter().any(|result| !result.passed()));
@@ -1187,7 +1145,8 @@ mod tests {
         std::fs::write(&wrapper, "include!(\"stock/macro-include-items.rs\");\n").unwrap();
         for nested in [false, true] {
             let path = if nested { &wrapper } else { original };
-            for fuel in [1_000_000, 0] {
+            // E-R5-006: the zero-fuel resource-fault branch was removed with fuel.
+            for fuel in [1_000_000] {
                 let (prepared, view, sources, snapshot) =
                     super::capture_standalone(path, false).unwrap();
                 let (compiler, prepared, view, sources) =
@@ -1386,332 +1345,27 @@ mod tests {
     }
 
     #[test]
-    fn rustc_generated_module_function_executes_and_resource_fault_preserves_origins() {
+    fn rustc_generated_module_function_executes_through_the_standalone_entry() {
+        // E-R5-006: the zero-fuel resource-fault/origin branch was removed with
+        // fuel. The whole original (whose main calls a macro-generated module
+        // function) runs through the production standalone entry route.
         require_current_validation_source();
-        use crate::{
-            db::{memo::Database, poll::QueryPoll},
-            engine::run::{RunMachine, RunPoll},
-            frontend::callables::CallSelection,
-        };
         let path = std::path::Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../fixtures/upstream/rustc-checkout/tests/ui/macros/pub-item-inside-macro.rs"
         ));
-        for fuel in [1_000_000, 0] {
-            let (prepared, view, sources, snapshot) =
-                super::capture_standalone(path, false).unwrap();
-            let (compiler, prepared, view, sources) =
-                super::compile_inputs::PreparedCompileInputs::prepare(
-                    path, prepared, view, sources,
-                )
-                .unwrap();
-            let mut db = Database::default();
-            prepared.publish(&mut db).unwrap();
-            let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
-                sources,
-                view.outline().root_scope.clone(),
-                crate::source::manifest::Namespace::Value,
-                view.selection().outline.crate_key,
-                1,
-            )
-            .unwrap()
-            .with_declarative_compiler(
-                compiler.environment_identity(),
-                crate::expand::source_declarative::engine_version(),
-                compiler.catalog.clone(),
-            )
-            .unwrap();
-            compiler.discover(&mut discovery, &mut db).unwrap();
-            discovery.publish(&mut db).unwrap();
-            let QueryPoll::Ready(Ok(CallSelection::Source(callable))) =
-                discovery.entry_function(&mut db, "main")
-            else {
-                panic!("stock main did not resolve");
-            };
-            let body = callable.body().unwrap().key();
-            let (startup, selected_body) = if fuel == 0 {
-                let (sources, graph) = discovery.into_runtime_parts().unwrap();
-                let borrowed = sources.iter().collect::<Vec<_>>();
-                let resolver =
-                    crate::frontend::callables::CallResolver::new(&graph, &borrowed).unwrap();
-                let QueryPoll::Ready(Ok(CallSelection::Source(callee))) =
-                    resolver.source_function(&mut db, body.definition, "bleh::bar")
-                else {
-                    panic!("sealed generated callee did not resolve");
-                };
-                callee.revalidate(&mut db).unwrap();
-                let generated_body = callee.body().unwrap().key();
-                assert_ne!(generated_body.definition, body.definition);
-                (
-                    RunMachine::start_with_sources(&mut db, generated_body.clone(), fuel, sources),
-                    generated_body,
-                )
-            } else {
-                (
-                    RunMachine::start_with_discovery(&mut db, body.clone(), fuel, discovery),
-                    body.clone(),
-                )
-            };
-            let QueryPoll::Ready(Ok(mut run)) = startup else {
-                panic!("stock main did not enter");
-            };
-            db.begin_run().unwrap();
-            let result = run.poll(&mut db);
-            if fuel == 1_000_000 {
-                let RunPoll::Completed(report) = result else {
-                    panic!(
-                        "whole stock source failed: {}",
-                        match result {
-                            RunPoll::Fault(error) => error.to_string(),
-                            _ => "unexpected execution outcome".into(),
-                        }
-                    );
-                };
-                assert!(matches!(
+        for edition in [2015, 2018, 2021, 2024] {
+            match super::standalone_edition(path, None, edition) {
+                Ok(super::StandaloneOutcome::Completed(report)) => assert!(matches!(
                     report.value,
                     crate::engine::run::ValueSummary::Unit
-                ));
-            } else {
-                let RunPoll::Fault(error) = result else {
-                    panic!("stock generated call did not exhaust opcode fuel");
-                };
-                assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-                assert_eq!(error.message, "guest opcode fuel exhausted");
-                assert!(error.origin_attachment_failure.is_none(), "{error}");
-                let origin = error
-                    .generated_origin
-                    .as_ref()
-                    .expect("fault was not attached to the generated callee");
-                assert_ne!(origin.body.body_key.definition, body.definition);
-                assert_eq!(origin.body.body_key, selected_body);
-                assert_eq!(origin.definition.as_ref().unwrap().name, "foo");
-                assert!(!origin.tokens.is_empty());
-                drop(run);
-                let trace = db.trace.events.len();
-                // A declared newline-only adaptation lives in a separate
-                // immutable snapshot; the licensed upstream copy stays intact.
-                let mut files = snapshot.files().clone();
-                let root = snapshot.project().root_source.clone();
-                let edited = format!("\n{}", files[&root].text().unwrap());
-                files.insert(
-                    root,
-                    crate::source::snapshot::SourceBlob::new(edited.into_bytes()).unwrap(),
-                );
-                let edited_snapshot = std::sync::Arc::new(
-                    crate::source::snapshot::Snapshot::new(
-                        snapshot.project().clone(),
-                        files,
-                        snapshot.cfg_by_crate().clone(),
-                        snapshot.compile_env().clone(),
-                        Some(snapshot.id()),
-                    )
-                    .unwrap(),
-                );
-                let stale = super::render::attach(error.clone(), edited_snapshot);
-                let stale_at = stale.rendered_generated_origin.as_ref().unwrap();
-                assert!(stale_at.invocation.is_none() && stale_at.definition.is_none());
-                assert!(stale_at.tokens.iter().all(Option::is_none));
-                assert!(!stale.to_string().contains("\n  -->"));
-                let error = super::render::attach(error, snapshot);
-                let at = error.rendered_generated_origin.as_ref().unwrap();
-                assert!(at.invocation.is_some() && at.definition.is_some());
-                assert!(at.tokens.iter().all(Option::is_some));
-                let text = error.to_string();
-                assert!(text.contains("foo!();"));
-                assert!(text.contains("definition of `foo`"));
-                assert!(text.contains("pub fn bar() { }"));
-                assert_eq!(db.trace.events.len(), trace, "rendering ran a query");
+                )),
+                Ok(_) => panic!("whole stock source did not complete: edition={edition}"),
+                Err(error) => panic!("whole stock source failed: edition={edition}: {error}"),
             }
-            db.finish_run().unwrap();
         }
     }
 
-    #[test]
-    fn rustc_generated_module_fuel_boundaries_preserve_entered_guest_stack() {
-        require_current_validation_source();
-        use crate::{
-            db::{memo::Database, poll::QueryPoll},
-            engine::run::{RunMachine, RunPoll},
-            frontend::callables::CallSelection,
-        };
-        // Unchanged upstream program; resource limits are LRR harness controls.
-        // Every opcode boundary is exercised, measured from its successful run.
-        fn enter(
-            fuel: u64,
-        ) -> (
-            RunMachine,
-            Database,
-            std::sync::Arc<crate::source::snapshot::Snapshot>,
-        ) {
-            let path = std::path::Path::new(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../../fixtures/upstream/rustc-checkout/tests/ui/macros/pub-item-inside-macro.rs"
-            ));
-            let (prepared, view, sources, snapshot) =
-                super::capture_standalone(path, false).unwrap();
-            let (compiler, prepared, view, sources) =
-                super::compile_inputs::PreparedCompileInputs::prepare(
-                    path, prepared, view, sources,
-                )
-                .unwrap();
-            let mut db = Database::default();
-            prepared.publish(&mut db).unwrap();
-            let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
-                sources,
-                view.outline().root_scope.clone(),
-                crate::source::manifest::Namespace::Value,
-                view.selection().outline.crate_key,
-                1,
-            )
-            .unwrap()
-            .with_declarative_compiler(
-                compiler.environment_identity(),
-                crate::expand::source_declarative::engine_version(),
-                compiler.catalog.clone(),
-            )
-            .unwrap();
-            compiler.discover(&mut discovery, &mut db).unwrap();
-            discovery.publish(&mut db).unwrap();
-            let QueryPoll::Ready(Ok(CallSelection::Source(main))) =
-                discovery.entry_function(&mut db, "main")
-            else {
-                panic!("stock main selection failed");
-            };
-            let QueryPoll::Ready(Ok(run)) = RunMachine::start_with_discovery(
-                &mut db,
-                main.body().unwrap().key(),
-                fuel,
-                discovery,
-            ) else {
-                panic!("stock main entry failed");
-            };
-            db.begin_run().unwrap();
-            (run, db, snapshot)
-        }
-        let (mut baseline, mut db, _) = enter(1_000_000);
-        let RunPoll::Completed(report) = baseline.poll(&mut db) else {
-            panic!("stock whole-source baseline did not complete");
-        };
-        assert!(matches!(
-            report.value,
-            crate::engine::run::ValueSummary::Unit
-        ));
-        let used = baseline.fuel_snapshot().used;
-        assert_eq!(used, report.opcode_counters.fuel_used);
-        assert!(
-            (1..1024).contains(&used),
-            "stock boundary sweep exceeded its harness budget"
-        );
-        assert_eq!(baseline.peak_guest_frames(), 2);
-        db.finish_run().unwrap();
-        let mut saw_suspended_caller = false;
-        for fuel in 0..used {
-            let (mut run, mut db, snapshot) = enter(fuel);
-            let main = run.root_body().clone();
-            let RunPoll::Fault(error) = run.poll(&mut db) else {
-                panic!("fuel boundary {fuel} failed to exhaust");
-            };
-            assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-            assert_eq!(error.message, "guest opcode fuel exhausted");
-            assert!(
-                error.origin_attachment_failure.is_none(),
-                "boundary {fuel}: {error}"
-            );
-            let stack = error
-                .guest_stack
-                .as_ref()
-                .expect("entered guest stack missing");
-            assert_eq!(stack.omitted_frames, 0);
-            assert_eq!(stack.frames.len(), run.diagnostic_frames().count());
-            for (frame, (pc, _)) in stack.frames.iter().zip(run.diagnostic_frames()) {
-                assert_eq!(frame.pc, crate::core::digest::StableEncode::fingerprint(pc));
-                assert_eq!(frame.body.body_key, pc.body);
-                assert!(
-                    !frame.locations.is_empty(),
-                    "boundary {fuel} lacked an exact captured origin"
-                );
-            }
-            assert_eq!(
-                stack.frames.last().unwrap().body.body_key,
-                main,
-                "boundary {fuel} lost its suspended caller"
-            );
-            if stack.frames.len() == 2 {
-                saw_suspended_caller = true;
-                assert_ne!(stack.frames[0].body.body_key.definition, main.definition);
-                let caller = &stack.frames[1].locations[0];
-                let source = snapshot.files()[&snapshot.project().root_source]
-                    .text()
-                    .unwrap();
-                let text = &source[caller.range.start as usize..caller.range.end as usize];
-                assert!(
-                    text.contains("bleh::bar"),
-                    "caller location changed: {text}"
-                );
-            } else {
-                assert_eq!(stack.frames.len(), 1);
-            }
-            let trace = db.trace.events.len();
-            let captured = crate::engine::failure::guest_stack(&run, &mut db).unwrap();
-            assert_eq!(
-                crate::core::digest::StableEncode::fingerprint(stack.as_ref()),
-                crate::core::digest::StableEncode::fingerprint(&captured)
-            );
-            assert_eq!(db.trace.events.len(), trace, "stack capture ran a query");
-            drop(run);
-            let mut files = snapshot.files().clone();
-            let root = snapshot.project().root_source.clone();
-            let edited = format!("\n{}", files[&root].text().unwrap());
-            files.insert(
-                root,
-                crate::source::snapshot::SourceBlob::new(edited.into_bytes()).unwrap(),
-            );
-            let stale = std::sync::Arc::new(
-                crate::source::snapshot::Snapshot::new(
-                    snapshot.project().clone(),
-                    files,
-                    snapshot.cfg_by_crate().clone(),
-                    snapshot.compile_env().clone(),
-                    Some(snapshot.id()),
-                )
-                .unwrap(),
-            );
-            let rejected = super::render::attach(error.clone(), stale);
-            assert!(
-                rejected
-                    .rendered_guest_stack
-                    .as_ref()
-                    .unwrap()
-                    .frames
-                    .iter()
-                    .flatten()
-                    .all(Option::is_none)
-            );
-            assert!(!rejected.to_string().contains("\n  -->"));
-            let frame_count = stack.frames.len();
-            let rendered = super::render::attach(error, snapshot);
-            let attached = rendered.rendered_guest_stack.as_ref().unwrap();
-            assert_eq!(attached.frames.len(), frame_count);
-            assert_eq!(attached.omitted_frames, 0);
-            assert_eq!(attached.omitted_locations, 0);
-            assert!(
-                attached
-                    .frames
-                    .iter()
-                    .all(|frame| !frame.is_empty() && frame.iter().all(Option::is_some))
-            );
-            assert!(rendered.to_string().contains("guest frame 0"));
-            if attached.frames.len() == 2 {
-                assert!(rendered.to_string().contains("guest frame 1"));
-            }
-            assert_eq!(db.trace.events.len(), trace, "rendering ran a query");
-            db.finish_run().unwrap();
-        }
-        assert!(
-            saw_suspended_caller,
-            "all actual call boundaries were missed"
-        );
-    }
 
     #[test]
     fn rustc_original_println_facet_retains_std_world_and_refuses_core_selection() {
@@ -1782,9 +1436,8 @@ mod tests {
         };
         assert_eq!(report.panic.kind, crate::vm::numeric::PanicKind::Explicit);
         assert!(report.panic.description().contains(pattern));
-        assert_eq!(report.opcode_counters.started_by_opcode[22], 1);
-        assert_eq!(report.opcode_counters.started_by_opcode[19], 0);
-        assert_eq!(report.opcode_counters.started_by_opcode[25], 1);
+        // The library's own `panic!` reaches its panic through ordinary
+        // operations; the legacy Panic opcode/call counts no longer apply.
         assert!(report.opcode_counters.panic_scopes_cleaned > 0);
     }
 

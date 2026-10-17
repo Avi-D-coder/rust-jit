@@ -2,8 +2,6 @@
 use super::*;
 use syntax::GreenNode;
 
-const MAX_SEED_METADATA: usize = 256 * 1024 * 1024;
-
 /// The green tree and exact origin/store allocations are shared by every fork.
 /// No private Salsa ID or allocation address participates in `identity`.
 pub struct SyntaxAttachmentSeed {
@@ -19,7 +17,6 @@ pub struct SyntaxAttachmentSeed {
 
 fn add(a: usize, b: usize) -> Result<usize, AdapterError> {
     a.checked_add(b)
-        .filter(|n| *n <= MAX_SEED_METADATA)
         .ok_or_else(|| error("attachment seed metadata budget"))
 }
 
@@ -27,9 +24,6 @@ impl SyntaxAttachment {
     /// Consume an actual pinned tree. This cold validation/hash/size pass runs
     /// once; subsequent forks do not parse, materialize, walk or hash it.
     pub fn into_seed(self) -> Result<SyntaxAttachmentSeed, AdapterError> {
-        if self.retained_input_bytes > MAX_RETAINED_INPUT {
-            return Err(error("attachment retained input budget"));
-        }
         check_tree(&self.root)?;
         let text_len = u32::from(self.root.text_range().len());
         check_origins(&self.origins, text_len)?;

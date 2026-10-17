@@ -187,14 +187,7 @@ impl FrozenCompileEnvironment {
     ) -> Result<EnvironmentExpansionPoll, Diagnostic> {
         use crate::expand::identity::{GrammarSlot, MacroIdentity};
         request.key.validate()?;
-        if request.max_wire_bytes == 0
-            || request.max_wire_bytes > 256 * 1024 * 1024
-            || request
-                .original
-                .allocated_bytes()
-                .map_err(|e| fault(&e.to_string()))?
-                > 64 * 1024 * 1024
-        {
+        if request.max_wire_bytes == 0 {
             return Err(fault("environment output resource limits are invalid"));
         }
         let descriptor = request

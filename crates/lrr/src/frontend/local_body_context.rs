@@ -135,9 +135,7 @@ impl LocalBodyContext {
             let depth = source
                 .local_body
                 .as_ref()
-                .map_or(Some(1), |local| local.depth.checked_add(1))
-                .filter(|depth| *depth <= 256)
-                .ok_or_else(crate::runtime::arena::resource)?;
+                .map_or(Some(1), |local| local.depth.checked_add(1))                .ok_or_else(crate::runtime::arena::resource)?;
             let owner_stamp = owner.fingerprint();
             if db
                 .published_input(&InputKey::LocalDeclarationOwner(definition))

@@ -28,12 +28,9 @@ struct Explanation {
 }
 
 fn explain(code: &str) -> Result<Explanation, String> {
-    if MANIFEST.len() > 1024 * 1024 {
-        return Err("local diagnostic manifest exceeds its byte limit".into());
-    }
     let manifest: Manifest = toml::from_str(MANIFEST)
         .map_err(|_| "local diagnostic manifest is malformed".to_owned())?;
-    if manifest.schema != 1 || manifest.diagnostic.len() > 4096 {
+    if manifest.schema != 1 {
         return Err("local diagnostic manifest schema or count is unsupported".into());
     }
     let mut identities = BTreeSet::new();
@@ -41,7 +38,6 @@ fn explain(code: &str) -> Result<Explanation, String> {
         if !entry.code.starts_with("LRR-E-")
             || !identities.insert(&entry.code)
             || entry.fixtures.is_empty()
-            || entry.fixtures.len() > 256
             || [
                 &entry.code,
                 &entry.phase,
@@ -51,7 +47,7 @@ fn explain(code: &str) -> Result<Explanation, String> {
             ]
             .into_iter()
             .chain(entry.fixtures.iter())
-            .any(|text| text.is_empty() || text.len() > 64 * 1024)
+            .any(|text| text.is_empty())
         {
             return Err("local diagnostic manifest contains invalid or duplicate entries".into());
         }

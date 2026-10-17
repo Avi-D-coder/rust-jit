@@ -23,8 +23,8 @@ mod tests {
     use super::super::GuestStore;
     #[test]
     fn stores_with_identical_arena_handle_bits_have_distinct_actual_sessions() {
-        let mut a = GuestStore::new(1, 1000, 1_000_000).unwrap();
-        let mut b = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut a = GuestStore::for_epoch(1).unwrap();
+        let mut b = GuestStore::for_epoch(1).unwrap();
         assert_eq!(
             a.new_frame_anchor().unwrap().bits(),
             b.new_frame_anchor().unwrap().bits()

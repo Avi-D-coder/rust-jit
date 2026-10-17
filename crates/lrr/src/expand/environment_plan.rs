@@ -78,13 +78,6 @@ impl EnvironmentArgumentPlan {
         descriptor: &CompileInputDescriptor,
         original: &TokenForest,
     ) -> Result<Self, Diagnostic> {
-        if original
-            .allocated_bytes()
-            .map_err(|e| fault(e.to_string()))?
-            > 64 * 1024 * 1024
-        {
-            return Err(fault("environment original metadata limit"));
-        }
         EnvironmentArguments::parse(descriptor, original)?;
         let wire = original.encode().map_err(|e| fault(e.to_string()))?;
         let input = lrr_expand_adapter::token_wire::TokenForest::decode(&wire)
@@ -149,13 +142,6 @@ impl EnvironmentArgumentPlan {
         chains: &std::collections::BTreeMap<usize, super::string_chain::StringExpansionChain>,
     ) -> EnvironmentMaterializationPoll {
         let mut work = || -> Result<EnvironmentMaterializationPoll, Diagnostic> {
-            if original
-                .allocated_bytes()
-                .map_err(|e| fault(e.to_string()))?
-                > 64 * 1024 * 1024
-            {
-                return Err(fault("environment original metadata limit"));
-            }
             let wire = original.encode().map_err(|e| fault(e.to_string()))?;
             if self.definition != descriptor.definition_identity()
                 || self.original != Digest::of_bytes(&wire)
@@ -216,7 +202,6 @@ impl EnvironmentArgumentPlan {
                 };
                 bytes = bytes
                     .checked_add(tokens.allocated_bytes().map_err(|e| fault(e.to_string()))?)
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| fault("environment child aggregate metadata limit"))?;
                 let owned = lrr_expand_adapter::token_wire::TokenForest::decode(
                     &tokens.encode().map_err(|e| fault(e.to_string()))?,

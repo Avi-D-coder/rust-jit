@@ -10,6 +10,90 @@ use crate::{
     traits::term::RegionTerm,
 };
 
+#[test]
+fn generated_body_context_preserves_complete_facts_without_inventing_outer_macro_rib() {
+    use crate::{
+        db::dependency::{InputKey, InputValue},
+        frontend::{source_body_context, source_macros::PublishedMacroIndex},
+        ir::pc::{NodeId, Phase},
+    };
+    use std::sync::Arc;
+    fn ready<T>(poll: QueryPoll<T>) -> T {
+        match poll {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => panic!("actual body context: {error:?}"),
+            QueryPoll::NeedInput(input) => panic!("actual body context suspended: {input:?}"),
+        }
+    }
+    for edition in [2015, 2018, 2021, 2024] {
+        for suffix in ["emit!();", "macro_rules! wrap{()=>{emit!();}}wrap!();"] {
+            let source = format!(
+                "struct Point{{x:isize}}macro_rules! emit{{()=>{{fn answer(p:&Point){{type Local=i32;use self::Point as Alias;let mut value=1;value;}}}}}}{suffix}fn main(){{}}"
+            );
+            let (mut db, signature, _, _, owner) =
+                super::tests::prepared_config_retained(&source, edition, true, false);
+            let body = db
+                .input(&InputKey::DefinitionBody(signature.definition))
+                .unwrap();
+            let InputValue::DefinitionBody(body) = body.as_ref() else {
+                panic!()
+            };
+            let index = ready(db.fetch(&SyntaxProvider, QueryKey::BodyStructure(body.key())));
+            let QueryValue::BodyStructure(index) = index.value.as_ref() else {
+                panic!()
+            };
+            let pc = index.pc(NodeId(0), Phase::Entry).unwrap();
+            let admitted = Arc::new(ready(source_body_context::capture(
+                &mut db,
+                &[&owner],
+                index,
+                &pc,
+            )));
+            let prepared = ready(Arc::clone(&admitted).prepare(&mut db));
+            assert!(Arc::ptr_eq(prepared.source().index(), admitted.index()));
+            assert!(
+                prepared
+                    .facts()
+                    .items
+                    .iter()
+                    .any(|item| item.item.def_key.declared_name == "Local")
+            );
+            assert_eq!(prepared.facts().imports.len(), 1);
+            let binding = prepared
+                .facts()
+                .bindings
+                .iter()
+                .find(|binding| binding.name == "value")
+                .unwrap();
+            assert!(
+                admitted
+                    .identifier_context(binding.name_range)
+                    .unwrap()
+                    .is_some()
+            );
+            let (root, facts) = crate::syntax::floating_fixture_hygiene::root(
+                owner.selection().outline.crate_key,
+                edition,
+            );
+            let original_index =
+                PublishedMacroIndex::from_view(owner.share(), root, facts).unwrap();
+            // Complete generated body facts are available. The original module
+            // index still cannot invent the generated insertion macro boundary.
+            assert!(
+                original_index
+                    .enter_prepared_body(Arc::clone(&prepared))
+                    .is_err()
+            );
+            ready(prepared.require_current(&mut db));
+            db.begin_expansion_epoch(2).unwrap();
+            assert!(matches!(
+                prepared.require_current(&mut db),
+                QueryPoll::Ready(Err(_))
+            ));
+        }
+    }
+}
+
 fn syntax(
     db: &mut Database,
     signature: &FunctionSignature,

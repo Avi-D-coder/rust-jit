@@ -123,7 +123,7 @@ fn rustc_nested_tuple_initialization_summary_propagates_without_tree_rescan() {
     let source =
         include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/tuple/index-float.rs");
     let depth = crate::syntax::place_fixture_facts::nested_unit_tuple_depth(source);
-    let mut store = GuestStore::new(1, 20_000, 16 * 1024 * 1024).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     // Stock-derived depth and a stress multiple use the actual existing
     // constructor/field-owner graph. Raw leaf transfer is a supplemental LRR
     // state transition; ordinary source reads of Unit use Copy instead.
@@ -181,37 +181,6 @@ fn rustc_tuple_argument_owner_and_field_overlap_refuses_before_packet_or_summary
 }
 
 #[test]
-fn rustc_tuple_field_quota_refusal_preserves_cached_initialization_and_owners() {
-    let (mut store, root, field, sibling, _) = tests::stock_tuple_reference_owner();
-    let place = store.project_tuple(&Place::cell(root), 0).unwrap();
-    while store.budget.handles() < 1000 {
-        store.ticket(ValueRepr::unit()).unwrap();
-    }
-    let before = (
-        store.state(root).unwrap(),
-        store.state(field).unwrap(),
-        store.state(sibling).unwrap(),
-        store.budget.handles(),
-        store.budget.bytes(),
-    );
-    let PlaceFailure::RuntimeFault(error) = store.read_owning_place(&place).unwrap_err() else {
-        panic!("quota did not produce a runtime fault")
-    };
-    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(summary(&store, root), (true, vec![true, true]));
-    assert_eq!(
-        (
-            store.state(root).unwrap(),
-            store.state(field).unwrap(),
-            store.state(sibling).unwrap(),
-            store.budget.handles(),
-            store.budget.bytes()
-        ),
-        before
-    );
-}
-
-#[test]
 fn rustc_array_initialization_word_boundary_stress_restores_all_live_fields() {
     let original = include_str!(
         "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/vec-fixed-length.rs"
@@ -221,7 +190,7 @@ fn rustc_array_initialization_word_boundary_stress_restores_all_live_fields() {
     // a bitset word boundary. This is not full unchanged program execution.
     let count = values.len().checked_mul(17).unwrap();
     assert!(count > 64);
-    let mut store = GuestStore::new(1, 10_000, 1024 * 1024).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let ty = store
         .intern_type(TypeKey::Array {
             element: TypeId(8),

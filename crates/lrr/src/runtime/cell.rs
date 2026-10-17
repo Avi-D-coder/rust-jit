@@ -6,14 +6,20 @@ mod test_owners;
 pub(crate) use test_owners::OwnerInventory;
 #[path = "cell_aggregate_copy.rs"]
 pub(crate) mod aggregate_copy;
+#[path = "cell_boxes.rs"]
+mod boxes;
 #[path = "cell_constant_instantiation.rs"]
 pub mod constant_instantiation;
 #[path = "cell_construction_cleanup.rs"]
 mod construction_cleanup;
+#[path = "cell_closures.rs"]
+mod closures;
 #[path = "cell_reference_return.rs"]
 mod reference_return;
 #[path = "cell_run_session.rs"]
 mod run_session;
+#[path = "cell_unsizing.rs"]
+mod unsizing;
 #[path = "str_storage.rs"]
 pub mod str_storage;
 use super::{
@@ -35,6 +41,13 @@ use crate::core::diagnostic::Diagnostic;
 pub use construction_cleanup::ConstructionCleanupTransfer;
 pub(crate) use reference_return::ReferenceTarget;
 pub(crate) use run_session::StoreSession;
+/// `[T]` is unsized: its place is borrowed or indexed, never read or assigned.
+fn unsized_place() -> Diagnostic {
+    Diagnostic::new(
+        "LRR-E-OP-TYPE",
+        "an unsized slice place can only be borrowed or indexed".into(),
+    )
+}
 fn ownership() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-OWNERSHIP",
@@ -62,20 +75,28 @@ enum PlaceUse {
 pub(crate) enum IntrinsicAssignment {
     Initialize { ty: TypeId, target: CellId },
     Replace { ty: TypeId, target: CellId },
+    /// The old value is an owning aggregate or nominal value: its drop glue
+    /// (and any user `Drop` witness) runs through the frame's cleanup
+    /// activation, never as a synchronous discard.
+    ReplaceOwned { ty: TypeId, target: CellId },
 }
 impl IntrinsicAssignment {
     pub(crate) fn ty(self) -> TypeId {
         match self {
-            Self::Initialize { ty, .. } | Self::Replace { ty, .. } => ty,
+            Self::Initialize { ty, .. } | Self::Replace { ty, .. } | Self::ReplaceOwned { ty, .. } => {
+                ty
+            }
         }
     }
     pub(crate) fn target(self) -> CellId {
         match self {
-            Self::Initialize { target, .. } | Self::Replace { target, .. } => target,
+            Self::Initialize { target, .. }
+            | Self::Replace { target, .. }
+            | Self::ReplaceOwned { target, .. } => target,
         }
     }
     pub(crate) fn replaces_live(self) -> bool {
-        matches!(self, Self::Replace { .. })
+        matches!(self, Self::Replace { .. } | Self::ReplaceOwned { .. })
     }
 }
 /// One bounded declaration-order cleanup transition. Skipping a moved field
@@ -218,13 +239,29 @@ pub struct GuestStore {
     constructions: GuestArena<ConstructionRecord>,
     references: GuestArena<ReferenceRecord>,
     strings: str_storage::ImmutableStrStorage,
+    /// Nominal declarations with a user `Drop` impl, once the run's complete
+    /// impl inventory is known. Absent means every nominal cleanup still
+    /// demands its witness.
+    user_drop_types: Option<std::collections::BTreeSet<crate::core::digest::Digest>>,
+    /// Nominal declarations with a `Copy` impl, once the run's complete impl
+    /// inventory is known. A nominal value outside this set is moved by an
+    /// owning read; absent means every nominal owning read is still refused.
+    user_copy_types: Option<std::collections::BTreeSet<crate::core::digest::Digest>>,
+    /// The `owned_box` lang item (the alloc facade's `Box` declaration),
+    /// whose places dereference through the builtin box projection.
+    owned_box: Option<crate::core::digest::Digest>,
 }
 impl GuestStore {
-    pub fn new(epoch: u32, max_handles: u32, max_bytes: usize) -> Result<Self, Diagnostic> {
+    // E-R5-006: ignored, remove at callers (`_max_handles`, `_max_bytes`).
+    pub fn new(epoch: u32, _max_handles: u32, _max_bytes: usize) -> Result<Self, Diagnostic> {
+        Self::for_epoch(epoch)
+    }
+    /// A run store with no guest handle or byte limit (E-R5-006).
+    pub fn for_epoch(epoch: u32) -> Result<Self, Diagnostic> {
         let session = StoreSession::mint()?;
         Ok(Self {
             pattern_binding_session: session,
-            budget: RunBudget::new(epoch, max_handles, max_bytes)?,
+            budget: RunBudget::for_epoch(epoch)?,
             types: TypeRegistry::default(),
             cells: GuestArena::new(epoch)?,
             objects: GuestArena::new(epoch)?,
@@ -235,7 +272,33 @@ impl GuestStore {
             constructions: GuestArena::new(epoch)?,
             references: GuestArena::new(epoch)?,
             strings: str_storage::ImmutableStrStorage::new(epoch, session)?,
+            user_drop_types: None,
+            user_copy_types: None,
+            owned_box: None,
         })
+    }
+    pub(crate) fn drop_inventory_installed(&self) -> bool {
+        self.user_drop_types.is_some()
+    }
+    /// Install the run's complete set of nominal types that implement `Drop`.
+    pub(crate) fn install_drop_inventory(
+        &mut self,
+        user_drop_types: std::collections::BTreeSet<crate::core::digest::Digest>,
+    ) {
+        self.user_drop_types = Some(user_drop_types);
+    }
+    /// Whether the run's complete impl inventory gives this declaration Copy.
+    pub(crate) fn nominal_copy(&self, identity: crate::core::digest::Digest) -> bool {
+        self.user_copy_types
+            .as_ref()
+            .is_some_and(|types| types.contains(&identity))
+    }
+    /// Install the run's complete set of nominal types that implement `Copy`.
+    pub(crate) fn install_copy_inventory(
+        &mut self,
+        user_copy_types: std::collections::BTreeSet<crate::core::digest::Digest>,
+    ) {
+        self.user_copy_types = Some(user_copy_types);
     }
     pub(crate) fn pattern_binding_session(&self) -> StoreSession {
         self.pattern_binding_session
@@ -244,10 +307,173 @@ impl GuestStore {
         &self.budget
     }
     pub fn intern_type(&mut self, key: TypeKey) -> Result<TypeId, Diagnostic> {
-        self.types.intern(key)
+        let ty = self.types.intern(key)?;
+        self.intern_unsized_box_view(ty)?;
+        Ok(ty)
     }
     pub(crate) fn find_type(&self, key: &TypeKey) -> Option<TypeId> {
         self.types.find(key)
+    }
+    /// The closed source type a runtime descriptor records exactly:
+    /// primitives, argument-free nominal declarations and tuples of those.
+    /// References keep their evaluated source view (regions are not data).
+    pub(crate) fn descriptor_source_term(
+        &self,
+        ty: TypeId,
+    ) -> Option<crate::traits::term::TyTerm> {
+        use crate::{ir::op::PrimitiveType as P, traits::term::TyTerm};
+        let primitive = match ty.0 {
+            1 => Some(P::Unit),
+            2 => Some(P::Bool),
+            3 => Some(P::Char),
+            4 => Some(P::I8),
+            5 => Some(P::I16),
+            6 => Some(P::I32),
+            7 => Some(P::I64),
+            8 => Some(P::Isize),
+            9 => Some(P::U8),
+            10 => Some(P::U16),
+            11 => Some(P::U32),
+            12 => Some(P::U64),
+            13 => Some(P::Usize),
+            14 => Some(P::F32),
+            15 => Some(P::F64),
+            16 => return Some(TyTerm::Str),
+            _ => None,
+        };
+        if let Some(primitive) = primitive {
+            return Some(TyTerm::Primitive(primitive));
+        }
+        match self.type_descriptor(ty).ok()?.key.as_ref() {
+            // Regions are not runtime data: a reached reference is `'static`
+            // up to the erasure used by structural contracts.
+            TypeKey::Ref { mutable, target } => Some(TyTerm::Ref(
+                crate::traits::term::RegionTerm::Static,
+                *mutable,
+                Box::new(self.descriptor_source_term(*target)?),
+            )),
+            TypeKey::Nominal {
+                identity,
+                args,
+                const_args,
+                ..
+            } if const_args.is_empty() => Some(TyTerm::Nominal(
+                *identity,
+                args.iter()
+                    .map(|arg| {
+                        self.descriptor_source_term(*arg)
+                            .map(crate::traits::term::GenericArg::Type)
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            )),
+            TypeKey::Tuple(fields) => fields
+                .iter()
+                .map(|field| self.descriptor_source_term(*field))
+                .collect::<Option<Vec<_>>>()
+                .map(TyTerm::Tuple),
+            // A function item or closure is its own nominal-like Type,
+            // named by its callee identity (no source schema).
+            TypeKey::Callable { identity, .. } => Some(TyTerm::Nominal(*identity, Vec::new())),
+            TypeKey::Array { element, len } => Some(TyTerm::Array(
+                Box::new(self.descriptor_source_term(*element)?),
+                crate::traits::term::ConstTerm::Value(u64::from(*len)),
+            )),
+            TypeKey::Slice { element } => Some(TyTerm::Slice(Box::new(
+                self.descriptor_source_term(*element)?,
+            ))),
+            _ => None,
+        }
+    }
+    /// Intern the runtime descriptor of a closed structural source type built
+    /// from primitives (tuples/arrays of them). Nominal types need their
+    /// schema and are not formed here.
+    pub(crate) fn intern_structural_term(
+        &mut self,
+        term: &crate::traits::term::TyTerm,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        use crate::traits::term::{ConstTerm, TyTerm};
+        Ok(match term {
+            TyTerm::Primitive(primitive) => {
+                Some(super::shape::PrimitiveIdentity::from_recipe(*primitive)?.id())
+            }
+            TyTerm::Tuple(fields) => {
+                let mut ids = Vec::with_capacity(fields.len());
+                for field in fields {
+                    let Some(id) = self.intern_structural_term(field)? else {
+                        return Ok(None);
+                    };
+                    ids.push(id);
+                }
+                Some(self.intern_type(TypeKey::Tuple(ids.into_boxed_slice()))?)
+            }
+            TyTerm::Array(element, ConstTerm::Value(len)) => {
+                let Some(element) = self.intern_structural_term(element)? else {
+                    return Ok(None);
+                };
+                let Ok(len) = u32::try_from(*len) else {
+                    return Ok(None);
+                };
+                Some(self.intern_type(TypeKey::Array { element, len })?)
+            }
+            // `&[T]` / `&mut [T]` of a structural element (regions are not data).
+            TyTerm::Slice(element) => {
+                let Some(element) = self.intern_structural_term(element)? else {
+                    return Ok(None);
+                };
+                Some(self.intern_type(TypeKey::Slice { element })?)
+            }
+            TyTerm::Str => Some(TypeId(16)),
+            // A reference to a structural target (regions are not data).
+            TyTerm::Ref(_, mutable, target) => {
+                let Some(target) = self.intern_structural_term(target)? else {
+                    return Ok(None);
+                };
+                Some(self.intern_type(TypeKey::Ref {
+                    mutable: *mutable,
+                    target,
+                })?)
+            }
+            _ => None,
+        })
+    }
+    /// `intern_structural_term` without interning (preflight).
+    pub(crate) fn find_structural_term(
+        &self,
+        term: &crate::traits::term::TyTerm,
+    ) -> Option<TypeId> {
+        use crate::traits::term::{ConstTerm, TyTerm};
+        match term {
+            TyTerm::Primitive(primitive) => super::shape::PrimitiveIdentity::from_recipe(*primitive)
+                .ok()
+                .map(|identity| identity.id()),
+            TyTerm::Tuple(fields) => {
+                let ids = fields
+                    .iter()
+                    .map(|field| self.find_structural_term(field))
+                    .collect::<Option<Vec<_>>>()?;
+                self.find_type(&TypeKey::Tuple(ids.into_boxed_slice()))
+            }
+            TyTerm::Array(element, ConstTerm::Value(len)) => {
+                let element = self.find_structural_term(element)?;
+                self.find_type(&TypeKey::Array {
+                    element,
+                    len: u32::try_from(*len).ok()?,
+                })
+            }
+            TyTerm::Slice(element) => {
+                let element = self.find_structural_term(element)?;
+                self.find_type(&TypeKey::Slice { element })
+            }
+            TyTerm::Str => Some(TypeId(16)),
+            TyTerm::Ref(_, mutable, target) => {
+                let target = self.find_structural_term(target)?;
+                self.find_type(&TypeKey::Ref {
+                    mutable: *mutable,
+                    target,
+                })
+            }
+            _ => None,
+        }
     }
     pub fn type_descriptor(&self, ty: TypeId) -> Result<&TypeDescriptor, Diagnostic> {
         self.types.descriptor(ty)
@@ -261,37 +487,218 @@ impl GuestStore {
         &mut self,
         bound: &crate::frontend::types::BoundNominalVariant,
     ) -> Result<(TypeId, ConstructionId), Diagnostic> {
+        self.begin_nominal_construction_with(bound, &[])
+    }
+    /// A generic declaration's variant instantiated by its type arguments,
+    /// which become the descriptor's `TypeKey::Nominal` args.
+    pub(crate) fn begin_nominal_construction_with(
+        &mut self,
+        bound: &crate::frontend::types::BoundNominalVariant,
+        args: &[TypeId],
+    ) -> Result<(TypeId, ConstructionId), Diagnostic> {
+        let ty = self.intern_nominal_with(bound, args)?;
         let mut fields = Vec::new();
         fields
             .try_reserve_exact(bound.fields().len())
             .map_err(|_| resource())?;
         for field in bound.fields() {
-            fields.push(field.materialize(self)?);
+            fields.push(field.materialize(self, args)?);
+        }
+        let guard = self.begin_construction(&fields)?;
+        self.constructions.get_mut(guard)?.nominal = Some((ty, bound.variant()));
+        Ok((ty, guard))
+    }
+    /// The run-local descriptor of a source-checked variant's nominal type,
+    /// with an enum's bound discriminant table attached.
+    pub(crate) fn intern_nominal(
+        &mut self,
+        bound: &crate::frontend::types::BoundNominalVariant,
+    ) -> Result<TypeId, Diagnostic> {
+        self.intern_nominal_with(bound, &[])
+    }
+    pub(crate) fn intern_nominal_with(
+        &mut self,
+        bound: &crate::frontend::types::BoundNominalVariant,
+        args: &[TypeId],
+    ) -> Result<TypeId, Diagnostic> {
+        if args.len() != bound.type_parameters() as usize {
+            return Err(Diagnostic::new(
+                "LRR-E-GENERIC-BINDING",
+                "nominal type arguments differ from its declaration's type parameters".into(),
+            ));
+        }
+        for arg in args {
+            self.types.descriptor(*arg)?;
         }
         let ty = self.types.intern(TypeKey::Nominal {
             identity: bound.identity(),
             definition: bound.definition().clone(),
             schema: bound.schema(),
-            args: Box::new([]),
+            args: args.into(),
             const_args: Box::new([]),
         })?;
-        let guard = self.begin_construction(&fields)?;
-        self.constructions.get_mut(guard)?.nominal = Some((ty, bound.variant()));
-        Ok((ty, guard))
+        if bound.definition().item_kind == crate::source::manifest::ItemKind::Enum {
+            self.types.attach_discriminants(ty, bound.discriminants())?;
+        }
+        self.intern_unsized_box_view(ty)?;
+        Ok(ty)
+    }
+    /// `as` operand of a fieldless enum value: its active variant's
+    /// discriminant as the default `isize` representation. Other values are
+    /// not enum cast operands (`None`); the operand stays in its cell.
+    pub(crate) fn enum_cast_operand(&self, id: CellId) -> Result<Option<ValueRepr>, Diagnostic> {
+        let cell = self.cells.get(id)?;
+        if cell.retired {
+            return Err(stale());
+        }
+        let CellState::Live(value) = cell.state else {
+            return Ok(None);
+        };
+        if value.kind != 8 {
+            return Ok(None);
+        }
+        let descriptor = self.types.descriptor(TypeId(value.type_id))?;
+        let TypeKey::Nominal { definition, .. } = descriptor.key.as_ref() else {
+            return Ok(None);
+        };
+        if definition.item_kind != crate::source::manifest::ItemKind::Enum {
+            return Ok(None);
+        }
+        self.object_owner(value, ValueOwner::Cell(id))?;
+        let ObjectStorage::Aggregate(storage) = &self
+            .objects
+            .get(ObjectId::from_bits(value.payload))?
+            .storage
+        else {
+            return Err(invalid());
+        };
+        if !storage.fields.is_empty() {
+            return Err(Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "only a fieldless enum value can be cast to an integer".into(),
+            ));
+        }
+        let variant = storage.variant.ok_or_else(invalid)?;
+        let discriminant = descriptor
+            .discriminants
+            .as_ref()
+            .and_then(|table| table.get(variant as usize).copied())
+            .ok_or_else(invalid)?
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "enum discriminant expression requires constant evaluation".into(),
+                )
+            })?;
+        let discriminant = i64::try_from(discriminant).map_err(|_| {
+            Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "enum discriminant outside the default isize representation".into(),
+            )
+        })?;
+        ValueRepr::signed(TypeId(8), discriminant).map(Some)
+    }
+    /// A generic declaration's variant with no type context: concrete fields
+    /// keep their bound Types and each parameter-typed field's completed value
+    /// determines that parameter (`intern_pending_nominal`).
+    pub(crate) fn begin_pending_nominal_construction(
+        &mut self,
+        bound: &crate::frontend::types::BoundNominalVariant,
+    ) -> Result<ConstructionId, Diagnostic> {
+        let mut expected = Vec::new();
+        expected
+            .try_reserve_exact(bound.fields().len())
+            .map_err(|_| resource())?;
+        for field in bound.fields() {
+            expected.push(if field.generic() {
+                None
+            } else {
+                let ty = field.materialize(self, &[])?;
+                if self.types.descriptor(ty)?.shape == ShapeCategory::Unsized {
+                    return Err(invalid());
+                }
+                Some(ty)
+            });
+        }
+        self.constructions.reserve(1, &mut self.budget)?;
+        let mut record = ConstructionRecord::partial(&expected)?;
+        record.pending_nominal = Some(Box::new(bound.clone()));
+        let bytes = record.owned_bytes().ok_or_else(resource)?;
+        self.constructions
+            .allocate(record, bytes, &mut self.budget)
+            .map(ConstructionId::from)
+    }
+    /// The completed pending construction's instantiated nominal descriptor;
+    /// it becomes the guard's commit witness.
+    pub(crate) fn intern_pending_nominal(
+        &mut self,
+        guard: ConstructionId,
+    ) -> Result<TypeId, Diagnostic> {
+        let record = self.constructions.get(guard)?;
+        let bound = record.pending_nominal.as_deref().ok_or_else(ownership)?;
+        if record.state != ConstructionState::Building
+            || record.completed.len() != record.fields.len()
+        {
+            return Err(ownership());
+        }
+        let fixed = self.pending_nominal_args(bound, &record.expected)?;
+        let args = fixed.into_iter().collect::<Option<Vec<_>>>().ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "generic type argument is not determined by any constructed field".into(),
+            )
+        })?;
+        let bound = bound.clone();
+        let ty = self.intern_nominal_with(&bound, &args)?;
+        let record = self.constructions.get_mut(guard)?;
+        record.nominal = Some((ty, bound.variant()));
+        record.pending_nominal = None;
+        Ok(ty)
+    }
+    /// The type arguments a construction has fixed so far: all of a bound
+    /// generic construction's, the completed fields' for a pending one, none
+    /// otherwise.
+    pub(crate) fn pending_construction_args(
+        &self,
+        guard: ConstructionId,
+    ) -> Result<Vec<Option<TypeId>>, Diagnostic> {
+        let record = self.constructions.get(guard)?;
+        if let Some(bound) = record.pending_nominal.as_deref() {
+            return self.pending_nominal_args(bound, &record.expected);
+        }
+        if let Some((ty, _)) = record.nominal
+            && let TypeKey::Nominal { args, .. } = self.types.descriptor(ty)?.key.as_ref()
+        {
+            return Ok(args.iter().copied().map(Some).collect());
+        }
+        Ok(Vec::new())
+    }
+    /// The type arguments a pending generic construction's completed fields
+    /// determine so far, by matching each completed generic field's Type.
+    fn pending_nominal_args(
+        &self,
+        bound: &crate::frontend::types::BoundNominalVariant,
+        expected: &[Option<TypeId>],
+    ) -> Result<Vec<Option<TypeId>>, Diagnostic> {
+        let mut fixed = vec![None; bound.type_parameters() as usize];
+        for (field, ty) in bound.fields().iter().zip(expected) {
+            if let Some(ty) = ty
+                && field.generic()
+                && !field.bind(*ty, self, &mut fixed)?
+            {
+                return Err(ownership());
+            }
+        }
+        Ok(fixed)
     }
     /// Field types have already been bound by the reached constructor resolver.
     /// This reserves ownership slots without executing or forcing any field.
     pub fn begin_construction(&mut self, fields: &[TypeId]) -> Result<ConstructionId, Diagnostic> {
-        if fields.len() > super::object::MAX_CONSTRUCTION_FIELDS {
-            return Err(resource());
-        }
         for ty in fields {
             if self.types.descriptor(*ty)?.shape == ShapeCategory::Unsized {
                 return Err(invalid());
             }
         }
-        let bytes = ConstructionRecord::estimated_bytes(fields.len()).ok_or_else(resource)?;
-        self.budget.check(1, bytes)?;
         self.constructions.reserve(1, &mut self.budget)?;
         let record = ConstructionRecord::new(fields)?;
         let bytes = record.owned_bytes().ok_or_else(resource)?;
@@ -306,11 +713,6 @@ impl GuestStore {
         kind: StructuralConstructionKind,
         count: usize,
     ) -> Result<ConstructionId, Diagnostic> {
-        if count > super::object::MAX_CONSTRUCTION_FIELDS {
-            return Err(resource());
-        }
-        let bytes = ConstructionRecord::estimated_bytes(count).ok_or_else(resource)?;
-        self.budget.check(1, bytes)?;
         self.constructions.reserve(1, &mut self.budget)?;
         let record = ConstructionRecord::observed(kind, count)?;
         let bytes = record.owned_bytes().ok_or_else(resource)?;
@@ -334,15 +736,63 @@ impl GuestStore {
         {
             return Ok(ty);
         }
+        if let Some(bound) = record.pending_nominal.as_deref() {
+            use crate::frontend::types::NominalFieldType;
+            let field = bound.fields().get(index).ok_or_else(ownership)?;
+            if !field.generic() {
+                return Err(ownership());
+            }
+            // Parameters the already completed fields determined.
+            let mut fixed = self.pending_nominal_args(bound, &record.expected)?;
+            if let NominalFieldType::Parameter(parameter) = field
+                && let Some(Some(ty)) = fixed.get(*parameter as usize)
+            {
+                return Ok(*ty);
+            }
+            // Otherwise the completed value's own Type determines them; an
+            // unconstrained literal at a bare parameter takes rustc's
+            // integer/float fallback.
+            let ty = match self.effective_type(value)? {
+                Some(ty) if self.types.descriptor(ty)?.shape != ShapeCategory::Unsized => ty,
+                Some(_) => return Err(invalid()),
+                None if value.kind == 11 && matches!(field, NominalFieldType::Parameter(_)) => {
+                    TypeId(6)
+                }
+                None if value.kind == 12 && matches!(field, NominalFieldType::Parameter(_)) => {
+                    TypeId(15)
+                }
+                None => {
+                    return Err(Diagnostic::new(
+                        "LRR-E-TYPE-CONTEXT",
+                        "generic constructor field requires its reached concrete type".into(),
+                    ));
+                }
+            };
+            return if field.bind(ty, self, &mut fixed)? {
+                Ok(ty)
+            } else {
+                Err(ownership())
+            };
+        }
         if record.observed_kind.is_none() {
             return Err(ownership());
         }
-        let ty = self.effective_type(value)?.ok_or_else(|| {
-            Diagnostic::new(
-                "LRR-E-TYPE-CONTEXT",
-                "completed structural field requires its reached concrete type".into(),
-            )
-        })?;
+        // A tuple field is a bare parameter of the tuple type, as a generic
+        // constructor's field above: a literal nothing constrained (`(1, 'a')`
+        // compared with another temporary) takes rustc's integer/float
+        // fallback. An array element keeps its unresolved literal.
+        let tuple = record.observed_kind == Some(StructuralConstructionKind::Tuple);
+        let ty = match self.effective_type(value)? {
+            Some(ty) => ty,
+            None if tuple && value.kind == 11 => TypeId(6),
+            None if tuple && value.kind == 12 => TypeId(15),
+            None => {
+                return Err(Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "completed structural field requires its reached concrete type".into(),
+                ));
+            }
+        };
         if self.types.descriptor(ty)?.shape == ShapeCategory::Unsized {
             return Err(invalid());
         }
@@ -523,7 +973,6 @@ impl GuestStore {
         };
         let value = record.fields[field as usize].ok_or_else(ownership)?;
         self.object_owner(value, ValueOwner::Construction { guard, field })?;
-        self.budget.check(1, 0)?;
         self.tickets.reserve(1, &mut self.budget)?;
         let ticket = self
             .tickets
@@ -575,7 +1024,7 @@ impl GuestStore {
         }
         let variant = record.nominal.map(|(_, variant)| variant);
         let valid = match descriptor.key.as_ref() {
-            TypeKey::Tuple(members) => {
+            TypeKey::Tuple(members) | TypeKey::Callable { captures: members, .. } => {
                 record.nominal.is_none()
                     && members.len() == record.expected.len()
                     && members
@@ -605,15 +1054,6 @@ impl GuestStore {
             )?;
         }
         let count = record.fields.len();
-        let handles = u32::try_from(count)
-            .ok()
-            .and_then(|n| n.checked_add(2))
-            .ok_or_else(resource)?;
-        let predicted = count
-            .checked_mul(std::mem::size_of::<CellId>())
-            .and_then(|bytes| bytes.checked_add(InitializedFields::estimated_bytes(count)?))
-            .ok_or_else(resource)?;
-        self.budget.check(handles, predicted)?;
         self.objects.reserve(1, &mut self.budget)?;
         self.cells.reserve(count, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
@@ -627,7 +1067,6 @@ impl GuestStore {
             .checked_mul(std::mem::size_of::<CellId>())
             .and_then(|bytes| bytes.checked_add(initialized.owned_bytes()?))
             .ok_or_else(resource)?;
-        self.budget.check(handles, owned)?;
         let object = ObjectId::from(self.objects.allocate(
             ObjectRecord {
                 type_id: ty,
@@ -774,6 +1213,32 @@ impl GuestStore {
                 }
                 self.strings.resolve(*buffer).map(|_| ())
             }
+            ReferenceLease::Elements(elements) => {
+                // The window stays inside the borrowed array's own retained
+                // length, and the reference names exactly its `[T]` view.
+                let base = &elements.base;
+                let array = self.place_type(base.final_cell.cell)?;
+                let TypeKey::Array { element, len } = self.types.descriptor(array)?.key.as_ref()
+                else {
+                    return Err(lease_fault());
+                };
+                if elements
+                    .start
+                    .checked_add(elements.len)
+                    .is_none_or(|end| end > *len)
+                    || self.types.find(&TypeKey::Slice { element: *element })
+                        != Some(reference.target)
+                {
+                    return Err(lease_fault());
+                }
+                self.validate_reference_target(
+                    base.root,
+                    &base.enclosing,
+                    base.final_cell,
+                    array,
+                )?;
+                self.validate_source_projection_steps(&base.enclosing, &base.source_projections)
+            }
         }
     }
     fn validate_source_projection_steps(
@@ -809,8 +1274,10 @@ impl GuestStore {
         source: &SourceFieldProjection,
         key: &TypeKey,
     ) -> Result<(), Diagnostic> {
-        if !matches!(key,TypeKey::Nominal {identity,schema,args,const_args,..}
-            if *identity==source.definition && *schema==source.schema && args.is_empty() && const_args.is_empty())
+        // An instantiated generic parent is admitted: the projection's own
+        // recorded field descriptor already carries its instantiation.
+        if !matches!(key,TypeKey::Nominal {identity,schema,const_args,..}
+            if *identity==source.definition && *schema==source.schema && const_args.is_empty())
         {
             return Err(ownership());
         }
@@ -959,12 +1426,27 @@ impl GuestStore {
     fn resolve_place(&self, place: &Place) -> Result<ResolvedPlace, PlaceFailure> {
         self.resolve_place_for_use(place, PlaceUse::Value)
     }
+    /// Sized place resolution: an unsized element window (`*s`, `a[1..3]`)
+    /// is only an address (its Type) or a borrow/index base, never a value.
     fn resolve_place_for_use(
         &self,
         place: &Place,
         usage: PlaceUse,
     ) -> Result<ResolvedPlace, PlaceFailure> {
-        let (root, mut target, writable, prefix, mut source_projections) = match place.root {
+        let resolved = self.resolve_place_windowed(place, usage)?;
+        if resolved.window.is_some() && usage != PlaceUse::Address {
+            return Err(unsized_place().into());
+        }
+        Ok(resolved)
+    }
+    fn resolve_place_windowed(
+        &self,
+        place: &Place,
+        usage: PlaceUse,
+    ) -> Result<ResolvedPlace, PlaceFailure> {
+        let (root, mut target, writable, prefix, mut source_projections, mut window) = match place
+            .root
+        {
             PlaceRoot::Cell(id) => {
                 if usage == PlaceUse::OwningRead {
                     self.admit_read_location(id)?;
@@ -978,12 +1460,19 @@ impl GuestStore {
                     .checked_add(place.projections.len())
                     .ok_or_else(resource)?;
                 checked_chain_bytes(count)?;
-                (root, id, writable, enclosing, Vec::new())
+                (root, id, writable, enclosing, Vec::new(), None)
             }
             PlaceRoot::Deref(id) => {
                 let reference = self.references.get(id)?;
                 self.validate_reference_record(reference)?;
-                let location = reference.location()?;
+                // A slice reference dereferences to its element window of the
+                // borrowed array location.
+                let (location, window) = match &reference.lease {
+                    ReferenceLease::Elements(elements) => {
+                        (&elements.base, Some((elements.start, elements.len)))
+                    }
+                    _ => (reference.location()?, None),
+                };
                 (
                     location.root,
                     location.final_cell.cell,
@@ -1007,6 +1496,7 @@ impl GuestStore {
                         sources.extend_from_slice(&location.source_projections);
                         sources
                     },
+                    window,
                 )
             }
         };
@@ -1036,20 +1526,58 @@ impl GuestStore {
             let parent = self.place_stamp(target)?;
             let ty = self.place_type(target)?;
             let key = self.types.descriptor(ty)?.key.as_ref();
-            let field = match (projection, key) {
-                (Projection::SourceField(source), key @ TypeKey::Nominal { .. }) => {
+            let field = match (projection, key, window) {
+                // A range narrows the element window of the same array cell.
+                (Projection::Range { start, end }, TypeKey::Array { len, .. }, current) => {
+                    let (base, available) = current.unwrap_or((0, *len));
+                    if start > end || *end > available {
+                        return Err(PlaceFailure::GuestPanic(PlacePanic::RangeEndOutOfBounds {
+                            end: u64::from(*end),
+                            len: u64::from(available),
+                        }));
+                    }
+                    window = Some((
+                        base.checked_add(*start).ok_or_else(resource)?,
+                        end - start,
+                    ));
+                    continue;
+                }
+                // An index into a window is relative to its first element.
+                (Projection::Index(index), TypeKey::Array { .. }, Some((start, len))) => {
+                    if *index >= len {
+                        return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds {
+                            len: u64::from(len),
+                            index: u64::from(*index),
+                        }));
+                    }
+                    window = None;
+                    start.checked_add(*index).ok_or_else(resource)?
+                }
+                (_, _, Some(_)) => return Err(invalid().into()),
+                (Projection::SourceField(source), key @ TypeKey::Nominal { .. }, None) => {
                     Self::require_source_projection_parent(source, key)?;
                     source.field
                 }
-                (Projection::Field(field), TypeKey::Nominal { .. }) => *field,
-                (Projection::Tuple(field), TypeKey::Tuple(_)) => *field,
-                (Projection::Index(index), TypeKey::Array { .. }) => *index,
+                (Projection::Field(field), TypeKey::Nominal { .. }, None) => *field,
+                // `*b` of a box: its one owned heap cell.
+                (Projection::BoxContents, TypeKey::Nominal { identity, .. }, None)
+                    if self.owned_box == Some(*identity) =>
+                {
+                    0
+                }
+                (Projection::Tuple(field), TypeKey::Tuple(_) | TypeKey::Callable { .. }, None) => {
+                    *field
+                }
+                (Projection::Index(index), TypeKey::Array { .. }, None) => *index,
                 _ => return Err(invalid().into()),
             };
             let (object, storage) = self.place_object(target)?;
             let child = *storage.fields.get(field as usize).ok_or_else(|| {
                 if matches!(projection, Projection::Index(_)) {
-                    PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds)
+                    PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds {
+                        len: storage.fields.len() as u64,
+                        index: u64::from(field),
+                    })
                 } else {
                     PlaceFailure::RuntimeFault(Diagnostic::new(
                         "LRR-E-PLACE-FIELD",
@@ -1064,6 +1592,12 @@ impl GuestStore {
                 })
             {
                 return Err(lease_fault().into());
+            }
+            // `*b` of a `Box<[T]>` is its `[T; N]` cell's element window.
+            if matches!(projection, Projection::BoxContents)
+                && let Some(len) = self.unsized_box_window(ty, child)?
+            {
+                window = Some((0, len));
             }
             if let Projection::SourceField(source) = projection {
                 if storage.variant != Some(source.variant) || self.address_type(child)? != source.ty
@@ -1092,8 +1626,23 @@ impl GuestStore {
             .checked_add(checked_source_projection_bytes(
                 source_projections.capacity(),
             )?)
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(resource)?;
+        let ty = if usage == PlaceUse::Address {
+            self.address_type(target)?
+        } else {
+            self.place_type(target)?
+        };
+        // A window's Type is its array's `[T]` view, interned with the array.
+        let ty = match window {
+            Some(_) => match self.types.descriptor(ty)?.key.as_ref() {
+                TypeKey::Array { element, .. } => self
+                    .types
+                    .find(&TypeKey::Slice { element: *element })
+                    .ok_or_else(invalid)?,
+                _ => return Err(invalid().into()),
+            },
+            None => ty,
+        };
         Ok(ResolvedPlace {
             root,
             enclosing,
@@ -1102,24 +1651,20 @@ impl GuestStore {
             } else {
                 self.place_stamp(target)?
             },
-            ty: if usage == PlaceUse::Address {
-                self.address_type(target)?
-            } else {
-                self.place_type(target)?
-            },
+            ty,
             writable,
             source_projections,
+            window,
         })
     }
     /// Publish a checked run-owned lease only after validation and quota reservation.
     pub fn borrow(&mut self, place: &Place, access: Access) -> Result<RefId, PlaceFailure> {
-        let resolved = self.resolve_place(place)?;
+        let resolved = self.resolve_place_windowed(place, PlaceUse::Value)?;
         if access == Access::Mutable && !resolved.writable {
             return Err(access_fault().into());
         }
         let record = ReferenceRecord::from_place(resolved, access);
         let bytes = record.owned_bytes()?;
-        self.budget.check(1, bytes)?;
         self.references.reserve(1, &mut self.budget)?;
         self.references
             .allocate(record, bytes, &mut self.budget)
@@ -1152,8 +1697,9 @@ impl GuestStore {
                 let parent = self.place_type(link.parent.cell)?;
                 if !matches!(
                     self.types.descriptor(parent)?.key.as_ref(),
-                    TypeKey::Tuple(_)
-                ) {
+                    TypeKey::Tuple(_) | TypeKey::Callable { .. }
+                ) && !self.box_parent(parent)?
+                {
                     return Err(Diagnostic::new(
                         "LRR-E-UNSUPPORTED",
                         "partial field move requires the enclosing source-selected Drop policy"
@@ -1198,7 +1744,7 @@ impl GuestStore {
         bound: &crate::frontend::types::BoundNominalVariant,
         field: u32,
     ) -> Result<Place, PlaceFailure> {
-        let source_type = bound.fields().get(field as usize).ok_or_else(|| {
+        let field_type = bound.fields().get(field as usize).ok_or_else(|| {
             Diagnostic::new("LRR-E-PLACE-FIELD", "source-bound field is absent".into())
         })?;
         self.project_bound_field(
@@ -1208,7 +1754,7 @@ impl GuestStore {
             bound.schema(),
             bound.variant(),
             field,
-            source_type,
+            field_type,
         )
     }
     /// One used field can be admitted without binding an unrelated field type.
@@ -1224,7 +1770,7 @@ impl GuestStore {
             bound.schema(),
             bound.variant(),
             bound.field(),
-            bound.source_type(),
+            bound.field_type(),
         )
     }
     fn project_bound_field(
@@ -1235,7 +1781,7 @@ impl GuestStore {
         schema_witness: crate::core::digest::Digest,
         variant_witness: u32,
         field: u32,
-        source_type: &crate::frontend::source_types::SourceType,
+        field_type: &crate::frontend::types::NominalFieldType,
     ) -> Result<Place, PlaceFailure> {
         let resolved = self.resolve_place(base)?;
         let TypeKey::Nominal {
@@ -1255,7 +1801,6 @@ impl GuestStore {
         if *identity != identity_witness
             || definition != definition_witness
             || *schema != schema_witness
-            || !args.is_empty()
             || !const_args.is_empty()
         {
             return Err(Diagnostic::new(
@@ -1283,7 +1828,7 @@ impl GuestStore {
             return Err(lease_fault().into());
         }
         let expected = self.address_type(child)?;
-        if source_type.find_descriptor(self) != Some(expected) {
+        if field_type.find_descriptor(self, args) != Some(expected) {
             return Err(Diagnostic::new(
                 "LRR-E-OWNERSHIP",
                 "field source type differs from its installed cell".into(),
@@ -1330,9 +1875,12 @@ impl GuestStore {
     ) -> Result<Place, PlaceFailure> {
         // Index identity has its own typed fault even on an unsupported receiver.
         super::place::checked_index(index)?;
-        let ty = self.place_type_id(base)?;
+        let resolved = self.resolve_place_for_use(base, PlaceUse::Address)?;
+        let ty = resolved.ty;
         let length = match self.type_descriptor(ty)?.key.as_ref() {
             TypeKey::Array { len, .. } => *len,
+            // A slice window indexes relative to its first element.
+            TypeKey::Slice { .. } => resolved.window.ok_or_else(invalid)?.1,
             TypeKey::Tuple(_) | TypeKey::Primitive(_) => {
                 return Err(Diagnostic::new(
                     "LRR-E-OP-TYPE",
@@ -1354,15 +1902,18 @@ impl GuestStore {
         Ok(place)
     }
     pub(crate) fn reserve_place_read_result(&mut self) -> Result<(), Diagnostic> {
-        self.budget.check(2, 0)?;
         self.cells.reserve(1, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
-        self.budget.check(2, 0)
+        Ok(())
     }
     pub(crate) fn dereference_place(&self, place: &Place) -> Result<Place, PlaceFailure> {
         let resolved = self.resolve_place(place)?;
         match self.type_descriptor(resolved.ty)?.key.as_ref() {
             TypeKey::Ref { .. } => {}
+            // The builtin box dereference projects the box's heap cell.
+            TypeKey::Nominal { identity, .. } if self.owned_box == Some(*identity) => {
+                return self.dereference_box(place);
+            }
             TypeKey::Primitive(_) => {
                 return Err(Diagnostic::new(
                     "LRR-E-OP-TYPE",
@@ -1389,6 +1940,9 @@ impl GuestStore {
         source: CellId,
     ) -> Result<IntrinsicAssignment, PlaceFailure> {
         let resolved = self.resolve_place_for_use(place, PlaceUse::Address)?;
+        if resolved.window.is_some() {
+            return Err(unsized_place().into());
+        }
         if !resolved.writable {
             return Err(access_fault().into());
         }
@@ -1406,6 +1960,16 @@ impl GuestStore {
                 self.admit_new_contract(Some(resolved.ty), incoming)?;
                 incoming
             }
+            // Owning values: an old value is dropped by its ordinary glue.
+            TypeKey::Tuple(_)
+            | TypeKey::Array { .. }
+            | TypeKey::Nominal { .. }
+            | TypeKey::Callable { .. }
+                if incoming.kind == 8 =>
+            {
+                self.admit_new_contract(Some(resolved.ty), incoming)?;
+                incoming
+            }
             _ => {
                 return Err(Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
@@ -1418,6 +1982,14 @@ impl GuestStore {
             CellState::Uninit | CellState::Moved => {
                 self.validate_initialization_value(resolved.target.cell, value)?;
                 IntrinsicAssignment::Initialize {
+                    ty: resolved.ty,
+                    target: resolved.target.cell,
+                }
+            }
+            CellState::Live(old) if old.kind == 8 && !self.types.is_string(resolved.ty) => {
+                self.admit_replacement(resolved.target.cell, value)?;
+                self.admit_cleanup_cell(resolved.target.cell)?;
+                IntrinsicAssignment::ReplaceOwned {
                     ty: resolved.ty,
                     target: resolved.target.cell,
                 }
@@ -1445,16 +2017,11 @@ impl GuestStore {
         materializes: bool,
     ) -> Result<(), Diagnostic> {
         let tickets = 2 + usize::from(plan.replaces_live()) + usize::from(materializes);
-        let handles = u32::try_from(tickets)
-            .map_err(|_| resource())?
-            .checked_add(u32::from(needs_cell))
-            .ok_or_else(resource)?;
-        self.budget.check(handles, 0)?;
         if needs_cell {
             self.cells.reserve(1, &mut self.budget)?;
         }
         self.tickets.reserve(tickets, &mut self.budget)?;
-        self.budget.check(handles, 0)
+        Ok(())
     }
     /// Revalidate the write address and initialize only a missing terminal
     /// value. No old-value drop obligation is invented for a moved field.
@@ -1464,6 +2031,9 @@ impl GuestStore {
         incoming: TicketId,
     ) -> Result<(), PlaceFailure> {
         let resolved = self.resolve_place_for_use(place, PlaceUse::Address)?;
+        if resolved.window.is_some() {
+            return Err(unsized_place().into());
+        }
         if !resolved.writable {
             return Err(access_fault().into());
         }
@@ -1489,7 +2059,7 @@ impl GuestStore {
         place: &Place,
         access: Access,
     ) -> Result<TypeId, PlaceFailure> {
-        let resolved = self.resolve_place(place)?;
+        let resolved = self.resolve_place_windowed(place, PlaceUse::Value)?;
         if access == Access::Mutable && !resolved.writable {
             return Err(access_fault().into());
         }
@@ -1502,17 +2072,12 @@ impl GuestStore {
         place: &Place,
         needs_cell: bool,
     ) -> Result<(), PlaceFailure> {
-        let resolved = self.resolve_place(place)?;
-        let record = ReferenceRecord::from_place(resolved, Access::Shared);
-        let bytes = record.owned_bytes()?;
-        let handles = 2 + u32::from(needs_cell);
-        self.budget.check(handles, bytes)?;
+        self.resolve_place_windowed(place, PlaceUse::Value)?;
         if needs_cell {
             self.cells.reserve(1, &mut self.budget)?;
         }
         self.references.reserve(1, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
-        self.budget.check(handles, bytes)?;
         Ok(())
     }
     /// Reserve both the lease and its first value owner before publishing either.
@@ -1521,7 +2086,7 @@ impl GuestStore {
         place: &Place,
         access: Access,
     ) -> Result<TicketId, PlaceFailure> {
-        let resolved = self.resolve_place(place)?;
+        let resolved = self.resolve_place_windowed(place, PlaceUse::Value)?;
         if access == Access::Mutable && !resolved.writable {
             return Err(access_fault().into());
         }
@@ -1531,10 +2096,8 @@ impl GuestStore {
         })?;
         let record = ReferenceRecord::from_place(resolved, access);
         let bytes = record.owned_bytes()?;
-        self.budget.check(2, bytes)?;
         self.references.reserve(1, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
-        self.budget.check(2, bytes)?;
         let reference = self.references.allocate(record, bytes, &mut self.budget)?;
         let value = ValueRepr {
             kind: 9,
@@ -1559,7 +2122,6 @@ impl GuestStore {
         let mutable = record.access == Access::Mutable;
         let target = record.target;
         let ty = self.types.intern(TypeKey::Ref { mutable, target })?;
-        self.budget.check(1, 0)?;
         self.tickets.reserve(1, &mut self.budget)?;
         let value = ValueRepr {
             kind: 9,
@@ -1617,6 +2179,14 @@ impl GuestStore {
         };
         Ok(storage.variant)
     }
+    /// Read-only active variant of the live aggregate at a checked place. A
+    /// pattern test reads it without copying, moving or leasing the value;
+    /// structs report their single variant.
+    pub(crate) fn place_variant(&self, place: &Place) -> Result<Option<u32>, PlaceFailure> {
+        let resolved = self.resolve_place(place)?;
+        let (_, storage) = self.place_object(resolved.target.cell)?;
+        Ok(storage.variant)
+    }
     pub fn aggregate_field(&self, ticket: TicketId, field: u32) -> Result<CellId, Diagnostic> {
         let value = self.peek_ticket(ticket)?;
         self.object_owner(value, ValueOwner::Ticket(ticket))?;
@@ -1667,7 +2237,18 @@ impl GuestStore {
             1..=7 | 9 | 11 | 12 => Ok(CleanupInventory::Leaf),
             8 if self.types.is_string(TypeId(value.type_id)) => Ok(CleanupInventory::Leaf),
             8 => match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
-                TypeKey::Tuple(_) | TypeKey::Array { .. } => Ok(CleanupInventory::Fields),
+                TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. } => {
+                    Ok(CleanupInventory::Fields)
+                }
+                // No user Drop impl: drop glue drops the fields in order.
+                TypeKey::Nominal { identity, .. }
+                    if self
+                        .user_drop_types
+                        .as_ref()
+                        .is_some_and(|types| !types.contains(identity)) =>
+                {
+                    Ok(CleanupInventory::Fields)
+                }
                 _ => Ok(CleanupInventory::NeedWitness(TypeId(value.type_id))),
             },
             _ => Err(invalid()),
@@ -1793,6 +2374,58 @@ impl GuestStore {
         storage.pending_cleanup = None;
         Ok(())
     }
+    /// Drop glue lends a cleanup ticket's nominal value to a fresh, writable
+    /// frame location, so the selected `Drop::drop` receives an ordinary
+    /// `&mut` place to it (its fields resolve through that location). The
+    /// ticket record stays reserved for the same cleanup continuation; only
+    /// `reclaim_cleanup_ticket` may use it again.
+    pub(crate) fn lend_cleanup_ticket(
+        &mut self,
+        ticket: TicketId,
+        receiver: CellId,
+    ) -> Result<(), Diagnostic> {
+        let value = self.peek_ticket(ticket)?;
+        self.object_owner(value, ValueOwner::Ticket(ticket))?;
+        if value.kind != 8 {
+            return Err(invalid());
+        }
+        self.validate_initialization_value(receiver, value)?;
+        let cell = self.cells.get(receiver)?;
+        if cell.state != CellState::Uninit
+            || !cell.writable
+            || !matches!(cell.owner, CellOwner::FrameSlot { .. })
+        {
+            return Err(ownership());
+        }
+        let declared = self.contract(cell, value)?;
+        self.set_owner(value, ValueOwner::Cell(receiver))?;
+        let cell = self.cells.get_mut(receiver)?;
+        cell.state = CellState::Live(value);
+        cell.declared = declared;
+        self.commit_initialization_change(receiver, true)
+    }
+    /// After `Drop::drop` returned (or unwound), move the lent location's
+    /// value (possibly replaced through `&mut self`, same type) back into its
+    /// reserved cleanup ticket and retire the location.
+    pub(crate) fn reclaim_cleanup_ticket(
+        &mut self,
+        ticket: TicketId,
+        receiver: CellId,
+    ) -> Result<(), Diagnostic> {
+        let lent = self.tickets.get(ticket)?.value;
+        let value = self.admit_live_value(receiver)?;
+        if value.kind != 8 || value.type_id != lent.type_id {
+            return Err(ownership());
+        }
+        self.prepare_initialization_change(receiver, false)?;
+        self.tickets.get_mut(ticket)?.value = value;
+        self.set_owner(value, ValueOwner::Ticket(ticket))?;
+        let cell = self.cells.get_mut(receiver)?;
+        cell.state = CellState::Moved;
+        cell.location_epoch = cell.location_epoch.saturating_add(1);
+        self.commit_initialization_change(receiver, false)?;
+        self.retire_cell(receiver)
+    }
     /// Legacy test convenience only. Production cleanup consumes one explicit
     /// transition at a time, including skips, through aggregate_cleanup_step.
     #[cfg(test)]
@@ -1838,10 +2471,7 @@ impl GuestStore {
         contracts: &[(TypeId, bool)],
     ) -> Result<Vec<CellId>, Diagnostic> {
         self.require_frame(frame)?;
-        let count = u32::try_from(contracts.len())
-            .ok()
-            .filter(|n| *n <= 100_000)
-            .ok_or_else(resource)?;
+        let count = u32::try_from(contracts.len()).ok().ok_or_else(resource)?;
         base.checked_add(count).ok_or_else(resource)?;
         for (ty, _) in contracts {
             // This allocates empty physical cells. Frame source admission and
@@ -1850,13 +2480,11 @@ impl GuestStore {
             // referent must not be reclassified as a primitive here.
             self.types.descriptor(*ty)?;
         }
-        self.budget.check(count, 0)?;
         let mut cells = Vec::new();
         cells
             .try_reserve_exact(contracts.len())
             .map_err(|_| resource())?;
         self.cells.reserve(contracts.len(), &mut self.budget)?;
-        self.budget.check(count, 0)?;
         for (ordinal, (ty, writable)) in contracts.iter().enumerate() {
             cells.push(self.new_cell(
                 StorageContract::Exact(*ty),
@@ -1932,7 +2560,9 @@ impl GuestStore {
                     ObjectStorage::String(_) if self.types.is_string(object.type_id) => Ok(()),
                     ObjectStorage::Aggregate(storage)
                         if match self.types.descriptor(object.type_id)?.key.as_ref() {
-                            TypeKey::Tuple(_) | TypeKey::Array { .. } => storage.variant.is_none(),
+                            TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. } => {
+                                storage.variant.is_none()
+                            }
                             TypeKey::Nominal { .. } => storage.variant.is_some(),
                             _ => false,
                         } =>
@@ -2020,7 +2650,6 @@ impl GuestStore {
     }
     pub fn string(&mut self, text: &str) -> Result<TicketId, Diagnostic> {
         let ty = self.types.intern_string()?;
-        self.budget.check(2, text.len())?;
         self.objects.reserve(1, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
         let mut bytes = Vec::new();
@@ -2029,7 +2658,6 @@ impl GuestStore {
             .map_err(|_| resource())?;
         bytes.extend_from_slice(text.as_bytes());
         let owned = bytes.capacity();
-        self.budget.check(2, owned)?;
         let object = self.objects.allocate(
             ObjectRecord {
                 type_id: ty,
@@ -2051,7 +2679,6 @@ impl GuestStore {
         self.set_owner(value, ValueOwner::Ticket(ticket))?;
         Ok(ticket)
     }
-    #[cfg(test)]
     pub(crate) fn integer_parts(
         &self,
         value: ValueRepr,
@@ -2172,10 +2799,15 @@ impl GuestStore {
         value: ValueRepr,
     ) -> Result<(), Diagnostic> {
         self.validate_value(value)?;
+        // A replaced nominal value is cleaned up by the same machine as a
+        // structural one (drop glue, or its demanded Drop witness).
         if value.kind != 8
             || !matches!(
                 self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
-                TypeKey::Tuple(_) | TypeKey::Array { .. }
+                TypeKey::Tuple(_)
+                    | TypeKey::Array { .. }
+                    | TypeKey::Nominal { .. }
+                    | TypeKey::Callable { .. }
             )
         {
             return Err(ownership());
@@ -2407,12 +3039,8 @@ impl GuestStore {
         let mut initialized = initialized;
         let mut slow = Some(id);
         let mut fast = Some(id);
-        let mut depth = 0_u32;
+        // Floyd's slow/fast walk below rejects cycles; no depth ceiling is needed.
         while let Some((object, index, parent)) = self.initialization_parent(current)? {
-            depth = depth
-                .checked_add(1)
-                .filter(|n| *n <= self.budget.max_handles())
-                .ok_or_else(resource)?;
             let ObjectStorage::Aggregate(storage) = &self.objects.get(object)?.storage else {
                 return Err(ownership());
             };
@@ -2560,21 +3188,93 @@ impl GuestStore {
             // A structural NotCopy certificate is final even when another cold
             // member's nominal policy is Deferred. Transfer the whole existing
             // object; never duplicate its payload or force sibling Drop/Copy.
-            TypeKey::Tuple(_) | TypeKey::Array { .. }
+            TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. }
                 if descriptor.copy == super::shape::CopyStatus::Copy =>
             {
                 Ok(IntrinsicRead::CopyAggregate)
             }
-            TypeKey::Tuple(_) | TypeKey::Array { .. }
+            TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. }
                 if descriptor.copy == super::shape::CopyStatus::NotCopy =>
             {
                 Ok(IntrinsicRead::Move)
+            }
+            // A structural aggregate with nominal members is Copy exactly when
+            // its reached fields are.
+            TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. }
+                if self.user_copy_types.is_some() =>
+            {
+                Ok(if self.fields_copy(id)? {
+                    IntrinsicRead::CopyAggregate
+                } else {
+                    IntrinsicRead::Move
+                })
+            }
+            // A nominal type without a Copy impl is moved as one whole object;
+            // one with a Copy impl is copied field by field.
+            TypeKey::Nominal { identity, .. }
+                if self
+                    .user_copy_types
+                    .as_ref()
+                    .is_some_and(|types| !types.contains(identity)) =>
+            {
+                Ok(IntrinsicRead::Move)
+            }
+            // A bounded `impl<T: Copy> Copy for N<T>` applies exactly when the
+            // value's fields are all Copy (rustc requires that of every Copy
+            // type's fields); otherwise the value moves.
+            TypeKey::Nominal { identity, .. } if self.nominal_copy(*identity) => {
+                Ok(if self.fields_copy(id)? {
+                    IntrinsicRead::CopyAggregate
+                } else {
+                    IntrinsicRead::Move
+                })
             }
             _ => Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "owning read requires checked aggregate Copy or selected source policy".into(),
             )),
         }
+    }
+    /// Whether every field reached from a Copy-impl nominal value is itself
+    /// Copy: scalars and shared references are; mutable references, strings
+    /// and nominal values without a Copy impl are not.
+    pub(super) fn fields_copy(&self, root: CellId) -> Result<bool, Diagnostic> {
+        let mut pending = vec![root];
+        while let Some(cell) = pending.pop() {
+            let value = self.admit_move(cell)?;
+            match value.kind {
+                1..=7 | 11 | 12 => {}
+                9 => {
+                    if self.references.get(RefId::from_bits(value.payload))?.access
+                        == Access::Mutable
+                    {
+                        return Ok(false);
+                    }
+                }
+                8 => {
+                    let descriptor = self.types.descriptor(TypeId(value.type_id))?;
+                    match descriptor.key.as_ref() {
+                        TypeKey::Nominal { identity, .. } => {
+                            if !self.nominal_copy(*identity) {
+                                return Ok(false);
+                            }
+                        }
+                        TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. } => {
+                            match descriptor.copy {
+                                super::shape::CopyStatus::Copy => continue,
+                                super::shape::CopyStatus::NotCopy => return Ok(false),
+                                super::shape::CopyStatus::Deferred => {}
+                            }
+                        }
+                        _ => return Ok(false),
+                    }
+                    let (_, storage) = self.place_object(cell)?;
+                    pending.extend(storage.fields.iter().copied());
+                }
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
     }
     pub(crate) fn admit_owning_read(&self, id: CellId) -> Result<IntrinsicRead, Diagnostic> {
         let mode = self.intrinsic_read_mode(id)?;
@@ -2592,24 +3292,6 @@ impl GuestStore {
         }
         Ok(mode)
     }
-    /// Immutable admission of all capacity needed for a scalar owning result.
-    /// Reserving arena capacity remains an executed action after fuel admission.
-    pub(crate) fn preflight_owning_read_result(
-        &self,
-        needs_cell: bool,
-        materializes_literal: bool,
-    ) -> Result<(), Diagnostic> {
-        let tickets = 1 + usize::from(materializes_literal);
-        let handles = u32::try_from(tickets)
-            .map_err(|_| resource())?
-            .checked_add(u32::from(needs_cell))
-            .ok_or_else(resource)?;
-        let cells = self.cells.reservation_bytes(usize::from(needs_cell))?;
-        let bytes = cells
-            .checked_add(self.tickets.reservation_bytes(tickets)?)
-            .ok_or_else(resource)?;
-        self.budget.check(handles, bytes)
-    }
     /// Reserve the complete result cell/ticket batch before source ownership is
     /// consumed. A numeric materialization uses a second transfer ticket.
     pub(crate) fn reserve_owning_read_result(
@@ -2617,41 +3299,24 @@ impl GuestStore {
         needs_cell: bool,
         materializes_literal: bool,
     ) -> Result<(), Diagnostic> {
-        self.preflight_owning_read_result(needs_cell, materializes_literal)?;
         let tickets = 1 + usize::from(materializes_literal);
-        let handles = u32::try_from(tickets)
-            .map_err(|_| resource())?
-            .checked_add(u32::from(needs_cell))
-            .ok_or_else(resource)?;
-        self.budget.check(handles, 0)?;
         if needs_cell {
             self.cells.reserve(1, &mut self.budget)?;
         }
         self.tickets.reserve(tickets, &mut self.budget)?;
-        self.budget.check(handles, 0)
+        Ok(())
     }
-    /// Admit a pending pattern's whole cell/move-ticket batch before any move.
+    /// Admit a pending pattern's whole cell/move-ticket batch against the u32
+    /// handle index space (Handle encoding) before any move.
     pub(crate) fn preflight_pattern_bindings(&self, count: usize) -> Result<(), Diagnostic> {
-        let handles = u32::try_from(count)
-            .map_err(|_| resource())?
-            .checked_mul(2)
-            .ok_or_else(resource)?;
-        let bytes = self
-            .cells
-            .reservation_bytes(count)?
-            .checked_add(self.tickets.reservation_bytes(count)?)
-            .ok_or_else(resource)?;
-        self.budget.check(handles, bytes)
+        self.cells.admits(count)?;
+        self.tickets.admits(count)
     }
     pub(crate) fn reserve_pattern_bindings(&mut self, count: usize) -> Result<(), Diagnostic> {
         self.preflight_pattern_bindings(count)?;
-        let handles = u32::try_from(count)
-            .map_err(|_| resource())?
-            .checked_mul(2)
-            .ok_or_else(resource)?;
         self.cells.reserve(count, &mut self.budget)?;
         self.tickets.reserve(count, &mut self.budget)?;
-        self.budget.check(handles, 0)
+        Ok(())
     }
     /// Local assignment consumes an RHS ticket, optionally creates an old-value
     /// ticket, and publishes Unit. Handles are monotonic for a run, so consuming
@@ -2662,16 +3327,11 @@ impl GuestStore {
         replaces_live: bool,
     ) -> Result<(), Diagnostic> {
         let tickets = 2 + usize::from(replaces_live);
-        let handles = u32::try_from(tickets)
-            .map_err(|_| resource())?
-            .checked_add(u32::from(needs_cell))
-            .ok_or_else(resource)?;
-        self.budget.check(handles, 0)?;
         if needs_cell {
             self.cells.reserve(1, &mut self.budget)?;
         }
         self.tickets.reserve(tickets, &mut self.budget)?;
-        self.budget.check(handles, 0)
+        Ok(())
     }
     /// Bounded replacement consumes incoming/old tickets at commit and retains
     /// a Unit result plus the later root Drop ticket. One detached old-value
@@ -2682,13 +3342,9 @@ impl GuestStore {
         needs_result_cell: bool,
     ) -> Result<(), Diagnostic> {
         let cells = 1 + usize::from(needs_result_cell);
-        let handles = 4_u32
-            .checked_add(u32::try_from(cells).map_err(|_| resource())?)
-            .ok_or_else(resource)?;
-        self.budget.check(handles, 0)?;
         self.cells.reserve(cells, &mut self.budget)?;
         self.tickets.reserve(4, &mut self.budget)?;
-        self.budget.check(handles, 0)
+        Ok(())
     }
     pub(crate) fn read_owning(&mut self, id: CellId) -> Result<TicketId, Diagnostic> {
         match self.admit_owning_read(id)? {
@@ -2711,7 +3367,6 @@ impl GuestStore {
             self.admit_move(id)?
         };
         self.prepare_initialization_change(id, false)?;
-        self.budget.check(1, 0)?;
         self.tickets.reserve(1, &mut self.budget)?;
         let ticket = self
             .tickets
@@ -2738,9 +3393,6 @@ impl GuestStore {
                 "LRR-E-CALL-ARITY",
                 "evaluated argument count does not match the prepared boundary".into(),
             ));
-        }
-        if cells.len() > 100_000 {
-            return Err(resource());
         }
         let mut seen = std::collections::BTreeSet::new();
         for cell in cells {
@@ -2771,19 +3423,23 @@ impl GuestStore {
                     "call argument has no reached concrete descriptor".into(),
                 ));
             }
-            self.admit_new_contract(Some(*expected), value)
-                .map_err(|error| {
-                    if error.code == "LRR-E-OWNERSHIP" {
-                        Diagnostic::new(
+            // A call argument is a coercion site: an array reference meets a
+            // slice-reference parameter through the shared unsizing operation.
+            let unsize = match self.admit_new_contract(Some(*expected), value) {
+                Ok(()) => false,
+                Err(error) if error.code == "LRR-E-OWNERSHIP" => {
+                    if self.unsizing_coercion(value, *expected)?.is_none() {
+                        return Err(Diagnostic::new(
                             "LRR-E-CALL-ARG-TYPE",
                             "evaluated argument descriptor does not match the prepared boundary"
                                 .into(),
-                        )
-                    } else {
-                        error
+                        ));
                     }
-                })?;
-            values.push(value);
+                    true
+                }
+                Err(error) => return Err(error),
+            };
+            values.push((value, unsize.then_some(*expected)));
         }
         let mut tickets = Vec::new();
         tickets
@@ -2804,22 +3460,26 @@ impl GuestStore {
                     .and_then(|m| n.checked_add(m))
             })
             .ok_or_else(resource)?;
-        let count = u32::try_from(cells.len())
-            .ok()
-            .and_then(|n| n.checked_add(1))
-            .ok_or_else(resource)?;
-        self.budget.check(count, owned)?;
         self.tickets.reserve(cells.len(), &mut self.budget)?;
         self.argument_batches.reserve(1, &mut self.budget)?;
-        self.budget.check(count, owned)?;
         // No guest mutation until all storage and handle allowances are reserved.
-        for value in &values {
+        let mut sealed = Vec::new();
+        sealed
+            .try_reserve_exact(values.len())
+            .map_err(|_| resource())?;
+        for (value, unsize) in values {
+            let value = match unsize {
+                Some(expected) => self.coerce_unsized_admitted(value, expected)?,
+                None => value,
+            };
+            sealed.push(value);
             tickets.push(
                 self.tickets
-                    .allocate(TransferTicket { value: *value }, 0, &mut self.budget)?
+                    .allocate(TransferTicket { value }, 0, &mut self.budget)?
                     .into(),
             );
         }
+        let values = sealed;
         let batch = self.argument_batches.allocate(
             ArgumentBatch {
                 tickets,
@@ -2872,6 +3532,20 @@ impl GuestStore {
         }
         Ok(())
     }
+    /// A closed facade intrinsic consumes its sealed packet itself; the
+    /// caller owns every returned ticket and must consume or discard it.
+    pub(crate) fn take_arguments(
+        &mut self,
+        batch: ArgumentBatchId,
+    ) -> Result<Vec<TicketId>, Diagnostic> {
+        let record = self.argument_batches.get(batch)?;
+        for ticket in &record.tickets {
+            let value = self.peek_ticket(*ticket)?;
+            self.object_owner(value, ValueOwner::Ticket(*ticket))?;
+        }
+        let record = self.argument_batches.take(batch, &mut self.budget)?;
+        Ok(record.tickets.into_iter().collect())
+    }
     pub(crate) fn discard_arguments(&mut self, batch: ArgumentBatchId) -> Result<(), Diagnostic> {
         let record = self.argument_batches.get(batch)?;
         for ticket in &record.tickets {
@@ -2893,7 +3567,6 @@ impl GuestStore {
             return Err(ownership());
         };
         let declared = self.contract(cell, value)?;
-        self.budget.check(1, 0)?;
         self.tickets.reserve(1, &mut self.budget)?;
         let old_ticket = self
             .tickets
@@ -2937,7 +3610,6 @@ impl GuestStore {
         spelling: String,
         kind: u32,
     ) -> Result<TicketId, Diagnostic> {
-        self.budget.check(2, spelling.capacity())?;
         self.literals.reserve(1, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
         let bytes = spelling.capacity();
@@ -3028,6 +3700,23 @@ impl GuestStore {
             LiteralNumber::Float => Self::preview_float(&record.spelling, ty),
         }
     }
+    /// A Copy read for closed formatting: an unbound numeric literal takes
+    /// rustc's integer/float fallback type (i32 / f64).
+    pub(crate) fn read_format_scalar(&self, id: CellId) -> Result<ValueRepr, Diagnostic> {
+        let cell = self.cells.get(id)?;
+        if let CellState::Live(value) = cell.state
+            && (value.kind == 11 || value.kind == 12)
+            && self
+                .literals
+                .get(LiteralId::from_bits(value.payload))?
+                .binding
+                .is_none()
+        {
+            self.object_owner(value, ValueOwner::Cell(id))?;
+            return self.literal_value(value, TypeId(if value.kind == 11 { 6 } else { 15 }));
+        }
+        self.read_scalar(id)
+    }
     fn bound_literal(&self, value: ValueRepr) -> Result<ValueRepr, Diagnostic> {
         let record = self.literals.get(LiteralId::from_bits(value.payload))?;
         let ty = record.binding.ok_or(Diagnostic::new(
@@ -3057,7 +3746,6 @@ impl GuestStore {
             return Err(ownership());
         }
         let concrete = self.literal_value(value, ty)?;
-        self.budget.check(1, 0)?;
         self.tickets.reserve(1, &mut self.budget)?;
         let result = self
             .tickets
@@ -3065,6 +3753,23 @@ impl GuestStore {
             .map(TicketId::from)?;
         self.literals.get_mut(literal)?.binding = Some(ty);
         Ok(result)
+    }
+    /// Bind an unconstrained numeric literal held in `id` to rustc's
+    /// fallback type (`i32` / `f64`); a bound literal or non-literal is
+    /// unchanged. Used where inference leaves a literal with no context.
+    pub(crate) fn bind_literal_fallback(&mut self, id: CellId) -> Result<(), Diagnostic> {
+        let CellState::Live(value) = self.cells.get(id)?.state else {
+            return Ok(());
+        };
+        if value.kind != 11 && value.kind != 12 {
+            return Ok(());
+        }
+        let literal = LiteralId::from_bits(value.payload);
+        let record = self.literals.get_mut(literal)?;
+        if record.binding.is_none() {
+            record.binding = Some(TypeId(if value.kind == 11 { 6 } else { 15 }));
+        }
+        Ok(())
     }
     pub fn materialize(&mut self, ticket: TicketId, ty: TypeId) -> Result<ValueRepr, Diagnostic> {
         let value = self.peek_ticket(ticket)?;
@@ -3196,11 +3901,7 @@ impl GuestStore {
         self.frames.reset(new_epoch)?;
         self.constructions.reset(new_epoch)?;
         self.references.reset(new_epoch)?;
-        self.budget = RunBudget::new(
-            new_epoch,
-            self.budget.max_handles(),
-            self.budget.max_bytes(),
-        )?;
+        self.budget = RunBudget::for_epoch(new_epoch)?;
         Ok(())
     }
 }
@@ -3229,7 +3930,7 @@ pub(crate) mod tests {
         );
         let members = crate::syntax::scope_fixture_facts::original_no_drop_record_members(original);
         assert!(!members.is_empty());
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let first = store.string(&members[0]).unwrap();
         let member_type = TypeId(store.peek_ticket(first).unwrap().type_id);
         let types = vec![member_type; members.len()];
@@ -3320,10 +4021,10 @@ pub(crate) mod tests {
         // Rc/Cell state, println or complete rustc run-pass is exercised here.
     }
 
-    fn stock_string_locations(max_handles: u32) -> (GuestStore, CellId, CellId, String) {
+    fn stock_string_locations() -> (GuestStore, CellId, CellId, String) {
         let (text, source_writable, target_writable) =
             crate::syntax::place_fixture_facts::string_local_move(STOCK_STRING_MOVE);
-        let mut store = GuestStore::new(1, max_handles, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         // Disclosed component setup supplies original to_string's result;
         // this does not execute that method, println, or a whole stock fixture.
@@ -3348,7 +4049,7 @@ pub(crate) mod tests {
     }
     #[test]
     fn rustc_string_local_move_transfers_one_owner_then_reports_use_after_move() {
-        let (mut store, source, destination, text) = stock_string_locations(1000);
+        let (mut store, source, destination, text) = stock_string_locations();
         let before = store.state(source).unwrap();
         let epoch = store.location_epoch(source).unwrap();
         assert_eq!(
@@ -3392,33 +4093,8 @@ pub(crate) mod tests {
         );
     }
     #[test]
-    fn rustc_string_move_reservation_refusal_keeps_original_owner_and_epoch() {
-        let (mut store, source, destination, _) = stock_string_locations(5);
-        assert_eq!(store.budget().handles(), 5);
-        let before = (
-            store.state(source).unwrap(),
-            store.location_epoch(source).unwrap(),
-            store.budget().handles(),
-            store.budget().bytes(),
-        );
-        assert_eq!(
-            store.read_owning(source).unwrap_err().code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            before,
-            (
-                store.state(source).unwrap(),
-                store.location_epoch(source).unwrap(),
-                store.budget().handles(),
-                store.budget().bytes()
-            )
-        );
-        assert_eq!(store.state(destination).unwrap(), CellState::Uninit);
-    }
-    #[test]
     fn rustc_string_move_single_owner_property_rejects_the_bitcopy_model() {
-        let (mut store, source, destination, _) = stock_string_locations(1000);
+        let (mut store, source, destination, _) = stock_string_locations();
         let frame = store.new_frame_anchor().unwrap();
         let CellState::Live(value) = store.state(source).unwrap() else {
             panic!("source owner absent")
@@ -3492,7 +4168,7 @@ pub(crate) mod tests {
             STOCK_TUPLE_REFERENCE_MOVE,
         );
         assert_eq!(selector, 0);
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let referent = store
             .new_cell(
@@ -3602,38 +4278,6 @@ pub(crate) mod tests {
         assert_eq!(store.read_reference(lease).unwrap(), ValueRepr::unit());
     }
     #[test]
-    fn rustc_tuple_reference_field_move_ticket_quota_refusal_preserves_all_owners() {
-        let (mut store, root, field, sibling, lease) = stock_tuple_reference_owner();
-        // LRR-specific resource extension of the unchanged stock field move.
-        let remaining = 1000 - store.budget().handles();
-        let mut fillers = Vec::new();
-        for _ in 0..remaining {
-            fillers.push(store.ticket(ValueRepr::unit()).unwrap());
-        }
-        let before = (
-            store.state(field).unwrap(),
-            store.state(sibling).unwrap(),
-            store.location_epoch(field).unwrap(),
-            store.location_epoch(root).unwrap(),
-        );
-        let place = store.project_tuple(&Place::cell(root), 0).unwrap();
-        assert_eq!(
-            place_runtime_fault(store.read_owning_place(&place).unwrap_err()).code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            before,
-            (
-                store.state(field).unwrap(),
-                store.state(sibling).unwrap(),
-                store.location_epoch(field).unwrap(),
-                store.location_epoch(root).unwrap()
-            )
-        );
-        assert_eq!(store.read_reference(lease).unwrap(), ValueRepr::unit());
-        assert_eq!(fillers.len() as u32, remaining);
-    }
-    #[test]
     fn rustc_scalar_copy_owning_reads_preserve_original_location_and_epoch() {
         let source =
             include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/moves/move-arg.rs");
@@ -3644,7 +4288,7 @@ pub(crate) mod tests {
         .unwrap();
         // The selected stock test parameter explicitly supplies isize context;
         // calls and the whole original run-pass remain separate observations.
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let cell = store
             .new_cell(
@@ -3692,7 +4336,7 @@ pub(crate) mod tests {
         // Transport exercises the original immutable binding of a mutable lease.
         // Move/copy/guard/call admission injections below are supplemental LRR
         // checks; the original Fake calls and loop are not executed.
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let target = store
             .new_cell(
@@ -3920,7 +4564,7 @@ pub(crate) mod tests {
         assert!(borrows.iter().all(|borrow| borrow.mutable && !borrow.raw));
         // Execute the location operations described by the original borrow prefix.
         // Fake trait calls and the loop are unexecuted, not a full stock pass.
-        let mut store = GuestStore::new(1, 100, 100_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let cell = store
             .new_cell(
@@ -3994,7 +4638,7 @@ pub(crate) mod tests {
         assert_eq!(borrows.len(), 1);
         assert!(borrows[0].mutable && !borrows[0].raw);
         assert_eq!(borrows[0].target, "x");
-        let mut store = GuestStore::new(1, 100, 100_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let cell = store
             .new_cell(
@@ -4071,7 +4715,7 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>(),
             [Some(crate::ir::op::PrimitiveType::Isize); 2]
         );
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let (ty, initial_ticket) = point_ticket(&mut store, &bound, &initial_values);
         let cell = store
@@ -4272,7 +4916,7 @@ pub(crate) mod tests {
         for (levels, writable) in [(depth, false), (depth * 256, true)] {
             // The first case has the exact stock tuple nesting. The second is a
             // disclosed LRR stress extension of that shape, not a stock pass.
-            let mut store = GuestStore::new(1, 100_000, 16 * 1024 * 1024).unwrap();
+            let mut store = GuestStore::for_epoch(1).unwrap();
             let (root, leaf) = nested_unit_cells(&mut store, levels, writable);
             let reference = store.borrow(&Place::cell(leaf), Access::Shared).unwrap();
             let record = store.references.get(reference).unwrap().location().unwrap();
@@ -4306,7 +4950,7 @@ pub(crate) mod tests {
     #[test]
     fn rustc_nested_tuple_forged_owner_cycle_is_rejected_without_guest_mutation() {
         let depth = crate::syntax::place_fixture_facts::nested_unit_tuple_depth(STOCK_NESTED_TUPLE);
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let (root, leaf) = nested_unit_cells(&mut store, depth, true);
         let (object, _) = store.place_object(root).unwrap();
         // LRR-only corruption injection makes the root its own installed field.
@@ -4361,7 +5005,7 @@ pub(crate) mod tests {
         let value = ValueRepr::boolean(crate::syntax::place_fixture_facts::first_main_boolean(
             ORIGINAL,
         ));
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let (ty, guard) = store.begin_nominal_construction(&bound).unwrap();
         let field = store.ticket(value).unwrap();
@@ -4437,7 +5081,7 @@ pub(crate) mod tests {
         )
         .unwrap();
         let (writable, values) = facts::point(STOCK_POINT, "a");
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let (ty, ticket) = point_ticket(&mut store, &bound, &values);
         let root = store
@@ -4507,7 +5151,7 @@ pub(crate) mod tests {
         let value = ValueRepr::boolean(crate::syntax::place_fixture_facts::first_main_boolean(
             ORIGINAL,
         ));
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let (ty, guard) = store.begin_nominal_construction(&bound).unwrap();
         let field = store.ticket(value).unwrap();
@@ -4662,7 +5306,7 @@ pub(crate) mod tests {
             panic!("Point construction binding absent")
         };
         let (writable, values) = crate::syntax::place_fixture_facts::point(STOCK_POINT, "a");
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let (ty, ticket) = point_ticket(&mut store, &bound, &values);
         let root = store
@@ -4876,7 +5520,7 @@ pub(crate) mod tests {
             panic!("import-free stock unit constructor schema must bind")
         };
         assert!(bound.fields().is_empty());
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let (ty, guard) = store.begin_nominal_construction(&bound).unwrap();
         assert_eq!(
             store.type_descriptor(ty).unwrap().copy,
@@ -4912,7 +5556,7 @@ pub(crate) mod tests {
     }
     #[test]
     fn construction_scalar_cleanup_refuses_unbound_aggregate_without_advancing_owner() {
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let ty = store
             .intern_type(TypeKey::Tuple(Box::new([TypeId(2)])))
             .unwrap();
@@ -4946,33 +5590,10 @@ pub(crate) mod tests {
         assert!(store.aggregate_cleanup_next(aggregate).unwrap().is_none());
         store.discard(aggregate).unwrap();
     }
-    #[test]
-    fn structural_commit_reservation_failure_preserves_partial_owner_guard() {
-        let mut store = GuestStore::new(1, 2, 100_000).unwrap();
-        let tuple = store
-            .intern_type(TypeKey::Tuple(Box::new([TypeId(2)])))
-            .unwrap();
-        let guard = store.begin_construction(&[TypeId(2)]).unwrap();
-        let field = store.ticket(ValueRepr::boolean(true)).unwrap();
-        store.construction_push(guard, 0, field).unwrap();
-        assert_eq!(
-            store.commit_construction(guard, tuple).unwrap_err().code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            store.constructions.get(guard).unwrap().fields,
-            [Some(ValueRepr::boolean(true))]
-        );
-        assert_eq!(store.constructions.get(guard).unwrap().completed, [0]);
-        assert_eq!(
-            store.constructions.get(guard).unwrap().state,
-            ConstructionState::Building
-        );
-    }
 
     #[test]
     fn construction_rejection_keeps_ticket_and_cleanup_cursor_owned() {
-        let mut store = GuestStore::new(1, 100, 100_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let guard = store.begin_construction(&[TypeId(2), TypeId(2)]).unwrap();
         let wrong = store.ticket(ValueRepr::unit()).unwrap();
         assert_eq!(
@@ -5009,30 +5630,11 @@ pub(crate) mod tests {
         store.discard(late).unwrap();
         store.discard(cleanup).unwrap();
         assert!(store.construction_cleanup_next(guard).unwrap().is_none());
-
-        // A real exhausted, monotonic handle budget prevents cleanup transport.
-        // A fatal resource fault must retain the guard for physical teardown;
-        // it cannot repeat a user destructor or replenish the handle budget.
-        let mut exhausted = GuestStore::new(1, 2, 100_000).unwrap();
-        let guard = exhausted.begin_construction(&[TypeId(2)]).unwrap();
-        let value = exhausted.ticket(ValueRepr::boolean(true)).unwrap();
-        exhausted.construction_push(guard, 0, value).unwrap();
-        for _ in 0..2 {
-            assert_eq!(
-                exhausted.construction_cleanup_next(guard).unwrap_err().code,
-                "LRR-E-RUNTIME-RESOURCE"
-            );
-            assert_eq!(exhausted.constructions.get(guard).unwrap().completed, [0]);
-            assert_eq!(
-                exhausted.constructions.get(guard).unwrap().fields[0],
-                Some(ValueRepr::boolean(true))
-            );
-        }
     }
 
     #[test]
     fn worker_type_identity_and_metadata_survive_guest_epoch_reset() {
-        let mut store = GuestStore::new(1, 100, 100_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let tuple = TypeKey::Tuple(Box::new([TypeId(7), TypeId(8)]));
         let ty = store.intern_type(tuple.clone()).unwrap();
         let bytes = store.type_metadata_bytes();
@@ -5059,7 +5661,7 @@ pub(crate) mod tests {
 
     #[test]
     fn exhausted_location_epoch_is_retired_before_replacement_initialization() {
-        let mut store = GuestStore::new(1, 100, 100000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let cell = store
             .new_cell(

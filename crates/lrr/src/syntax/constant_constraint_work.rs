@@ -25,10 +25,7 @@ impl Graph<'_> {
         target: &StatementRef,
     ) -> Result<(), Diagnostic> {
         let mut root = None;
-        for (depth, ancestor) in target.0.syntax().ancestors().enumerate() {
-            if depth >= 128 {
-                return Err(limit());
-            }
+        for ancestor in target.0.syntax().ancestors() {
             self.source_units(1)?;
             root = Some(ancestor);
         }
@@ -90,9 +87,6 @@ impl Graph<'_> {
     }
     fn source_text(&mut self, node: &ra_ap_syntax::SyntaxNode) -> Result<(), Diagnostic> {
         let width = usize::from(node.text_range().len());
-        if width > 64 * 1024 {
-            return Err(limit());
-        }
         self.source_units(width.checked_add(1).ok_or_else(limit)?)?;
         // Charge bounded copied syntax conservatively as metadata as well.
         self.charge(width.checked_mul(4).ok_or_else(limit)?)
@@ -154,9 +148,6 @@ impl Graph<'_> {
         self.source_declaration()?;
         let params = required(function.param_list())?;
         for (index, param) in params.params().enumerate() {
-            if index >= 256 {
-                return Err(limit());
-            }
             self.source_units(index.checked_add(1).ok_or_else(limit)?)?;
             self.source_text(required(param.pat())?.syntax())?;
             self.source_type(&required(param.ty())?)?;

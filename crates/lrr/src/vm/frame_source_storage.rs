@@ -7,31 +7,33 @@ use crate::traits::term::TyTerm;
 impl Frame {
     /// Closed retained source shapes have an allocation-free checked measure.
     /// This inspects source terms, never source syntax or a runtime descriptor.
-    fn retained_source_heap(source: &TyTerm, depth: usize, work: &mut usize) -> Option<usize> {
-        *work = work.checked_add(1).filter(|count| *count <= 100_000)?;
-        if depth >= 256 {
-            return None;
-        }
+    fn retained_source_heap(source: &TyTerm) -> Option<usize> {
         match source {
             TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Param(_) => Some(0),
-            TyTerm::Nominal(_, args) if args.is_empty() => args
-                .capacity()
-                .checked_mul(std::mem::size_of::<crate::traits::term::GenericArg>()),
+            TyTerm::Nominal(_, args) => {
+                let mut bytes = args
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<crate::traits::term::GenericArg>())?;
+                // An instantiated generic nominal's closed type arguments.
+                for arg in args {
+                    let crate::traits::term::GenericArg::Type(ty) = arg else {
+                        return None;
+                    };
+                    bytes = bytes.checked_add(Self::retained_source_heap(ty)?)?;
+                }
+                Some(bytes)
+            }
             TyTerm::Ref(_, _, target)
+            | TyTerm::Slice(target)
             | TyTerm::Array(target, crate::traits::term::ConstTerm::Value(_)) => {
-                std::mem::size_of::<TyTerm>().checked_add(Self::retained_source_heap(
-                    target,
-                    depth + 1,
-                    work,
-                )?)
+                std::mem::size_of::<TyTerm>().checked_add(Self::retained_source_heap(target)?)
             }
             TyTerm::Tuple(members) => {
                 let mut bytes = members
                     .capacity()
                     .checked_mul(std::mem::size_of::<TyTerm>())?;
                 for member in members {
-                    bytes =
-                        bytes.checked_add(Self::retained_source_heap(member, depth + 1, work)?)?;
+                    bytes = bytes.checked_add(Self::retained_source_heap(member)?)?;
                 }
                 Some(bytes)
             }
@@ -40,9 +42,7 @@ impl Frame {
     }
     pub(super) fn source_heap(source: Option<&TyTerm>) -> Result<usize, Diagnostic> {
         source
-            .map_or(Some(0), |source| {
-                Self::retained_source_heap(source, 0, &mut 0)
-            })
+            .map_or(Some(0), Self::retained_source_heap)
             .ok_or_else(crate::runtime::arena::resource)
     }
     pub(super) fn source_excess(source: Option<&TyTerm>) -> Result<usize, Diagnostic> {
@@ -60,7 +60,6 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .and_then(|bytes| bytes.checked_add(excess))
             .and_then(|bytes| bytes.checked_add(transient))
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         Ok(())
     }

@@ -56,14 +56,13 @@ fn rustc_borrowed_cast_owns_extended_temporary_distinct_from_original_local() {
         .as_ref()
         .unwrap()
         .scope;
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(
         body.clone(),
         body.pc(statement, Phase::Entry).unwrap(),
         &mut store,
     )
     .unwrap();
-    frame.set_fuel_limit(1000).unwrap();
     let mut scopes = vec![];
     let mut scope = Some(body.nodes()[statement.0 as usize].scope);
     while let Some(id) = scope {
@@ -236,9 +235,8 @@ fn rustc_stock_hoisted_trait_refuses_primitive_let_context_before_operand_entry(
         "unexpected guarded let recipe: {:?}",
         entry.recipe().operations
     );
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body.clone(), entry.recipe().key.clone(), &mut store).unwrap();
-    frame.set_fuel_limit(100).unwrap();
     let mut ancestors = vec![];
     let mut parent = body.scopes()[expected_scope.0 as usize].parent;
     while let Some(scope) = parent {

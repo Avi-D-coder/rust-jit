@@ -43,9 +43,6 @@ impl RetainedBoundaryParents {
         Ok(result)
     }
     pub(super) fn require_bound(&self) -> Result<(), Diagnostic> {
-        if self.scopes.len() > 256 || self.sources.len() > 256 || self.items.len() > 256 {
-            return Err(fault("retained macro boundary ancestry limit"));
-        }
         let mut shared = 0usize;
         for root in &self.scopes {
             shared = shared
@@ -143,7 +140,6 @@ impl GeneratedBodyBoundary {
             .ok_or_else(crate::runtime::arena::resource)?;
         bytes = bytes
             .checked_add(256)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         // PreparedSourceView shares the publication but owns its selection and
         // location keys. Account conservative storage for both shallow keys.
@@ -156,7 +152,6 @@ impl GeneratedBodyBoundary {
                         .checked_mul(2)
                         .ok_or_else(crate::runtime::arena::resource)?,
                 )
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
         let mut e = StableEncoder::new("lrr/v1/generated-owning-macro-boundary");

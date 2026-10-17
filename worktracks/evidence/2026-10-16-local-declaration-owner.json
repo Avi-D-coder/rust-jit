@@ -1,0 +1,52 @@
+{
+  "kind": "common-local-declaration-owner",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "17f855ff75fc14d19c5e534c01c3dfd32841f2896c29b1c3f7390ca122459660",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/dependency.rs",
+      "bytes": 17960,
+      "sha256": "5fc64da66fae6d715c2ccb7eb3ac7dd6aad695169ba21a375e6f62a0f18de7d0"
+    },
+    {
+      "path": "crates/lrr/src/db/local_declaration_inputs.rs",
+      "bytes": 7538,
+      "sha256": "81d61d84a16add47588a97d1405204b9cf18492069cf372af2b01dbe0cb4a80e"
+    },
+    {
+      "path": "crates/lrr/src/db/local_declaration_inputs_tests.rs",
+      "bytes": 12197,
+      "sha256": "4d0e83e247ae76c500cf522792dcc55a8b7406777b3f458e70466ecf02c5c86f"
+    },
+    {
+      "path": "crates/lrr/src/db/lexical_inputs.rs",
+      "bytes": 11660,
+      "sha256": "bc3ae55dc37a44ca71bb34b2976050bf45299991de4eaf25138fd9d2c2e092ed"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs.rs",
+      "bytes": 12273,
+      "sha256": "f485ac3e6c2cd548128442063f6dda6ada21e86aa959d5f918bbaa5b99efb75e"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "bytes": 137796,
+      "sha256": "f1970301f9f4d038c224708d431088b0a51ffe4b4d6e63b720aaf2f271302e4a"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "bytes": 22880,
+      "sha256": "4da2a783184d70adc5a60d5bbf252c8baba3ba379206e5d703a4f9f4bdc2fd55"
+    }
+  ],
+  "predecessor": "common-owning-field-header-integration-v1",
+  "changes": [
+    "Actual local declaration owner BodyKey input, stable tag33, cold atomic header publication",
+    "Canonical nominal owner uses exact owner input and current DefinitionBody/SourceLocalPlan; removes rib-as-definition join",
+    "Fixed missing StableEncode import found by frozen247 compile; old failure retained"
+  ],
+  "holds": [
+    "Installed constructor source binding repeated",
+    "All8 architecture removal and full runtime evidence incomplete"
+  ]
+}

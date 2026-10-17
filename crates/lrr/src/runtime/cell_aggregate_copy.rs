@@ -13,6 +13,9 @@ struct CopyDestination {
     object: ObjectId,
     ty: TypeId,
     count: usize,
+    /// A nominal Copy value's active variant and its fields' exact Types.
+    variant: Option<u32>,
+    members: Vec<TypeId>,
 }
 struct CopyFrame {
     source: CellStamp,
@@ -41,15 +44,32 @@ impl GuestStore {
         }
         Ok(())
     }
-    fn copy_layout(&self, source: CellId) -> Result<(TypeId, usize), Diagnostic> {
+    fn copy_layout(&self, source: CellId) -> Result<(TypeId, usize, Option<u32>), Diagnostic> {
         let value = self.admit_move(source)?;
         let ty = TypeId(value.type_id);
         let descriptor = self.types.descriptor(ty)?;
-        if value.kind != 8 || descriptor.copy != CopyStatus::Copy {
+        if value.kind != 8 {
+            return Err(requires_activation());
+        }
+        // A nominal value is Copy exactly when its declaration has a Copy
+        // impl in the run's complete impl inventory.
+        if let TypeKey::Nominal { identity, .. } = descriptor.key.as_ref() {
+            if !self.nominal_copy(*identity) {
+                return Err(requires_activation());
+            }
+            let (_, storage) = self.place_object(source)?;
+            if storage.variant.is_none() || !storage.initialized.complete_value() {
+                return Err(ownership());
+            }
+            return Ok((ty, storage.fields.len(), storage.variant));
+        }
+        if descriptor.copy != CopyStatus::Copy
+            && !(descriptor.copy == CopyStatus::Deferred && self.fields_copy(source)?)
+        {
             return Err(requires_activation());
         }
         let count = match descriptor.key.as_ref() {
-            TypeKey::Tuple(fields) => fields.len(),
+            TypeKey::Tuple(fields) | TypeKey::Callable { captures: fields, .. } => fields.len(),
             TypeKey::Array { len, .. } => usize::try_from(*len).map_err(|_| resource())?,
             _ => return Err(requires_activation()),
         };
@@ -60,15 +80,18 @@ impl GuestStore {
         {
             return Err(ownership());
         }
-        Ok((ty, count))
+        Ok((ty, count, None))
     }
     fn begin_copy_destination(&mut self, source: CellId) -> Result<CopyDestination, Diagnostic> {
-        let (ty, count) = self.copy_layout(source)?;
-        let predicted = count
-            .checked_mul(std::mem::size_of::<CellId>())
-            .and_then(|n| n.checked_add(InitializedFields::estimated_bytes(count)?))
-            .ok_or_else(resource)?;
-        self.budget.check(1, predicted)?;
+        let (ty, count, variant) = self.copy_layout(source)?;
+        let mut members = Vec::new();
+        if variant.is_some() {
+            let (_, storage) = self.place_object(source)?;
+            members.try_reserve_exact(count).map_err(|_| resource())?;
+            for field in &storage.fields {
+                members.push(TypeId(self.admit_move(*field)?.type_id));
+            }
+        }
         self.objects.reserve(1, &mut self.budget)?;
         let mut fields = Vec::new();
         fields.try_reserve_exact(count).map_err(|_| resource())?;
@@ -78,7 +101,6 @@ impl GuestStore {
             .checked_mul(std::mem::size_of::<CellId>())
             .and_then(|n| n.checked_add(initialized.owned_bytes()?))
             .ok_or_else(resource)?;
-        self.budget.check(1, owned)?;
         let object = ObjectId::from(self.objects.allocate(
             ObjectRecord {
                 type_id: ty,
@@ -88,13 +110,19 @@ impl GuestStore {
                     initialized,
                     next_cleanup: 0,
                     pending_cleanup: None,
-                    variant: None,
+                    variant,
                 }),
             },
             owned,
             &mut self.budget,
         )?);
-        Ok(CopyDestination { object, ty, count })
+        Ok(CopyDestination {
+            object,
+            ty,
+            count,
+            variant,
+            members,
+        })
     }
     fn copy_member_type(
         &self,
@@ -104,8 +132,13 @@ impl GuestStore {
         if index >= destination.count {
             return Err(ownership());
         }
+        if destination.variant.is_some() {
+            return destination.members.get(index).copied().ok_or_else(ownership);
+        }
         match self.types.descriptor(destination.ty)?.key.as_ref() {
-            TypeKey::Tuple(fields) => fields.get(index).copied().ok_or_else(ownership),
+            TypeKey::Tuple(fields) | TypeKey::Callable { captures: fields, .. } => {
+                fields.get(index).copied().ok_or_else(ownership)
+            }
             TypeKey::Array { element, len }
                 if usize::try_from(*len).ok() == Some(destination.count) =>
             {
@@ -126,7 +159,7 @@ impl GuestStore {
         if object.owner.is_some()
             || object.type_id != destination.ty
             || storage.next_cleanup != 0
-            || storage.variant.is_some()
+            || storage.variant != destination.variant
             || storage.fields.len() >= destination.count
             || storage.fields.capacity() < destination.count
         {
@@ -143,7 +176,6 @@ impl GuestStore {
         if TypeId(value.type_id) != expected {
             return Err(ownership());
         }
-        self.budget.check(1, 0)?;
         self.cells.reserve(1, &mut self.budget)?;
         let cell = self.new_cell(
             StorageContract::Exact(expected),
@@ -178,7 +210,7 @@ impl GuestStore {
         if object.owner.is_some()
             || object.type_id != destination.ty
             || storage.next_cleanup != 0
-            || storage.variant.is_some()
+            || storage.variant != destination.variant
             || storage.fields.len() != destination.count
             || !storage.initialized.complete_value()
         {
@@ -199,11 +231,7 @@ impl GuestStore {
     }
 }
 impl AggregateCopy {
-    pub(crate) fn begin(
-        store: &mut GuestStore,
-        source: CellId,
-        metadata_limit: usize,
-    ) -> Result<Self, Diagnostic> {
+    pub(crate) fn begin(store: &mut GuestStore, source: CellId) -> Result<Self, Diagnostic> {
         let root = store.place_stamp(source)?;
         let root_value = store.admit_move(source)?;
         store.copy_layout(source)?;
@@ -213,7 +241,7 @@ impl AggregateCopy {
             stack: Vec::new(),
             complete: false,
         };
-        copy.reserve_frame(metadata_limit)?;
+        copy.reserve_frame()?;
         let destination = store.begin_copy_destination(source)?;
         copy.stack.push(CopyFrame {
             source: root,
@@ -223,26 +251,9 @@ impl AggregateCopy {
         });
         Ok(copy)
     }
-    pub(crate) fn retained_bytes(&self) -> Option<usize> {
-        self.stack
-            .capacity()
-            .checked_mul(std::mem::size_of::<CopyFrame>())
-    }
-    fn reserve_frame(&mut self, metadata_limit: usize) -> Result<(), Diagnostic> {
-        let predicted = self
-            .stack
-            .len()
-            .checked_add(1)
-            .and_then(|n| n.checked_mul(std::mem::size_of::<CopyFrame>()))
-            .ok_or_else(resource)?;
-        if predicted > metadata_limit {
-            return Err(resource());
-        }
-        self.stack.try_reserve_exact(1).map_err(|_| resource())?;
-        if self.retained_bytes().is_none_or(|n| n > metadata_limit) {
-            return Err(resource());
-        }
-        Ok(())
+    /// Reserve the next nesting frame before any owner moves (no depth cap).
+    fn reserve_frame(&mut self) -> Result<(), Diagnostic> {
+        self.stack.try_reserve(1).map_err(|_| resource())
     }
     pub(crate) fn next(&self, store: &GuestStore) -> Result<CopyWork, Diagnostic> {
         if self.complete {
@@ -275,16 +286,12 @@ impl AggregateCopy {
         }
         Ok(CopyWork::Field(field))
     }
-    pub(crate) fn advance(
-        &mut self,
-        store: &mut GuestStore,
-        metadata_limit: usize,
-    ) -> Result<CopyProgress, Diagnostic> {
+    pub(crate) fn advance(&mut self, store: &mut GuestStore) -> Result<CopyProgress, Diagnostic> {
         match self.next(store)? {
             CopyWork::Field(source) => {
                 let value = store.admit_move(source)?;
                 if value.kind == 8 {
-                    self.reserve_frame(metadata_limit)?;
+                    self.reserve_frame()?;
                     let stamp = store.place_stamp(source)?;
                     let destination = store.begin_copy_destination(source)?;
                     self.stack.push(CopyFrame {
@@ -294,10 +301,8 @@ impl AggregateCopy {
                         next: 0,
                     });
                 } else {
-                    store.budget.check(2, 0)?;
                     store.tickets.reserve(1, &mut store.budget)?;
                     store.cells.reserve(1, &mut store.budget)?;
-                    store.budget.check(2, 0)?;
                     let ticket = store.copy_from(source)?;
                     let frame = self.stack.last_mut().ok_or_else(ownership)?;
                     store.append_copy_field(&frame.destination, ticket)?;
@@ -307,12 +312,10 @@ impl AggregateCopy {
             }
             CopyWork::Finish => {
                 let nested = self.stack.len() > 1;
-                store.budget.check(1 + u32::from(nested), 0)?;
                 store.tickets.reserve(1, &mut store.budget)?;
                 if nested {
                     store.cells.reserve(1, &mut store.budget)?;
                 }
-                store.budget.check(1 + u32::from(nested), 0)?;
                 let frame = self.stack.pop().ok_or_else(ownership)?;
                 let ticket = store.finish_copy_destination(frame.destination)?;
                 if let Some(parent) = self.stack.last_mut() {

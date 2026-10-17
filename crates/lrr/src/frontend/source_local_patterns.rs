@@ -28,7 +28,7 @@ fn canonical_name(
     }
     for candidate in index.nodes_at_range(SourceRange { start, end }) {
         let mut node = candidate;
-        for _ in 0..256 {
+        for _ in 0usize.. {
             if node.role == NodeRole::Pattern {
                 if let Some(group) = index.pattern_bindings().group_for(node.id)
                     && group.name() == binding.name
@@ -63,7 +63,6 @@ pub(super) fn prepare(
     bindings
         .len()
         .checked_mul(768)
-        .filter(|bytes| *bytes <= 32 * 1024 * 1024)
         .ok_or_else(|| error("local binding equivalence metadata limit"))?;
     let mut names = BTreeMap::new();
     for binding in bindings {

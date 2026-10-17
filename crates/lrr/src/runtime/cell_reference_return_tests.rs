@@ -37,7 +37,7 @@ fn reference_cell(
 }
 #[test]
 fn checked_reference_result_accepts_new_reborrow_lease_and_preserves_actual_target() {
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let target = scalar(&mut store, frame, 0);
     let argument = reference_cell(&mut store, frame, 1, target, Access::Shared);
@@ -68,7 +68,7 @@ fn checked_reference_result_accepts_new_reborrow_lease_and_preserves_actual_targ
 }
 #[test]
 fn equal_layout_and_value_do_not_authorize_a_different_return_target() {
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let target = scalar(&mut store, frame, 0);
     let other = scalar(&mut store, frame, 1);
@@ -95,12 +95,12 @@ fn equal_layout_and_value_do_not_authorize_a_different_return_target() {
 }
 #[test]
 fn reference_result_receipt_refuses_cross_store_even_with_matching_handle_bits() {
-    let mut a = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut a = GuestStore::for_epoch(1).unwrap();
     let af = a.new_frame_anchor().unwrap();
     let av = scalar(&mut a, af, 0);
     let ar = reference_cell(&mut a, af, 1, av, Access::Shared);
     let receipt = a.reference_target(ar).unwrap();
-    let mut b = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut b = GuestStore::for_epoch(1).unwrap();
     let bf = b.new_frame_anchor().unwrap();
     let bv = scalar(&mut b, bf, 0);
     let br = reference_cell(&mut b, bf, 1, bv, Access::Shared);
@@ -117,7 +117,7 @@ fn reference_result_receipt_refuses_cross_store_even_with_matching_handle_bits()
 }
 #[test]
 fn reference_result_checks_live_target_access_and_real_mutable_ticket_owner() {
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let target = scalar(&mut store, frame, 0);
     let argument = reference_cell(&mut store, frame, 1, target, Access::Mutable);
@@ -145,7 +145,7 @@ fn reference_result_checks_live_target_access_and_real_mutable_ticket_owner() {
 
 #[test]
 fn reference_result_replays_original_enclosing_chain_even_when_endpoints_match() {
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let tuple_type = store
         .intern_type(TypeKey::Tuple(Box::new([TypeId(8), TypeId(8)])))
@@ -267,7 +267,7 @@ fn point(
 #[test]
 fn selected_source_field_return_survives_reborrow_and_input_reference_cleanup() {
     let (bound, field) = point_members();
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let (root, ty) = point(&mut store, frame, 0, &bound);
     let argument = reference_cell(&mut store, frame, 1, root, Access::Shared);
@@ -319,7 +319,7 @@ fn selected_source_field_return_survives_reborrow_and_input_reference_cleanup() 
 #[test]
 fn raw_field_equal_target_wrong_input_and_wrong_source_type_cannot_prove_a_return() {
     let (bound, field) = point_members();
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let (root, ty) = point(&mut store, frame, 0, &bound);
     let (other, _) = point(&mut store, frame, 1, &bound);
@@ -371,7 +371,7 @@ fn raw_field_equal_target_wrong_input_and_wrong_source_type_cannot_prove_a_retur
 #[test]
 fn derived_result_checks_source_receipt_and_original_intermediate_ownership() {
     let (bound, field) = point_members();
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let (first, ty) = point(&mut store, frame, 0, &bound);
     let (second, _) = point(&mut store, frame, 1, &bound);
@@ -498,12 +498,12 @@ fn derived_result_checks_source_receipt_and_original_intermediate_ownership() {
 #[test]
 fn selected_projection_receipt_cannot_cross_store_sessions() {
     let (bound, field) = point_members();
-    let mut a = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut a = GuestStore::for_epoch(1).unwrap();
     let af = a.new_frame_anchor().unwrap();
     let (av, ty) = point(&mut a, af, 0, &bound);
     let ar = reference_cell(&mut a, af, 1, av, Access::Shared);
     let receipt = a.reference_target(ar).unwrap();
-    let mut b = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut b = GuestStore::for_epoch(1).unwrap();
     let bf = b.new_frame_anchor().unwrap();
     let (bv, bty) = point(&mut b, bf, 0, &bound);
     let br = reference_cell(&mut b, bf, 1, bv, Access::Shared);

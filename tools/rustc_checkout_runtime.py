@@ -1,8 +1,9 @@
 """Execute unchanged, selected rustc runtime contracts through the LRR CLI.
 
 No native compilation or reference execution occurs. This first adapter supports
-plain run-pass plus owning-edition directives and the existing closed guest-effect
-capture. Other contracts/dependencies remain explicit harness blockers, not skips.
+plain run-pass plus owning-edition and aux-build/aux-crate directives (as
+`--extern` source dependency crates with their own editions) and the existing
+closed guest-effect capture. Other contracts/dependencies remain explicit harness blockers, not skips.
 Selected runtime evidence never completes the entire upstream or diagnostic gates.
 """
 import argparse
@@ -45,6 +46,67 @@ def checked_file(name, files):
     return data
 
 
+AUX_CRATE = re.compile(r"(?:([a-z,]+):)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)\Z")
+
+
+def extern_flags(case_path, aux, files, seen=None, root=True):
+    """compiletest auxiliaries as `lrr --extern` source dependency crates.
+
+    `aux-build:FILE` is found by `extern crate` only (rustc `-L` search), so it
+    becomes `--extern noprelude:NAME=PATH`; `aux-crate:[OPTS:]NAME=FILE` is a
+    rustc `--extern`. Each auxiliary keeps its own `//@ edition` (compiletest
+    default 2015). Nested auxiliaries resolve against the top-level test's
+    `auxiliary/` directory and reach the root only through `extern crate`.
+    """
+    seen = set() if seen is None else seen
+    flags, blockers = [], []
+    base = PurePosixPath(case_path).parent / "auxiliary"
+    for kind, value in aux:
+        if kind == "aux-crate":
+            match = AUX_CRATE.fullmatch(value)
+            if not match:
+                blockers.append("unparsed aux-crate directive: " + value)
+                continue
+            options, name, file = match.groups()
+            prefix = options + ":" if options else ""
+        else:
+            file = value
+            name = PurePosixPath(file).stem.replace("-", "_")
+            prefix = "noprelude:"
+        if not root:
+            prefix = "noprelude:"
+        original = str(base / file)
+        if original not in files:
+            blockers.append("auxiliary source is not imported: " + original)
+            continue
+        text = checked_file(original, files).decode("utf-8")
+        if kind == "aux-build":
+            declared = re.search(r'#!\[crate_name\s*=\s*"([A-Za-z_][A-Za-z0-9_]*)"\]', text)
+            if declared:
+                name = declared[1]
+        if (name, original) in seen:
+            continue
+        seen.add((name, original))
+        edition = 2015
+        nested = []
+        for line in text.splitlines():
+            directive = line.strip()
+            match = re.fullmatch(r"//@\s*edition:\s*(2015|2018|2021|2024)", directive)
+            if match:
+                edition = int(match[1])
+            match = re.fullmatch(r"//@\s*(aux-build|aux-crate)\s*:\s*(\S.*)", directive)
+            if match:
+                nested.append((match[1], match[2].strip()))
+            if re.fullmatch(r"//@\s*proc-macro\s*:.*", directive):
+                blockers.append("proc-macro auxiliary requires procedural macro execution")
+        flags += ["--extern", "%s%s=%s" % (prefix, name, SOURCE / original),
+                  "--extern-edition", "%s=%d" % (name, edition)]
+        sub_flags, sub_blockers = extern_flags(case_path, nested, files, seen, root=False)
+        flags += sub_flags
+        blockers += sub_blockers
+    return flags, blockers
+
+
 def contract(case, data, files):
     directives = [line.strip() for line in data.decode("utf-8").splitlines()
                   if line.lstrip().startswith("//@")]
@@ -56,8 +118,13 @@ def contract(case, data, files):
         blockers.append("requires a run-pass contract adapter")
     editions = []
     reference_rules = []
+    aux = []
     for directive in directives:
         if directive == "//@ run-pass":
+            continue
+        auxiliary = re.fullmatch(r"//@\s*(aux-build|aux-crate)\s*:\s*(\S.*)", directive)
+        if auxiliary:
+            aux.append((auxiliary[1], auxiliary[2].strip()))
             continue
         # Pinned compiletest recognizes `reference` but has no runtime handler
         # for it (directives/directive_names.rs and directives/handlers.rs).
@@ -75,13 +142,16 @@ def contract(case, data, files):
         blockers.append("multiple edition directives require configuration expansion")
     elif editions:
         edition = editions[0]
+    externs, aux_blockers = extern_flags(case["path"], aux, files)
+    blockers.extend(aux_blockers)
     stem = str(PurePosixPath(case["path"]).with_suffix(""))
     expected = [name for name in files if name.startswith(stem + ".")
                 and name != case["path"]]
     if expected:
         blockers.append("expected-output/fixed files need their asserted-contract adapter")
     return {"mode": "run-pass", "edition": edition, "directives": directives,
-            "expected_files": expected, "reference_rules": reference_rules, "blockers": blockers}
+            "expected_files": expected, "reference_rules": reference_rules,
+            "extern_flags": externs, "blockers": blockers}
 
 
 def observe(argv, directory, timeout):
@@ -311,7 +381,8 @@ def main():
             context = secrets.token_hex(32)
             selected["capture_context"] = context
             observation = observe([
-                str(binary), "--edition", str(selected["edition"]), "run", str(SOURCE / name),
+                str(binary), "--edition", str(selected["edition"])] + selected["extern_flags"] + [
+                "run", str(SOURCE / name),
                 "--runtime-capture", "--capture-context", context], case_dir, args.timeout)
             selected["observation"] = observation
             packet = None

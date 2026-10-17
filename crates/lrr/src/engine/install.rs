@@ -22,7 +22,7 @@ struct InstalledRecipe {
 }
 pub struct InstalledRecipes {
     source_revision: u64,
-    limit: usize,
+    /// Installed metadata observation only; no LRIR budget (E-R5-006).
     bytes: usize,
     by_pc: BTreeMap<PcKey, RecipeId>,
     entries: Vec<InstalledRecipe>,
@@ -31,16 +31,10 @@ fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
 impl InstalledRecipes {
-    pub fn new(source_revision: u64, limit: usize) -> Result<Self, Diagnostic> {
-        if limit > super::telemetry::INSTALLED_LRIR_BUDGET {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "installed LRIR limit exceeds fixed maximum",
-            ));
-        }
+    // E-R5-006: ignored, remove at callers (`_limit`; no installed LRIR budget).
+    pub fn new(source_revision: u64, _limit: usize) -> Result<Self, Diagnostic> {
         Ok(Self {
             source_revision,
-            limit,
             bytes: 0,
             by_pc: BTreeMap::new(),
             entries: Vec::new(),
@@ -291,9 +285,8 @@ impl InstalledRecipes {
         let bytes = self
             .bytes
             .checked_add(charge)
-            .filter(|bytes| *bytes <= self.limit)
-            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "installed LRIR budget exhausted"))?;
-        self.entries.try_reserve_exact(1).map_err(|_| {
+            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "installed recipe size overflow"))?;
+        self.entries.try_reserve(1).map_err(|_| {
             fault(
                 "LRR-E-METADATA-LIMIT",
                 "installed recipe table allocation failed",

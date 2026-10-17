@@ -18,7 +18,9 @@ fn ready<T>(poll: QueryPoll<T>) -> T {
     }
 }
 
-fn run(control: &str, edition: u16, calls: u64, comparisons: u64) {
+/// `numeric` counts ordinary NumericBinary operations outside pattern tests:
+/// literal/range tests run inside the single shared matcher's Test step.
+fn run(control: &str, edition: u16, calls: u64, numeric: u64) {
     for body in [control.to_owned(), "emit!()".into(), "wrapper!()".into()] {
         let text = format!(
             "macro_rules! emit {{()=>{{{control}}}}} \
@@ -77,9 +79,14 @@ fn run(control: &str, edition: u16, calls: u64, comparisons: u64) {
             panic!("common pattern route failed in edition {edition}: {text}")
         };
         assert!(matches!(report.value, ValueSummary::Signed(ref value) if value == "7"));
-        assert_eq!(report.opcode_counters.started_by_opcode[10], comparisons);
+        assert_eq!(report.opcode_counters.started_by_opcode[10], numeric);
+        assert!(
+            report.opcode_counters.started_by_opcode[45] > 0,
+            "every owner runs the shared pattern transaction steps"
+        );
+        // Zero-argument source calls seal directly (CallSeal); none prepares.
         assert_eq!(
-            report.opcode_counters.started_by_opcode[22], calls,
+            report.opcode_counters.started_by_opcode[19], calls,
             "reached source/guard calls run once; cold result calls stay cold"
         );
         assert_eq!(
@@ -111,28 +118,28 @@ fn reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_ori
             (
                 "match {let _=entered();2_i32} {1_i32..=3_i32 if reject()=>cold(),_=>7_i32}",
                 2,
-                2,
+                0,
             ),
             (
                 "if let 1_i32..=3_i32={let _=entered();2_i32}{7_i32}else{cold()}",
                 1,
-                2,
+                0,
             ),
             (
                 "if let true={let _=entered();true}{7_i32}else{cold()}",
                 1,
-                1,
+                0,
             ),
             (
                 "if let false={let _=entered();true}{cold()}else{7_i32}",
                 1,
-                1,
+                0,
             ),
-            ("if let 10_i32..=UNRESOLVED=2_i32{cold()}else{7_i32}", 0, 1),
-            ("match 2_i32{..=3_i32=>7_i32,_=>cold()}", 0, 1),
-            ("match 2_i32{2_i32.. =>7_i32,_=>cold()}", 0, 1),
-            ("{while let 1_i32..=3_i32=2_i32{break;}7_i32}", 0, 2),
-            ("{while let false=true{cold();}7_i32}", 0, 1),
+            ("if let 10_i32..=UNRESOLVED=2_i32{cold()}else{7_i32}", 0, 0),
+            ("match 2_i32{..=3_i32=>7_i32,_=>cold()}", 0, 0),
+            ("match 2_i32{2_i32.. =>7_i32,_=>cold()}", 0, 0),
+            ("{while let 1_i32..=3_i32=2_i32{break;}7_i32}", 0, 0),
+            ("{while let false=true{cold();}7_i32}", 0, 0),
         ] {
             run(control, edition, calls, comparisons);
         }
@@ -143,17 +150,11 @@ fn reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_ori
 fn reached_scalar_condition_chains_share_test_and_clause_cleanup_routes() {
     // Let-chain admission follows its actual owning edition. This is a runtime
     // cleanup control, not a claim about a compiler diagnostic in older editions.
-    for (control, comparisons) in [
-        (
-            "if let 1_i32..=3_i32=2_i32 && let 4_i32..=6_i32=5_i32{7_i32}else{cold()}",
-            4,
-        ),
-        (
-            "if let 1_i32..=3_i32=2_i32 && let 8_i32..=UNRESOLVED=5_i32{cold()}else{7_i32}",
-            3,
-        ),
+    for control in [
+        "if let 1_i32..=3_i32=2_i32 && let 4_i32..=6_i32=5_i32{7_i32}else{cold()}",
+        "if let 1_i32..=3_i32=2_i32 && let 8_i32..=UNRESOLVED=5_i32{cold()}else{7_i32}",
     ] {
-        run(control, 2024, 0, comparisons);
+        run(control, 2024, 0, 0);
     }
 }
 
@@ -165,13 +166,13 @@ fn changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared() {
                 &format!("match 2_i32{{1_i32..=3_i32=>7_i32,_=>{result}}}"),
                 edition,
                 0,
-                2,
+                0,
             );
             run(
                 &format!("if let 1_i32..=3_i32=2_i32{{7_i32}}else{{{result}}}"),
                 edition,
                 0,
-                2,
+                0,
             );
         }
     }
@@ -238,20 +239,20 @@ fn a_generated_condition_cannot_capture_a_same_spelled_caller_without_its_scope_
 
 #[test]
 fn false_guards_retry_selected_alternatives_without_replaying_the_source() {
-    // Supplemental scalar frontier for unchanged search-via-bindings.rs. Its
-    // nested tuple/binding Cartesian search remains a required stock gap.
+    // Supplemental scalar controls for unchanged search-via-bindings.rs: a
+    // false guard retries the same arm's later or-alternatives in order.
     for edition in [2015, 2018, 2021, 2024] {
         run(
             "match {let _=entered();2_i32}{1_i32..=3_i32 | 2_i32 if reject()=>cold(),_=>7_i32}",
             edition,
             3,
-            3,
+            0,
         );
         run(
             "match {let _=entered();true}{true | true if reject()=>cold(),_=>7_i32}",
             edition,
             3,
-            2,
+            0,
         );
         run(
             "match true{_ | _ if reject()=>cold(),_=>7_i32}",

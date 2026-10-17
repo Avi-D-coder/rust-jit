@@ -1,4 +1,4 @@
-//! Bounded runtime use of already sealed original declarative expression records.
+//! Runtime use of already sealed original declarative expression records.
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -20,13 +20,6 @@ type Site = (Digest, u32, u32);
 pub(super) struct DeclarativeRuntimePlans {
     sites: BTreeMap<Site, ExpansionDescriptor>,
     plans: BTreeMap<PcKey, PreparedDeclarativeExpression>,
-    plan_bytes: usize,
-}
-fn limit() -> Diagnostic {
-    Diagnostic::new(
-        "LRR-E-METADATA-LIMIT",
-        "declarative runtime plan budget".into(),
-    )
 }
 fn invalid() -> Diagnostic {
     Diagnostic::new(
@@ -58,9 +51,6 @@ impl DeclarativeRuntimePlans {
                 MacroIdentity::Declaration { .. }
             )
         }) {
-            if wanted.len() >= 4096 {
-                return Err(limit());
-            }
             let descriptor = record.descriptor();
             if let Some(prior) = wanted.insert(descriptor.key.invocation, descriptor.clone())
                 && prior.fingerprint() != descriptor.fingerprint()
@@ -72,15 +62,9 @@ impl DeclarativeRuntimePlans {
         if wanted.is_empty() {
             return Ok(this);
         }
-        let mut bytes = 0usize;
-        let mut work = 0usize;
         for source in sources {
             let scan = source.declaration_inventory(Default::default())?;
             for producer in scan.producers() {
-                work = work
-                    .checked_add(1)
-                    .filter(|n| *n <= 100_000)
-                    .ok_or_else(limit)?;
                 let Some(descriptor) = wanted.get(&producer.identity) else {
                     continue;
                 };
@@ -97,14 +81,6 @@ impl DeclarativeRuntimePlans {
                         return Err(invalid());
                     }
                     continue;
-                }
-                bytes = bytes
-                    .checked_add(descriptor.estimated_bytes())
-                    .and_then(|n| n.checked_add(192))
-                    .filter(|n| *n <= 4 * 1024 * 1024)
-                    .ok_or_else(limit)?;
-                if this.sites.len() >= 4096 {
-                    return Err(limit());
                 }
                 this.sites.insert(site, descriptor.clone());
             }
@@ -158,17 +134,8 @@ impl DeclarativeRuntimePlans {
         if self.plans.contains_key(pc) {
             return QueryPoll::Ready(Err(invalid()));
         }
-        let Some(bytes) = self
-            .plan_bytes
-            .checked_add(plan.metadata_bytes())
-            .and_then(|n| n.checked_add(192))
-            .filter(|n| *n <= 64 * 1024 * 1024 && self.plans.len() < 4096)
-        else {
-            return QueryPoll::Ready(Err(limit()));
-        };
         // Retain nothing until the ordinary installed-recipe table accepts it.
         // A failed installation must leave no unused observer witness.
-        let _ = bytes;
         QueryPoll::Ready(Ok(Some(plan)))
     }
     pub(super) fn retain(&mut self, plan: PreparedDeclarativeExpression) -> Result<(), Diagnostic> {
@@ -176,14 +143,7 @@ impl DeclarativeRuntimePlans {
         if self.plans.contains_key(&pc) {
             return Err(invalid());
         }
-        let bytes = self
-            .plan_bytes
-            .checked_add(plan.metadata_bytes())
-            .and_then(|n| n.checked_add(192))
-            .filter(|n| *n <= 64 * 1024 * 1024 && self.plans.len() < 4096)
-            .ok_or_else(limit)?;
         self.plans.insert(pc, plan);
-        self.plan_bytes = bytes;
         Ok(())
     }
 }

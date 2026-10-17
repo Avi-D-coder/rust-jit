@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "kind": "common-installed-record-binding",
+  "status": "source-only-uncompiled-unexecuted",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T040",
+    "M018"
+  ],
+  "source_fingerprint": "88a8bc57503b075613817df0ffca1349dd24e3558e6267838ea807614dcfc54b",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "bytes": 1668,
+      "sha256": "f55eb19b15d3eb14614ebeeb531fa85941434942eb24777c2dec4b55f6be79e8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/types.rs",
+      "bytes": 46362,
+      "sha256": "a1266f951d8c814ad36bb2a9512634d33f6e6f2e4b678ed5f19ecf7d5812c40f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/prepared_constructors.rs",
+      "bytes": 6968,
+      "sha256": "2fd1848400303c6d98355dc0f1358cee16da1b16e2be8eed080b3dd1c79c188b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "bytes": 10253,
+      "sha256": "a9704edb73b2f7039b4209e8283ac907cfd6fbcaeb21cd92496815a9fd22ebc7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/prepared_constructor_tests.rs",
+      "bytes": 4667,
+      "sha256": "f64175e8a4a5976c7171d26501978a9d02f3b85fcf460510daa2ec4e6e293de2"
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "bytes": 9598,
+      "sha256": "a81d89a5197eab425fb669be0415d2d84b689670b5bc3ed83e54b7b66d18f2e6"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "bytes": 54886,
+      "sha256": "7bffd920e53065e7a7b4c7432fd86c4200120f90159b8babc5f0b19210f5fdfd"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "bytes": 16468,
+      "sha256": "50e7e5d022005aabf62f865ce9755a73276c5b68c02bf27ff0adc03be24f73d0"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "bytes": 138345,
+      "sha256": "55083ec9b01f7ffae6a5adc914a9d1eda61a477aa5674a9dcfa84bca27a860cb"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "bytes": 9050,
+      "sha256": "a3696ce29d3b493a0ad1863e5de3ce8ff12ba11ad847733ac50956dbb878ee7b"
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "bytes": 10525,
+      "sha256": "6852bbcabea98d62377963d794057da2f437483e2454260dde4707e14f991209"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "bytes": 112986,
+      "sha256": "cafa2eded5d5f22ecb535a27d13ba91937e92401e9b8b5ddf518996965ab6341"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_constructors.rs",
+      "bytes": 51234,
+      "sha256": "e4d8ebc073505199453abdf0a89f83bbaf2c78ee9dff4e477036f4943006d5e1"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "bytes": 312025,
+      "sha256": "82eb60079577082cc99d4164c81711889781388880b8e2aad15a9ed87626b4ba"
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "bytes": 22426,
+      "sha256": "10f673d02bb12f1f00d33088f6883c53279e9c799b42169c52003003dd9c35e3"
+    },
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "bytes": 21093,
+      "sha256": "04c48ad96b87033f1069720176d6ea90616c4e1443ea6929d120b2b2f76e76d6"
+    }
+  ],
+  "handoff": "worktracks/04-calls-source-views/common-installed-constructor-source-handoff.md",
+  "dependencies": [
+    "released lexical568",
+    "completed source environment19 and scope-owner2",
+    "entered local SOURCE6 and context-root1",
+    "reached boundary root11 plus corrected retention3 and macro-retention4",
+    "reference reached controls pending exact capture"
+  ],
+  "controls": [
+    "exact_transitive_inputs_survive_memo_eviction_and_reject_changed_absence",
+    "positive_changes_and_wrong_root_fingerprint_cannot_refresh_guard",
+    "stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+    "installed_record_rejects_revoked_owning_epoch_without_replanning"
+  ],
+  "holds": [
+    "Not compiled or executed; no stock pass or task closure",
+    "Complete architecture matrix and milestone unexecuted",
+    "Legacy unsealed and structural constructor planning retained, not repaired by this record component",
+    "Existing recipe namespace census and coarse inherited source/seal dependencies remain mode7 debt",
+    "Source-selected Drop and qualified name scope prerequisites remain incomplete",
+    "Actual frame start/materialization/cleanup and NeedInput atomicity controls pending"
+  ]
+}

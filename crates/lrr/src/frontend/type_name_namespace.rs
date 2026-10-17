@@ -166,7 +166,43 @@ pub(crate) fn lookup_name(
     // A body-only retained edit preserves its original declaration's Type
     // namespace. Prove that bridge from actual admitted source/rows, not a
     // primitive-looking return spelling or the result's runtime layout.
-    let retained_owner = if db
+    // A macro-generated associated function retained in its original owner
+    // (impl/trait item position) has no other declaration: macro_rules item
+    // paths resolve at the invocation site, i.e. this owner's Type namespace.
+    let associated_source = match db.published_input(&InputKey::RetainedSyntax(parse.content)) {
+        Some((InputValue::RetainedSyntax(retained), _))
+            if retained.key() == &parse
+                && retained.generated_associated().is_some()
+                && retained
+                    .prepared()
+                    .selected_generated()
+                    .is_some_and(|anchor| anchor.definition() == declaration.definition) =>
+        {
+            Some(retained.prepared().source().clone())
+        }
+        _ => None,
+    };
+    let retained_owner = if let Some(selection) = &associated_source {
+        let owner = *sources
+            .iter()
+            .find(|view| view.selection() == selection)
+            .ok_or_else(missing)?;
+        let proof = match db.retained_generated_declaration(declaration.definition) {
+            QueryPoll::Ready(Ok(Some(proof))) => proof,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::Ready(Ok(None)) | QueryPoll::NeedInput(_) => return Err(missing()),
+        };
+        if proof.parse() != &parse
+            || proof.context().scope != *declaration.scope
+            || proof.header().fingerprint() != declaration.header.fingerprint()
+        {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "retained generated associated header differs from its declaration",
+            ));
+        }
+        Some(owner.selection())
+    } else if db
         .published_input(&InputKey::RetainedSyntax(parse.content))
         .is_some()
     {
@@ -214,7 +250,6 @@ pub(crate) fn lookup_name(
         };
         captured_count = captured_count
             .checked_add(1)
-            .filter(|n| *n <= 4096)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -247,12 +282,14 @@ pub(crate) fn lookup_name(
         return Err(missing());
     };
     owner.require_original_hygiene()?;
-    if !owner.outline().items.iter().any(|item| {
-        item.def_key.fingerprint() == declaration.definition
-            && item.scope == *declaration.scope
-            && item.header.fingerprint() == declaration.header.fingerprint()
-            && (retained_owner.is_some() || item.header == *declaration.header)
-    }) {
+    if associated_source.is_none()
+        && !owner.outline().items.iter().any(|item| {
+            item.def_key.fingerprint() == declaration.definition
+                && item.scope == *declaration.scope
+                && item.header.fingerprint() == declaration.header.fingerprint()
+                && (retained_owner.is_some() || item.header == *declaration.header)
+        })
+    {
         return Err(missing());
     }
     let name =
@@ -289,19 +326,7 @@ pub(crate) fn lookup_name(
         let Some(scope) = input.scope.as_ref() else {
             return Err(missing());
         };
-        if input.seal.key() != *key
-            || input.seal.unresolved_frontiers() != 0
-            || scope.scope != *declaration.scope
-            || scope.namespace != Namespace::Type
-            || scope.edition != declaration.header.profile.edition
-            || source.outline.parse.profile != declaration.header.profile
-            || !input.sources.contains(source)
-            || input.sources.len() != captured_count
-            || input.sources.len() > 4096
-            || input.compiler_inputs.len() > 4096
-            || input.records.len() > 4096
-            || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph), _)) if graph.fingerprint() == input.source_dependencies)
-        {
+        if input.seal.key() != *key || input.seal.unresolved_frontiers() != 0 || scope.scope != *declaration.scope || scope.namespace != Namespace::Type || scope.edition != declaration.header.profile.edition || source.outline.parse.profile != declaration.header.profile || !input.sources.contains(source) || input.sources.len() != captured_count || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph), _)) if graph.fingerprint() == input.source_dependencies) {
             return Err(missing());
         }
         let mut locations = std::collections::BTreeSet::new();
@@ -385,7 +410,7 @@ pub(crate) fn lookup_name(
     // Plain start_with_sources has no discovery certificates. Reconstruct
     // only from the complete actual current retained original source set;
     // unknown producers/imports still cannot establish namespace absence.
-    if sources.is_empty() || sources.len() != captured_count || sources.len() > 4096 {
+    if sources.is_empty() || sources.len() != captured_count {
         return Err(missing());
     }
     let mut bytes = 0usize;
@@ -405,7 +430,6 @@ pub(crate) fn lookup_name(
         }
         bytes = bytes
             .checked_add(view.prepared_metadata_bytes()?)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -415,7 +439,6 @@ pub(crate) fn lookup_name(
         for (key, expected) in view.prepared_inputs() {
             rows = rows
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",

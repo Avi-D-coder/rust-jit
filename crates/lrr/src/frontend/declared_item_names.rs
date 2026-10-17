@@ -214,9 +214,6 @@ impl DeclaredItemName {
                 })
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(crate::runtime::arena::resource());
-        }
         Ok(bytes)
     }
 }

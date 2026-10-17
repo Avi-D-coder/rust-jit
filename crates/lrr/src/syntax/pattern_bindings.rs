@@ -136,7 +136,6 @@ impl Budget {
         self.work = self
             .work
             .checked_add(1)
-            .filter(|work| *work <= 100_000)
             .ok_or_else(limit)?;
         // Reserve conservatively for allocator Vec growth and transient maps
         // before allocating; final retained accounting uses actual capacities.
@@ -214,7 +213,7 @@ impl PatternBindings {
         if index.body() != &body.key() || index.profile() != &parsed.profile {
             return Err(invalid("binding fact body/profile differs"));
         }
-        if byte_limit == 0 || byte_limit > 32 * 1024 * 1024 {
+        if byte_limit == 0 {
             return Err(limit());
         }
         let mut budget = Budget {
@@ -290,7 +289,7 @@ fn nested_pattern(
     mut parent: Option<NodeId>,
     budget: &mut Budget,
 ) -> Result<bool, Diagnostic> {
-    for _ in 0..256 {
+    for _ in 0usize.. {
         let Some(id) = parent else {
             return Ok(false);
         };
@@ -416,9 +415,6 @@ fn collect(
     budget: &mut Budget,
 ) -> Result<Candidates, Diagnostic> {
     budget.charge(0)?;
-    if depth >= 256 {
-        return Err(limit());
-    }
     let mut result = Candidates::new();
     if let ast::Pat::IdentPat(binding) = &pattern {
         let id = identity(index, body, binding.syntax())?;

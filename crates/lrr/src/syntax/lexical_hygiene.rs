@@ -30,6 +30,38 @@ impl ParsedFile {
         Ok(Some(facts.item(context.context)?))
     }
 
+    /// For a generated `$crate` token: the defining crate root it names and
+    /// whether that is the crate whose original source contains this
+    /// expansion (so it is exactly `crate`). A non-local root names another
+    /// crate (e.g. a standard library macro's).
+    pub(crate) fn dollar_crate_root(
+        &self,
+        range: SourceRange,
+    ) -> Result<Option<(crate::core::digest::Digest, bool)>, Diagnostic> {
+        let Some(context) = self.token_context(range)? else {
+            return Ok(None);
+        };
+        let facts = self.hygiene_facts().ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-MACRO-OUTPUT",
+                "dollar-crate source lacks its prepared hygiene facts".into(),
+            )
+        })?;
+        let defining = facts.dollar_crate(context.context)?;
+        let mut current = context.context;
+        loop {
+            let record = facts.context(current)?;
+            match record.parent {
+                Some(parent) if parent != current => current = parent,
+                _ => {
+                    return Ok(Some((
+                        crate::core::digest::Digest(defining.0),
+                        record.defining_unit == defining,
+                    )));
+                }
+            }
+        }
+    }
     pub(super) fn token_context(
         &self,
         range: SourceRange,

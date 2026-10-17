@@ -194,15 +194,22 @@ fn prepared_source(text: &str, edition: u16) -> (Database, ConstantSource) {
     (db, source)
 }
 #[test]
-fn unchanged_run_pass_array_component_requires_real_root_attribute_preparation() {
+fn unchanged_run_pass_array_component_builtin_root_attribute_needs_no_preparation() {
     for edition in [2015, 2018, 2021, 2024] {
+        // The root `#![allow(..)]` is builtin inert, never a macro call: an
+        // unprepared capture plans and evaluates the same length.
         let unprepared = source(RUN, edition);
+        let plan = unprepared
+            .array_length(alias_length(&unprepared, "Array"))
+            .unwrap();
         assert_eq!(
-            unprepared
-                .array_length(alias_length(&unprepared, "Array"))
-                .unwrap_err()
-                .code,
-            "LRR-E-CONST-SOURCE"
+            evaluate(&plan, ConstLimits::default())
+                .unwrap()
+                .value()
+                .scalar()
+                .unwrap(),
+            crate::runtime::value::ValueRepr::unsigned(crate::runtime::shape::TypeId(13), 5)
+                .unwrap()
         );
         let (_db, prepared) = prepared_source(RUN, edition);
         let plan = prepared

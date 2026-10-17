@@ -22,3 +22,5 @@ pub mod ordinary_module;
 pub(crate) mod compiler_replay;
 
 pub mod macro_export_module;
+
+pub mod embedded_crates;

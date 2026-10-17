@@ -227,9 +227,6 @@ impl ParsedFile {
         let caller_signature =
             self.function_signature(caller.def_key, caller_header, caller_context, Some(caller))?;
         let facts = self.entered_macro_facts(caller, index.cfg(), &caller_context.scope)?;
-        if facts.items.len() > 100_000 {
-            return Err(fault("lexical declaration source work budget"));
-        }
         let mut found = facts
             .items
             .iter()
@@ -289,10 +286,7 @@ impl ParsedFile {
         };
         let signature =
             self.function_signature(selected, &row.item.header, &context, Some(body))?;
-        if !signature.generics.is_empty()
-            || !signature.predicates.is_empty()
-            || signature.parameters.len() > 256
-        {
+        if !signature.generics.is_empty() || !signature.predicates.is_empty() {
             return Err(fault(
                 "lexical generic source signature awaits owning context integration",
             ));
@@ -352,7 +346,6 @@ impl ParsedFile {
         let charge = |bytes: usize, n: usize| {
             bytes
                 .checked_add(n)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("lexical function plan metadata budget"))
         };
         let mut metadata_bytes = std::mem::size_of::<LexicalFunctionPlan>();

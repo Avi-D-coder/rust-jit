@@ -18,7 +18,6 @@ use crate::{
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-CONSTRUCTION-SOURCE", message.into())
 }
-const MAX_METADATA: usize = 32 << 20;
 fn require_current_query(
     db: &Database,
     admission: &ConstantSourceAdmission,
@@ -125,7 +124,7 @@ impl<'a> CurrentConstantConstruction<'a> {
         length: Option<(&'a ConstantSourceAdmission, &'a ConstantQueryValue)>,
         byte_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        if byte_limit == 0 || byte_limit > MAX_METADATA {
+        if byte_limit == 0 {
             return Err(fault(
                 "constant construction metadata budget exceeds profile",
             ));

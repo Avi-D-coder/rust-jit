@@ -477,16 +477,13 @@ pub fn prepare_declarative_expression(
     };
     let validate = || -> Result<_, Diagnostic> {
         expected.key.validate()?;
-        if expected.wire_bytes > 32 * 1024 * 1024
-            || !matches!(
-                expected.key.macro_identity,
-                MacroIdentity::Declaration { .. }
-            )
-            || !matches!(
-                expected.key.grammar,
-                GrammarSlot::Expression | GrammarSlot::Statements
-            )
-            || expected.key.call_edition != source.selection().outline.parse.profile.edition
+        if !matches!(
+            expected.key.macro_identity,
+            MacroIdentity::Declaration { .. }
+        ) || !matches!(
+            expected.key.grammar,
+            GrammarSlot::Expression | GrammarSlot::Statements
+        ) || expected.key.call_edition != source.selection().outline.parse.profile.edition
             || expected.key.engine_version != crate::expand::source_declarative::engine_version()
             || body.body() != &pc.body
             || pc.phase != Phase::Entry.code()?
@@ -543,7 +540,7 @@ pub fn prepare_declarative_expression(
             })?;
         let original = SourceDeclarative::new(source.share())?;
         let input = group(
-            &original.owned_forest()?,
+            &*original.owned_forest()?,
             source.macro_token_group(range, false)?,
         )?;
         if producer.identity != expected.key.invocation
@@ -727,7 +724,6 @@ pub fn prepare_declarative_expression(
                     crate::frontend::runtime_macro_plan::PreparedDeclarativeExpression,
                 >())
             })
-            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",

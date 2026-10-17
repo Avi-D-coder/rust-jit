@@ -1,0 +1,62 @@
+{
+  "kind": "common-reached-local-runtime-controls",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "084760523520ff8da79b062ff8f05d31cf42232d8dc9ec3eaaccf56d36e75269",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/lexical_numeric_callees_tests.rs",
+      "bytes": 11114,
+      "sha256": "5744e5269422248ee24bb0c1f3b106415d0f7a04ff3fc3689120ae5c3d7c58d2"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation_tests.rs",
+      "bytes": 15144,
+      "sha256": "b653d8b7f9296e0bdd0ad263612f945b6b463294f4fc5e80cee4a897e2412478"
+    }
+  ],
+  "test_selectors": [
+    "engine::run_source_preparation::tests::unchanged_suffix_main_executes_local_calls_and_reuses_one_current_child_plan_all_editions",
+    "engine::run_source_preparation::tests::wrong_runtime_argument_type_never_executes_the_selected_local_callee_all_editions",
+    "engine::run_source_preparation::tests::retired_local_preparation_roots_are_charged_until_last_raw_source_context_or_macro_release"
+  ],
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "git_blob": "ed59bba119606fe2c37ee70504de592b1ba25172",
+    "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+    "bytes": 1221,
+    "directives": [
+      "//@ run-pass"
+    ],
+    "auxiliaries": [],
+    "license": "MIT OR Apache-2.0",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ]
+  },
+  "dependencies": [
+    "common-entered-local-body-source-v1 SOURCE6 manifest92806e53",
+    "common-reached-local-boundary-root-v1 root11 manifest45ac271f",
+    "common-local-plan-context-owner-roots manifest559b412e leaf7ba37500",
+    "root corrected body_environment_retention/memo dependency closure and product_retention raw macros successor9400c76ea1a0da30cc3513cf2717d0a8a6af389502768a302abde8f4403f95db",
+    "completed source environment19 +retirement2 +scope-owner2 captured separately by sole validator",
+    "root run_source_preparation.rs exact cfg(test) module hook"
+  ],
+  "scope": [
+    "Two all-edition test bodies: full unchanged main and appended LRR runtime authority negative",
+    "One Rust2024 test body runs raw admitted-source, raw prepared-context and raw sealed-macro extraction variants",
+    "Actual indexed call and VM opcode counters, source revisions/query reuse, current owner checks and cleanup",
+    "Public whole-input-universe revocation, typed currentness refusal and exact zero-budget release"
+  ],
+  "holds": [
+    "No Cargo/native execution or pass claimed",
+    "Genuine suspension/resume/exact-once-after-resume remains unexecuted: primitive original has no missing-input frontier; no fabricated NeedInput or second dispatcher",
+    "Signature/cold selected-body absence additionally relies on SOURCE6 existing entered-local source controls; new runtime tests check actual child index/environment/thunk absence before first poll",
+    "Generated/retained/wrapper local call execution matrix not claimed by ordinary-source runtime controls",
+    "Existing A/B cleanup Drop, standard macro and other fullfixture gaps remain",
+    "Disk capacity currently blocks sole validator runtime execution; immutable source composition still useful"
+  ]
+}

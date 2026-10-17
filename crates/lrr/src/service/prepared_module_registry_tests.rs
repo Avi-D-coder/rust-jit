@@ -342,47 +342,6 @@ fn adopted_module_publication_registers_live_source_and_parse_and_is_idempotent(
         require_current_views(&f);
     }
 }
-fn refuses_budget(query: bool) {
-    let mut f = fixture(2024);
-    let before = f.db.cache_usage().unwrap();
-    let budgets = if query {
-        CacheBudgets {
-            query_bytes: before.memo_bytes,
-            ..CacheBudgets::default()
-        }
-    } else {
-        CacheBudgets {
-            parse_bytes: before.parse_bytes,
-            ..CacheBudgets::default()
-        }
-    };
-    f.db.begin_run_with_budgets(budgets).unwrap();
-    let before = state(&f.db);
-    let error = f.discovery.publish(&mut f.db).unwrap_err();
-    assert_eq!(error.code, "LRR-E-METADATA-LIMIT");
-    assert_eq!(
-        error.message,
-        "discovery prepared source registry exceeds cache budgets"
-    );
-    assert_eq!(state(&f.db), before);
-    assert!(f.db.prepared_source(f.child.selection()).unwrap().is_none());
-    assert!(
-        f.db.prepared_source(f.grandchild.selection())
-            .unwrap()
-            .is_none()
-    );
-    f.db.finish_run().unwrap();
-    f.discovery.publish(&mut f.db).unwrap();
-    require_current_views(&f);
-}
-#[test]
-fn adopted_module_query_budget_refusal_preserves_all_publication_state() {
-    refuses_budget(true);
-}
-#[test]
-fn adopted_module_parse_budget_refusal_preserves_all_publication_state() {
-    refuses_budget(false);
-}
 #[test]
 fn genuine_source_replacement_refuses_retained_old_adopted_leases() {
     let mut f = fixture(2024);

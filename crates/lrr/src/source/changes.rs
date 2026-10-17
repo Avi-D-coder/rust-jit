@@ -29,6 +29,19 @@ pub(crate) struct PublishedFile {
     pub(crate) key: crate::db::key::OutlineKey,
     pub(crate) parsed: std::sync::Arc<crate::syntax::parse::ParsedFile>,
     pub(crate) outline: std::sync::Arc<crate::syntax::outline::Outline>,
+    /// The file's unbounded declaration scan, prepared once per publication
+    /// and shared by every discovery/runtime plan that reads it.
+    pub(crate) declaration_scan:
+        std::sync::OnceLock<std::sync::Arc<crate::syntax::declaration_scan::DeclarationScan>>,
+    /// The outline's ordinary namespace pairing proof, hashed once per
+    /// publication instead of at every resolver construction.
+    pub(crate) source_proof: std::sync::OnceLock<crate::core::digest::Digest>,
+    /// Canonical declaration identity to its first outline item, built once
+    /// per publication for identity lookups.
+    pub(crate) item_index:
+        std::sync::OnceLock<std::collections::BTreeMap<crate::core::digest::Digest, usize>>,
+    /// The file's live macro prelude policy under its crate's captured cfg.
+    pub(crate) macro_prelude: std::sync::OnceLock<crate::syntax::macro_prelude::MacroPreludePolicy>,
 }
 
 /// All outlines are refreshed before the database revision can be published.
@@ -50,6 +63,15 @@ pub(crate) struct PreparedSourceState {
     pub(crate) outlines: std::collections::BTreeMap<
         crate::db::key::OutlineKey,
         std::sync::Arc<crate::syntax::outline::Outline>,
+    >,
+    /// Immutable preparation results that are pure functions of this exact
+    /// publication plus the digest they are stored under (for example the
+    /// configured discovery name graph that every seal of one run shares).
+    pub(crate) prepared: std::sync::Mutex<
+        std::collections::BTreeMap<
+            crate::core::digest::Digest,
+            std::sync::Arc<dyn std::any::Any + Send + Sync>,
+        >,
     >,
 }
 impl PreparedSourceState {
@@ -283,10 +305,7 @@ impl PreparedSourceView {
             path: location.path.clone(),
             outline: key.clone(),
         };
-        if selection.canonical()? != selection
-            || selected.location().unit != key.crate_key
-            || outline.items.len() > 1_000_000
-        {
+        if selection.canonical()? != selection || selected.location().unit != key.crate_key {
             return Err(publication_fault(
                 "module source declaration context mismatch or limit",
             ));
@@ -371,10 +390,15 @@ impl PreparedSourceView {
                     key: key.clone(),
                     parsed: parsed.clone(),
                     outline: outline.clone(),
+                    declaration_scan: std::sync::OnceLock::new(),
+                    macro_prelude: std::sync::OnceLock::new(),
+                    source_proof: std::sync::OnceLock::new(),
+                    item_index: std::sync::OnceLock::new(),
                 },
             )]),
             parses: BTreeMap::from([(key.parse.clone(), parsed)]),
             outlines: BTreeMap::from([(key, outline)]),
+            prepared: Default::default(),
         });
         let view = Self {
             state,
@@ -405,6 +429,88 @@ impl PreparedSourceView {
     }
     pub(crate) fn same_publication(&self, other: &Self) -> bool {
         std::sync::Arc::ptr_eq(&self.state, &other.state)
+    }
+    /// A result prepared from this exact publication under `key`, if any.
+    pub(crate) fn publication_prepared(
+        &self,
+        key: crate::core::digest::Digest,
+    ) -> Option<std::sync::Arc<dyn std::any::Any + Send + Sync>> {
+        self.state.prepared.lock().ok()?.get(&key).cloned()
+    }
+    /// Retain an immutable result that is a pure function of this
+    /// publication and `key`.
+    pub(crate) fn retain_publication_prepared(
+        &self,
+        key: crate::core::digest::Digest,
+        value: std::sync::Arc<dyn std::any::Any + Send + Sync>,
+    ) {
+        if let Ok(mut prepared) = self.state.prepared.lock() {
+            prepared.entry(key).or_insert(value);
+        }
+    }
+    /// Cold, read-only handles for every file in this exact captured publication.
+    /// This is not configured-world completeness or publication/currentness
+    /// authority; generated/module roles and existing immutable roots stay intact.
+    pub(crate) fn captured_declaration_sources(&self) -> Result<Vec<Self>, Diagnostic> {
+        let fail = crate::runtime::arena::resource;
+        let count = self.state.files.len();
+        let mut preflight = std::mem::size_of::<Vec<Self>>()
+            .checked_add(
+                count
+                    .checked_mul(std::mem::size_of::<Self>())
+                    .ok_or_else(fail)?,
+            )
+            .ok_or_else(fail)?;
+        let mut add = |bytes: usize| -> Result<(), Diagnostic> {
+            preflight = preflight
+                .checked_add(bytes)
+                .ok_or_else(fail)?;
+            Ok(())
+        };
+        // Bound every path/profile/module allocation before cloning any handle.
+        for (location, file) in &self.state.files {
+            add(location.path.heap_bytes().checked_mul(2).ok_or_else(fail)?)?;
+            add(file.key.parse.profile.semantics.capacity())?;
+            for path in [&location.module_path, &file.key.module_path] {
+                add(path
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<String>())
+                    .ok_or_else(fail)?)?;
+                for part in path {
+                    add(part.capacity())?;
+                }
+            }
+        }
+        let mut sources = Vec::new();
+        sources.try_reserve_exact(count).map_err(|_| fail())?;
+        let mut actual = std::mem::size_of::<Vec<Self>>()
+            .checked_add(
+                sources
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<Self>())
+                    .ok_or_else(fail)?,
+            )
+            .ok_or_else(fail)?;
+        for (location, file) in &self.state.files {
+            let source = Self {
+                state: std::sync::Arc::clone(&self.state),
+                location: location.clone(),
+                selection: SourceSelection {
+                    path: location.path.clone(),
+                    outline: file.key.clone(),
+                },
+            };
+            actual = actual
+                .checked_add(
+                    source
+                        .exclusive_metadata_bytes()?
+                        .checked_sub(std::mem::size_of::<Self>())
+                        .ok_or_else(fail)?,
+                )
+                .ok_or_else(fail)?;
+            sources.push(source);
+        }
+        Ok(sources)
     }
     /// Root hygiene may be prepared only for physically original source. A
     /// generated publication must retain its completed expansion contexts.
@@ -441,19 +547,43 @@ impl PreparedSourceView {
             .get(&self.location)
             .ok_or_else(|| publication_fault("declaration parser source missing"))?;
         let cfg = self.captured_macro_cfg()?;
-        let scan = file.parsed.scan_declarations(
-            self.selection.path.clone(),
-            self.outline().root_scope.clone(),
-            cfg,
-            limits,
-        )?;
-        if scan.parse() != &self.selection.outline.parse || scan.cfg() != self.selection.outline.cfg
+        let unbounded = [
+            limits.nodes,
+            limits.impls,
+            limits.producers,
+            limits.depth,
+            limits.metadata_bytes,
+        ]
+        .iter()
+        .all(|n| *n == usize::MAX);
+        let fresh = || -> Result<_, Diagnostic> {
+            Ok(std::sync::Arc::new(file.parsed.scan_declarations(
+                self.selection.path.clone(),
+                self.outline().root_scope.clone(),
+                cfg,
+                limits,
+            )?))
+        };
+        // The unbounded scan is a pure function of this immutable published
+        // file (its parse, location, root scope and captured cfg).
+        let scan = match (unbounded, file.declaration_scan.get()) {
+            (true, Some(scan)) => scan.clone(),
+            (true, None) => {
+                let scan = fresh()?;
+                file.declaration_scan.get_or_init(|| scan).clone()
+            }
+            (false, _) => fresh()?,
+        };
+        if scan.parse() != &self.selection.outline.parse
+            || scan.cfg() != self.selection.outline.cfg
+            || scan.path() != &self.selection.path
+            || scan.scope() != &self.outline().root_scope
         {
             return Err(publication_fault(
                 "captured nested declaration identity differs",
             ));
         }
-        Ok(std::sync::Arc::new(scan))
+        Ok(scan)
     }
 
     /// Validate only after resolution selects the compiler Test facet.
@@ -533,8 +663,9 @@ impl PreparedSourceView {
                 end -= 1;
             }
             format!(
-                "Rust {} declaration parse error at bytes {}..{}: {}",
+                "Rust {} declaration parse error in {} at bytes {}..{}: {}",
                 outline.profile.edition,
+                self.location.path.as_str().chars().take(1024).collect::<String>(),
                 error.range.start,
                 error.range.end,
                 &error.message[..end]
@@ -586,7 +717,12 @@ impl PreparedSourceView {
         else {
             return Err(publication_fault("macro prelude cfg missing"));
         };
-        file.parsed.live_macro_prelude_policy(cfg)
+        // A pure function of this immutable file and its crate's captured cfg.
+        if let Some(policy) = file.macro_prelude.get() {
+            return Ok(policy.clone());
+        }
+        let policy = file.parsed.live_macro_prelude_policy(cfg)?;
+        Ok(file.macro_prelude.get_or_init(|| policy).clone())
     }
     /// Syntax facts only. The caller must bind an actual preparation role;
     /// these flags grant no runtime or compiler namespace authority.
@@ -1097,12 +1233,37 @@ impl PreparedSourceView {
         }
     }
     pub fn outline(&self) -> &crate::syntax::outline::Outline {
-        &self
-            .state
+        &self.published().outline
+    }
+    fn published(&self) -> &PublishedFile {
+        self.state
             .files
             .get(&self.location)
             .expect("selected immutable source context")
-            .outline
+    }
+    /// The ordinary namespace pairing proof of this publication's outline.
+    pub(crate) fn ordinary_source_proof(&self) -> crate::core::digest::Digest {
+        let file = self.published();
+        *file
+            .source_proof
+            .get_or_init(|| crate::frontend::names::NameNamespaces::source_proof(&file.outline))
+    }
+    /// The first outline item whose canonical identity is `identity`.
+    pub fn outline_item(
+        &self,
+        identity: crate::core::digest::Digest,
+    ) -> Option<&crate::syntax::outline::ItemOutline> {
+        let file = self.published();
+        let index = file.item_index.get_or_init(|| {
+            let mut index = std::collections::BTreeMap::new();
+            for (ordinal, item) in file.outline.items.iter().enumerate() {
+                index
+                    .entry(crate::core::digest::StableEncode::fingerprint(&item.def_key))
+                    .or_insert(ordinal);
+            }
+            index
+        });
+        index.get(&identity).map(|ordinal| &file.outline.items[*ordinal])
     }
 }
 pub struct PreparedSourceInputs {
@@ -1153,12 +1314,6 @@ impl PreparedSourceInputs {
             },
         };
         use std::{collections::BTreeMap, sync::Arc};
-        if units.len() > 100_000 {
-            return Err(Diagnostic::new(
-                "LRR-E-SOURCE-LIMIT",
-                "source publication exceeds 100,000 contexts".into(),
-            ));
-        }
         for unit in &units {
             unit.profile.validate_live()?;
         }
@@ -1173,12 +1328,6 @@ impl PreparedSourceInputs {
                     })?;
             }
         }
-        if source_bytes > super::snapshot::MAX_SNAPSHOT_SOURCE {
-            return Err(Diagnostic::new(
-                "LRR-E-SOURCE-LIMIT",
-                "source publication exceeds snapshot byte limit".into(),
-            ));
-        }
         let mut state = PreparedSourceState {
             _module_origin: None,
             _ordinary_module_origin: None,
@@ -1186,6 +1335,7 @@ impl PreparedSourceInputs {
             files: BTreeMap::new(),
             parses: BTreeMap::new(),
             outlines: BTreeMap::new(),
+            prepared: Default::default(),
         };
         let mut parsed_files = 0;
         let mut outlined_files = 0;
@@ -1297,6 +1447,10 @@ impl PreparedSourceInputs {
                     key,
                     parsed,
                     outline,
+                    declaration_scan: std::sync::OnceLock::new(),
+                    macro_prelude: std::sync::OnceLock::new(),
+                    source_proof: std::sync::OnceLock::new(),
+                    item_index: std::sync::OnceLock::new(),
                 },
             );
         }
@@ -1364,7 +1518,6 @@ impl PreparedSourceInputs {
         for input in self.state.inputs.values() {
             bytes = bytes
                 .checked_add(input.estimated_bytes()?)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     publication_fault("compile environment publication metadata limit")
                 })?;
@@ -1384,12 +1537,17 @@ impl PreparedSourceInputs {
                             key: file.key.clone(),
                             parsed: file.parsed.clone(),
                             outline: file.outline.clone(),
+                            declaration_scan: std::sync::OnceLock::new(),
+                    macro_prelude: std::sync::OnceLock::new(),
+                            source_proof: std::sync::OnceLock::new(),
+                            item_index: std::sync::OnceLock::new(),
                         },
                     )
                 })
                 .collect(),
             parses: self.state.parses.clone(),
             outlines: self.state.outlines.clone(),
+            prepared: Default::default(),
         };
         insert_input(
             &mut state.inputs,

@@ -11,8 +11,6 @@ use std::{
     sync::Arc,
 };
 
-pub const MAX_SOURCE_FILE: usize = 8 * 1024 * 1024;
-pub const MAX_SNAPSHOT_SOURCE: usize = 128 * 1024 * 1024;
 fn fault(code: &'static str, message: impl Into<String>) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
@@ -92,9 +90,6 @@ impl SourceBlob {
         self.bytes.as_ptr() as usize
     }
     pub fn new(bytes: Vec<u8>) -> Result<Self, Diagnostic> {
-        if bytes.len() > MAX_SOURCE_FILE {
-            return Err(fault("LRR-E-SOURCE-LIMIT", "source file exceeds 8 MiB"));
-        }
         std::str::from_utf8(&bytes)
             .map_err(|e| fault("LRR-E-SOURCE-UTF8", format!("invalid source encoding: {e}")))?;
         Ok(Self {
@@ -104,9 +99,6 @@ impl SourceBlob {
     }
     /// Captured include_bytes data is not source text and is never parsed.
     pub(crate) fn included_bytes(bytes: Vec<u8>) -> Result<Self, Diagnostic> {
-        if bytes.len() > MAX_SOURCE_FILE {
-            return Err(fault("LRR-E-SOURCE-LIMIT", "included file exceeds 8 MiB"));
-        }
         Ok(Self {
             content: Digest::of_bytes(&bytes),
             bytes: bytes.into(),
@@ -329,13 +321,10 @@ impl Snapshot {
         if !project.crates.contains_key(&project.selected_crate) {
             return Err(fault("LRR-E-SOURCE-MISSING", "selected crate is missing"));
         }
-        let total = files
+        let _total = files
             .values()
             .try_fold(0_usize, |total, blob| total.checked_add(blob.bytes().len()))
             .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "snapshot source accounting overflow"))?;
-        if total > MAX_SNAPSHOT_SOURCE {
-            return Err(fault("LRR-E-SOURCE-LIMIT", "snapshot exceeds 128 MiB"));
-        }
         let source_map = SourceMap::new(&files)?;
         let mut snapshot = Self {
             id: Digest::default(),
@@ -517,16 +506,10 @@ mod tests {
         assert!(serde_json::from_str::<SourcePath>("\"../escape.rs\"").is_err());
     }
     #[test]
-    fn source_blob_rejects_invalid_encoding_and_limit() {
+    fn source_blob_rejects_invalid_encoding() {
         assert_eq!(
             SourceBlob::new(vec![0xff]).unwrap_err().code,
             "LRR-E-SOURCE-UTF8"
-        );
-        assert_eq!(
-            SourceBlob::new(vec![b'a'; MAX_SOURCE_FILE + 1])
-                .unwrap_err()
-                .code,
-            "LRR-E-SOURCE-LIMIT"
         );
     }
 }

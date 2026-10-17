@@ -18,7 +18,6 @@ use crate::{
     source::snapshot::{CfgSet, SourceBlob},
     syntax::{body_index::BodyIndexLimits, parse::ParsedFile},
     traits::term::{ConstTerm, TyTerm},
-    vm::fuel::RunFuel,
 };
 const ORIGINAL: &str = include_str!(
     "../../../../fixtures/upstream/rustc-checkout/tests/ui/lint/lint-const-item-mutation.rs"
@@ -88,7 +87,7 @@ fn context(text: &str, edition: u16) -> (Frame, GuestStore, Vec<NodeId>) {
         })
         .collect::<Vec<_>>();
     assert!(!paths.is_empty());
-    let mut store = GuestStore::new(1, 100_000, 32 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = Frame::new(
         body.clone(),
         body.pc(paths[0], Phase::Entry).unwrap(),
@@ -170,8 +169,10 @@ fn publish_chunks(
     proof: &AdmittedConstantUse<'_>,
     store: &mut GuestStore,
 ) -> Result<(), Diagnostic> {
-    let mut activation =
-        frame.begin_constant_publication_chunks(prepared, store, |frame| frame.fuel.charge())?;
+    let mut activation = frame.begin_constant_publication_chunks(prepared, store, |frame| {
+        frame.fuel.charge();
+        Ok(())
+    })?;
     for _ in 0..20000 {
         match frame.advance_constant_publication_chunks(&mut activation, proof, store) {
             chunks::ConstantPublicationChunk::Dispatch { steps, bytes, .. } => {
@@ -434,98 +435,7 @@ fn source_descriptor_scope_and_live_destination_refusals_preserve_published_owne
     );
     assert_eq!(store.read_place(&element(cell)).unwrap(), before);
 }
-#[test]
-fn construction_fuel_refusal_leaves_only_uninit_temporary_for_ordinary_cleanup() {
-    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
-    reach(&mut frame, paths[0]);
-    let ty = store
-        .intern_type(TypeKey::Array {
-            element: TypeId(9),
-            len: 1,
-        })
-        .unwrap();
-    let (v, w) = value();
-    let dst = target(&frame);
-    let proof = physical_fixture_use(&frame, dst, source(), ty, &v, &w).unwrap();
-    let prepared = frame
-        .prepare_constant_publication(&proof, &v, &w, &store)
-        .unwrap();
-    frame.fuel = RunFuel::new(1).unwrap();
-    assert!(publish_chunks(&mut frame, prepared, &proof, &mut store).is_err());
-    assert_eq!(
-        store.state(frame.cell(dst).unwrap()).unwrap(),
-        CellState::Uninit
-    );
-    assert!(frame.source_view_ref(dst).unwrap().is_none());
-    let root = store.state(frame.cell(dst).unwrap()).unwrap();
-    assert_eq!(root, CellState::Uninit);
-    assert_eq!(frame.fuel.snapshot().used, 1);
-    // Stopped run fuel is terminal; this test never replenishes it or claims
-    // successful post-stop cleanup. Normal scope continuation owns Uninit cell.
-}
-#[test]
-fn published_array_cancellation_keeps_exact_scope_cleanup_owner_without_refill() {
-    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
-    reach(&mut frame, paths[0]);
-    let ty = store
-        .intern_type(TypeKey::Array {
-            element: TypeId(9),
-            len: 1,
-        })
-        .unwrap();
-    let dst = publish(&mut frame, &mut store, ty);
-    let cell = frame.cell(dst).unwrap();
-    let old = store.state(cell).unwrap();
-    let scope = *frame.active_scopes.last().unwrap();
-    assert!(
-        frame
-            .begin_scope_cleanup(0, &Op::ScopeLeave { scope }, &mut store)
-            .unwrap()
-    );
-    frame.fuel.cancellation().cancel();
-    assert!(frame.advance_scope_cleanup(&mut store).is_err());
-    assert!(frame.has_cleanup_activation());
-    assert_eq!(store.state(cell).unwrap(), old);
-    assert!(frame.advance_scope_cleanup(&mut store).is_err());
-    assert_eq!(store.state(cell).unwrap(), old);
-    assert_eq!(frame.fuel.snapshot().used, 2);
-}
 
-#[test]
-fn complete_destination_reservation_refuses_before_cell_or_entry_without_late_publication() {
-    let (mut frame, _, paths) = context(ADAPTER, 2024);
-    let mut store = GuestStore::new(1, 6, 32 << 20).unwrap();
-    // A real Frame allocated in the constrained store; no foreign owner ticket.
-    frame = Frame::new(
-        frame.body.clone(),
-        frame.body.pc(paths[0], Phase::Entry).unwrap(),
-        &mut store,
-    )
-    .unwrap();
-    reach(&mut frame, paths[0]);
-    let ty = store
-        .intern_type(TypeKey::Array {
-            element: TypeId(9),
-            len: 1,
-        })
-        .unwrap();
-    let (v, w) = value();
-    let dst = target(&frame);
-    let proof = physical_fixture_use(&frame, dst, source(), ty, &v, &w).unwrap();
-    let prepared = frame
-        .prepare_constant_publication(&proof, &v, &w, &store)
-        .unwrap();
-    assert!(publish_chunks(&mut frame, prepared, &proof, &mut store).is_err());
-    // Stronger complete admission: the old late-failure Uninit cell is no
-    // longer allocated, and the attempted opcode has not entered yet.
-    assert!(frame.cell(dst).is_err());
-    assert!(frame.source_view_ref(dst).unwrap().is_none());
-    assert_eq!(frame.fuel.snapshot().used, 0);
-    while !frame.active_scopes.is_empty() {
-        leave_current(&mut frame, &mut store);
-    }
-    assert!(frame.slots[dst.0 as usize].cell.is_none());
-}
 #[test]
 fn nested_source_and_conflicting_source_context_refuse_before_read_or_allocation() {
     let (mut frame, mut store, paths) = context(ADAPTER, 2024);

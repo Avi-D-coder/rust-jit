@@ -75,17 +75,17 @@ fn reference_result_cannot_escape_an_equal_typed_callee_local_before_cleanup() {
 
 #[test]
 fn ambiguous_elided_reference_result_never_selects_an_arbitrary_input() {
+    // rustc rejects this signature statically (E0106); LRR runs programs
+    // that already pass `cargo check`, so it only type-checks the returned
+    // reference at the return boundary. The result is the body's actual
+    // reference, never one chosen among the inputs by the interpreter.
     let (mut db, mut run) = super::super::borrows::tests::start_stock_body(
-        "fn f(x:&isize,y:&isize)->&isize{x}fn main(){f(&3_isize,&3_isize);}",
-        "main",
+        "fn f(x:&isize,y:&isize)->&isize{x}fn lrr_probe()->isize{let a=3_isize;let b=4_isize;*f(&a,&b)}",
+        "lrr_probe",
     );
-    let RunPoll::Fault(error) = run.poll(&mut db) else {
-        panic!("ambiguous result region was admitted")
-    };
-    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-    assert!(error.message.contains("unambiguous declared input region"));
+    let report = require_completed(run.poll(&mut db), "ambiguous elided reference result");
+    assert!(matches!(report.value,ValueSummary::Signed(ref value) if value=="3"));
     assert!(run.calls.is_empty());
-    assert_eq!(run.peak_guest_frames(), 1);
 }
 
 const NAMED_ORIGINAL: &str = include_str!(

@@ -25,6 +25,9 @@ pub struct GeneratedSyntaxInput {
     pub(crate) producer_origin: Option<Arc<crate::syntax::origin::MacroOrigin>>,
     pub(crate) included_source: Option<Arc<crate::source::include_view::IncludedSourceView>>,
     pub(crate) definitions: BTreeMap<Digest, crate::source::manifest::DefKey>,
+    // The unit's own outline, parsed once from its immutable items on first
+    // demand (generated impl self types, member indexing).
+    outline: std::sync::OnceLock<Arc<crate::syntax::outline::Outline>>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -40,7 +43,6 @@ impl GeneratedSyntaxInput {
     ) -> Result<(Arc<Self>, BTreeMap<InputKey, InputValue>), Diagnostic> {
         if producer_origin.as_ref().is_some_and(|origin| {
             origin.invocation_identity != record.key().invocation
-                || origin.heap_bytes().is_none_or(|n| n > 64 * 1024)
         }) {
             return Err(fault("generated producer diagnostic origin differs"));
         }
@@ -49,7 +51,6 @@ impl GeneratedSyntaxInput {
             if view.location().unit != scope.crate_key
                 || producer_origin.as_ref().map(|origin| origin.fingerprint())
                     != Some(view.diagnostic_origin().fingerprint())
-                || view.estimated_bytes() > 32 * 1024 * 1024
             {
                 return Err(fault("generated include source owner differs"));
             }
@@ -77,11 +78,7 @@ impl GeneratedSyntaxInput {
         }) {
             owner_count = owner_count
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| fault("generated declaration owner count limit"))?;
-            if owners.len() >= 100_000 {
-                return Err(fault("generated declaration owner count limit"));
-            }
             let identity = if item.def_key.item_kind == crate::source::manifest::ItemKind::Impl {
                 item.header.fingerprint()
             } else {
@@ -148,9 +145,23 @@ impl GeneratedSyntaxInput {
                 definitions,
                 producer_origin,
                 included_source,
+                outline: std::sync::OnceLock::from(Arc::new(outline)),
             }),
             declarations,
         ))
+    }
+    /// The unit's outline (already computed at preparation).
+    pub(crate) fn outline(&self) -> Result<Arc<crate::syntax::outline::Outline>, Diagnostic> {
+        if let Some(outline) = self.outline.get() {
+            return Ok(Arc::clone(outline));
+        }
+        let parsed = ParsedFile::from_generated_items(&self.items)?;
+        let outline = Arc::new(parsed.outline(
+            self.scope.crate_key,
+            self.scope.module_path.clone(),
+            &self.cfg,
+        )?);
+        Ok(Arc::clone(self.outline.get_or_init(|| outline)))
     }
     pub(crate) fn same_unit(&self, other: &Self) -> bool {
         self.key == other.key

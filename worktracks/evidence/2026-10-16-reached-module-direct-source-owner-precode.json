@@ -1,0 +1,32 @@
+{
+  "status": "PRECODE source-only bounded component; no runtime hook/Cargo",
+  "claim": "LOCAL-024 / WT04; T032 and M013/M017/M018 source-call prerequisites, E-R5-005; MA006/MA008 distinct from recurring modes6/7/8",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/shift.rs",
+    "sha256": "d6457a9cb5e412016ddc8de0687e0267654fdb577410958cf2fa48bd45e64cf4",
+    "scope": "unchanged main calls three module functions; actual first runtime terminal pending, no pass inferred"
+  },
+  "invariant": "First reached module source admission consumes actual canonical declaration scope owner from completed immutable ownership index; do not build an O(S) source-root census per first call. Ownership lookup supplies no namespace/call/currentness authority.",
+  "owned_file": "crates/lrr/src/engine/run_module_source_preparation.rs",
+  "before_sha256": "5591b7eedc355fc7c7acd856010a042122606daf0c7c94aa9f56f6dd2a3e8990",
+  "symbols": [
+    "RunMachine::prepare_reached_module_source",
+    "CompletedSourceEnvironment::scope_owner",
+    "SourceScopeOwner",
+    "source_body_context::capture",
+    "ReachedModuleBody::require_current",
+    "Database::prepare_reached_module_plan"
+  ],
+  "change": "Replace count/allocate/all-source reference Vec with typed unique actual scope owner borrowed for a one-element capture slice. Preserve Ambiguous/Missing as explicit errors, exact source/header/context/body/caller/currentness/macro publication and reuse checks.",
+  "alternate_removed": "Only first-capture completed.sources length/census/vector. No evaluator or legacy runtime route removed; helper remains unhooked.",
+  "authority": "Use proof.declaration.context.scope, not callee name/caller source/first source ordinal. Actual source capture and receipt validate canonical selected source; owning editions, parse, cfg, epoch and generated authority remain existing checks.",
+  "costs": "Map O(log scopes) plus fixed stack one-reference slice; no new retained allocation/index. Existing cold capture and canonical/header scans retained. No performance measurement or scaling claim.",
+  "holds": [
+    "No runtime hook or production run.rs changes",
+    "Generated boundary export/source body macro closure remain actual prerequisites",
+    "No original-only semantic refusal or fixture-specific callee rule",
+    "All four macro contexts/editions/runtime/authority/currentness/suspension/cleanup acceptance pending",
+    "No Cargo/compiler/tests executed by worker"
+  ],
+  "closure_evidence": "Exact all8 source review, frozen single-leaf overlay, independent review where available; root integration and sole validator own actual commands/acceptance."
+}

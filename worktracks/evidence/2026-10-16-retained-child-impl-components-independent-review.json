@@ -1,0 +1,102 @@
+{
+  "schema": "lrr/source-review/retained-child-impl-closure-components/v1",
+  "status": "Read-only independent combined source pass; exact live source identities below. No Cargo/compiler/tests or imports. No integration/runtime acceptance. Exact frozen V8 historical review remains unchanged.",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "b37f4ee3da322ab4bfdcfc8fa01e6a59093adc4ef1978f1e43d59dc1b9e67241",
+      "bytes": 28159
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_projection.rs",
+      "sha256": "c416dd7857fcdd690cab01f3aa5a79f2a90ad2146ce3b6b9603207fe65f96a56",
+      "bytes": 4464
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19",
+      "bytes": 38023
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "sha256": "d5b059acb26d9141682abbb7ec1d55b97a25760876f4714ce99c0cd84ef57746",
+      "bytes": 7985
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242",
+      "bytes": 8043
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_macros.rs",
+      "sha256": "097184e6964424b3d15469f3d3e8e93884864c3146a8d0024f9dd70c7937365b",
+      "bytes": 205830
+    },
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c",
+      "bytes": 96053
+    }
+  ],
+  "source_fingerprint": "73f987fedb0a316cc4679c6677a096a8e53d28a5bcb353b79e1a6976394903a8",
+  "review_scope": "GeneratedHeaderPlan actual active extraction/projection getters, ActiveImplProjection, GeneratedDeclarations shared item_impl_headers kernel, AncestorImplCompletion, ChildImplFrontier, GeneratedMacroCatalog retained_items/completed_declaration_call and DeclarationFragment genuine completed output/inventory construction. Other inherited source in these files is excluded. Root source_discovery module/maps/admission/handler not finished and not reviewed here.",
+  "conclusion": "No concrete authority blocker in the combined components. Repeated per-child ancestor listing/index/inventory scan found in historical09486 helper has been removed by4198f4ef using shared prepared completion. Cache creation/reuse/current rootArc accounting and exact frontier-release lifecycle require separate root-wiring review.",
+  "authority": {
+    "active": "Projectionc416 is private constructor accessible only owning generated_headers parent; actual sorted cfg-active Outline Impl declaration spans at actual record/cfg/scope/epoch. Original cfg-disabled raw headers need not be demanded. Retained active ranges are same facts after plan publication, not a declaration closure receipt.",
+    "actual_owners": "Child4198 retains actual child+selected parent GeneratedItems Arcs. Stable lrr/v1/generated-child-impl-frontier binds actual ancestorjob, child+parent descriptors, projection fingerprint, actual scope,cfg,epoch. First generated parent edge must same_record selected parent+sameepoch, not any equalshape parent.",
+    "ancestor": "Completiond5b validates actual root v2 item-declarationjob, root Items/currentepoch/cfg, root.parent_inventory actualsource fp and actualsource producer identity/grammar/scope. Exact rootArc occurs uniquely in genuine completed syntax outputs. Key+descriptor sorted lookup only locates candidates; same_record checks actual key+output+wire and unique result.",
+    "chain": "Child selected actual same_record output with actual scope/cfg/epoch; child!=root. For each edge, actual child.parent_inventory selects unique retained parent scan; actual parent producer identity equals child.parent_invocation, grammar equals child record slot, producer.scope equals actual child.scan.scope. MAX_DEPTH256/cycle checks; must reach exact root index, no dangling/colliding scan allowance.",
+    "canonical": "ONE item_impl_headers_from_projection kernel preserves actual record/epoch/cfg/Items/text/origins and exact active raw Impl+retained ScannedImpl unique range/header relation. Each actual header_identity must occur in genuine root completed inventory. DeclarationFragment constructs inventory from actual completed scans, excluding actual replacement masks. No output listing/headercount grants completeness.",
+    "source_join": "Existing completed_declaration_call matches genuine parentcatalog output descriptor/cfg and actual scan producer, maps actual call origins via full structural occurrence coverage, invokes admit_completed_item_call with actual producer. GeneratedDeclarations captures generated scope/actual token edition and parent identity; childhelper consumes these receipts, does not synthesize origin."
+  },
+  "ownership_accounting": {
+    "projection": "Same private projection Arc cloned by retained_impl_projection, no body/parser deep copy. Self+scopeheap+range slice+twoArc allocationheaders charged <=32MiB; enclosing plan/waiter owns extra Arc handle. settled_originals clears frontier while retaining metadata; no consumer derives completion from rangesalone.",
+    "waiter": "Self contains child+parent+projection Arc handles, actual ScopeKey/CfgSet heaps, conservative projection metadata+128 allowance under64MiB. GeneratedItems payload remains actual catalog owner and coordinator must keep it accounted when catalogs close. Repeated conservative projection charge is safe overcount, no unique-byte claim.",
+    "completion": "Outputs share genuineGeneratedDeclarations Arcs; completedArc retained. Own actual vector capacities for outputhandles/scans/recordrows/headerIDs+Self+Arc allocationheader <=64MiB/100000rows. No copied parse/index payload. Root must charge cache map/outerArc and preserve real completedArc equality/current ownership. Wholegraph accounting not claimed before wiring."
+  },
+  "preparation_cost": {
+    "once": "Actual completed.syntax_outputs listing+sorted scan/record indexes+sorted canonical headerIDs prepared once peractual ancestor by root cache. O(OlogO+IlogI) plus bounded existing traversal/hash work. Derived lookup rows use existing stable key/descriptor/jobdomains; no new semantic pointeridentity.",
+    "child": "Guard tuple constant. Record binarybucket lookup plus exact matching wire comparison; parentchain <=256 with binaryscan lookup+actual parentproducer search; cycle Vec bounded256. Shared canonicaljoin O(A*(rawheaders+scannedimpls)), header membership O(logI) perheader. No perchild fullancestor listing/sort or rootinventory traversal. Cold only; no performance measurement."
+  },
+  "all8": {
+    "1": "No assertion/expression evaluator. Components serve ordinary declaration/source engine.",
+    "2": "Actual generated record/tree/scan identities, no literal/break lane.",
+    "3": "No macro/name/numeric whitelist; actual ItemKind and shared source authority.",
+    "4": "Common generated-child admission prerequisite, no original-only syntax exclusion; runtimeclosure integration still held.",
+    "5": "Header/declaration discovery only; cold bodies or unselected executable arms not lowered. Patterns unchanged.",
+    "6": "One immutable completion index replaces perchild reconstruction. Root must actually cache it once; installed runtime untouched.",
+    "7": "Exact ancestor/frontier dependencies preserve unrelated blockers. Root release/wiring pending, no namespacecensus in reviewedcomponents.",
+    "8": "Shared parser/output handles and bounded derived indexes, no BodyIndexdeepclone; historical repeated ancestor listing removed."
+  },
+  "unexecuted": [
+    "All negative actualparent/record/scope/cfg/epoch/header/chain/cycle controls; siblingwaiters index-sharing counter; root cache matchingArc/currentness/retention tests.",
+    "Full unchanged shadowing wrapper all4, plain/user regression, standardmacro matrix/exactonce/suspension/cleanup/invalidation; root/validator soleowners.",
+    "Root generated-child admission ancestorjob inheritance/request ownership and release producer timing not yet reviewed."
+  ],
+  "next_unchanged_upstream_candidates_path_contract_only": [
+    {
+      "path": "rustc/rust/tests/ui/macros/macro-nested_stmt_macros.rs",
+      "contract": "run-pass. Nested statement macro grault invokes foo, defining Bar/Baz/Xyzzy in actual caller block; three explicit generic module calls resolve those generated local types. Already known source witness; runtimeTypearg consumer remains separate prerequisite."
+    },
+    {
+      "path": "rustc/rust/tests/ui/macros/macro-include-items.rs",
+      "contract": "run-pass. Item include filename uses nested concat, included foo calls ordinary bar, expression include in assertion yields1usize. Must preserve actual filesystem/sourcebase and both auxiliary item/expression files; not import now."
+    },
+    {
+      "path": "rustc/rust/tests/ui/macros/nested-macro-expansion.rs",
+      "contract": "run-pass. Static FOO initialized by nested concat calls and ordinary assertion checks helloworld. Exercises common eager producer argument closure/pure constant+normal value route, not impl closure."
+    },
+    {
+      "path": "rustc/rust/tests/ui/macros/macro-nested_definition_issue-31946.rs",
+      "contract": "run-pass. Statement block inside println defines macro foo, calls it to concat hello rust; actual local macro scope and standard formatting route, broader stdmacro prerequisite."
+    },
+    {
+      "path": "rustc/rust/tests/ui/macros/macro-multiple-items.rs",
+      "contract": "check-pass with reached main Foo.bar() runtime component. One itemmacro produces actual struct+impl/member; useful next method/member boundary but compilecheck directive not fullfixture runtimepass."
+    },
+    {
+      "path": "rustc/rust/tests/ui/macros/nested-use-as.rs",
+      "contract": "check-pass edition2018. Macro definitions/import aliases emitted over four nested declaration stages, reversed/forward alias chain. Useful importfrontier independence/closure source control; no substantive main runtime contract. No imports proposed now."
+    }
+  ]
+}

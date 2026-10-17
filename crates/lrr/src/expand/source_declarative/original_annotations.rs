@@ -58,7 +58,6 @@ impl OriginalAnnotationPlan {
             }
             bytes = bytes
                 .checked_add(128)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("original annotation attachment budget"))?;
             if ranges
                 .insert((row.range.start, row.range.end), scan_row)
@@ -78,7 +77,12 @@ impl OriginalAnnotationPlan {
             let mut rows = Vec::new();
             rows.try_reserve_exact(item.header.attributes.len())
                 .map_err(|_| fault("original annotation item allocation"))?;
-            for attribute in &item.header.attributes {
+            for attribute in item
+                .header
+                .attributes
+                .iter()
+                .filter(|attribute| crate::syntax::outline::attribute_may_name_macro(attribute))
+            {
                 let selected = attribute
                     .source_meta
                     .ok_or_else(|| fault("original annotation lacks its Meta range"))?;
@@ -99,13 +103,11 @@ impl OriginalAnnotationPlan {
                                 .checked_mul(std::mem::size_of::<ImportSegment>())?,
                         )
                     })
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| fault("original annotation path budget"))?;
                 for segment in &segments {
                     if let ImportSegment::Name(name) = segment {
                         bytes = bytes
                             .checked_add(name.capacity())
-                            .filter(|n| *n <= 64 * 1024 * 1024)
                             .ok_or_else(|| fault("original annotation name budget"))?;
                     }
                 }
@@ -124,7 +126,6 @@ impl OriginalAnnotationPlan {
                 .and_then(|n| {
                     n.checked_add(rows.capacity().checked_mul(std::mem::size_of::<usize>())?)
                 })
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("original annotation item budget"))?;
             if items
                 .insert(

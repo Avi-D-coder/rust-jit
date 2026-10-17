@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "component": "common-value39-retained-prelude-dependency-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "fixes": "numeric capsule0312516a compile650c80/1 missing source module; zero bodies ran; old failed source preserved",
+  "payload": "/private/tmp/lrr-value39-retained-prelude-dependency-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/facade/retained_value_binding_prelude.rs",
+      "sha256": "1a035631b16377ec7080adc5de1f0b4b5bb10fb5293f499b6297883e19e1d75f",
+      "bytes": 4478
+    }
+  ],
+  "immutable_origin": {
+    "component": "artifacts/macos-first/common-pattern-occurrences-prelude-component-v1/COMPONENT.json",
+    "component_sha256": "0bce755a60626fb11134cba37d374c0d1b3ceaa9d073ea50242f3c91f30a03f2",
+    "source_fingerprint": "38b93167d5a16584a7ad9bc7d71b9e7f624e582b884ad44628af3c4a0bc62610"
+  },
+  "dependency_contract": [
+    "Value11 facade/value_binding_prelude.rs5686c883 already supplies private VALUES/ValueBindingPrelude/fault/source+scope getters and original privately minted policy",
+    "Existing PreparedSourceView::require_original_hygiene/selection and ProfileIdentity::validate_source, ScopeKey/SourceSelection stable encoding/metadata APIs; existing in capsule",
+    "No transitive modules, filesystem capture, runtime source grant, parser dependency or public constructor"
+  ],
+  "source_review": {
+    "1": "No expression/assertion evaluator: immutable receipt lookup only",
+    "2": "No macro executable shortcut or synthetic body",
+    "3": "No numeric/member rule; uses existing privately minted complete selected Value facet",
+    "4": "Checks exact genuine owning source/scope/profile; generated uses need actual lexical source join from parent, no original-source syntax rejection added",
+    "5": "No pattern execution/commit authority; positive finite-facet names explicitly require common Value resolution; absence alone is not local binding proof",
+    "6": "retain uses existing source receipt and lookup uses finite retained metadata; no parse/catalogue replay during retry",
+    "7": "No namespace census or new dependency framework; enclosing Value39 owns actual current scope/seal/source/compiler input joins; helper alone cannot assert currentness",
+    "8": "Only owned scalar receipt/source-selection/scope strings are cloned and bounded before clone; no parser/body/index/graph Arc roots or new registry; exact bytes charged by metadata_bytes"
+  },
+  "closure_audit": {
+    "path": "/private/tmp/lrr-value39-literal-module-closure-v1.json",
+    "sha256": "a312759d10b1547f2ec1da501e0f504abe5c4a0f998ce35b774abd2ffe317611",
+    "result": "18 changed source roots ->31 literal module files /17 literal includes; this is the sole missing path module, not a Rust compile or complete semantic dependency proof"
+  },
+  "holds": [
+    "Helpers own no currentness authority alone; actual Value39 enclosing query must validate selected current source/scope/compiler/seal",
+    "Positive finite prelude names require actual common Value resolution",
+    "No fixture/runtime/task/architecture pass; uncompiled leaf now scheduled only after failed snapshot sealing"
+  ]
+}

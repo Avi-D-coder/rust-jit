@@ -110,7 +110,7 @@ fn normalize_absolute(path: &Path) -> Result<PathBuf, Diagnostic> {
     let text = path
         .to_str()
         .ok_or_else(|| fault("include path must be UTF-8"))?;
-    if text.len() > 64 * 1024 || text.as_bytes().contains(&0) || !path.is_absolute() {
+    if text.as_bytes().contains(&0) || !path.is_absolute() {
         return Err(fault("invalid absolute include path"));
     }
     let mut result = PathBuf::from("/");
@@ -120,9 +120,6 @@ fn normalize_absolute(path: &Path) -> Result<PathBuf, Diagnostic> {
             Component::RootDir | Component::CurDir => {}
             Component::Normal(value) => {
                 depth += 1;
-                if depth > 256 {
-                    return Err(fault("include path depth limit"));
-                }
                 result.push(value);
             }
             Component::ParentDir => {
@@ -175,13 +172,9 @@ impl IncludeAuthorities {
         let mut paths = std::collections::BTreeSet::new();
         let mut bytes = 0usize;
         for mut root in roots {
-            if retained.len() >= 4096 {
-                return Err(fault("include authority count limit"));
-            }
             root.path = normalize_absolute(&root.path)?;
             bytes = bytes
                 .checked_add(root.path.as_os_str().len() + 256)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("include authority metadata limit"))?;
             if !paths.insert(root.path.clone()) || retained.insert(root.identity, root).is_some() {
                 return Err(fault("duplicate include authority identity or path"));
@@ -280,13 +273,10 @@ impl IncludeAuthorities {
         raw_file: Option<&Path>,
     ) -> Result<GeneratedSourceRequest, Diagnostic> {
         let route = || -> Result<GeneratedSourceRequest, Diagnostic> {
-            if from.path.as_str().len() > 64 * 1024 {
-                return Err(fault("include caller path limit"));
-            }
             if from.unit != self.unit {
                 return Err(fault("include caller belongs to another unit"));
             }
-            if value.is_empty() || value.len() > 64 * 1024 || value.as_bytes().contains(&0) {
+            if value.is_empty() || value.as_bytes().contains(&0) {
                 return Err(fault("invalid include path string"));
             }
             let parent = self
@@ -298,7 +288,7 @@ impl IncludeAuthorities {
                 .unwrap_or_else(|| parent.path.join(from.path.as_str()));
             if file
                 .to_str()
-                .is_none_or(|s| s.len() > 64 * 1024 || s.contains('\0'))
+                .is_none_or(|s| s.contains('\0'))
                 || !file.is_absolute()
             {
                 return Err(fault("invalid included raw file base"));

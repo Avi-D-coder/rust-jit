@@ -43,8 +43,6 @@ pub(crate) struct PreparedImmutableStr {
     backing: PreparedBacking,
     ty: TypeId,
     range: Range<usize>,
-    new: bool,
-    owned: usize,
 }
 fn utf8_fault() -> Diagnostic {
     Diagnostic::new(
@@ -93,48 +91,25 @@ impl ImmutableStrStorage {
         }
         Ok(Err(low))
     }
-    fn reservation_bytes(&self, new: bool) -> Result<usize, Diagnostic> {
-        if !new {
-            return Ok(0);
-        }
-        self.backings
-            .atomic_reservation_bytes(1)?
-            .checked_add(if self.rows.len() == self.rows.capacity() {
-                self.rows
-                    .len()
-                    .checked_add(1)
-                    .and_then(|n| n.checked_mul(std::mem::size_of::<PoolRow>()))
-                    .ok_or_else(resource)?
-            } else {
-                0
-            })
-            .ok_or_else(resource)
-    }
     fn reserve(&mut self, new: bool, budget: &mut RunBudget) -> Result<(), Diagnostic> {
         if !new {
             return Ok(());
         }
         self.backings.reserve_atomic(1, budget)?;
         if self.rows.len() == self.rows.capacity() {
-            // Build temporary capacity first so allocator over-reservation or a
-            // failed budget check cannot leave an uncharged live index buffer.
+            // Build replacement capacity first so a failed allocation leaves the
+            // live index buffer unchanged. Geometric growth stays amortized.
             let count = self.rows.len().checked_add(1).ok_or_else(resource)?;
             let mut rows = Vec::new();
-            rows.try_reserve_exact(count).map_err(|_| resource())?;
-            let actual = rows
-                .capacity()
-                .checked_mul(std::mem::size_of::<PoolRow>())
-                .ok_or_else(resource)?;
-            // During replacement old and new index buffers coexist. Admit that
-            // bounded transient peak before retaining the replacement capacity.
-            budget.check(0, actual)?;
+            rows.try_reserve_exact(count.max(self.rows.capacity().saturating_mul(2)))
+                .map_err(|_| resource())?;
             let delta = rows
                 .capacity()
                 .checked_sub(self.rows.capacity())
                 .and_then(|n| n.checked_mul(std::mem::size_of::<PoolRow>()))
                 .ok_or_else(resource)?;
             rows.extend_from_slice(&self.rows);
-            budget.charge(0, delta)?;
+            budget.charge(0, delta);
             self.rows = rows;
         }
         Ok(())
@@ -184,35 +159,10 @@ impl GuestStore {
         let prepared = self.reserve_immutable_str_range(utf8, range, false)?;
         self.commit_immutable_str(prepared)
     }
-    /// Immutable quota/source-data admission before fuel or arena mutation.
-    pub(crate) fn preflight_immutable_str_literal(
-        &self,
-        utf8: &[u8],
-        needs_cell: bool,
-    ) -> Result<(), Diagnostic> {
-        if utf8.len() > self.budget.max_bytes() {
-            return Err(resource());
-        }
+    /// Immutable source-data admission before arena mutation.
+    pub(crate) fn preflight_immutable_str_literal(&self, utf8: &[u8]) -> Result<(), Diagnostic> {
         let text = std::str::from_utf8(utf8).map_err(|_| utf8_fault())?;
-        let new = self.strings.find(Digest::of_bytes(utf8), text)?.is_err();
-        let handles = 2u32
-            .checked_add(u32::from(new))
-            .and_then(|n| n.checked_add(u32::from(needs_cell)))
-            .ok_or_else(resource)?;
-        let cells = self
-            .cells
-            .atomic_reservation_bytes(usize::from(needs_cell))?;
-        let refs = self.references.atomic_reservation_bytes(1)?;
-        let tickets = self.tickets.atomic_reservation_bytes(1)?;
-        let bytes = self
-            .strings
-            .reservation_bytes(new)?
-            .checked_add(cells)
-            .and_then(|n| n.checked_add(refs))
-            .and_then(|n| n.checked_add(tickets))
-            .and_then(|n| n.checked_add(if new { utf8.len() } else { 0 }))
-            .ok_or_else(resource)?;
-        self.budget.check(handles, bytes)
+        self.strings.find(Digest::of_bytes(utf8), text).map(|_| ())
     }
     pub(crate) fn reserve_immutable_str_literal(
         &mut self,
@@ -227,36 +177,11 @@ impl GuestStore {
         range: Range<usize>,
         needs_cell: bool,
     ) -> Result<PreparedImmutableStr, Diagnostic> {
-        // Bound incoming work before UTF-8 validation or hashing. Dedup reuse
-        // does not charge bytes twice, but cannot exceed the run's byte limit.
-        if utf8.len() > self.budget.max_bytes() {
-            return Err(resource());
-        }
         let text = std::str::from_utf8(utf8).map_err(|_| utf8_fault())?;
         text.get(range.clone()).ok_or_else(range_fault)?;
         let digest = Digest::of_bytes(utf8);
         let found = self.strings.find(digest, text)?;
         let new = found.is_err();
-        let handles = 2u32
-            .checked_add(u32::from(new))
-            .and_then(|n| n.checked_add(u32::from(needs_cell)))
-            .ok_or_else(resource)?;
-        let tickets = self.tickets.atomic_reservation_bytes(1)?;
-        let cells = self
-            .cells
-            .atomic_reservation_bytes(usize::from(needs_cell))?;
-        let capacity = self
-            .strings
-            .reservation_bytes(new)?
-            .checked_add(self.references.atomic_reservation_bytes(1)?)
-            .and_then(|n| n.checked_add(tickets))
-            .and_then(|n| n.checked_add(cells))
-            .ok_or_else(resource)?;
-        let text_bytes = if new { text.len() } else { 0 };
-        self.budget.check(
-            handles,
-            capacity.checked_add(text_bytes).ok_or_else(resource)?,
-        )?;
         let prepared = match found {
             Ok(id) => PreparedBacking::Existing(id),
             Err(position) => {
@@ -265,23 +190,12 @@ impl GuestStore {
                     .try_reserve_exact(text.len())
                     .map_err(|_| resource())?;
                 owned.push_str(text);
-                // Account actual allocator capacity, not merely requested bytes.
-                self.budget.check(
-                    handles,
-                    capacity
-                        .checked_add(owned.capacity())
-                        .ok_or_else(resource)?,
-                )?;
                 PreparedBacking::New {
                     digest,
                     position,
                     backing: ImmutableStrBacking { text: owned },
                 }
             }
-        };
-        let owned = match &prepared {
-            PreparedBacking::New { backing, .. } => backing.text.capacity(),
-            _ => 0,
         };
         // This descriptor is the existing unsized Str target under a shared Ref;
         // it never permits a standalone value with descriptor16.
@@ -295,7 +209,6 @@ impl GuestStore {
         self.strings.reserve(new, &mut self.budget)?;
         self.references.reserve_atomic(1, &mut self.budget)?;
         self.tickets.reserve_atomic(1, &mut self.budget)?;
-        self.budget.check(handles, owned)?;
 
         Ok(PreparedImmutableStr {
             session: self.pattern_binding_session(),
@@ -303,8 +216,6 @@ impl GuestStore {
             backing: prepared,
             ty,
             range,
-            new,
-            owned,
         })
     }
     pub(crate) fn commit_immutable_str(
@@ -316,8 +227,6 @@ impl GuestStore {
         {
             return Err(ownership());
         }
-        self.budget
-            .check(2 + u32::from(prepared.new), prepared.owned)?;
         let backing = self.strings.commit(prepared.backing, &mut self.budget)?;
         let record = ReferenceRecord::from_immutable_buffer(BufferLease {
             backing,
@@ -349,7 +258,52 @@ impl GuestStore {
         self.validate_reference_record(reference)?;
         match &reference.lease {
             ReferenceLease::Buffer(buffer) => self.strings.resolve(*buffer),
-            ReferenceLease::Location(_) => Err(invalid()),
+            ReferenceLease::Location(_) | ReferenceLease::Elements(_) => Err(invalid()),
+        }
+    }
+}
+/// What a shared reference designates, for closed facade formatting.
+pub(crate) enum ReferenceView<'a> {
+    Str(&'a str),
+    Value(ValueRepr),
+}
+impl GuestStore {
+    /// Read-only view through an actual shared reference value: its str
+    /// bytes, or the Copy value at its location. Aggregates are refused by
+    /// the ordinary scalar read.
+    /// The referent cell of a reference to a location (any value kind).
+    pub(crate) fn referent_location_cell(
+        &self,
+        value: ValueRepr,
+    ) -> Result<Option<super::CellId>, Diagnostic> {
+        if value.kind != 9 {
+            return Ok(None);
+        }
+        let reference = self.references.get(RefId::from_bits(value.payload))?;
+        self.validate_reference_record(reference)?;
+        Ok(match &reference.lease {
+            ReferenceLease::Location(_) => Some(reference.location()?.final_cell.cell),
+            _ => None,
+        })
+    }
+    pub(crate) fn reference_view(&self, value: ValueRepr) -> Result<ReferenceView<'_>, Diagnostic> {
+        if value.kind != 9 {
+            return Err(invalid());
+        }
+        let reference = self.references.get(RefId::from_bits(value.payload))?;
+        self.validate_reference_record(reference)?;
+        if reference.access != Access::Shared {
+            return Err(ownership());
+        }
+        match &reference.lease {
+            ReferenceLease::Buffer(buffer) => Ok(ReferenceView::Str(self.strings.resolve(*buffer)?)),
+            ReferenceLease::Location(_) => Ok(ReferenceView::Value(
+                self.read_scalar(reference.location()?.final_cell.cell)?,
+            )),
+            ReferenceLease::Elements(_) => Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "slice formatting requires its element-window formatting route".into(),
+            )),
         }
     }
 }

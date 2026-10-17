@@ -42,11 +42,30 @@ pub enum MacroIdentity {
     Builtin {
         definition: Digest,
     },
+    /// A library `#[rustc_builtin_macro]` derive (`core::clone::Clone`, ...)
+    /// expanded in process by the pinned adapter's builtin derive expander.
+    BuiltinDerive {
+        definition: Digest,
+    },
     Procedural {
         artifact: Digest,
         export: String,
         kind: ProceduralKind,
     },
+}
+impl MacroIdentity {
+    /// An item derive (procedural or builtin): its output is appended after
+    /// the annotated item rather than attached at a call site.
+    pub fn is_derive(&self) -> bool {
+        matches!(
+            self,
+            Self::BuiltinDerive { .. }
+                | Self::Procedural {
+                    kind: ProceduralKind::Derive,
+                    ..
+                }
+        )
+    }
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum ProceduralKind {
@@ -89,7 +108,7 @@ impl ExpansionKey {
             return Err(error("invalid expansion edition/epoch"));
         }
         if let MacroIdentity::Procedural { export, .. } = &self.macro_identity
-            && (export.is_empty() || export.len() > 64 * 1024 || export.contains('\0'))
+            && (export.is_empty() || export.contains('\0'))
         {
             return Err(error("invalid macro export identity"));
         }
@@ -106,6 +125,10 @@ impl StableEncode for ExpansionKey {
             }
             MacroIdentity::Builtin { definition } => {
                 e.u8(1);
+                e.digest(*definition)
+            }
+            MacroIdentity::BuiltinDerive { definition } => {
+                e.u8(3);
                 e.digest(*definition)
             }
             MacroIdentity::Procedural {
@@ -139,7 +162,7 @@ pub struct GeneratedItemKey {
 }
 impl GeneratedItemKey {
     pub fn validate(&self) -> Result<(), Diagnostic> {
-        if self.structural_path.is_empty() || self.structural_path.len() > 256 {
+        if self.structural_path.is_empty() {
             Err(error("generated item requires a bounded structural path"))
         } else {
             Ok(())

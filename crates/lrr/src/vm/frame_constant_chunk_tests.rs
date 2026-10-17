@@ -110,7 +110,7 @@ fn actual_array_source_proof_is_reborrowed_each_chunk_with_one_entry_and_stable_
             ready.admission(),
             &array(PrimitiveType::U8, 1024),
         );
-        let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let (mut frame, body, node) = frame(&db, &view, &mut store);
         let views = [&view];
         let path = path(&db, &view, &frame, &body, node, &views);
@@ -145,7 +145,8 @@ fn actual_array_source_proof_is_reborrowed_each_chunk_with_one_entry_and_stable_
             frame
                 .begin_constant_publication_chunks(prepared, &mut store, |frame| {
                     charges += 1;
-                    frame.fuel.charge()
+                    frame.fuel.charge();
+                    Ok(())
                 })
                 .unwrap()
         };
@@ -237,7 +238,7 @@ fn source_loss_after_array_dispatch_keeps_cleanup_pending_until_private_owners_d
         &array(PrimitiveType::U8, 1024),
     );
     let image = success(&parent).payload().decode_value().unwrap();
-    let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (mut frame, body, node) = frame(&db, &view, &mut store);
     let views = [&view];
     let path = path(&db, &view, &frame, &body, node, &views);
@@ -268,7 +269,10 @@ fn source_loss_after_array_dispatch_keeps_cleanup_pending_until_private_owners_d
             .prepare_constant_publication(&proof, &image, c.wire(), &store)
             .unwrap();
         frame
-            .begin_constant_publication_chunks(p, &mut store, |frame| frame.fuel.charge())
+            .begin_constant_publication_chunks(p, &mut store, |frame| {
+                frame.fuel.charge();
+                Ok(())
+            })
             .unwrap()
     };
     {
@@ -365,7 +369,7 @@ fn constant_array_entry_callback_must_really_charge_once_before_any_private_owne
         &array(PrimitiveType::U8, 1024),
     );
     let image = success(&parent).payload().decode_value().unwrap();
-    let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (mut frame, body, node) = frame(&db, &view, &mut store);
     let views = [&view];
     let path = path(&db, &view, &frame, &body, node, &views);

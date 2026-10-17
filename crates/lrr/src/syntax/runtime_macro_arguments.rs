@@ -180,7 +180,7 @@ impl ParsedFile {
             .ok_or_else(|| fault("runtime macro has no delimited arguments"))?;
         let token_range = range(tokens.syntax().text_range());
         let text = tokens.syntax().text().to_string();
-        if text.len() > 131_072 || text.len() < 2 {
+        if text.len() < 2 {
             return Err(fault("runtime macro argument size limit"));
         }
         let delimiter = (
@@ -248,9 +248,6 @@ impl ParsedFile {
                     || ast::MacroCall::can_cast(node.kind())
                     || ast::Attr::can_cast(node.kind())
             });
-            if ranges.len() >= 10_000 {
-                return Err(fault("runtime macro argument count limit"));
-            }
             if kind == RuntimeMacroKind::Assert
                 && ranges.is_empty()
                 && let ast::Expr::Literal(literal) = &argument
@@ -279,9 +276,6 @@ impl ParsedFile {
                 && segment.coloncolon_token().is_none()
                 && let Some(name) = segment.name_ref()
             {
-                if name.text().len() > 4096 {
-                    return Err(fault("assertion predicate call name exceeds budget"));
-                }
                 crate::expand::scopes::MacroName::parse(name.text(), self.edition)?;
                 zero_arg_predicate_call = Some(name.text().to_string());
             }
@@ -299,9 +293,6 @@ impl ParsedFile {
                 && segment.coloncolon_token().is_none()
                 && let Some(name) = segment.name_ref()
             {
-                if name.text().len() > 4096 {
-                    return Err(fault("assertion binding name exceeds budget"));
-                }
                 crate::expand::scopes::MacroName::parse(name.text(), self.edition)?;
                 binding_predicate = Some(name.text().to_string());
             }

@@ -19,21 +19,7 @@ fn at_value_place() -> (
     SlotId,
     SlotId,
 ) {
-    at_value_place_with_fuel(None)
-}
-fn at_value_place_with_fuel(
-    fuel: Option<u64>,
-) -> (
-    Database,
-    RunMachine,
-    crate::db::memo::Outcome,
-    SlotId,
-    SlotId,
-) {
     let (mut db, mut run) = super::borrows::tests::start_stock(STOCK);
-    if let Some(fuel) = fuel {
-        run.frame.set_fuel_limit(fuel).unwrap();
-    }
     let selected: Vec<_> = run
         .frame
         .body
@@ -177,37 +163,6 @@ fn rustc_original_temporary_record_field_keeps_the_constructed_owner_and_evaluat
     db.finish_run().unwrap();
 }
 #[test]
-fn rustc_temporary_record_place_fuel_refusal_keeps_its_original_owner() {
-    // Derive the exact original prefix cost on an independent run, then
-    // replay from an unstarted frame with that quota. Never reset consumed fuel.
-    let limit = {
-        let (mut db, run, ..) = at_value_place();
-        let used = run.frame.fuel_snapshot().used;
-        assert!(used > 0);
-        db.finish_run().unwrap();
-        used
-    };
-    let (mut db, mut run, outcome, source, place) = at_value_place_with_fuel(Some(limit));
-    assert_eq!(run.frame.fuel_snapshot().used, limit);
-    assert_eq!(run.frame.fuel_snapshot().remaining, 0);
-    let cell = run.frame.cell(source).unwrap();
-    let owner = run.store.state(cell).unwrap();
-    let before = snapshot(&run);
-    let QueryValue::Thunk(recipe) = outcome.value.as_ref() else {
-        panic!("temporary formation absent")
-    };
-    let error = step::step(&mut run.frame, &mut run.store, recipe).unwrap_err();
-    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(snapshot(&run), before);
-    assert_eq!(
-        run.frame.fuel_snapshot().stop,
-        Some(crate::vm::fuel::FuelStop::Exhausted)
-    );
-    assert_eq!(run.store.state(cell).unwrap(), owner);
-    assert!(run.frame.nominal_place_source(place).is_err());
-    db.finish_run().unwrap();
-}
-#[test]
 fn rustc_temporary_record_rigid_source_refuses_runtime_shape_erasure_before_fuel() {
     let (mut db, mut run, outcome, source, place) = at_value_place();
     let cell = run.frame.cell(source).unwrap();
@@ -322,23 +277,8 @@ fn computed_reference_at_formation() -> (
     SlotId,
     NodeId,
 ) {
-    computed_reference_at_formation_with_fuel(None)
-}
-fn computed_reference_at_formation_with_fuel(
-    fuel: Option<u64>,
-) -> (
-    Database,
-    RunMachine,
-    crate::db::memo::Outcome,
-    SlotId,
-    SlotId,
-    NodeId,
-) {
     let facts = place_fixture_facts::computed_deref_facts(COMPUTED);
     let (mut db, mut run) = super::borrows::tests::start_stock_body(COMPUTED, "f");
-    if let Some(fuel) = fuel {
-        run.frame.set_fuel_limit(fuel).unwrap();
-    }
     let (statement, scope) = {
         let node = run
             .frame
@@ -523,48 +463,6 @@ fn rustc_original_computed_mutable_reference_assigns_without_copying_its_owner()
     assert_eq!(run.frame.counters.started_by_opcode[8], 0);
     // Original x.1=a, Option<String> construction, function cleanup and native
     // const-qualification oracle are deliberately outside this prefix control.
-    db.finish_run().unwrap();
-}
-#[test]
-fn rustc_computed_reference_place_fuel_refusal_retains_the_original_reference_cell() {
-    // Derive the exact original prefix cost on an independent run, then
-    // replay from an unstarted frame with that quota. Never reset consumed fuel.
-    let limit = {
-        let (mut db, run, ..) = computed_reference_at_formation();
-        let used = run.frame.fuel_snapshot().used;
-        assert!(used > 0);
-        db.finish_run().unwrap();
-        used
-    };
-    let (mut db, mut run, outcome, source, place, binding) =
-        computed_reference_at_formation_with_fuel(Some(limit));
-    assert_eq!(run.frame.fuel_snapshot().used, limit);
-    assert_eq!(run.frame.fuel_snapshot().remaining, 0);
-    let cell = run.frame.cell(source).unwrap();
-    let owner = run.store.state(cell).unwrap();
-    let reference = run.store.reference_from_cell(cell).unwrap();
-    let target = run.frame.binding_cell_for_test(binding).unwrap();
-    let original = run.store.state(target).unwrap();
-    let before = snapshot(&run);
-    let QueryValue::Thunk(recipe) = outcome.value.as_ref() else {
-        panic!("formation absent")
-    };
-    assert_eq!(
-        step::step(&mut run.frame, &mut run.store, recipe)
-            .unwrap_err()
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(snapshot(&run), before);
-    assert_eq!(
-        run.frame.fuel_snapshot().stop,
-        Some(crate::vm::fuel::FuelStop::Exhausted)
-    );
-    assert_eq!(run.store.state(cell).unwrap(), owner);
-    assert_eq!(run.store.state(target).unwrap(), original);
-    assert_eq!(run.store.reference_from_cell(cell).unwrap(), reference);
-    assert!(run.frame.source_view(place).unwrap().is_none());
-    assert_eq!(run.frame.counters.started_by_opcode[38], 0);
     db.finish_run().unwrap();
 }
 #[test]

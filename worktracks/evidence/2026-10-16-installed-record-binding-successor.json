@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "kind": "common-installed-record-binding-successor",
+  "status": "source-only-uncompiled-unexecuted",
+  "predecessor": "ea9ac48e69b0641a2edbc38a6ac9b8340359f95df6e24c196d69fc1922800442",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "bytes": 11041,
+      "sha256": "4e39a57ec198a85f217510a675035e4823731687b439969962158876e9bc6ec8"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "bytes": 9342,
+      "sha256": "b81f6eaa653e036a91e883158028272303705a4ecc2e764464893a1324bb0742"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "bytes": 313704,
+      "sha256": "6e791921964933def4568f3a3a1b04f749ded8a030e81e83fb1037462fc39975"
+    }
+  ],
+  "source_fingerprint": "54da243ec7acba923255b305f0ca83c9080a0eb051f9a189222ab1a0ad4b6df9",
+  "changes": [
+    "Source-fact getter compares prepared input stamps without repeating existing executable recipe namespace census",
+    "Guard transport tests preserve full positive input universe during unrelated/absence publications",
+    "Prepared active construction shares actual query mapping through same storage_field method; no immutable map clone/plan hash at prepared construction"
+  ],
+  "reviews": [
+    "worktracks/evidence/2026-10-16-installed-constructor-source-review.json",
+    "worktracks/evidence/2026-10-16-prepared-construction-mapping-source-review.json"
+  ],
+  "additional_control_component": "cf053c4b16bdbd4e5ad1036e74271b2246b0835eebdf6d6ff5841a8a5d23341a",
+  "holds": [
+    "Actual VM/whole-main runtime, suspension/fault, retired-query execution controls unexecuted",
+    "Legacy unsealed and structural constructors retain historical planning/map copy",
+    "Inherited namespace census/coarse dependency invalidation and repeated wholefile lookup remain debt",
+    "Aggregate arbitrary API pending-constructor metadata accounting unverified; no production interleaving witness"
+  ],
+  "runtime_acceptance": false
+}

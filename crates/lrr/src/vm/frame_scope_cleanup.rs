@@ -33,7 +33,7 @@ enum Owner {
     Parameter(usize),
     Replacement,
 }
-// Only these three fixed, scalar-field opcodes can own cleanup. Retain their
+// Only these four fixed, scalar-field opcodes can own cleanup. Retain their
 // exact fields without cloning unrelated large opcode payloads or allocating.
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum CleanupOperation {
@@ -45,6 +45,11 @@ enum CleanupOperation {
     },
     AssignLocal {
         binding: NodeId,
+        source: SlotId,
+        destination: SlotId,
+    },
+    AssignPlace {
+        place: SlotId,
         source: SlotId,
         destination: SlotId,
     },
@@ -63,6 +68,15 @@ impl CleanupOperation {
                 source: *source,
                 destination: *destination,
             }),
+            Op::AssignPlace {
+                place,
+                source,
+                destination,
+            } => Some(Self::AssignPlace {
+                place: *place,
+                source: *source,
+                destination: *destination,
+            }),
             _ => None,
         }
     }
@@ -74,14 +88,38 @@ enum Boundary {
     },
     Return,
     Panic,
+    /// A `break`/`continue` exit leaving every scope through its label's.
+    Control(ControlExit),
+}
+/// A `break` value moved before cleanup and written after it; none for
+/// `continue`.
+struct ControlExit {
+    destination: Option<SlotId>,
+    ticket: Option<TicketId>,
+    source: Option<crate::traits::term::TyTerm>,
 }
 struct Replacement {
-    binding: NodeId,
+    /// The assigned local, or none for an assigned place (field, element or
+    /// dereference), whose old value the same machine drops.
+    binding: Option<NodeId>,
     old: CellId,
     target: CellId,
     unit: TicketId,
     destination: SlotId,
     prepared: Option<crate::vm::cleanup::PreparedCleanup>,
+}
+/// The pending owner reached a value whose nominal type has a user `Drop`
+/// impl. The dispatcher selects `<T as Drop>::drop` and enters it as an
+/// ordinary call; its return (or unwind) resumes this activation, whose drop
+/// glue then continues with the value's fields.
+struct Witness {
+    /// The Dropping location and reserved ticket the cleanup machine reported.
+    location: CellId,
+    ticket: TicketId,
+    ty: TypeId,
+    /// The lent value's location and the `&mut` receiver argument location.
+    lent: Option<(CellId, CellId)>,
+    entered: bool,
 }
 pub(super) struct Activation {
     pc: crate::core::digest::Digest,
@@ -91,6 +129,7 @@ pub(super) struct Activation {
     stage: Stage,
     pending: Option<(Owner, CleanupMachine)>,
     replacement: Option<Replacement>,
+    witness: Option<Witness>,
 }
 impl Activation {
     pub(super) fn operation_index(&self) -> Option<usize> {
@@ -99,6 +138,8 @@ impl Activation {
                 operation_index, ..
             } => Some(operation_index as usize),
             Boundary::Return | Boundary::Panic => None,
+            // A control exit follows every operation of its recipe.
+            Boundary::Control(_) => Some(usize::MAX),
         }
     }
 }
@@ -151,22 +192,11 @@ impl Frame {
         })
     }
     fn after_cleanup_storage(&self, scope: ScopeId) -> Stage {
-        if scope == ScopeId(0) {
+        if scope == self.root_scope() {
             Stage::Parameters(self.parameters.len())
         } else {
             Stage::Finish
         }
-    }
-    fn cleanup_metadata_limit(&self) -> Result<usize, Diagnostic> {
-        let base = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
-            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
-            .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
-            .ok_or_else(crate::runtime::arena::resource)?;
-        (32_usize * 1024 * 1024)
-            .checked_sub(base)
-            .ok_or_else(crate::runtime::arena::resource)
     }
     /// Install only after the reached opcode entry charge. All owning storage
     /// is visited through bounded transitions, with no eager type/body query.
@@ -215,7 +245,7 @@ impl Frame {
                         .checked_add(binding.0)
                         .ok_or_else(|| invalid("replacement binding slot overflow"))?,
                 };
-                if store.owner(old)? != owner {
+                if store.owner(old)? != owner && !self.captured.contains(binding) {
                     return Err(invalid(
                         "replacement local location belongs to another frame slot",
                     ));
@@ -226,11 +256,10 @@ impl Frame {
                     .get(binding.0 as usize)
                     .ok_or_else(|| invalid("replacement binding node absent"))?
                     .scope;
-                if !self.active_scopes.contains(&scope) {
+                if !self.active_scopes.contains(&scope) && !self.captured.contains(binding) {
                     return Err(invalid("replacement binding scope inactive"));
                 }
-                let prepared =
-                    CleanupMachine::prepare_root(old, store, self.cleanup_metadata_limit()?)?;
+                let prepared = CleanupMachine::prepare_root(old, store)?;
                 store.reserve_bounded_local_replacement(self.slot(*destination)?.cell.is_none())?;
                 let cleanup_root = store.new_cell(store.declared(old)?, true, owner)?;
                 store.validate_replacement_cleanup_root(
@@ -246,13 +275,69 @@ impl Frame {
                 store.initialize_replacement_cleanup_root(cleanup_root, old_ticket)?;
                 let prepared = prepared.relocate_replacement_root(cleanup_root, store)?;
                 replacement = Some(Replacement {
-                    binding: *binding,
+                    binding: Some(*binding),
                     old: cleanup_root,
                     target: old,
                     unit,
                     destination: *destination,
                     prepared: Some(prepared),
                 });
+                (scope, scope, Stage::Replacement)
+            }
+            Op::AssignPlace {
+                place,
+                source,
+                destination,
+            } if let Some((ty, target)) = self.owned_place_replacement(*place, *source, store) => {
+                if self.copy_activation.is_some() || self.cleanup_activation.is_some() {
+                    return Err(invalid("another operation activation is already active"));
+                }
+                if self.slot(*destination)?.cell == Some(target) {
+                    return Err(invalid("assignment result aliases its reached target"));
+                }
+                let prepared = CleanupMachine::prepare_root(target, store)?;
+                store.reserve_bounded_local_replacement(self.slot(*destination)?.cell.is_none())?;
+                let owner = CellOwner::FrameSlot {
+                    frame: self.anchor,
+                    slot: self
+                        .owned_location_base()?
+                        .checked_add(2)
+                        .ok_or_else(|| invalid("replacement location overflow"))?,
+                };
+                let cleanup_root = store.new_cell(StorageContract::Exact(ty), true, owner)?;
+                store.validate_replacement_cleanup_root(
+                    cleanup_root,
+                    store.admit_cleanup_root(target)?,
+                )?;
+                self.prepare_write(*destination, store)?;
+                let unit = store.ticket(ValueRepr::unit())?;
+                let incoming = store.move_from(self.cell(*source)?)?;
+                // Commit the new value at the place before the old value's
+                // drop glue (and any `Drop` witness) runs from its own root.
+                let old_ticket = store
+                    .replace_place(self.executed_place(*place)?, incoming)
+                    .map_err(|failure| match failure {
+                        crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                        crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                            invalid("admitted place replacement panicked")
+                        }
+                    })?;
+                store.initialize_replacement_cleanup_root(cleanup_root, old_ticket)?;
+                let prepared = prepared.relocate_replacement_root(cleanup_root, store)?;
+                self.clear_place(*place)?;
+                replacement = Some(Replacement {
+                    binding: None,
+                    old: cleanup_root,
+                    target,
+                    unit,
+                    destination: *destination,
+                    prepared: Some(prepared),
+                });
+                let scope = self
+                    .active_scopes
+                    .last()
+                    .copied()
+                    .ok_or_else(|| invalid("replacement scope absent"))?;
                 (scope, scope, Stage::Replacement)
             }
             _ => return Ok(false),
@@ -271,6 +356,7 @@ impl Frame {
             stage,
             pending: None,
             replacement,
+            witness: None,
         });
         Ok(true)
     }
@@ -295,11 +381,12 @@ impl Frame {
                 self.cleanup_activation = Some(Activation {
                     pc: self.pc.fingerprint(),
                     boundary: Boundary::Return,
-                    target: ScopeId(0),
+                    target: self.root_scope(),
                     scope,
                     stage: self.first_cleanup_stage(scope)?,
                     pending: None,
                     replacement: None,
+                    witness: None,
                 });
             }
             self.advance_scope_cleanup(store)
@@ -330,11 +417,12 @@ impl Frame {
                 self.cleanup_activation = Some(Activation {
                     pc: self.pc.fingerprint(),
                     boundary: Boundary::Panic,
-                    target: ScopeId(0),
+                    target: self.root_scope(),
                     scope,
                     stage: self.first_cleanup_stage(scope)?,
                     pending: None,
                     replacement: None,
+                    witness: None,
                 });
             }
             let complete = self.advance_scope_cleanup(store)?;
@@ -445,14 +533,12 @@ impl Frame {
             .checked_sub(mapping)
             .ok_or_else(|| invalid("constructor mapping charge mismatch"))?;
         let slot = u32::try_from(index).map_err(|_| invalid("guard slot ordinal overflow"))?;
-        let limit = self.cleanup_metadata_limit()?;
         match CleanupMachine::begin_constructor_field(
             guard,
             self.anchor,
             slot,
             store,
             &mut self.fuel,
-            limit,
         )? {
             Some((ordinal, ticket, machine)) => {
                 self.slots[index]
@@ -486,8 +572,7 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         match store.state(cell)? {
             CellState::Live(_) => {
-                let limit = self.cleanup_metadata_limit()?;
-                let machine = CleanupMachine::begin(cell, store, &mut self.fuel, limit)?;
+                let machine = CleanupMachine::begin(cell, store, &mut self.fuel)?;
                 active.pending = Some((owner, machine));
             }
             CellState::Uninit | CellState::Moved => {
@@ -497,7 +582,7 @@ impl Frame {
                     .cleanup_elements_completed
                     .checked_add(1)
                     .ok_or_else(crate::runtime::arena::resource)?;
-                self.fuel.charge()?;
+                self.count_step();
                 store.retire_cell(cell)?;
                 self.clear_cleanup_owner(owner)?;
                 self.counters.cleanup_elements_completed = completed;
@@ -517,8 +602,10 @@ impl Frame {
             .take()
             .ok_or_else(|| invalid("cleanup activation absent"))?;
         let result = (|| {
+            if active.witness.is_some() {
+                return Err(invalid("cleanup advanced while its Drop witness is pending"));
+            }
             for _ in 0..256 {
-                self.fuel.poll()?;
                 if let Some((owner, machine)) = active.pending.as_mut() {
                     match machine.advance(store, &mut self.fuel)? {
                         CleanupProgress::Advanced => {}
@@ -532,11 +619,15 @@ impl Frame {
                             self.counters.cleanup_elements_completed = completed;
                             active.pending = None;
                         }
-                        CleanupProgress::NeedWitness { .. } => {
-                            return Err(Diagnostic::new(
-                                "LRR-E-UNSUPPORTED",
-                                "cleanup requires its source-selected Drop witness".into(),
-                            ));
+                        CleanupProgress::NeedWitness { cell, ticket, ty } => {
+                            active.witness = Some(Witness {
+                                location: cell,
+                                ticket,
+                                ty,
+                                lent: None,
+                                entered: false,
+                            });
+                            return Ok(false);
                         }
                     }
                     continue;
@@ -560,7 +651,11 @@ impl Frame {
                             .replacement
                             .as_ref()
                             .ok_or_else(|| invalid("replacement continuation absent"))?;
-                        if self.binding(replacement.binding)? != replacement.target
+                        let target = match replacement.binding {
+                            Some(binding) => self.binding(binding)?,
+                            None => replacement.target,
+                        };
+                        if target != replacement.target
                             || store.state(replacement.old)? != CellState::Dropped
                         {
                             return Err(invalid("replacement location changed during cleanup"));
@@ -691,7 +786,7 @@ impl Frame {
                             return Err(invalid("cleanup scope changed during suspension"));
                         }
                         self.preflight_leave(active.scope)?;
-                        if active.scope == ScopeId(0) {
+                        if active.scope == self.root_scope() {
                             self.clear_parameter_source_views()?;
                         }
                         if matches!(active.boundary, Boundary::Return) {
@@ -708,9 +803,16 @@ impl Frame {
                                 .checked_add(1)
                                 .ok_or_else(crate::runtime::arena::resource)?;
                         }
-                        self.patterns.retire_scope(active.scope);
+                        self.open_patterns.retire_scope(active.scope);
                         self.active_scopes.pop();
                         if active.scope == active.target {
+                            if let Boundary::Control(exit) = &mut active.boundary
+                                && let (Some(destination), Some(ticket)) =
+                                    (exit.destination, exit.ticket.take())
+                            {
+                                self.write(destination, ticket, store)?;
+                                self.set_source_view(destination, exit.source.take())?;
+                            }
                             return Ok(true);
                         }
                         active.scope = self
@@ -730,6 +832,316 @@ impl Frame {
             self.cleanup_activation = Some(active);
         }
         result
+    }
+    pub(crate) fn has_control_cleanup(&self) -> bool {
+        self.cleanup_activation
+            .as_ref()
+            .is_some_and(|active| matches!(active.boundary, Boundary::Control(_)))
+    }
+    /// A `break`/`continue` exit: move its value, then leave every scope
+    /// through the label's with the same bounded owner machine as scope exit
+    /// (so drop glue and `Drop` witnesses run), then write the value. False
+    /// means the exit resumes later at this PC, after its exit preflight.
+    pub(crate) fn control_transfer(
+        &mut self,
+        label: crate::syntax::body_index::LabelId,
+        value: Option<SlotId>,
+        continuing: bool,
+        store: &mut GuestStore,
+    ) -> Result<bool, Diagnostic> {
+        match &self.cleanup_activation {
+            Some(active) => {
+                if active.pc != self.pc.fingerprint()
+                    || !matches!(active.boundary, Boundary::Control(_))
+                {
+                    return Err(invalid("control cleanup resumed at a different exit"));
+                }
+            }
+            None => {
+                self.preflight_control(label, value, continuing, store)?;
+                if self.copy_activation.is_some() {
+                    return Err(invalid("another operation activation is already active"));
+                }
+                let target = self
+                    .body
+                    .labels()
+                    .get(label.0 as usize)
+                    .cloned()
+                    .ok_or_else(|| invalid("control target absent"))?;
+                if !self.active_scopes.contains(&target.scope) || continuing && !target.is_loop
+                {
+                    return Err(invalid("control target inactive or not a loop"));
+                }
+                let destination = if continuing {
+                    None
+                } else {
+                    Some(
+                        self.body.nodes()[target.node.0 as usize]
+                            .value
+                            .ok_or_else(|| invalid("control target result absent"))?,
+                    )
+                };
+                let source = value
+                    .map(|slot| self.source_view(slot))
+                    .transpose()?
+                    .flatten();
+                let ticket = if continuing {
+                    None
+                } else if let Some(source) = value {
+                    Some(store.move_from(self.cell(source)?)?)
+                } else {
+                    Some(store.ticket(ValueRepr::unit())?)
+                };
+                let scope = self
+                    .active_scopes
+                    .last()
+                    .copied()
+                    .ok_or_else(|| invalid("control cleanup lost target"))?;
+                self.preflight_cleanup_scope(scope)?;
+                self.cleanup_activation = Some(Activation {
+                    pc: self.pc.fingerprint(),
+                    boundary: Boundary::Control(ControlExit {
+                        destination,
+                        ticket,
+                        source,
+                    }),
+                    target: target.scope,
+                    scope,
+                    stage: self.first_cleanup_stage(scope)?,
+                    pending: None,
+                    replacement: None,
+                    witness: None,
+                });
+            }
+        }
+        self.advance_scope_cleanup(store)
+    }
+    /// Cleanup-owned locations of this frame (a Drop witness's receiver and
+    /// argument, a replaced place's old value) follow its slot, binding and
+    /// parameter locations; each lives only for its activation.
+    pub(super) fn owned_location_base(&self) -> Result<u32, Diagnostic> {
+        u32::try_from(self.parameters.len())
+            .ok()
+            .and_then(|parameters| {
+                self.body.slot_count().checked_add(
+                    u32::try_from(self.body.nodes().len())
+                        .ok()?
+                        .checked_add(parameters)?,
+                )
+            })
+            .ok_or_else(|| invalid("cleanup location overflow"))
+    }
+    /// An executed place assignment whose old value owns drop glue.
+    fn owned_place_replacement(
+        &self,
+        place: SlotId,
+        source: SlotId,
+        store: &GuestStore,
+    ) -> Option<(TypeId, CellId)> {
+        match store.preview_intrinsic_place_assignment(
+            self.executed_place(place).ok()?,
+            self.cell(source).ok()?,
+        ) {
+            Ok(crate::runtime::cell::IntrinsicAssignment::ReplaceOwned { ty, target }) => {
+                Some((ty, target))
+            }
+            _ => None,
+        }
+    }
+    /// The value type whose selected `Drop::drop` this frame's pending
+    /// cleanup owner awaits, until the dispatcher enters that call.
+    pub(crate) fn drop_witness_demand(&self) -> Option<TypeId> {
+        self.cleanup_activation
+            .as_ref()?
+            .witness
+            .as_ref()
+            .filter(|witness| !witness.entered)
+            .map(|witness| witness.ty)
+    }
+    fn witness_mut(&mut self) -> Result<&mut Witness, Diagnostic> {
+        self.cleanup_activation
+            .as_mut()
+            .and_then(|active| active.witness.as_mut())
+            .ok_or_else(|| invalid("drop witness absent"))
+    }
+    /// Lend the value being dropped to a fresh writable location of this
+    /// frame and form its `&mut` receiver in a fresh argument location, as an
+    /// ordinary borrow of that place. Repeating before entry reuses both.
+    /// Returns the argument location, its source view and its descriptor.
+    pub(crate) fn lend_drop_witness(
+        &mut self,
+        store: &mut GuestStore,
+    ) -> Result<(CellId, crate::traits::term::TyTerm, TypeId), Diagnostic> {
+        use crate::{
+            runtime::{place::Place, reference::Access},
+            traits::term::{RegionTerm, TyTerm},
+        };
+        self.require_store(store)?;
+        let range = self
+            .body
+            .nodes()
+            .get(self.pc.node as usize)
+            .ok_or_else(|| invalid("drop witness node absent"))?
+            .range;
+        let definition = self.body.body().definition;
+        let anchor = self.anchor;
+        let base = self.owned_location_base()?;
+        let witness = self.witness_mut()?;
+        if witness.entered {
+            return Err(invalid("drop witness already entered"));
+        }
+        let pointee = store.descriptor_source_term(witness.ty).ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "Drop receiver type requires its closed source descriptor".into(),
+            )
+        })?;
+        let source = TyTerm::Ref(
+            RegionTerm::Local {
+                definition,
+                start: range.start,
+                end: range.end,
+            },
+            true,
+            Box::new(pointee),
+        );
+        let argument = match witness.lent {
+            Some((_, argument)) => argument,
+            None => {
+                let receiver = store.new_cell(
+                    StorageContract::Exact(witness.ty),
+                    true,
+                    CellOwner::FrameSlot {
+                        frame: anchor,
+                        slot: base,
+                    },
+                )?;
+                store.lend_cleanup_ticket(witness.ticket, receiver)?;
+                let reference = store
+                    .borrow_ticket(&Place::cell(receiver), Access::Mutable)
+                    .map_err(|failure| match failure {
+                        crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                        crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                            invalid("drop receiver borrow panicked")
+                        }
+                    })?;
+                let ty = TypeId(store.peek_ticket(reference)?.type_id);
+                let argument = store.new_cell(
+                    StorageContract::Exact(ty),
+                    false,
+                    CellOwner::FrameSlot {
+                        frame: anchor,
+                        slot: base
+                            .checked_add(1)
+                            .ok_or_else(|| invalid("drop witness location overflow"))?,
+                    },
+                )?;
+                store.initialize(argument, reference)?;
+                witness.lent = Some((receiver, argument));
+                argument
+            }
+        };
+        let descriptor = TypeId(store.admit_move(argument)?.type_id);
+        Ok((argument, source, descriptor))
+    }
+    /// Enter the lent witness: the callee frame shares this run's step and
+    /// action observation, like any callee entered from this frame.
+    pub(crate) fn enter_drop_witness(
+        &mut self,
+        body: Arc<BodyIndex>,
+        entry: PcKey,
+        store: &mut GuestStore,
+    ) -> Result<Self, Diagnostic> {
+        self.require_store(store)?;
+        let witness = self.witness_mut()?;
+        if witness.entered || witness.lent.is_none() {
+            return Err(invalid("drop witness entry requires its lent receiver"));
+        }
+        let mut frame = Self::new(body, entry, store)?;
+        frame.fuel = self.fuel.share();
+        frame.actions = self.actions.share();
+        self.witness_mut()?.entered = true;
+        Ok(frame)
+    }
+    /// The witness returned: reclaim the (possibly reassigned) value into its
+    /// reserved ticket and continue that value's drop glue with its fields.
+    pub(crate) fn finish_drop_witness(&mut self, store: &mut GuestStore) -> Result<(), Diagnostic> {
+        let active = self
+            .cleanup_activation
+            .as_mut()
+            .ok_or_else(|| invalid("drop witness activation absent"))?;
+        let witness = active
+            .witness
+            .take()
+            .ok_or_else(|| invalid("drop witness absent"))?;
+        let (true, Some((receiver, argument))) = (witness.entered, witness.lent) else {
+            return Err(invalid("drop witness resumed before entry"));
+        };
+        store.reclaim_cleanup_ticket(witness.ticket, receiver)?;
+        store.retire_cell(argument)?;
+        let (_, machine) = active
+            .pending
+            .as_mut()
+            .ok_or_else(|| invalid("drop witness owner absent"))?;
+        machine.witness_complete(witness.location, witness.ticket)
+    }
+    /// The witness unwound: finish it as above, then continue this frame's
+    /// cleanup as panic cleanup (the value's fields, then every remaining
+    /// owner of every active scope), as rustc's unwind path does.
+    pub(crate) fn unwind_drop_witness(&mut self, store: &mut GuestStore) -> Result<(), Diagnostic> {
+        self.finish_drop_witness(store)?;
+        let scope = self
+            .active_scopes
+            .last()
+            .copied()
+            .ok_or_else(|| invalid("unwinding cleanup scope absent"))?;
+        self.preflight_cleanup_scope(scope)?;
+        let first = self.first_cleanup_stage(scope)?;
+        let root = self.root_scope();
+        let active = self
+            .cleanup_activation
+            .as_mut()
+            .ok_or_else(|| invalid("drop witness activation absent"))?;
+        if matches!(active.boundary, Boundary::Panic) {
+            return Err(Diagnostic::new(
+                "LRR-E-DOUBLE-PANIC",
+                "a Drop witness panicked during unwinding".into(),
+            ));
+        }
+        // Assignment already committed its new value; its unit result is
+        // never published on the unwind path, nor is a pending `break` value.
+        if let Some(replacement) = active.replacement.take() {
+            store.discard(replacement.unit)?;
+        }
+        if let Boundary::Control(exit) = &mut active.boundary
+            && let Some(ticket) = exit.ticket.take()
+        {
+            match store.cleanup_ticket_inventory(ticket)? {
+                crate::runtime::cell::CleanupInventory::Leaf => store.discard(ticket)?,
+                _ => {
+                    return Err(Diagnostic::new(
+                        "LRR-E-UNSUPPORTED",
+                        "unwinding from a Drop witness abandons an owning break value".into(),
+                    ));
+                }
+            }
+        }
+        if active.scope != scope
+            || matches!(
+                active.stage,
+                Stage::DiscardSlot(_)
+                    | Stage::FinishDiscard
+                    | Stage::Replacement
+                    | Stage::FinishReplacement
+            )
+        {
+            active.stage = first;
+        }
+        active.scope = scope;
+        active.target = root;
+        active.boundary = Boundary::Panic;
+        self.status = FrameStatus::Panicked;
+        Ok(())
     }
 }
 

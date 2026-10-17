@@ -12,7 +12,6 @@ pub(super) struct Request {
     pub enabled: bool,
     pub context: Option<Digest>,
 }
-const MAX_PACKET: usize = 4 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-RUNTIME-CAPTURE", message.into())
 }
@@ -33,9 +32,6 @@ struct SnapshotObservation {
 }
 impl SnapshotObservation {
     fn observe(snapshot: &Snapshot, owning_edition: u16) -> Result<Self, Diagnostic> {
-        if snapshot.files().len() > 10_000 {
-            return Err(fault("capture source count limit"));
-        }
         let mut files = Vec::new();
         files
             .try_reserve_exact(snapshot.files().len())
@@ -43,13 +39,11 @@ impl SnapshotObservation {
         let mut bytes = files
             .capacity()
             .checked_mul(std::mem::size_of::<CapturedFile>())
-            .filter(|n| *n <= MAX_PACKET)
             .ok_or_else(|| fault("capture source metadata limit"))?;
         for (path, blob) in snapshot.files() {
             bytes = bytes
                 .checked_add(path.as_str().len())
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= MAX_PACKET)
                 .ok_or_else(|| fault("capture source metadata limit"))?;
             let mut owned = String::new();
             owned
@@ -141,9 +135,6 @@ impl Packet {
         error: Diagnostic,
         context: Option<Digest>,
     ) -> Result<Self, Diagnostic> {
-        if error.message.len() > 65_536 {
-            return Err(fault("capture fault message limit"));
-        }
         Ok(Self::incomplete(
             context,
             serde_json::json!({"status":"fault", "phase":"before_observation_or_finish_fault",
@@ -159,6 +150,8 @@ impl Packet {
         context: Option<Digest>,
     ) -> Result<Self, Diagnostic> {
         let retained = run.terminal_facts();
+        // Guest `_print`/`_eprint` bytes written through the managed facade.
+        let mut output = crate::engine::run::GuestOutput::default();
         let (terminal, code) = match result {
             RunPoll::Completed(report) => {
                 let Some(facts) = retained else {
@@ -172,6 +165,7 @@ impl Packet {
                 {
                     return Err(fault("completed report identity differs"));
                 }
+                output = report.output.clone();
                 (
                     serde_json::to_value(report)
                         .map_err(|_| fault("capture completed serialization"))?,
@@ -188,21 +182,17 @@ impl Packet {
                 if message != report.panic.description() || report.live_edition != owning_edition {
                     return Err(fault("panic report identity differs"));
                 }
+                output = report.output.clone();
                 (
                     serde_json::to_value(report)
                         .map_err(|_| fault("capture panic serialization"))?,
                     1,
                 )
             }
-            RunPoll::Fault(error) => {
-                if error.message.len() > 65_536 {
-                    return Err(fault("capture fault message limit"));
-                }
-                (
-                    serde_json::json!({"status":"fault","phase":"executor","code":error.code,"message":error.message,"diagnostic":error}),
-                    2,
-                )
-            }
+            RunPoll::Fault(error) => (
+                serde_json::json!({"status":"fault","phase":"executor","code":error.code,"message":error.message,"diagnostic":error}),
+                2,
+            ),
             RunPoll::NeedInput(_) => (
                 serde_json::json!({"status":"suspended","phase":"executor",
                 "code":"LRR-E-UNSUPPORTED","message":"runtime capture requires later input/macro authority"}),
@@ -230,9 +220,13 @@ impl Packet {
             packet.capture.complete = true;
             packet.capture.blocker = None;
             packet.capture.guest = GuestStreams {
-                status: "closed_no_external_effects_observed",
-                stdout: Some(Vec::new()),
-                stderr: Some(Vec::new()),
+                status: if output.stdout.is_empty() && output.stderr.is_empty() {
+                    "closed_no_external_effects_observed"
+                } else {
+                    "closed_managed_output_observed"
+                },
+                stdout: Some(output.stdout.into_bytes()),
+                stderr: Some(output.stderr.into_bytes()),
             };
         }
         // Bound the serialized packet through a bounded writer. This does not
@@ -263,7 +257,6 @@ impl Packet {
                     .0
                     .len()
                     .checked_add(bytes.len())
-                    .filter(|n| *n <= MAX_PACKET)
                     .ok_or_else(|| std::io::Error::other("runtime capture packet limit"))?;
                 self.0
                     .try_reserve(next - self.0.len())

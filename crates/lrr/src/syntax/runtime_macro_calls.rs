@@ -55,9 +55,6 @@ pub(super) fn source_call_path(call: &ast::CallExpr) -> Result<(String, Vec<Stri
     let mut cursor = path;
     let absolute;
     loop {
-        if components.len() >= 256 {
-            return Err(invalid("assertion call path depth limit"));
-        }
         let part = cursor
             .segment()
             .ok_or_else(|| unsupported("assertion call segment absent"))?;
@@ -93,20 +90,13 @@ pub(super) fn source_call_path(call: &ast::CallExpr) -> Result<(String, Vec<Stri
     if absolute {
         name.insert_str(0, "::");
     }
-    if name.len() > 4096 {
-        return Err(invalid("assertion call path spelling limit"));
-    }
     let mut explicit = Vec::new();
     let mut bytes = 0usize;
     if let Some(list) = segment.generic_arg_list() {
         for arg in list.generic_args() {
-            if explicit.len() >= 256 {
-                return Err(invalid("assertion explicit argument count limit"));
-            }
             let text = arg.syntax().text().to_string();
             bytes = bytes
                 .checked_add(text.len())
-                .filter(|n| *n <= 65_500)
                 .ok_or_else(|| invalid("assertion explicit argument text limit"))?;
             explicit
                 .try_reserve(1)
@@ -166,7 +156,6 @@ impl RuntimeScalarPlan {
             for borrow in call.argument_borrows.iter().flatten() {
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 1_000_000)
                     .ok_or_else(|| invalid("scalar borrow lookup work limit"))?;
                 if borrow.hint.as_ref() == Some(key)
                     || &borrow.place_key == key
@@ -219,7 +208,6 @@ impl RuntimeScalarPlan {
                         .checked_mul(std::mem::size_of::<Arc<RuntimeMacroCall>>())?,
                 )
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| invalid("scalar plan metadata limit"))?;
         retained_bytes = retained_bytes
             .checked_add(
@@ -235,7 +223,6 @@ impl RuntimeScalarPlan {
                         .checked_mul(std::mem::size_of::<(usize, BodySpan)>())?,
                 )
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| invalid("scalar fault origin metadata limit"))?;
         let mut fault_origins = Vec::new();
         fault_origins
@@ -276,7 +263,6 @@ impl RuntimeScalarPlan {
                             .allocated_bytes()
                             .ok_or_else(|| invalid("primitive method metadata overflow"))?,
                     )
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| invalid("primitive method metadata limit"))?;
             }
         }
@@ -284,7 +270,6 @@ impl RuntimeScalarPlan {
             if let RuntimeScalarStep::Control(control) = step {
                 retained_bytes = retained_bytes
                     .checked_add(control.allocated_bytes()?)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| invalid("scalar control plan metadata limit"))?;
             }
         }
@@ -299,7 +284,6 @@ impl RuntimeScalarPlan {
             for (at, step) in steps.iter().enumerate() {
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 1_000_000)
                     .ok_or_else(|| invalid("scalar call phase capture work limit"))?;
                 match step {
                     RuntimeScalarStep::CallPrepare(id) if *id == draft.ordinal => {
@@ -386,7 +370,6 @@ impl RuntimeScalarPlan {
                         .and_then(|m| n.checked_add(m))
                 })
                 .and_then(|n| n.checked_add(retained_bytes))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| invalid("scalar borrow retained metadata limit"))?;
             let mut borrows = Vec::new();
             borrows
@@ -423,7 +406,6 @@ impl RuntimeScalarPlan {
                 for (at, step) in steps.iter().enumerate() {
                     work = work
                         .checked_add(1)
-                        .filter(|n| *n <= 1_000_000)
                         .ok_or_else(|| invalid("scalar borrow phase capture work limit"))?;
                     if let RuntimeScalarStep::Operation(op) = step {
                         match op {
@@ -520,7 +502,6 @@ impl RuntimeScalarPlan {
             retained_bytes = retained_bytes
                 .checked_add(bytes)
                 .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| invalid("scalar call retained metadata limit"))?;
             let mut e = StableEncoder::new("lrr/v2/runtime-macro-source-call/argument-borrows");
             e.record(&call.source);

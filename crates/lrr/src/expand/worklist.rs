@@ -11,15 +11,11 @@ use crate::{
     syntax::token_wire::TokenForest,
 };
 use std::{collections::BTreeSet, sync::Arc};
-const MAX_SLOTS: usize = 4096;
-const MAX_TRANSFORMS: usize = 100_000;
-const MAX_BYTES: usize = 64 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-TRANSFORM", message.into())
 }
 fn bounded_add(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_add(b)
-        .filter(|v| *v <= MAX_BYTES)
         .ok_or_else(|| fault("transformation metadata limit"))
 }
 fn token_digest(tokens: &TokenForest) -> Result<Digest, Diagnostic> {
@@ -76,9 +72,6 @@ impl ItemPlan {
         Ok(plan)
     }
     fn bytes(&self) -> Result<usize, Diagnostic> {
-        if self.attributes.len() > MAX_SLOTS || self.derives.len() > MAX_SLOTS {
-            return Err(fault("transformation slot limit"));
-        }
         let mut bytes = self
             .item
             .allocated_bytes()
@@ -170,7 +163,7 @@ fn validate_key(
         MacroIdentity::Procedural { kind: k, .. } => {
             *k == kind && key.procedural_epoch == Some(epoch)
         }
-        MacroIdentity::Builtin { .. } => {
+        MacroIdentity::Builtin { .. } | MacroIdentity::BuiltinDerive { .. } => {
             kind == ProceduralKind::Derive && key.procedural_epoch.is_none()
         }
         MacroIdentity::Declaration { .. } => false,
@@ -371,9 +364,6 @@ impl ItemTransformWorklist {
         };
         if expected != record.key() || self.consumed.contains(&record.key().invocation) {
             return Err(fault("stale or mismatched transformation reply"));
-        }
-        if self.transforms >= MAX_TRANSFORMS {
-            return Err(fault("transformation count limit"));
         }
         let next_revision = self
             .revision

@@ -24,14 +24,9 @@ impl CapturedSpanSource {
         encoding: SourceDigestEncoding,
         local_path: Option<String>,
     ) -> Result<Self, AdapterError> {
-        if text.len() > 32 * 1024 * 1024
-            || source.path.is_empty()
-            || source.path.len() > 64 * 1024
-            || source.path.contains('\0')
-            || local_path.as_ref().is_some_and(|p| {
-                p.len() > 64 * 1024 || p.contains('\0') || !std::path::Path::new(p).is_absolute()
-            })
-        {
+        if source.path.is_empty() || source.path.contains('\0') || local_path.as_ref().is_some_and(|p| {
+                p.contains('\0') || !std::path::Path::new(p).is_absolute()
+            }) {
             return Err(error("invalid or excessive captured span source"));
         }
         let hash = match encoding {

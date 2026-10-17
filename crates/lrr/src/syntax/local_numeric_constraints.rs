@@ -26,7 +26,6 @@ impl Budget {
         self.work = self
             .work
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-BODY-INDEX-LIMIT",
@@ -40,9 +39,7 @@ impl Budget {
         // its use separately so many repeated names cannot multiply that work.
         self.reads = self
             .reads
-            .checked_add(1)
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| {
+            .checked_add(1)            .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-BODY-INDEX-LIMIT",
                     "local numeric constraint binding read budget".into(),
@@ -53,7 +50,7 @@ impl Budget {
 }
 fn path(expression: ast::Expr, budget: &mut Budget) -> Result<Option<ast::PathExpr>, Diagnostic> {
     let mut expression = expression;
-    for _ in 0..256 {
+    for _ in 0usize.. {
         budget.charge()?;
         match expression {
             ast::Expr::ParenExpr(group) => {
@@ -125,14 +122,8 @@ fn annotation(
         return Err(unresolved());
     }
     let wanted = MacroName::parse(&ty.syntax().text().to_string(), parsed.edition)?;
-    for (depth, scope) in ty.syntax().ancestors().enumerate() {
+    for scope in ty.syntax().ancestors() {
         budget.charge()?;
-        if depth >= 256 {
-            return Err(Diagnostic::new(
-                "LRR-E-BODY-INDEX-LIMIT",
-                "local numeric constraint namespace depth budget".into(),
-            ));
-        }
         // Generic type parameters are symbolic, including enclosing impls.
         for parameters in scope.children().filter_map(ast::GenericParamList::cast) {
             for parameter in parameters.generic_params() {
@@ -444,7 +435,7 @@ pub(super) fn unconstrained_literal(
             }
             let mut expression = read.syntax().clone();
             let mut closed = false;
-            for _ in 0..256 {
+            for _ in 0usize.. {
                 budget.charge()?;
                 let Some(parent) = expression.parent() else {
                     break;

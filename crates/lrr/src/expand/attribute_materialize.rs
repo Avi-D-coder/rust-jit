@@ -71,8 +71,7 @@ pub(crate) fn after_compiler_prefix(
     source: &SourceIdentity,
     forest: &TokenForest,
 ) -> Result<TokenForest, Diagnostic> {
-    if consumed.len() > 4096
-        || consumed.iter().any(|index| *index >= applied)
+    if consumed.iter().any(|index| *index >= applied)
         || consumed.windows(2).any(|pair| pair[0] >= pair[1])
     {
         return Err(fault("consumed compiler prefix indexes are invalid"));
@@ -88,8 +87,7 @@ pub(crate) fn after_derives(
     source: &SourceIdentity,
     forest: &TokenForest,
 ) -> Result<TokenForest, Diagnostic> {
-    if derives.len() > 4096
-        || derives.iter().any(|index| *index >= applied)
+    if derives.iter().any(|index| *index >= applied)
         || derives
             .iter()
             .collect::<std::collections::BTreeSet<_>>()
@@ -122,8 +120,7 @@ pub fn derive_input_resolved(
     source: &SourceIdentity,
     forest: &TokenForest,
 ) -> Result<TokenForest, Diagnostic> {
-    if indices.len() > 4096
-        || indices.iter().any(|i| *i >= inputs.attributes.len())
+    if indices.iter().any(|i| *i >= inputs.attributes.len())
         || indices
             .iter()
             .collect::<std::collections::BTreeSet<_>>()

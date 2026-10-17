@@ -52,7 +52,6 @@ impl ModulePreparationDemand {
         for declaration in declarations {
             count = count
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| error("module preparation declaration count limit"))?;
             let scope = declaration.scope();
             if scope.crate_key != self.missing.unit || scope.owner.is_some() {
@@ -110,19 +109,14 @@ impl Budget {
         self.path(&key.1)
     }
     fn path(&mut self, names: &[MacroName]) -> Result<(), Diagnostic> {
-        if names.len() > 256 {
-            return Err(error("module alias path depth exceeded"));
-        }
         self.bytes = self
             .bytes
             .checked_add(std::mem::size_of::<ModuleKey>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("module alias metadata budget exceeded"))?;
         for name in names {
             self.bytes = self
                 .bytes
                 .checked_add(name.as_str().len() + std::mem::size_of::<MacroName>())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("module alias metadata budget exceeded"))?;
         }
         Ok(())
@@ -156,9 +150,6 @@ impl Modules {
             return Ok(Resolution::Wait(current));
         }
         for name in names {
-            if current.1.len() >= 256 {
-                return Err(error("resolved module alias path depth exceeded"));
-            }
             current
                 .1
                 .try_reserve(1)
@@ -186,9 +177,6 @@ impl Modules {
             Resolution::Known(target) => target,
             Resolution::Wait(key) => return Ok(MacroTarget::Wait(key)),
         };
-        if names.len() >= 256 {
-            return Err(error("resolved macro alias depth exceeded"));
-        }
         names
             .try_reserve(1)
             .map_err(|_| error("macro alias target allocation failed"))?;
@@ -267,9 +255,6 @@ fn reference(
             ImportSegment::SelfModule if named => {}
             ImportSegment::Name(name) => {
                 named = true;
-                if names.len() >= 256 {
-                    return Err(error("module alias depth exceeded"));
-                }
                 names
                     .try_reserve(1)
                     .map_err(|_| error("module alias allocation failed"))?;
@@ -298,9 +283,6 @@ fn destination(source: &SourceImport, edition: u16) -> Result<ModuleKey, Diagnos
         _ => return Err(error("unnamed module import")),
     };
     let mut names = module_names(&source.scope.module_path, edition)?;
-    if names.len() >= 256 {
-        return Err(error("module binding depth exceeded"));
-    }
     names
         .try_reserve(1)
         .map_err(|_| error("module binding allocation failed"))?;
@@ -310,9 +292,6 @@ fn destination(source: &SourceImport, edition: u16) -> Result<ModuleKey, Diagnos
 pub(super) fn candidate_graph(
     catalogs: &[SourceMacroRoutes],
 ) -> Result<MacroNamespaces, Diagnostic> {
-    if catalogs.len() > 100_000 {
-        return Err(error("source catalog count exceeded"));
-    }
     let mut borrowed = Vec::new();
     borrowed
         .try_reserve_exact(catalogs.len())
@@ -338,13 +317,7 @@ pub(super) fn prepare_graph_with_compiler_imports(
     pending: bool,
     imports: &[super::compile_input_catalog::CompilerInjectedImport],
 ) -> Result<ModuleGraphPreparation, Diagnostic> {
-    if imports.len() > 100_000 {
-        return Err(error("compiler import count limit"));
-    }
-    if catalogs.len() > 100_000 {
-        return Err(error("source catalog count exceeded"));
-    }
-    if catalogs.iter().flat_map(|c| c.deferred()).any(|d| {
+    if let Some(unresolved) = catalogs.iter().flat_map(|c| c.deferred()).find(|d| {
         !matches!(
             d.reason,
             DeferredImportReason::ModuleAlias
@@ -353,7 +326,19 @@ pub(super) fn prepare_graph_with_compiler_imports(
                 | DeferredImportReason::DependencyModuleCollision
         ) && !(pending && matches!(d.reason, DeferredImportReason::TextualProducer(_)))
     }) {
-        return Err(error("source routes have unresolved import demands"));
+        return Err(error(&format!(
+            "source routes have unresolved import demands: {:?} for import in {}",
+            unresolved.reason,
+            unresolved
+                .source
+                .scope
+                .module_path
+                .iter()
+                .take(16)
+                .map(|part| part.chars().take(64).collect::<String>())
+                .collect::<Vec<_>>()
+                .join("::"),
+        )));
     }
     let mut modules = Modules {
         known: BTreeSet::new(),
@@ -404,9 +389,6 @@ pub(super) fn prepare_graph_with_compiler_imports(
                 continue;
             };
             let mut names = module_names(&row.scope.module_path, catalog.edition)?;
-            if names.len() >= 256 {
-                return Err(error("extern alias path depth exceeded"));
-            }
             names
                 .try_reserve(1)
                 .map_err(|_| error("extern alias path allocation failed"))?;
@@ -433,9 +415,6 @@ pub(super) fn prepare_graph_with_compiler_imports(
         for source in &catalog.source_imports {
             if !matches!(source.kind, ImportKind::Named { .. }) {
                 continue;
-            }
-            if jobs.len() >= 100_000 {
-                return Err(error("module import edge limit exceeded"));
             }
             let target = reference(source, catalog, &modules.known)?;
             let destination = destination(source, catalog.edition)?;
@@ -475,9 +454,6 @@ pub(super) fn prepare_graph_with_compiler_imports(
             return Err(error(
                 "cyclic strong/glob module selection has no stable result",
             ));
-        }
-        if seen.len() > 100_000 {
-            return Err(error("module glob fixed point state limit exceeded"));
         }
         modules.weak = weak;
     };
@@ -544,8 +520,39 @@ pub(super) fn prepare_graph_with_compiler_imports(
             let source = &deferred.source;
             let target = reference(source, catalog, &modules.known)?;
             if deferred.reason == DeferredImportReason::ModuleAlias {
+                // `use a::Enum::{self}` names a non-module item: it binds only
+                // the type namespace and never a macro or module alias here.
+                if !completed.contains(&(source.identity, source.leaf_ordinal))
+                    && source.path.len() > 1
+                    && source.path.last() == Some(&ImportSegment::SelfModule)
+                {
+                    continue;
+                }
                 if !completed.contains(&(source.identity, source.leaf_ordinal)) {
-                    return Err(error("module alias cycle or unresolved target"));
+                    return Err(error(&format!(
+                        "module alias cycle or unresolved target: use {}{} in {}",
+                        if source.absolute { "::" } else { "" },
+                        source
+                            .path
+                            .iter()
+                            .take(16)
+                            .map(|part| match part {
+                                ImportSegment::Name(name) => name.chars().take(64).collect(),
+                                ImportSegment::Crate => "crate".to_owned(),
+                                ImportSegment::SelfModule => "self".to_owned(),
+                                ImportSegment::Super => "super".to_owned(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join("::"),
+                        source
+                            .scope
+                            .module_path
+                            .iter()
+                            .take(16)
+                            .map(|part| part.chars().take(64).collect::<String>())
+                            .collect::<Vec<_>>()
+                            .join("::"),
+                    )));
                 }
                 // A named module and macro may share a spelling. Retain the macro edge too
                 // whenever the target has a nonempty path; macro absence stays separate.
@@ -600,7 +607,6 @@ pub(super) fn prepare_graph_with_compiler_imports(
         {
             glob_count = glob_count
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| error("source import edge limit exceeded"))?;
             let source = &deferred.source;
             let (unit, parts) = reference(source, catalog, &modules.known)?;
@@ -610,7 +616,6 @@ pub(super) fn prepare_graph_with_compiler_imports(
                     .budget
                     .bytes
                     .checked_add(crate::syntax::imports::retained_bytes(source)?)
-                    .filter(|bytes| *bytes <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("module preparation demand metadata limit"))?;
                 return Ok(ModuleGraphPreparation::NeedModule(
                     ModulePreparationDemand {
@@ -684,7 +689,6 @@ fn named_modules(
     while let Some(index) = ready.pop_first() {
         *steps = steps
             .checked_add(1)
-            .filter(|n| *n <= 100_000 * 257)
             .ok_or_else(|| error("module alias work limit exceeded"))?;
         let job = &jobs[index];
         match modules.resolve(job.target.0, &job.target.1)? {
@@ -903,7 +907,6 @@ fn glob_modules(
         .checked_add(modules.aliases.len())
         .and_then(|n| n.checked_add(modules.weak.len()))
         .and_then(|n| n.checked_mul(std::mem::size_of::<&ModuleKey>()))
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(|| error("module member key index budget exceeded"))?;
     let keys: BTreeSet<_> = modules
         .known
@@ -922,7 +925,6 @@ fn glob_modules(
         {
             *steps = steps
                 .checked_add(1)
-                .filter(|n| *n <= 100_000 * 257)
                 .ok_or_else(|| error("module glob work limit exceeded"))?;
             let (unit, names) = reference(source, catalog, &modules.known)?;
             let ModuleResolution::Known { path: selected, .. } = graph
@@ -939,7 +941,6 @@ fn glob_modules(
             for member in &keys {
                 *steps = steps
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000 * 257)
                     .ok_or_else(|| error("module glob work limit exceeded"))?;
                 if member.0 != selected.unit
                     || member.1.len() != selected.names.len() + 1
@@ -949,7 +950,6 @@ fn glob_modules(
                 }
                 *steps = steps
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000 * 257)
                     .ok_or_else(|| error("module glob work limit exceeded"))?;
                 let path = ModulePath {
                     unit: member.0,
@@ -976,7 +976,6 @@ fn glob_modules(
                     }
                     edges = edges
                         .checked_add(1)
-                        .filter(|n| *n <= 100_000)
                         .ok_or_else(|| error("module glob member limit exceeded"))?;
                     budget.key(&dest)?;
                     budget.key(&target)?;

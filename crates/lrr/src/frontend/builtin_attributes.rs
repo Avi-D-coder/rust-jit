@@ -33,12 +33,7 @@ impl BuiltinAttributeCatalog {
         descriptors: impl IntoIterator<Item = BuiltinAttributeDescriptor>,
     ) -> Result<Self, Diagnostic> {
         let mut definitions = BTreeMap::new();
-        let mut count = 0usize;
         for descriptor in descriptors {
-            count += 1;
-            if count > 64 {
-                return Err(fault("builtin attribute descriptor count limit"));
-            }
             let mut e = StableEncoder::new("lrr/v2/builtin-attribute-definition");
             e.digest(unit);
             e.u32(u32::from(edition));
@@ -52,6 +47,21 @@ impl BuiltinAttributeCatalog {
             definitions.insert(definition.identity, (definition, descriptor));
         }
         Ok(Self { definitions })
+    }
+    /// Bind descriptors to existing definitions (the library's own
+    /// `#[rustc_builtin_macro]` items), so no second identity names them.
+    pub(crate) fn rebind(
+        mut self,
+        mut definition_for: impl FnMut(&BuiltinAttributeDescriptor) -> Option<MacroDefinition>,
+    ) -> Result<Self, Diagnostic> {
+        let mut definitions = BTreeMap::new();
+        for (synthetic, descriptor) in std::mem::take(&mut self.definitions).into_values() {
+            let definition = definition_for(&descriptor).unwrap_or(synthetic);
+            definition.validate()?;
+            definitions.insert(definition.identity, (definition, descriptor));
+        }
+        self.definitions = definitions;
+        Ok(self)
     }
     pub fn definitions(&self) -> impl Iterator<Item = &MacroDefinition> {
         self.definitions.values().map(|(d, _)| d)
@@ -85,9 +95,6 @@ impl BuiltinAttributeCatalog {
         &self,
         prefix: &[MacroName],
     ) -> Result<Vec<SourceMacroRoutes>, Diagnostic> {
-        if prefix.len() > 255 {
-            return Err(fault("builtin attribute module depth limit"));
-        }
         let mut bytes = prefix
             .len()
             .checked_mul(256)
@@ -106,7 +113,6 @@ impl BuiltinAttributeCatalog {
                 .ok_or_else(|| fault("builtin route size overflow"))?;
             bytes = bytes
                 .checked_add(amount)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("builtin route metadata limit"))?;
         }
         let mut units: BTreeMap<Digest, SourceMacroRoutes> = BTreeMap::new();

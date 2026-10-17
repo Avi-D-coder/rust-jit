@@ -1,0 +1,63 @@
+{
+  "schema": "lrr/source-review/stock-local-call-controls/v1",
+  "status": "source-only; uncompiled and unexecuted; runtime-contract oracle, no full-fixture/native acceptance",
+  "file": {
+    "path": "crates/lrr/src/engine/run_stock_local_call_tests.rs",
+    "bytes": 8672,
+    "sha256": "e7475f1f68bbb0b12bc05a68fa33b551dc944b0eba646a1353da2b08046401e0"
+  },
+  "fixture": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/resolve/type-param-local-var-shadowing.rs",
+    "bytes": 398,
+    "sha256": "c90c918b7d21b237f7137bd8a744022bf5b63c5fd61253b30fd7d893ad259d23"
+  },
+  "precode_claim": "worktracks/evidence/2026-10-16-stock-local-call-claim.json",
+  "actual_oracle_correction": "Parent approved actual zero-argument normal block route: thunks.rs inserts CheckParameters only if count != 0. This genuine fixture expects CallSeal1, CheckParameters0, ReadParameter0, CallPrepare0, CallAdvance0; child entry established with actual child Thunk/provider event, peakframes2, matching canonical local proof/body/environment/source and cleanup. No production adaptation to force a neighboring parameterized counter.",
+  "reviewed_api": [
+    "run_source_preparation_tests::{start,completed,child_bodies,assert_children_cold,EDITIONS}",
+    "AdmittedBodyContext::{body,index,parsed,header,generated_source,generated_boundary,local_parent}",
+    "PreparedSourceLocalPlan::{source_identity,environment,context}",
+    "EnteredCallGoal::{selection,require_current}",
+    "OrdinaryLocalAdmission::{item,parent,site,scope}",
+    "QueryKey::{EnteredCall,BodyStructure,SourceLocalPlan,Thunk}",
+    "OpcodeCounters/RunMachine terminal, frame, calls, pending, call_bytes, pending_bytes, prepared_call, returning, unwinding"
+  ],
+  "all_eight": {
+    "1": "Test-only whole original root via existing interpreter harness, no source evaluator or compiler. Legacy Assert opcode strictly zero. MA001/MA007/MA008 removal not claimed.",
+    "2": "Actual indexed original/generated main and f body through normal CallSeal/child thunk/cleanup. No literal/break-only executor added; MA004/MA005 held.",
+    "3": "Actual query44 selection must be Local proof for canonical inner f, matching declaration scope/body/parent/source; outer f local cannot be accepted by name alone. No numeric/method/macro whitelist; MA003/MA006 held.",
+    "4": "Plain/user/wrapper all4 editions use same start/completed/assertion helper, strict actual parent generated-source and boundary flags. Test-only crate-attribute adapter follows existing AST-based whole-source adapter. Standard-macro context not applicable to current item-emitter fixture and not claimed.",
+    "5": "Complete cold generic Foo/Box and impl source retained. Before entry child f has no body locator/environment/body memo/executable work; after completion every BodyStructure/Thunk trace must belong to actual main or f, leaving foo unprepared. No pattern changes, MA002 held.",
+    "6": "Query44, reached child BodyStructure and SourceLocalPlan each actual ProviderRun exactly1; final goal/plan reads use existing memos. No fabricated selected body or alternate planning framework. Repeated loops/suspension still untested.",
+    "7": "Only actual published input lookups and actual trace rows; no namespace census or production currentness change. Relevant revocation controls remain parent/previous packet-owned.",
+    "8": "Strict Arc equality for child plan/index environment reuse; body/header/parse/parent identities checked. Test-only source adapter parses once per generated world; no production parse/body clone/node-search changes."
+  },
+  "authored_controls": {
+    "test_functions": [
+      "unchanged_shadowing_main_calls_inner_item_and_keeps_generic_impl_cold_all_editions",
+      "upstream_shadowing_user_macro_uses_ordinary_local_call_all_editions",
+      "upstream_shadowing_wrapper_macro_uses_ordinary_local_call_all_editions"
+    ],
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "whole_roots": 12,
+    "strict_route": [
+      "canonical Local query44 proof selects exact f BodyKey/scope/site/parent, not outer binding/module",
+      "body source/header/parse/edition/local parent and actual generated source-boundary correspondence",
+      "one CallSeal, no parameter/argument/legacy Assert ops, source revision unchanged",
+      "only actual main/f bodies are prepared/lowered, actual f child thunk enters",
+      "operations start==complete, return cleanup>=2, no panic cleanup",
+      "peakframes2; terminal; no pending calls/prepared call/continuations/scopes or metadata bytes"
+    ]
+  },
+  "gaps": [
+    "No Cargo/compiler/tests by this worker",
+    "No runtime-contract pass until independent validator executes exact frozen candidate",
+    "No full compiletest fixture/native/compiler/JIT claim",
+    "No standard-macro emitter comparison, suspension or stale-source validation added in this leaf"
+  ]
+}

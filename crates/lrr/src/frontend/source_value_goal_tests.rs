@@ -407,6 +407,7 @@ fn unchanged_function_name_is_shadowed_by_actual_binding_all_editions_and_source
                 source,
                 &changed,
                 context,
+                None,
             ) {
                 QueryPoll::Ready(Err(_)) => {}
                 other => panic!("mismatched function source/header admitted: {other:?}"),

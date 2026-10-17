@@ -125,7 +125,33 @@ fn actual_opaque_body_record_joins_selected_definition_module_and_expires() {
                     published = true;
                     break;
                 }
-                _ => panic!("opaque source authority needs another actual producer"),
+                SourceDiscoveryStep::Incomplete {
+                    diagnostic,
+                    blocked,
+                } => panic!(
+                    "actual SourceDiscoveryStep::Incomplete: diagnostic={diagnostic:?}, blocked={blocked:?}"
+                ),
+                SourceDiscoveryStep::NeedSourceDeriveSelection { .. } => {
+                    panic!("actual SourceDiscoveryStep::NeedSourceDeriveSelection")
+                }
+                SourceDiscoveryStep::NeedSourceDeriveExpansion { .. } => {
+                    panic!("actual SourceDiscoveryStep::NeedSourceDeriveExpansion")
+                }
+                SourceDiscoveryStep::NeedSourceDeriveAppend { .. } => {
+                    panic!("actual SourceDiscoveryStep::NeedSourceDeriveAppend")
+                }
+                SourceDiscoveryStep::NeedDeriveAppend { .. } => {
+                    panic!("actual SourceDiscoveryStep::NeedDeriveAppend")
+                }
+                SourceDiscoveryStep::NeedDeriveDeclaration { .. } => {
+                    panic!("actual SourceDiscoveryStep::NeedDeriveDeclaration")
+                }
+                SourceDiscoveryStep::NeedAttributeSelection { .. } => {
+                    panic!("actual SourceDiscoveryStep::NeedAttributeSelection")
+                }
+                SourceDiscoveryStep::NeedProceduralSelection { .. } => {
+                    panic!("actual SourceDiscoveryStep::NeedProceduralSelection")
+                }
             }
         }
         assert!(published);

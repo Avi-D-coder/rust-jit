@@ -41,7 +41,8 @@ pub struct TestCatalog {
     cases: Vec<TestCase>,
     seal: Option<crate::db::seals::Seal>,
     source_revision: u64,
-    environment: Option<std::sync::Arc<crate::expand::source_discovery::CompletedSourceEnvironment>>,
+    environment:
+        Option<std::sync::Arc<crate::expand::source_discovery::CompletedSourceEnvironment>>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TEST-DISCOVERY", message.into())
@@ -169,11 +170,7 @@ impl TestCatalog {
                 .checked_add(name.capacity())
                 .and_then(|n| n.checked_add(panic_contains.as_ref().map_or(0, String::capacity)))
                 .and_then(|n| n.checked_add(256))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("test metadata budget exceeded"))?;
-            if cases.len() >= 100_000 {
-                return Err(fault("test count limit exceeded"));
-            }
             cases.push(TestCase {
                 name,
                 definition: item.def_key.fingerprint(),

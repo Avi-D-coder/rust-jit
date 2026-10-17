@@ -70,8 +70,14 @@ pub struct ConstantDeclaration {
     blocked: bool,
     context: DeclarationContext,
     handle: BodyHandle,
+    /// A body-local item of an enclosing block: selected by the entered
+    /// lexical scope, never by the module's Value namespace.
+    local: bool,
 }
 impl ConstantDeclaration {
+    pub fn is_local(&self) -> bool {
+        self.local
+    }
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -96,12 +102,14 @@ impl ConstantDeclaration {
 }
 #[derive(Debug)]
 struct Captured {
-    parsed: ParsedFile,
+    parsed: std::sync::Arc<ParsedFile>,
     cfg: CfgSet,
     crate_key: Digest,
     scope: ScopeKey,
     selection: Option<SourceSelection>,
     module_items: Vec<ast::Item>,
+    /// Captured body-local items of the blocks enclosing a local constant.
+    local_items: Vec<ast::Item>,
     type_certificate: Option<CurrentConstantTypeCertificate>,
     macro_proofs: BTreeMap<(u32, u32), AdmittedConstantPanic>,
     declarations: Vec<ConstantDeclaration>,
@@ -122,6 +130,9 @@ pub struct ConstantPlan {
 #[derive(Debug, Clone)]
 enum Entry {
     Constant(ast::Const),
+    /// An immutable static's initializer: a const context in rustc whose
+    /// value a read of the static observes.
+    Static(ast::Static),
     Call(ast::Fn, Vec<ConstValue>),
     Length(ExprRef),
 }
@@ -213,6 +224,8 @@ pub(crate) enum Node {
     Panic,
     AdmittedPanic(AdmittedConstantPanic),
     RequiredMacro(Box<RequiredConstantMacro>),
+    /// A reached form outside the specified pure constant domain.
+    OutsideDomain(&'static str),
     Unsupported,
 }
 impl ConstantSource {
@@ -267,9 +280,8 @@ impl ConstantSource {
             .find(|i| i.def_key.fingerprint() == definition)
             .ok_or_else(|| fault("prepared constant declaration absent"))?;
         if item.scope.owner.is_some() {
-            return Err(fault(
-                "lexical/associated constant owner requires separate preparation",
-            ));
+            let item = item.clone();
+            return Self::capture_associated(view, parsed, cfg, outline, item);
         }
         let scope = item.scope.clone();
         view.captured_inline_module_layout(&scope)?;
@@ -281,7 +293,9 @@ impl ConstantSource {
             .filter_map(ast::Item::cast)
             .find(|i| range(i.syntax().text_range()) == item.declaration_span)
             .ok_or_else(|| fault("prepared constant declaration syntax absent"))?;
-        if !matches!(syntax, ast::Item::Const(_) | ast::Item::Fn(_)) {
+        // A `static mut` initializer is a const context like any static's;
+        // only reads of a `static mut` from other constants are refused.
+        if !matches!(syntax, ast::Item::Const(_) | ast::Item::Fn(_) | ast::Item::Static(_)) {
             return Err(fault(
                 "constant plan requires a direct const/function body owner",
             ));
@@ -309,6 +323,94 @@ impl ConstantSource {
             Some(selected.clone()),
             items,
         )
+    }
+    /// An associated constant of a non-generic impl or trait. Its
+    /// initializer names resolve in the enclosing module, exactly as rustc
+    /// resolves them (an impl or trait introduces no item namespace); the
+    /// member itself is selected by the member index, never by name here.
+    fn capture_associated(
+        view: &PreparedSourceView,
+        parsed: ParsedFile,
+        cfg: CfgSet,
+        outline: super::outline::Outline,
+        item: super::outline::ItemOutline,
+    ) -> Result<Self, Diagnostic> {
+        let selected = view.selection();
+        let module_scope = ScopeKey {
+            crate_key: item.scope.crate_key,
+            module_path: item.scope.module_path.clone(),
+            owner: None,
+        };
+        view.captured_inline_module_layout(&module_scope)?;
+        let body = item
+            .body
+            .clone()
+            .ok_or_else(|| fault("associated constant has no initializer"))?;
+        let syntax = parsed
+            .parsed
+            .tree()
+            .syntax()
+            .descendants()
+            .filter_map(ast::Item::cast)
+            .find(|i| range(i.syntax().text_range()) == item.declaration_span)
+            .ok_or_else(|| fault("prepared constant declaration syntax absent"))?;
+        let ast::Item::Const(constant) = &syntax else {
+            return Err(fault("associated constant plan requires a direct const"));
+        };
+        let owner = required(syntax.syntax().parent())
+            .ok()
+            .filter(|list| ast::AssocItemList::can_cast(list.kind()))
+            .and_then(|list| list.parent())
+            .ok_or_else(|| fault("associated constant owner is not an impl or trait"))?;
+        let generic = if let Some(owner) = ast::Impl::cast(owner.clone()) {
+            owner.generic_param_list().is_some() || owner.where_clause().is_some()
+        } else if let Some(owner) = ast::Trait::cast(owner.clone()) {
+            owner.generic_param_list().is_some() || owner.where_clause().is_some()
+        } else {
+            return Err(fault("associated constant owner is not an impl or trait"));
+        };
+        if generic {
+            return Err(fault(
+                "associated constant of a generic owner requires its substitution",
+            ));
+        }
+        let module = owner
+            .parent()
+            .filter(|parent| {
+                ast::SourceFile::can_cast(parent.kind()) || ast::ItemList::can_cast(parent.kind())
+            })
+            .ok_or_else(|| fault("associated constant owner is not a captured module item"))?;
+        let items = module.children().filter_map(ast::Item::cast).collect();
+        let mut captured = Self::capture_scope(
+            parsed,
+            cfg,
+            selected.outline.crate_key,
+            outline,
+            module_scope,
+            Some(selected.clone()),
+            items,
+        )?;
+        let inner = Rc::get_mut(&mut captured.0)
+            .ok_or_else(|| fault("associated constant capture requires a fresh capture"))?;
+        let at = item.declaration_span;
+        let name = semantic(required(constant.name())?.text())?;
+        inner.declarations.push(ConstantDeclaration {
+            name,
+            range: at,
+            definition: item.def_key.fingerprint(),
+            body: body.key(),
+            blocked: body.entry_blocked,
+            context: DeclarationContext {
+                scope: item.scope.clone(),
+                range: at,
+            },
+            handle: body.clone(),
+            local: false,
+        });
+        inner.owners.push((at, item.def_key.fingerprint(), Some(body)));
+        inner.local_items.push(syntax);
+        inner.scope = item.scope;
+        Ok(captured)
     }
     fn capture_scope(
         parsed: ParsedFile,
@@ -345,15 +447,17 @@ impl ConstantSource {
             let name = match item {
                 ast::Item::Const(c) if c.underscore_token().is_some() => String::new(),
                 ast::Item::Const(c) => semantic(required(c.name())?.text())?,
+                ast::Item::Static(s) => semantic(required(s.name())?.text())?,
                 ast::Item::Fn(f) => semantic(required(f.name())?.text())?,
                 _ => continue,
             };
+            // A `static mut` is captured for its own initializer, but a
+            // constant expression can never name (read) it.
+            let const_visible =
+                !matches!(item, ast::Item::Static(s) if s.mut_token().is_some());
             let Some(body) = header.body.as_ref() else {
                 continue;
             };
-            if declarations.len() >= 100_000 {
-                return Err(fault("constant declaration inventory limit"));
-            }
             declarations
                 .try_reserve(1)
                 .map_err(|_| fault("constant declaration allocation"))?;
@@ -368,18 +472,222 @@ impl ConstantSource {
                     range: at,
                 },
                 handle: body.clone(),
+                local: false,
             });
-            if !name.is_empty() {
+            if !name.is_empty() && const_visible {
+                items.entry(name).or_default().push(item.clone());
+            }
+        }
+        Ok(Self(Rc::new(Captured {
+            parsed: std::sync::Arc::new(parsed),
+            cfg,
+            crate_key,
+            scope,
+            selection,
+            module_items,
+            local_items: Vec::new(),
+            type_certificate: None,
+            macro_proofs: BTreeMap::new(),
+            declarations,
+            items,
+            owners,
+        })))
+    }
+    /// Capture a body-local constant or static in its lexical scope, as
+    /// rustc resolves a const context inside a function body: the items of
+    /// every enclosing block (innermost first, each visible throughout its
+    /// block, never a `let` binding), then the enclosing module's items.
+    /// `rows` are the owning body's actual entered item rows; `scopes` its
+    /// block scopes. Bodies are not typechecked or evaluated here.
+    /// `parsed` is the owning body's actual admitted source (the original
+    /// file, or its retained assembly with attached macro outputs): the
+    /// coordinates of `rows` and of the captured syntax.
+    pub(crate) fn capture_local(
+        view: &PreparedSourceView,
+        parsed: std::sync::Arc<ParsedFile>,
+        definition: Digest,
+        rows: &[crate::syntax::body_items::BodyItem],
+        scopes: &[crate::syntax::entered_macros::BodyMacroScope],
+    ) -> Result<Self, Diagnostic> {
+        view.require_original_hygiene()?;
+        view.require_declaration_syntax()?;
+        let selected = view.selection();
+        let cfg = view.captured_macro_cfg()?.clone();
+        if parsed.profile != selected.outline.parse.profile {
+            return Err(fault("local constant owning parse profile differs"));
+        }
+        // Module item identities and headers of the owning file, in the
+        // owning parse's own coordinates.
+        let outline = parsed.outline(
+            selected.outline.crate_key,
+            selected.outline.module_path.clone(),
+            &cfg,
+        )?;
+        let mut owned = rows
+            .iter()
+            .filter(|row| row.item.def_key.fingerprint() == definition);
+        let row = owned
+            .next()
+            .ok_or_else(|| fault("local constant declaration absent from its owning body"))?;
+        if owned.next().is_some() || row.attribute_input.is_some() {
+            return Err(fault("local constant declaration requires attribute preparation"));
+        }
+        let local_scope = row.item.scope.clone();
+        if local_scope.owner.is_none() {
+            return Err(fault("local constant scope has no owning body"));
+        }
+        let module_scope = ScopeKey {
+            crate_key: local_scope.crate_key,
+            module_path: local_scope.module_path.clone(),
+            owner: None,
+        };
+        view.captured_inline_module_layout(&module_scope)?;
+        let tree = parsed.parsed.tree();
+        let item_at = |at: SourceRange| -> Result<ast::Item, Diagnostic> {
+            tree.syntax()
+                .descendants()
+                .filter_map(ast::Item::cast)
+                .find(|i| range(i.syntax().text_range()) == at)
+                .ok_or_else(|| fault("local constant declaration syntax absent"))
+        };
+        let syntax = item_at(row.item.declaration_span)?;
+        if !matches!(syntax, ast::Item::Const(_) | ast::Item::Static(_))
+            || !syntax
+                .syntax()
+                .parent()
+                .is_some_and(|parent| ast::StmtList::can_cast(parent.kind()))
+        {
+            return Err(fault("local constant plan requires a direct block const/static"));
+        }
+        // The enclosing module's own item list (the root file or an inline
+        // module body); impls/traits introduce no module namespace.
+        let module = syntax
+            .syntax()
+            .ancestors()
+            .find(|node| {
+                ast::SourceFile::can_cast(node.kind())
+                    || (ast::ItemList::can_cast(node.kind())
+                        && node.parent().is_some_and(|p| ast::Module::can_cast(p.kind())))
+            })
+            .ok_or_else(|| fault("local constant enclosing module absent"))?;
+        let module_items: Vec<ast::Item> = module.children().filter_map(ast::Item::cast).collect();
+        // Enclosing block scopes, innermost first.
+        let mut chain = Vec::new();
+        let mut current = Some(row.scope);
+        while let Some(ordinal) = current {
+            if chain.contains(&ordinal) {
+                return Err(fault("local constant block ancestry cycle"));
+            }
+            chain.push(ordinal);
+            current = scopes
+                .iter()
+                .find(|scope| scope.ordinal == ordinal)
+                .ok_or_else(|| fault("local constant block scope absent"))?
+                .parent;
+        }
+        let mut declarations = Vec::new();
+        let mut items: BTreeMap<String, Vec<ast::Item>> = BTreeMap::new();
+        let mut local_items = Vec::new();
+        let mut owners = Vec::new();
+        for ordinal in &chain {
+            let mut block: BTreeMap<String, ast::Item> = BTreeMap::new();
+            for local in rows.iter().filter(|local| local.scope == *ordinal) {
+                if !matches!(
+                    local.item.def_key.item_kind,
+                    crate::source::manifest::ItemKind::Constant
+                        | crate::source::manifest::ItemKind::Static
+                        | crate::source::manifest::ItemKind::Function
+                ) || local.attribute_input.is_some()
+                {
+                    continue;
+                }
+                let Some(body) = local.item.body.as_ref() else {
+                    continue;
+                };
+                let at = local.item.declaration_span;
+                let item = item_at(at)?;
+                let name = match &item {
+                    ast::Item::Const(c) if c.underscore_token().is_some() => String::new(),
+                    ast::Item::Const(c) => semantic(required(c.name())?.text())?,
+                    ast::Item::Static(s) => semantic(required(s.name())?.text())?,
+                    ast::Item::Fn(f) => semantic(required(f.name())?.text())?,
+                    _ => return Err(fault("local constant row syntax kind differs")),
+                };
+                let const_visible =
+                    !matches!(&item, ast::Item::Static(s) if s.mut_token().is_some());
+                declarations.push(ConstantDeclaration {
+                    name: name.clone(),
+                    range: at,
+                    definition: local.item.def_key.fingerprint(),
+                    body: body.key(),
+                    blocked: body.entry_blocked,
+                    context: DeclarationContext {
+                        scope: local.item.scope.clone(),
+                        range: at,
+                    },
+                    handle: body.clone(),
+                    local: true,
+                });
+                owners.push((at, local.item.def_key.fingerprint(), Some(body.clone())));
+                if !name.is_empty() && const_visible && !items.contains_key(&name) {
+                    // Duplicate names in one block are an ambiguity rustc rejects.
+                    if block.insert(name.clone(), item.clone()).is_some() {
+                        return Err(fault("local constant block declares a name twice"));
+                    }
+                }
+                local_items.push(item);
+            }
+            for (name, item) in block {
+                items.insert(name, vec![item]);
+            }
+        }
+        for item in &module_items {
+            let at = range(item.syntax().text_range());
+            let Some(header) = outline
+                .items
+                .iter()
+                .find(|h| h.declaration_span == at && h.scope == module_scope)
+            else {
+                continue;
+            };
+            let name = match item {
+                ast::Item::Const(c) if c.underscore_token().is_some() => String::new(),
+                ast::Item::Const(c) => semantic(required(c.name())?.text())?,
+                ast::Item::Static(s) => semantic(required(s.name())?.text())?,
+                ast::Item::Fn(f) => semantic(required(f.name())?.text())?,
+                _ => continue,
+            };
+            let const_visible = !matches!(item, ast::Item::Static(s) if s.mut_token().is_some());
+            let Some(body) = header.body.as_ref() else {
+                continue;
+            };
+            declarations.push(ConstantDeclaration {
+                name: name.clone(),
+                range: at,
+                definition: header.def_key.fingerprint(),
+                body: body.key(),
+                blocked: body.entry_blocked,
+                context: DeclarationContext {
+                    scope: header.scope.clone(),
+                    range: at,
+                },
+                handle: body.clone(),
+                local: false,
+            });
+            owners.push((at, header.def_key.fingerprint(), Some(body.clone())));
+            // A block item shadows a same-named module item.
+            if !name.is_empty() && const_visible && !items.contains_key(&name) {
                 items.entry(name).or_default().push(item.clone());
             }
         }
         Ok(Self(Rc::new(Captured {
             parsed,
             cfg,
-            crate_key,
-            scope,
-            selection,
+            crate_key: selected.outline.crate_key,
+            scope: local_scope,
+            selection: Some(selected.clone()),
             module_items,
+            local_items,
             type_certificate: None,
             macro_proofs: BTreeMap::new(),
             declarations,
@@ -434,13 +742,9 @@ impl ConstantSource {
         if !proof.matches(selection, body, range) {
             return Err(fault("constant macro proof source/body/range differs"));
         }
-        if self.0.macro_proofs.len() >= 256 {
-            return Err(fault("constant macro proof count limit"));
-        }
         let total = self
             .metadata_bytes()?
             .checked_add(proof.metadata_bytes())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("constant macro proof metadata limit"))?;
         let _ = total;
         let captured = Rc::get_mut(&mut self.0)
@@ -462,11 +766,7 @@ impl ConstantSource {
             .tree()
             .syntax()
             .descendants_with_tokens()
-            .take(100_001)
             .count();
-        if nodes > 100_000 {
-            return Err(fault("constant source node count limit"));
-        }
         let mut bytes = nodes
             .checked_mul(128)
             .and_then(|n| n.checked_add(std::mem::size_of::<Captured>()))
@@ -500,7 +800,6 @@ impl ConstantSource {
                     .as_ref()
                     .map_or(Ok(0), SourceSelection::metadata_bytes)?,
             )
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("constant source metadata limit"))
     }
     pub fn declarations(&self) -> &[ConstantDeclaration] {
@@ -521,16 +820,23 @@ impl ConstantSource {
         self.0
             .module_items
             .iter()
+            .chain(&self.0.local_items)
             .find(|i| range(i.syntax().text_range()) == at)
             .cloned()
             .ok_or_else(|| fault("captured declaration absent"))
     }
     pub fn constant(&self, at: SourceRange) -> Result<ConstantPlan, Diagnostic> {
-        let ast::Item::Const(c) = self.exact(at)? else {
-            return Err(fault("selected declaration is not a constant"));
-        };
-        self.constant_header(&c)?;
-        self.plan(Entry::Constant(c), at)
+        match self.exact(at)? {
+            ast::Item::Const(c) => {
+                self.constant_header(&c)?;
+                self.plan(Entry::Constant(c), at)
+            }
+            ast::Item::Static(s) => {
+                self.static_header(&s)?;
+                self.plan(Entry::Static(s), at)
+            }
+            _ => Err(fault("selected declaration is not a constant")),
+        }
     }
     pub fn const_call(
         &self,
@@ -575,10 +881,19 @@ impl ConstantSource {
                     return Err(fault("array length owning root is cfg-disabled"));
                 }
                 let mut parameter_length = None;
+                // A length inside a captured associated constant of a
+                // non-generic impl/trait (`capture_associated`) resolves in
+                // the enclosing module like its initializer.
+                let associated = self.0.declarations.iter().any(|declaration| {
+                    declaration.context.scope.owner.is_some()
+                        && declaration.range.start <= at.start
+                        && at.end <= declaration.range.end
+                });
                 for ancestor in expr.syntax().ancestors() {
                     if (ast::Module::can_cast(ancestor.kind()) && self.0.selection.is_none())
-                        || ast::Impl::can_cast(ancestor.kind())
-                        || ast::Trait::can_cast(ancestor.kind())
+                        || (!associated
+                            && (ast::Impl::can_cast(ancestor.kind())
+                                || ast::Trait::can_cast(ancestor.kind())))
                         || ast::ClosureExpr::can_cast(ancestor.kind())
                     {
                         return Err(fault(
@@ -632,6 +947,20 @@ impl ConstantSource {
                         super::attributes::effective_metas(metas, &self.0.cfg)?;
                     let remaining = remaining
                         .into_iter()
+                        .filter(|meta| {
+                            // Builtin inert and tool attributes (`#![allow(..)]`)
+                            // are never macro calls; the declaration scan records
+                            // no producer or proof for them.
+                            let path: String = meta
+                                .path()
+                                .map(|path| path.syntax().text().to_string())
+                                .unwrap_or_default()
+                                .chars()
+                                .filter(|c| !c.is_whitespace())
+                                .collect();
+                            !(super::outline::is_builtin_inert_attribute(&path)
+                                || super::outline::is_tool_attribute(&path))
+                        })
                         .filter(|meta| {
                             !self.0.type_certificate.as_ref().is_some_and(|proof| {
                                 proof.permits_inert_attribute(range(meta.syntax().text_range()))
@@ -720,6 +1049,7 @@ impl ConstantSource {
         }
         match &entry {
             Entry::Constant(_) => e.u8(1),
+            Entry::Static(_) => e.u8(4),
             Entry::Call(_, args) => {
                 e.u8(2);
                 e.sequence(args, |e, a| e.record(a))
@@ -775,7 +1105,13 @@ impl ConstantSource {
             return Ok(PrimitiveType::Unit);
         }
         let ast::Type::PathType(path) = &ty else {
-            return Err(fault("constant type is not a handwritten primitive"));
+            return Err(match ty {
+                ast::Type::RefType(_) => outside_domain("a reference type"),
+                ast::Type::PtrType(_) => outside_domain("a raw pointer type"),
+                ast::Type::FnPtrType(_) => outside_domain("a function pointer type"),
+                ast::Type::SliceType(_) => outside_domain("a slice type"),
+                _ => fault("constant type is not a handwritten primitive"),
+            });
         };
         let name = bare(required(path.path())?)?;
         use PrimitiveType as P;
@@ -794,15 +1130,31 @@ impl ConstantSource {
             "usize" => P::Usize,
             "f32" => P::F32,
             "f64" => P::F64,
-            _ => return Err(fault("constant primitive type identity is unavailable")),
+            _ => {
+                // A nominal (struct/enum/union) type of the captured module.
+                return Err(if self.names_nominal(&name) {
+                    outside_domain("a nominal type")
+                } else {
+                    fault("constant primitive type identity is unavailable")
+                });
+            }
         };
         // Conservative captured lexical proof. Imports/producers never grant primitive identity.
+        // Block scopes (and generic parameters) inside the declaration's module
+        // are scanned. A module's own Type namespace — its items, imports and
+        // producers — is the current certificate's answer, when one is
+        // attached; enclosing modules' items are never in scope in Rust.
         let mut work = 0usize;
         for scope in ty.syntax().ancestors() {
+            let module_scope = ast::SourceFile::can_cast(scope.kind())
+                || (ast::ItemList::can_cast(scope.kind())
+                    && scope.parent().is_some_and(|p| ast::Module::can_cast(p.kind())));
+            if module_scope && self.0.type_certificate.is_some() {
+                break;
+            }
             for child in scope.children() {
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(|| fault("constant namespace work limit"))?;
                 if let Some(g)=ast::GenericParamList::cast(child.clone()) && g.generic_params().any(|p|matches!(p,ast::GenericParam::TypeParam(t) if t.name().is_some_and(|n|n.text()==name))){return Err(fault("constant primitive type is shadowed by a parameter"))}
                 let Some(item) = ast::Item::cast(child) else {
@@ -875,15 +1227,29 @@ impl ConstantSource {
             body: ExprRef(required(c.body())?),
         })
     }
+    /// An immutable static's initializer is evaluated exactly like a
+    /// constant body; its declared type is the result type.
+    fn static_header(&self, s: &ast::Static) -> Result<Constant, Diagnostic> {
+        self.attributes_clear(s.syntax())?;
+        if self.declaration(s)?.blocked {
+            return Err(fault("static initializer boundaries are blocked"));
+        }
+        Ok(Constant {
+            declaration: self.declaration(s)?,
+            ty: self.ty(required(s.ty())?)?,
+            body: ExprRef(required(s.body())?),
+        })
+    }
     fn function_header(&self, f: &ast::Fn) -> Result<Function, Diagnostic> {
         self.attributes_clear(f.syntax())?;
         if self.declaration(f)?.blocked {
             return Err(fault("const fn body boundaries are blocked"));
         }
+        // `const unsafe fn` is an ordinary const fn to the evaluator; the
+        // `unsafe` obligation is the caller's, checked by rustc.
         if f.const_token().is_none()
             || f.generic_param_list().is_some()
             || f.async_token().is_some()
-            || f.unsafe_token().is_some()
         {
             return Err(Diagnostic::new(
                 "LRR-E-CONST-EFFECT",
@@ -892,9 +1258,6 @@ impl ConstantSource {
         }
         let mut params = Vec::new();
         for p in required(f.param_list())?.params() {
-            if params.len() >= 256 {
-                return Err(fault("constant parameter limit"));
-            }
             let (name, mutable) = local_binding(required(p.pat())?)?;
             let ty = self.primitive(required(p.ty())?)?;
             if params.iter().any(|(n, _, _)| n == &name) {
@@ -914,11 +1277,14 @@ impl ConstantSource {
         })
     }
     pub(crate) fn named_constant(&self, name: &str) -> Result<Constant, Diagnostic> {
-        let i = self.named(name)?;
-        let ast::Item::Const(c) = i else {
-            return Err(fault("reached name is not a named constant"));
-        };
-        self.constant_header(&c)
+        match self.named(name)? {
+            ast::Item::Const(c) => self.constant_header(&c),
+            // A const context may read an immutable static's value
+            // (rustc-checkout tests/ui/static/refer-to-other-statics-by-value.rs);
+            // a `static mut` read is never const-evaluable.
+            ast::Item::Static(s) if s.mut_token().is_none() => self.static_header(&s),
+            _ => Err(fault("reached name is not a named constant")),
+        }
     }
     pub(crate) fn named_function(&self, name: &str) -> Result<Function, Diagnostic> {
         let i = self.named(name)?;
@@ -942,15 +1308,56 @@ impl ConstantSource {
                 return Err(fault("constant name requires source namespace preparation"));
             }
         }
-        let items = self
-            .0
-            .items
-            .get(name)
-            .ok_or_else(|| fault("reached constant name is absent"))?;
+        let items = self.0.items.get(name).ok_or_else(|| {
+            if self.names_nominal(name) {
+                outside_domain("a struct value or constructor")
+            } else {
+                fault("reached constant name is absent")
+            }
+        })?;
         if items.len() != 1 {
             return Err(fault("reached constant name is ambiguous"));
         }
         Ok(items[0].clone())
+    }
+    /// A single-name value path. A path through a nominal type (an enum
+    /// variant, associated constant or function) leaves the pure domain;
+    /// other qualified paths still need captured namespace routing.
+    fn value_path_name(&self, path: ast::Path) -> Result<String, Diagnostic> {
+        if let Some(qualifier) = path.qualifier() {
+            let mut first = qualifier;
+            while let Some(next) = first.qualifier() {
+                first = next;
+            }
+            let through_type = first.segment().is_some_and(|segment| {
+                segment.type_anchor().is_some()
+                    || segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw)
+                    || segment.name_ref().is_some_and(|name| {
+                        semantic(name.text()).is_ok_and(|name| self.names_nominal(&name))
+                    })
+            });
+            if through_type {
+                return Err(outside_domain("an enum variant or associated item path"));
+            }
+        }
+        bare(path)
+    }
+    /// Whether a captured module or enclosing block declares a struct,
+    /// enum or union `name` (a nominal value, outside the pure domain).
+    fn names_nominal(&self, name: &str) -> bool {
+        self.0
+            .module_items
+            .iter()
+            .chain(&self.0.local_items)
+            .any(|item| {
+                let declared = match item {
+                    ast::Item::Struct(x) => x.name(),
+                    ast::Item::Enum(x) => x.name(),
+                    ast::Item::Union(x) => x.name(),
+                    _ => None,
+                };
+                declared.is_some_and(|n| semantic(n.text()).is_ok_and(|n| n == name))
+            })
     }
     pub(crate) fn statement(&self, s: &StatementRef) -> Result<Statement, Diagnostic> {
         Ok(match &s.0 {
@@ -993,7 +1400,6 @@ impl ConstantSource {
             for child in scope.children() {
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(|| fault("constant lexical value work limit"))?;
                 let Some(item) = ast::Item::cast(child) else {
                     continue;
@@ -1013,7 +1419,7 @@ impl ConstantSource {
                         "constant lexical value namespace requires source preparation",
                     ));
                 }
-                let name = match item {
+                let name = match &item {
                     ast::Item::Const(i) => i.name(),
                     ast::Item::Static(i) => i.name(),
                     ast::Item::Fn(i) => i.name(),
@@ -1021,6 +1427,24 @@ impl ConstantSource {
                     _ => None,
                 };
                 if name.is_some_and(|n| semantic(n.text()).is_ok_and(|n| n == wanted)) {
+                    // The innermost block item of this name is the captured
+                    // lexical selection of a body-local constant's scope.
+                    let at = range(item.syntax().text_range());
+                    if self
+                        .0
+                        .items
+                        .get(wanted)
+                        .is_some_and(|selected| {
+                            selected.len() == 1 && range(selected[0].syntax().text_range()) == at
+                        })
+                        && self
+                            .0
+                            .local_items
+                            .iter()
+                            .any(|local| range(local.syntax().text_range()) == at)
+                    {
+                        return Ok(());
+                    }
                     return Err(fault(
                         "constant value has an unsupported local item identity",
                     ));
@@ -1064,7 +1488,7 @@ impl ConstantSource {
             E::ParenExpr(p) => Node::Parentheses(ExprRef(required(p.expr())?)),
             E::TupleExpr(t) if t.fields().next().is_none() => Node::Unit,
             E::PathExpr(p) => {
-                let name = bare(required(p.path())?)?;
+                let name = self.value_path_name(required(p.path())?)?;
                 self.lexical_value_clear(p.syntax(), &name)?;
                 Node::Path(name)
             }
@@ -1150,9 +1574,9 @@ impl ConstantSource {
                 }),
             ),
             E::BlockExpr(b) => {
+                // `unsafe { .. }` and `const { .. }` blocks evaluate as
+                // ordinary blocks in a const context.
                 if b.async_token().is_some()
-                    || b.unsafe_token().is_some()
-                    || b.const_token().is_some()
                     || b.gen_token().is_some()
                     || b.try_block_modifier().is_some()
                 {
@@ -1161,9 +1585,6 @@ impl ConstantSource {
                 let list = required(b.stmt_list())?;
                 let mut stmts = Vec::new();
                 for s in list.statements() {
-                    if stmts.len() >= 100_000 {
-                        return Err(fault("constant block inventory limit"));
-                    }
                     stmts.push(StatementRef(s));
                 }
                 Node::Block(
@@ -1196,7 +1617,7 @@ impl ConstantSource {
                     return Ok(Node::Unsupported);
                 };
                 let args = required(c.arg_list())?.args().map(ExprRef).collect();
-                let name = bare(required(p.path())?)?;
+                let name = self.value_path_name(required(p.path())?)?;
                 self.lexical_value_clear(c.syntax(), &name)?;
                 Node::Call(name, args)
             }
@@ -1251,9 +1672,30 @@ impl ConstantSource {
                     Node::Unsupported
                 }
             }
+            // Spec §18.3 keeps nominal values, references and method
+            // selection out of the pure evaluator; their const-context
+            // evaluation awaits the const-evaluation design decision.
+            E::RecordExpr(_) => Node::OutsideDomain("a struct or variant value"),
+            E::MethodCallExpr(_) => Node::OutsideDomain("a method call"),
+            E::RefExpr(_) => Node::OutsideDomain("a reference value"),
+            E::FieldExpr(_) => Node::OutsideDomain("a field projection"),
+            E::MatchExpr(_) => Node::OutsideDomain("a match expression"),
+            E::ClosureExpr(_) => Node::OutsideDomain("a closure value"),
             _ => Node::Unsupported,
         })
     }
+}
+/// The diagnostic for a constant whose initializer or type leaves the
+/// specified pure constant domain (spec §18.3: scalars, strings, tuples
+/// and arrays). Its const-context evaluation awaits the const-evaluation
+/// design decision; it is never approximated here.
+pub(crate) fn outside_domain(what: &str) -> Diagnostic {
+    Diagnostic::new(
+        "LRR-E-CONST-UNSUPPORTED",
+        format!(
+            "constant initializer outside the pure constant domain ({what}: nominal values, references and method calls await the const-evaluation design decision)"
+        ),
+    )
 }
 fn local_binding(pat: ast::Pat) -> Result<(String, bool), Diagnostic> {
     let ast::Pat::IdentPat(p) = pat else {
@@ -1307,6 +1749,7 @@ impl ConstantPlan {
     pub(crate) fn entry(&self) -> Result<SelectedEntry, Diagnostic> {
         Ok(match &self.entry {
             Entry::Constant(c) => (Some(self.source.constant_header(c)?), None, None),
+            Entry::Static(s) => (Some(self.source.static_header(s)?), None, None),
             Entry::Call(f, args) => (
                 None,
                 Some((self.source.function_header(f)?, args.clone())),
@@ -1318,6 +1761,7 @@ impl ConstantPlan {
     pub(crate) fn range(&self) -> SourceRange {
         match &self.entry {
             Entry::Constant(c) => range(c.syntax().text_range()),
+            Entry::Static(s) => range(s.syntax().text_range()),
             Entry::Call(f, _) => range(f.syntax().text_range()),
             Entry::Length(e) => e.range(),
         }

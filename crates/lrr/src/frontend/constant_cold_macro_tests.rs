@@ -54,7 +54,7 @@ fn unchanged_cold_unreachable_and_unimplemented_have_distinct_declaration_proofs
                 &admission,
                 &handle.key(),
                 invocation.range,
-                MAX_BYTES,
+                usize::MAX,
             )
             .unwrap_err();
             assert_eq!(error.code, "LRR-E-CONST-MACRO-SOURCE");

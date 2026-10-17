@@ -27,7 +27,7 @@ struct Context {
     operand: NodeId,
     expected: u64,
 }
-fn context(mutable: bool, fuel: u64) -> Context {
+fn context(mutable: bool) -> Context {
     let facts = scope_fixture_facts::original_reference_contexts(ORIGINAL);
     assert_eq!(facts.len(), 2);
     let facts = facts.iter().find(|fact| fact.mutable == mutable).unwrap();
@@ -61,14 +61,13 @@ fn context(mutable: bool, fuel: u64) -> Context {
     };
     let statement = id(facts.statement);
     let (binding, borrow, operand) = (id(facts.binding), id(facts.borrow), id(facts.operand));
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(
         body.clone(),
         body.pc(statement, Phase::Entry).unwrap(),
         &mut store,
     )
     .unwrap();
-    frame.set_fuel_limit(fuel).unwrap();
     let mut scopes = vec![];
     let mut scope = Some(body.nodes()[statement.0 as usize].scope);
     while let Some(id) = scope {
@@ -187,7 +186,7 @@ fn complete(c: &mut Context) {
     panic!("original typed borrow statement did not finish");
 }
 fn check(mutable: bool) {
-    let mut c = context(mutable, 1000);
+    let mut c = context(mutable);
     complete(&mut c);
     let node = &c.frame.body.nodes()[c.operand.0 as usize];
     let scope = node.extended_to.as_ref().unwrap().scope;
@@ -219,45 +218,8 @@ fn rustc_explicit_mutable_borrow_context_materializes_original_unsuffixed_operan
     check(true);
 }
 #[test]
-fn rustc_borrow_target_hint_fuel_refusal_preserves_operand_before_publication() {
-    let witness = context(false, 1000);
-    let mut c = context(false, witness.frame.fuel_snapshot().used);
-    let child = c.frame.body.nodes()[c.operand.0 as usize].value.unwrap();
-    let handles = c.store.budget().handles();
-    let source = c.frame.source_view(child).unwrap();
-    let r = recipe(&c);
-    assert_eq!(
-        step(&mut c.frame, &mut c.store, &r).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(c.frame.hint(child).unwrap(), None);
-    assert_eq!(c.frame.source_view(child).unwrap(), source);
-    assert!(c.frame.cell(child).is_err());
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.started_by_opcode[0], 0);
-    assert_eq!(c.frame.counters.started_by_opcode[31], 0);
-}
-#[test]
-fn rustc_borrow_target_hint_cancellation_preserves_operand_before_publication() {
-    let mut c = context(true, 1000);
-    let child = c.frame.body.nodes()[c.operand.0 as usize].value.unwrap();
-    let handles = c.store.budget().handles();
-    c.frame.fuel.cancellation().cancel();
-    let r = recipe(&c);
-    assert_eq!(
-        step(&mut c.frame, &mut c.store, &r).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(c.frame.hint(child).unwrap(), None);
-    assert_eq!(c.frame.source_view(child).unwrap(), None);
-    assert!(c.frame.cell(child).is_err());
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.started_by_opcode[0], 0);
-    assert_eq!(c.frame.counters.started_by_opcode[31], 0);
-}
-#[test]
 fn rustc_borrow_target_hint_verifier_rejects_foreign_parent_child_and_annotation_use() {
-    let c = context(false, 1000);
+    let c = context(false);
     let r = recipe(&c);
     let child = c.frame.body.nodes()[c.operand.0 as usize].value.unwrap();
     let parent = c.frame.body.nodes()[c.borrow.0 as usize].value.unwrap();
@@ -332,7 +294,7 @@ fn rustc_borrow_target_hint_without_context_preserves_original_suffixed_type() {
         .iter()
         .find(|node| node.range == facts.borrow)
         .unwrap();
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(
         body.clone(),
         body.pc(borrow.id, Phase::Entry).unwrap(),

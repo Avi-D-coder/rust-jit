@@ -32,10 +32,7 @@ pub(crate) fn prepare_remaining(
     if !facts.enabled {
         return Err(fault("generated attribute item became disabled"));
     }
-    if skipped.len() > 4096
-        || inert.len() > 4096
-        || compiler_tests.len() > 4096
-        || !compiler_tests.is_subset(inert)
+    if !compiler_tests.is_subset(inert)
         || skipped
             .iter()
             .chain(inert)

@@ -87,6 +87,59 @@ pub enum ConstructorKind {
         rest: Option<ConstructorOperand>,
     },
 }
+/// A range expression's lang-item struct (rustc's AST lowering of `a..b`,
+/// `a..`, `..b`, `..` and `..=b` to `core::ops::Range*` struct literals).
+/// The record plan names the item through the owning `core` crate, never
+/// through the caller's scope, so user items cannot shadow it.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum LangRecord {
+    Range,
+    RangeFrom,
+    RangeTo,
+    RangeFull,
+    RangeToInclusive,
+}
+impl LangRecord {
+    /// Path of the lang item inside the `core` crate.
+    pub fn core_path(self) -> [&'static str; 2] {
+        [
+            "ops",
+            match self {
+                Self::Range => "Range",
+                Self::RangeFrom => "RangeFrom",
+                Self::RangeTo => "RangeTo",
+                Self::RangeFull => "RangeFull",
+                Self::RangeToInclusive => "RangeToInclusive",
+            },
+        ]
+    }
+    fn tag(self) -> u32 {
+        match self {
+            Self::Range => 0,
+            Self::RangeFrom => 1,
+            Self::RangeTo => 2,
+            Self::RangeFull => 3,
+            Self::RangeToInclusive => 4,
+        }
+    }
+    /// The lang item a range expression constructs and its written fields.
+    /// `a..=b` lowers to `RangeInclusive::new(a, b)` (private fields), which
+    /// is not a record construction; it is `None` here.
+    pub(crate) fn of(range: &ast::RangeExpr) -> Option<(Self, Option<ast::Expr>, Option<ast::Expr>)> {
+        use ast::RangeItem;
+        let inclusive = range.op_kind()? == ast::RangeOp::Inclusive;
+        let (start, end) = (range.start(), range.end());
+        let item = match (start.is_some(), end.is_some(), inclusive) {
+            (true, true, false) => Self::Range,
+            (true, false, false) => Self::RangeFrom,
+            (false, true, false) => Self::RangeTo,
+            (false, false, false) => Self::RangeFull,
+            (false, true, true) => Self::RangeToInclusive,
+            _ => return None,
+        };
+        Some((item, start, end))
+    }
+}
 /// Sealed source/index pairing. Consumers resolve types and evaluate child PCs
 /// later; capture performs neither operation, including for a zero-length repeat.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -96,6 +149,8 @@ pub struct ConstructorPlan {
     profile: ProfileIdentity,
     cfg: Digest,
     kind: ConstructorKind,
+    /// `Some` for a range expression: a record of this `core` lang item.
+    lang: Option<LangRecord>,
 }
 impl ConstructorPlan {
     pub fn node(&self) -> NodeId {
@@ -112,6 +167,10 @@ impl ConstructorPlan {
     }
     pub fn kind(&self) -> &ConstructorKind {
         &self.kind
+    }
+    /// The `core` lang-item struct a range expression's record constructs.
+    pub fn lang_record(&self) -> Option<LangRecord> {
+        self.lang
     }
     pub fn estimated_bytes(&self) -> Option<usize> {
         let operands = |n: usize| n.checked_mul(std::mem::size_of::<ConstructorOperand>());
@@ -216,9 +275,6 @@ impl ParsedFile {
         let mut name_range = None;
         let mut first_name_range = None;
         loop {
-            if suffix.len() >= 256 {
-                return Err(limit());
-            }
             let segment = current
                 .segment()
                 .ok_or_else(|| fault("record path segment absent"))?;
@@ -323,9 +379,11 @@ impl ParsedFile {
         if !matches!(
             expression,
             ast::Expr::TupleExpr(_) | ast::Expr::ArrayExpr(_) | ast::Expr::RecordExpr(_)
-        ) {
+        ) && !matches!(&expression, ast::Expr::RangeExpr(range) if LangRecord::of(range).is_some())
+        {
             return Ok(None);
         }
+        let mut lang = None;
         let operand = |expr: ast::Expr| -> Result<ConstructorOperand, Diagnostic> {
             let r = range(expr.syntax().text_range());
             let relative = SourceRange {
@@ -425,6 +483,31 @@ impl ParsedFile {
                     rest,
                 }
             }
+            // `a..b` is the record `core::ops::Range { start: a, end: b }`.
+            ast::Expr::RangeExpr(range) => {
+                let (item, start, end) =
+                    LangRecord::of(&range).ok_or_else(|| fault("range lang item absent"))?;
+                let edition = self.profile.edition;
+                let mut fields = Vec::new();
+                for (name, expr) in [("start", start), ("end", end)] {
+                    if let Some(expr) = expr {
+                        push(
+                            &mut fields,
+                            WrittenField {
+                                name: name.into(),
+                                edition,
+                                operand: operand(expr)?,
+                            },
+                        )?;
+                    }
+                }
+                lang = Some(item);
+                ConstructorKind::Record {
+                    path: Vec::new(),
+                    fields,
+                    rest: None,
+                }
+            }
             _ => return Ok(None),
         };
         let plan = ConstructorPlan {
@@ -433,13 +516,8 @@ impl ParsedFile {
             profile: self.profile.clone(),
             cfg: cfg.fingerprint(),
             kind,
+            lang,
         };
-        if plan
-            .estimated_bytes()
-            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(limit());
-        }
         Ok(Some(plan))
     }
 }
@@ -481,6 +559,7 @@ impl StableEncode for ConstructorPlan {
                 e.option(rest, operand);
             }
         }
+        e.option(&self.lang, |e, item| e.u32(item.tag()));
     }
 }
 impl StableEncode for ConstructorToken {
@@ -499,6 +578,75 @@ mod tests {
     use crate::ir::pc::Phase;
     use crate::source::snapshot::SourceBlob;
     use crate::syntax::body_index::ExpressionKind;
+    /// rustc lowers `..`, `a..`, `..b` and `a..b` to `core::ops` lang-item
+    /// struct literals; each reached range expression is that ordinary record
+    /// plan with its written bounds as the named fields, in source order.
+    #[test]
+    fn rustc_range_expressions_plan_core_lang_item_records() {
+        const ORIGINAL: &str =
+            include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/slice.rs");
+        let cfg = CfgSet::guest_default();
+        let parsed = ParsedFile::parse(
+            &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+            ProfileIdentity::current(),
+        )
+        .unwrap();
+        let outline = parsed.outline(Digest([149; 32]), vec![], &cfg).unwrap();
+        let main = outline
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "main")
+            .unwrap();
+        let body = main.body.as_ref().unwrap();
+        let index = parsed.index_body(body, Default::default()).unwrap();
+        let plans: Vec<_> = index
+            .nodes()
+            .iter()
+            .filter(|node| node.constructor_guard.is_some())
+            .filter_map(|node| {
+                parsed
+                    .constructor_plan(body, &index, node.id, &cfg)
+                    .unwrap()
+            })
+            .filter(|plan| plan.lang_record().is_some())
+            .collect();
+        let shapes: Vec<_> = plans
+            .iter()
+            .map(|plan| {
+                let ConstructorKind::Record {
+                    path,
+                    fields,
+                    rest: None,
+                } = plan.kind()
+                else {
+                    panic!("range plan is not a plain record")
+                };
+                assert!(path.is_empty(), "a lang item is never named by caller tokens");
+                (
+                    plan.lang_record().unwrap(),
+                    fields
+                        .iter()
+                        .map(|field| field.name.as_str())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        let expected = [
+            (LangRecord::RangeFull, vec![]),
+            (LangRecord::RangeFrom, vec!["start"]),
+            (LangRecord::RangeTo, vec!["end"]),
+            (LangRecord::Range, vec!["start", "end"]),
+        ];
+        // `&x[..]` .. `&x[Foo..Foo]`, then the same four under `&mut`.
+        assert_eq!(shapes.len(), 8);
+        for (actual, expected) in shapes.iter().zip(expected.iter().chain(expected.iter())) {
+            assert_eq!(actual.0, expected.0);
+            assert_eq!(actual.1, expected.1);
+        }
+        assert_eq!(LangRecord::Range.core_path(), ["ops", "Range"]);
+        // Distinct lang items keep distinct plan identities.
+        assert_ne!(plans[0].fingerprint(), plans[4].fingerprint());
+    }
     #[test]
     fn rustc_const_record_initializer_indexes_original_order_without_constant_evaluation() {
         use crate::syntax::body_index::{ScopeId, ScopeKind};

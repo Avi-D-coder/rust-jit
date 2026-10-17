@@ -35,7 +35,6 @@ impl ModuleSyntaxInput {
                 .checked_add(key.heap_bytes())
                 .and_then(|n| n.checked_add(value.estimated_bytes().ok()?))
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(fault)?;
         }
         let mut identity = StableEncoder::new("lrr/v2/module-syntax-projection");

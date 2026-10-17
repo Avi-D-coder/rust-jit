@@ -115,12 +115,6 @@ impl SpanStore {
                 .next_slot
                 .checked_add(1)
                 .ok_or_else(|| error("span slot overflow"))?;
-            if slot >= 2_000_000 {
-                return Err(AdapterError {
-                    code: "LRR-E-MACRO-OUTPUT",
-                    message: "private span table limit".into(),
-                });
-            }
             let s = Span {
                 range: TextRange::new(record.start.into(), record.end.into()),
                 anchor: SpanAnchor {
@@ -157,6 +151,79 @@ impl SpanStore {
         });
         pinned::emit(children, &mut builder, &self.slots)?;
         Ok(builder.build())
+    }
+    pub(crate) fn record(&self, key: Key) -> Option<&SpanRecord> {
+        self.records.get(&key)
+    }
+    /// Compiler builtin span construction (rustc `Span::with_def_site_ctxt` /
+    /// `with_call_site_ctxt`): keep the invocation location record and replace
+    /// only its resolution context. Def-site marks apply an opaque mark to the
+    /// defining unit's root; call-site marks apply a transparent mark to the
+    /// caller's root and inherit the caller's normalized context through the
+    /// pinned `apply_mark_with_call_site` algorithm.
+    pub(crate) fn builtin_span(
+        &mut self,
+        call_site: Key,
+        mark: crate::builtin_macros::BuiltinSite,
+        transparency: crate::token_wire::Transparency,
+    ) -> Result<Key, AdapterError> {
+        use crate::token_wire::Transparency;
+        let location = self
+            .records
+            .get(&call_site)
+            .ok_or_else(|| error("unregistered builtin call-site record"))?
+            .clone();
+        let parent = match transparency {
+            Transparency::Opaque => self
+                .hygiene
+                .root(mark.defining_unit, mark.definition_edition)?,
+            Transparency::Transparent | Transparency::SemiTransparent => {
+                self.hygiene.root_key(location.context)?
+            }
+        };
+        let context = self.hygiene.apply(MarkRequest {
+            parent,
+            expansion: mark.expansion,
+            defining_unit: mark.defining_unit,
+            definition_edition: mark.definition_edition,
+            call_site: location.context,
+            transparency,
+        })?;
+        self.sync_contexts();
+        let record = SpanRecord {
+            context,
+            ..location
+        };
+        self.register_record(record)
+    }
+    fn register_record(&mut self, record: SpanRecord) -> Result<Key, AdapterError> {
+        let key = record.key();
+        if self.slots.contains_key(&key) {
+            return Ok(key);
+        }
+        let slot = self.next_slot;
+        self.next_slot = self
+            .next_slot
+            .checked_add(1)
+            .ok_or_else(|| error("span slot overflow"))?;
+        let s = Span {
+            range: TextRange::new(record.start.into(), record.end.into()),
+            anchor: SpanAnchor {
+                file_id: EditionedFileId::new(
+                    FileId::from_raw(slot),
+                    pinned::edition(record.edition),
+                ),
+                ast_id: ROOT_ERASED_FILE_AST_ID,
+            },
+            ctx: self.transport_context(record.context)?,
+        };
+        self.records.insert(key, record);
+        self.anchors.insert(s.anchor, key);
+        self.slots.insert(key, s);
+        if self.reverse.insert(s, key).is_some() {
+            return Err(error("ambiguous private span slot"));
+        }
+        Ok(key)
     }
     pub(crate) fn span(&self, key: Key) -> Result<Span, AdapterError> {
         self.slots
@@ -243,14 +310,6 @@ impl SpanStore {
             .iter()
             .filter(|(key, ..)| !self.records.contains_key(key))
             .count();
-        if self
-            .records
-            .len()
-            .checked_add(additions)
-            .is_none_or(|n| n > 2_000_000)
-        {
-            return Err(error("marked span table limit exceeded"));
-        }
         let mut substitutions = HashMap::new();
         substitutions
             .try_reserve(staged.len())
@@ -375,9 +434,6 @@ impl SpanStore {
             if self.reverse.contains_key(&span) {
                 return Ok(());
             }
-            if self.records.len() >= 2_000_000 {
-                return Err(error("procedural span table limit"));
-            }
             let location = self
                 .anchors
                 .get(&span.anchor)
@@ -396,7 +452,6 @@ impl SpanStore {
             };
             text_bytes = text_bytes
                 .checked_add(location.source.path.len())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("procedural span source metadata limit"))?;
             let record = SpanRecord {
                 source: location.source.clone(),

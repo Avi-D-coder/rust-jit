@@ -4,7 +4,7 @@ use crate::{
     core::diagnostic::Diagnostic,
     syntax::{body_index::ScopeId, spans::BodySpan},
 };
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum PrimitiveType {
     Unit,
     Bool,
@@ -85,6 +85,12 @@ pub enum HintRecipe {
         mutable: bool,
         target: PrimitiveType,
     },
+    /// A written local annotation whose named leaves the entered Type service
+    /// selected (nominal, tuple and array annotations).
+    Written(std::sync::Arc<super::written_type::WrittenType>),
+    /// The definition's declared nominal result (`-> Option<u32>`), when its
+    /// call contract closed it; otherwise no context. Root Entry only.
+    DefinitionWrittenResult,
 }
 /// Selected from definition-source types before either operand executes.
 /// Generic/overloaded assignment requires an exact trait-member recipe instead.
@@ -234,15 +240,79 @@ impl NumericUnary {
         }
     }
 }
+/// How a comparison operand's value expression reads its place when the
+/// operand is a builtin (primitive scalar or shared reference) value.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum OperandRead {
+    /// A local binding path (`ReadLocal`).
+    Local(super::pc::NodeId),
+    /// A parameter path (`ReadParameter`).
+    Parameter(u32),
+    /// A projection (field, index or dereference: `ReadPlace`).
+    Place,
+}
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BorrowAccess {
     Shared,
     Mutable,
 }
+/// How a closure captures one enclosing binding (rustc's capture inference
+/// over the closure body's uses of that binding, by whole variable).
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CaptureMode {
+    /// Shared borrow: the body only reads or borrows the variable.
+    Shared,
+    /// Unique borrow: the body assigns or mutably borrows the variable.
+    Mutable,
+    /// By value (`move` closures): copy a Copy value, move any other.
+    Value,
+    /// A use that consumes the variable: by value unless its reached type is
+    /// Copy, which a shared borrow suffices for.
+    Consumed,
+}
+/// What a closure captures: an enclosing binding, or a parameter of the
+/// frame that creates the closure (by its ordinal there).
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CaptureSource {
+    Binding(super::pc::NodeId),
+    Parameter(u32),
+}
+/// One captured enclosing variable, in the closure's capture order.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ClosureCapture {
+    pub source: CaptureSource,
+    pub mode: CaptureMode,
+}
+/// One written closure parameter (an identifier pattern): whether its
+/// binding is `mut` and its written primitive annotation, which types the
+/// call's argument like a declared parameter type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ClosureParameter {
+    pub mutable: bool,
+    pub hint: Option<PrimitiveType>,
+}
 /// Stable opcode inventory. Runtime counter storage must use this bound.
 // Tag42 remains reserved for the separately frozen managed Vec instruction.
 pub const SOURCE_CONSTANT_OPCODE: u8 = 43;
-pub const OPCODE_COUNT: usize = 46;
+// Tag 60 is the format_args operation; the counter array covers it.
+pub const FORMAT_ARGUMENTS_OPCODE: u8 = 60;
+// Tag 58 reads a non-local value path through the dispatcher's selection.
+pub const VALUE_PATH_OPCODE: u8 = 58;
+/// Call-op spelling of a call through its callee operand's value (`f(x)` with
+/// `f` a local, parameter or non-path expression), selected from the callee's
+/// reached callable type rather than by name.
+pub const VALUE_CALL_NAME: &str = "()";
+// Tag 59 creates a closure value from its captured bindings.
+pub const MAKE_CLOSURE_OPCODE: u8 = 59;
+pub const METHOD_RECEIVER_OPCODE: u8 = 61;
+pub const COMPOUND_ASSIGN_PLACE_OPCODE: u8 = 62;
+// Tag 63 builds `[element; count]` from a once-evaluated element.
+pub const ARRAY_REPEAT_OPCODE: u8 = 63;
+// Tag 64 forms one autoref'd comparison operand from its place.
+pub const COMPARISON_OPERAND_OPCODE: u8 = 64;
+// Tag 65 calls a `for` loop's lang-item iterator method.
+pub const ITERATOR_CALL_OPCODE: u8 = 65;
+pub const OPCODE_COUNT: usize = 66;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -297,7 +367,6 @@ impl PrimitiveFloatingConstant {
             || binding.next.body != binding.key.body
             || binding.key.phase != super::pc::Phase::Entry.code()?
             || binding.dependencies.is_empty()
-            || binding.dependencies.len() > 16
         {
             return Err(invalid());
         }
@@ -407,75 +476,61 @@ impl crate::core::digest::StableEncode for PrimitiveFloatingConstant {
     }
 }
 
-/// Prepared ordinary pattern transitions. No guest values, scopes, leases or
-/// source parsing are embedded in a cached transition.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum PatternDecision {
-    Begin {
-        source: SlotId,
-        matched: super::pc::PcKey,
-        unmatched: super::pc::PcKey,
-        unmatched_inactive: super::pc::PcKey,
-    },
-    /// A source receipt for ordinary tests/projections in this node's recipe.
-    Observe,
-    StartSource,
-    SourceStep,
-    EnterAttempt {
-        scope: ScopeId,
-    },
-    CheckTuple {
-        place: SlotId,
-        arity: u32,
-    },
-    Test {
-        result: SlotId,
-        first: bool,
-        upper_pending: bool,
-    },
-    Enter,
-    Success,
-    Fail {
-        node: Option<super::pc::NodeId>,
-    },
-    /// Retire at most one pending source or one exhausted source choice.
-    Cleanup,
-}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PatternOperation {
-    Decision {
+    /// Open the owner's single pattern transaction over its evaluated
+    /// scrutinee: an owning value slot or an executed place slot. Every owner
+    /// (match, let, let-else, if/while let, macro output) uses these steps.
+    Open {
         owner: super::pc::NodeId,
-        plan: std::sync::Arc<crate::syntax::pattern_product::PatternProductPlan>,
-        transition: PatternDecision,
-    },
-    Begin {
-        owner: super::pc::NodeId,
-        alternative: super::pc::NodeId,
         source: SlotId,
-        retry: super::pc::PcKey,
     },
-    StageBinding {
+    /// Non-consuming structural test of one retained root pattern against the
+    /// open scrutinee. Writes Bool to `result` and stages bindings on success.
+    /// `retry` resumes after the previously selected solution, so a false
+    /// guard retries the same arm's later or-alternatives without replaying
+    /// scrutinee evaluation.
+    Test {
         owner: super::pc::NodeId,
-        binding: super::pc::NodeId,
-        source: SlotId,
-        writable: bool,
+        tree: std::sync::Arc<crate::syntax::pattern_tree::PatternTree>,
+        result: SlotId,
+        retry: bool,
     },
-    /// Publish provisional copies for a guard. General non-Copy guard views
-    /// require their shared borrow/projection engine and remain unsupported.
-    Preview {
+    /// Publish the staged bindings as a guard view without moving the source.
+    Expose {
         owner: super::pc::NodeId,
     },
-    /// None means an already successful irrefutable/selected pattern. A Bool
-    /// result commits on true and rolls back on false without consuming it.
-    Finish {
+    /// Retire the guard view after its guard completed.
+    Conceal {
         owner: super::pc::NodeId,
-        matched: Option<SlotId>,
     },
-    Rollback {
+    /// Validate, then transfer every staged binding (copy, move or borrow) in
+    /// binding order.
+    Commit {
+        owner: super::pc::NodeId,
+    },
+    /// Close the owner's transaction.
+    Close {
         owner: super::pc::NodeId,
     },
 }
 
+/// The lang-item iterator method a `for` loop calls.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum IteratorCall {
+    /// `core::iter::IntoIterator::into_iter`.
+    IntoIter,
+    /// `core::iter::Iterator::next`.
+    Next,
+}
+impl IteratorCall {
+    pub fn tag(self) -> u32 {
+        match self {
+            Self::IntoIter => 0,
+            Self::Next => 1,
+        }
+    }
+}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Op {
     Pattern {
@@ -556,11 +611,85 @@ pub enum Op {
         guard: SlotId,
         destination: SlotId,
     },
+    /// A non-local value path (`S`, `E::A`, `crate::m::S`) as written. The
+    /// dispatcher selects it through the ordinary Value namespace for this
+    /// exact PC before dispatch (constants keep their SourceConstant route);
+    /// a selected unit struct or unit enum variant constructor writes its
+    /// fieldless nominal value. Selection never happens inside the VM.
+    ValuePath {
+        path: String,
+        destination: SlotId,
+    },
+    /// Create the closure value of the closure expression at this PC: a
+    /// `TypeKey::Callable` aggregate whose fields are its captures (shared or
+    /// unique references to, or values moved/copied out of, the enclosing
+    /// bindings). Its body executes only in the closure's own call frame.
+    MakeClosure {
+        captures: Box<[ClosureCapture]>,
+        parameters: Box<[ClosureParameter]>,
+        destination: SlotId,
+    },
     /// Conditional guest panic after the frontend has evaluated a boolean operand.
     Assert {
         condition: SlotId,
         destination: SlotId,
         message: String,
+    },
+    /// `builtin # format_args(..)`: render the evaluated argument values
+    /// through the parsed template into the `core::fmt::Arguments` value,
+    /// represented as an immutable str buffer. Rendering is eager, which is
+    /// unobservable for the closed scalar/str family it accepts; any other
+    /// argument faults until trait-method formatting joins the call path.
+    FormatArguments {
+        template: std::sync::Arc<super::format::FormatTemplate>,
+        arguments: Vec<SlotId>,
+        destination: SlotId,
+    },
+    /// `place op= right` on a projected primitive place (`*r += 1`, `s.f -= 2`,
+    /// `a[i] *= 3`): read, compute with overflow checks, write back; the
+    /// result is unit.
+    CompoundAssignPlace {
+        operator: NumericBinary,
+        place: SlotId,
+        right: SlotId,
+        destination: SlotId,
+    },
+    /// `[source; count]`: the element value evaluated once, repeated `count`
+    /// (a `usize` value) times — copied when the element type is Copy, moved
+    /// when `count == 1`, dropped when `count == 0`.
+    ArrayRepeat {
+        source: SlotId,
+        count: SlotId,
+        destination: SlotId,
+    },
+    /// One operand of a comparison operator, evaluated as a place: rustc
+    /// autorefs both operands (`a == b` is `PartialEq::eq(&a, &b)`), so a
+    /// comparison never moves them. A primitive scalar or shared reference
+    /// is read by value exactly as its value expression reads it (`read`)
+    /// for the builtin operator; any other operand is shared-borrowed in
+    /// place for its trait method, which the operator then selects.
+    ComparisonOperand {
+        place: SlotId,
+        read: OperandRead,
+        destination: SlotId,
+    },
+    /// A `for` loop's lang-item call, always dispatched to its trait method
+    /// through the member index: `IntoIterator::into_iter(source)` (moves
+    /// the evaluated head) or `Iterator::next(&mut source)` (the loop-owned
+    /// iterator, mutably borrowed in place).
+    IteratorCall {
+        call: IteratorCall,
+        source: SlotId,
+        destination: SlotId,
+    },
+    /// Form a method call's receiver argument from the published receiver
+    /// place: the dispatcher-selected autoderef count, then a shared/mutable
+    /// autoref or a by-value read. `scratch` is a place slot for autoderef.
+    MethodReceiver {
+        site: super::recipe::CallSiteId,
+        place: SlotId,
+        scratch: SlotId,
+        destination: SlotId,
     },
     /// Explicit guest panic; emitted only after frontend intrinsic identity resolution.
     Panic {
@@ -728,6 +857,14 @@ impl Op {
             Self::ConstructStart { .. } => 27,
             Self::ConstructField { .. } => 28,
             Self::ConstructFinish { .. } => 29,
+            Self::FormatArguments { .. } => FORMAT_ARGUMENTS_OPCODE,
+            Self::MethodReceiver { .. } => METHOD_RECEIVER_OPCODE,
+            Self::CompoundAssignPlace { .. } => COMPOUND_ASSIGN_PLACE_OPCODE,
+            Self::ArrayRepeat { .. } => ARRAY_REPEAT_OPCODE,
+            Self::ComparisonOperand { .. } => COMPARISON_OPERAND_OPCODE,
+            Self::IteratorCall { .. } => ITERATOR_CALL_OPCODE,
+            Self::ValuePath { .. } => VALUE_PATH_OPCODE,
+            Self::MakeClosure { .. } => MAKE_CLOSURE_OPCODE,
         }
     }
 }
@@ -743,7 +880,7 @@ pub enum EffectClass {
 impl Op {
     pub fn effect_class(&self) -> EffectClass {
         match self {
-            Self::Pattern { .. } => EffectClass::OwnershipTransfer,
+            Self::Pattern { .. } | Self::ArrayRepeat { .. } => EffectClass::OwnershipTransfer,
             Self::MakePlace { .. }
             | Self::ParameterPlace { .. }
             | Self::ValuePlace { .. }
@@ -765,6 +902,7 @@ impl Op {
             | Self::CompoundHint { .. }
             | Self::BranchHint { .. }
             | Self::CheckParameters { .. }
+            | Self::FormatArguments { .. }
             | Self::CheckUnit { .. } => EffectClass::Primitive,
             Self::SourceConstant { .. }
             | Self::Borrow { .. }
@@ -774,6 +912,12 @@ impl Op {
             | Self::ConstructStart { .. }
             | Self::ConstructField { .. }
             | Self::ConstructFinish { .. }
+            | Self::MethodReceiver { .. }
+            | Self::ComparisonOperand { .. }
+            | Self::IteratorCall { .. }
+            | Self::CompoundAssignPlace { .. }
+            | Self::ValuePath { .. }
+            | Self::MakeClosure { .. }
             | Self::CallAdvance { .. }
             | Self::ReadParameter { .. }
             | Self::CallSeal { .. }

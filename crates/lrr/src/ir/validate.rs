@@ -9,13 +9,13 @@ use crate::{
     syntax::{body_index::BodyIndex, spans::BodySpan},
 };
 use std::collections::BTreeSet;
-#[path = "pattern_decision.rs"]
-mod pattern_decision;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-IR", message.into())
 }
 fn pattern_descendant(body: &BodyIndex, mut child: NodeId, owner: NodeId) -> bool {
-    for _ in 0..4096 {
+    // A parent chain visits each node at most once; the node count bounds a
+    // malformed cyclic index without imposing a nesting-depth policy.
+    for _ in 0..=body.nodes().len() {
         if child == owner {
             return true;
         }
@@ -35,143 +35,79 @@ fn pattern_transition(
     key: &PcKey,
     operation: &super::op::PatternOperation,
 ) -> Result<(), Diagnostic> {
-    use super::op::PatternOperation;
+    pattern_step(body, key, operation)
+}
+/// The indexed owners of the single pattern transaction and their reserved
+/// Bool test slots. Every owner shares the same steps and matcher.
+pub(crate) fn pattern_owner_test_slot(body: &BodyIndex, owner: NodeId) -> Option<SlotId> {
     use crate::syntax::body_index::{ExpressionKind, NodeRole};
-    if let PatternOperation::Decision {
-        owner,
-        plan,
-        transition,
-    } = operation
-    {
-        return pattern_decision::transition(body, key, *owner, plan, transition);
+    let node = body.nodes().get(owner.0 as usize)?;
+    match node.role {
+        NodeRole::Expression(ExpressionKind::Match) => node.runtime_temporaries[1],
+        NodeRole::Expression(ExpressionKind::Other) if node.clause_scope.is_some() => node.value,
+        NodeRole::Expression(ExpressionKind::For) => node.value,
+        NodeRole::Statement => node.runtime_temporaries[0],
+        _ => None,
     }
+}
+fn pattern_step(
+    body: &BodyIndex,
+    key: &PcKey,
+    operation: &super::op::PatternOperation,
+) -> Result<(), Diagnostic> {
+    use super::op::PatternOperation;
+    use crate::syntax::body_index::NodeRole;
     let owner = match operation {
-        PatternOperation::Begin { owner, .. }
-        | PatternOperation::StageBinding { owner, .. }
-        | PatternOperation::Preview { owner }
-        | PatternOperation::Finish { owner, .. }
-        | PatternOperation::Rollback { owner } => *owner,
-        PatternOperation::Decision { .. } => unreachable!(),
+        PatternOperation::Open { owner, .. }
+        | PatternOperation::Test { owner, .. }
+        | PatternOperation::Expose { owner }
+        | PatternOperation::Conceal { owner }
+        | PatternOperation::Commit { owner }
+        | PatternOperation::Close { owner } => *owner,
     };
-    let selected = body
-        .nodes()
-        .get(owner.0 as usize)
-        .ok_or_else(|| invalid("pattern transaction owner absent"))?;
-    let is_match = selected.role == NodeRole::Expression(ExpressionKind::Match);
-    let conditional = selected.role == NodeRole::Expression(ExpressionKind::Other)
-        && selected.clause_scope.is_some();
-    if (!is_match && !conditional) || !pattern_descendant(body, NodeId(key.node), owner) {
-        return Err(invalid(
-            "pattern transition is outside its indexed ordinary owner",
-        ));
+    let test = pattern_owner_test_slot(body, owner)
+        .ok_or_else(|| invalid("pattern step owner is not an indexed pattern owner"))?;
+    if !pattern_descendant(body, NodeId(key.node), owner) {
+        return Err(invalid("pattern step is outside its indexed owner"));
     }
-    // Both ordinary pattern owners have exactly one direct expression child.
-    // Pattern-bound expressions can appear earlier in the flattened operand
-    // list; they are descendants of their pattern, not the owning scrutinee.
-    let mut scrutinee = None;
-    for operand in &selected.operands {
-        let node = body
-            .nodes()
-            .get(operand.0 as usize)
-            .ok_or_else(|| invalid("pattern owner operand absent"))?;
-        if node.parent == Some(owner) && matches!(node.role, NodeRole::Expression(_)) {
-            let value = node
-                .value
-                .ok_or_else(|| invalid("pattern source value absent"))?;
-            if scrutinee.replace(value).is_some() {
-                return Err(invalid(
-                    "pattern owner has ambiguous direct source operands",
-                ));
-            }
-        }
-    }
-    let scrutinee = scrutinee.ok_or_else(|| invalid("pattern source operand absent"))?;
+    let selected = &body.nodes()[owner.0 as usize];
     match operation {
-        PatternOperation::Begin {
-            alternative,
-            source,
-            retry,
-            ..
-        } => {
-            let alternative_node = body
-                .nodes()
-                .get(alternative.0 as usize)
-                .ok_or_else(|| invalid("pattern alternative absent"))?;
-            if *source != scrutinee
-                || alternative_node.role != NodeRole::Pattern
-                || !pattern_descendant(body, *alternative, owner)
-                || (is_match && (key.node != alternative.0 || key.phase != Phase::Entry.code()?))
-                || (conditional
-                    && (key.node != owner.0
-                        || !matches!(Phase::from_code(key.phase), Phase::Operand(_))))
+        // A `for` loop matches each `Iterator::next` result it owns.
+        PatternOperation::Open { source, .. }
+            if selected.role
+                == NodeRole::Expression(crate::syntax::body_index::ExpressionKind::For) =>
+        {
+            if key.node != owner.0 || selected.runtime_temporaries[1] != Some(*source) {
+                return Err(invalid("for pattern source differs from its next result"));
+            }
+        }
+        PatternOperation::Open { source, .. } => {
+            let scrutinee = selected.operands.iter().find_map(|operand| {
+                let node = body.nodes().get(operand.0 as usize)?;
+                (node.parent == Some(owner) && matches!(node.role, NodeRole::Expression(_)))
+                    .then_some(node)
+            });
+            let scrutinee =
+                scrutinee.ok_or_else(|| invalid("pattern scrutinee operand absent"))?;
+            if key.node != owner.0
+                || (scrutinee.value != Some(*source) && scrutinee.place != Some(*source))
             {
-                return Err(invalid("pattern begin source/alternative/entry differs"));
+                return Err(invalid("pattern open source differs from its scrutinee"));
             }
-            slot(body, *source, SlotKind::Value)?;
-            pc(body, retry)?;
-            let target = &body.nodes()[retry.node as usize];
-            if conditional {
-                if *retry != body.pc(owner, Phase::Exit)? {
-                    return Err(invalid("condition retry is not its indexed exit"));
-                }
-            } else if *retry != body.pc(owner, Phase::Exit)?
-                && (retry.phase != Phase::Entry.code()?
-                    || !matches!(target.role, NodeRole::Pattern | NodeRole::MatchArm)
-                    || !pattern_descendant(body, target.id, owner)
-                    || target.range.start <= alternative_node.range.start)
+        }
+        PatternOperation::Test { tree, result, .. } => {
+            slot(body, *result, SlotKind::Value)?;
+            if *result != test
+                || body
+                    .nodes()
+                    .get(tree.pattern().0 as usize)
+                    .is_none_or(|node| node.role != NodeRole::Pattern)
+                || !pattern_descendant(body, tree.pattern(), owner)
             {
-                return Err(invalid(
-                    "pattern retry is not a forward continuation of its owner",
-                ));
+                return Err(invalid("pattern test tree or result differs from its owner"));
             }
         }
-        PatternOperation::StageBinding {
-            binding, source, ..
-        } => {
-            if key.phase != Phase::Commit.code()?
-                || (is_match && key.node != binding.0)
-                || body.nodes().get(binding.0 as usize).is_none_or(|node| {
-                    node.role != NodeRole::Pattern || !pattern_descendant(body, *binding, owner)
-                })
-                || (*source != scrutinee && !selected.runtime_temporaries.contains(&Some(*source)))
-            {
-                return Err(invalid(
-                    "pending pattern binding source/target/phase differs",
-                ));
-            }
-            slot(body, *source, SlotKind::Value)?;
-        }
-        PatternOperation::Preview { .. } => {
-            if !is_match || key.phase != Phase::Commit.code()? {
-                return Err(invalid(
-                    "pattern guard preview is outside its selected commit phase",
-                ));
-            }
-        }
-        PatternOperation::Finish { matched, .. } => {
-            if let Some(matched) = matched {
-                if !conditional
-                    || key.node != owner.0
-                    || key.phase != Phase::Exit.code()?
-                    || selected.value != Some(*matched)
-                {
-                    return Err(invalid("conditional pattern finish Bool differs"));
-                }
-                slot(body, *matched, SlotKind::Value)?;
-            } else if key.phase != Phase::Commit.code()? {
-                return Err(invalid(
-                    "pattern commit is outside its selected commit phase",
-                ));
-            }
-        }
-        PatternOperation::Rollback { .. } => {
-            if !is_match || key.phase != Phase::Exit.code()? {
-                return Err(invalid(
-                    "pattern rollback is outside its failed alternative exit",
-                ));
-            }
-        }
-        PatternOperation::Decision { .. } => unreachable!(),
+        _ => {}
     }
     Ok(())
 }
@@ -179,9 +115,6 @@ fn definition_numeric_context(
     context: super::op::DefinitionNumericContext,
 ) -> Result<(), Diagnostic> {
     match context {
-        super::op::DefinitionNumericContext::Parameter(ordinal) if ordinal >= 100_000 => Err(
-            invalid("definition numeric parameter ordinal exceeds structural limit"),
-        ),
         super::op::DefinitionNumericContext::Parameter(_)
         | super::op::DefinitionNumericContext::Result
         | super::op::DefinitionNumericContext::ResultOrDefault { .. } => Ok(()),
@@ -258,77 +191,8 @@ fn span(body: &BodyIndex, origin: &BodySpan) -> Result<(), Diagnostic> {
 fn charge(bytes: &mut usize, n: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(n)
-        .filter(|n| *n <= 64 * 1024 * 1024)
-        .ok_or_else(|| invalid("recipe metadata limit"))?;
+        .ok_or_else(|| invalid("recipe metadata size overflow"))?;
     Ok(())
-}
-/// Structural permission for the scalar binding lane only. Name resolution is
-/// supplied separately by the private source admission before this recipe is
-/// constructed; these exact slots never authorize an aggregate or reference copy.
-fn scalar_binding_copy(body: &BodyIndex, draft: &RecipeDraft) -> Option<(SlotId, SlotId, SlotId)> {
-    use crate::syntax::body_index::{ExpressionKind, NodeRole};
-    let pattern = body.nodes().get(draft.key.node as usize)?;
-    if pattern.role != NodeRole::Pattern || draft.key.phase != Phase::Commit.code().ok()? {
-        return None;
-    }
-    let arm = body.nodes().get(pattern.parent?.0 as usize)?;
-    if arm.role != NodeRole::MatchArm {
-        return None;
-    }
-    let mut parent = arm.parent;
-    let mut owner = None;
-    for _ in 0..body.nodes().len() {
-        let node = body.nodes().get(parent?.0 as usize)?;
-        if node.role == NodeRole::Expression(ExpressionKind::Match) {
-            owner = Some(node);
-            break;
-        }
-        if node.role != NodeRole::Syntax {
-            return None;
-        }
-        parent = node.parent;
-    }
-    let owner = owner?;
-    let source = body
-        .nodes()
-        .get(owner.operands.first()?.0 as usize)?
-        .value?;
-    let destination = owner.runtime_temporaries[0]?;
-    let place = SlotId(destination.0.checked_add(1)?);
-    match draft.operations.as_slice() {
-        [
-            Op::ScopeEnter { scope },
-            Op::ValuePlace {
-                source: actual_source,
-                destination: actual_place,
-            },
-            Op::ReadPlace {
-                place: read_place,
-                destination: read_destination,
-            },
-            Op::Pattern {
-                operation:
-                    super::op::PatternOperation::StageBinding {
-                        owner: transaction_owner,
-                        binding,
-                        source: bound_source,
-                        writable: false,
-                    },
-            },
-            ..,
-        ] if *scope == arm.scope
-            && *actual_source == source
-            && *actual_place == place
-            && *read_place == place
-            && *read_destination == destination
-            && *transaction_owner == owner.id
-            && *binding == pattern.id
-            && *bound_source == destination =>
-        {
-            Some((source, place, destination))
-        }
-        _ => None,
-    }
 }
 fn macro_scalar_value(node: &crate::syntax::body_index::StructuralNode, value: SlotId) -> bool {
     node.role
@@ -337,6 +201,33 @@ fn macro_scalar_value(node: &crate::syntax::body_index::StructuralNode, value: S
         )
         && (node.runtime_scalar_slots.contains(&value)
             || node.runtime_temporaries[0] == Some(value))
+}
+/// A compound assignment whose local left operand has no primitive source
+/// proof forms that local's place itself, at its right operand's phase, and
+/// updates it in place (`CompoundAssignPlace`): the left operand's own place.
+fn compound_local_place(
+    node: &crate::syntax::body_index::StructuralNode,
+    body: &BodyIndex,
+    key: &PcKey,
+    place: SlotId,
+) -> bool {
+    matches!(Phase::from_code(key.phase), Phase::Operand(_))
+        && node.runtime_temporaries[0].is_some()
+        && node.role
+            == crate::syntax::body_index::NodeRole::Expression(
+                crate::syntax::body_index::ExpressionKind::Other,
+            )
+        && node
+            .operands
+            .first()
+            .and_then(|left| body.nodes().get(left.0 as usize))
+            .is_some_and(|left| {
+                left.place == Some(place)
+                    && left.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Path,
+                        )
+            })
 }
 fn macro_scalar_place(
     node: &crate::syntax::body_index::StructuralNode,
@@ -674,7 +565,6 @@ fn verify_inner(
     let mut shared_product_admission_bytes = 0usize;
     let mut string_literals = BTreeSet::new();
     let mut shared_string_literal_admission_bytes = 0usize;
-    pattern_decision::exits(&draft)?;
     for op in &draft.operations {
         charge(&mut bytes, 256usize.max(std::mem::size_of::<Op>()))?;
         let annotation = match op {
@@ -684,14 +574,13 @@ fn verify_inner(
             | Op::Literal { hint, .. } => Some(hint),
             _ => None,
         };
-        if let Some(super::op::HintRecipe::DefinitionParameter(ordinal)) = annotation
-            && *ordinal >= 100_000
-        {
-            return Err(invalid(
-                "definition parameter ordinal exceeds structural limit",
-            ));
-        }
-        if matches!(annotation, Some(super::op::HintRecipe::DefinitionResult))
+        if matches!(
+            annotation,
+            Some(
+                super::op::HintRecipe::DefinitionResult
+                    | super::op::HintRecipe::DefinitionWrittenResult
+            )
+        )
             && (draft.key.node != 0
                 || draft.key.phase != Phase::Entry.code()?
                 || !matches!(op, Op::SetHint { child, .. } if body.nodes()[0].value == Some(*child)))
@@ -733,7 +622,7 @@ fn verify_inner(
             slot(body, child, SlotKind::Value)?;
         }
         if let Some(super::op::HintRecipe::Parameter(key)) = annotation
-            && (key.definition != draft.key.body.definition || key.ordinal >= 100_000)
+            && key.definition != draft.key.body.definition
         {
             return Err(invalid("annotation parameter identity mismatch"));
         }
@@ -747,26 +636,42 @@ fn verify_inner(
                 return Err(invalid("reference annotation region identity mismatch"));
             }
         }
+        if let Some(super::op::HintRecipe::Written(written)) = annotation {
+            use crate::traits::term::RegionTerm;
+            let definition = draft.key.body.definition;
+            if !written.regions_satisfy(&mut |region| match region {
+                RegionTerm::Static => true,
+                RegionTerm::Local {
+                    definition: owner,
+                    start,
+                    end,
+                } => *owner == definition && start < end,
+                _ => false,
+            }) {
+                return Err(invalid("written annotation region identity mismatch"));
+            }
+        }
 
         let output = match op {
             Op::Pattern { operation } => {
                 pattern_transition(body, &draft.key, operation)?;
-                if let super::op::PatternOperation::Decision { plan, .. } = operation
-                    && pattern_plans.insert(std::sync::Arc::as_ptr(plan))
-                {
-                    let shared = plan
-                        .metadata_bytes()
-                        .checked_add(3 * std::mem::size_of::<usize>())
-                        .ok_or_else(|| invalid("decision plan accounting overflow"))?;
-                    // Admission still bounds the complete retained aggregate,
-                    // even though the memo owner later charges shared payloads
-                    // separately from each recipe's exclusive allocation.
-                    charge(&mut bytes, shared)?;
-                    shared_product_admission_bytes = shared_product_admission_bytes
-                        .checked_add(shared)
-                        .ok_or_else(|| invalid("decision plan accounting overflow"))?;
+                if let super::op::PatternOperation::Test { tree, result, .. } = operation {
+                    if pattern_plans.insert(std::sync::Arc::as_ptr(tree)) {
+                        let shared = tree
+                            .metadata_bytes()
+                            .checked_add(3 * std::mem::size_of::<usize>())
+                            .ok_or_else(|| invalid("pattern tree accounting overflow"))?;
+                        // Admission bounds the retained aggregate; the memo
+                        // owner charges each shared tree once separately.
+                        charge(&mut bytes, shared)?;
+                        shared_product_admission_bytes = shared_product_admission_bytes
+                            .checked_add(shared)
+                            .ok_or_else(|| invalid("pattern tree accounting overflow"))?;
+                    }
+                    Some(*result)
+                } else {
+                    None
                 }
-                None
             }
             Op::ProjectTuple {
                 base, destination, ..
@@ -840,14 +745,7 @@ fn verify_inner(
                             .0
                             .checked_add(1)
                             .ok_or_else(|| invalid("macro place slot overflow"))?;
-                let scalar_binding = scalar_binding_copy(body, &draft).is_some_and(
-                    |(_, actual_place, actual_destination)| {
-                        actual_place == *place && actual_destination == *destination
-                    },
-                );
                 if !scalar_macro
-                    && !scalar_binding
-                    && !pattern_decision::read_place(body, &draft, *place, *destination)
                     && (node.place != Some(*place) || node.value != Some(*destination))
                 {
                     return Err(invalid(
@@ -891,13 +789,7 @@ fn verify_inner(
             } => {
                 slot(body, *source, SlotKind::Value)?;
                 slot(body, *destination, SlotKind::Place)?;
-                if macro_borrow
-                    || scalar_binding_copy(body, &draft).is_some_and(
-                        |(actual_source, actual_place, _)| {
-                            actual_source == *source && actual_place == *destination
-                        },
-                    )
-                {
+                if macro_borrow {
                     Some(*destination)
                 } else {
                     let own_path = node.role
@@ -953,19 +845,16 @@ fn verify_inner(
                 }
                 Some(*destination)
             }
-            Op::ParameterPlace {
-                ordinal,
-                destination,
-            } => {
+            Op::ParameterPlace { destination, .. } => {
                 slot(body, *destination, SlotKind::Place)?;
-                if *ordinal >= 100_000
-                    || (!macro_borrow
-                        && (node.role
-                            != crate::syntax::body_index::NodeRole::Expression(
-                                crate::syntax::body_index::ExpressionKind::Path,
-                            )
-                            || node.place != Some(*destination)
-                            || draft.key.phase != Phase::Entry.code()?))
+                if !macro_borrow
+                    && !compound_local_place(node, body, &draft.key, *destination)
+                    && (node.role
+                        != crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Path,
+                        )
+                        || node.place != Some(*destination)
+                        || draft.key.phase != Phase::Entry.code()?)
                 {
                     return Err(invalid(
                         "parameter place requires its original path and place slot",
@@ -979,7 +868,8 @@ fn verify_inner(
             } => {
                 slot(body, *destination, SlotKind::Place)?;
                 if (node.place != Some(*destination)
-                    && !macro_scalar_place(node, &draft.key, *destination))
+                    && !macro_scalar_place(node, &draft.key, *destination)
+                    && !compound_local_place(node, body, &draft.key, *destination))
                     || body
                         .nodes()
                         .get(binding.0 as usize)
@@ -1024,11 +914,7 @@ fn verify_inner(
                 }
                 Some(*guard)
             }
-            Op::ConstructField {
-                guard,
-                field,
-                source,
-            } => {
+            Op::ConstructField { guard, source, .. } => {
                 slot(body, *guard, SlotKind::Guard)?;
                 slot(body, *source, SlotKind::Value)?;
                 let operand_matches = match Phase::from_code(draft.key.phase) {
@@ -1039,7 +925,7 @@ fn verify_inner(
                         .is_some_and(|operand| operand.value == Some(*source)),
                     _ => false,
                 };
-                if node.constructor_guard != Some(*guard) || *field >= 100_000 || !operand_matches {
+                if node.constructor_guard != Some(*guard) || !operand_matches {
                     return Err(invalid("constructor field guard/source identity mismatch"));
                 }
                 None
@@ -1053,6 +939,58 @@ fn verify_inner(
                 {
                     return Err(invalid("constructor finish guard/result identity mismatch"));
                 }
+                Some(*destination)
+            }
+            Op::ValuePath { path, destination } => {
+                use crate::syntax::body_index::{ExpressionKind, NodeRole};
+                slot(body, *destination, SlotKind::Value)?;
+                if draft.key.phase != Phase::Entry.code()?
+                    || node.role != NodeRole::Expression(ExpressionKind::Path)
+                    || node.value != Some(*destination)
+                    || path.is_empty()
+                {
+                    return Err(invalid("value path requires its own path entry and result"));
+                }
+                charge(&mut bytes, path.len())?;
+                Some(*destination)
+            }
+            Op::MakeClosure {
+                captures,
+                parameters,
+                destination,
+            } => {
+                use crate::syntax::body_index::{ExpressionKind, NodeRole};
+                slot(body, *destination, SlotKind::Value)?;
+                if draft.key.phase != Phase::Entry.code()?
+                    || node.role != NodeRole::Expression(ExpressionKind::Closure)
+                    || node.value != Some(*destination)
+                    || node.closure_scope.is_none()
+                {
+                    return Err(invalid("closure creation requires its own closure entry"));
+                }
+                let mut seen = BTreeSet::new();
+                for capture in captures.iter() {
+                    if !seen.insert(capture.source)
+                        || matches!(capture.source, crate::ir::op::CaptureSource::Binding(binding)
+                            if body.nodes().get(binding.0 as usize).is_none_or(|binding| {
+                                binding.role != crate::syntax::body_index::NodeRole::Pattern
+                            }))
+                    {
+                        return Err(invalid("closure capture is not a distinct binding"));
+                    }
+                }
+                charge(
+                    &mut bytes,
+                    captures
+                        .len()
+                        .checked_mul(std::mem::size_of::<crate::ir::op::ClosureCapture>())
+                        .and_then(|n| {
+                            n.checked_add(parameters.len().checked_mul(std::mem::size_of::<
+                                crate::ir::op::ClosureParameter,
+                            >())?)
+                        })
+                        .ok_or_else(|| invalid("closure capture size overflow"))?,
+                )?;
                 Some(*destination)
             }
             Op::SourceConstant {
@@ -1235,7 +1173,7 @@ fn verify_inner(
             }
             Op::SetHint { child, hint } => {
                 if let super::op::HintRecipe::Parameter(key) = hint
-                    && (key.definition != draft.key.body.definition || key.ordinal >= 100_000)
+                    && key.definition != draft.key.body.definition
                 {
                     return Err(invalid("hint parameter identity mismatch"));
                 }
@@ -1259,21 +1197,134 @@ fn verify_inner(
                 }
                 None
             }
+            Op::IteratorCall {
+                call,
+                source,
+                destination,
+            } => {
+                slot(body, *source, SlotKind::Value)?;
+                slot(body, *destination, SlotKind::Value)?;
+                // Only a `for` loop's own head, iterator and `next` result.
+                let [Some(iterator), Some(next)] = node.runtime_temporaries else {
+                    return Err(invalid("iterator call outside its for loop"));
+                };
+                let head = node
+                    .operands
+                    .first()
+                    .and_then(|operand| body.nodes().get(operand.0 as usize))
+                    .and_then(|operand| operand.value);
+                let expected = match call {
+                    super::op::IteratorCall::IntoIter => (head, iterator),
+                    super::op::IteratorCall::Next => (Some(iterator), next),
+                };
+                if node.role
+                    != crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::For,
+                    )
+                    || expected != (Some(*source), *destination)
+                {
+                    return Err(invalid("iterator call slots differ from its for loop"));
+                }
+                Some(*destination)
+            }
+            Op::ArrayRepeat {
+                source,
+                count,
+                destination,
+            } => {
+                slot(body, *source, SlotKind::Value)?;
+                slot(body, *count, SlotKind::Value)?;
+                slot(body, *destination, SlotKind::Value)?;
+                if source == destination || count == destination || source == count {
+                    return Err(invalid("array repeat operands alias"));
+                }
+                Some(*destination)
+            }
+            Op::CompoundAssignPlace {
+                place,
+                right,
+                destination,
+                ..
+            } => {
+                slot(body, *place, SlotKind::Place)?;
+                slot(body, *right, SlotKind::Value)?;
+                slot(body, *destination, SlotKind::Value)?;
+                if right == destination {
+                    return Err(invalid("compound assignment result aliases its operand"));
+                }
+                Some(*destination)
+            }
+            Op::ComparisonOperand {
+                place,
+                read,
+                destination,
+            } => {
+                slot(body, *place, SlotKind::Place)?;
+                slot(body, *destination, SlotKind::Value)?;
+                // The operand's own place/value pair, of this comparison.
+                if !node.operands.iter().any(|operand| {
+                    body.nodes().get(operand.0 as usize).is_some_and(|operand| {
+                        operand.place == Some(*place) && operand.value == Some(*destination)
+                    })
+                }) {
+                    return Err(invalid(
+                        "comparison operand requires its own operand place and value",
+                    ));
+                }
+                if let crate::ir::op::OperandRead::Local(binding) = read
+                    && body
+                        .nodes()
+                        .get(binding.0 as usize)
+                        .is_none_or(|n| n.role != crate::syntax::body_index::NodeRole::Pattern)
+                {
+                    return Err(invalid("comparison operand local lacks its binding"));
+                }
+                Some(*destination)
+            }
+            Op::MethodReceiver {
+                place,
+                scratch,
+                destination,
+                ..
+            } => {
+                slot(body, *place, SlotKind::Place)?;
+                slot(body, *scratch, SlotKind::Place)?;
+                slot(body, *destination, SlotKind::Value)?;
+                if place == scratch {
+                    return Err(invalid("method receiver scratch aliases its place"));
+                }
+                Some(*destination)
+            }
+            Op::FormatArguments {
+                template,
+                arguments,
+                destination,
+            } => {
+                if template.arguments != arguments.len() {
+                    return Err(invalid("format template argument count differs"));
+                }
+                for argument in arguments {
+                    slot(body, *argument, SlotKind::Value)?;
+                    if argument == destination {
+                        return Err(invalid("format argument aliases its result"));
+                    }
+                }
+                slot(body, *destination, SlotKind::Value)?;
+                Some(*destination)
+            }
             Op::Assert {
                 condition,
                 destination,
                 message,
             } => {
-                if message.capacity() > 65_536
-                    || message.len() > 65_536
-                    || node.role
-                        != crate::syntax::body_index::NodeRole::Expression(
-                            crate::syntax::body_index::ExpressionKind::Macro,
-                        )
+                if node.role
+                    != crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::Macro,
+                    )
                     || condition == destination
                 {
                     return Err(invalid(
-                        "assertion requires distinct slots, macro origin and bounded owned message",
+                        "assertion requires distinct slots and macro origin",
                     ));
                 }
                 slot(body, *condition, SlotKind::Value)?;
@@ -1282,16 +1333,12 @@ fn verify_inner(
                 Some(*destination)
             }
             Op::Panic { message } => {
-                if message.len() > 65_536
-                    || message.capacity() > 65_536
-                    || node.role
-                        != crate::syntax::body_index::NodeRole::Expression(
-                            crate::syntax::body_index::ExpressionKind::Macro,
-                        )
+                if node.role
+                    != crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::Macro,
+                    )
                 {
-                    return Err(invalid(
-                        "explicit panic requires a macro origin and bounded owned message",
-                    ));
+                    return Err(invalid("explicit panic requires a macro origin"));
                 }
                 charge(&mut bytes, message.capacity())?;
                 None
@@ -1458,9 +1505,8 @@ fn verify_inner(
                 }
                 None
             }
-            Op::CallAdvance { site, argument } => {
+            Op::CallAdvance { site, .. } => {
                 if site.0 != draft.key.node
-                    || *argument >= 100_000
                     || (node.role
                         == crate::syntax::body_index::NodeRole::Expression(
                             crate::syntax::body_index::ExpressionKind::Macro,
@@ -1471,22 +1517,13 @@ fn verify_inner(
                 }
                 None
             }
-            Op::CheckParameters { count } => {
-                if draft.key.node != 0
-                    || draft.key.phase != Phase::Entry.code()?
-                    || *count > 100_000
-                {
-                    return Err(invalid("parameter guard requires bounded function entry"));
+            Op::CheckParameters { .. } => {
+                if draft.key.node != 0 || draft.key.phase != Phase::Entry.code()? {
+                    return Err(invalid("parameter guard requires function entry"));
                 }
                 None
             }
-            Op::ReadParameter {
-                ordinal,
-                destination,
-            } => {
-                if *ordinal >= 100_000 {
-                    return Err(invalid("parameter ordinal exceeds budget"));
-                }
+            Op::ReadParameter { destination, .. } => {
                 slot(body, *destination, SlotKind::Value)?;
                 Some(*destination)
             }
@@ -1518,22 +1555,23 @@ fn verify_inner(
                         if Some(*child) == node.runtime_temporaries[0]);
                 if site.0 != draft.key.node
                     || name.is_empty()
-                    || name.len() > 4096
                     || (!macro_predicate
                         && macro_call.is_none()
                         && node.role
                             != crate::syntax::body_index::NodeRole::Expression(
                                 crate::syntax::body_index::ExpressionKind::Call,
-                            ))
+                            )
+                        && !(node.role
+                            == crate::syntax::body_index::NodeRole::Expression(
+                                crate::syntax::body_index::ExpressionKind::MethodCall,
+                            )
+                            && name.starts_with('.')))
                 {
                     return Err(invalid(
-                        "call seal requires its selected call node and bounded name",
+                        "call seal requires its selected call node and name",
                     ));
                 }
                 charge(&mut bytes, name.len())?;
-                if explicit.len() > 100_000 {
-                    return Err(invalid("explicit generic count exceeds budget"));
-                }
                 for ty in explicit {
                     if ty.is_empty() {
                         return Err(invalid("empty explicit generic syntax"));
@@ -1541,9 +1579,6 @@ fn verify_inner(
                     charge(&mut bytes, ty.len())?;
                 }
 
-                if arguments.len() > 100_000 {
-                    return Err(invalid("call argument count exceeds budget"));
-                }
                 charge(
                     &mut bytes,
                     arguments
@@ -1572,9 +1607,6 @@ fn verify_inner(
         }
     }
     let exit = draft.exits.pop().expect("one checked terminal exit");
-    if let RecipeExit::PatternNext { owner } = &exit {
-        pattern_decision::exit(&draft, *owner)?;
-    }
     let seals: Vec<_> = draft
         .operations
         .iter()
@@ -1590,23 +1622,6 @@ fn verify_inner(
         return Err(invalid("call seal requires one matching Call exit"));
     }
     match &exit {
-        RecipeExit::PatternNext { .. } => {}
-        RecipeExit::PatternRetry { owner } => {
-            use crate::syntax::body_index::{ExpressionKind, NodeRole};
-            if draft.key.phase != Phase::Exit.code()?
-                || node.role != NodeRole::MatchArm
-                || node.guard_scope.is_none()
-                || body
-                    .nodes()
-                    .get(owner.0 as usize)
-                    .is_none_or(|owner| owner.role != NodeRole::Expression(ExpressionKind::Match))
-                || !pattern_descendant(body, node.id, *owner)
-            {
-                return Err(invalid(
-                    "pattern retry requires its owning ordinary guard-failure exit",
-                ));
-            }
-        }
         RecipeExit::Call {
             site,
             resume,
@@ -1640,15 +1655,22 @@ fn verify_inner(
         RecipeExit::Next(target) => pc(body, target)?,
         RecipeExit::Backedge(target) => {
             pc(body, target)?;
-            if target.phase != crate::ir::pc::Phase::Entry.code()?
-                || !matches!(
-                    body.nodes()[target.node as usize].role,
+            let role = body.nodes()[target.node as usize].role;
+            let loop_entry = target.phase == crate::ir::pc::Phase::Entry.code()?
+                && matches!(
+                    role,
                     crate::syntax::body_index::NodeRole::Expression(
                         crate::syntax::body_index::ExpressionKind::While
                             | crate::syntax::body_index::ExpressionKind::Loop
                     )
-                )
-            {
+                );
+            // A `for` loop's backedge targets its head (the `next` call).
+            let for_head = target.phase == crate::ir::pc::Phase::Commit.code()?
+                && role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::For,
+                    );
+            if !loop_entry && !for_head {
                 return Err(invalid("backedge must target an indexed loop entry"));
             }
         }
@@ -1893,10 +1915,11 @@ pub(crate) fn verify_generated_break(
 mod tests {
     use super::*;
     #[test]
-    fn recipe_metadata_charge_is_checked_and_atomic() {
+    fn recipe_metadata_charge_is_overflow_checked_and_atomic() {
+        // E-R5-006: no metadata ceiling; only arithmetic overflow refuses.
         let mut n = 64 * 1024 * 1024;
-        assert!(charge(&mut n, 1).is_err());
-        assert_eq!(n, 64 * 1024 * 1024);
+        charge(&mut n, 1).unwrap();
+        assert_eq!(n, 64 * 1024 * 1024 + 1);
         let mut n = usize::MAX;
         assert!(charge(&mut n, 1).is_err());
         assert_eq!(n, usize::MAX);

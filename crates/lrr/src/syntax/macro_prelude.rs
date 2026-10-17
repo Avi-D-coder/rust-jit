@@ -3,12 +3,13 @@ use crate::{
     core::diagnostic::Diagnostic,
     expand::scopes::MacroName,
     source::snapshot::CfgSet,
-    syntax::{outline::ScopeKey, parse::ParsedFile},
+    syntax::parse::ParsedFile,
 };
 use ra_ap_syntax::{
     AstNode,
     ast::{self, HasAttrs, HasName},
 };
+#[derive(Clone)]
 pub(crate) struct MacroPreludePolicy {
     pub standard: bool,
     pub no_core: bool,
@@ -65,28 +66,12 @@ impl ParsedFile {
                 .map(|n| MacroName::parse(n.text(), self.edition).map(|n| n.as_str().to_owned()))
                 .collect::<Result<Vec<_>, _>>()?;
             path.reverse();
-            if policy.disabled.len() >= 100_000
-                || path.len() > 256
-                || (ScopeKey {
-                    crate_key: crate::core::digest::Digest([0; 32]),
-                    module_path: path.clone(),
-                    owner: None,
-                })
-                .heap_bytes()
-                    > 65_536
-            {
-                return Err(Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "macro prelude source policy budget".into(),
-                ));
-            }
             disabled_bytes = path
                 .iter()
                 .try_fold(disabled_bytes, |total, name| {
                     total.checked_add(name.capacity())
                 })
                 .and_then(|n| n.checked_add(64))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| {
                     Diagnostic::new(
                         "LRR-E-METADATA-LIMIT",

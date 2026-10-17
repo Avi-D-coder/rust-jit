@@ -7,7 +7,6 @@ use super::{
 };
 use crate::core::diagnostic::Diagnostic;
 
-pub(crate) const MAX_CONSTRUCTION_FIELDS: usize = 100_000;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum ConstructionState {
     Building,
@@ -34,8 +33,14 @@ pub struct ConstructionRecord {
     /// The transferred field's exact continuation blocks the next field and
     /// guard retirement until its owned cleanup ticket has been consumed.
     pub(super) pending_cleanup: Option<(u32, TicketId, ValueRepr)>,
+    /// A generic declaration's source-checked variant whose type arguments
+    /// its parameter-typed fields determine as they complete.
+    pub(super) pending_nominal: Option<Box<crate::frontend::types::BoundNominalVariant>>,
 }
 impl ConstructionRecord {
+    pub(super) fn partial(expected: &[Option<TypeId>]) -> Result<Self, Diagnostic> {
+        Self::allocate(expected.len(), None, |index| expected[index])
+    }
     pub(super) fn new(expected: &[TypeId]) -> Result<Self, Diagnostic> {
         Self::allocate(expected.len(), None, |index| Some(expected[index]))
     }
@@ -50,9 +55,6 @@ impl ConstructionRecord {
         observed_kind: Option<StructuralConstructionKind>,
         field_type: impl Fn(usize) -> Option<TypeId>,
     ) -> Result<Self, Diagnostic> {
-        if count > MAX_CONSTRUCTION_FIELDS {
-            return Err(resource());
-        }
         let mut types = Vec::new();
         let mut fields = Vec::new();
         let mut completed = Vec::new();
@@ -70,14 +72,8 @@ impl ConstructionRecord {
             state: ConstructionState::Building,
             nominal: None,
             pending_cleanup: None,
+            pending_nominal: None,
         })
-    }
-    pub(super) fn estimated_bytes(count: usize) -> Option<usize> {
-        count.checked_mul(
-            std::mem::size_of::<Option<TypeId>>()
-                + std::mem::size_of::<Option<ValueRepr>>()
-                + std::mem::size_of::<u32>(),
-        )
     }
     pub(super) fn owned_bytes(&self) -> Option<usize> {
         self.expected
@@ -122,9 +118,6 @@ pub(super) struct InitializedFields {
 }
 impl InitializedFields {
     pub fn empty(fields: usize) -> Result<Self, Diagnostic> {
-        if fields > MAX_CONSTRUCTION_FIELDS {
-            return Err(resource());
-        }
         let words = fields.checked_add(63).ok_or_else(resource)? / 64;
         let mut bits = Vec::new();
         bits.try_reserve_exact(words).map_err(|_| resource())?;
@@ -135,13 +128,7 @@ impl InitializedFields {
             live: 0,
         })
     }
-    pub fn estimated_bytes(fields: usize) -> Option<usize> {
-        fields.checked_add(63)?.checked_div(64)?.checked_mul(8)
-    }
     pub fn complete(fields: usize) -> Result<Self, Diagnostic> {
-        if fields > MAX_CONSTRUCTION_FIELDS {
-            return Err(resource());
-        }
         let words = fields.checked_add(63).ok_or_else(resource)? / 64;
         let mut bits = Vec::new();
         bits.try_reserve_exact(words).map_err(|_| resource())?;

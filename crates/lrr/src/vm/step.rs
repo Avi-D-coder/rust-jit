@@ -42,6 +42,17 @@ pub enum StepOutcome {
     Return(TicketId),
     GuestPanic(GuestPanic),
 }
+/// rustc's integer/float fallback for a comparison whose operands are both
+/// still-unresolved literals: nothing else constrains their shared type, so it
+/// defaults to i32 (or f64 when either is a float literal). The Bool result
+/// carries no operand type onward.
+fn unconstrained_literal_fallback(left: ValueRepr, right: ValueRepr) -> Option<TypeId> {
+    match (left.kind, right.kind) {
+        (11 | 12, 11 | 12) if left.kind == 12 || right.kind == 12 => Some(TypeId(15)),
+        (11, 11) => Some(TypeId(6)),
+        _ => None,
+    }
+}
 fn concrete(hint: &HintRecipe) -> Result<Option<TypeId>, Diagnostic> {
     let HintRecipe::Primitive(p) = hint else {
         return Ok(None);
@@ -58,6 +69,11 @@ fn frame_hint(
 ) -> Result<Option<TypeId>, Diagnostic> {
     if matches!(hint, HintRecipe::DefinitionResult) {
         frame.definition_result_descriptor(store)
+    } else if matches!(hint, HintRecipe::DefinitionWrittenResult) {
+        match frame.definition_written_result()? {
+            Some(written) => written.find_in(store, &[]),
+            None => Ok(None),
+        }
     } else if let HintRecipe::DefinitionParameter(ordinal) = hint {
         concrete(&HintRecipe::Primitive(
             frame.definition_parameter_primitive(*ordinal)?,
@@ -89,9 +105,42 @@ fn frame_hint(
     } else if let HintRecipe::ArrayPrimitive { element, len } = hint {
         let element = crate::runtime::shape::PrimitiveIdentity::from_recipe(*element)?.id();
         Ok(store.find_type(&crate::runtime::shape::TypeKey::Array { element, len: *len }))
+    } else if let HintRecipe::Written(written) = hint {
+        written.find(store)
     } else {
         concrete(hint)
     }
+}
+/// A written annotation with an inference hole, or a slice/trait-object
+/// pointee, names a structure rather than one descriptor: the reached
+/// initializer must have that structure. A sized value under an unsized
+/// written pointee needs an unsizing coercion, which is refused explicitly
+/// rather than binding the value under a Type it does not have.
+fn written_binding_admission(
+    frame: &Frame,
+    source: crate::ir::pc::SlotId,
+    hint: &HintRecipe,
+    store: &GuestStore,
+) -> Result<(), Diagnostic> {
+    let HintRecipe::Written(written) = hint else {
+        return Ok(());
+    };
+    if written.exact() {
+        return Ok(());
+    }
+    let value = store.admit_move(frame.cell(source)?)?;
+    let admitted = match store.effective_type(value)? {
+        Some(ty) => written.admits(ty, store)?,
+        None => matches!(written.as_ref(), crate::ir::written_type::WrittenType::Infer),
+    };
+    // A typed `let` is a coercion site: `&[T; N]` meets `&[T]` by unsizing.
+    if admitted || frame.written_unsizing(source, written, store)?.is_some() {
+        return Ok(());
+    }
+    Err(Diagnostic::new(
+        "LRR-E-UNSUPPORTED",
+        "written annotation requires an unsizing coercion or partial-Type inference of its initializer, which awaits slice/trait-object reference integration".into(),
+    ))
 }
 /// Descriptor publication is an executed VM action, never pure preflight work.
 fn materialize_hint(
@@ -104,6 +153,12 @@ fn materialize_hint(
         return frame
             .materialize_definition_result_descriptor(store)
             .map(Some);
+    }
+    if matches!(hint, HintRecipe::DefinitionWrittenResult) {
+        let Some(written) = frame.definition_written_result()?.cloned() else {
+            return Ok(None);
+        };
+        return written.materialize_in(store, &[]);
     }
     if let HintRecipe::Reference {
         mutable, target, ..
@@ -122,6 +177,9 @@ fn materialize_hint(
         return store
             .intern_type(crate::runtime::shape::TypeKey::Array { element, len: *len })
             .map(Some);
+    }
+    if let HintRecipe::Written(written) = hint {
+        return written.materialize(store);
     }
     frame_hint(frame, hint, required, store)
 }
@@ -303,7 +361,6 @@ fn commit_literal(
 /// descriptors cannot mint this source view.
 fn intrinsic_literal_preflight(
     frame: &Frame,
-    store: &GuestStore,
     literal: &LiteralRecipe,
     destination: crate::ir::pc::SlotId,
     prepared: PreparedLiteral,
@@ -370,11 +427,7 @@ fn intrinsic_literal_preflight(
     }
     frame.preflight_source_view(destination, Some(&source))?;
     match prepared {
-        PreparedLiteral::Scalar(value) => {
-            // Closed intrinsic scalars admit one ticket/cell before either effect.
-            store.preflight_owning_read_result(true, false)?;
-            Ok(PreparedLiteral::IntrinsicScalar { value, primitive })
-        }
+        PreparedLiteral::Scalar(value) => Ok(PreparedLiteral::IntrinsicScalar { value, primitive }),
         PreparedLiteral::Integer {
             negative,
             magnitude,
@@ -438,7 +491,7 @@ fn literal_preflight(
     let hint = explicit.or(inherited);
     let prepared = prepare_literal(literal, hint)?;
     frame.preflight_literal(*destination, prepared.ty(), hint, store)?;
-    let prepared = intrinsic_literal_preflight(frame, store, literal, *destination, prepared)?;
+    let prepared = intrinsic_literal_preflight(frame, literal, *destination, prepared)?;
     Ok(Some(prepared))
 }
 fn assertion_preflight(
@@ -491,6 +544,11 @@ fn place_preflight(
             source,
             destination,
         } => frame.preflight_assign_place(*place, *source, *destination, store),
+        Op::ComparisonOperand {
+            place,
+            read,
+            destination,
+        } => frame.preflight_comparison_operand(*place, *read, *destination, store),
         _ => return Ok(None),
     };
     match result {
@@ -520,6 +578,17 @@ fn place_operation(
             source,
             destination,
         } => frame.assign_place(*place, *source, *destination, store)?,
+        Op::MethodReceiver {
+            site,
+            place,
+            scratch,
+            destination,
+        } => frame.method_receiver(site.0, *place, *scratch, *destination, store)?,
+        Op::ComparisonOperand {
+            place,
+            read,
+            destination,
+        } => frame.comparison_operand(*place, *read, *destination, store)?,
         _ => return Ok(false),
     }
     Ok(true)
@@ -529,15 +598,13 @@ fn place_panic_outcome(
     recipe: &crate::ir::recipe::Recipe,
     panic: crate::runtime::place::PlacePanic,
 ) -> StepOutcome {
-    let kind = match panic {
-        crate::runtime::place::PlacePanic::IndexOutOfBounds => {
-            super::numeric::PanicKind::IndexOutOfBounds
-        }
-    };
+    // Element and range bounds checks are both rustc index panics; the
+    // message carries rustc's exact formatted bounds text.
+    let kind = super::numeric::PanicKind::IndexOutOfBounds;
     frame.status = FrameStatus::Panicked;
     StepOutcome::GuestPanic(GuestPanic {
         kind,
-        message: None,
+        message: Some(panic.message()),
         pc: recipe.key.clone(),
         origin: recipe.origin.clone(),
     })
@@ -555,6 +622,13 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             source,
             destination,
         } => frame.preflight_value_place(*source, *destination, store),
+        Op::ArrayRepeat {
+            source,
+            count,
+            destination,
+        } => frame.preflight_array_repeat(*source, *count, *destination, store),
+        // Always dispatched to its lang-item trait method.
+        Op::IteratorCall { .. } => Ok(()),
         Op::PlaceTransfer {
             source,
             destination,
@@ -576,6 +650,12 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
         Op::ConstructFinish { guard, destination } => {
             frame.preflight_constructor_finish(*guard, *destination, store)
         }
+        Op::ValuePath { destination, .. } => frame.preflight_value_path(*destination, store),
+        Op::MakeClosure {
+            captures,
+            destination,
+            ..
+        } => frame.preflight_make_closure(captures, *destination, store),
         Op::Declaration => frame.preflight_item(),
         Op::DeclareLocal { binding, hint, .. } => {
             frame_hint(frame, hint, true, store)?;
@@ -588,12 +668,24 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             hint,
             ..
         } => {
+            // An unsizing initializer binds before its coercion; the written
+            // `&[T]` Type then holds for the coerced value.
+            let unsize = match hint {
+                HintRecipe::Written(written) if !written.exact() => {
+                    frame.written_unsizing(*source, written, store)?
+                }
+                _ => None,
+            };
             frame.preflight_bind(
                 *binding,
                 *source,
-                frame_hint(frame, hint, true, store)?,
+                match unsize {
+                    Some(_) => None,
+                    None => frame_hint(frame, hint, true, store)?,
+                },
                 store,
             )?;
+            written_binding_admission(frame, *source, hint, store)?;
             frame.preflight_binding_source(*source, hint)
         }
         Op::ReadLocal {
@@ -682,8 +774,6 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
 }
 fn exit_preflight(frame: &Frame, store: &GuestStore, exit: &RecipeExit) -> Result<(), Diagnostic> {
     match exit {
-        RecipeExit::PatternNext { owner } => frame.preflight_pattern_next(*owner, store),
-        RecipeExit::PatternRetry { owner } => frame.preflight_pattern_retry(*owner, store),
         RecipeExit::Call { .. } => {
             if !frame.call_ready || frame.call_arguments.is_none() {
                 return Err(invalid("Call exit requires a sealed argument packet"));
@@ -692,7 +782,18 @@ fn exit_preflight(frame: &Frame, store: &GuestStore, exit: &RecipeExit) -> Resul
         }
         RecipeExit::Next(_) | RecipeExit::Fault(_) | RecipeExit::MatchNoArm => Ok(()),
         RecipeExit::Backedge(pc) => {
-            frame.preflight_enter(frame.body.nodes()[pc.node as usize].scope)
+            let node = &frame.body.nodes()[pc.node as usize];
+            // A `for` loop's head enters one iteration, inside its own scope.
+            let scope = if node.role
+                == crate::syntax::body_index::NodeRole::Expression(
+                    crate::syntax::body_index::ExpressionKind::For,
+                ) {
+                node.condition_scope
+                    .ok_or_else(|| invalid("for iteration scope absent"))?
+            } else {
+                node.scope
+            };
+            frame.preflight_enter(scope)
         }
         RecipeExit::Branch { condition, .. } => {
             let value = store.preview_scalar(frame.cell(*condition)?, None)?;
@@ -703,6 +804,13 @@ fn exit_preflight(frame: &Frame, store: &GuestStore, exit: &RecipeExit) -> Resul
         }
         RecipeExit::Control(ControlRecipe::Return { value }) => {
             frame.preflight_return(*value, store)
+        }
+        // A resumed control exit already moved its value; its cleanup
+        // activation retains the admitted exit.
+        RecipeExit::Control(ControlRecipe::Break { .. } | ControlRecipe::Continue { .. })
+            if frame.has_control_cleanup() =>
+        {
+            Ok(())
         }
         RecipeExit::Control(ControlRecipe::Break { target, value, .. }) => {
             frame.preflight_control(*target, *value, false, store)
@@ -716,7 +824,7 @@ fn exit_preflight(frame: &Frame, store: &GuestStore, exit: &RecipeExit) -> Resul
         )),
     }
 }
-/// Immutable result/source admission, retained across this opcode's fuel charge.
+/// Immutable result/source admission, retained across this opcode's step.
 struct PreparedNumericResult {
     destination: crate::ir::pc::SlotId,
     ty: TypeId,
@@ -785,6 +893,29 @@ fn numeric_preflight(
             let crate::runtime::cell::CellState::Live(right_raw) = store.state(right_cell)? else {
                 return Err(invalid("right operand not live"));
             };
+            // Non-primitive operands select the operator's trait method
+            // before this preflight (`Frame::overloaded_operator`).
+            for raw in [left_raw, right_raw] {
+                let primitive_reference = raw.kind == 9
+                    && matches!(
+                        store.type_descriptor(TypeId(raw.type_id))?.key.as_ref(),
+                        crate::runtime::shape::TypeKey::Ref { target, .. }
+                            if target.0 != 16
+                                && matches!(
+                                    store.type_descriptor(*target)?.key.as_ref(),
+                                    crate::runtime::shape::TypeKey::Primitive(_)
+                                )
+                    );
+                if !(1..=7).contains(&raw.kind)
+                    && raw.kind != 11
+                    && raw.kind != 12
+                    && !primitive_reference
+                {
+                    return Err(invalid(
+                        "non-primitive operator operand bypassed its trait method dispatch",
+                    ));
+                }
+            }
             let shift = matches!(operator, B::Shl | B::Shr);
             let comparison = matches!(operator, B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge);
             let left_borrowed = if comparison {
@@ -803,7 +934,7 @@ fn numeric_preflight(
                 .or(right_borrowed.map(|value| TypeId(value.type_id)))
                 .or(store.effective_type(right_raw)?)
                 .or(if comparison {
-                    None
+                    unconstrained_literal_fallback(left_raw, right_raw)
                 } else {
                     frame.hint(*destination)?
                 });
@@ -882,7 +1013,11 @@ fn numeric_preflight(
             target,
             destination,
         } => {
-            let value = store.preview_scalar(frame.cell(*source)?, None)?;
+            let cell = frame.cell(*source)?;
+            let value = match store.enum_cast_operand(cell)? {
+                Some(discriminant) => discriminant,
+                None => store.preview_scalar(cell, None)?,
+            };
             let target = concrete(&HintRecipe::Primitive(*target))?
                 .ok_or_else(|| invalid("cast target absent"))?;
             numeric::cast_types(TypeId(value.type_id), target).map_err(runtime)?;
@@ -895,22 +1030,6 @@ fn numeric_preflight(
         frame.preflight_write_type(destination, ty, store)?;
     } else {
         frame.preflight_primitive_operator_result(destination, ty, source, store)?;
-    }
-    if matches!(
-        op,
-        Op::NumericBinary {
-            operator: crate::ir::op::NumericBinary::Eq
-                | crate::ir::op::NumericBinary::Ne
-                | crate::ir::op::NumericBinary::Lt
-                | crate::ir::op::NumericBinary::Le
-                | crate::ir::op::NumericBinary::Gt
-                | crate::ir::op::NumericBinary::Ge,
-            ..
-        }
-    ) {
-        // These closed primitive comparisons cannot guest-panic after type
-        // admission. Keep arithmetic/cast panic and quota ordering unchanged.
-        frame.preflight_primitive_operator_capacity(destination, store)?;
     }
     Ok(Some(PreparedNumericResult {
         destination,
@@ -926,6 +1045,15 @@ fn numeric_operation(
 ) -> Result<bool, super::numeric::NumericFailure> {
     use super::numeric::{self, NumericFailure};
     let (destination, result) = match op {
+        Op::CompoundAssignPlace {
+            operator,
+            place,
+            right,
+            destination,
+        } => {
+            frame.compound_assign_place(*operator, *place, *right, *destination, store)?;
+            return Ok(true);
+        }
         Op::NumericBinary {
             operator,
             left,
@@ -959,7 +1087,7 @@ fn numeric_operation(
                 .or(right_borrowed.map(|value| TypeId(value.type_id)))
                 .or(store.effective_type(right_raw)?)
                 .or(if comparison {
-                    None
+                    unconstrained_literal_fallback(left_raw, right_raw)
                 } else {
                     frame.hint(*destination)?
                 });
@@ -1010,7 +1138,11 @@ fn numeric_operation(
             target,
             destination,
         } => {
-            let source = store.read_scalar(frame.cell(*source)?)?;
+            let cell = frame.cell(*source)?;
+            let source = match store.enum_cast_operand(cell)? {
+                Some(discriminant) => discriminant,
+                None => store.read_scalar(cell)?,
+            };
             frame.prepare_write(*destination, store)?;
             let target = concrete(&HintRecipe::Primitive(*target))?
                 .ok_or_else(|| invalid("primitive cast target absent"))?;
@@ -1051,6 +1183,11 @@ fn execute(
             source,
             destination,
         } => frame.value_place(*source, *destination, store),
+        Op::ArrayRepeat {
+            source,
+            count,
+            destination,
+        } => frame.array_repeat(*source, *count, *destination, store),
         Op::PlaceTransfer {
             source,
             destination,
@@ -1072,6 +1209,12 @@ fn execute(
         Op::ConstructFinish { guard, destination } => {
             frame.finish_constructor(*guard, *destination, store)
         }
+        Op::ValuePath { destination, .. } => frame.write_value_path(*destination, store),
+        Op::MakeClosure {
+            captures,
+            destination,
+            ..
+        } => frame.make_closure(captures, *destination, store),
         Op::Panic { .. } => Err(invalid(
             "explicit panic bypassed its guest outcome boundary",
         )),
@@ -1145,6 +1288,9 @@ fn execute(
             let ticket = store.ticket(ValueRepr::unit())?;
             frame.write(*destination, ticket, store)
         }
+        Op::FormatArguments { .. } => Err(invalid(
+            "format operation executes through its resumable step",
+        )),
         Op::NumericHint {
             parent,
             child,
@@ -1169,6 +1315,15 @@ fn execute(
                 store,
             )?;
             frame.declared_hint(*child, descriptor)?;
+            // A written Type naming no single descriptor (`(_, u8)`, `&[u8]`)
+            // stays a partial context for the value's own construction.
+            if descriptor.is_none() {
+                if let HintRecipe::Written(written) = hint {
+                    frame.set_partial_hint(*child, std::sync::Arc::clone(written), None)?;
+                } else if let HintRecipe::BorrowTarget { reference } = hint {
+                    frame.borrow_partial_hint(*reference, *child, store)?;
+                }
+            }
             if let HintRecipe::BorrowTarget { reference } = hint {
                 frame.set_source_view(*child, frame.borrow_target_source(*reference)?)?;
             } else if matches!(
@@ -1177,8 +1332,10 @@ fn execute(
                     | HintRecipe::DefinitionNumeric(_)
                     | HintRecipe::DefinitionParameter(_)
                     | HintRecipe::DefinitionResult
+                    | HintRecipe::DefinitionWrittenResult
                     | HintRecipe::Reference { .. }
                     | HintRecipe::ArrayPrimitive { .. }
+                    | HintRecipe::Written(_)
             ) {
                 frame.set_source_view(*child, frame.resolved_annotation_source(hint)?)?;
             }
@@ -1193,9 +1350,21 @@ fn execute(
                 return Err(invalid("transfer source is not live"));
             };
             let source_view = frame.certified_root_transfer_source(*source, *destination, store)?;
+            let unsize = frame.write_unsizing(*destination, value, store)?;
+            // The coerced value has the destination's declared `&[T]` view.
+            let source_view = match unsize {
+                Some(_) => frame.source_view(*destination)?.or(source_view),
+                None => source_view,
+            };
             let destination_cell = frame.prepare_write(*destination, store)?;
-            store.validate_initialization_value(destination_cell, value)?;
+            if unsize.is_none() {
+                store.validate_initialization_value(destination_cell, value)?;
+            }
             let ticket = store.move_from(source_cell)?;
+            // A returned `&[T; N]` meets its declared `&[T]` result.
+            if let Some(expected) = unsize {
+                store.coerce_unsized_ticket(ticket, expected)?;
+            }
             store.initialize(destination_cell, ticket)?;
             frame.set_source_view(*destination, source_view)
         }
@@ -1247,8 +1416,21 @@ fn execute(
             writable,
         } => {
             frame.preflight_binding_source(*source, hint)?;
-            let descriptor = materialize_hint(frame, hint, true, store)?;
+            written_binding_admission(frame, *source, hint, store)?;
+            let unsize = match hint {
+                HintRecipe::Written(written) if !written.exact() => {
+                    frame.written_unsizing(*source, written, store)?
+                }
+                _ => None,
+            };
+            let descriptor = match unsize {
+                Some(_) => None,
+                None => materialize_hint(frame, hint, true, store)?,
+            };
             frame.bind(*binding, *source, descriptor, *writable, store)?;
+            if let Some(expected) = unsize {
+                frame.coerce_binding(*binding, expected, store)?;
+            }
             frame.set_binding_source(*binding, hint)
         }
         Op::ReadLocal {
@@ -1264,8 +1446,14 @@ fn execute(
         | Op::ProjectField { .. }
         | Op::DerefPlace { .. }
         | Op::ReadPlace { .. }
+        | Op::MethodReceiver { .. }
+        | Op::ComparisonOperand { .. }
+        | Op::CompoundAssignPlace { .. }
         | Op::AssignPlace { .. } => Err(invalid(
             "place opcode bypassed its typed execution boundary",
+        )),
+        Op::IteratorCall { .. } => Err(invalid(
+            "iterator call bypassed its trait method dispatch",
         )),
         Op::NumericBinary { .. } | Op::NumericUnary { .. } | Op::PrimitiveCast { .. } => Err(
             invalid("numeric opcode bypassed its typed execution boundary"),
@@ -1337,7 +1525,7 @@ pub(crate) fn step_with_constant(
                 .ok_or_else(|| invalid("copy operation absent from resumed recipe"))?;
             frame.check_copy_activation(resume, op)?;
         }
-        if frame.has_cleanup_activation() {
+        if frame.has_cleanup_activation() && !frame.has_control_cleanup() {
             let op = recipe
                 .operations
                 .get(resume)
@@ -1380,18 +1568,48 @@ pub(crate) fn step_with_constant(
                 increment(&mut frame.counters.operations_completed)?;
                 continue;
             }
+            // An operator suspended for its trait method resumes completed:
+            // the method's result is already the operation's.
+            if frame.has_operator_activation() {
+                frame.complete_operator_operation(index, op)?;
+                increment(&mut frame.counters.operations_completed)?;
+                continue;
+            }
+            // A format operation suspended for a trait-method `fmt` resumes:
+            // it demands its next call or completes.
+            if frame.has_format_activation() {
+                if !frame.format_arguments_step(index, op, store)? {
+                    return Ok(StepOutcome::Dispatch);
+                }
+                increment(&mut frame.counters.operations_completed)?;
+                continue;
+            }
             let tag = usize::from(op.opcode_tag());
             let prepared = literal_preflight(frame, store, op)?;
             let assertion = assertion_preflight(frame, store, op)?;
             state_preflight(frame, store, op)?;
-            let numeric_result = numeric_preflight(frame, store, op)?;
+            // Non-primitive operands select the operator's trait method.
+            let overloaded = frame.overloaded_operator(op, store)?;
+            let numeric_result = if overloaded.is_some() {
+                None
+            } else {
+                numeric_preflight(frame, store, op)?
+            };
             let (projection, projection_panic) = match frame.prepare_projection(op, store) {
                 Ok(prepared) => (prepared, None),
                 Err(crate::runtime::place::PlaceFailure::RuntimeFault(error)) => return Err(error),
                 Err(crate::runtime::place::PlaceFailure::GuestPanic(panic)) => (None, Some(panic)),
             };
+            // rustc's deref coercion of a borrowed box (`&b` expected as
+            // `&T` borrows `&*b`), before the borrow's own admission.
+            if let Op::Borrow {
+                place, destination, ..
+            } = op
+            {
+                frame.box_deref_coercion(*place, *destination, store)?;
+            }
             let place_panic = projection_panic.or(place_preflight(frame, store, op)?);
-            frame.charge_fuel()?;
+            frame.count_step();
             increment(&mut frame.counters.operations_started)?;
             increment(&mut frame.counters.started_by_opcode[tag])?;
             if let Some(panic) = place_panic {
@@ -1412,6 +1630,19 @@ pub(crate) fn step_with_constant(
                     pc: recipe.key.clone(),
                     origin: recipe.origin.clone(),
                 }));
+            }
+            if let Some(kind) = overloaded {
+                frame.begin_operator_call(index, op, kind, store)?;
+                return Ok(StepOutcome::Dispatch);
+            }
+            // `format_args!`: placeholders outside the native family suspend
+            // the operation for their trait's `fmt`.
+            if matches!(op, Op::FormatArguments { .. }) {
+                if !frame.format_arguments_step(index, op, store)? {
+                    return Ok(StepOutcome::Dispatch);
+                }
+                increment(&mut frame.counters.operations_completed)?;
+                continue;
             }
             if frame.begin_aggregate_copy(index, op, store)? {
                 if !frame.advance_aggregate_copy(store)? {
@@ -1457,14 +1688,8 @@ pub(crate) fn step_with_constant(
             increment(&mut frame.counters.operations_completed)?;
         }
         exit_preflight(frame, store, &recipe.exit)?;
-        frame.charge_fuel()?;
+        frame.count_step();
         let outcome = match &recipe.exit {
-            RecipeExit::PatternNext { owner } => {
-                StepOutcome::Next(frame.pattern_next(*owner, store)?)
-            }
-            RecipeExit::PatternRetry { owner } => {
-                StepOutcome::Next(frame.pattern_retry(*owner, store)?)
-            }
             RecipeExit::Call {
                 site,
                 resume,
@@ -1509,13 +1734,27 @@ pub(crate) fn step_with_constant(
                 value,
                 resume,
             }) => {
-                frame.control_transfer(*target, *value, false, store)?;
+                if !frame.control_transfer(*target, *value, false, store)? {
+                    return Ok(StepOutcome::Dispatch);
+                }
                 StepOutcome::Next(resume.clone())
             }
             RecipeExit::Control(ControlRecipe::Continue { target }) => {
                 let node = frame.body.labels()[target.0 as usize].node;
-                let entry = frame.body.pc(node, crate::ir::pc::Phase::Entry)?;
-                frame.control_transfer(*target, None, true, store)?;
+                // A `for` loop continues at its head (the next `next` call);
+                // its entry would re-evaluate the iterated expression.
+                let phase = if frame.body.nodes()[node.0 as usize].role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::For,
+                    ) {
+                    crate::ir::pc::Phase::Commit
+                } else {
+                    crate::ir::pc::Phase::Entry
+                };
+                let entry = frame.body.pc(node, phase)?;
+                if !frame.control_transfer(*target, None, true, store)? {
+                    return Ok(StepOutcome::Dispatch);
+                }
                 StepOutcome::Backedge(entry)
             }
             RecipeExit::Fault(d) => return Err(d.reached_unsupported()),

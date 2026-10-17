@@ -10,7 +10,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
-const MAX_MESSAGE: usize = 1024 * 1024;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildScriptMessage {
@@ -25,9 +24,6 @@ pub struct BuildScriptMessage {
 impl BuildScriptMessage {
     /// Decode one selected build-script record. Ordinary log handling belongs to the driver.
     pub fn decode(bytes: &[u8]) -> Result<Self, crate::core::diagnostic::Diagnostic> {
-        if bytes.len() > MAX_MESSAGE {
-            return Err(fault("Cargo build output record exceeds 1 MiB"));
-        }
         let mut decoder = serde_json::Deserializer::from_slice(bytes);
         CheckedJson::deserialize(&mut decoder).map_err(|e| fault(e.to_string()))?;
         decoder.end().map_err(|e| fault(e.to_string()))?;
@@ -113,7 +109,7 @@ pub fn associate_build_outputs(
     graph: &UnitGraph,
     messages: Vec<BuildScriptMessage>,
 ) -> Result<BTreeMap<Digest, AssociatedBuildOutput>, crate::core::diagnostic::Diagnostic> {
-    if graph.schema != 1 || graph.units.len() > 100_000 || messages.len() > 100_000 {
+    if graph.schema != 1 {
         return Err(fault("invalid build output graph bounds"));
     }
     let mut producers: BTreeMap<&str, Vec<Digest>> = BTreeMap::new();
@@ -129,9 +125,6 @@ pub fn associate_build_outputs(
         edge_count = edge_count
             .checked_add(unit.dependencies.len())
             .ok_or_else(|| fault("build output edge count overflow"))?;
-        if edge_count > 100_000 {
-            return Err(fault("build output graph edge limit"));
-        }
         for edge in &unit.dependencies {
             consumers_by_producer
                 .entry(edge.target)

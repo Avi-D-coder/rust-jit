@@ -155,12 +155,6 @@ impl Database {
                 )));
             }
         };
-        if plan.context().facts().items.len() > 100_000 {
-            return QueryPoll::Ready(Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "owning local declaration inventory limit",
-            )));
-        }
         // These are already-admitted declaration headers, not executable
         // preparation or TypeSchema demands. Opaque attribute owners remain
         // pending in the same prefix index and acquire no declaration rows.
@@ -269,26 +263,7 @@ impl Database {
             });
             let value = InputValue::BodyEnvironment(Arc::clone(&input));
             let fingerprint = value.fingerprint();
-            let before = self.body_environment_root_bytes(None)?;
-            let after = self.body_environment_root_bytes(Some(&input))?;
-            let children = after
-                .checked_sub(before)
-                .ok_or_else(crate::runtime::arena::resource)?;
-            let extra = account_add(
-                account_add(input_metadata_bytes(&key, &value)?, children)?,
-                self.source_plan_pins.input_extra_bytes(&input)?,
-            )?;
-            let usage = self.cache_usage()?;
-            let budgets = self.run_budgets.unwrap_or_default();
-            if account_add(usage.memo_bytes, extra)? > budgets.query_bytes
-                || usage.parse_bytes > budgets.parse_bytes
-                || usage.source_input_bytes > budgets.source_input_bytes
-            {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "body environment publication exceeds source/query metadata cap",
-                ));
-            }
+            // E-R5-006: no byte accounting.
             self.source_plan_pins.register_input(&input)?;
             self.inputs.insert(
                 key,
@@ -307,7 +282,6 @@ impl Database {
         &mut self,
         receipt: &crate::engine::run::source_preparation::ReachedLocalBody<'_>,
     ) -> QueryPoll<()> {
-        use crate::db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue};
         macro_rules! ready {
             ($value:expr) => {
                 match $value {
@@ -327,11 +301,86 @@ impl Database {
             )));
         }
         ready!(receipt.require_current(self));
-        ready!(self.publish_body_environment_checked(
-            Arc::clone(receipt.source()),
-            Arc::clone(receipt.macros()),
-        ));
-        let body = receipt.source().index().body();
+        self.prepare_reached_body_plan(receipt.source(), receipt.macros())
+    }
+    /// Exact reached module receipt shares the same derived owning-body core.
+    pub(crate) fn prepare_reached_module_plan(
+        &mut self,
+        receipt: &crate::engine::run::module_source_preparation::ReachedModuleBody<'_>,
+    ) -> QueryPoll<()> {
+        if let Err(error) = self.require_coordinator() {
+            return QueryPoll::Ready(Err(error));
+        }
+        if !self.run_active {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "reached module preparation requires active run",
+            )));
+        }
+        match receipt.require_current(self) {
+            QueryPoll::Ready(Ok(())) => {
+                self.prepare_reached_body_plan(receipt.source(), receipt.macros())
+            }
+            other => other,
+        }
+    }
+    /// Every published macro-generated item unit, for the run's one-time
+    /// impl member index (cold; never on an operation path).
+    pub(crate) fn generated_syntax_units(
+        &self,
+    ) -> Vec<Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>> {
+        self.inputs
+            .iter()
+            .filter_map(|(key, record)| match (key, record.value.as_ref()) {
+                (InputKey::GeneratedSyntax(_), InputValue::GeneratedSyntax(unit)) => {
+                    Some(Arc::clone(unit))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+    /// A source callee selected by ordinary name/member resolution (no
+    /// entered-goal receipt) shares the same derived owning-body core. The
+    /// caller has already revalidated the selected identity.
+    pub(crate) fn prepare_selected_body_plan(
+        &mut self,
+        source: &Arc<AdmittedBodyContext>,
+        macros: &Arc<SealedBodyMacroEnvironment>,
+    ) -> QueryPoll<()> {
+        if let Err(error) = self.require_coordinator() {
+            return QueryPoll::Ready(Err(error));
+        }
+        // Outside an active run (direct machine harnesses) the selected body
+        // keeps its environment-free preparation.
+        if !self.run_active {
+            return QueryPoll::Ready(Ok(()));
+        }
+        match source.require_current(self) {
+            QueryPoll::Ready(Ok(())) => {}
+            other => return other,
+        }
+        match macros.require_current(self) {
+            QueryPoll::Ready(Ok(())) => self.prepare_reached_body_plan(source, macros),
+            other => other,
+        }
+    }
+    fn prepare_reached_body_plan(
+        &mut self,
+        source: &Arc<AdmittedBodyContext>,
+        macros: &Arc<SealedBodyMacroEnvironment>,
+    ) -> QueryPoll<()> {
+        use crate::db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue};
+        macro_rules! ready {
+            ($value:expr) => {
+                match $value {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+        }
+        ready!(self.publish_body_environment_checked(Arc::clone(source), Arc::clone(macros),));
+        let body = source.index().body();
         let value = ready!(self.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.clone())));
         let QueryValue::SourceLocalPlan(plan) = value.value.as_ref() else {
             return QueryPoll::Ready(Err(fault(
@@ -339,19 +388,13 @@ impl Database {
                 "reached local plan variant differs",
             )));
         };
-        if plan.context().source().identity() != receipt.source().identity()
+        if plan.context().source().identity() != source.identity()
             || plan.context().source().index().body() != body
             || plan.environment().is_none()
         {
             return QueryPoll::Ready(Err(fault(
                 "LRR-E-BODY-ENVIRONMENT",
                 "reached local plan source differs",
-            )));
-        }
-        if plan.context().facts().items.len() > 100_000 {
-            return QueryPoll::Ready(Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "reached local declaration inventory limit",
             )));
         }
         for row in &plan.context().facts().items {

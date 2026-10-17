@@ -1,0 +1,48 @@
+{
+  "kind": "common-local-declaration-field-type-prefix-component",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "5ca319c43fede4149f539a57f2a5f4220347350b6ba9ca7b0ca133fc65bc9347",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "bytes": 19126,
+      "sha256": "16f3d961036a9d20c100cb204dd849317a86b146cc02724a0ceea83999322024"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "bytes": 10179,
+      "sha256": "a4065e6655ba881d003779ec4d9f983b06975e0f00b101e83a6aefce4175725f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "bytes": 31298,
+      "sha256": "37b21536a39bf1dfca20b0b139b8b175cda3bcd0c97b6b002fd5b487790faa4f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "bytes": 89575,
+      "sha256": "3bfc1671743bea7fbb9ffbdfcc98068a9bcad99cff5e811f4c9c5094340ec009"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "bytes": 28576,
+      "sha256": "a00f9adc71e2a365096667f3f7dceaf9933093f1741f3ec6b22270523572950e"
+    }
+  ],
+  "required_root_dependency": {
+    "path": "crates/lrr/src/frontend/signature_names.rs",
+    "sha256": "e38976762172c6e41f28015f38ee631dda46b581b49d426a9608e1fb806bf4ef",
+    "symbol": "classify_completed_type_lookup"
+  },
+  "dependencies": [
+    "query22 83bbb544 +compile correction4 2be3b390",
+    "root actual FieldRecipe.type_range/current-name callback/schema-owning plan constructor7"
+  ],
+  "holds": [
+    "qualified m::S module prefix",
+    "production relevant Type module completion projection",
+    "installed constructor association source freeze pending root",
+    "per-field cold full-schema equality yields O(F\u00b2) when all F fields bound",
+    "full original/generated/wrapper/std runtime acceptance unexecuted"
+  ]
+}

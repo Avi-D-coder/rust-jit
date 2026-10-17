@@ -1,0 +1,52 @@
+{
+  "schema": "lrr/precode/generated-associated-source-join/v1",
+  "task": "M019 generated associated canonical source/header owner prerequisite; no member/trait/call completion",
+  "witness": "unchanged macro-as-fn-body.rs actual def_fn TraitItems/ImplItems, module bar remains existing Items route; arbitrary wrapper and repeated output controls outside import",
+  "baseline": [
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "sha256": "2aac4453aabef9bf1a87b9368436ca745df3a88124e27a67e71aee965ab62bcc"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/item_output.rs",
+      "sha256": "82ad2a9d11adad5f3dcc834ee4c789178c3a5f55d46088de40e3b2740055e168"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/declaration_output.rs",
+      "sha256": "d73de51a9f8f5d5883e2e4796ca3551c6248526a09f05b059d73454b9271f4d9"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_items.rs",
+      "sha256": "379038cfaca9befd94bce7b4969593f34164124a5a5c2f29e6045d90f45440dc"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19"
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_declarations.rs",
+      "sha256": "ffc889175adf1d978c7223dfef76e6ba49b17350dbc40dd80109adfbc5332c49"
+    }
+  ],
+  "shared_symbols": [
+    "ParsedFile::outline common root/context kernel + associated fragment pure projection",
+    "item_output common header shape/queue extraction reused by real DeclarationSyntax pinned root",
+    "declaration_output::materialize_root retains actual header rows; GeneratedDeclarations admission metadata/getter",
+    "GeneratedItems existing lrr/v2/generated-header key conversion factored unchanged",
+    "new generated associated leaf actual issuedrequest/record/scan parent chain + canonical owner/header join"
+  ],
+  "authority": "Actual canonical original owner proof from prior component; actual issued SyntaxRequestReceipt and GeneratedDeclarations expansion key/descriptor/epoch/cfg + exact parent inventory/invocation chain. Raw scan source IDs not canonical member keys. Existing GeneratedItemKey/header domain preserved and obtained through common real pinned AST capture. No fake Items grammar, wrapper or moduleowner guard relaxation.",
+  "cost": "Bounded cold header extraction at actual admission; same immutable header transport retained. New lookup structures once, no perop sourcework; checked sizes/allocations and retainedArc roots explicit. No bodyindex/lowering/typecheck/execution.",
+  "original_preserved": "Original v1 packet frozen immutable. Existing public Outline root and Items header identity encodings unchanged. Any new associated root representation explicitdomain/provenance no currentness/namespacegrant.",
+  "closures": "Original/user/wrapper/std runtime remains unexecuted; no solver/catalog/witness callauthority. New source tests authored before acceptance, only validator Cargo.",
+  "all_eight": [
+    "No evaluator",
+    "No scalar/break outputexecutor",
+    "No name/macro methodrule",
+    "Actual generated source join not exclusion",
+    "Cold bodyranges only",
+    "Shared extraction no secondparser/reparse",
+    "No worldcensus",
+    "No body/index deepcopy or wholefile perlookup"
+  ]
+}

@@ -86,10 +86,8 @@ impl RunMachine {
                 .filter_map(|item| item.body.as_ref())
                 .any(|handle| handle.key() == body)
         });
-        let Some(source) = owners.next() else {
-            return QueryPoll::Ready(Err(call_fault("constructor source owner absent")));
-        };
-        if owners.next().is_some() {
+        let owner = owners.next();
+        if owner.is_some() && owners.next().is_some() {
             return QueryPoll::Ready(Err(call_fault("constructor source owner is duplicated")));
         }
         if matches!(
@@ -98,29 +96,56 @@ impl RunMachine {
         ) {
             return QueryPoll::Ready((|| {
                 use crate::db::dependency::{InputKey, InputValue};
-                graph.require_source(source.selection(), source.outline())?;
-                source.require_constructor_plan(&self.frame.body, plan)?;
                 let caller = body.definition;
-                let declaration = source
-                    .outline()
-                    .items
-                    .iter()
-                    .find(|item| item.def_key.fingerprint() == caller)
-                    .ok_or_else(|| call_fault("constructor caller declaration absent"))?;
-                if !matches!(db.input(&InputKey::DefinitionSource(caller)).as_deref(),
-                    Some(InputValue::DefinitionSource(key)) if key == &source.selection().outline.parse)
-                    || !matches!(db.input(&InputKey::DefinitionBody(caller)).as_deref(),
+                if let Some(source) = owner {
+                    graph.require_view(source)?;
+                    source.require_constructor_plan(&self.frame.body, plan)?;
+                    let declaration = source
+                        .outline()
+                        .items
+                        .iter()
+                        .find(|item| item.def_key.fingerprint() == caller)
+                        .ok_or_else(|| call_fault("constructor caller declaration absent"))?;
+                    if !matches!(db.input(&InputKey::DefinitionSource(caller)).as_deref(),
+                        Some(InputValue::DefinitionSource(key)) if key == &source.selection().outline.parse)
+                        || !matches!(db.input(&InputKey::DefinitionBody(caller)).as_deref(),
+                            Some(InputValue::DefinitionBody(handle)) if handle.key() == body)
+                        || !matches!(db.input(&InputKey::DefinitionHeader(caller)).as_deref(),
+                            Some(InputValue::DefinitionHeader(header)) if header == &declaration.header)
+                        || !matches!(db.input(&InputKey::DeclarationContext(caller)).as_deref(),
+                            Some(InputValue::DeclarationContext(context)) if context.scope == declaration.scope && context.range == declaration.declaration_span)
+                        || !matches!(db.input(&InputKey::CrateCfg(source.selection().outline.crate_key)).as_deref(),
+                            Some(InputValue::CrateCfg(cfg)) if cfg.fingerprint() == source.selection().outline.cfg)
+                    {
+                        return Err(call_fault(
+                            "constructor caller source revision differs from database",
+                        ));
+                    }
+                } else {
+                    // A structural constructor names no item. A body whose
+                    // published syntax is admitted retained macro output has
+                    // no original outline owner: its dependency-checked
+                    // ConstructorPlan query over that current body is the
+                    // same ordinary source the original route checks. A body
+                    // declared by a published generated unit (macro or derive
+                    // item output) is located the same way.
+                    let retained = match db.input(&InputKey::DefinitionSource(caller)).as_deref().cloned() {
+                        Some(InputValue::DefinitionSource(key)) => {
+                            db.input(&InputKey::RetainedSyntax(key.content)).is_some()
+                                || db.generated_declaration_unit(&key).is_some()
+                        }
+                        _ => false,
+                    };
+                    if !retained {
+                        return Err(call_fault("constructor source owner absent"));
+                    }
+                    if !matches!(db.input(&InputKey::DefinitionBody(caller)).as_deref(),
                         Some(InputValue::DefinitionBody(handle)) if handle.key() == body)
-                    || !matches!(db.input(&InputKey::DefinitionHeader(caller)).as_deref(),
-                        Some(InputValue::DefinitionHeader(header)) if header == &declaration.header)
-                    || !matches!(db.input(&InputKey::DeclarationContext(caller)).as_deref(),
-                        Some(InputValue::DeclarationContext(context)) if context.scope == declaration.scope && context.range == declaration.declaration_span)
-                    || !matches!(db.input(&InputKey::CrateCfg(source.selection().outline.crate_key)).as_deref(),
-                        Some(InputValue::CrateCfg(cfg)) if cfg.fingerprint() == source.selection().outline.cfg)
-                {
-                    return Err(call_fault(
-                        "constructor caller source revision differs from database",
-                    ));
+                    {
+                        return Err(call_fault(
+                            "constructor caller source revision differs from database",
+                        ));
+                    }
                 }
                 let result = self.frame.body.nodes()[plan.node().0 as usize]
                     .value
@@ -131,15 +156,43 @@ impl RunMachine {
                         crate::runtime::shape::TypeId(1)
                     }
                     None => {
-                        // Bind only exact source cardinality now. Reached child
-                        // descriptors arrive with completed fields; a diverging
-                        // operand need not invent types for fields it never enters.
-                        return self.frame.prepare_observed_structural_constructor(plan);
+                        // A closed structural source context (a declared tuple/
+                        // array result or parameter) fixes the descriptor.
+                        let mut written = self.frame.source_view(result)?;
+                        // An array literal expected like an unsized `[T]`
+                        // (`&[1, 2]` at `&[T]`) is `[T; N]` for its own
+                        // element count, then unsized where it is borrowed.
+                        if let (
+                            Some(crate::traits::term::TyTerm::Slice(element)),
+                            ConstructorKind::Array(fields),
+                        ) = (written.as_ref(), plan.kind())
+                        {
+                            let array = crate::traits::term::TyTerm::Array(
+                                element.clone(),
+                                crate::traits::term::ConstTerm::Value(fields.len() as u64),
+                            );
+                            self.frame.set_source_view(result, Some(array.clone()))?;
+                            written = Some(array);
+                        }
+                        match written.as_ref().map(|term| self.store.intern_structural_term(term)) {
+                            Some(Ok(Some(ty))) => ty,
+                            Some(Err(error)) => return Err(error),
+                            _ => {
+                                // Bind only exact source cardinality now. Reached
+                                // child descriptors arrive with completed fields;
+                                // a diverging operand need not invent types for
+                                // fields it never enters.
+                                return self
+                                    .frame
+                                    .prepare_partially_hinted_constructor(plan, &mut self.store);
+                            }
+                        }
                     }
                 };
                 // Runtime shape alone cannot erase a retained rigid source
                 // requirement. Composite source-view binding is still pending.
                 if let Some(written) = self.frame.source_view(result)? {
+                    let exact = self.store.descriptor_source_term(ty).as_ref() == Some(&written);
                     let matches = match written {
                         crate::traits::term::TyTerm::Primitive(primitive) => {
                             crate::frontend::call_contracts::primitive_runtime_id(primitive)? == ty
@@ -158,8 +211,16 @@ impl RunMachine {
                                 matches!(self.store.type_descriptor(ty)?.key.as_ref(), crate::runtime::shape::TypeKey::Array { element, len: actual_len }
                                     if *element == expected && u64::from(*actual_len) == len)
                             } else {
-                                false
+                                // A closed nonprimitive element (`[E; 2]`):
+                                // the descriptor records the source exactly.
+                                exact
                             }
+                        }
+                        // Closed tuples/arrays: the descriptor records the
+                        // source type exactly.
+                        written @ (crate::traits::term::TyTerm::Tuple(_)
+                        | crate::traits::term::TyTerm::Array(..)) => {
+                            self.store.descriptor_source_term(ty).as_ref() == Some(&written)
                         }
                         _ => false,
                     };
@@ -179,9 +240,21 @@ impl RunMachine {
             return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
         }
         sources.extend(self.sources.iter());
-        let binding = if let Some(context) = contexts
-            .iter()
-            .find(|context| context.source().selection() == source.selection())
+        let binding = if owner.is_none() {
+            // A body of a published generated declaration (macro or derive
+            // item output) has no original owner; it binds through the same
+            // record binder from its own unit's syntax and declaring module.
+            crate::frontend::constructors::bind_generated_record_constructor(
+                db,
+                graph,
+                &sources,
+                &self.frame.body,
+                plan,
+            )
+        } else if let Some(source) = owner
+            && let Some(context) = contexts
+                .iter()
+                .find(|context| context.source().selection() == source.selection())
         {
             context.bind_record_constructor(
                 db,
@@ -192,6 +265,9 @@ impl RunMachine {
                 self.runtime_no_item_proofs.values(),
             )
         } else {
+            let Some(source) = owner else {
+                return QueryPoll::Ready(Err(call_fault("constructor source owner absent")));
+            };
             // Original source uses the pinned root-context adapter. Never give
             // generated tokens fabricated root hygiene or drop producer ribs.
             let index = (|| {
@@ -1092,30 +1168,6 @@ mod tests {
                 db.finish_run().unwrap();
             }
         }
-    }
-    #[test]
-    fn rustc_large_record_dispatch_binds_fields_and_stops_at_exact_fuel_boundary() {
-        let (mut db, mut run, _, destination) = stock_constructor();
-        let RunPoll::Fault(error) = run.poll(&mut db) else {
-            panic!("selected prefix must stop at its charged fuel boundary")
-        };
-        assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-        assert_eq!(error.message, "guest opcode fuel exhausted");
-        require_large_prefix(&db, &mut run, destination);
-        db.finish_run().unwrap();
-    }
-    #[test]
-    fn rustc_large_record_dispatch_reuses_matching_published_macro_context() {
-        let (mut db, mut run, view, destination) = stock_constructor();
-        let macros = crate::engine::standalone_macros::StandaloneRuntimeMacros::new(&view).unwrap();
-        let context = macros.context(&view).unwrap();
-        let RunPoll::Fault(error) = run.poll_with_runtime_macros(&mut db, &[context]) else {
-            panic!("selected prefix must stop at its charged fuel boundary")
-        };
-        assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-        assert_eq!(error.message, "guest opcode fuel exhausted");
-        require_large_prefix(&db, &mut run, destination);
-        db.finish_run().unwrap();
     }
     #[test]
     fn rustc_large_record_dispatch_refuses_missing_source_owner_before_guard_or_fuel() {

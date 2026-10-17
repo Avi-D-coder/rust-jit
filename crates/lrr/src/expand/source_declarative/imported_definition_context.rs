@@ -59,7 +59,7 @@ fn arena_catalogs(
 fn arenas(
     exports: &SealedMacroExportProviders,
 ) -> impl Iterator<Item = &SealedMacroExportProviders> {
-    std::iter::successors(Some(exports), |owner| owner.imports().map(AsRef::as_ref)).take(256)
+    std::iter::successors(Some(exports), |owner| owner.imports().map(AsRef::as_ref))
 }
 fn sources(exports: &SealedMacroExportProviders) -> impl Iterator<Item = &SourceDeclarative> {
     arenas(exports).flat_map(arena_sources)
@@ -126,7 +126,7 @@ impl<'a> CapturedMacroContext<'a> {
             origin = Some(found);
             Ok(())
         };
-        let mut remaining = 100_000;
+        let mut remaining = usize::MAX;
         if let Some(owner) = self.exported_definition_owner(definition, &mut remaining)?
             && let Some(found) = owner.index.definition_origin(definition)?
         {

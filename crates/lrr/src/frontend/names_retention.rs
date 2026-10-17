@@ -16,7 +16,6 @@ impl Size {
         self.bytes = self
             .bytes
             .checked_add(bytes)
-            .filter(|n| *n <= 256 * 1024 * 1024)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
@@ -29,7 +28,6 @@ impl Size {
         self.rows = self
             .rows
             .checked_add(count)
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",

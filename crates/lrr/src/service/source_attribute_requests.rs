@@ -194,7 +194,6 @@ impl SourceAttributeSelection {
                     .ok_or_else(|| fault("compiler Test descriptor absent"))?;
                 if descriptor.action()
                     != crate::expand::builtin_attributes::BuiltinAttributeAction::Test
-                    || consumed_tests.len() >= 4096
                 {
                     return Err(fault("compiler Test prefix invalid"));
                 }
@@ -325,7 +324,7 @@ impl SourceAttributeSelection {
             .attribute_item_range_at(row.range)?
             .ok_or_else(|| fault("cold attribute owning item absent"))?;
         let facts = parsed.attribute_inputs_at(range, source.captured_macro_cfg()?)?;
-        if !facts.enabled || facts.attributes.len() > 4096 {
+        if !facts.enabled {
             return Err(fault("cold attribute inactive item or count limit"));
         }
         let at = facts
@@ -398,7 +397,7 @@ impl SourceAttributeSelection {
             scope: row.scope.clone(),
             grammar: row.grammar,
             input,
-            registry,
+            registry: (*registry).clone(),
             call_site,
             definition,
             catalog: catalog.clone(),
@@ -760,7 +759,7 @@ impl SourceAttributeSelection {
             scope: item.scope.clone(),
             grammar: crate::expand::identity::GrammarSlot::Items,
             input,
-            registry,
+            registry: (*registry).clone(),
             call_site,
             definition,
             catalog: catalog.clone(),
@@ -858,9 +857,6 @@ impl SourceAttributeSelection {
                 .checked_add(source.heap_bytes().map_err(|e| fault(&e.message))?)
                 .ok_or_else(|| fault("generated attribute source size overflow"))?;
         }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(fault("source attribute metadata limit"));
-        }
         Ok(bytes)
     }
     pub(crate) fn diagnostic_origin(
@@ -945,7 +941,6 @@ impl SourceAttributeSelection {
                         .map_or(0, |site| site.source.path.len()),
                 )
             })
-            .filter(|n| *n <= 64 * 1024)
             .ok_or_else(limit)?;
         let _ = retained;
         let mut path = String::new();
@@ -1005,9 +1000,6 @@ impl SourceAttributeSelection {
                 })
             {
                 let selected = self.source.selection();
-                if selected.path.as_str().len() > 64 * 1024 {
-                    return Err(limit());
-                }
                 let mut path = String::new();
                 path.try_reserve_exact(selected.path.as_str().len())
                     .map_err(|_| limit())?;
@@ -1043,9 +1035,6 @@ impl SourceAttributeSelection {
             failure_span: None,
             parents,
         };
-        if origin.heap_bytes().is_none_or(|n| n > 64 * 1024) {
-            return Err(limit());
-        }
         Ok(origin)
     }
     pub(crate) fn matches_request(

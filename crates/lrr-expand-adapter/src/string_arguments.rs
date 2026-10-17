@@ -74,9 +74,6 @@ pub(crate) fn parse_operands(
             let value = string
                 .value()
                 .map_err(|_| fault("invalid compile-time string string escape"))?;
-            if value.len() > 64 * 1024 {
-                return Err(fault("compile-time string decoded string limit"));
-            }
             StringOperand::Literal {
                 value: value.into_owned(),
                 span: store.owned_span_key(span)?,
@@ -115,9 +112,6 @@ pub fn owned_operands(
     input: &TokenForest,
     max_operands: usize,
 ) -> Result<Vec<StringArgumentTokens>, AdapterError> {
-    if input.allocated_bytes().map_err(|e| fault(&e.to_string()))? > 64 * 1024 * 1024 {
-        return Err(fault("string operand input metadata limit"));
-    }
     let parsed = parse_operands(input, max_operands)?;
     let mut store = SpanStore::default();
     let tree = store.import(input)?;
@@ -164,7 +158,6 @@ pub fn owned_operands(
             )
             .and_then(|n| n.checked_add(extra))
             .and_then(|n| n.checked_add(std::mem::size_of::<StringArgumentTokens>()))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("string operand aggregate metadata limit"))?;
         result.push(StringArgumentTokens { tokens, nested });
     }

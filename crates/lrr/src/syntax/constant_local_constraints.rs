@@ -183,18 +183,12 @@ impl Graph<'_> {
         Ok(())
     }
     fn push(&mut self) -> Result<(), Diagnostic> {
-        if self.scopes.len() >= 128 {
-            return Err(limit());
-        }
         self.charge(64)?;
         self.scopes.try_reserve(1).map_err(|_| limit())?;
         self.scopes.push(BTreeMap::new());
         Ok(())
     }
     fn name(&mut self, text: &str) -> Result<String, Diagnostic> {
-        if text.len() > 64 * 1024 {
-            return Err(limit());
-        }
         self.charge(
             text.len()
                 .checked_mul(4)
@@ -322,9 +316,6 @@ impl Graph<'_> {
     }
     fn expr(&mut self, expr: ast::Expr, depth: usize) -> Result<Option<usize>, Diagnostic> {
         self.charge(0)?;
-        if depth >= 128 {
-            return Err(limit());
-        }
         let id = self.fresh()?;
         if !self.checked_attributes(expr.syntax())? {
             self.opaque_scope()?;
@@ -567,9 +558,6 @@ pub(super) fn select(
     work_limit: usize,
     byte_limit: usize,
 ) -> Result<LocalNumericContext, Diagnostic> {
-    if !(1..=100_000).contains(&work_limit) || !(128..=32 * 1024 * 1024).contains(&byte_limit) {
-        return Err(limit());
-    }
     let mut graph = Graph {
         source,
         nodes: Vec::new(),

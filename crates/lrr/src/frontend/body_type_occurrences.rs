@@ -175,6 +175,57 @@ fn retained_original_origin(
         // GeneratedBodyBoundary, output record, owning edition and hygiene.
         return QueryPoll::Ready(Ok(occurrence.origin()));
     };
+    // A Type path emitted by an expansion this retained unit recorded: its
+    // structural position lies wholly inside one current generated output of
+    // the same retained assembly, and every segment carries its actual retained
+    // token context. That is the same evidence a GeneratedSyntax body's
+    // boundary supplies, so the ordinary hygienic Type service resolves it
+    // exactly like a generated item body's path (call site, `$crate` and
+    // definition-module routes included). No original-source equivalence or
+    // copied diagnostic span is consulted.
+    let generated = (|| -> Result<Option<BodyTypeOrigin>, Diagnostic> {
+        if unit.key() != &source.parsed().key()
+            || occurrence.owner != source.identity()
+            || occurrence.body() != &source.body().key()
+            || !source.body().range.contains(occurrence.path_range())
+        {
+            return Err(fault("retained Type occurrence actual source/body differs"));
+        }
+        let SourceOccurrence::Generated { record, .. } =
+            unit.prepared().occurrence(occurrence.path_range())?
+        else {
+            return Ok(None);
+        };
+        if !unit
+            .prepared()
+            .outputs()
+            .iter()
+            .any(|output| output.record().key().fingerprint() == record)
+        {
+            return Ok(None);
+        }
+        for segment in occurrence.segments() {
+            let identifier = match segment {
+                BodyTypeSegment::Name(identifier)
+                | BodyTypeSegment::Crate(identifier)
+                | BodyTypeSegment::SelfModule(identifier)
+                | BodyTypeSegment::Super(identifier) => identifier,
+                BodyTypeSegment::NeedQualifiedType => return Ok(None),
+            };
+            let Some(context) = source.parsed().identifier_context(identifier.range())? else {
+                return Ok(None);
+            };
+            if identifier.raw_context().is_some_and(|raw| raw != context) {
+                return Err(fault("retained Type occurrence token context differs"));
+            }
+        }
+        Ok(Some(BodyTypeOrigin::Generated(Key(record.0))))
+    })();
+    match generated {
+        Ok(Some(origin)) => return QueryPoll::Ready(Ok(origin)),
+        Ok(None) => {}
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    }
     let result = (|| -> Result<Option<(&crate::source::changes::PreparedSourceView, SourceRange)>, Diagnostic> {
         if unit.key() != &source.parsed().key() || occurrence.owner != source.identity()
             || occurrence.body() != &source.body().key() || !source.body().range.contains(occurrence.path_range()) {
@@ -296,7 +347,7 @@ fn retained_original_origin(
         let Some(current_path) = path(source.parsed(), occurrence.path_range())? else {
             return Ok(false);
         };
-        let owner = original_path.ancestors().take(257).find(|node| {
+        let owner = original_path.ancestors().find(|node| {
             ast::Fn::can_cast(node.kind())
                 || ast::Const::can_cast(node.kind())
                 || ast::Static::can_cast(node.kind())
@@ -337,7 +388,6 @@ fn resource() -> Diagnostic {
 fn add(bytes: usize, extra: usize) -> Result<usize, Diagnostic> {
     bytes
         .checked_add(extra)
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(resource)
 }
 impl PreparedBodyTypeOccurrences {
@@ -415,9 +465,6 @@ impl PreparedBodyTypeOccurrences {
             let mut shape = BodyTypeShape::Named;
             let absolute;
             loop {
-                if segments.len() >= 256 {
-                    return Err(resource());
-                }
                 let segment = current
                     .segment()
                     .ok_or_else(|| fault("body Type path segment absent"))?;

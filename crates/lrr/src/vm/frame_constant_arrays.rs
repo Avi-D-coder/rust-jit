@@ -118,19 +118,6 @@ impl Frame {
             ));
         }
         let construction = store.prepare_constant_instantiation(value, wire, proof.ty())?;
-        let retained = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
-            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
-            .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
-            .and_then(|n| n.checked_add(std::mem::size_of::<PreparedConstantPublication<'_, '_>>()))
-            .and_then(|n| n.checked_add(construction.metadata_bytes()))
-            .and_then(|n| n.checked_add(proof.metadata_bytes()?))
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let _ = retained;
-        store
-            .preflight_owning_read_result(self.slot(proof.destination())?.cell.is_none(), false)?;
         Ok(PreparedConstantPublication {
             admitted: proof,
             frame: self.anchor,
@@ -176,17 +163,12 @@ impl Frame {
                 "constant publication preparation is stale or foreign",
             ));
         }
-        self.fuel.poll()?;
         store.reserve_owning_read_result(prepared.prior.is_none(), false)?;
         // A new Uninit FrameSlot is a normal cleanup obligation, not a value
         // publication. Its handle cannot be spent by subsequent construction.
         let cell = self.prepare_write(prepared.destination, store)?;
         let mut pending =
             store.instantiate_pending_constant(prepared.construction, &mut self.fuel)?;
-        if let Err(error) = self.fuel.poll() {
-            store.abort_pending_constant(pending)?;
-            return Err(error);
-        }
         match store.commit_pending_constant(&mut pending, cell) {
             Ok(()) => self.set_source_view(prepared.destination, Some(prepared.source)),
             Err(error) => {

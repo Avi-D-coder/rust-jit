@@ -54,11 +54,7 @@ impl NamespaceReads {
         let bytes = heap
             .checked_add(256 + 16 * std::mem::size_of::<NamespaceRead>())
             .and_then(|n| n.checked_add(self.bytes))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
-        if self.rows.len() >= 100_000 {
-            return Err(crate::runtime::arena::resource());
-        }
         self.rows.insert(row);
         self.bytes = bytes;
         Ok(())
@@ -72,9 +68,6 @@ impl NamespaceReads {
             return Ok(());
         }
         let heap = scope.heap_bytes();
-        if heap > 32 * 1024 * 1024 {
-            return Err(crate::runtime::arena::resource());
-        }
         self.insert(
             NamespaceRead::Scope {
                 namespace,
@@ -105,9 +98,6 @@ impl NamespaceReads {
         unit: Digest,
         parts: &[MacroName],
     ) -> Result<(), Diagnostic> {
-        if parts.len() > 256 {
-            return Err(crate::runtime::arena::resource());
-        }
         let (name, scope_parts) = match parts.split_last() {
             Some((name, scope)) => (Some(name), scope),
             None => (None, parts),
@@ -115,7 +105,6 @@ impl NamespaceReads {
         let text = parts
             .iter()
             .try_fold(0usize, |n, p| n.checked_add(p.as_str().len()))
-            .filter(|n| *n <= 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let scope = ScopeKey {
             crate_key: unit,
@@ -367,7 +356,7 @@ impl NamespaceReads {
                 }
             };
         }
-        if !self.enabled || self.bytes > 32 * 1024 * 1024 {
+        if !self.enabled {
             return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
         }
         let mut semantic = StableEncoder::new("lrr/v1/current-resolver-read-answers");

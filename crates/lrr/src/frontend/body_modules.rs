@@ -24,14 +24,12 @@ fn error(message: &str) -> Diagnostic {
 fn charge(bytes: &mut usize, n: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(n)
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(|| error("body module metadata budget exceeded"))?;
     Ok(())
 }
 fn step(work: &mut usize) -> Result<(), Diagnostic> {
     *work = work
         .checked_add(1)
-        .filter(|n| *n <= 100_000 * 257)
         .ok_or_else(|| error("body module work limit exceeded"))?;
     Ok(())
 }
@@ -199,9 +197,6 @@ impl<'a> Modules<'a> {
             pending: BTreeMap::new(),
             states: BTreeMap::new(),
         };
-        if facts.imports.len() > 100_000 {
-            return Err(error("body module import count exceeded"));
-        }
         let mut scopes = BTreeSet::new();
         let mut current = Some(selected_scope);
         while let Some(scope) = current {
@@ -449,9 +444,7 @@ fn append(
     let len = route
         .names
         .len()
-        .checked_add(tail.len())
-        .filter(|n| *n <= 256)
-        .ok_or_else(|| error("body module route depth exceeded"))?;
+        .checked_add(tail.len())        .ok_or_else(|| error("body module route depth exceeded"))?;
     let mut names = Vec::new();
     let size = tail
         .iter()

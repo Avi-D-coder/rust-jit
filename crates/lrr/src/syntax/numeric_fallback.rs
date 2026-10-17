@@ -14,7 +14,7 @@ pub(super) fn literal_only(expression: &ast::Expr) -> Result<Option<PrimitiveTyp
     let mut root = expression.clone();
     let mut depth = 0usize;
     while let ast::Expr::ParenExpr(parenthesis) = root {
-        depth = depth.checked_add(1).filter(|n| *n <= 256).ok_or_else(|| {
+        depth = depth.checked_add(1).ok_or_else(|| {
             Diagnostic::new(
                 "LRR-E-METADATA-LIMIT",
                 "numeric fallback parenthesis limit".into(),
@@ -146,9 +146,7 @@ pub(super) fn cast_operand(
         match selected {
             ast::Expr::ParenExpr(group) => {
                 parentheses = parentheses
-                    .checked_add(1)
-                    .filter(|n| *n <= 256)
-                    .ok_or_else(|| {
+                    .checked_add(1)                    .ok_or_else(|| {
                         Diagnostic::new(
                             "LRR-E-METADATA-LIMIT",
                             "numeric cast parenthesis limit".into(),
@@ -222,7 +220,7 @@ pub(super) fn operator_initializer(
     let mut root = expression.clone();
     let mut depth = 0usize;
     while let ast::Expr::ParenExpr(parenthesis) = root {
-        depth = depth.checked_add(1).filter(|n| *n <= 256).ok_or_else(|| {
+        depth = depth.checked_add(1).ok_or_else(|| {
             Diagnostic::new(
                 "LRR-E-METADATA-LIMIT",
                 "numeric initializer parenthesis limit".into(),
@@ -243,7 +241,6 @@ pub(super) fn operator_initializer(
 fn source_work(visited: &mut usize) -> Result<(), Diagnostic> {
     *visited = visited
         .checked_add(1)
-        .filter(|n| *n <= 100_000)
         .ok_or_else(|| {
             Diagnostic::new(
                 "LRR-E-METADATA-LIMIT",
@@ -323,12 +320,6 @@ pub(super) fn right_operand_hint(
         let mut work = 0usize;
         loop {
             source_work(&mut work)?;
-            if work > 256 {
-                return Err(Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "shared shift count parenthesis limit".into(),
-                ));
-            }
             if root
                 .syntax()
                 .children()

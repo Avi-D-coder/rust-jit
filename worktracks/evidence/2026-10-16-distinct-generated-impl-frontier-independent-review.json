@@ -1,0 +1,72 @@
+{
+  "schema": "lrr/source-review/distinct-generated-impl-frontier/v1",
+  "status": "source-only current root two-file bridge review; no Cargo/compiler/tests or runtime acceptance",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "d25932d55cf7fc78f57b883eb1a177d56fbe2a68e25e13742dffc1e20b0b260f",
+      "bytes": 26372
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "62356c4d27d01129aef06243bf773c224cdf373f773eabc579f4f1c3cf76c00b",
+      "bytes": 510101
+    },
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "sha256": "2aac4453aabef9bf1a87b9368436ca745df3a88124e27a67e71aee965ab62bcc",
+      "bytes": 61332
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "d9b6b508363c89851500adf304a6f0501f546a12592825514f9732d7a24a2ff7",
+      "bytes": 36414
+    },
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c",
+      "bytes": 96053
+    }
+  ],
+  "task": "LOCAL-024/M018 declaration fixed point; existing impl header contribution only, no ImplCatalog/Drop seal",
+  "reviewed_diff": "GeneratedHeaderPlan dedicated impl frontier + exact impl-owned scope classification; SourceDiscovery direct original item bridge, derive rekey and existing item_impl_jobs completion consumer. SourceDiscovery impl_catalog modulehook is unrelated inherited moving slice, not reviewed as integration.",
+  "conclusion": "Blocker coalescing no longer allows the impl completion path to release unrelated invocation/import/scope blockers by source. A concrete macro-empty boundary completion ownership gap remains, so direct bridge not ready for closure.",
+  "blocker_separation": {
+    "identity": "Dedicated lrr/v1/generated-impl-frontier stable digest of actual output descriptor, actual owning scope, epoch. Distinct from record.key.invocation and generated import ids.",
+    "impl_owner": "GeneratedHeaderPlan uses actual Outline Impl headers (module_path, header.fingerprint). Outline construction itself assigns implementation child ScopeKey.owner=header.fingerprint; candidate crate/module/owner must match this retained membership. Does not classify arbitrary owner scopes as impls.",
+    "other_blockers": "All original member.blockers retained by actual generated syntax identities. Unsupported import scope/type-only/other scope cases retain original record invocation or actual import id. Other uncontained item/scopes remain invocation blockers. Graph publish reserves each id; item impl completion only releases job.identity at stored actual scope.",
+    "completion": "Direct admission uses actual GeneratedItems.declaration_facet and GeneratedDeclarations.item_impl_headers, creates exact v2 declaration job. impl_frontier\u2192declaration_job+expected_headerids+scope registration checked for duplicate. Completion waits nested_completed exactjob and verifies every expected actual header_identity in completedinventory before releasing dedicated frontier. Counts/equalshape alone do not suffice.",
+    "derive": "Existing source derive job now keys same dedicated frontier; no SourceCall/Type/runtime grant added."
+  },
+  "finding": {
+    "severity": "integration blocker for no-macro output ownership; source-confirmed, runtime unexecuted",
+    "trigger": "Direct item output has real impl(s) but no calls/attrs/module source/import/macro rules/extern crate, so requires_macro_catalog=false, empty_boundary Some, opaque includes impl_frontier, deferred=false.",
+    "location": "SourceDiscovery::admit_expansion empty_boundary and opaque.is_empty()&&!deferred provider completion block; existing ScanNestedDeclarations item_impl_jobs completion consumer.",
+    "behavior": "EmptyBoundary exists only local until inserted inside opaque-empty block. With impl blocker, provider.complete_without_macro_bindings and completed_empty_boundaries insertion skipped; local receipt dropped. Later impl completion only work.complete + graph release + producer removal, never finalizes original provider or preserves actual macro-empty boundary receipt.",
+    "authority_impact": "Must retain actual no-macro completion receipt until ALL relevant blockers complete; cannot infer empty contribution from impl presence/inventory completion. Generated body boundary later explicitly needs completed_empty_boundaries or real selected completed catalog, so dropping receipt is a genuine source-owner join gap.",
+    "required_fix": "Bound pending no-macro completion to actual call/record/source ordinal and remaining blockers; finalize exact ordinary provider completion + boundary storage when common declaration closure has discharged all relevant contributions. Keep unrelated blockers held and preflight metadata/jobs before mutations. Do not synthesize boundary/source origin or bypass hygiene."
+  },
+  "cost_and_ownership": {
+    "cold": "One extra bounded impl-scope BTreeSet built from actual output Outline items, O(I logI) compare/insert plus O(logI) owner membership per item/scope. Borrow module paths; preflight outline.items.len*96<=32MiB. No runtime entry scan.",
+    "job": "Direct expected header vector checked allocations and 256/impl+scope retained quota allowance, existing declaration output Arc; existing completed inventory search O(H*I) cold. Shared GeneratedDeclarations helper currently separate peer retained-scan work: preserve its exact evidence.",
+    "retained": "Dedicated Option<Digest> belongs temporary header plan consumed by graph publish; output/records remain existing Arc/coordinator queues. No BodyIndex or parser graph copies added in two-file diff. Pending macro-empty boundary ownership currently absent as finding.",
+    "currentness": "Same record/source cfg/epoch/generated producer authority, deterministic job identity and completedinventory dependency. No global db revision bypass or runtime namespace census. No speed/scaling claim."
+  },
+  "all8": {
+    "1": "No assertion/expression evaluator; declaration closure feeds existing normal language engine.",
+    "2": "Actual generated records/header/scopes, no scalar/break lane. Child closure missing join explicitly held.",
+    "3": "No wrapper/macro/name/numeric specialcase. Impl classified by actual ItemKind and owning-header scope identity.",
+    "4": "Direct item/derive actual generated source authority retained, no original-only gate; generated child opaque route remains refusal pending real closure.",
+    "5": "Impl header/declaration inventory metadata only; cold method/function executable bodies not lowered/entered. No pattern machinery or unselected executable arm check.",
+    "6": "Cold fixed-point work; installed/runtime execution untouched. No macro reexecution introduced. Existing helper/cold metadata cost separately named.",
+    "7": "Separate frontier dependencies preserve unrelated blockers, no full-world hot scan or unchecked absence.",
+    "8": "Actual Outline header membership/root scope, existing shared declaration fragments, bounded borrowed indexes; no BodyIndex deep clone or per-node whole-file runtime search."
+  },
+  "required_unexecuted": [
+    "Validator authority component distinct impl vs unrelated scope/import blockers and actual scope/record/epoch negative controls.",
+    "No-macro empty-boundary owner/current provider completion regression must accompany fix.",
+    "Full unchanged stock plain/user/wrapper/stdmacro contexts, runtime route/trace/exact-once/suspension/cleanup/source invalidation.",
+    "Generated-child real ancestor declaration closure waiter and metadata/currentness transport as separate handoff.",
+    "Impl inventory completeness is not configured-world ImplCatalogSeal, Drop presence/absence or trait member selection."
+  ]
+}

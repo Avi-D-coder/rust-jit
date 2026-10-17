@@ -141,7 +141,6 @@ impl RuntimeScalarControl {
                     || site.operand.relative_end < self.span.relative_end
                     || !node.runtime_scalar_slots.contains(&site.source)
                     || !inside(&site.scrutinee)
-                    || site.arms.len() > 4096
                     || site.arms.iter().any(|arm| !inside(arm))
                     || site
                         .arms
@@ -194,9 +193,7 @@ impl RuntimeScalarControl {
                         .checked_mul(std::mem::size_of::<BodySpan>())?,
                 ),
                 _ => Some(n),
-            })
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(|| invalid("scalar control metadata limit"))
+            })            .ok_or_else(|| invalid("scalar control metadata limit"))
     }
 }
 impl StableEncode for RuntimeScalarControl {
@@ -321,9 +318,7 @@ impl Builder {
                         .capacity()
                         .checked_mul(std::mem::size_of::<(usize, Draft)>())?,
                 )
-            })
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(|| invalid("scalar control builder metadata limit"))?;
+            })            .ok_or_else(|| invalid("scalar control builder metadata limit"))?;
         for (_, draft) in &self.patches {
             if let DraftExit::Exhausted(site) = &draft.exit {
                 bytes = bytes
@@ -332,9 +327,7 @@ impl Builder {
                             .capacity()
                             .checked_mul(std::mem::size_of::<BodySpan>())
                             .ok_or_else(|| invalid("scalar match arm metadata overflow"))?,
-                    )
-                    .filter(|n| *n <= 32 << 20)
-                    .ok_or_else(|| invalid("scalar match aggregate metadata limit"))?;
+                    )                    .ok_or_else(|| invalid("scalar match aggregate metadata limit"))?;
             }
         }
         let count = steps.len();
@@ -355,9 +348,7 @@ impl Builder {
                         .capacity()
                         .checked_mul(std::mem::size_of::<RuntimeScalarStep>())?,
                 )
-            })
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(|| invalid("scalar control aggregate metadata limit"))?;
+            })            .ok_or_else(|| invalid("scalar control aggregate metadata limit"))?;
         let body_index = index.fingerprint();
         let pc = |at: usize| -> Result<PcKey, Diagnostic> {
             if at >= count {
@@ -405,9 +396,7 @@ impl Builder {
             proof.identity = proof.fingerprint();
             proof.require_index(&source, index, &proof.key, body_index)?;
             bytes = bytes
-                .checked_add(proof.allocated_bytes()?)
-                .filter(|n| *n <= 32 << 20)
-                .ok_or_else(|| invalid("scalar control retained metadata limit"))?;
+                .checked_add(proof.allocated_bytes()?)                .ok_or_else(|| invalid("scalar control retained metadata limit"))?;
             steps[at] = RuntimeScalarStep::Control(Box::new(proof));
         }
         Ok(())
@@ -448,9 +437,6 @@ impl Builder {
         let result = self.label()?;
         let mut arms = Vec::new();
         for arm in expression.match_arm_list().ok_or_else(unsupported)?.arms() {
-            if arms.len() >= 4096 {
-                return Err(invalid("scalar match arm limit"));
-            }
             arms.try_reserve(1)
                 .map_err(|_| invalid("scalar match arm allocation"))?;
             arms.push((arm, self.label()?));
@@ -517,9 +503,7 @@ impl Builder {
         }
         sequence.push(Work::Mark(end));
         arms.len()
-            .checked_mul(std::mem::size_of::<BodySpan>())
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(|| invalid("scalar match source arm metadata limit"))?;
+            .checked_mul(std::mem::size_of::<BodySpan>())            .ok_or_else(|| invalid("scalar match source arm metadata limit"))?;
         let mut arm_spans = Vec::new();
         arm_spans
             .try_reserve_exact(arms.len())
@@ -630,7 +614,6 @@ impl Builder {
                     .ok_or_else(|| invalid("scalar control phase bytes overflow"))?,
             )
             .and_then(|n| n.checked_add(count.checked_mul(std::mem::size_of::<Work>())?))
-            .filter(|n| *n <= 32 << 20 && count <= self.limit)
             .ok_or_else(|| invalid("scalar control source work budget"))?;
         let mut work = Vec::new();
         work.try_reserve_exact(count)
@@ -840,7 +823,7 @@ pub(super) fn require_written(
         .start
         .checked_add(span.relative_end)
         .ok_or_else(|| invalid("scalar control source end overflow"))?;
-    if end > body.range.end || end - start > 65_500 {
+    if end > body.range.end {
         return Err(invalid("scalar control source range limit"));
     }
     let original = parsed.parsed.tree().syntax().text();

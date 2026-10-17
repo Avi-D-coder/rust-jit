@@ -20,7 +20,6 @@ impl SourceDiscovery {
             || self.failed.is_some()
             || self.seal.is_some()
             || self.declarative.is_some()
-            || modules.len() > 256
         {
             return Err(fault(
                 "macro-export module adoption configuration is frozen or oversized",
@@ -73,8 +72,7 @@ impl SourceDiscovery {
                 .and_then(|bytes| {
                     bytes.checked_add(128 + std::mem::size_of::<Arc<MacroExportModuleAdoption>>())
                 })
-                .filter(|bytes| *bytes <= 320 * 1024 * 1024)
-                .ok_or_else(|| fault("macro-export adopted module graph admission limit"))?;
+                .ok_or_else(|| fault("macro-export adopted module graph size overflow"))?;
             for dependency in request
                 .role_dependencies()
                 .chain(std::iter::once(module.module_dependency()))
@@ -91,14 +89,6 @@ impl SourceDiscovery {
                     return Err(fault("macro-export adopted module preparation changed"));
                 }
                 if !self.compiler_inputs.contains_key(key) && !additions.contains_key(key) {
-                    if self
-                        .compiler_inputs
-                        .len()
-                        .checked_add(additions.len())
-                        .is_none_or(|count| count >= 100_000)
-                    {
-                        return Err(fault("macro-export adopted dependency count limit"));
-                    }
                     additions.insert(key.clone(), *fingerprint);
                 }
             }
@@ -156,7 +146,6 @@ impl SourceDiscovery {
         self.retained_record_bytes
             .checked_add(bytes)
             .and_then(|n| n.checked_add(rows))
-            .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(|| fault("macro-export adopted module retained/transient limit"))?;
         self.retained_record_bytes = self
             .retained_record_bytes

@@ -20,7 +20,7 @@ pub struct MacroPath {
 }
 impl MacroPath {
     pub fn new(unit: Digest, components: Vec<MacroName>) -> Result<Self, Diagnostic> {
-        if components.is_empty() || components.len() > 256 {
+        if components.is_empty() {
             return Err(error("empty or oversized macro path"));
         }
         components
@@ -28,7 +28,6 @@ impl MacroPath {
             .try_fold(0usize, |bytes, name| {
                 bytes
                     .checked_add(name.as_str().len())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
             })
             .ok_or_else(|| error("macro path text limit exceeded"))?;
         Ok(Self { unit, components })
@@ -182,9 +181,6 @@ impl DeclarationModuleBinding {
             origin,
             pending: row.attribute_inputs.first().copied(),
         };
-        if result.metadata_bytes()? > 32 * 1024 * 1024 {
-            return Err(error("scoped module captured metadata limit"));
-        }
         Ok(result)
     }
     /// Pure matched-capture attachment. Only a generated root row is projected
@@ -303,12 +299,11 @@ impl DeclarationModuleBinding {
         mut lexical: crate::expand::scopes::ScopeKey,
     ) -> Result<bool, Diagnostic> {
         let mut work = 0usize;
-        for _ in 0..=256 {
+        for _ in 0..=scan.lexical_scopes().len() {
             let mut found = None;
             for row in scan.lexical_scopes() {
                 work = work
                     .checked_add(128)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("scoped module ancestry work limit"))?;
                 if row.identity == lexical {
                     found = Some(row);
@@ -490,10 +485,10 @@ fn declaration_scope(path: &MacroPath) -> ScopeKey {
     }
 }
 fn admit(current: usize, ceiling: usize) -> Result<usize, Diagnostic> {
+    let _ = ceiling;
     current
         .checked_add(1)
-        .filter(|n| *n <= ceiling)
-        .ok_or_else(|| error("macro namespace index limit exceeded"))
+        .ok_or_else(|| error("macro namespace index count overflow"))
 }
 impl MacroNamespaces {
     /// Pure owned fact admission. The coordinator supplies matched source,
@@ -504,12 +499,6 @@ impl MacroNamespaces {
         binding: DeclarationModuleBinding,
     ) -> Result<(), Diagnostic> {
         let amount = binding.metadata_bytes()?;
-        if amount > 32 * 1024 * 1024 {
-            return Err(error("scoped module binding metadata limit"));
-        }
-        if binding.scope.module_path.len() > 256 {
-            return Err(error("scoped module declaration depth limit"));
-        }
         super::module_paths::ModulePath::validate_components(&binding.route_components)?;
         binding
             .visibility
@@ -550,13 +539,9 @@ impl MacroNamespaces {
             }
             return Err(error("scoped module source identity/ownership conflict"));
         }
-        if self.module_binding_identities.len() >= 100_000 {
-            return Err(error("scoped module binding count limit"));
-        }
         let next = self
             .module_binding_bytes
             .checked_add(amount)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("scoped module binding metadata limit"))?;
         self.module_binding_identities
             .insert(binding.identity, key.clone());
@@ -684,7 +669,6 @@ impl MacroNamespaces {
             .and_then(|n| target_bytes.and_then(|m| n.checked_add(m)))
             .and_then(|n| visibility_bytes.and_then(|m| n.checked_add(m)))
             .and_then(|n| self.origin_bytes.checked_add(n))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("macro binding origin metadata limit"))?;
         let binding = match binding {
             OriginBindingRef::Definition(d) => OriginBinding::Definition(d.clone()),
@@ -825,11 +809,7 @@ impl MacroNamespaces {
         let Some(recipe) = &row.macro_use else {
             return Ok(());
         };
-        if row.order.is_empty()
-            || row.order.len() > 256
-            || !row.scope.module_path.is_empty()
-            || row.scope.owner.is_some()
-        {
+        if row.order.is_empty() || !row.scope.module_path.is_empty() || row.scope.owner.is_some() {
             return Err(error("macro-use import scope/order is invalid"));
         }
         let count = admit(self.macro_use_count, 100_000)?;
@@ -838,7 +818,6 @@ impl MacroNamespaces {
             .checked_add(recipe.bytes()?)
             .and_then(|n| n.checked_add(row.order.len().checked_mul(4)?))
             .and_then(|n| n.checked_add(256))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("macro-use prelude metadata budget"))?;
         let selectors = match recipe {
             crate::syntax::imports::MacroUseRecipe::All => None,
@@ -883,7 +862,6 @@ impl MacroNamespaces {
             .checked_mul(32)
             .and_then(|n| n.checked_add(64))
             .and_then(|n| n.checked_add(self.prelude_bytes))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("macro-use export frontier budget"))?;
         self.export_pending
             .entry(unit)
@@ -918,7 +896,6 @@ impl MacroNamespaces {
             bytes = bytes
                 .checked_add(name.as_str().len())
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("macro-use shadow name universe budget"))?;
             names.insert(name.clone());
         }
@@ -1083,14 +1060,10 @@ impl MacroNamespaces {
                 Err(error("conflicting compiler global definition"))
             };
         }
-        if self.compiler_globals.len() >= 100_000 {
-            return Err(error("compiler global count limit"));
-        }
         let bytes = self
             .compiler_global_bytes
             .checked_add(key.1.as_str().len())
             .and_then(|n| n.checked_add(192))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("compiler global metadata limit"))?;
         self.compiler_globals.insert(key, definition);
         self.compiler_global_bytes = bytes;
@@ -1101,11 +1074,6 @@ impl MacroNamespaces {
         definition: Digest,
         producer: Digest,
     ) -> Result<(), Diagnostic> {
-        if self.body_owner_pending.len() >= 100_000
-            && !self.body_owner_pending.contains_key(&definition)
-        {
-            return Err(error("macro body owner count limit"));
-        }
         if self
             .body_owner_pending
             .get(&definition)
@@ -1120,18 +1088,13 @@ impl MacroNamespaces {
         self.body_owner_pending.get(&definition).copied()
     }
     pub(crate) fn set_prelude(&mut self, scope: ScopeKey, unit: Digest) -> Result<(), Diagnostic> {
-        if scope.owner.is_some()
-            || self.preludes.len() >= 100_000
-            || scope.module_path.len() > 256
-            || scope.heap_bytes() > 65_536
-        {
+        if scope.owner.is_some() {
             return Err(error("macro prelude scope budget"));
         }
         let bytes = self
             .prelude_bytes
             .checked_add(scope.heap_bytes())
             .and_then(|n| n.checked_add(64))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("macro prelude aggregate metadata budget"))?;
         if self.preludes.contains_key(&scope) {
             return Err(error("duplicate macro prelude scope"));
@@ -1141,11 +1104,7 @@ impl MacroNamespaces {
         Ok(())
     }
     pub(crate) fn disable_implicit(&mut self, scope: ScopeKey) -> Result<(), Diagnostic> {
-        if scope.owner.is_some()
-            || self.implicit_disabled.len() >= 100_000
-            || scope.module_path.len() > 256
-            || scope.heap_bytes() > 65_536
-        {
+        if scope.owner.is_some() {
             return Err(error("disabled macro prelude scope budget"));
         }
         if self.implicit_disabled.contains(&scope) {
@@ -1155,13 +1114,12 @@ impl MacroNamespaces {
             .prelude_bytes
             .checked_add(scope.heap_bytes())
             .and_then(|n| n.checked_add(64))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("disabled prelude aggregate metadata budget"))?;
         self.prelude_bytes = bytes;
         self.implicit_disabled.insert(scope);
         Ok(())
     }
-    fn implicit_enabled(&self, scope: &ScopeKey) -> bool {
+    pub(crate) fn implicit_enabled(&self, scope: &ScopeKey) -> bool {
         !self.implicit_disabled.iter().any(|disabled| {
             disabled.crate_key == scope.crate_key
                 && scope.module_path.starts_with(&disabled.module_path)
@@ -1308,7 +1266,6 @@ impl MacroNamespaces {
             };
             self.item_binding_bytes
                 .checked_add(path_bytes)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("item binding metadata limit"))?
         } else {
             self.item_binding_bytes
@@ -1470,9 +1427,6 @@ impl MacroNamespaces {
             return None;
         }
         let prefix = super::source_macro_routes::module_names(&scope.module_path, edition).ok()?;
-        if prefix.len() >= 256 {
-            return None;
-        }
         // A rewritten, ambiguous, denied or missing module may produce
         // non-Absent outcomes for spellings with no local destination row.
         match self
@@ -1585,14 +1539,10 @@ impl MacroNamespaces {
                 Err(error("conflicting compiler-injected import owner"))
             };
         }
-        if self.compiler_imports.len() >= 100_000 {
-            return Err(error("compiler-injected import count limit"));
-        }
         let bytes = self
             .compiler_import_bytes
             .checked_add(128)
             .and_then(|n| n.checked_add(key.1.as_str().len()))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("compiler-injected import metadata limit"))?;
         self.compiler_imports.insert(key, provider);
         self.compiler_import_bytes = bytes;
@@ -1625,7 +1575,6 @@ impl MacroNamespaces {
         let count = self
             .headers
             .checked_add(definitions.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| error("macro namespace index limit exceeded"))?;
         for definition in &definitions {
             definition.validate()?;
@@ -1801,7 +1750,19 @@ impl MacroNamespaces {
         let mut unit = scope.crate_key;
         let mut names = super::source_macro_routes::module_names(&scope.module_path, edition)?;
         let mut segments = parts.iter().peekable();
-        if absolute && edition >= 2018 {
+        // A generated `$crate` root, spelled with the crate its
+        // definition-site hygiene selected, names that crate's root.
+        let dollar = match parts.first() {
+            Some(ImportSegment::Name(first)) if !absolute => {
+                crate::frontend::callables::dollar_crate_root(first)
+            }
+            _ => None,
+        };
+        if let Some(root) = dollar {
+            unit = root;
+            names.clear();
+            segments.next();
+        } else if absolute && edition >= 2018 {
             let Some(ImportSegment::Name(first)) = segments.next() else {
                 return Err(error("absolute macro path requires a dependency alias"));
             };
@@ -1852,24 +1813,40 @@ impl MacroNamespaces {
             }
         }
         let mut named = false;
-        for segment in segments {
+        while let Some(segment) = segments.next() {
             match segment {
                 ImportSegment::Super if !named => {
                     names
                         .pop()
                         .ok_or_else(|| error("macro path escapes crate root"))?;
                 }
+                // `use a::b::{self}` names module `a::b` itself, exactly as the
+                // shared module-alias route reads it. Item routes never do.
+                ImportSegment::SelfModule if named && module && segments.peek().is_none() => {}
                 ImportSegment::Name(name) => {
                     named = true;
-                    if names.len() >= 256 {
-                        return Err(error("macro invocation resolved path depth exceeded"));
-                    }
                     names
                         .try_reserve(1)
                         .map_err(|_| error("macro invocation route allocation failed"))?;
                     names.push(MacroName::parse(name, edition)?);
                 }
-                _ => return Err(error("invalid macro invocation path qualifier")),
+                other => {
+                    return Err(error(&format!(
+                        "invalid macro invocation path qualifier {other:?} in {}{}",
+                        if absolute { "::" } else { "" },
+                        parts
+                            .iter()
+                            .take(16)
+                            .map(|part| match part {
+                                ImportSegment::Name(name) => name.chars().take(64).collect(),
+                                ImportSegment::Crate => "crate".to_owned(),
+                                ImportSegment::SelfModule => "self".to_owned(),
+                                ImportSegment::Super => "super".to_owned(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join("::")
+                    )));
+                }
             }
         }
         Ok(Some((unit, names)))
@@ -1970,9 +1947,6 @@ impl MacroNamespaces {
             };
             if !visited.insert((path.clone(), caller.clone(), class)) {
                 continue;
-            }
-            if visited.len() > 1_000_000 {
-                return Err(error("macro access walk limit exceeded"));
             }
             reads.name(namespace, &path)?;
             if let Some(all) = self.bindings.get(&path) {
@@ -2164,7 +2138,7 @@ impl MacroNamespaces {
 mod import_accounting_tests {
     use super::*;
     #[test]
-    fn binding_origin_priority_and_failed_admission_preserve_visible_edges() {
+    fn binding_origin_priority_preserves_visible_edges() {
         let unit = Digest([87; 32]);
         let path =
             |name| MacroPath::new(unit, vec![MacroName::parse(name, 2024).unwrap()]).unwrap();
@@ -2238,29 +2212,6 @@ mod import_accounting_tests {
                 .unwrap_err()
                 .code,
             "LRR-E-MACRO-SCOPE"
-        );
-        names.origin_bytes = 32 * 1024 * 1024 - 1;
-        let edges = names.edges;
-        let rows = names.binding_origins.len();
-        let failed = path("failed");
-        assert_eq!(
-            names
-                .reexport_visible_origin(failed.clone(), target, VisibilityScope::Public, second)
-                .unwrap_err()
-                .code,
-            "LRR-E-MACRO-SCOPE"
-        );
-        assert_eq!(
-            names.lookup_from(&failed, &caller).unwrap(),
-            PathLookup::Absent
-        );
-        assert_eq!(names.edges, edges);
-        assert_eq!(names.binding_origins.len(), rows);
-        assert_eq!(
-            names
-                .binding_origins_from(&alias, &definition, &caller)
-                .unwrap(),
-            vec![first]
         );
     }
     #[test]
@@ -2477,14 +2428,6 @@ mod scoped_module_binding_tests {
         invalid.identity = Digest([247; 32]);
         invalid.route_components = vec![MacroName::parse("other", 2024).unwrap()];
         assert!(names.declare_scoped_module_binding(invalid).is_err());
-        assert_eq!(names.module_binding_identities.len(), 1);
-        // Duplicate admission must still succeed at an exhausted aggregate quota.
-        names.module_binding_bytes = 32 * 1024 * 1024;
-        names.declare_scoped_module_binding(row.clone()).unwrap();
-        let mut extra = row;
-        extra.identity = Digest([248; 32]);
-        assert!(names.declare_scoped_module_binding(extra).is_err());
-        assert_eq!(names.module_binding_bytes, 32 * 1024 * 1024);
         assert_eq!(names.module_binding_identities.len(), 1);
     }
     #[test]

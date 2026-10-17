@@ -47,8 +47,6 @@ pub struct HygieneStore {
     marks: BTreeMap<Key, (MarkIdentity, Key)>,
     reverse_marks: HashMap<span::MacroCallId, Key>,
 }
-const MAX_CONTEXTS: usize = 2_000_000;
-const MAX_DEPTH: usize = 256;
 fn error(message: &str) -> AdapterError {
     AdapterError {
         code: "LRR-E-MACRO-TOKEN-WIRE",
@@ -116,9 +114,6 @@ impl HygieneStore {
         &mut self,
         demanded: &[Key],
     ) -> Result<Vec<ResolutionContext>, AdapterError> {
-        if demanded.len() > MAX_CONTEXTS {
-            return Err(error("resolution context table limit exceeded"));
-        }
         for key in demanded {
             self.context(*key)?;
         }
@@ -143,9 +138,6 @@ impl HygieneStore {
         &self,
         demanded: &[Key],
     ) -> Result<Vec<NameResolutionContext>, AdapterError> {
-        if demanded.len() > MAX_CONTEXTS {
-            return Err(error("name comparison table limit exceeded"));
-        }
         for key in demanded {
             self.context(*key)?;
         }
@@ -188,8 +180,13 @@ impl HygieneStore {
             .copied()
             .ok_or_else(|| error("unregistered hygiene context"))
     }
+    /// Root ancestor of a registered context. Builtin call-site marks apply to
+    /// the caller's own root, matching rustc's single `SyntaxContext::root()`.
+    pub(crate) fn root_key(&self, key: Key) -> Result<Key, AdapterError> {
+        Ok(self.root_record(key)?.key())
+    }
     fn root_record(&self, mut key: Key) -> Result<&ContextRecord, AdapterError> {
-        for _ in 0..=MAX_DEPTH {
+        for _ in 0..=self.records.len() {
             let record = self
                 .records
                 .get(&key)
@@ -210,9 +207,6 @@ impl HygieneStore {
             edition,
         };
         let key = record.key();
-        if !self.records.contains_key(&key) && self.records.len() >= MAX_CONTEXTS {
-            return Err(error("hygiene context table limit exceeded"));
-        }
         self.records.insert(key, record);
         self.contexts
             .insert(key, SyntaxContext::root(pinned::edition(edition)));
@@ -250,9 +244,6 @@ impl HygieneStore {
                 return Err(error("expansion identity has conflicting defining units"));
             }
             return Ok(span::MacroCallId(identity.as_id()));
-        }
-        if self.marks.len() >= MAX_CONTEXTS {
-            return Err(error("hygiene mark table limit exceeded"));
         }
         self.reverse_marks
             .try_reserve(1)
@@ -327,9 +318,6 @@ impl HygieneStore {
     ) -> Result<Vec<(ContextRecord, SyntaxContext)>, AdapterError> {
         let mut chain = Vec::new();
         while !raw.is_root() {
-            if chain.len() >= MAX_DEPTH {
-                return Err(error("hygiene context depth exceeded"));
-            }
             chain
                 .try_reserve(1)
                 .map_err(|_| error("hygiene ancestor allocation failed"))?;
@@ -391,18 +379,10 @@ impl HygieneStore {
             .into_iter()
             .map(|(record, raw)| (record.key(), (record, raw)))
             .collect();
-        let additions = staged
+        let _additions = staged
             .keys()
             .filter(|k| !self.records.contains_key(*k))
             .count();
-        if self
-            .records
-            .len()
-            .checked_add(additions)
-            .is_none_or(|n| n > MAX_CONTEXTS)
-        {
-            return Err(error("hygiene context table limit exceeded"));
-        }
         for (key, (record, raw)) in staged {
             self.records.insert(key, record);
             self.contexts.insert(key, raw);
@@ -413,9 +393,6 @@ impl HygieneStore {
     /// call-site inheritance; root call-site reconstruction directly interns
     /// those recorded marks through the original upstream algorithm.
     pub fn import(&mut self, records: &[ContextRecord]) -> Result<(), AdapterError> {
-        if records.len() > MAX_CONTEXTS {
-            return Err(error("imported hygiene table limit exceeded"));
-        }
         let mut owned = Vec::new();
         owned
             .try_reserve(records.len())
@@ -445,7 +422,7 @@ impl HygieneStore {
             }
             incoming.insert(record.key(), record);
         }
-        let new_contexts = incoming
+        let _new_contexts = incoming
             .keys()
             .filter(|key| !self.records.contains_key(*key))
             .count();
@@ -453,24 +430,11 @@ impl HygieneStore {
             .keys()
             .filter(|key| !self.marks.contains_key(*key))
             .count();
-        if self
-            .records
-            .len()
-            .checked_add(new_contexts)
-            .is_none_or(|n| n > MAX_CONTEXTS)
-            || self
-                .marks
-                .len()
-                .checked_add(new_marks)
-                .is_none_or(|n| n > MAX_CONTEXTS)
-        {
-            return Err(error("imported hygiene table limit exceeded"));
-        }
         // Reserve the complete iterative walk before publishing any input.
         // Its initial frontier can grow by at most one entry per ancestor.
         let capacity = incoming
             .len()
-            .checked_add(MAX_DEPTH + 1)
+            .checked_add(self.records.len().saturating_add(1))
             .ok_or_else(|| error("hygiene worklist size overflow"))?;
         let mut pending = Vec::new();
         pending

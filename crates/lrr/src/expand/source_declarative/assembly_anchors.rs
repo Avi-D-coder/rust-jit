@@ -53,7 +53,13 @@ fn outline(
     source: &PreparedSourceView,
     snapshot: Arc<SyntaxSnapshot>,
 ) -> Result<crate::syntax::outline::Outline, Diagnostic> {
-    ParsedFile::from_syntax_snapshot(snapshot, source.selection().outline.parse.profile.clone())?
+    let mut parsed =
+        ParsedFile::from_syntax_snapshot(snapshot, source.selection().outline.parse.profile.clone())?;
+    // This snapshot re-parses the original captured caller before any
+    // expansion; it is compared item-by-item with the original outline, so
+    // original-only dialects (macro 2.0 declarations) remain admitted.
+    parsed.generated_origin = None;
+    parsed
         .outline(
             source.selection().outline.crate_key,
             source.selection().outline.module_path.clone(),
@@ -65,9 +71,6 @@ pub(super) fn capture(
     tree: &SyntaxAttachment,
 ) -> Result<Vec<OriginalDeclarationAnchor>, Diagnostic> {
     let original = source.outline();
-    if original.items.len() > 100_000 {
-        return Err(fault("original declaration anchor count limit"));
-    }
     let normalized = outline(source, Arc::new(tree.snapshot().map_err(adapter)?))?;
     let mut source_items = original
         .items

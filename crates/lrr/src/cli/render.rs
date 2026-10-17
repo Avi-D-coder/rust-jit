@@ -35,6 +35,8 @@ fn excerpt(text: &str, start: usize) -> Option<SourceExcerpt> {
         } else {
             ch.len_utf8()
         };
+        // Presentation only (diagnostic excerpt trimming, like rustc's
+        // `--diagnostic-width` snippet trimming); never refuses execution.
         if rendered.len().checked_add(size)? > MAX_EXCERPT_BYTES {
             break;
         }
@@ -84,9 +86,6 @@ impl CapturedWorlds {
                 "diagnostic source worlds conflict or exceed capture limits".into(),
             )
         };
-        if secondary.len() >= MAX_RENDERED_FRAMES {
-            return Err(fault());
-        }
         let mut by_unit: BTreeMap<Digest, Arc<Snapshot>> = BTreeMap::new();
         let mut bytes = 0usize;
         let mut files = 0usize;
@@ -100,12 +99,10 @@ impl CapturedWorlds {
             }
             files = files
                 .checked_add(snapshot.files().len())
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(fault)?;
             for blob in snapshot.files().values() {
                 bytes = bytes
                     .checked_add(blob.bytes().len())
-                    .filter(|n| *n <= 128 * 1024 * 1024)
                     .ok_or_else(fault)?;
             }
             by_unit.insert(unit, snapshot.clone());
@@ -632,20 +629,11 @@ mod tests {
                 prior.origin_attachment_failure,
                 Some("LRR-E-METADATA-LIMIT")
             );
-            let excess = vec![native.clone(); MAX_RENDERED_FRAMES];
-            let excess = attach_captured_worlds(diagnostic, primary.clone(), &excess);
-            assert_eq!(
-                excess.origin_attachment_failure,
-                Some("LRR-E-INTERNAL-SOURCE-MAP")
-            );
-            assert!(
-                excess
-                    .rendered_macro_origin
-                    .as_ref()
-                    .unwrap()
-                    .definition
-                    .is_none()
-            );
+            // E-R5-006: many copies of the same native world are no conflict;
+            // only the rendered frame list is trimmed for presentation.
+            let repeated = vec![native.clone(); MAX_RENDERED_FRAMES];
+            let repeated = attach_captured_worlds(diagnostic, primary.clone(), &repeated);
+            assert!(repeated.origin_attachment_failure.is_none());
         }
     }
     #[test]

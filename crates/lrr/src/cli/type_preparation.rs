@@ -20,11 +20,12 @@ pub(super) fn prepare(
     root: &PreparedSourceView,
     sources: &[PreparedSourceView],
     snapshot: &mut Arc<Snapshot>,
+    mut procedural: Option<&mut super::proc_macros::ProceduralRun<'_>>,
 ) -> Result<SourceDiscovery, Diagnostic> {
     // This precedes discovery and any compiler capture. Query/run callers do
     // not gain authority merely by possessing a prepared compiler handle.
     db.require_source_preparation()?;
-    if sources.is_empty() || sources.len() > 100_000 || root.outline().root_scope.owner.is_some() {
+    if sources.is_empty() || root.outline().root_scope.owner.is_some() {
         return Err(fault("Type owning source count/scope differs"));
     }
     let mut owners = sources
@@ -69,26 +70,38 @@ pub(super) fn prepare(
                     .checked_mul(2)
                     .ok_or_else(|| fault("Type source selection size overflow"))?,
             )
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("Type source handle metadata limit"))?;
         retained.push(source.share());
     }
-    let mut discovery = SourceDiscovery::new(
+    let discovery = SourceDiscovery::new_deferred_imports(
         retained,
         root.outline().root_scope.clone(),
         Namespace::Type,
-        root.selection().outline.crate_key,
+        procedural
+            .as_deref()
+            .map_or(root.selection().outline.crate_key, |run| run.graph()),
         *epoch,
-    )?
-    .with_declarative_compiler(
-        compiler.environment_identity(),
-        crate::expand::source_declarative::engine_version(),
-        Arc::clone(&compiler.catalog),
     )?;
+    let mut discovery = match procedural.as_deref() {
+        Some(run) => run.configure(
+            discovery.with_resolved_imports()?,
+            compiler.environment_identity(),
+            Arc::clone(&compiler.catalog),
+        )?,
+        None => discovery.with_declarative_compiler(
+            compiler.environment_identity(),
+            crate::expand::source_declarative::engine_version(),
+            Arc::clone(&compiler.catalog),
+        )?,
+    };
     // Existing coordinator owns compiler include/env/module request adoption,
-    // matched facets, diagnostic sources and explicit standalone proc refusal.
-    compiler.discover_diagnostic(&mut discovery, db, snapshot)?;
-    discovery.publish(db)?;
+    // matched facets and diagnostic sources; procedural steps execute only
+    // through the request's prepared macro run.
+    compiler.discover_diagnostic_with(&mut discovery, db, snapshot, procedural.as_deref_mut())?;
+    match procedural {
+        Some(run) => run.publish(db, &mut discovery)?,
+        None => discovery.publish(db)?,
+    }
     Ok(discovery)
 }
 #[cfg(test)]

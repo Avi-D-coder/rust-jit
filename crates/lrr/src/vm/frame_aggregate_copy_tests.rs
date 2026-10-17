@@ -109,7 +109,7 @@ fn context(tuple: bool, expanded: bool) -> Context {
     };
     assert_eq!(*binding, pattern);
     let destination = *destination;
-    let mut store = GuestStore::new(1, 10000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body, pc, &mut store).unwrap();
     let mut scopes = vec![];
     let mut scope = Some(node.scope);
@@ -160,7 +160,7 @@ fn finish_kernel(
 ) -> TicketId {
     for _ in 0..4096 {
         if let crate::runtime::cell::aggregate_copy::CopyProgress::Complete(ticket) =
-            copy.advance(store, 1_000_000).unwrap()
+            copy.advance(store).unwrap()
         {
             return ticket;
         }
@@ -278,61 +278,6 @@ fn rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_f
     }
 }
 #[test]
-fn rustc_array_copy_zero_fuel_refuses_before_guard_and_preserves_source() {
-    let mut c = context(false, false);
-    c.frame.set_fuel_limit(0).unwrap();
-    let before = (
-        c.store.state(c.source).unwrap(),
-        c.store.budget().handles(),
-        c.store.budget().bytes(),
-    );
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(
-        (
-            c.store.state(c.source).unwrap(),
-            c.store.budget().handles(),
-            c.store.budget().bytes()
-        ),
-        before
-    );
-    assert!(!c.frame.has_copy_activation());
-    assert_eq!(c.frame.counters.operations_started, 0);
-}
-#[test]
-fn rustc_array_copy_element_fuel_exhaustion_keeps_partial_guard_unpublished() {
-    let mut c = context(false, false);
-    c.frame.set_fuel_limit(2).unwrap();
-    let before = c.store.state(c.source).unwrap();
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.fuel_snapshot().used, 2);
-    assert_eq!(c.frame.counters.operations_completed, 0);
-    assert_eq!(c.store.state(c.source).unwrap(), before);
-    assert_eq!(
-        c.store.state(c.frame.cell(c.destination).unwrap()).unwrap(),
-        CellState::Uninit
-    );
-    assert!(c.frame.has_copy_activation());
-    assert_eq!(c.frame.status, FrameStatus::Faulted);
-}
-#[test]
-fn rustc_array_copy_cancellation_between_chunks_has_no_completion_or_source_move() {
-    let mut c = context(false, true);
-    let before = c.store.state(c.source).unwrap();
-    assert!(matches!(
-        run(&mut c).unwrap(),
-        crate::vm::step::StepOutcome::Dispatch
-    ));
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.counters.fuel_used, 257);
-    assert_eq!(c.frame.counters.operations_completed, 0);
-    assert_eq!(c.store.state(c.source).unwrap(), before);
-    assert_eq!(
-        c.store.state(c.frame.cell(c.destination).unwrap()).unwrap(),
-        CellState::Uninit
-    );
-}
-#[test]
 fn rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result() {
     let mut c = context(false, true);
     assert!(matches!(
@@ -356,7 +301,7 @@ fn rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_parti
 #[test]
 fn rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects() {
     let facts = facts::aggregate_copy_read(ARRAY, "arr", "arr2");
-    let mut store = GuestStore::new(1, 10000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut ticket = aggregate(&mut store, &facts.values, TypeId(6), false);
     // Supplemental depth stress around the original array values, independent
     // of the stock source's shallow syntax; no new language program is invented.
@@ -373,8 +318,7 @@ fn rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_obj
         store.location_epoch(source).unwrap(),
     );
     let mut copy =
-        crate::runtime::cell::aggregate_copy::AggregateCopy::begin(&mut store, source, 1_000_000)
-            .unwrap();
+        crate::runtime::cell::aggregate_copy::AggregateCopy::begin(&mut store, source).unwrap();
     let ticket = finish_kernel(&mut store, &mut copy);
     assert_eq!(
         (
@@ -406,7 +350,7 @@ fn rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_obj
 #[test]
 fn rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells() {
     let facts = facts::aggregate_copy_read(TUPLE, "p", "p2");
-    let mut store = GuestStore::new(1, 10000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut references = vec![];
     let mut tickets = vec![];
     // A supplemental closed-reference storage graph uses the original values;
@@ -434,8 +378,7 @@ fn rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cel
     let ticket = store.commit_construction(guard, ty).unwrap();
     let source = root_cell(&mut store, ticket);
     let mut copy =
-        crate::runtime::cell::aggregate_copy::AggregateCopy::begin(&mut store, source, 1_000_000)
-            .unwrap();
+        crate::runtime::cell::aggregate_copy::AggregateCopy::begin(&mut store, source).unwrap();
     let ticket = finish_kernel(&mut store, &mut copy);
     let destination = root_cell(&mut store, ticket);
     for (index, lease) in references.iter().enumerate() {
@@ -449,46 +392,6 @@ fn rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cel
             ValueRepr::signed(TypeId(8), facts.values[index]).unwrap()
         );
     }
-}
-#[test]
-fn rustc_copy_metadata_refusal_precedes_destination_guard_allocation() {
-    let mut c = context(false, false);
-    let before = (
-        c.store.state(c.source).unwrap(),
-        c.store.budget().handles(),
-        c.store.budget().bytes(),
-    );
-    assert!(
-        matches!(crate::runtime::cell::aggregate_copy::AggregateCopy::begin(&mut c.store, c.source, 0), Err(error) if error.code == "LRR-E-RUNTIME-RESOURCE")
-    );
-    assert_eq!(
-        (
-            c.store.state(c.source).unwrap(),
-            c.store.budget().handles(),
-            c.store.budget().bytes()
-        ),
-        before
-    );
-}
-#[test]
-fn rustc_copy_quota_refusal_between_chunks_retains_source_and_unpublished_guard() {
-    let mut c = context(false, true);
-    assert!(matches!(
-        run(&mut c).unwrap(),
-        crate::vm::step::StepOutcome::Dispatch
-    ));
-    // Fill monotonic handle credit without consuming either aggregate owner.
-    while c.store.budget().handles() < 10000 {
-        c.store.ticket(ValueRepr::unit()).unwrap();
-    }
-    let before = c.store.state(c.source).unwrap();
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.store.state(c.source).unwrap(), before);
-    assert_eq!(c.frame.counters.operations_completed, 0);
-    assert_eq!(
-        c.store.state(c.frame.cell(c.destination).unwrap()).unwrap(),
-        CellState::Uninit
-    );
 }
 
 #[test]

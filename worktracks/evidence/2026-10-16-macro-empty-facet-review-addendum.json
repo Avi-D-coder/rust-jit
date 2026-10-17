@@ -1,0 +1,13 @@
+{
+  "schema": "lrr/source-review/macro-empty-facet-clarification/v1",
+  "status": "read-only addendum, no implementation/terminal",
+  "prior_review": "2026-10-16-distinct-generated-impl-frontier-independent-review.json SHA875c52a3ae1c263d78ade17460bbcb09111dc9e1ad7cb4f583fb9948e660aef1 preserved unchanged",
+  "clarification": "CompletedEmptyBoundary certifies no module macro catalogue required after actual producer/import/call/attribute facts, not empty Type/Value/impl contribution. complete_without_macro_bindings completes actual source macro prefix; unrelated namespace/frontiers remain separate owners.",
+  "minimal_possible_fix": "At successful ordinary admission, independently finalize/retain macro-empty facet when requires_macro_catalog=false, even if dedicated impl declaration frontier remains held. Alternatively retain explicit pending macro completion until its relevant facts settle. Do not impose all-namespace completeness on macro-only facet merely from prior wording, and do not infer macro emptiness from presence/completion of impls.",
+  "source_symbols": [
+    "expand/body_macro_boundary.rs::CompletedEmptyBoundary",
+    "expand/source_declarative.rs::complete_without_macro_bindings",
+    "expand/source_discovery.rs::admit_expansion"
+  ],
+  "authority": "Still actual call/record/source ordinal/insertion scope and source macro prefix completion; graph/impl producer frontiers cannot be blanket-released. No origin synthesis/currentness bypass. Root owns implementation and exact successor review/tests."
+}

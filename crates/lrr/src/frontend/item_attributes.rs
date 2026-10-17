@@ -31,7 +31,7 @@ pub fn classify_custom_attribute(
     namespace: PathLookup,
     catalog: &PreparedProcCatalog,
 ) -> Result<CustomAttributeDecision, Diagnostic> {
-    if path.is_empty() || path.len() > 256 {
+    if path.is_empty() {
         return Err(fault("empty or oversized attribute path"));
     }
     classify_custom_candidate(

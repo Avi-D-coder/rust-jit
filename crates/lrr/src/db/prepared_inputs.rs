@@ -15,8 +15,6 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-const MAX_DEPENDENCIES: usize = 100_000;
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 
 /// Minted only from a successful current pure memo. This is a currentness
 /// receipt, not authority to perform a lookup or execute an operation.
@@ -25,6 +23,7 @@ pub(crate) struct PreparedInputGuard {
     inputs: Vec<DependencyStamp>,
     bytes: usize,
     fingerprint: Digest,
+    checked: super::CheckedRevision,
 }
 fn guard_fingerprint(inputs: &[DependencyStamp]) -> Digest {
     let mut e = StableEncoder::new("lrr/v1/prepared-input-guard");
@@ -35,9 +34,6 @@ impl PreparedInputGuard {
     /// Cold composition of actual captured closures. No lookup, stamp refresh,
     /// provider execution or new authority is granted by combining them.
     pub(crate) fn join(guards: &[&Self]) -> Result<Self, Diagnostic> {
-        if guards.len() > MAX_DEPENDENCIES {
-            return Err(limit());
-        }
         let mut inputs = BTreeMap::new();
         let mut visits = 0usize;
         let mut temporary_bytes = 0usize;
@@ -45,7 +41,6 @@ impl PreparedInputGuard {
         for guard in guards {
             visits = visits
                 .checked_add(guard.inputs.len())
-                .filter(|n| *n <= MAX_DEPENDENCIES)
                 .ok_or_else(limit)?;
             for dependency in &guard.inputs {
                 let DependencyStamp::Input { key, fingerprint } = dependency else {
@@ -59,11 +54,9 @@ impl PreparedInputGuard {
                 }
                 temporary_bytes = temporary_bytes
                     .checked_add(std::mem::size_of::<(&InputKey, Digest)>() + 64)
-                    .filter(|n| *n <= MAX_BYTES)
                     .ok_or_else(limit)?;
                 key_bytes = key_bytes
                     .checked_add(dependency.heap_bytes())
-                    .filter(|n| *n <= MAX_BYTES)
                     .ok_or_else(limit)?;
                 inputs.insert(key, *fingerprint);
             }
@@ -77,12 +70,10 @@ impl PreparedInputGuard {
             .checked_mul(std::mem::size_of::<DependencyStamp>())
             .and_then(|n| n.checked_add(key_bytes))
             .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(limit)?;
         // Bound simultaneous transient index and final owned closure too.
         bytes
             .checked_add(temporary_bytes)
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(limit)?;
         stamps.extend(
             inputs
@@ -96,6 +87,7 @@ impl PreparedInputGuard {
             fingerprint: guard_fingerprint(&stamps),
             inputs: stamps,
             bytes,
+            checked: Default::default(),
         })
     }
     pub(crate) fn metadata_bytes(&self) -> usize {
@@ -107,6 +99,9 @@ impl PreparedInputGuard {
         self.fingerprint
     }
     pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
+        if self.checked.is_current(db) {
+            return Ok(());
+        }
         for dependency in &self.inputs {
             let DependencyStamp::Input { key, fingerprint } = dependency else {
                 return Err(stale("prepared input guard contains a derived demand"));
@@ -118,6 +113,7 @@ impl PreparedInputGuard {
                 return Err(stale("prepared operation input changed"));
             }
         }
+        self.checked.record(db);
         Ok(())
     }
     /// Cold continuation check, only with the opaque receipt minted by the
@@ -195,7 +191,6 @@ impl RepairBudget {
         self.bytes = self
             .bytes
             .checked_add(bytes)
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(limit)?;
         Ok(())
     }
@@ -241,9 +236,6 @@ impl Database {
                 if key == root {
                     return Err(stale("prepared operation memo is absent").into());
                 }
-                if key.heap_bytes() > MAX_BYTES {
-                    return Err(limit().into());
-                }
                 return Err(CaptureFailure::Missing {
                     key: key.clone(),
                     expected,
@@ -257,7 +249,6 @@ impl Database {
             }
             edges = edges
                 .checked_add(memo.dependencies.len())
-                .filter(|edges| *edges <= MAX_DEPENDENCIES)
                 .ok_or_else(limit)?;
             work.try_reserve(memo.dependencies.len())
                 .map_err(|_| limit())?;
@@ -271,7 +262,6 @@ impl Database {
                         } else {
                             key_bytes = key_bytes
                                 .checked_add(dependency.heap_bytes())
-                                .filter(|bytes| *bytes <= MAX_BYTES)
                                 .ok_or_else(limit)?;
                         }
                     }
@@ -288,7 +278,6 @@ impl Database {
             .checked_mul(std::mem::size_of::<DependencyStamp>())
             .and_then(|n| n.checked_add(key_bytes))
             .and_then(|n| n.checked_add(std::mem::size_of::<PreparedInputGuard>()))
-            .filter(|bytes| *bytes <= MAX_BYTES)
             .ok_or_else(limit)?;
         stamps.extend(
             inputs
@@ -302,6 +291,7 @@ impl Database {
             fingerprint: guard_fingerprint(&stamps),
             inputs: stamps,
             bytes,
+            checked: Default::default(),
         };
         guard.require_current(self)?;
         Ok(guard)
@@ -391,7 +381,6 @@ impl Database {
                 budget
                     .edges
                     .checked_add(memo.dependencies.len())
-                    .filter(|n| *n <= MAX_DEPENDENCIES)
                     .ok_or_else(limit)
             );
             let query_edges = memo
@@ -458,7 +447,6 @@ impl Database {
                 .checked_mul(std::mem::size_of::<DependencyStamp>())
                 .and_then(|n| n.checked_add(input_heap))
                 .and_then(|n| n.checked_add(std::mem::size_of::<PreparedInputGuard>()))
-                .filter(|n| *n <= MAX_BYTES)
                 .ok_or_else(limit)
         );
         checked!(budget.bytes(checked!(bytes.checked_sub(planned_bytes).ok_or_else(limit))));
@@ -471,6 +459,7 @@ impl Database {
             fingerprint: guard_fingerprint(&stamps),
             inputs: stamps,
             bytes,
+            checked: Default::default(),
         };
         QueryPoll::Ready(guard.require_current(self).map(|()| guard))
     }

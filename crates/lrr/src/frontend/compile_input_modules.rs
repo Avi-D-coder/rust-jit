@@ -105,6 +105,21 @@ impl CompileInputCatalog {
             ));
         }
         for unit in self.facades.values() {
+            // The LRR-provided facade sources declare `panic` themselves; the
+            // compiler-owned entry only stands in for an absent source module.
+            if graph
+                .declared_module_access(
+                    &crate::syntax::outline::ScopeKey {
+                        crate_key: *unit,
+                        module_path: vec!["panic".into()],
+                        owner: None,
+                    },
+                    self.edition,
+                )
+                .is_ok()
+            {
+                continue;
+            }
             let mut e = StableEncoder::new("lrr/v1/compiler-facade-panic-module");
             e.digest(*unit);
             e.u16(self.edition);

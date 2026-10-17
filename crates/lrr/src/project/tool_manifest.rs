@@ -22,9 +22,6 @@ use std::{
     path::Path,
     sync::atomic::{AtomicU64, Ordering},
 };
-const MAX_WIRE: usize = 64 * 1024 * 1024;
-const MAX_RECORDS: usize = 100_000;
-const MAX_STRING: usize = 64 * 1024;
 pub(super) fn fault(message: impl Into<String>) -> Diagnostic {
     Diagnostic::new("LRR-E-TOOLCHAIN-CAPABILITY", message.into())
 }
@@ -35,7 +32,7 @@ fn stale() -> Diagnostic {
     )
 }
 fn text(value: &str) -> Result<(), Diagnostic> {
-    if value.len() > MAX_STRING || value.contains('\0') {
+    if value.contains('\0') {
         Err(fault("invalid or oversized manifest string"))
     } else {
         Ok(())
@@ -62,6 +59,19 @@ pub(super) fn absolute(value: &str) -> Result<(), Diagnostic> {
         return Err(fault("preparation path must be normalized"));
     }
     Ok(())
+}
+/// Standalone (rustc-style `--extern`) preparation has no Cargo planner. The
+/// pinned compiler that explicitly built the recorded procedural-macro
+/// artifacts occupies the planner slot under this selection; validation
+/// requires it to be that exact compiler binary.
+pub const STANDALONE_PLANNER_SELECTION: &str = "standalone-rustc-1.99.0";
+/// Version banner of the E-M013-001 stdio-v1 macro server built from the pinned
+/// upstream source for this compiler (`tools/prepare_macro_server.py`).
+pub fn standalone_repaired_server_banner(compiler_commit: &str) -> String {
+    format!(
+        "rust-analyzer-proc-macro-srv 1.99.0 (rustc {compiler_commit}; source {}; lrr-stdio-v1)",
+        lrr_expand_adapter::UPSTREAM_COMMIT
+    )
 }
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -135,9 +145,6 @@ impl InputInventory {
         .into_iter()
         .try_fold(0usize, usize::checked_add)
         .ok_or_else(|| fault("input count overflow"))?;
-        if n > MAX_RECORDS {
-            return Err(fault("too many preparation inputs"));
-        }
         for (path, hash) in &self.source_files {
             absolute(path)?;
             if let Some(other) = self.external_files.get(path)
@@ -161,9 +168,6 @@ impl InputInventory {
             count = count
                 .checked_add(members.len())
                 .ok_or_else(|| fault("membership count overflow"))?;
-            if count > MAX_RECORDS {
-                return Err(fault("input membership limit"));
-            }
         }
         Ok(())
     }
@@ -363,7 +367,11 @@ impl ToolManifest {
                 return Err(fault("missing tool version capture"));
             }
         }
-        if self.toolchain.planner.selection != "nightly-2026-10-01"
+        let planner = &self.toolchain.planner;
+        let standalone_planner = planner.selection == STANDALONE_PLANNER_SELECTION
+            && planner.path == self.toolchain.compiler.path
+            && planner.content == self.toolchain.compiler.content;
+        if (planner.selection != "nightly-2026-10-01" && !standalone_planner)
             || self.toolchain.compiler.selection != "1.99.0"
             || self.toolchain.macro_server.selection != "1.99.0"
             || self.toolchain.macro_protocol != 6
@@ -382,9 +390,15 @@ impl ToolManifest {
         if !Path::new(&self.toolchain.component_manifest).starts_with(&self.toolchain.sysroot) {
             return Err(fault("server/component outside recorded sysroot"));
         }
+        // A standalone preparation may name the pinned-source stdio-v1 repair
+        // (E-M013-001) by its exact build banner instead of the sysroot server.
+        let standalone_repair = standalone_planner
+            && self.toolchain.macro_server.version_verbose.trim()
+                == standalone_repaired_server_banner(&self.toolchain.compiler_commit);
         match &self.toolchain.prepared_macro_server {
-            None if !Path::new(&self.toolchain.macro_server.path)
-                .starts_with(&self.toolchain.sysroot) =>
+            None if !standalone_repair
+                && !Path::new(&self.toolchain.macro_server.path)
+                    .starts_with(&self.toolchain.sysroot) =>
             {
                 return Err(fault("server/component outside recorded sysroot"));
             }
@@ -392,14 +406,7 @@ impl ToolManifest {
             Some(prepared) => prepared.validate(&self.toolchain)?,
         }
         self.inputs.validate()?;
-        if self.graph.schema != 1
-            || self.graph.roots.len() != 1
-            || self.graph.units.is_empty()
-            || self.graph.units.len() > MAX_RECORDS
-            || self.artifacts.len() > MAX_RECORDS
-            || self.compile_env.len() > MAX_RECORDS
-            || self.build_outputs.len() > MAX_RECORDS
-        {
+        if self.graph.schema != 1 || self.graph.roots.len() != 1 || self.graph.units.is_empty() {
             return Err(fault("unsupported or oversized unit graph"));
         }
         let mut visited = BTreeSet::new();
@@ -414,7 +421,7 @@ impl ToolManifest {
             if visited.contains(&id) {
                 return Ok(());
             }
-            if depth >= 256 || !active.insert(id) {
+            if !active.insert(id) {
                 return Err(fault("persisted unit graph cycle/depth limit"));
             }
             let unit = graph
@@ -481,9 +488,6 @@ impl ToolManifest {
                 absolute(path)?;
                 if !artifact_files.insert(path) {
                     return Err(fault("compiled artifacts share a filename"));
-                }
-                if artifact_files.len() > MAX_RECORDS {
-                    return Err(fault("compiled artifact filename limit"));
                 }
             }
             let unit = self
@@ -606,9 +610,6 @@ impl ToolManifest {
         Ok(())
     }
     pub fn decode(bytes: &[u8]) -> Result<Self, Diagnostic> {
-        if bytes.len() > MAX_WIRE {
-            return Err(fault("preparation manifest exceeds 64 MiB"));
-        }
         let mut decoder = serde_json::Deserializer::from_slice(bytes);
         CheckedJson::deserialize(&mut decoder).map_err(|e| fault(e.to_string()))?;
         decoder.end().map_err(|e| fault(e.to_string()))?;
@@ -626,14 +627,6 @@ impl ToolManifest {
 struct BoundedWriter(Vec<u8>);
 impl Write for BoundedWriter {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        if self
-            .0
-            .len()
-            .checked_add(bytes.len())
-            .is_none_or(|n| n > MAX_WIRE)
-        {
-            return Err(std::io::Error::other("preparation manifest exceeds 64 MiB"));
-        }
         self.0.extend_from_slice(bytes);
         Ok(bytes.len())
     }
@@ -669,11 +662,8 @@ impl<'de, const SETS: bool> Deserialize<'de> for CheckedJsonShape<SETS> {
                 }
             }
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<CheckedJsonShape<SETS>, E> {
-                if v.len() > MAX_STRING {
-                    Err(E::custom("oversized preparation string"))
-                } else {
-                    Ok(CheckedJsonShape::<SETS>)
-                }
+                let _ = v;
+                Ok(CheckedJsonShape::<SETS>)
             }
             fn visit_none<E: serde::de::Error>(self) -> Result<CheckedJsonShape<SETS>, E> {
                 Ok(CheckedJsonShape::<SETS>)
@@ -685,13 +675,7 @@ impl<'de, const SETS: bool> Deserialize<'de> for CheckedJsonShape<SETS> {
                 self,
                 mut a: A,
             ) -> Result<CheckedJsonShape<SETS>, A::Error> {
-                let mut count = 0usize;
-                while a.next_element::<CheckedJsonShape<SETS>>()?.is_some() {
-                    count += 1;
-                    if count > 8 * 1024 * 1024 {
-                        return Err(serde::de::Error::custom("preparation array limit"));
-                    }
-                }
+                while a.next_element::<CheckedJsonShape<SETS>>()?.is_some() {}
                 Ok(CheckedJsonShape::<SETS>)
             }
             fn visit_map<A: serde::de::MapAccess<'de>>(
@@ -700,13 +684,10 @@ impl<'de, const SETS: bool> Deserialize<'de> for CheckedJsonShape<SETS> {
             ) -> Result<CheckedJsonShape<SETS>, A::Error> {
                 let mut keys = BTreeSet::new();
                 while let Some(key) = a.next_key::<String>()? {
-                    if key.len() > MAX_STRING || !keys.insert(key.clone()) {
+                    if !keys.insert(key.clone()) {
                         return Err(serde::de::Error::custom(
                             "duplicate/oversized preparation key",
                         ));
-                    }
-                    if keys.len() > MAX_RECORDS {
-                        return Err(serde::de::Error::custom("preparation map limit"));
                     }
                     match key.as_str() {
                         "features" | "roots" | "consumers" | "directories" | "atoms" if SETS => {
@@ -741,7 +722,7 @@ impl<'de> Deserialize<'de> for CheckedStringSet {
             ) -> Result<CheckedStringSet, A::Error> {
                 let mut seen = BTreeSet::new();
                 while let Some(value) = a.next_element::<String>()? {
-                    if value.len() > MAX_STRING || !seen.insert(value) || seen.len() > MAX_RECORDS {
+                    if !seen.insert(value) {
                         return Err(serde::de::Error::custom(
                             "duplicate/oversized preparation set",
                         ));
@@ -768,7 +749,7 @@ impl<'de> Deserialize<'de> for CheckedMembership {
             ) -> Result<CheckedMembership, A::Error> {
                 let mut keys = BTreeSet::new();
                 while let Some(key) = a.next_key::<String>()? {
-                    if key.len() > MAX_STRING || !keys.insert(key) || keys.len() > MAX_RECORDS {
+                    if !keys.insert(key) {
                         return Err(serde::de::Error::custom(
                             "duplicate/oversized membership key",
                         ));
@@ -852,8 +833,8 @@ impl ToolStore {
             .directory
             .metadata(&name)
             .map_err(|e| fault(e.to_string()))?;
-        if !metadata.is_file() || metadata.len() > MAX_WIRE as u64 {
-            return Err(fault("preparation record is not a bounded regular file"));
+        if !metadata.is_file() {
+            return Err(fault("preparation record is not a regular file"));
         }
         let mut file = self
             .directory
@@ -861,7 +842,6 @@ impl ToolStore {
             .map_err(|e| fault(e.to_string()))?;
         let mut bytes = vec![];
         Read::by_ref(&mut file)
-            .take((MAX_WIRE + 1) as u64)
             .read_to_end(&mut bytes)
             .map_err(|e| fault(e.to_string()))?;
         let manifest = ToolManifest::decode(&bytes)?;

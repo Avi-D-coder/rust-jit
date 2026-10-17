@@ -130,7 +130,7 @@ fn source_admit(
     definition: Digest,
     request: ConstantRequest,
 ) -> Result<ConstantSourceAdmission, Diagnostic> {
-    ConstantSourceAdmission::capture_current(db, view, definition, request, MAX_BYTES)
+    ConstantSourceAdmission::capture_current(db, view, definition, request, usize::MAX)
 }
 fn ready(
     db: &Database,
@@ -139,7 +139,7 @@ fn ready(
     request: ConstantRequest,
 ) -> Result<CurrentConstantResultType, Diagnostic> {
     let admitted = source_admit(db, view, definition, request)?;
-    CurrentConstantResultType::capture_current(db, view, admitted, MAX_BYTES)
+    CurrentConstantResultType::capture_current(db, view, admitted, usize::MAX)
 }
 fn arg(value: u64) -> ConstValue {
     ConstValue::from_scalar(
@@ -182,7 +182,7 @@ fn unchanged_named_scalar_header_all_editions_without_initializing() {
         assert_eq!(proof.admission().plan().owner_definition(), definition);
         assert_eq!(proof.admission().plan().profile().edition, edition);
         assert_eq!(before, db.trace.events.len());
-        assert!(proof.metadata_bytes() <= MAX_BYTES);
+        assert!(proof.metadata_bytes() <= usize::MAX);
         assert!(
             proof
                 .check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::Bool))

@@ -66,10 +66,6 @@ pub(crate) fn captured_source_root(
         .ok_or_else(fail)?;
     let mut file = std::fs::File::open(&unit.source_path).map_err(|_| fail())?;
     let size = usize::try_from(file.metadata().map_err(|_| fail())?.len()).map_err(|_| fail())?;
-    let limit = crate::source::snapshot::MAX_SOURCE_FILE;
-    if size > limit {
-        return Err(fail());
-    }
     let mut bytes = Vec::new();
     bytes.try_reserve_exact(size).map_err(|_| fail())?;
     let mut buffer = [0u8; 64 * 1024];
@@ -78,11 +74,7 @@ pub(crate) fn captured_source_root(
         if n == 0 {
             break;
         }
-        bytes
-            .len()
-            .checked_add(n)
-            .filter(|size| *size <= limit)
-            .ok_or_else(fail)?;
+        bytes.len().checked_add(n).ok_or_else(fail)?;
         bytes.try_reserve(n).map_err(|_| fail())?;
         bytes.extend_from_slice(&buffer[..n]);
     }

@@ -76,12 +76,7 @@ impl ConstantQueryFailure {
             .heap_bytes()
             .and_then(|bytes| bytes.checked_mul(2))
             .and_then(|bytes| bytes.checked_add(key.metadata_bytes().ok()?))
-            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Self>() + 128 + 2 * 65_536))
-            .filter(|bytes| *bytes <= 32 << 20)
-            .ok_or_else(|| invalid("constant failure transient metadata limit"))?;
-        if diagnostic.message.len() > 65_536 {
-            return Err(invalid("constant failure diagnostic message limit"));
-        }
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Self>() + 128 + 2 * 65_536))            .ok_or_else(|| invalid("constant failure transient metadata limit"))?;
         let kind = match (diagnostic.code, failure.numeric_panic(), failure.panic()) {
             ("LRR-E-CONST-TYPE", None, None) => FailureKind::Type,
             ("LRR-E-CONST-CYCLE", None, None) => FailureKind::Cycle,
@@ -96,9 +91,6 @@ impl ConstantQueryFailure {
             ) if diagnostic.message == kind.description() => FailureKind::Numeric(kind),
             ("LRR-E-CONST-PANIC", None, Some(panic)) if diagnostic.message == panic.message() => {
                 // Admit the clone before allocating either retained message.
-                if panic.message().len() > 65_536 {
-                    return Err(invalid("constant failure panic message limit"));
-                }
                 FailureKind::Macro(panic.clone())
             }
             _ => {
@@ -147,9 +139,7 @@ impl ConstantQueryFailure {
             .and_then(|bytes| match &self.kind {
                 FailureKind::Macro(panic) => bytes.checked_add(panic.message().len() + 128),
                 _ => Some(bytes),
-            })
-            .filter(|bytes| *bytes <= 32 << 20)
-            .ok_or_else(|| invalid("constant failure metadata limit"))
+            })            .ok_or_else(|| invalid("constant failure metadata limit"))
     }
 }
 impl StableEncode for ConstantQueryFailure {

@@ -20,7 +20,6 @@ fn error(message: &str) -> Diagnostic {
 fn charge(bytes: &mut usize, size: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(size)
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(|| error("nested namespace metadata budget exceeded"))?;
     Ok(())
 }
@@ -163,7 +162,7 @@ impl Namespace {
         let mut contexts = BTreeMap::new();
         let mut current = Some(selected);
         while let Some(old) = current {
-            if mapping.contains_key(&old) || mapping.len() >= 256 {
+            if mapping.contains_key(&old) {
                 return Err(error("nested namespace scope ancestry limit exceeded"));
             }
             let source_scope = source
@@ -220,9 +219,6 @@ impl Namespace {
         }
         for row in &source.items {
             if let Some(scope) = mapping.get(&row.scope) {
-                if facts.items.len() >= 1_000_000 {
-                    return Err(error("nested item count exceeded"));
-                }
                 item(&mut bytes, row)?;
                 facts
                     .items
@@ -241,9 +237,6 @@ impl Namespace {
                 continue;
             }
             if let Some(scope) = mapping.get(&event.scope) {
-                if facts.events.len() >= 1_000_000 {
-                    return Err(error("nested event count exceeded"));
-                }
                 charge(&mut bytes, std::mem::size_of_val(event))?;
                 facts
                     .events
@@ -256,9 +249,6 @@ impl Namespace {
         }
         for row in &source.imports {
             if let Some(scope) = mapping.get(&row.scope) {
-                if facts.imports.len() >= 100_000 {
-                    return Err(error("nested namespace import count exceeded"));
-                }
                 import(&mut bytes, row)?;
                 facts
                     .imports

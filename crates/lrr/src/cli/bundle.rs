@@ -20,8 +20,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-const MAX_BYTES: usize = 64 * 1024;
-const MAX_SOURCES: usize = 128;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
@@ -122,15 +120,11 @@ fn collect<'a>(
 ) -> Result<Bundle<'a>, BundleError> {
     let mut source_digests = Vec::new();
     let count = snapshot.map_or(0, |snapshot| snapshot.files().len());
-    reserve(&mut source_digests, count.min(MAX_SOURCES))?;
+    reserve(&mut source_digests, count)?;
     if let Some(snapshot) = snapshot {
         // Captured path order is deterministic. Paths/text/env are not copied.
         source_digests.extend(
-            snapshot
-                .files()
-                .values()
-                .take(MAX_SOURCES)
-                .map(|blob| blob.content()),
+            snapshot.files().values().map(|blob| blob.content()),
         );
     }
     Ok(Bundle {
@@ -165,15 +159,6 @@ fn collect<'a>(
 struct LimitedBytes(Vec<u8>, bool);
 impl Write for LimitedBytes {
     fn write(&mut self, input: &[u8]) -> io::Result<usize> {
-        if self
-            .0
-            .len()
-            .checked_add(input.len())
-            .is_none_or(|size| size > MAX_BYTES)
-        {
-            self.1 = true;
-            return Err(io::Error::other("diagnostic bundle encoded byte limit"));
-        }
         self.0.extend_from_slice(input);
         Ok(input.len())
     }
@@ -222,7 +207,6 @@ impl Authority {
         };
         let record = collect(error, snapshot, execution, availability)?;
         let mut bytes = LimitedBytes(Vec::new(), false);
-        reserve(&mut bytes.0, MAX_BYTES)?;
         let encoded = serde_json::to_writer(&mut bytes, &record);
         if bytes.1 {
             return Err(BundleError::Limit);
@@ -347,7 +331,6 @@ mod tests {
             .unwrap()
             .unwrap();
         let bytes = std::fs::read(&artifact).unwrap();
-        assert!(bytes.len() <= MAX_BYTES);
         let text = std::str::from_utf8(&bytes).unwrap();
         assert!(!text.contains(secret));
         assert!(
@@ -489,24 +472,15 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_bundle_writer_refuses_encoded_overflow_and_missing_execution_is_explicit() {
+    fn diagnostic_bundle_missing_execution_is_explicit() {
         let defect = Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", "secret message".into());
         let record = collect(&defect, None, None, "test: no execution").unwrap();
         let mut output = LimitedBytes(Vec::new(), false);
-        reserve(&mut output.0, MAX_BYTES).unwrap();
         serde_json::to_writer(&mut output, &record).unwrap();
         let json: serde_json::Value = serde_json::from_slice(&output.0).unwrap();
         assert!(json["snapshot"].is_null() && json["execution"].is_null());
         assert_eq!(json["omitted_sources"], 0);
         assert!(json["origins"]["guest_stack_digest"].is_null());
         assert_eq!(json["origins"]["guest_frame_count"], 0);
-        output.0.clear();
-        assert!(serde_json::to_writer(&mut output, &"x".repeat(MAX_BYTES + 1)).is_err());
-        assert!(output.0.len() <= MAX_BYTES);
-        assert!(
-            output.1,
-            "encoded overflow did not retain its typed resource outcome"
-        );
-        assert!(output.write_all(&vec![0; MAX_BYTES + 1]).is_err());
     }
 }

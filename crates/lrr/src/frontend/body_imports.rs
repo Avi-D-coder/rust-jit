@@ -92,12 +92,8 @@ pub(super) fn lookup(
                     })
                     .and_then(|n| n.checked_add(std::mem::size_of::<MacroName>()))
                     .and_then(|n| n.checked_add(name.as_str().len()))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("body qualified member metadata budget exceeded"))?;
                 let mut member = candidate.route.names;
-                if member.len() >= 256 {
-                    return Err(error("body module macro member depth exceeded"));
-                }
                 member
                     .try_reserve(1)
                     .map_err(|_| error("body module macro member allocation failed"))?;
@@ -113,7 +109,6 @@ pub(super) fn lookup(
     loop {
         work = work
             .checked_add(1)
-            .filter(|n| *n <= 100_000 * 257)
             .ok_or_else(|| error("body import work limit exceeded"))?;
         let Some(ImportSegment::Name(first)) = parts.first() else {
             break;
@@ -129,7 +124,6 @@ pub(super) fn lookup(
             for row in &facts.imports {
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000 * 257)
                     .ok_or_else(|| error("body import work limit exceeded"))?;
                 if row.scope != ordinal {
                     continue;
@@ -189,20 +183,15 @@ pub(super) fn lookup(
                             n.checked_add(std::mem::size_of::<MacroName>())
                                 .and_then(|n| n.checked_add(name.as_str().len()))
                         })
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| error("body glob member metadata budget exceeded"))?;
                     let mut member = components;
                     for part in &parts {
                         let ImportSegment::Name(name) = part else {
                             return Err(error("invalid body glob member qualifier"));
                         };
-                        if member.len() >= 256 {
-                            return Err(error("body glob member depth exceeded"));
-                        }
                         bytes = bytes
                             .checked_add(std::mem::size_of::<MacroName>())
                             .and_then(|n| n.checked_add(name.len()))
-                            .filter(|n| *n <= 32 * 1024 * 1024)
                             .ok_or_else(|| error("body glob member metadata budget exceeded"))?;
                         member
                             .try_reserve(1)
@@ -245,7 +234,6 @@ pub(super) fn lookup(
             .ok_or_else(|| error("body import metadata overflow"))?;
         bytes = bytes
             .checked_add(path_bytes)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("body import metadata budget exceeded"))?;
         if !seen.insert((scope, absolute, parts.clone())) {
             return Ok(Some(weak.finish(PathLookup::Absent)?));
@@ -274,9 +262,7 @@ pub(super) fn lookup(
         }
         target
             .len()
-            .checked_add(parts.len() - 1)
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| error("body import route depth exceeded"))?;
+            .checked_add(parts.len() - 1)            .ok_or_else(|| error("body import route depth exceeded"))?;
         let next_bytes = target
             .iter()
             .chain(parts[1..].iter())
@@ -292,7 +278,6 @@ pub(super) fn lookup(
             .ok_or_else(|| error("body import route metadata overflow"))?;
         bytes = bytes
             .checked_add(next_bytes)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("body import route metadata budget exceeded"))?;
         let mut next = Vec::new();
         next.try_reserve(target.len() + parts.len() - 1)
@@ -357,7 +342,6 @@ impl Candidates {
                     .and_then(|p| p.checked_mul(32))
                     .and_then(|p| n.checked_add(p))
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("body glob candidate metadata budget exceeded"))?;
         Ok(())
     }

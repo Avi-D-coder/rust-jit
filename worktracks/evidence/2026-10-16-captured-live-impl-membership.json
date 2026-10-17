@@ -1,0 +1,69 @@
+{
+  "schema": "lrr/source-review/captured-live-impl-membership/v1",
+  "status": "source-only uncompiled/unexecuted; no source-selected Drop/NoDrop, impl catalog seal, task or runtime acceptance",
+  "component": "/private/tmp/lrr-captured-live-impl-membership-v1/COMPONENT.json",
+  "component_sha256": "448135ff21880ed1fc0c34758239dfeef34c555e241e8938cd0825d9bbffa265",
+  "source_fingerprint": "ee448c4f8e903ac418811a069583da794022cadc1324409366e2ff219d782efe",
+  "bounded_record": "worktracks/05-trait-goal-engine/common-live-impl-membership-prerequisite.md",
+  "owned_source": [
+    "crates/lrr/src/expand/source_discovery/impl_catalog.rs",
+    "crates/lrr/src/expand/source_discovery.rs module hook only",
+    "crates/lrr/src/source/changes.rs PreparedSourceView::captured_declaration_sources only",
+    "crates/lrr/src/source/dependencies.rs SourceDependencies::root/root_count only"
+  ],
+  "authority": "SourceDiscovery::prepare_live_impl_catalog_sources derives exact captured reachability using real SourceDependencies roots/adjacency and same-Arc publication views, including captured dependency modules omitted from the scope caller vector. Its only terminal contribution state is NeedConfiguredWorld with MandatoryTraitFacade::Missing. Caller unit_graph digest is retained context, not authority. No Ready/Sealed variant, no inventory domain broadening, no fake empty facade or catalog.",
+  "retention": "Views share exact Arc<PreparedSourceState>, parsed and outline roots; cloned selector/location/profile metadata and source/unit/profile vectors are checked and explicitly charged as exclusive bytes. 100000 units/sources,256 profiles,32MiB conservative temporary/final budget. Future pure-query activation must retain/account actual root handles; this component is not activated.",
+  "cold_hot": "Captured-source enumeration/sort plus reached immutable adjacency traversal and explicit source selector encoding are cold. No executable body parsing/lowering, producer polling, namespace census, call/dispatch/operation hook or runtime recipe is added. Full SourceDependencies fingerprint remains conservative over all captured roots and aliases; precise relevant catalog bucket invalidation remains a gap.",
+  "eight_mode_review": {
+    "1": "No assertion/expression evaluator: only retained source identity and adjacency access; MA001/MA008 remain held.",
+    "2": "No literal/break generated executor, runtime phase or opcode; generated producer sources still need real closure.",
+    "3": "No name-selected method or numeric inference, trait identity, candidate applicability or Drop/NoDrop proof.",
+    "4": "Source accessor preserves actual state/module/generated origins without original-source exclusion; no generated runtime matrix executed.",
+    "5": "No pattern/body preparation or cold producer discharge; the existing ordinary scanner owns cfg/grammar and pending jobs.",
+    "6": "Explicit cold preparation only; no installed consumer. Existing memo query and root accounting integration are required before runtime activation.",
+    "7": "No hot full-world namespace scan. Cold all-captured-source sorting/full existing dependency fingerprint are explicit conservative preparation costs.",
+    "8": "No BodyIndex/DeclarationScan/AST deep copy or whole-file node lookup. Exact source handles share immutable roots; checked owned identity buffers only."
+  },
+  "external_controls": {
+    "command": "cargo test -p lrr --lib expand::source_discovery::impl_catalog::tests:: -- --nocapture",
+    "status": "suggested only; not executed",
+    "cases": [
+      "Full unchanged borrowck-assign-to-subfield.rs and destructor-run-for-let-ignore-6892.rs sources in four owning editions always require real configured world and mandatory trait facade.",
+      "Actual PreparedSourceInputs+SourceDependency graph retains captured dependency module omitted from initial scope sources, excludes unrelated captured unit, and retains two owning profiles.",
+      "Ordinary scanner leaves unknown cold producer pending, excludes cfg-disabled producer, and membership does not start discovery or mint a seal."
+    ]
+  },
+  "static_checks": [
+    {
+      "command": "git diff --check -- crates/lrr/src/source/changes.rs crates/lrr/src/source/dependencies.rs crates/lrr/src/expand/source_discovery.rs",
+      "chunk_id": "f1c3b0",
+      "wall_time_seconds": 0.000006208,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    },
+    {
+      "command": "rustfmt --check --edition 2024 --config skip_children=true crates/lrr/src/source/changes.rs crates/lrr/src/source/dependencies.rs crates/lrr/src/expand/source_discovery/impl_catalog.rs",
+      "chunk_id": "a7038a",
+      "wall_time_seconds": 0.000007666,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    }
+  ],
+  "unchanged_predecessor": {
+    "header_sha256": "801c0554253f1018078d35784781bf8c4aebaa3384591e4f4481c2f48af56c17",
+    "index_sha256": "962501df63ec50223e36b36a74b773bcb9db107202abc6e8395b003d78e5a072",
+    "component_sha256": "39c019955db9210a3a98484e990ac9048598c0a6ce9bdf585cf458bdf0fcc31d"
+  },
+  "remaining_gaps": [
+    "Actual coordinator-bound standalone/Cargo configured live/native membership receipt",
+    "Actual owning-profile compiler-selected trait facade declarations and privately minted contribution authority",
+    "Genuine all-producer ImplCatalogSeal, distinct inventory query with source/epoch/currentness dependencies",
+    "Common trait TypeName/binder/where normalization and M020/M021/M026 solver predicates/dictionaries",
+    "Ordinary selected Drop and structural cleanup exact-once/panic/suspension/cleanup execution",
+    "Missing-root provenance replay, full catalog oracle and stale source/epoch/facade invalidation controls",
+    "Current milestone and unchanged A/B runtime remain unexecuted by this component; earlier terminal75e555/1 failure remains open"
+  ],
+  "prohibited_actions_taken": []
+}

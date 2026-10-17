@@ -30,9 +30,10 @@ pub mod body_index;
 
 mod thunks;
 pub use thunks::pattern_plan;
-pub use thunks::pattern_product;
+pub use thunks::pattern_tree;
 pub(crate) use thunks::runtime_macro_numeric_context::MacroNumericSite;
 pub use thunks::string_literal;
+pub(crate) use thunks::let_annotations as thunks_let_annotations;
 
 pub mod signatures;
 

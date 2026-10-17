@@ -18,7 +18,6 @@ use lrr_expand_adapter::{
     proc_client::{CapturedSpanSource, ProcForm, ProcGrammar, ProcInvocation},
     token_wire::{Key, TokenForest},
 };
-const MAX_INPUT_BYTES: usize = 64 * 1024 * 1024;
 fn fault(message: impl Into<String>) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-TRANSFORM", message.into())
 }
@@ -348,7 +347,6 @@ impl PreparedItemRequest {
 }
 fn bounded(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_add(b)
-        .filter(|n| *n <= MAX_INPUT_BYTES)
         .ok_or_else(|| fault("item request input limit"))
 }
 fn with_sites(
@@ -369,14 +367,9 @@ fn with_sites(
             .find(|span| span.key() == key)
             .ok_or_else(|| fault("resolved item site has no owned span record"))?;
         let mut context = Some(span.context);
-        let mut depth = 0usize;
         while let Some(key) = context {
             if contexts.iter().any(|record| record.key() == key) {
                 break;
-            }
-            depth += 1;
-            if depth > 256 {
-                return Err(fault("item site context depth limit"));
             }
             let record = target
                 .registry

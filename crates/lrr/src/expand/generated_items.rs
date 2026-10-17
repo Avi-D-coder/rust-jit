@@ -57,7 +57,6 @@ pub(crate) fn retain_token_origins(
 ) -> Result<Vec<TokenOrigin>, Diagnostic> {
     rows.len()
         .checked_mul(std::mem::size_of::<TokenOrigin>())
-        .filter(|bytes| *bytes <= 256 * 1024 * 1024)
         .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "generated origin retention budget"))?;
     let mut owned = Vec::new();
     owned
@@ -72,6 +71,92 @@ pub(crate) fn retain_token_origins(
     }
     Ok(owned)
 }
+
+/// Common exact generated-header key conversion. Items and admitted associated
+/// declarations retain the same v2 header encoding and expansion/path identity.
+pub(crate) fn retain_generated_headers(
+    expected: &ExpansionKey,
+    text: &str,
+    origins: &[item_output::Origin],
+    headers: Vec<item_output::Item>,
+) -> Result<Vec<GeneratedHeader>, Diagnostic> {
+    let mut retained = headers
+        .len()
+        .checked_mul(std::mem::size_of::<GeneratedHeader>())
+        .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "generated header metadata limit"))?;
+    let mut items = Vec::new();
+    items
+        .try_reserve_exact(headers.len())
+        .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "generated header allocation"))?;
+    retained = retained
+        .checked_add(
+            items
+                .capacity()
+                .checked_sub(headers.len())
+                .and_then(|n| n.checked_mul(std::mem::size_of::<GeneratedHeader>()))
+                .ok_or_else(|| {
+                    fault("LRR-E-METADATA-LIMIT", "generated header capacity overflow")
+                })?,
+        )
+        .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "generated header metadata limit"))?;
+    for item in headers {
+        if item.header_start > item.header_end
+            || item.header_end > item.end
+            || item.start > item.header_start
+            || text
+                .get(item.header_start as usize..item.header_end as usize)
+                .is_none()
+        {
+            return Err(fault(
+                "LRR-E-MACRO-OUTPUT",
+                "generated header range differs",
+            ));
+        }
+        retained = retained
+            .checked_add(
+                item.structural_path
+                    .capacity()
+                    .checked_mul(4)
+                    .ok_or_else(|| {
+                        fault("LRR-E-METADATA-LIMIT", "generated header path overflow")
+                    })?,
+            )
+            .and_then(|n| n.checked_add(item.name.as_ref().map_or(0, |name| name.text.capacity())))
+            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "generated header metadata limit"))?;
+
+        let mut e = StableEncoder::new("lrr/v2/generated-header");
+        e.u32(item.kind.tag());
+        e.string(&text[item.header_start as usize..item.header_end as usize]);
+        let first = origins.partition_point(|o| o.end <= item.header_start);
+        let last = origins.partition_point(|o| o.start < item.header_end);
+        e.u64(
+            u64::try_from(last - first)
+                .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "generated header origin count"))?,
+        );
+        for origin in &origins[first..last] {
+            e.u32(origin.start.max(item.header_start) - item.header_start);
+            e.u32(origin.end.min(item.header_end) - item.header_start);
+            e.digest(Digest(origin.span.0));
+        }
+        let key = GeneratedItemKey {
+            expansion: expected.fingerprint(),
+            structural_path: item.structural_path,
+            header: e.finish(),
+        };
+        key.validate()?;
+        items.push(GeneratedHeader {
+            key,
+            kind: item.kind,
+            name: item.name,
+            start: item.start,
+            end: item.end,
+            header_start: item.header_start,
+            header_end: item.header_end,
+        });
+    }
+    Ok(items)
+}
+
 impl GeneratedItems {
     pub fn admit(
         expected: &ExpansionKey,
@@ -89,12 +174,6 @@ impl GeneratedItems {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "generated item record does not match exact demanded item key",
-            ));
-        }
-        if record.descriptor().wire_bytes > 32 * 1024 * 1024 {
-            return Err(fault(
-                "LRR-E-DISCOVERY-LIMIT",
-                "generated item wire size limit",
             ));
         }
         let tokens = record.tokens()?;
@@ -160,45 +239,8 @@ impl GeneratedItems {
         );
         let parsed =
             item_output::materialize(&adapter_tokens).map_err(|e| fault(e.code, &e.message))?;
-        let mut items = Vec::new();
-        items
-            .try_reserve_exact(parsed.items.len())
-            .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "generated header allocation"))?;
-        for item in parsed.items {
-            let mut e = StableEncoder::new("lrr/v2/generated-header");
-            e.u32(item.kind.tag());
-            e.string(&parsed.text[item.header_start as usize..item.header_end as usize]);
-            let first = parsed
-                .origins
-                .partition_point(|o| o.end <= item.header_start);
-            let last = parsed
-                .origins
-                .partition_point(|o| o.start < item.header_end);
-            e.u64(
-                u64::try_from(last - first)
-                    .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "generated header origin count"))?,
-            );
-            for origin in &parsed.origins[first..last] {
-                e.u32(origin.start.max(item.header_start) - item.header_start);
-                e.u32(origin.end.min(item.header_end) - item.header_start);
-                e.digest(Digest(origin.span.0));
-            }
-            let key = GeneratedItemKey {
-                expansion: expected.fingerprint(),
-                structural_path: item.structural_path,
-                header: e.finish(),
-            };
-            key.validate()?;
-            items.push(GeneratedHeader {
-                key,
-                kind: item.kind,
-                name: item.name,
-                start: item.start,
-                end: item.end,
-                header_start: item.header_start,
-                header_end: item.header_end,
-            });
-        }
+        let items =
+            retain_generated_headers(expected, &parsed.text, &parsed.origins, parsed.items)?;
         let mut macro_bodies = std::collections::BTreeMap::new();
         for body in parsed.macros {
             let header = items
@@ -396,8 +438,8 @@ impl GeneratedItems {
                     defining_unit: lrr_expand_adapter::token_wire::Key(owner.0),
                     definition_edition: edition,
                 },
-                2_000_000,
-                32 * 1024 * 1024,
+                usize::MAX,
+                usize::MAX,
             )
             .map_err(|e| fault(e.code, &e.message))?;
         let output = result.map_err(|e| fault("LRR-E-MACRO-EXPANSION", &e.to_string()))?;

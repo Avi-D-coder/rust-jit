@@ -99,7 +99,7 @@ impl ArgumentDeclarations {
         )
         .map_err(|e| fault(&e.message))?;
         forest
-            .encoded_len_with_limit(32 * 1024 * 1024)
+            .encoded_len()
             .map_err(|e| fault(&e.message))?;
         Ok(forest)
     }
@@ -273,7 +273,6 @@ impl ArgumentDeclarations {
             .and_then(|n| n.checked_add(scan.retained_bytes()))
             .and_then(|n| n.checked_add(parsed.estimated_bytes()))
             .and_then(|n| n.checked_add(output.text.capacity()))
-            .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(|| fault("intrinsic argument metadata limit"))?;
         Ok(Self {
             identity,
@@ -335,9 +334,6 @@ impl ArgumentDeclarations {
             .iter()
             .find(|span| span.key() == capture.name_span)
             .ok_or_else(|| fault("argument definition name source absent"))?;
-        if span.source.path.len() > 64 * 1024 {
-            return Err(fault("argument definition source path budget"));
-        }
         Ok(crate::syntax::origin::SourceOrigin {
             source: crate::syntax::token_wire::SourceIdentity {
                 unit: crate::syntax::token_wire::Key(span.source.unit.0),

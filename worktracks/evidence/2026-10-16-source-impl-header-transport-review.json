@@ -1,0 +1,71 @@
+{
+  "schema": "lrr/source-review/impl-header-transport/v1",
+  "status": "source-only, uncompiled/unexecuted; no runtime or completeness acceptance",
+  "component": "/private/tmp/lrr-source-impl-header-transport-v1/COMPONENT.json",
+  "component_sha256": "39c019955db9210a3a98484e990ac9048598c0a6ce9bdf585cf458bdf0fcc31d",
+  "source_fingerprint": "651517f74799da67c7f474017cf3e9e7ed29c04a20b1962a29032e4f09aa9e17",
+  "payload": [
+    {
+      "path": "crates/lrr/src/traits/header.rs",
+      "sha256": "801c0554253f1018078d35784781bf8c4aebaa3384591e4f4481c2f48af56c17",
+      "bytes": 2134,
+      "actual_sha256": "801c0554253f1018078d35784781bf8c4aebaa3384591e4f4481c2f48af56c17",
+      "matches": true
+    },
+    {
+      "path": "crates/lrr/src/traits/index.rs",
+      "sha256": "962501df63ec50223e36b36a74b773bcb9db107202abc6e8395b003d78e5a072",
+      "bytes": 14503,
+      "actual_sha256": "962501df63ec50223e36b36a74b773bcb9db107202abc6e8395b003d78e5a072",
+      "matches": true
+    }
+  ],
+  "dependency_observations": {
+    "crates/lrr/src/frontend/impl_index.rs": {
+      "actual_sha256": "b68da8e748bc676f1dc99af3c9c1c8bca91d241ef388d169362a453a35f2a5ea",
+      "component_observed_sha256": "b68da8e748bc676f1dc99af3c9c1c8bca91d241ef388d169362a453a35f2a5ea",
+      "same": true
+    },
+    "crates/lrr/src/syntax/declaration_scan.rs": {
+      "actual_sha256": "023a30a30d272a9c4a5fcfcaaf8fa4c58543ac076a2e3bcee069c7930131f68c",
+      "component_observed_sha256": "023a30a30d272a9c4a5fcfcaaf8fa4c58543ac076a2e3bcee069c7930131f68c",
+      "same": true
+    },
+    "crates/lrr/src/db/provider.rs": {
+      "actual_sha256": "8793156b8ca7e624c4c548102ad75c6fb9f52ade2bf90c1c1e0f27a5dc0f6b22",
+      "component_observed_sha256": "8793156b8ca7e624c4c548102ad75c6fb9f52ade2bf90c1c1e0f27a5dc0f6b22",
+      "same": true
+    },
+    "crates/lrr/src/db/memo.rs": {
+      "actual_sha256": "41ae97cde4e201bf56aeeb5176ee664ef73f425cbe9f4ee29b6c32c8e8cea4f8",
+      "component_observed_sha256": "41ae97cde4e201bf56aeeb5176ee664ef73f425cbe9f4ee29b6c32c8e8cea4f8",
+      "same": true
+    },
+    "crates/lrr/src/db/value.rs": {
+      "actual_sha256": "beaf61cf777f96075b4c9ebf48d6caafb40dec0652100d06fcf15c1662edc0b2",
+      "component_observed_sha256": "beaf61cf777f96075b4c9ebf48d6caafb40dec0652100d06fcf15c1662edc0b2",
+      "same": true
+    }
+  },
+  "production_api_review": "prepare accepts Scope SealKey only, fetches actual ScopeDeclarationInventory via SyntaxProvider, checks exact key then private constructor. Existing provider first fetches genuine DiscoverySeal and retains real published declaration inventory input. QueryPin weak inventory root tracks extra inner Arc and cache_usage retains/charges it after memo/outer loss. HeaderLocation uses sorted exact active IDs; duplicate source owners, missing rows and differing impl/associated raw requirements refuse. require_current cold fetches same real query and exact cached outcome fingerprint. No applicability, negative Drop, canonical Type or callable execution proof minted.",
+  "bounds_and_lifetime": "At most4096 scans/1e6 headers+inspected rows and32MiB exclusive/temp locator buffers. Checks counts/order, preflights temp+final size, uses try_reserve, checks actual capacities, u32 narrowing. Final immutable rows borrow scan/header through retained inventory Arc; no source/header/body cloning. header(id) O(logH) plus fixed indexed dereferences. Cold join O(H+S+NlogH+raw exact requirement comparison); fingerprint O(H), cold require_current existing query dependency validation.",
+  "remaining_holds": [
+    "PreparedScopeImplHeaders locator allocation is not yet a query value/root: future consumer must charge exclusive_metadata_bytes while existing QueryPin charges inventory shared roots; no activation before that join.",
+    "Source headers/generics/where clauses and associated members remain raw TokenRecipe facts. Common name/Type/predicate normalization, genuine ImplCatalogSeal closure, applicable candidate selection/ambiguity and runtime cleanup are separate unmet requirements.",
+    "No installed-operation call to require_current: it can demand provider work, unlike a readonly prepared-input guard.",
+    "New test setup uses full unchanged originals and actual discovery; standardmacro or attribute producer failures must remain actual failures. Wildcard panic hides typed unexpected SourceDiscoveryStep. This enum does NOT implement Debug; any diagnostic successor must enumerate actual variants and print available payloads, not use blanket Debug formatting. Frozen component unchanged."
+  ],
+  "test_api_review": "SourceDiscovery poll/admit/publish, CompileInputCatalog standalone and assembly::tests::world APIs exist and types align. SourceImplHeader associated/range/header getters match DeclarationScan types. Trait parent module hook still required. No compile guarantee or actual control outcome.",
+  "eight_mode_review": {
+    "1": "No evaluator or assertion lowering; unchanged runtime fixtures only supply raw headers.",
+    "2": "Original/generated headers share same inventory and retained scan join; no literal-output execution added.",
+    "3": "No Drop name whitelist or applicable-impl selection; common source facts are retained pending generic/predicate service.",
+    "4": "Generated origin remains in actual DeclarationScan root and inventory dependency, no original-only production refusal added. No generated positive matrix executed.",
+    "5": "Associated method headers exclude actual method bodies; no executable arms/body lowering. Existing declaration producer closure is required and not bypassed.",
+    "6": "All locator construction and full raw equality work cold; require_current remains cold. Future query memoization/consumer accounting required before installed use.",
+    "7": "No new namespace-world scan. Existing genuine ScopeDeclarationInventory dependency domain retained; unrelated-invalidation granularity not improved/claimed.",
+    "8": "Inventory Arc retains scans; HeaderLocation indexes actual immutable roots, header lookup binarysearch+directindex. No BodyIndex clone or whole-file per-node search."
+  },
+  "actual_witness": "Unchanged borrowck-assign-to-subfield prior cleanup terminal75e555/1 remains failure; destructor-run-for-let-ignore-6892 raw source witness only. No Drop/NoDrop or full catalogue closure.",
+  "changes": "No production source edits; source review artifact only. No Cargo/native tests."
+}

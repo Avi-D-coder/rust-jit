@@ -27,7 +27,7 @@ use crate::{
 
 /// Opaque source proof. It supplies no recipe, runtime value or macro behavior.
 pub(crate) struct PrimitiveTypeNameAdmission {
-    namespace: std::collections::BTreeMap<InputKey, Digest>,
+    namespace: std::sync::Arc<std::collections::BTreeMap<InputKey, Digest>>,
     declaration_rows: [Digest; 4],
     parse: ParseKey,
     body: BodyKey,
@@ -84,9 +84,6 @@ impl PrimitiveTypeNameAdmission {
                 let InputKey::CapturedSource(_) = key else {
                     continue;
                 };
-                if sources.len() >= 4096 {
-                    return Err(invalid("Type name source count budget"));
-                }
                 let Some(input) = db.input(key) else {
                     return Err(invalid("Type name captured source disappeared"));
                 };
@@ -98,7 +95,6 @@ impl PrimitiveTypeNameAdmission {
                     .ok_or_else(|| invalid("Type name original source lease absent"))?;
                 bytes = bytes
                     .checked_add(source.prepared_metadata_bytes()?)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| invalid("Type name source metadata budget"))?;
                 sources
                     .try_reserve(1)

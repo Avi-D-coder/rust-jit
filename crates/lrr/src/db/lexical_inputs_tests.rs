@@ -302,38 +302,6 @@ fn partial_lexical_metadata_requires_its_actual_cold_owner_and_all_three_exact_r
         db.finish_run().unwrap();
     }
 }
-#[test]
-fn exact_cold_headers_body_publication_respects_the_existing_metadata_cap() {
-    let (mut db, view, context) = world(2024);
-    publish_header(&mut db, &context);
-    let selected = plan(&db, &context);
-    let budget = db.cache_usage().unwrap().memo_bytes;
-    db.begin_run_with_budgets(crate::engine::telemetry::CacheBudgets {
-        query_bytes: budget,
-        ..Default::default()
-    })
-    .unwrap();
-    let before = stamps(&db);
-    let revision = db.revision();
-    match admit_lexical_function(&mut db, &view, &selected) {
-        QueryPoll::Ready(Err(error)) => {
-            assert_eq!(error.code, "LRR-E-METADATA-LIMIT", "{error:?}");
-            assert_eq!(
-                error.message, "lexical definition publication exceeds cache cap",
-                "{error:?}"
-            );
-        }
-        _ => panic!("cold headers bypassed reached-body metadata cap"),
-    }
-    assert_eq!(stamps(&db), before);
-    assert_eq!(db.revision(), revision);
-    assert!(
-        !db.inputs
-            .contains_key(&InputKey::DefinitionBody(definition(&context)))
-    );
-    assert_no_child_preparation(&db, &context);
-    db.finish_run().unwrap();
-}
 
 fn owning_world(
     edition: u16,

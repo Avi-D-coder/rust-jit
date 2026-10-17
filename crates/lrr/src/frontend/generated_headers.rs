@@ -285,7 +285,6 @@ impl GeneratedHeaderPlan {
             .items
             .len()
             .checked_mul(128)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "impl scope index limit"))?;
         let impl_scopes = outline
             .items
@@ -335,7 +334,6 @@ impl GeneratedHeaderPlan {
         let mut routes = Vec::new();
         let mut bytes = impl_scope_bytes
             .checked_add(impl_projection.metadata_bytes())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "impl projection metadata limit"))?;
         for members in outline.scopes.values() {
             for b in &members.blockers {
@@ -355,7 +353,6 @@ impl GeneratedHeaderPlan {
                 .checked_add(item.scope.heap_bytes())
                 .and_then(|n| n.checked_add(item.def_key.declared_name.capacity()))
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-DISCOVERY-LIMIT",
@@ -379,12 +376,6 @@ impl GeneratedHeaderPlan {
             child
                 .module_path
                 .extend(request.module_path.iter().cloned());
-            if child.module_path.len() > 256 {
-                return Err(fault(
-                    "LRR-E-DISCOVERY-LIMIT",
-                    "generated module depth limit",
-                ));
-            }
             let parent_path = &child.module_path[..child.module_path.len() - 1];
             let item = module_items
                 .get(&(parent_path.to_vec(), request.name.clone()))
@@ -445,7 +436,6 @@ impl GeneratedHeaderPlan {
                 })?;
             bytes = bytes
                 .checked_add(request_bytes)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-DISCOVERY-LIMIT",
@@ -519,12 +509,6 @@ impl GeneratedHeaderPlan {
             let mut import = import.clone();
             import.identity = header.key.fingerprint();
             blocked.insert(NameNamespaces::import_identity(&import));
-            if imports.len() >= 100000 {
-                return Err(fault(
-                    "LRR-E-DISCOVERY-LIMIT",
-                    "generated import count limit",
-                ));
-            }
             imports
                 .try_reserve(1)
                 .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "generated import allocation"))?;
@@ -616,16 +600,9 @@ impl GeneratedHeaderPlan {
                     bytes = bytes
                         .checked_add(declaration.metadata_bytes()?)
                         .and_then(|n| n.checked_add(std::mem::size_of::<GeneratedRoute>() + 96))
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| {
                             fault("LRR-E-DISCOVERY-LIMIT", "generated route metadata limit")
                         })?;
-                    if routes.len() >= 1_000_000 {
-                        return Err(fault(
-                            "LRR-E-DISCOVERY-LIMIT",
-                            "generated route count limit",
-                        ));
-                    }
                     routes.try_reserve(1).map_err(|_| {
                         fault("LRR-E-DISCOVERY-LIMIT", "generated route allocation")
                     })?;
@@ -689,7 +666,6 @@ impl GeneratedHeaderPlan {
         self.imports
             .len()
             .checked_mul(96)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-DISCOVERY-LIMIT",

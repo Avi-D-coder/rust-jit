@@ -16,7 +16,7 @@ impl ConstantSourceAdmission {
                 "constant child requires a freshly admitted publication revision",
             ));
         }
-        if byte_limit > MAX_BYTES || byte_limit < self.metadata_bytes() {
+        if byte_limit < self.metadata_bytes() {
             return Err(limit());
         }
         self.revalidate(db, source)?;
@@ -29,6 +29,7 @@ impl ConstantSourceAdmission {
             byte_limit.min(self.byte_limit),
             &self.macro_proofs,
             &self.sources.views(),
+            self.local.clone(),
         )?;
         if child.plan.owner_definition() != self.plan.owner_definition()
             || child.plan.owner_context() != self.plan.owner_context()

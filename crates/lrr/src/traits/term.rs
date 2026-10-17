@@ -147,21 +147,6 @@ impl OpaqueKey {
         mut captures: Vec<(BoundKind, ParamKey)>,
     ) -> Result<Self, crate::core::diagnostic::Diagnostic> {
         use crate::core::diagnostic::Diagnostic;
-        if captures.capacity() > 100_000 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "opaque capture identities exceed metadata bounds".into(),
-            ));
-        }
-        if captures
-            .iter()
-            .any(|(_, parameter)| parameter.ordinal >= 100_000)
-        {
-            return Err(Diagnostic::new(
-                "LRR-E-GENERIC-BINDING",
-                "opaque capture parameter ordinal exceeds definition domain".into(),
-            ));
-        }
         captures.sort_unstable();
         if captures.windows(2).any(|pair| pair[0] == pair[1]) {
             return Err(Diagnostic::new(
@@ -435,16 +420,13 @@ impl TyTerm {
         let mut nodes = 0usize;
         while let Some((term, depth)) = stack.pop() {
             nodes = nodes.checked_add(1)?;
-            if nodes > 100_000 || depth > 256 {
+            if depth > 256 {
                 return None;
             }
             // Capture keys own declaration metadata in addition to arguments.
             if let Self::Opaque(key, _) = term {
                 bytes = bytes.checked_add(key.heap_bytes()?)?;
                 nodes = nodes.checked_add(key.captures.len())?;
-                if nodes > 100_000 {
-                    return None;
-                }
             }
             match term {
                 Self::Projection(key) => {
@@ -496,18 +478,12 @@ impl TyTerm {
                         )?
                         .checked_add(std::mem::size_of::<Self>())?;
                     nodes = nodes.checked_add(function.variables.len())?;
-                    if function.value.parameters.len() > 100_000usize.checked_sub(nodes)? {
-                        return None;
-                    }
                     stack.extend(function.value.parameters.iter().map(|t| (t, depth + 1)));
                     stack.push((&function.value.result, depth + 1));
                 }
                 Self::Tuple(fields) => {
                     bytes = bytes
                         .checked_add(fields.capacity().checked_mul(std::mem::size_of::<Self>())?)?;
-                    if fields.len() > 100_000 - nodes {
-                        return None;
-                    }
                     stack.extend(fields.iter().map(|t| (t, depth + 1)));
                 }
                 Self::Nominal(_, args) | Self::Opaque(_, args) => {
@@ -515,9 +491,6 @@ impl TyTerm {
                         args.capacity()
                             .checked_mul(std::mem::size_of::<GenericArg>())?,
                     )?;
-                    if args.len() > 100_000 - nodes {
-                        return None;
-                    }
                     nodes = nodes.checked_add(
                         args.iter()
                             .filter(|arg| !matches!(arg, GenericArg::Type(_)))
@@ -536,9 +509,6 @@ impl TyTerm {
                     stack.push((t, depth + 1));
                 }
                 _ => {}
-            }
-            if bytes > 32 * 1024 * 1024 || nodes > 100_000 {
-                return None;
             }
         }
         Some((nodes, bytes))
@@ -603,16 +573,11 @@ impl ParamEnv {
                 "parameter environment exceeds metadata bounds".into(),
             )
         };
-        if parameters.len() > 100_000 || predicates.len() > 100_000 {
-            return Err(limit());
-        }
         let parameter_bytes = parameters
             .capacity()
             .checked_mul(std::mem::size_of::<(BoundKind, ParamKey)>())
             .ok_or_else(limit)?;
-        if parameter_bytes > 1024 * 1024 {
-            return Err(limit());
-        }
+        let _ = parameter_bytes;
         let mut names = std::collections::BTreeSet::new();
         for key in &parameters {
             if !names.insert(*key) {
@@ -661,12 +626,6 @@ impl ParamEnv {
                         .ok_or_else(limit)?;
                 }
             }
-            if bytes > 1024 * 1024 {
-                return Err(limit());
-            }
-        }
-        if bytes > 1024 * 1024 {
-            return Err(limit());
         }
         for predicate in &predicates {
             definition_parameters(&predicate.value.self_ty, &names)?;

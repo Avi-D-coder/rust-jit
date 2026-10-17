@@ -207,38 +207,3 @@ fn actual_inner_plan_input_arc_outlives_outer_input_with_charged_wrapper_and_pla
     assert!(plan.upgrade().is_none());
 }
 
-#[test]
-fn real_plan_input_two_root_quota_refusal_leaves_publication_atomic() {
-    let (mut db, source, discovery) = setup(NESTED_SOURCE, 2024);
-    db.begin_expansion_epoch(1).unwrap();
-    discovery.publish(&mut db).unwrap();
-    let completed = ready(discovery.completed_source_environment(&mut db));
-    let main = source
-        .outline()
-        .items
-        .iter()
-        .find(|i| i.def_key.declared_name == "main")
-        .unwrap()
-        .def_key
-        .fingerprint();
-    let count = db.source_plan_pins.registered_artifact_count();
-    db.source_plan_pins.set_test_artifact_limit(count + 1);
-    let before = (
-        db.revision(),
-        db.inputs.len(),
-        db.source_plan_pins.registered_artifact_count(),
-    );
-    let error = match db.publish_completed_source_syntax(&completed, source.selection(), main) {
-        QueryPoll::Ready(Err(error)) => error,
-        _ => panic!("two actual roots exceeded one remaining registry row"),
-    };
-    assert_eq!(error.code, "LRR-E-METADATA-LIMIT");
-    assert_eq!(
-        before,
-        (
-            db.revision(),
-            db.inputs.len(),
-            db.source_plan_pins.registered_artifact_count()
-        )
-    );
-}

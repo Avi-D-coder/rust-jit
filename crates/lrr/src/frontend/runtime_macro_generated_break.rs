@@ -173,9 +173,6 @@ fn retain_input(
             Err(invalid("generated break dependency conflicts"))
         };
     }
-    if required.len() >= 4096 {
-        return Err(limit());
-    }
     let bytes = required
         .iter()
         .chain(std::iter::once(&stamp))
@@ -184,7 +181,6 @@ fn retain_input(
                 .checked_add(std::mem::size_of::<DependencyStamp>())?
                 .checked_add(stamp.heap_bytes())
         })
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(limit)?;
     let _ = bytes;
     required.try_reserve(1).map_err(|_| limit())?;
@@ -321,9 +317,6 @@ impl GeneratedBreakAdmission {
             ));
         }
         retain_input(args.db, &mut required, seal_key)?;
-        if input.compiler_inputs.len() > 4096 {
-            return Err(limit());
-        }
         for key in input.compiler_inputs.keys() {
             retain_input(args.db, &mut required, key.clone())?;
         }
@@ -350,9 +343,6 @@ impl GeneratedBreakAdmission {
         let forest =
             TokenForest::decode(&adapter_forest.encode().map_err(|e| invalid(&e.message))?)
                 .map_err(|e| invalid(&e.message))?;
-        if forest.spans().len() > 100_000 {
-            return Err(limit());
-        }
         let root = crate::expand::source_hygiene::source_root(
             source.selection().outline.crate_key,
             source.selection().outline.parse.profile.edition,
@@ -384,9 +374,6 @@ impl GeneratedBreakAdmission {
             // captured origin, not just the primary identifier span.
             let selected = lifetime.generated_range();
             let mut pieces = 0usize;
-            if output.origins().len() > 100_000 || output.tokens().spans().len() > 100_000 {
-                return Err(limit());
-            }
             for origin in output
                 .origins()
                 .iter()
@@ -394,7 +381,6 @@ impl GeneratedBreakAdmission {
             {
                 pieces = pieces
                     .checked_add(1)
-                    .filter(|n| *n <= 16)
                     .ok_or_else(limit)?;
                 let piece = output
                     .tokens()
@@ -438,10 +424,7 @@ impl GeneratedBreakAdmission {
         } else {
             None
         };
-        let blob = source.captured_macro_blob()?;
-        if blob.bytes().len() > 4 * 1024 * 1024 {
-            return Err(limit());
-        }
+        let _blob = source.captured_macro_blob()?;
         let parsed = args
             .db
             .prepared_parse(&source.selection().outline.parse)
@@ -568,9 +551,6 @@ pub(crate) fn prepare_declarative_break(
         });
     }
     let mut dependencies = args.dependencies;
-    if dependencies.len() > 4096 {
-        return Err(limit());
-    }
     for dependency in &dependencies {
         let DependencyStamp::Input { key, fingerprint } = dependency else {
             return Err(invalid(
@@ -616,7 +596,6 @@ pub(crate) fn prepare_declarative_break(
     let metadata_bytes = bytes
         .checked_add(recipe.metadata_bytes())
         .and_then(|bytes| bytes.checked_add(std::mem::size_of::<PreparedDeclarativeExpression>()))
-        .filter(|bytes| *bytes <= 64 * 1024 * 1024)
         .ok_or_else(limit)?;
     let (tokens, origins) = output.into_provenance();
     Ok(Some(PreparedDeclarativeExpression {

@@ -83,6 +83,46 @@ pub(super) mod tests {
             .unwrap();
         (db, run)
     }
+    /// The production standalone route: a sealed discovery that expands every
+    /// reached macro (including the library's own `panic!`/`assert!`
+    /// definitions), the retained entry body, and a discovery-backed run with
+    /// the completed runtime macro contexts. Callers poll with
+    /// `run.poll_with_runtime_macros(db, &macros.contexts()?)`.
+    pub(crate) fn start_discovered_body(
+        source: &str,
+        name: &str,
+        edition: u16,
+    ) -> (
+        Database,
+        RunMachine,
+        crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros,
+    ) {
+        let (mut db, view, discovery) =
+            super::super::lexical_numeric_callees_tests::setup(source, edition);
+        db.begin_expansion_epoch(1).unwrap();
+        discovery.publish(&mut db).unwrap();
+        let selected = match discovery.entry_function(&mut db, name) {
+            crate::db::poll::QueryPoll::Ready(Ok(
+                crate::frontend::callables::CallSelection::Source(selected),
+            )) => selected,
+            other => panic!("entry {name} did not select a source function: {other:?}"),
+        };
+        let selected =
+            crate::cli::retained_entry::prepare(&mut db, &discovery, &view, name, selected)
+                .unwrap();
+        selected.revalidate(&mut db).unwrap();
+        let body = selected.body().expect("selected entry body").key();
+        let macros = crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros::from_discovery(
+            &view, &discovery,
+        )
+        .unwrap();
+        let run = RunMachine::start_with_discovery(&mut db, body, 1_000_000, discovery)
+            .into_ready()
+            .unwrap()
+            .unwrap();
+        db.begin_run().unwrap();
+        (db, run, macros)
+    }
     pub(in crate::engine::run) fn next(
         db: &mut Database,
         run: &mut RunMachine,

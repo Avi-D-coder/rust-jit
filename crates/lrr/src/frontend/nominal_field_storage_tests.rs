@@ -70,9 +70,7 @@ fn variant(
     selected(db, source, graph, name, |db, names| {
         let bound = ready(
             names
-                .bind_variant_with(None, |name, field| {
-                    names.current_name(db, &[source], name, field)
-                })
+                .bind_variant_with(None, |query| names.current_query(db, &[source], query))
                 .unwrap(),
         );
         let NominalBinding::Ready(bound) = bound else {
@@ -137,10 +135,10 @@ fn upstream_nested_nominal_field_uses_exact_source_type_through_two_address_proj
         let outer = member(&mut db, &source, &graph, "Nested", "nested");
         let inner = member(&mut db, &source, &graph, "MyStruct", "field");
         assert_eq!(
-            outer.source_type().source(),
+            outer.field_type().concrete().unwrap().source(),
             &TyTerm::Nominal(child.identity(), vec![])
         );
-        assert_eq!(&parent.fields()[0], outer.source_type());
+        assert_eq!(&parent.fields()[0], outer.field_type());
         assert_eq!(outer.primitive(), None);
         assert_eq!(inner.primitive(), Some(crate::ir::op::PrimitiveType::Usize));
         assert!(!db.trace.events.iter().any(|event| matches!(

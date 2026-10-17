@@ -22,18 +22,20 @@ use ra_ap_syntax::{
     AstNode, AstToken, SyntaxKind, SyntaxNode,
     ast::{self, HasArgList, HasGenericArgs, HasGenericParams, HasLoopBody, HasName},
 };
-#[path = "condition_ranges.rs"]
-mod condition_ranges;
-#[path = "literal_match.rs"]
-mod literal_match;
+#[path = "format_args_thunk.rs"]
+mod format_args_thunk;
+#[path = "method_call_thunk.rs"]
+pub(crate) mod method_call_thunk;
+#[path = "value_call_thunk.rs"]
+pub(crate) mod value_call_thunk;
+#[path = "closure_thunk.rs"]
+pub(crate) mod closure_thunk;
 #[path = "local_numeric_constraints.rs"]
 mod local_numeric_constraints;
 #[path = "pattern_plan.rs"]
 pub mod pattern_plan;
-#[path = "pattern_product.rs"]
-pub mod pattern_product;
-#[path = "pattern_tests.rs"]
-mod pattern_tests;
+#[path = "pattern_tree.rs"]
+pub mod pattern_tree;
 #[path = "primitive_cast_target.rs"]
 mod primitive_cast_target;
 #[path = "runtime_local_numeric_context.rs"]
@@ -42,6 +44,10 @@ mod runtime_local_numeric_context;
 pub(crate) mod runtime_macro_numeric_context;
 #[path = "string_literal.rs"]
 pub mod string_literal;
+#[path = "value_paths.rs"]
+mod value_paths;
+#[path = "let_annotations.rs"]
+pub(crate) mod let_annotations;
 
 #[derive(Default, Clone, Copy)]
 struct EnteredAdmissions<'a> {
@@ -52,6 +58,7 @@ struct EnteredAdmissions<'a> {
         Option<&'a crate::frontend::binding_constraints::PreparedBindingConstraints>,
     type_use: Option<&'a crate::frontend::entered_type_goals::EnteredTypeGoal>,
     call: Option<&'a crate::frontend::entered_call_goals::EnteredCallGoal>,
+    let_annotation: Option<&'a let_annotations::LetAnnotation>,
 }
 
 fn error(message: &str) -> Diagnostic {
@@ -74,6 +81,8 @@ fn id_for(index: &BodyIndex, body: &BodyHandle, syntax: &SyntaxNode) -> Result<N
                 node.role == NodeRole::Pattern
             } else if ast::Item::can_cast(syntax.kind()) {
                 node.role == NodeRole::OpaqueItem
+            } else if ast::MatchArm::can_cast(syntax.kind()) {
+                node.role == NodeRole::MatchArm
             } else {
                 node.role == NodeRole::Statement
             }
@@ -136,12 +145,18 @@ fn annotation_hint(
     let Some(ty) = ty else {
         return Ok(Some(HintRecipe::None));
     };
+    // `_` alone is the absent annotation.
+    if matches!(ty, ast::Type::InferType(_)) {
+        return Ok(Some(HintRecipe::None));
+    }
+    // Pure lowering (no entered Type service) admits only a primitive
+    // element/pointee selected like a bare primitive annotation, and states it
+    // as the same written-Type hint the entered Type service selects for every
+    // other composite annotation (`let_annotations`): one runtime route.
     if let ast::Type::ArrayType(array) = &ty {
         let Some(element) = array.ty() else {
             return Ok(None);
         };
-        // One primitive element, resolved in the actual lexical namespace.
-        // General symbolic/nested arrays and const expressions belong to M017.
         if !matches!(&element, ast::Type::PathType(_) | ast::Type::TupleType(_)) {
             return Ok(None);
         }
@@ -161,28 +176,23 @@ fn annotation_hint(
         else {
             return Ok(None);
         };
-        let mut len = 0u32;
-        let spelling = token.text().strip_suffix("usize").unwrap_or(token.text());
-        if spelling.is_empty() || spelling.len() > 32 {
+        let Some(number) = ast::IntNumber::cast(token) else {
+            return Ok(None);
+        };
+        if !matches!(number.suffix(), None | Some("usize")) {
             return Ok(None);
         }
-        for byte in spelling.bytes().filter(|byte| *byte != b'_') {
-            if !byte.is_ascii_digit() {
-                return Ok(None);
-            }
-            let Some(next) = len
-                .checked_mul(10)
-                .and_then(|value| value.checked_add(u32::from(byte - b'0')))
-            else {
-                return Ok(None);
-            };
-            len = next;
-        }
-        return Ok(Some(HintRecipe::ArrayPrimitive { element, len }));
+        let Some(len) = number.value().ok().and_then(|len| u32::try_from(len).ok()) else {
+            return Ok(None);
+        };
+        return Ok(Some(HintRecipe::Written(std::sync::Arc::new(
+            crate::ir::written_type::WrittenType::Array(
+                Box::new(crate::ir::written_type::WrittenType::Primitive(element)),
+                len,
+            ),
+        ))));
     }
     if let ast::Type::RefType(reference) = &ty {
-        // Resolve the pointee in its actual lexical context before accepting a
-        // primitive spelling. Abstract/nested pointees require later source tables.
         let Some(pointee) = reference.ty() else {
             return Ok(None);
         };
@@ -194,24 +204,27 @@ fn annotation_hint(
         else {
             return Ok(None);
         };
-        let region = if let Some(lifetime) = reference.lifetime() {
-            if lifetime.syntax().text() != "'static" {
-                return Ok(None);
+        let region = match reference.lifetime() {
+            Some(lifetime) if lifetime.syntax().text() == "'static" => {
+                crate::traits::term::RegionTerm::Static
             }
-            crate::traits::term::RegionTerm::Static
-        } else {
-            let range = reference.syntax().text_range();
-            crate::traits::term::RegionTerm::Local {
-                definition,
-                start: u32::from(range.start()),
-                end: u32::from(range.end()),
+            Some(lifetime) if lifetime.syntax().text() != "'_" => return Ok(None),
+            _ => {
+                let range = reference.syntax().text_range();
+                crate::traits::term::RegionTerm::Local {
+                    definition,
+                    start: u32::from(range.start()),
+                    end: u32::from(range.end()),
+                }
             }
         };
-        return Ok(Some(HintRecipe::Reference {
-            region,
-            mutable: reference.mut_token().is_some(),
-            target,
-        }));
+        return Ok(Some(HintRecipe::Written(std::sync::Arc::new(
+            crate::ir::written_type::WrittenType::Ref {
+                region,
+                mutable: reference.mut_token().is_some(),
+                target: Box::new(crate::ir::written_type::WrittenType::Primitive(target)),
+            },
+        ))));
     }
     let wanted = MacroName::parse(&ty.syntax().text().to_string(), parsed.edition).ok();
     // An annotation inside a body must not ignore a hoisted local type declaration.
@@ -255,42 +268,80 @@ fn annotation_hint(
             }
         }
     }
+    // An impl or trait member's inherited owner parameter, numbered after the
+    // function's own exactly as the common signature capture numbers it.
+    if let Some(wanted) = &wanted
+        && wanted.as_str() != "Self"
+        && let Some(function) = ty.syntax().ancestors().find_map(ast::Fn::cast)
+    {
+        let own = crate::syntax::signatures::capture_generics(function.generic_param_list())?;
+        let own_count = own.len();
+        let combined = crate::syntax::signatures::owner_generics(&function, own)?;
+        if let Some(parameter) = combined.iter().skip(own_count).find(|parameter| {
+            parameter.kind == crate::syntax::signatures::GenericKind::Type
+                && parameter.name == wanted.as_str()
+        }) {
+            return Ok(Some(HintRecipe::Parameter(crate::traits::term::ParamKey {
+                definition,
+                ordinal: parameter.ordinal,
+            })));
+        }
+    }
     Ok(hint(Some(ty)))
+}
+/// The entered Type service's selection for this exact statement's annotation.
+fn selected_annotation(
+    statement: &ast::LetStmt,
+    annotation: Option<&let_annotations::LetAnnotation>,
+) -> Option<HintRecipe> {
+    let annotation = annotation?;
+    let ty = statement.ty()?;
+    (crate::syntax::ast_adapter::range(ty.syntax().text_range()) == annotation.range)
+        .then(|| HintRecipe::Written(std::sync::Arc::clone(&annotation.written)))
 }
 fn compound_local_primitive(
     parsed: &ParsedFile,
     index: &BodyIndex,
     body: &BodyHandle,
     path: &ast::PathExpr,
+    admitted: Option<&crate::frontend::binding_constraints::PreparedBindingConstraints>,
 ) -> Result<Option<(NodeId, PrimitiveType)>, Diagnostic> {
     let Some(binding) = local_binding(parsed, index, body, path)? else {
         return Ok(None);
     };
-    let root = parsed.entered_body_root(body)?;
-    let range = index.nodes()[binding.0 as usize].range;
-    let start = body
-        .range
-        .start
-        .checked_add(range.start)
-        .ok_or_else(|| error("compound binding source start overflow"))?;
-    let end = body
-        .range
-        .start
-        .checked_add(range.end)
-        .ok_or_else(|| error("compound binding source end overflow"))?;
-    let statement = root
-        .descendants()
-        .filter_map(ast::LetStmt::cast)
-        .find(|statement| {
-            statement.pat().is_some_and(|pattern| {
-                let range = pattern.syntax().text_range();
-                u32::from(range.start()) == start && u32::from(range.end()) == end
-            })
-        });
-    let Some(statement) = statement else {
+    // An inferred numeric local's Type is the common source-constraint
+    // result for its own declaring `let`, admitted by the thunk provider.
+    if let Some(proof) = admitted
+        && let Some(ty) = proof.local_primitive(index, binding)?
+    {
+        return Ok(Some((binding, ty)));
+    }
+    // The binding's own written pattern at its retained indexed location: a
+    // whole `let`, `if let`/`while let` or match-arm identifier pattern takes
+    // its written annotation or its initializer/scrutinee's literal suffix.
+    let Some(pattern) = parsed
+        .entered_node_syntax(body, index, binding)?
+        .filter(|node| ast::IdentPat::can_cast(node.kind()))
+    else {
         return Ok(None);
     };
-    let ty = if let Some(annotation) = statement.ty() {
+    let owner = pattern.parent();
+    let (annotation, initializer) = if let Some(statement) = owner.clone().and_then(ast::LetStmt::cast) {
+        (statement.ty(), statement.initializer())
+    } else if let Some(condition) = owner.clone().and_then(ast::LetExpr::cast) {
+        (None, condition.expr())
+    } else if let Some(arm) = owner.and_then(ast::MatchArm::cast) {
+        (
+            None,
+            arm.syntax()
+                .ancestors()
+                .find_map(ast::MatchExpr::cast)
+                .and_then(|expression| expression.expr()),
+        )
+    } else {
+        return Ok(None);
+    };
+    let ty = if let Some(annotation) = annotation {
         let Some(HintRecipe::Primitive(ty)) =
             annotation_hint(parsed, Some(annotation), body.def_key)?
         else {
@@ -298,7 +349,7 @@ fn compound_local_primitive(
         };
         ty
     } else {
-        let Some(initializer) = statement.initializer() else {
+        let Some(initializer) = initializer else {
             return Ok(None);
         };
         // A suffix belongs to the literal syntax even when an identically
@@ -326,7 +377,7 @@ fn compound_local_definition_context(
 /// Retain the actual outer shared borrow; nested or modified borrows are not
 /// primitive forwarding. This never reads or executes the borrowed expression.
 fn compound_shared_rhs(mut expression: ast::Expr) -> Result<Option<ast::RefExpr>, Diagnostic> {
-    for _ in 0..256 {
+    for _ in 0usize.. {
         if expression
             .syntax()
             .children()
@@ -362,6 +413,7 @@ fn compound_rhs_primitive(
     body: &BodyHandle,
     mut expression: ast::Expr,
     context: PrimitiveType,
+    admitted: Option<&crate::frontend::binding_constraints::PreparedBindingConstraints>,
 ) -> Result<Option<PrimitiveType>, Diagnostic> {
     if let Some(reference) = compound_shared_rhs(expression.clone())? {
         let Some(inner) = reference.expr() else {
@@ -369,7 +421,7 @@ fn compound_rhs_primitive(
         };
         expression = inner;
     }
-    for _ in 0..256 {
+    for _ in 0usize.. {
         if expression
             .syntax()
             .children()
@@ -393,7 +445,10 @@ fn compound_rhs_primitive(
                 expression = inner;
             }
             ast::Expr::PathExpr(path) => {
-                return Ok(compound_local_primitive(parsed, index, body, &path)?.map(|(_, ty)| ty));
+                return Ok(
+                    compound_local_primitive(parsed, index, body, &path, admitted)?
+                        .map(|(_, ty)| ty),
+                );
             }
             ast::Expr::Literal(literal) => {
                 let token = literal.token();
@@ -545,7 +600,61 @@ pub(super) fn return_pc(
 }
 /// Intrinsic location contexts enter a path's place, never its owning value.
 /// Parenthesized/computed receivers require their own checked continuations.
+/// Whether `syntax` (through parentheses) is the left operand of a plain or
+/// compound assignment.
+fn compound_assignment_lhs(syntax: &SyntaxNode) -> bool {
+    let mut current = syntax.clone();
+    while let Some(parent) = current.parent() {
+        if ast::ParenExpr::can_cast(parent.kind()) {
+            current = parent;
+            continue;
+        }
+        return ast::BinExpr::cast(parent).is_some_and(|binary| {
+            binary.op_token().is_some_and(|token| {
+                matches!(
+                    token.text(),
+                    "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "|=" | "^="
+                )
+            }) && binary.lhs().is_some_and(|left| left.syntax() == &current)
+        });
+    }
+    false
+}
+/// A comparison operator's direct operand, or a direct `format_args!`
+/// argument, that is itself a place expression (a path, field, index or
+/// dereference). rustc autorefs comparison operands (`a == b` is
+/// `PartialEq::eq(&a, &b)`) and its FormatArgs lowering borrows every
+/// argument (`Argument::new_display(&x)`): such an operand is evaluated as
+/// its place, never moved; `Op::ComparisonOperand` then reads a builtin
+/// value or borrows it. Other operands are value expressions whose
+/// temporaries the operation borrows in place.
+fn comparison_place_operand(syntax: &SyntaxNode) -> bool {
+    let Some(parent) = syntax.parent() else {
+        return false;
+    };
+    let autoref = match ast::BinExpr::cast(parent.clone()) {
+        Some(binary) => {
+            binary
+                .op_token()
+                .is_some_and(|token| matches!(token.text(), "==" | "!=" | "<" | "<=" | ">" | ">="))
+                && (binary.lhs().is_some_and(|left| left.syntax() == syntax)
+                    || binary.rhs().is_some_and(|right| right.syntax() == syntax))
+        }
+        None => ast::FormatArgsArg::can_cast(parent.kind()),
+    };
+    autoref
+        && ast::Expr::cast(syntax.clone()).is_some_and(|operand| match operand {
+            ast::Expr::PathExpr(_) | ast::Expr::FieldExpr(_) | ast::Expr::IndexExpr(_) => true,
+            ast::Expr::PrefixExpr(prefix) => {
+                prefix.op_token().is_some_and(|token| token.text() == "*")
+            }
+            _ => false,
+        })
+}
 fn place_context(syntax: &SyntaxNode) -> bool {
+    if comparison_place_operand(syntax) {
+        return true;
+    }
     let mut current = syntax.clone();
     loop {
         let Some(parent) = current.parent() else {
@@ -569,12 +678,54 @@ fn place_context(syntax: &SyntaxNode) -> bool {
                 .expr()
                 .is_some_and(|operand| operand.syntax() == &current);
         }
+        // The left operand of a compound assignment is the place it updates.
+        if let Some(binary) = ast::BinExpr::cast(parent.clone())
+            && binary.op_token().is_some_and(|token| {
+                matches!(
+                    token.text(),
+                    "+=" | "-=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "|=" | "^="
+                )
+            })
+        {
+            // A path LHS keeps the local compound route (read/write binding).
+            return binary.lhs().is_some_and(|left| {
+                left.syntax() == &current && !matches!(left, ast::Expr::PathExpr(_))
+            });
+        }
+        // A value callee is a place: the call borrows or consumes it through
+        // its callable type, like a method receiver.
+        if let Some(call) = ast::CallExpr::cast(parent.clone()) {
+            // Only an intrinsic place callee is addressed in place; any other
+            // callee value gets a temporary place at the call.
+            return call.expr().is_some_and(|callee| {
+                callee.syntax() == &current && intrinsic_place_receiver(&callee)
+            });
+        }
+        // A method receiver is a place: autoref borrows it, by-value reads it.
+        if let Some(call) = ast::MethodCallExpr::cast(parent.clone()) {
+            return call
+                .receiver()
+                .is_some_and(|receiver| receiver.syntax() == &current);
+        }
         if let Some(statement) = ast::LetStmt::cast(parent.clone()) {
             return statement
                 .initializer()
                 .is_some_and(|initializer| initializer.syntax() == &current)
-                && matches!(statement.pat(), Some(ast::Pat::IdentPat(pattern))
-                    if pattern.ref_token().is_some() && pattern.at_token().is_none());
+                && (matches!(statement.pat(), Some(ast::Pat::IdentPat(pattern))
+                    if pattern.ref_token().is_some() && pattern.at_token().is_none())
+                    || super::body_index::pattern_statement(&statement));
+        }
+        // A pattern scrutinee is a place expression: the shared transaction
+        // tests it in place and moves/borrows only the bound parts.
+        if let Some(expression) = ast::MatchExpr::cast(parent.clone()) {
+            return expression
+                .expr()
+                .is_some_and(|scrutinee| scrutinee.syntax() == &current);
+        }
+        if let Some(expression) = ast::LetExpr::cast(parent.clone()) {
+            return expression
+                .expr()
+                .is_some_and(|scrutinee| scrutinee.syntax() == &current);
         }
         if let Some(assignment) = ast::BinExpr::cast(parent) {
             return assignment
@@ -606,6 +757,29 @@ fn intrinsic_place_receiver(expr: &ast::Expr) -> bool {
     }
 }
 
+/// Whether a non-local path operand names a value item rather than one of
+/// the executing frame's parameters (which publishes its own place).
+fn value_path_operand(parsed: &ParsedFile, path: &ast::PathExpr) -> Result<bool, Diagnostic> {
+    let Some(source_path) = path.path() else {
+        return Ok(false);
+    };
+    if source_path.qualifier().is_some() {
+        return Ok(true);
+    }
+    let Some(segment) = source_path.segment() else {
+        return Ok(false);
+    };
+    let Some(ast::PathSegmentKind::Name(reference)) = segment.kind() else {
+        return Ok(false);
+    };
+    let Ok(name) = MacroName::parse(
+        &reference.text(),
+        parsed.token_edition(super::ast_adapter::range(reference.syntax().text_range()))?,
+    ) else {
+        return Ok(false);
+    };
+    Ok(parameter_at(parsed, path.syntax(), &name)?.is_none())
+}
 fn local_binding(
     parsed: &ParsedFile,
     index: &BodyIndex,
@@ -636,9 +810,6 @@ fn statement_cfg(
 ) -> Result<(bool, bool), Diagnostic> {
     let mut metas = Vec::new();
     for attribute in syntax.children().filter_map(ast::Attr::cast) {
-        if metas.len() >= 100_000 {
-            return Err(error("statement attribute inventory limit"));
-        }
         let meta = attribute
             .meta()
             .ok_or_else(|| error("statement attribute syntax absent"))?;
@@ -650,9 +821,19 @@ fn statement_cfg(
     let (enabled, remaining) = super::attributes::effective_metas(metas, cfg)?;
     Ok((
         enabled,
-        remaining
-            .iter()
-            .any(|meta| !matches!(meta, ast::Meta::CfgMeta(_))),
+        remaining.iter().any(|meta| {
+            if matches!(meta, ast::Meta::CfgMeta(_)) {
+                return false;
+            }
+            // Builtin inert and tool attributes (`#[allow(..)]`, `#[rustfmt::skip]`)
+            // never transform the statement or expression they annotate.
+            let path = meta
+                .path()
+                .map(|path| path.syntax().text().to_string())
+                .unwrap_or_default();
+            !(super::outline::is_builtin_inert_attribute(&path)
+                || super::outline::is_tool_attribute(&path))
+        }),
     ))
 }
 /// A lexical spelling is only a candidate. For retained/generated syntax the
@@ -749,6 +930,24 @@ fn local_binding_at(
         {
             break;
         }
+        // A closure parameter is a binding of the closure's own frame,
+        // bound from its call argument at the closure's entry; it shadows
+        // every enclosing binding of its name.
+        if let Some(closure) = ast::ClosureExpr::cast(ancestor.clone())
+            && closure
+                .body()
+                .is_some_and(|body| body.syntax().text_range().contains_range(syntax.text_range()))
+            && let Some(parameters) = closure.param_list()
+        {
+            for parameter in parameters.params() {
+                if let Some(pattern) = parameter.pat()
+                    && let Some(candidate) =
+                        pattern_binding_at(parsed, index, body, syntax, name, &pattern)?
+                {
+                    return Ok(Some(candidate));
+                }
+            }
+        }
         if let Some(list) = ast::StmtList::cast(ancestor.clone()) {
             let mut binding = None;
             for statement in list.statements() {
@@ -791,6 +990,17 @@ fn local_binding_at(
                 // continuation; ReadLocal still requires its actual live cell.
                 return Ok(Some(candidate));
             }
+        }
+        // A `for` pattern binds in its loop body only.
+        if let Some(expression) = ast::ForExpr::cast(ancestor.clone())
+            && expression
+                .loop_body()
+                .is_some_and(|body| body.syntax().text_range().contains_range(syntax.text_range()))
+            && let Some(pattern) = expression.pat()
+            && let Some(candidate) =
+                pattern_binding_at(parsed, index, body, syntax, name, &pattern)?
+        {
+            return Ok(Some(candidate));
         }
         let (condition, consequent) = if let Some(expression) = ast::IfExpr::cast(ancestor.clone())
         {
@@ -846,17 +1056,52 @@ fn parameter_at(
     syntax: &SyntaxNode,
     name: &MacroName,
 ) -> Result<Option<u32>, Diagnostic> {
+    parameter_from(parsed, syntax, syntax, name)
+}
+/// `parameter_at` for the name written at `reference`, as seen from the
+/// frame executing `position` (the reference, or a closure creating it).
+fn parameter_from(
+    parsed: &ParsedFile,
+    position: &SyntaxNode,
+    reference: &SyntaxNode,
+    name: &MacroName,
+) -> Result<Option<u32>, Diagnostic> {
+    let syntax = position;
+    // Inside a closure its own parameters are bindings; a parameter of the
+    // frame creating the closure is captured into the closure frame's
+    // parameters after its arguments, at that creating frame's ordinal.
+    if let Some(closure) = closure_thunk::enclosing_closure(syntax) {
+        if closure_thunk::closure_parameter(parsed, &closure, reference, name)?.is_some() {
+            return Ok(None);
+        }
+        let arity = closure
+            .param_list()
+            .map_or(0, |list| list.params().count());
+        return match parameter_from(parsed, closure.syntax(), reference, name)? {
+            Some(outer) => Ok(Some(
+                u32::try_from(arity)
+                    .ok()
+                    .and_then(|arity| arity.checked_add(outer))
+                    .ok_or_else(|| error("closure parameter capture ordinal overflow"))?,
+            )),
+            None => Ok(None),
+        };
+    }
     if let Some(params) = syntax
         .ancestors()
         .find_map(ast::Fn::cast)
         .and_then(|f| f.param_list())
     {
+        // The receiver is parameter 0.
+        if name.as_str() == "self" && params.self_param().is_some() {
+            return Ok(Some(0));
+        }
         for (ordinal, param) in params.params().enumerate() {
             if let Some(ast::Pat::IdentPat(pattern)) = param.pat()
                 && pattern.ref_token().is_none()
                 && pattern.at_token().is_none()
                 && let Some(candidate) = pattern.name()
-                && binding_name_matches(parsed, syntax, name, &candidate)?
+                && binding_name_matches(parsed, reference, name, &candidate)?
             {
                 let ordinal = ordinal
                     .checked_add(usize::from(params.self_param().is_some()))
@@ -1065,7 +1310,6 @@ impl ParsedFile {
             for statement in list.statements() {
                 visited = visited
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(|| error("lexical import inspection work limit exceeded"))?;
                 if !statement_cfg(statement.syntax(), cfg)?.0 {
                     continue;
@@ -1112,15 +1356,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("assertion predicate offset overflow"))?;
         let expression = self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::MacroExpr::cast)
-            .find(|e| {
-                u32::from(e.syntax().text_range().start()) == start
-                    && u32::from(e.syntax().text_range().end()) == end
-            })
+            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
+                ast::MacroExpr::can_cast(syntax.kind())
+            })?
+            .and_then(ast::MacroExpr::cast)
             .ok_or_else(|| error("assertion predicate original macro differs"))?;
         let wanted = MacroName::parse(name, self.edition)?;
         if self.enclosing_import_may_bind(expression.syntax(), name, index.cfg())? {
@@ -1266,7 +1505,6 @@ impl ParsedFile {
             for statement in list.statements() {
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(|| error("assertion call lexical work limit"))?;
                 let declared = match statement {
                     ast::Stmt::Item(ast::Item::TypeAlias(item)) => item.name(),
@@ -1361,15 +1599,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("runtime binding source overflow"))?;
         let expression = self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::MacroExpr::cast)
-            .find(|e| {
-                u32::from(e.syntax().text_range().start()) == start
-                    && u32::from(e.syntax().text_range().end()) == end
-            })
+            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
+                ast::MacroExpr::can_cast(syntax.kind())
+            })?
+            .and_then(ast::MacroExpr::cast)
             .ok_or_else(|| error("runtime binding invocation source differs"))?;
         let name = MacroName::parse(name, self.edition)?;
         if let Some(binding) = local_binding_at(self, index, body, expression.syntax(), &name)? {
@@ -1432,15 +1665,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("runtime macro continuation end overflow"))?;
         let expression = self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::MacroExpr::cast)
-            .find(|e| {
-                u32::from(e.syntax().text_range().start()) == start
-                    && u32::from(e.syntax().text_range().end()) == end
-            })
+            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
+                ast::MacroExpr::can_cast(syntax.kind())
+            })?
+            .and_then(ast::MacroExpr::cast)
             .ok_or_else(|| error("runtime macro continuation source differs"))?;
         return_pc(index, body, expression.syntax())
     }
@@ -1524,13 +1752,8 @@ impl ParsedFile {
                     fallback,
                 );
             }
-            ConstructorKind::Repeat { .. } => {
-                return thunks::unsupported(
-                    index,
-                    key.clone(),
-                    "repeat requires const length and resumable Copy binding".into(),
-                    fallback,
-                );
+            ConstructorKind::Repeat { element, .. } => {
+                return self.repeat_thunk(body, index, key, node, element.node, element.value);
             }
         };
         operands
@@ -1545,17 +1768,18 @@ impl ParsedFile {
             }
             _ => return Err(error("constructor operand inventory mismatch")),
         }
+        let start = body
+            .range
+            .start
+            .checked_add(node.range.start)
+            .ok_or_else(|| error("constructor syntax range overflow"))?;
+        let end = body
+            .range
+            .start
+            .checked_add(node.range.end)
+            .ok_or_else(|| error("constructor syntax range overflow"))?;
         let syntax = self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .find(|syntax| {
-                let r = syntax.text_range();
-                u32::from(r.start()).checked_sub(body.range.start) == Some(node.range.start)
-                    && u32::from(r.end()).checked_sub(body.range.start) == Some(node.range.end)
-                    && ast::Expr::can_cast(syntax.kind())
-            })
+            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| ast::Expr::can_cast(syntax.kind()))?
             .ok_or_else(|| error("constructor syntax boundary absent"))?;
         if syntax
             .children()
@@ -1615,9 +1839,77 @@ impl ParsedFile {
                     RecipeExit::Next(return_pc(index, body, &syntax)?),
                 )
             }
-            Phase::Exit | Phase::PatternCleanup => Err(error(
+            Phase::Exit => Err(error(
                 "constructor exit/cleanup is not an executable construction phase",
             )),
+        }
+    }
+    /// `[element; count]`: the element, then the count (a `usize` constant
+    /// expression evaluated as ordinary syntax), then one `ArrayRepeat`.
+    fn repeat_thunk(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        node: &crate::syntax::body_index::StructuralNode,
+        element_node: NodeId,
+        element_value: crate::ir::pc::SlotId,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        let start = body
+            .range
+            .start
+            .checked_add(node.range.start)
+            .ok_or_else(|| error("repeat syntax range overflow"))?;
+        let end = body
+            .range
+            .start
+            .checked_add(node.range.end)
+            .ok_or_else(|| error("repeat syntax range overflow"))?;
+        let syntax = self
+            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
+                ast::ArrayExpr::can_cast(syntax.kind())
+            })?
+            .and_then(ast::ArrayExpr::cast)
+            .ok_or_else(|| error("repeat syntax absent"))?;
+        let ast::ArrayExprKind::Repeat {
+            repeat: Some(length),
+            ..
+        } = syntax.kind()
+        else {
+            return Err(error("repeat length absent"));
+        };
+        let count_node = id_for(index, body, length.syntax())?;
+        let count = index.nodes()[count_node.0 as usize]
+            .value
+            .ok_or_else(|| error("repeat count value absent"))?;
+        let destination = node.value.ok_or_else(|| error("repeat result absent"))?;
+        match Phase::from_code(key.phase) {
+            Phase::Entry => draft(
+                index,
+                key,
+                vec![Op::SetHint {
+                    child: count,
+                    hint: HintRecipe::Primitive(PrimitiveType::Usize),
+                }],
+                RecipeExit::Next(index.pc(element_node, Phase::Entry)?),
+            ),
+            Phase::Operand(n) if node.operands.get(usize::from(n)) == Some(&element_node) => draft(
+                index,
+                key,
+                vec![],
+                RecipeExit::Next(index.pc(count_node, Phase::Entry)?),
+            ),
+            Phase::Operand(n) if node.operands.get(usize::from(n)) == Some(&count_node) => draft(
+                index,
+                key,
+                vec![Op::ArrayRepeat {
+                    source: element_value,
+                    count,
+                    destination,
+                }],
+                RecipeExit::Next(return_pc(index, body, syntax.syntax())?),
+            ),
+            _ => Err(error("invalid array repeat phase")),
         }
     }
     pub(crate) fn initial_thunk(
@@ -1690,6 +1982,51 @@ impl ParsedFile {
             },
         )
     }
+    /// A bare unsuffixed literal whose own inference variable the common
+    /// source constraints resolved.
+    /// `literal` is the literal's own goal key: `key` itself, or the
+    /// literal under the negation that `key` lowers as one negative literal.
+    pub(crate) fn initial_thunk_with_literal_constraints(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        literal: &PcKey,
+        proof: &crate::frontend::binding_constraints::PreparedBindingConstraints,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        if proof.literal_primitive(index, literal)?.is_none() {
+            return Err(error("literal constraint admission is not resolved"));
+        }
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                source_constraints: Some(proof),
+                ..Default::default()
+            },
+        )
+    }
+    /// A compound assignment whose place is an inferred local. The proof is
+    /// the local's own declaring-`let` constraint result; lowering checks
+    /// that it names the actual selected binding before using it.
+    pub(crate) fn initial_thunk_with_local_constraints(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        proof: &crate::frontend::binding_constraints::PreparedBindingConstraints,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                source_constraints: Some(proof),
+                ..Default::default()
+            },
+        )
+    }
     /// Source Type demand follows the ordinary cfg/attribute admission. A
     /// disabled expression executes its existing skip recipe without resolving
     /// a Type that no reached Rust operation uses.
@@ -1738,6 +2075,37 @@ impl ParsedFile {
             },
         )
     }
+    /// Lower a cast whose target the entered Type service selected as a
+    /// written trait-object Type (`&x as &dyn T`, `Box::new(x) as Box<dyn
+    /// T>`): a coercion cast, the same coercion a `let` annotation of that
+    /// Type applies. A trait-object place keeps its value's concrete Type.
+    pub(crate) fn initial_thunk_with_cast_coercion(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        coercion: &let_annotations::LetAnnotation,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        let cast = self
+            .entered_node_syntax(body, index, NodeId(key.node))?
+            .and_then(ast::CastExpr::cast)
+            .ok_or_else(|| error("cast coercion consumer is not its actual cast"))?;
+        let ty = cast
+            .ty()
+            .ok_or_else(|| error("cast coercion target absent"))?;
+        if crate::syntax::ast_adapter::range(ty.syntax().text_range()) != coercion.range {
+            return Err(error("cast coercion Type is not this cast's target"));
+        }
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                let_annotation: Some(coercion),
+                ..Default::default()
+            },
+        )
+    }
     pub(crate) fn initial_thunk_with_source_type(
         &self,
         body: &BodyHandle,
@@ -1767,6 +2135,25 @@ impl ParsedFile {
             },
         )
     }
+    /// Lower a `let` whose non-primitive annotation the entered Type service
+    /// selected; the statement checks it is its own actual annotation.
+    pub(crate) fn initial_thunk_with_let_annotation(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        annotation: &let_annotations::LetAnnotation,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                let_annotation: Some(annotation),
+                ..Default::default()
+            },
+        )
+    }
     fn initial_thunk_admission(
         &self,
         body: &BodyHandle,
@@ -1780,6 +2167,7 @@ impl ParsedFile {
             source_constraints,
             type_use,
             call,
+            let_annotation,
         } = admissions;
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
@@ -1861,6 +2249,11 @@ impl ParsedFile {
                 "entered statement/expression attributes require macro integration",
             );
         }
+        // Every pattern owner (match, matched let, let-else, if/while let) and
+        // its arms/root patterns lower through the one shared pattern plan.
+        if let Some(recipe) = self.initial_pattern_thunk(body, index, key)? {
+            return Ok(recipe);
+        }
         if matches!(
             syntax.kind(),
             SyntaxKind::REF_EXPR
@@ -1870,7 +2263,7 @@ impl ParsedFile {
                 | SyntaxKind::PAREN_EXPR
                 | SyntaxKind::PATH_EXPR
         ) {
-            return self.initial_place_thunk(body, index, key, syntax);
+            return self.initial_place_thunk(body, index, key, syntax, source_constraints);
         }
         match syntax.kind() {
             SyntaxKind::FN
@@ -1894,24 +2287,19 @@ impl ParsedFile {
                     syntax,
                     numeric_admission,
                     source_constraints,
+                    let_annotation,
                 ),
-            SyntaxKind::LET_EXPR => self.initial_let_condition_thunk(body, index, key, syntax),
-            SyntaxKind::MATCH_EXPR
-            | SyntaxKind::MATCH_ARM
-            | SyntaxKind::LITERAL_PAT
-            | SyntaxKind::WILDCARD_PAT
-            | SyntaxKind::IDENT_PAT
-            | SyntaxKind::RANGE_PAT => {
-                #[cfg(test)]
-                {
-                    literal_match::prepare(self, body, index, key, syntax)
-                }
-                #[cfg(not(test))]
-                {
-                    unsupported("pattern phase requires retained source plan query")
-                }
+            SyntaxKind::LET_EXPR => {
+                unsupported("let pattern requires a top-level if/while condition clause")
             }
             SyntaxKind::CALL_EXPR => self.initial_call_thunk(body, index, key, syntax, call),
+            SyntaxKind::CLOSURE_EXPR => self.closure_thunk(body, index, key, syntax),
+            SyntaxKind::FORMAT_ARGS_EXPR => {
+                self.initial_format_args_thunk(body, index, key, syntax)
+            }
+            SyntaxKind::METHOD_CALL_EXPR => {
+                self.initial_method_call_thunk(body, index, key, syntax)
+            }
             SyntaxKind::RETURN_EXPR
             | SyntaxKind::LOOP_EXPR
             | SyntaxKind::BREAK_EXPR
@@ -1919,12 +2307,24 @@ impl ParsedFile {
             SyntaxKind::WHILE_EXPR | SyntaxKind::IF_EXPR => {
                 self.initial_condition_thunk(body, index, key, syntax)
             }
-            SyntaxKind::BIN_EXPR => {
-                self.initial_binary_thunk(body, index, key, syntax, numeric_admission)
-            }
-            SyntaxKind::CAST_EXPR | SyntaxKind::LITERAL => {
-                self.initial_scalar_thunk(body, index, key, syntax, type_name, type_use)
-            }
+            SyntaxKind::BIN_EXPR => self.initial_binary_thunk(
+                body,
+                index,
+                key,
+                syntax,
+                numeric_admission,
+                source_constraints,
+            ),
+            SyntaxKind::CAST_EXPR | SyntaxKind::LITERAL => self.initial_scalar_thunk(
+                body,
+                index,
+                key,
+                syntax,
+                type_name,
+                type_use,
+                let_annotation,
+                source_constraints,
+            ),
             _ => unsupported("entered node phase awaits its ordered lowering task"),
         }
     }
@@ -1989,6 +2389,7 @@ impl ParsedFile {
         source_constraints: Option<
             &crate::frontend::binding_constraints::PreparedBindingConstraints,
         >,
+        let_annotation: Option<&let_annotations::LetAnnotation>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -1999,11 +2400,13 @@ impl ParsedFile {
         match (syntax.kind(), Phase::from_code(key.phase)) {
             (SyntaxKind::BLOCK_EXPR, Phase::Entry) => {
                 let block = ast::BlockExpr::cast(syntax).expect("checked block");
+                // `unsafe { .. }` evaluates exactly as an ordinary block; the
+                // unsafety obligation is a static check (cargo check), not a
+                // runtime semantic. Other modifiers change evaluation.
                 if block.async_token().is_some()
                     || block.const_token().is_some()
                     || block.gen_token().is_some()
                     || block.move_token().is_some()
-                    || block.unsafe_token().is_some()
                     || block.try_block_modifier().is_some()
                 {
                     return unsupported("modified block requires its ordered semantics");
@@ -2058,17 +2461,26 @@ impl ParsedFile {
                         .and_then(|function| function.ret_type())
                         .and_then(|ret| ret.ty())
                 {
-                    let return_hint = if matches!(ty, ast::Type::RefType(_)) {
+                    let return_hint = if matches!(ty, ast::Type::RefType(_))
+                        || (matches!(ty, ast::Type::TupleType(_) | ast::Type::ArrayType(_))
+                            && annotation_hint(self, Some(ty.clone()), key.body.definition)?
+                                .is_none())
+                    {
                         // Region identity comes from the admitted definition's
                         // actual caller/result certificate, never a header-local
                         // elision or a region invented while lowering syntax.
                         HintRecipe::DefinitionResult
                     } else {
-                        let Some(hint) = annotation_hint(self, Some(ty), key.body.definition)?
-                        else {
-                            return unsupported("return type requires symbolic resolution");
-                        };
-                        hint
+                        // A written name not resolvable while lowering (a
+                        // nominal/alias result) takes the declared result its
+                        // call contract closed (`-> Option<u32>`), if any; the
+                        // call boundary still checks the returned value.
+                        let path = matches!(ty, ast::Type::PathType(_));
+                        annotation_hint(self, Some(ty), key.body.definition)?.unwrap_or(if path {
+                            HintRecipe::DefinitionWrittenResult
+                        } else {
+                            HintRecipe::None
+                        })
                     };
                     ops.push(Op::SetHint {
                         child: node.value.expect("root value"),
@@ -2160,13 +2572,59 @@ impl ParsedFile {
                     let Some(initializer) = statement.initializer() else {
                         return unsupported("wildcard declaration requires an initializer");
                     };
-                    // A wildcard does not move a place into a new local. Keep
-                    // place handling refused until its type-only check is ready.
+                    // A wildcard does not move a place into a new local. A local
+                    // path or a field chain of one has no runtime effect; a
+                    // non-local path (constant, unit struct, fn item) is a
+                    // value created and dropped. Other places stay refused.
                     if intrinsic_place_receiver(&initializer) {
-                        return unsupported("wildcard place requires non-moving type integration");
+                        let mut base = initializer.clone();
+                        loop {
+                            match &base {
+                                ast::Expr::ParenExpr(paren) => match paren.expr() {
+                                    Some(inner) => base = inner,
+                                    None => break,
+                                },
+                                ast::Expr::FieldExpr(field)
+                                    if matches!(initializer, ast::Expr::FieldExpr(_)) =>
+                                {
+                                    match field.expr() {
+                                        Some(inner) => base = inner,
+                                        None => break,
+                                    }
+                                }
+                                _ => break,
+                            }
+                        }
+                        let local = match &base {
+                            ast::Expr::PathExpr(path) => {
+                                local_binding(self, index, body, path)?.is_some()
+                                    || MacroName::local(&path.syntax().text().to_string(), self.edition)
+                                        .ok()
+                                        .map(|name| parameter_at(self, path.syntax(), &name))
+                                        .transpose()?
+                                        .flatten()
+                                        .is_some()
+                            }
+                            _ => false,
+                        };
+                        let value_path = matches!(&initializer, ast::Expr::PathExpr(_)) && !local;
+                        if local {
+                            if phase != Phase::Entry {
+                                return unsupported("invalid wildcard declaration phase");
+                            }
+                            let (ops, next) =
+                                next_phase_operations(index, body, statement.syntax(), vec![])?;
+                            return draft(index, key, ops, RecipeExit::Next(next));
+                        }
+                        if !value_path {
+                            return unsupported(
+                                "wildcard place requires non-moving type integration",
+                            );
+                        }
                     }
                     let Some(mut hint) =
                         annotation_hint(self, statement.ty(), key.body.definition)?
+                            .or_else(|| selected_annotation(&statement, let_annotation))
                     else {
                         return unsupported("wildcard type requires symbolic type resolution");
                     };
@@ -2210,6 +2668,7 @@ impl ParsedFile {
                 }
                 let by_reference = pattern.ref_token().is_some();
                 let Some(mut hint) = annotation_hint(self, statement.ty(), key.body.definition)?
+                    .or_else(|| selected_annotation(&statement, let_annotation))
                 else {
                     return unsupported("local type requires later symbolic type resolution");
                 };
@@ -2429,49 +2888,6 @@ impl ParsedFile {
 
     /// Pure lowering of one validated captured PC; separate fixed host stack frame.
     #[inline(never)]
-    fn initial_let_condition_thunk(
-        &self,
-        _body: &BodyHandle,
-        index: &BodyIndex,
-        key: &PcKey,
-        syntax: SyntaxNode,
-    ) -> Result<VerifiedRecipe, Diagnostic> {
-        let id = NodeId(key.node);
-        let node = &index.nodes()[key.node as usize];
-        let fallback = index.pc(id, Phase::Exit)?;
-        let unsupported = |message: &str| {
-            thunks::unsupported(index, key.clone(), message.into(), fallback.clone())
-        };
-        match (syntax.kind(), Phase::from_code(key.phase)) {
-            (SyntaxKind::LET_EXPR, _) => {
-                let expression = ast::LetExpr::cast(syntax).expect("checked condition let");
-                if node.clause_scope.is_none() {
-                    return unsupported(
-                        "let pattern requires a top-level if/while condition clause",
-                    );
-                }
-                let Some(pattern) = expression.pat() else {
-                    return unsupported("condition pattern absent");
-                };
-                #[cfg(test)]
-                {
-                    if condition_ranges::selected(&pattern) {
-                        return condition_ranges::prepare(self, _body, index, key, &expression);
-                    }
-                    unsupported("reached condition pattern awaits ordered pattern integration")
-                }
-                #[cfg(not(test))]
-                {
-                    let _ = pattern;
-                    unsupported("pattern phase requires retained source plan query")
-                }
-            }
-            _ => unsupported("entered node phase awaits its ordered lowering task"),
-        }
-    }
-
-    /// Pure lowering of one validated captured PC; separate fixed host stack frame.
-    #[inline(never)]
     fn initial_call_thunk(
         &self,
         body: &BodyHandle,
@@ -2500,11 +2916,28 @@ impl ParsedFile {
                     .iter()
                     .map(|id| index.nodes()[id.0 as usize].value.expect("argument value"))
                     .collect();
-                let Some(ast::Expr::PathExpr(path)) = call.expr() else {
-                    return unsupported("callee values await function-value integration");
+                // A callee that is a value (any non-path expression, or a
+                // path naming a local binding or parameter) is called through
+                // its reached callable type, never by its spelling.
+                let Some(callee) = call.expr() else {
+                    return unsupported("callee absent");
                 };
+                let ast::Expr::PathExpr(path) = &callee else {
+                    return self.value_call_thunk(body, index, key, &call, &callee);
+                };
+                let path = path.clone();
                 if source_goal.is_none() && local_binding(self, index, body, &path)?.is_some() {
-                    return unsupported("local callee value awaits function-value integration");
+                    return self.value_call_thunk(body, index, key, &call, &callee);
+                }
+                if source_goal.is_none()
+                    && let Some(source_path) = path.path()
+                    && source_path.qualifier().is_none()
+                    && let Some(reference) =
+                        source_path.segment().and_then(|segment| segment.name_ref())
+                    && let Ok(name) = MacroName::local(&reference.text(), self.edition)
+                    && parameter_at(self, path.syntax(), &name)?.is_some()
+                {
+                    return self.value_call_thunk(body, index, key, &call, &callee);
                 }
                 let Some(source_path) = path.path() else {
                     return unsupported("callee path absent");
@@ -2519,9 +2952,6 @@ impl ParsedFile {
                 let mut cursor = source_path.clone();
                 let absolute;
                 loop {
-                    if components.len() >= 256 {
-                        return Err(error("source call path depth exceeded"));
-                    }
                     let Some(part) = cursor.segment() else {
                         return unsupported("callee path segment absent");
                     };
@@ -2531,10 +2961,69 @@ impl ParsedFile {
                         );
                     }
                     let text = match part.kind() {
+                        Some(ast::PathSegmentKind::Name(name)) if name.text() == "$crate" => {
+                            // `$crate` is the macro's defining crate. Within the
+                            // same crate it is exactly `crate`.
+                            // rustc resolves `$crate` to the defining crate's
+                            // root, never through the caller's names. The chain
+                            // root of a definition token is the defining source,
+                            // so locality cannot be read from it; always name
+                            // the defining root explicitly.
+                            match self.dollar_crate_root(crate::syntax::ast_adapter::range(
+                                name.syntax().text_range(),
+                            ))? {
+                                Some((unit, _)) => crate::frontend::callables::dollar_crate_segment(unit),
+                                None => {
+                                    return Err(error("`$crate` outside generated syntax"));
+                                }
+                            }
+                        }
                         Some(ast::PathSegmentKind::Name(name)) => name.text().to_string(),
                         Some(ast::PathSegmentKind::CrateKw) => "crate".into(),
                         Some(ast::PathSegmentKind::SelfKw) => "self".into(),
                         Some(ast::PathSegmentKind::SuperKw) => "super".into(),
+                        // `Self::item`: resolved by associated-item lookup.
+                        Some(ast::PathSegmentKind::SelfTypeKw) => "Self".into(),
+                        // `<Type as Trait>::name` / `<Type>::name`: the
+                        // dispatcher selects the impl of the anchor type (an
+                        // enclosing generic parameter reads its reached
+                        // binding), through the value-path anchor spelling.
+                        Some(ast::PathSegmentKind::Type {
+                            type_ref,
+                            trait_ref,
+                        }) if cursor.qualifier().is_none() => {
+                            let Some(ty) = type_ref.and_then(|ty| match ty {
+                                ast::Type::PathType(path) => path.path(),
+                                _ => None,
+                            }) else {
+                                return unsupported(
+                                    "qualified callee anchor requires structural type integration",
+                                );
+                            };
+                            let Some(ty) =
+                                self.anchor_spelling(&ty, path.syntax(), index.cfg(), true)?
+                            else {
+                                return unsupported(
+                                    "qualified callee anchor requires further type integration",
+                                );
+                            };
+                            match trait_ref.and_then(|tr| tr.path()) {
+                                Some(tr) => match self.anchor_spelling(
+                                    &tr,
+                                    path.syntax(),
+                                    index.cfg(),
+                                    false,
+                                )? {
+                                    Some(tr) => format!("<{ty} as {tr}>"),
+                                    None => {
+                                        return unsupported(
+                                            "qualified callee trait requires further integration",
+                                        );
+                                    }
+                                },
+                                None => format!("<{ty}>"),
+                            }
+                        }
                         _ => {
                             return unsupported("callee path requires associated-call integration");
                         }
@@ -2549,15 +3038,16 @@ impl ParsedFile {
                 }
                 components.reverse();
                 let qualified = components.len() > 1 || absolute;
-                let relative =
-                    !absolute && !matches!(components[0].as_str(), "crate" | "self" | "super");
+                // A `$crate` root names the defining crate root explicitly.
+                let relative = !absolute
+                    && !matches!(components[0].as_str(), "crate" | "self" | "super")
+                    && !components[0].starts_with("$crate@")
+                    && !components[0].starts_with('<')
+                    && components[0] != "Self";
                 let root_name = components[0].clone();
                 let mut name = components.join("::");
                 if absolute {
                     name.insert_str(0, "::");
-                }
-                if name.len() > 4096 {
-                    return Err(error("source call path text limit exceeded"));
                 }
 
                 let explicit = segment
@@ -2611,13 +3101,10 @@ impl ParsedFile {
                             "body-local explicit type requires lexical type namespace integration",
                         );
                     }
+                    // A generic parameter owner (`T::name`) is selected by
+                    // the dispatcher from the parameter's reached binding,
+                    // before any same-named module type.
                     let target_name = MacroName::parse(&root_name, self.edition).ok();
-                    if qualified && relative && path.syntax().ancestors().find_map(ast::Fn::cast)
-                    .and_then(|function| function.generic_param_list())
-                    .is_some_and(|parameters| parameters.generic_params().any(|parameter| matches!(parameter,
-                        ast::GenericParam::TypeParam(parameter) if parameter.name().is_some_and(|name| MacroName::parse(name.text(),self.edition).ok()==target_name)))) {
-                    return unsupported("generic source owner requires associated-call integration");
-                }
                     let local_item = relative
                         && path
                             .syntax()
@@ -2791,6 +3278,7 @@ impl ParsedFile {
         };
         match (syntax.kind(), Phase::from_code(key.phase)) {
             (SyntaxKind::RETURN_EXPR, phase) => {
+                let syntax_root = syntax.clone();
                 let expression = ast::ReturnExpr::cast(syntax).expect("checked return");
                 let destination = node.value.expect("return value");
                 let Some(child) = expression.expr() else {
@@ -2810,7 +3298,16 @@ impl ParsedFile {
                         index,
                         key,
                         vec![Op::NumericHint {
-                            parent: index.nodes()[0].value.expect("root result"),
+                            // A `return` in a closure returns the closure body's value.
+                            parent: match closure_thunk::enclosing_closure(&syntax_root) {
+                                Some(closure) => closure
+                                    .body()
+                                    .map(|closure_body| id_for(index, body, closure_body.syntax()))
+                                    .transpose()?
+                                    .and_then(|id| index.nodes()[id.0 as usize].value)
+                                    .ok_or_else(|| error("closure body value absent"))?,
+                                None => index.nodes()[0].value.expect("root result"),
+                            },
                             child: source,
                             left: None,
                             operator: None,
@@ -2870,10 +3367,15 @@ impl ParsedFile {
                 let label = &index.labels()[target.0 as usize];
                 let target_node = &index.nodes()[label.node.0 as usize];
                 if expression.expr().is_some()
-                    && target_node.role
-                        == NodeRole::Expression(super::body_index::ExpressionKind::While)
+                    && matches!(
+                        target_node.role,
+                        NodeRole::Expression(
+                            super::body_index::ExpressionKind::While
+                                | super::body_index::ExpressionKind::For
+                        )
+                    )
                 {
-                    return unsupported("while does not accept a break value");
+                    return unsupported("while/for does not accept a break value");
                 }
                 let start = body
                     .range
@@ -2886,17 +3388,17 @@ impl ParsedFile {
                     .checked_add(target_node.range.end)
                     .ok_or_else(|| error("break target range overflow"))?;
                 let target_syntax = self
-                    .parsed
-                    .tree()
-                    .syntax()
-                    .descendants()
-                    .find(|s| {
-                        ast::Expr::can_cast(s.kind())
-                            && u32::from(s.text_range().start()) == start
-                            && u32::from(s.text_range().end()) == end
-                    })
+                    .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |s| ast::Expr::can_cast(s.kind()))?
                     .ok_or_else(|| error("break continuation syntax absent"))?;
-                let resume = return_pc(index, body, &target_syntax)?;
+                // `break` out of a `for` leaves one iteration; the loop's
+                // exit then drops its iterator.
+                let resume = if target_node.role
+                    == NodeRole::Expression(super::body_index::ExpressionKind::For)
+                {
+                    index.pc(label.node, Phase::Exit)?
+                } else {
+                    return_pc(index, body, &target_syntax)?
+                };
                 let destination = node.value.expect("break result");
                 if let Some(child) = expression.expr() {
                     let child = id_for(index, body, child.syntax())?;
@@ -3179,6 +3681,32 @@ impl ParsedFile {
 
     /// Pure lowering of one validated captured PC; separate fixed host stack frame.
     #[inline(never)]
+    /// How a comparison's place operand reads its builtin value, or `None`
+    /// for a value operand (including a non-local value path).
+    fn comparison_operand_read(
+        &self,
+        index: &BodyIndex,
+        body: &BodyHandle,
+        operand: &ast::Expr,
+    ) -> Result<Option<crate::ir::op::OperandRead>, Diagnostic> {
+        use crate::ir::op::OperandRead;
+        if !comparison_place_operand(operand.syntax()) {
+            return Ok(None);
+        }
+        let ast::Expr::PathExpr(path) = operand else {
+            return Ok(Some(OperandRead::Place));
+        };
+        if let Some(binding) = local_binding(self, index, body, path)? {
+            return Ok(Some(OperandRead::Local(binding)));
+        }
+        let name = MacroName::local(&path.syntax().text().to_string(), self.edition).ok();
+        Ok(name
+            .as_ref()
+            .map(|name| parameter_at(self, path.syntax(), name))
+            .transpose()?
+            .flatten()
+            .map(OperandRead::Parameter))
+    }
     fn initial_binary_thunk(
         &self,
         body: &BodyHandle,
@@ -3187,6 +3715,9 @@ impl ParsedFile {
         syntax: SyntaxNode,
         numeric_admission: Option<
             &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
+        >,
+        source_constraints: Option<
+            &crate::frontend::binding_constraints::PreparedBindingConstraints,
         >,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
@@ -3313,8 +3844,12 @@ impl ParsedFile {
                                     "assignment destination requires place/namespace integration",
                                 );
                             };
-                            if !matches!(&left, ast::Expr::IndexExpr(_) | ast::Expr::FieldExpr(_))
-                                && !matches!(&left, ast::Expr::PrefixExpr(prefix) if prefix.op_token().is_some_and(|token| token.text() == "*"))
+                            // A non-local path (a static) is a place, like a
+                            // projection; its Exit forms the place.
+                            if !matches!(
+                                &left,
+                                ast::Expr::IndexExpr(_) | ast::Expr::FieldExpr(_) | ast::Expr::PathExpr(_)
+                            ) && !matches!(&left, ast::Expr::PrefixExpr(prefix) if prefix.op_token().is_some_and(|token| token.text() == "*"))
                             {
                                 return unsupported(
                                     "assignment destination requires projected-place integration",
@@ -3385,21 +3920,182 @@ impl ParsedFile {
                         .ok_or_else(|| error("compound operator suffix absent"))?,
                 )
                 .ok_or_else(|| error("compound numeric operator absent"))?;
-                let Some(ast::Expr::PathExpr(left)) = expression.lhs() else {
-                    return unsupported(
-                        "compound projected place requires source-view integration before operands",
-                    );
+                // A local or parameter path keeps the local compound route; any
+                // other path (a static) is a place like a projection.
+                let local_left = match expression.lhs() {
+                    Some(ast::Expr::PathExpr(left)) => {
+                        let local = local_binding(self, index, body, &left)?.is_some()
+                            || MacroName::local(&left.syntax().text().to_string(), self.edition)
+                                .ok()
+                                .map(|name| parameter_at(self, left.syntax(), &name))
+                                .transpose()?
+                                .flatten()
+                                .is_some();
+                        local.then_some(left)
+                    }
+                    _ => None,
+                };
+                // A local keeps the local numeric route only with a primitive
+                // or exact definition-numeric proof for both operands. Any
+                // other local (a `for` binding, a call result, a nominal value
+                // whose `AddAssign` impl the reached operator selects) is the
+                // updated place, through the same route as any other place,
+                // typed by the reached values.
+                let untyped_local = local_left.clone();
+                let local_left = match local_left {
+                    Some(left) => {
+                        let shift = matches!(operator, NumericBinary::Shl | NumericBinary::Shr);
+                        let numeric = match (
+                            compound_local_primitive(self, index, body, &left, source_constraints)?,
+                            expression.rhs(),
+                        ) {
+                            (Some((_, left_type)), Some(right)) => compound_rhs_primitive(
+                                self,
+                                index,
+                                body,
+                                right,
+                                if shift { PrimitiveType::I32 } else { left_type },
+                                source_constraints,
+                            )?
+                            .is_some(),
+                            (Some(_), None) => true,
+                            (None, right) => {
+                                let context =
+                                    compound_local_definition_context(self, index, body, &left)?
+                                        .is_some()
+                                        || numeric_admission.is_some();
+                                context
+                                    && match right {
+                                        Some(right) => {
+                                            runtime_local_numeric_context::compound_right(
+                                                &right, shift,
+                                            )?
+                                            .is_some()
+                                        }
+                                        None => true,
+                                    }
+                            }
+                        };
+                        numeric.then_some(left)
+                    }
+                    None => None,
+                };
+                let untyped_local = untyped_local.filter(|_| local_left.is_none());
+                let Some(left) = local_left else {
+                    // A projected place (`*r += 1`, `s.f -= 2`, `a[i] *= 3`):
+                    // as for primitive operands, the right operand evaluates
+                    // first, then the place; the operation reads and writes it.
+                    let Some(left) = expression.lhs() else {
+                        return unsupported("compound LHS absent");
+                    };
+                    let Some(right) = expression.rhs() else {
+                        return unsupported("compound RHS absent");
+                    };
+                    let left = id_for(index, body, left.syntax())?;
+                    let right = id_for(index, body, right.syntax())?;
+                    return match phase {
+                        Phase::Entry => draft(
+                            index,
+                            key,
+                            vec![],
+                            RecipeExit::Next(index.pc(right, Phase::Entry)?),
+                        ),
+                        // An untyped local is addressed by the compound
+                        // operation itself (its binding's place), never moved.
+                        Phase::Operand(n)
+                            if node.operands.get(usize::from(n)) == Some(&right)
+                                && untyped_local.is_some() =>
+                        {
+                            let path = untyped_local.as_ref().expect("checked untyped local");
+                            let place = index.nodes()[left.0 as usize]
+                                .place
+                                .ok_or_else(|| error("compound place absent"))?;
+                            let address = match local_binding(self, index, body, path)? {
+                                Some(binding) => Op::MakePlace {
+                                    binding,
+                                    destination: place,
+                                },
+                                None => {
+                                    let name = MacroName::local(
+                                        &path.syntax().text().to_string(),
+                                        self.edition,
+                                    )?;
+                                    let ordinal = parameter_at(self, path.syntax(), &name)?
+                                        .ok_or_else(|| error("compound local absent"))?;
+                                    Op::ParameterPlace {
+                                        ordinal,
+                                        destination: place,
+                                    }
+                                }
+                            };
+                            draft(
+                                index,
+                                key,
+                                vec![
+                                    address,
+                                    Op::CompoundAssignPlace {
+                                        operator,
+                                        place,
+                                        right: index.nodes()[right.0 as usize]
+                                            .value
+                                            .ok_or_else(|| error("compound operand absent"))?,
+                                        destination: node
+                                            .value
+                                            .ok_or_else(|| error("compound result absent"))?,
+                                    },
+                                ],
+                                RecipeExit::Next(return_pc(index, body, expression.syntax())?),
+                            )
+                        }
+                        Phase::Operand(n)
+                            if node.operands.get(usize::from(n)) == Some(&right) =>
+                        {
+                            draft(
+                                index,
+                                key,
+                                vec![],
+                                RecipeExit::Next(index.pc(left, Phase::Entry)?),
+                            )
+                        }
+                        Phase::Operand(n) if node.operands.get(usize::from(n)) == Some(&left) => {
+                            draft(
+                                index,
+                                key,
+                                vec![Op::CompoundAssignPlace {
+                                    operator,
+                                    place: index.nodes()[left.0 as usize]
+                                        .place
+                                        .ok_or_else(|| error("compound place absent"))?,
+                                    right: index.nodes()[right.0 as usize]
+                                        .value
+                                        .ok_or_else(|| error("compound operand absent"))?,
+                                    destination: node
+                                        .value
+                                        .ok_or_else(|| error("compound result absent"))?,
+                                }],
+                                RecipeExit::Next(return_pc(index, body, expression.syntax())?),
+                            )
+                        }
+                        _ => unsupported("invalid compound place phase"),
+                    };
                 };
                 let right = expression
                     .rhs()
                     .ok_or_else(|| error("compound RHS absent"))?;
                 let shift = matches!(operator, NumericBinary::Shl | NumericBinary::Shr);
                 let (binding, kind, computed_hint) = if let Some((binding, left_type)) =
-                    compound_local_primitive(self, index, body, &left)?
+                    compound_local_primitive(self, index, body, &left, source_constraints)?
                 {
                     let context = if shift { PrimitiveType::I32 } else { left_type };
                     let Some(right_type) =
-                        compound_rhs_primitive(self, index, body, right.clone(), context)?
+                        compound_rhs_primitive(
+                            self,
+                            index,
+                            body,
+                            right.clone(),
+                            context,
+                            source_constraints,
+                        )?
                     else {
                         return Err(Diagnostic::new(
                             "LRR-E-TYPE-CONTEXT",
@@ -3434,7 +4130,9 @@ impl ParsedFile {
                         HintRecipe::DefinitionNumeric(context),
                     )
                 } else {
-                    return Err(Diagnostic::new("LRR-E-TYPE-CONTEXT", "compound assignment requires a primitive source annotation or exact definition source before operands".into()));
+                    return Err(error(
+                        "compound local route lost its numeric proof after selection",
+                    ));
                 };
                 let shared_rhs = compound_shared_rhs(right.clone())?;
                 let right_reference_hint = match (&kind, shared_rhs) {
@@ -3545,10 +4243,30 @@ impl ParsedFile {
                 let right_default =
                     super::numeric_fallback::right_operand_default(&right, operator, default)?;
                 let right_expression = right.clone();
+                // Place operands of a comparison (see `comparison_place_operand`).
+                let left_read = self.comparison_operand_read(index, body, &left)?;
+                let right_read = self.comparison_operand_read(index, body, &right)?;
                 let left = id_for(index, body, left.syntax())?;
                 let right = id_for(index, body, right.syntax())?;
                 let left_slot = index.nodes()[left.0 as usize].value.expect("left value");
                 let right_slot = index.nodes()[right.0 as usize].value.expect("right value");
+                let operand = |id: NodeId, read: Option<crate::ir::op::OperandRead>| {
+                    read.map(|read| {
+                        let node = &index.nodes()[id.0 as usize];
+                        Ok::<_, Diagnostic>(Op::ComparisonOperand {
+                            place: node
+                                .place
+                                .ok_or_else(|| error("comparison operand place absent"))?,
+                            read,
+                            destination: node
+                                .value
+                                .ok_or_else(|| error("comparison operand value absent"))?,
+                        })
+                    })
+                    .transpose()
+                };
+                let left_operand = operand(left, left_read)?;
+                let right_operand = operand(right, right_read)?;
                 let destination = node.value.expect("binary value");
                 match phase {
                     Phase::Entry => draft(
@@ -3566,26 +4284,32 @@ impl ParsedFile {
                     Phase::Operand(0) => draft(
                         index,
                         key,
-                        vec![super::numeric_fallback::right_operand_hint(
-                            &right_expression,
-                            destination,
-                            right_slot,
-                            Some(left_slot),
-                            operator,
-                            right_default,
-                            key.body.definition,
-                        )?],
+                        left_operand
+                            .into_iter()
+                            .chain([super::numeric_fallback::right_operand_hint(
+                                &right_expression,
+                                destination,
+                                right_slot,
+                                Some(left_slot),
+                                operator,
+                                right_default,
+                                key.body.definition,
+                            )?])
+                            .collect(),
                         RecipeExit::Next(index.pc(right, Phase::Entry)?),
                     ),
                     Phase::Operand(1) => draft(
                         index,
                         key,
-                        vec![Op::NumericBinary {
-                            operator,
-                            left: left_slot,
-                            right: right_slot,
-                            destination,
-                        }],
+                        right_operand
+                            .into_iter()
+                            .chain([Op::NumericBinary {
+                                operator,
+                                left: left_slot,
+                                right: right_slot,
+                                destination,
+                            }])
+                            .collect(),
                         RecipeExit::Next(return_pc(index, body, expression.syntax())?),
                     ),
                     _ => unsupported("invalid binary phase"),
@@ -3606,6 +4330,10 @@ impl ParsedFile {
         syntax: SyntaxNode,
         type_name: Option<&crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
         type_use: Option<&crate::frontend::entered_type_goals::EnteredTypeGoal>,
+        cast_coercion: Option<&let_annotations::LetAnnotation>,
+        source_constraints: Option<
+            &crate::frontend::binding_constraints::PreparedBindingConstraints,
+        >,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -3619,6 +4347,44 @@ impl ParsedFile {
                 let Some(child) = expression.expr() else {
                     return unsupported("cast operand absent");
                 };
+                // A coercion cast: the operand is evaluated under the written
+                // target Type, as a `let` initializer under that annotation,
+                // and its value is the cast's value.
+                if let Some(coercion) = cast_coercion
+                    && expression.ty().is_some_and(|ty| {
+                        crate::syntax::ast_adapter::range(ty.syntax().text_range())
+                            == coercion.range
+                    })
+                {
+                    let child = id_for(index, body, child.syntax())?;
+                    let source = index.nodes()[child.0 as usize]
+                        .value
+                        .ok_or_else(|| error("cast operand value absent"))?;
+                    let destination = node.value.ok_or_else(|| error("cast value absent"))?;
+                    return match phase {
+                        Phase::Entry => draft(
+                            index,
+                            key,
+                            vec![Op::SetHint {
+                                child: source,
+                                hint: HintRecipe::Written(std::sync::Arc::clone(
+                                    &coercion.written,
+                                )),
+                            }],
+                            RecipeExit::Next(index.pc(child, Phase::Entry)?),
+                        ),
+                        Phase::Operand(0) => draft(
+                            index,
+                            key,
+                            vec![Op::ResultTransfer {
+                                source,
+                                destination,
+                            }],
+                            RecipeExit::Next(return_pc(index, body, expression.syntax())?),
+                        ),
+                        _ => unsupported("invalid cast coercion phase"),
+                    };
+                }
                 // The common source Type goal owns currentness/name selection.
                 // The historical unsealed route retains its old safety refusals.
                 let target = if let Some(proof) = type_use {
@@ -3695,7 +4461,15 @@ impl ParsedFile {
                         }
                         recipe
                     },
-                    HintRecipe::None,
+                    // The literal's own inference variable, resolved by the
+                    // common source constraints; otherwise its reached parent
+                    // hint alone selects the representation.
+                    match source_constraints {
+                        Some(proof) => proof
+                            .literal_primitive(index, key)?
+                            .map_or(HintRecipe::None, HintRecipe::Primitive),
+                        None => HintRecipe::None,
+                    },
                     node.value.expect("literal value"),
                     return_pc(index, body, literal.syntax())?,
                 )
@@ -3714,6 +4488,9 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
+        source_constraints: Option<
+            &crate::frontend::binding_constraints::PreparedBindingConstraints,
+        >,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -3735,8 +4512,23 @@ impl ParsedFile {
                 } else {
                     crate::ir::op::BorrowAccess::Shared
                 };
-                if !matches!(&operand, ast::Expr::PathExpr(_)) {
+                // A parameter or non-local value path (unit value, constant)
+                // publishes its own place (ParameterPlace, or a temporary at
+                // the path's Exit); only a local binding is borrowed directly.
+                let local_path = match &operand {
+                    ast::Expr::PathExpr(path) => local_binding(self, index, body, path)?.is_some(),
+                    _ => false,
+                };
+                if !local_path {
                     let operand_is_place = intrinsic_place_receiver(&operand);
+                    // A non-local value path that is not a parameter (a unit
+                    // variant, a constant) evaluates under the borrow's
+                    // target context like any other rvalue operand.
+                    let hinted = !operand_is_place
+                        || match &operand {
+                            ast::Expr::PathExpr(path) => value_path_operand(self, path)?,
+                            _ => false,
+                        };
                     let child = id_for(index, body, operand.syntax())?;
                     let place = index.nodes()[child.0 as usize]
                         .place
@@ -3745,7 +4537,7 @@ impl ParsedFile {
                         Phase::Entry => draft(
                             index,
                             key,
-                            if operand_is_place {
+                            if !hinted {
                                 vec![]
                             } else {
                                 vec![Op::SetHint {
@@ -3910,6 +4702,21 @@ impl ParsedFile {
                     return unsupported("index operand absent");
                 };
                 let base_is_place = intrinsic_place_receiver(&base);
+                // `base[a..b]` selects `Index<Range*<usize>>`: the range's
+                // endpoints, not the range value, take the usize context.
+                let range_bounds = match &evaluated {
+                    ast::Expr::RangeExpr(range) => {
+                        use ast::RangeItem;
+                        Some(
+                            [range.start(), range.end()]
+                                .into_iter()
+                                .flatten()
+                                .map(|bound| id_for(index, body, bound.syntax()))
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    }
+                    _ => None,
+                };
                 let base = id_for(index, body, base.syntax())?;
                 let evaluated = id_for(index, body, evaluated.syntax())?;
                 let base_place = index.nodes()[base.0 as usize]
@@ -3936,10 +4743,22 @@ impl ParsedFile {
                                 destination: base_place,
                             });
                         }
-                        ops.push(Op::SetHint {
-                            child: index_value,
-                            hint: HintRecipe::Primitive(PrimitiveType::Usize),
-                        });
+                        match &range_bounds {
+                            Some(bounds) => {
+                                for bound in bounds {
+                                    ops.push(Op::SetHint {
+                                        child: index.nodes()[bound.0 as usize].value.ok_or_else(
+                                            || error("range index bound value absent"),
+                                        )?,
+                                        hint: HintRecipe::Primitive(PrimitiveType::Usize),
+                                    });
+                                }
+                            }
+                            None => ops.push(Op::SetHint {
+                                child: index_value,
+                                hint: HintRecipe::Primitive(PrimitiveType::Usize),
+                            }),
+                        }
                         draft(
                             index,
                             key,
@@ -4071,7 +4890,21 @@ impl ParsedFile {
                                 spelling: expression.syntax().text().to_string(),
                                 source: index.span(id)?,
                             },
-                            HintRecipe::None,
+                            // The negated literal's own inference variable
+                            // (negation keeps its Type), when resolved.
+                            match source_constraints {
+                                Some(proof) => {
+                                    let literal = PcKey {
+                                        body: key.body.clone(),
+                                        node: id_for(index, body, literal.syntax())?.0,
+                                        phase: 0,
+                                    };
+                                    proof
+                                        .literal_primitive(index, &literal)?
+                                        .map_or(HintRecipe::None, HintRecipe::Primitive)
+                                }
+                                None => HintRecipe::None,
+                            },
                             node.value.expect("negative literal value"),
                             return_pc(index, body, expression.syntax())?,
                         );
@@ -4171,7 +5004,13 @@ impl ParsedFile {
             // through the same original AST parent/operand relation as other
             // path reads; this phase performs no name lookup or value synthesis.
             (SyntaxKind::PATH_EXPR, Phase::Exit) => {
-                let operations = if place_context(&syntax) {
+                // Only non-local value paths reach this Exit; one that a
+                // compound assignment updates (a static) is addressed in place.
+                // A comparison reads a non-local value path's fresh value as
+                // an ordinary operand (`OperandRead` covers locals and places).
+                let operations = if (place_context(&syntax) && !comparison_place_operand(&syntax))
+                    || compound_assignment_lhs(&syntax)
+                {
                     // The source constant already owns a fresh ordinary value
                     // cell. Form its location without reading/copying/moving it;
                     // indexing/borrowing retains the original cleanup owner.
@@ -4198,7 +5037,7 @@ impl ParsedFile {
                 let binding = local_binding(self, index, body, &path)?;
                 let Some(binding) = binding else {
                     let name =
-                        MacroName::parse(&path.syntax().text().to_string(), self.edition).ok();
+                        MacroName::local(&path.syntax().text().to_string(), self.edition).ok();
                     if let Some(ordinal) = name
                         .as_ref()
                         .map(|name| parameter_at(self, path.syntax(), name))
@@ -4224,12 +5063,25 @@ impl ParsedFile {
                             RecipeExit::Next(return_pc(index, body, path.syntax())?),
                         );
                     }
-                    if place_context(path.syntax()) {
-                        return unsupported(
-                            "non-local receiver requires retained source place resolution",
-                        );
-                    }
-                    return unsupported("non-local path awaits ordinary namespace resolution");
+                    // A non-local value path is selected by the dispatcher
+                    // through the ordinary Value namespace (constants were
+                    // already routed to SourceConstant). Its value continues
+                    // at this path's own Exit PC, exactly like a constant: a
+                    // place context addresses that fresh value there.
+                    return match self.written_value_path(&path, index.cfg())? {
+                        value_paths::WrittenValuePath::Spelled(spelled) => draft(
+                            index,
+                            key,
+                            vec![Op::ValuePath {
+                                path: spelled,
+                                destination: node
+                                    .value
+                                    .ok_or_else(|| error("value path result absent"))?,
+                            }],
+                            RecipeExit::Next(index.pc(id, Phase::Exit)?),
+                        ),
+                        value_paths::WrittenValuePath::Refused(reason) => unsupported(reason),
+                    };
                 };
                 draft(
                     index,
@@ -4475,17 +5327,13 @@ impl ParsedFile {
         };
         let wanted = MacroName::parse(name.text(), self.edition)?;
         let mut work = 0usize;
-        for (depth, scope) in path.syntax().ancestors().enumerate() {
-            if depth >= 256 {
-                return Err(error("lexical function recipe scope depth budget"));
-            }
+        for scope in path.syntax().ancestors() {
             let Some(list) = ast::StmtList::cast(scope) else {
                 continue;
             };
             for statement in list.statements() {
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(|| error("lexical function recipe source work budget"))?;
                 let ast::Stmt::Item(ast::Item::Fn(function)) = statement else {
                     continue;

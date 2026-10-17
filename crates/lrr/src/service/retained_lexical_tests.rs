@@ -141,7 +141,11 @@ fn ordinary_parameter_lookup_drives_retained_match_without_a_generated_source_ex
             ));
             let report = completed(run.poll(&mut db));
             assert!(matches!(report.value, ValueSummary::Signed(ref value) if value == "7"));
-            assert_eq!(report.opcode_counters.started_by_opcode[21], 1); // ordinary ReadParameter
+            // The scrutinee is a place expression: the ordinary parameter
+            // lookup addresses the original argument cell (ParameterPlace)
+            // and the shared matcher tests it in place, with no owning read.
+            assert_eq!(report.opcode_counters.started_by_opcode[44], 1);
+            assert_eq!(report.opcode_counters.started_by_opcode[21], 0);
             assert_eq!(report.opcode_counters.started_by_opcode[19], 1);
             assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
             assert_eq!(run.peak_guest_frames(), 2);

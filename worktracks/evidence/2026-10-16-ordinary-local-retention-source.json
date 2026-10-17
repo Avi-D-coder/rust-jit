@@ -1,0 +1,44 @@
+{
+  "schema": "lrr/source-review/ordinary-local-retention/v1",
+  "status": "source-only; uncompiled/unexecuted; normal engine selection integration held",
+  "source_fingerprint": "57fdf9290029486f75e4349ae32c95060341cd3da00e72fd01f19658805d19d7",
+  "frozen_payload": "/private/tmp/lrr-ordinary-local-retention-v1",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "23c3bd0066e2ebc1b062ca3d2d0f2d83a8cf4d1e78b629f3ac9cfe9ec995374d",
+      "bytes": 12342,
+      "before_sha256": "547c26a00ab01d1ab63ac454d071364680e3718e5b90fdf2a37a81371ee17d13"
+    },
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs_tests.rs",
+      "sha256": "18e7dc20c926f1160c2e518d45e75c680263ec2888b931dfba65f5f1c82992c1",
+      "bytes": 13299,
+      "before_sha256": "a6b05bdce6b478e6a6ebe5d8b2ac626a9d16b4f83c98faba8b5f5c0015879a93"
+    },
+    {
+      "path": "worktracks/04-calls-source-views/common-ordinary-local-retention-handoff.md",
+      "sha256": "4e1d1ab6ba518904b1e0ffeb25cc4b839a941010128f4dcc62e371cabbdb0783",
+      "bytes": 2903
+    }
+  ],
+  "base_contract": "ordinary module baseline exact frozen853f3152, tests baseline083f2763. Production delta is one checked Arc-header expression. No DB traversal/registry or engine edit. Parent plan roots already covered by actual query39 registry/external-owner DAG traversal.",
+  "review": "all8 recorded in handoff; actual parent-only/guard retirement regression unexecuted; publisher refusal unchanged",
+  "commands": [
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/frontend/ordinary_local_callables.rs crates/lrr/src/db/ordinary_local_inputs_tests.rs",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "not_run": [
+    "Cargo",
+    "native compilation",
+    "source regression",
+    "guest runtime",
+    "architecture matrix"
+  ]
+}

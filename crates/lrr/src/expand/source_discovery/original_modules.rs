@@ -34,18 +34,16 @@ pub(super) fn capture_original_modules(
                 .and_then(|bytes| {
                     bytes.checked_add(160 + std::mem::size_of::<OriginalModuleDeclaration>())
                 })
-                .filter(|bytes| *bytes <= 512 * 1024 * 1024)
                 .ok_or_else(|| fault("original module declaration metadata limit"))?;
-            if rows.len() >= 100_000
-                || rows
-                    .insert(
-                        declaration.producer(),
-                        OriginalModuleDeclaration {
-                            ordinal,
-                            declaration,
-                        },
-                    )
-                    .is_some()
+            if rows
+                .insert(
+                    declaration.producer(),
+                    OriginalModuleDeclaration {
+                        ordinal,
+                        declaration,
+                    },
+                )
+                .is_some()
             {
                 return Err(fault("original module producer identity/count conflict"));
             }

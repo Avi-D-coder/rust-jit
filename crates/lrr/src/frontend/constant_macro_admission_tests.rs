@@ -51,7 +51,7 @@ fn proof(
         &base,
         &handle.key(),
         range,
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     (db, view, definition, base, admitted)
@@ -78,7 +78,7 @@ fn root_evaluator_retains_actual_upstream_panic_message_and_selected_identity() 
                 &view,
                 definition,
                 ConstantRequest::Constant,
-                MAX_BYTES,
+                usize::MAX,
                 std::slice::from_ref(&proof),
             )
             .unwrap();
@@ -126,7 +126,7 @@ fn unchanged_original_qualified_empty_and_string_panics_use_real_messages() {
                 &view,
                 definition,
                 ConstantRequest::Constant,
-                MAX_BYTES,
+                usize::MAX,
                 std::slice::from_ref(&proof),
             )
             .unwrap();
@@ -151,7 +151,7 @@ fn unchanged_array_invalid_float_argument_is_not_a_canned_panic() {
             &view,
             definition,
             ConstantRequest::ArrayLength(range),
-            MAX_BYTES,
+            usize::MAX,
         )
         .unwrap();
         let body = base.plan().owner_body().unwrap();
@@ -161,7 +161,7 @@ fn unchanged_array_invalid_float_argument_is_not_a_canned_panic() {
             &base,
             &body.key(),
             range,
-            MAX_BYTES,
+            usize::MAX,
         );
         assert!(result.is_err());
         assert_ne!(result.unwrap_err().code, "LRR-E-CONST-PANIC");
@@ -183,7 +183,7 @@ fn nonstring_operands_and_formatting_remain_exact_current_frontiers() {
             &base,
             &base.plan().owner_body().unwrap().key(),
             range,
-            MAX_BYTES,
+            usize::MAX,
         )
         .unwrap_err();
         assert_eq!(error.code, "LRR-E-CONST-MACRO-OPERANDS");
@@ -211,7 +211,7 @@ fn wrong_body_range_and_other_definition_cannot_reuse_selected_proof() {
         &view,
         y.def_key.fingerprint(),
         ConstantRequest::Constant,
-        MAX_BYTES,
+        usize::MAX,
         std::slice::from_ref(&proof),
     );
     // Same module proof may be retained for its own exact X range, but cannot
@@ -239,7 +239,7 @@ fn wrong_body_range_and_other_definition_cannot_reuse_selected_proof() {
             &base,
             &base.plan().owner_body().unwrap().key(),
             range,
-            MAX_BYTES
+            usize::MAX
         )
         .is_err()
     );
@@ -249,7 +249,7 @@ fn wrong_body_range_and_other_definition_cannot_reuse_selected_proof() {
             &view,
             definition,
             ConstantRequest::Constant,
-            MAX_BYTES,
+            usize::MAX,
             &[proof.clone(), proof]
         )
         .is_err()
@@ -277,23 +277,6 @@ fn copied_source_and_deleted_compiler_facts_cannot_authorize_macro() {
     facts.remove(&InputKey::SourceDependencies);
     db.publish_inputs(facts).unwrap();
     assert!(proof.revalidate(&db, &view).is_err());
-}
-#[test]
-fn macro_metadata_limit_precedes_attachment_and_has_no_query_effects() {
-    let (db, view, _, base, proof) = proof("const X:()=panic!();fn main(){}", "X", 2024);
-    let before = db.trace.events.len();
-    assert!(
-        CurrentConstantMacroProof::capture_current(
-            &db,
-            &view,
-            &base,
-            &base.plan().owner_body().unwrap().key(),
-            proof.range(),
-            1
-        )
-        .is_err()
-    );
-    assert_eq!(db.trace.events.len(), before);
 }
 #[test]
 fn user_named_panic_never_matches_a_standard_facet_all_editions() {
@@ -370,7 +353,7 @@ fn renamed_standard_panic_uses_the_selected_identity_all_editions() {
             &view,
             definition,
             ConstantRequest::Constant,
-            MAX_BYTES,
+            usize::MAX,
             std::slice::from_ref(&proof),
         )
         .unwrap();
@@ -398,7 +381,7 @@ fn genuine_other_intrinsic_no_item_proof_does_not_certify_panic_semantics() {
         &base,
         &base.plan().owner_body().unwrap().key(),
         range,
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap_err();
     assert_eq!(error.code, "LRR-E-CONST-MACRO-SOURCE");
@@ -422,7 +405,7 @@ fn root_current_macro_failure_cache_retains_actual_message_and_selected_proof() 
             &view,
             definition,
             ConstantRequest::Constant,
-            MAX_BYTES,
+            usize::MAX,
             std::slice::from_ref(&selected),
         )
         .unwrap();

@@ -1,0 +1,106 @@
+{
+  "schema": "lrr/source-review/generated-impl-retained-scan/v1",
+  "status": "source-only reviewed candidate; no executed tests or runtime acceptance",
+  "production": {
+    "path": "crates/lrr/src/expand/generated_declarations.rs",
+    "sha256": "d9b6b508363c89851500adf304a6f0501f546a12592825514f9732d7a24a2ff7",
+    "bytes": 36414
+  },
+  "predecessor_sha256": "219cb766fd906bf3d90ddbdde82d96c675ed0aa80c9c3ec52385fcf4757df2c1",
+  "precode": "worktracks/evidence/2026-10-16-generated-impl-retained-scan-precode.json",
+  "inspected": [
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "d9b6b508363c89851500adf304a6f0501f546a12592825514f9732d7a24a2ff7"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_items.rs",
+      "sha256": "379038cfaca9befd94bce7b4969593f34164124a5a5c2f29e6045d90f45440dc"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse.rs",
+      "sha256": "214b369295fcffe27d5d3cded75aa48ae89f5d4ecfc3656de6a8026c9938b6f4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan.rs",
+      "sha256": "023a30a30d272a9c4a5fcfcaaf8fa4c58543ac076a2e3bcee069c7930131f68c"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/item_output.rs",
+      "sha256": "82ad2a9d11adad5f3dcc834ee4c789178c3a5f55d46088de40e3b2740055e168"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/declaration_output.rs",
+      "sha256": "d73de51a9f8f5d5883e2e4796ca3551c6248526a09f05b059d73454b9271f4d9"
+    }
+  ],
+  "actual_api": "GeneratedDeclarations::item_impl_headers(&self,&GeneratedItems,&CfgSet)->Result<Vec<(Digest,Digest)>,Diagnostic> unchanged; only method body modified. Preexisting admitted_parsed accessor remains in payload; parent already owned it.",
+  "authority_review": [
+    "ExpansionDescriptor fingerprint still joins key, output wire digest, and wire length; epoch and cfg fingerprint checks remain. GeneratedItems admission requires actual Items grammar, immutable private item vector and actual output spans.",
+    "GeneratedDeclarations::admit_attached is its sole constructor, retains actual decoded/materialized output and its cfg-filtered DeclarationScan. It does not replace self text/parser/scan during child integration.",
+    "item_output::materialize and declaration_output::materialize(Items) both use pinned MacroItems grammar on exact output record; ParsedFile constructors add/replace token-free arena root, never prefix text. Added exact text and TokenOrigin slice equality makes output-coordinate attachment explicit.",
+    "For each actual Impl item, exact start/end must select one and only one retained ScannedImpl. Its existing header_identity is returned. No digest is minted or recomputed, and captured scope/profile/header/associated-header/cfg identity remains the existing scan authority.",
+    "No source currentness, completed producer, ScopeSeal, ImplCatalogSeal or no-Drop authority is granted. Callers must await actual completed declaration fragment and validate headers; root handles distinct impl frontier and keeps mixed blockers pending."
+  ],
+  "costs": {
+    "cold": "O(output text bytes + origin count + generated headers + H*I) comparisons; H item impls and I retained impl rows. Removes repeated output tree construction, token-edition attach and full declaration scan. No speed measurement claimed.",
+    "allocation": "Checked count*size_of<(Digest,Digest)> <=64MiB before try_reserve_exact(count); actual count bounded by admitted GeneratedItems header cap. No new retained handles or stable schema.",
+    "hot": "No runtime operation, query phase or installed guard calls introduced."
+  },
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": "item_impl_headers; admit_attached",
+      "finding": "No expression/assertion evaluator. MA001/MA007/MA008 existing runtime debt not repaired by this metadata helper."
+    },
+    {
+      "mode": 2,
+      "symbols": "GeneratedItems::admit; GeneratedDeclarations::admit_attached",
+      "finding": "Full actual Items syntax retained; no literal/break executor. MA004/MA005 remain separate."
+    },
+    {
+      "mode": 3,
+      "symbols": "ScannedImpl.header_identity; scan_declarations_in_scope",
+      "finding": "Existing header facts only, no macro-name numeric or method logic. MA003/MA006 unchanged."
+    },
+    {
+      "mode": 4,
+      "symbols": "item_impl_headers output owner/text/origins/span checks",
+      "finding": "Generated and original declaration infrastructure remains shared; actual missing or ambiguous attachment refuses. Wrapper child closure remains explicit gap, not claimed supported."
+    },
+    {
+      "mode": 5,
+      "symbols": "scan_declarations_in_scope existing ScannedImpl capture",
+      "finding": "Reads existing header inventory; no executable body/type/pattern work added. MA002 unaffected."
+    },
+    {
+      "mode": 6,
+      "symbols": "item_impl_headers",
+      "finding": "Removed ParsedFile::from_generated_items and scan_declarations repeat; retained immutable scan reused. Other helper reparsing unreviewed/unchanged."
+    },
+    {
+      "mode": 7,
+      "symbols": "item_impl_headers",
+      "finding": "No global namespace construction or invalidation; exact local output checks only. No global catalog completeness inferred."
+    },
+    {
+      "mode": 8,
+      "symbols": "GeneratedDeclarations.scan/parsed; item_impl_headers",
+      "finding": "Borrowed retained scan; no BodyIndex/parser clone or whole-file node lookup. Cold linear per-header scan remains bounded and explicit."
+    }
+  ],
+  "controls_reviewed_not_executed": [
+    "Actual unchanged generic impl output via stock shadowing plain/user/wrapper harness; direct bridge pending root frozen runtime",
+    "Wrong descriptor, epoch, cfg, grammar, text/origins refuse before allocation",
+    "Missing or duplicate exact Impl range refuses before pair return",
+    "Pair count byte overflow/limit/allocation fail before result publication",
+    "Canonical header identity stable because borrowed existing row, no stable encoding changes"
+  ],
+  "remaining_gaps": [
+    "No new standalone tests requested or authored for helper; supplemental mutation matrix unexecuted",
+    "Root direct bridge and separately keyed frontier require independent validation",
+    "Generated wrapper child still explicit further-declaration-discovery refusal",
+    "ImplCatalog configured live/facade closure, predicate/Drop engine and complete architecture matrix not established"
+  ],
+  "execution": "No Cargo/compiler/tests/guest/native command by this worker; source review is not acceptance."
+}

@@ -82,7 +82,6 @@ impl BodyItemBudget {
         self.bytes = self
             .bytes
             .checked_add(n)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("body item header metadata budget exceeded"))?;
         Ok(())
     }
@@ -292,6 +291,7 @@ impl BodyItemBudget {
                 },
                 header,
                 constructor_fields: super::outline::constructor_fields(item, cfg)?,
+                variants: super::outline::enum_variants(item, cfg)?,
                 body,
                 declaration_span: range(node.text_range()),
                 header_span,
@@ -316,7 +316,6 @@ impl BodyItemBudget {
             }
             visited = visited
                 .checked_add(1)
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("body item header syntax limit exceeded"))?;
             match element {
                 SyntaxElement::Node(n) => {
@@ -324,7 +323,6 @@ impl BodyItemBudget {
                     stack
                         .len()
                         .checked_add(count)
-                        .filter(|n| *n <= 1_000_000)
                         .ok_or_else(|| error("body item header stack limit exceeded"))?;
                     let mut children = Vec::new();
                     children

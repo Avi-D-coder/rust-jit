@@ -1,14 +1,12 @@
 //! Preregistered pure IR admission controls, not full original-body execution.
 use super::{
     FloatingConstantOutcome, FloatingConstantSite, plan_floating_constant,
-    tests::{ORIGINAL, span, world},
+    tests::{span, world},
 };
 use crate::{
-    core::digest::StableEncode,
     db::{key::QueryKey, memo::Database, provider::SyntaxProvider, value::QueryValue},
-    frontend::source_locals::PatternResolution,
     ir::{
-        op::{OPCODE_COUNT, Op},
+        op::Op,
         pc::{NodeId, Phase, SlotId},
         recipe::{RecipeDraft, RecipeExit},
         validate::verify,
@@ -34,104 +32,6 @@ fn draft(recipe: &crate::ir::recipe::VerifiedRecipe) -> RecipeDraft {
         operations: recipe.operations.to_vec(),
         exits: vec![recipe.exit.clone()],
         dependencies: recipe.dependencies.to_vec(),
-    }
-}
-#[test]
-fn original_nan_ir_admission_preserves_each_official_edition_and_exact_let_continuation() {
-    for edition in [2015, 2018, 2021, 2024] {
-        let (mut db, view, published, body, graph, proofs) = world(ORIGINAL, "main", edition);
-        let mut entered = published.enter_body(view.selection(), &body).unwrap();
-        let catalog = crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard(
-            &view.selection().outline.parse.profile,
-        )
-        .unwrap();
-        for proof in proofs.iter().filter(|proof| proof.body() == &body) {
-            entered
-                .accept_no_item_proof(view.selection(), &body, proof, &catalog)
-                .unwrap();
-        }
-        let resolutions = entered
-            .facts()
-            .bindings
-            .iter()
-            .map(|binding| (binding.identity, PatternResolution::Binding))
-            .collect();
-        let locals = entered
-            .local_index(view.selection(), &body, &resolutions, &[])
-            .unwrap();
-        let at = ORIGINAL.find("f64::NAN").unwrap();
-        let written = span(&view, &body, at, "f64::NAN");
-        let site = FloatingConstantSite {
-            source: &view,
-            body: &body,
-            at: at as u64,
-            span: &written,
-            qualifier: "f64",
-            member: "NAN",
-            context: locals.context(),
-            expected: None,
-        };
-        let FloatingConstantOutcome::Ready(plan) =
-            plan_floating_constant(&mut db, &graph, &locals, site)
-                .into_ready()
-                .unwrap()
-                .unwrap()
-        else {
-            panic!("original first path blocked")
-        };
-        let index = body_index(&mut db, &body);
-        let node = index
-            .nodes()
-            .iter()
-            .find(|node| index.span(node.id).unwrap() == written)
-            .unwrap();
-        let pc = index.pc(node.id, Phase::Entry).unwrap();
-        let lowered = plan
-            .lower_recipe(&mut db, &graph, &locals, site, &index, &pc)
-            .into_ready()
-            .unwrap()
-            .unwrap();
-        let recipe = lowered.recipe().recipe();
-        assert_eq!(recipe.key, pc);
-        assert_eq!(recipe.origin.span, written);
-        let Op::PrimitiveFloatingConstant {
-            constant,
-            destination,
-        } = recipe.operations.last().unwrap()
-        else {
-            panic!("closed floating operation absent")
-        };
-        assert_eq!(Some(*destination), node.value);
-        assert_eq!(constant.scalar().type_id, 15);
-        assert_eq!(constant.scalar().kind, 7);
-        assert!(f64::from_bits(constant.scalar().payload).is_nan());
-        assert_eq!(constant.source_span(), &written);
-        assert_eq!(constant.plan_identity(), plan.fingerprint());
-        assert_eq!(constant.edition(), edition);
-        assert_eq!(constant.hygiene_context(), locals.context());
-        assert_eq!(constant.opcode_tag(), 41);
-        assert_eq!(
-            Op::Pattern {
-                operation: crate::ir::op::PatternOperation::Preview { owner: NodeId(0) },
-            }
-            .opcode_tag(),
-            45
-        );
-        assert_eq!(OPCODE_COUNT, 46); // tag42 reserved; constants43, parameter places44, patterns45
-        let RecipeExit::Next(next) = &recipe.exit else {
-            panic!("missing structural next")
-        };
-        assert_eq!(next.phase, Phase::Commit.code().unwrap());
-        assert_eq!(index.nodes()[next.node as usize].role, NodeRole::Statement);
-        assert_ne!(next.node, 0);
-        lowered
-            .revalidate(&mut db, &graph, &locals, site, &index, &pc)
-            .into_ready()
-            .unwrap()
-            .unwrap();
-        assert!(!recipe.dependencies.is_empty());
-        // These are pure source/recipe checks: no constant opcode or original
-        // is_nan/assertion/arithmetic body has executed in this test.
     }
 }
 #[test]

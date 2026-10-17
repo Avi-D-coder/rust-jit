@@ -55,15 +55,6 @@ impl ValueBindingPrelude {
             return Ok(None); // Owning-crate policy join remains a typed consumer prerequisite.
         }
         // Conservative bounded structural work before parse/header selection.
-        if source
-            .captured_macro_blob()?
-            .bytes()
-            .len()
-            .checked_mul(128)
-            .is_none_or(|n| n > 64 * 1024 * 1024)
-        {
-            return Err(fault("Value prelude source/header metadata limit"));
-        }
         let profile = &source.selection().outline.parse.profile;
         let facet = catalog.value_binding_facet(profile)?;
         let compiler = catalog.owning_profile_identity()?;

@@ -14,10 +14,7 @@ impl std::fmt::Display for WireError {
 impl std::error::Error for WireError {}
 
 use std::collections::BTreeMap;
-pub(super) const MAX_ITEMS: usize = 2_000_000;
-pub(super) const MAX_TEXT: usize = 32 * 1024 * 1024;
-const MAX_WIRE: usize = 32 * 1024 * 1024;
-pub(super) const MAX_DEPTH: usize = 256;
+const MAX_WIRE: usize = usize::MAX;
 pub(super) fn error(message: &str) -> WireError {
     WireError {
         code: "LRR-E-MACRO-TOKEN-WIRE",
@@ -31,7 +28,7 @@ pub(super) fn limit(message: &str) -> WireError {
     }
 }
 /// Content key, computed from explicitly encoded semantic records, never allocation order.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct Key(pub [u8; 32]);
 struct Encoder(blake3::Hasher);
 impl Encoder {
@@ -69,7 +66,7 @@ impl Encoder {
         Key(*self.0.finalize().as_bytes())
     }
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Edition {
     E2015,
     E2018,
@@ -86,7 +83,7 @@ impl Edition {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Transparency {
     Opaque,
     SemiTransparent,
@@ -101,7 +98,7 @@ impl Transparency {
         }
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContextRecord {
     pub parent: Option<Key>,
@@ -112,7 +109,7 @@ pub struct ContextRecord {
 }
 /// Owned normal forms computed by the pinned adapter. These are context keys,
 /// never raw frontend/interner handles. Runtime consumes facts without Salsa.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResolutionContext {
     pub original: Key,
@@ -120,7 +117,7 @@ pub struct ResolutionContext {
     pub local: Key,
 }
 /// Comparison-only identity; never a source/context authority or span key.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct NameContextKey(pub Key);
 impl NameContextKey {
     pub fn from_canonical_context(context: Key) -> Self {
@@ -129,7 +126,7 @@ impl NameContextKey {
         Self(e.finish())
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NameResolutionContext {
     pub original: Key,
@@ -150,14 +147,14 @@ impl ContextRecord {
         e.byte(self.edition.tag());
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourceIdentity {
     pub unit: Key,
     pub content: Key,
     pub path: String,
 }
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpanRecord {
     pub source: SourceIdentity,
@@ -201,7 +198,7 @@ impl SpanRecord {
         e.key(self.origin);
     }
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Delimiter {
     Parenthesis,
     Brace,
@@ -218,7 +215,7 @@ impl Delimiter {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Spacing {
     Alone,
     Joint,
@@ -233,7 +230,7 @@ impl Spacing {
         }
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub enum TokenTree {
     Group {
@@ -299,7 +296,7 @@ impl TokenTree {
         }
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TokenForest {
     schema: u32,
     roots: Vec<TokenTree>,
@@ -312,15 +309,12 @@ impl TokenForest {
         mut contexts: Vec<ContextRecord>,
         mut spans: Vec<SpanRecord>,
     ) -> Result<Self, WireError> {
-        if roots.len() > MAX_ITEMS || contexts.len() > MAX_ITEMS || spans.len() > MAX_ITEMS {
-            return Err(limit("token table/count limit"));
-        }
         let mut source_text = 0;
         for span in &spans {
             add_text(&mut source_text, &span.source.path)?;
         }
-        contexts.sort_by_key(ContextRecord::key);
-        spans.sort_by_key(SpanRecord::key);
+        contexts.sort_by_cached_key(ContextRecord::key);
+        spans.sort_by_cached_key(SpanRecord::key);
         let f = Self {
             schema: 2,
             roots,
@@ -392,18 +386,15 @@ impl TokenForest {
         if self.schema != 2 {
             return Err(error("unsupported token schema"));
         }
-        if self.contexts.len() > MAX_ITEMS
-            || self.spans.len() > MAX_ITEMS
-            || self.roots.len() > MAX_ITEMS
-        {
-            return Err(limit("token table limit"));
-        }
-        let contexts: BTreeMap<_, _> = self.contexts.iter().map(|v| (v.key(), v)).collect();
-        let spans: BTreeMap<_, _> = self.spans.iter().map(|v| (v.key(), v)).collect();
+        // Each stable key is one hash; compute it once per record.
+        let context_keys: Vec<Key> = self.contexts.iter().map(ContextRecord::key).collect();
+        let span_keys: Vec<Key> = self.spans.iter().map(SpanRecord::key).collect();
+        let contexts: BTreeMap<_, _> = context_keys.iter().copied().zip(&self.contexts).collect();
+        let spans: std::collections::BTreeSet<Key> = span_keys.iter().copied().collect();
         if contexts.len() != self.contexts.len()
             || spans.len() != self.spans.len()
-            || !self.contexts.windows(2).all(|w| w[0].key() < w[1].key())
-            || !self.spans.windows(2).all(|w| w[0].key() < w[1].key())
+            || !context_keys.windows(2).all(|w| w[0] < w[1])
+            || !span_keys.windows(2).all(|w| w[0] < w[1])
         {
             return Err(error("duplicate or noncanonical stable table"));
         }
@@ -412,12 +403,7 @@ impl TokenForest {
                 return Err(error("context parent/expansion mismatch"));
             }
             let mut next = c.parent;
-            let mut depth = 0;
             while let Some(key) = next {
-                depth += 1;
-                if depth > MAX_DEPTH {
-                    return Err(error("context cycle or depth limit"));
-                }
                 next = contexts
                     .get(&key)
                     .ok_or_else(|| error("unknown parent context"))?
@@ -441,11 +427,8 @@ impl TokenForest {
             count = count
                 .checked_add(1)
                 .ok_or_else(|| error("token count overflow"))?;
-            if count > MAX_ITEMS || depth > MAX_DEPTH {
-                return Err(limit("token count or depth limit"));
-            }
             let exists = |key: &Key| {
-                if spans.contains_key(key) {
+                if spans.contains(key) {
                     Ok(())
                 } else {
                     Err(error("token references unknown span"))
@@ -460,14 +443,6 @@ impl TokenForest {
                 } => {
                     exists(open)?;
                     exists(close)?;
-                    if children.len() > MAX_ITEMS
-                        || count
-                            .checked_add(stack.len())
-                            .and_then(|n| n.checked_add(children.len()))
-                            .is_none_or(|n| n > MAX_ITEMS)
-                    {
-                        return Err(limit("token count limit"));
-                    }
                     stack.extend(children.iter().map(|t| (t, depth + 1)));
                 }
                 TokenTree::Ident { text: t, span, .. }
@@ -527,9 +502,6 @@ fn add_text(total: &mut usize, text: &str) -> Result<(), WireError> {
     *total = total
         .checked_add(text.len())
         .ok_or_else(|| error("token text overflow"))?;
-    if *total > MAX_TEXT {
-        return Err(limit("token text byte limit"));
-    }
     Ok(())
 }
 
@@ -547,7 +519,6 @@ mod codec {
             let needed = self
                 .len
                 .checked_add(bytes.len())
-                .filter(|n| *n <= self.limit)
                 .ok_or_else(|| limit("token wire byte limit"))?;
             if let Some(output) = &mut self.bytes {
                 if needed > output.capacity() {
@@ -604,9 +575,6 @@ mod codec {
             .ok_or_else(|| error("token writer missing output buffer"))
     }
     pub(super) fn encoded_len(f: &TokenForest, byte_limit: usize) -> Result<usize, WireError> {
-        if byte_limit > MAX_WIRE {
-            return Err(limit("token wire limit exceeds fixed default"));
-        }
         f.validate()?;
         let mut w = Writer {
             bytes: None,
@@ -778,9 +746,6 @@ mod codec {
         }
         fn count(&mut self, min_bytes: usize) -> Result<usize, WireError> {
             let n = usize::try_from(self.u32()?).map_err(|_| limit("token wire count overflow"))?;
-            if n > MAX_ITEMS {
-                return Err(limit("token table/count limit"));
-            }
             if n.checked_mul(min_bytes)
                 .is_none_or(|v| v > self.bytes.len() - self.at)
             {
@@ -795,9 +760,6 @@ mod codec {
                 .text
                 .checked_add(n)
                 .ok_or_else(|| limit("token text size overflow"))?;
-            if self.text > MAX_TEXT {
-                return Err(limit("token text byte limit"));
-            }
             let source =
                 std::str::from_utf8(self.raw(n)?).map_err(|_| error("invalid token text UTF8"))?;
             let mut text = String::new();
@@ -815,30 +777,21 @@ mod codec {
                 _ => Err(error("invalid edition tag")),
             }
         }
-        fn span(&mut self, spans: &[SpanRecord]) -> Result<Key, WireError> {
+        fn span(&mut self, spans: &[Key]) -> Result<Key, WireError> {
             let i = usize::try_from(self.u32()?).map_err(|_| error("invalid span index"))?;
             spans
                 .get(i)
-                .map(SpanRecord::key)
+                .copied()
                 .ok_or_else(|| error("unknown span index"))
         }
         fn trees(
             &mut self,
             n: usize,
             depth: usize,
-            spans: &[SpanRecord],
+            spans: &[Key],
         ) -> Result<Vec<TokenTree>, WireError> {
             if n == 0 {
                 return Ok(Vec::new());
-            }
-            if depth > MAX_DEPTH
-                || self
-                    .tokens
-                    .checked_add(self.pending)
-                    .and_then(|v| v.checked_add(n))
-                    .is_none_or(|v| v > MAX_ITEMS)
-            {
-                return Err(limit("token count or depth limit"));
             }
             if n.checked_mul(7)
                 .is_none_or(|v| v > self.bytes.len() - self.at)
@@ -862,9 +815,6 @@ mod codec {
                     .tokens
                     .checked_add(1)
                     .ok_or_else(|| limit("token count overflow"))?;
-                if self.tokens > MAX_ITEMS {
-                    return Err(limit("token count limit"));
-                }
                 let token = match self.byte()? {
                     0 => {
                         let delimiter = match self.byte()? {
@@ -924,9 +874,6 @@ mod codec {
         }
     }
     pub(super) fn decode(bytes: &[u8]) -> Result<TokenForest, WireError> {
-        if bytes.len() > MAX_WIRE {
-            return Err(limit("token wire byte limit"));
-        }
         let mut r = Reader {
             bytes,
             at: 0,
@@ -993,7 +940,8 @@ mod codec {
             });
         }
         let n = r.count(7)?;
-        let roots = r.trees(n, 0, &spans)?;
+        let span_keys: Vec<Key> = spans.iter().map(SpanRecord::key).collect();
+        let roots = r.trees(n, 0, &span_keys)?;
         if r.at != bytes.len() {
             return Err(error("trailing token wire bytes"));
         }

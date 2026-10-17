@@ -1,0 +1,31 @@
+{
+  "schema": "lrr/precode/original-associated-declaration-join/v1",
+  "task": "M019 original canonical owner/header source join prerequisite; M017/M018/M020-M026 remain gated",
+  "ownership": [
+    "NEW crates/lrr/src/frontend/associated_declarations.rs",
+    "NEW crates/lrr/src/frontend/associated_declaration_tests.rs",
+    "new evidence/handoff; hook patch only, no shared edits"
+  ],
+  "witness": "unchanged macro-as-fn-body.rs actual traitFoo/inherentQux/traitimplBaz owners and real unresolved associated def_fn producer slots; supplementary direct members outside original",
+  "invariant": "Map actual retained scanner owner/member source entries to unique genuine Outline DefKey/HeaderRecipe/DeclarationContext/body attachment rows using exact admitted parse/path/cfg/ranges/kinds/parentcontext; never use spelling or raw source-entry digest as canonical trait/member identity.",
+  "API": "PreparedOriginalAssociatedDeclarations::prepare(&PreparedSourceView) returns original capture or explicit generated-parent gap. Borrows captured source lease, retains one real declaration_inventory Arc and bounded locator indexes. Accessors return borrowed canonical facts/producers; nested original owners absent from module Outline remain typed per-owner gaps, no false absence. No currentness/call grant.",
+  "existing_route": [
+    "PreparedSourceView::retained_declaration_parser/declaration_inventory/outline/prepared_inputs",
+    "ParsedFile existing shared scanner; frozen raw trait/impl/associated capture",
+    "Existing Outline ItemOutline DefKey/HeaderRecipe/context/body; no parser or outline factor needed for original-only slice"
+  ],
+  "alternate_routes": "No new resolver, parser, evaluator, BodyIndex, namespace registry or member-name selection; no existing runtime route removed by source-only component. Module ownerNone guard remains.",
+  "authority": "Actual captured source/prepared-input rows must agree with outline; original source only API signals missing generated parent evidence as component gap, never production semantic refusal. Scan raw header/owner IDs differ from canonical Outline owners. MacroProducer stays real pending producer, not method.",
+  "cost": "One bounded cold declaration capture and once-built sorted outline span/producer/owner/member indexes. Borrowed facts; no source tree/body clone. O(N log N + headers) prepare, O(log N) lookups; no installed runtime work. Checked metadata/capacity, explicit stable encodings.",
+  "closure_evidence": "New source-only controls unchanged stock4editions plus direct headers/cfg/coldbody/nestedowner gaps and source lease distinctions; all unexecuted until sole validator. Independent source review/all8/exactfingerprint before freeze.",
+  "all_eight": [
+    "1 no evaluator",
+    "2 actual full AST skeleton, no scalar executor",
+    "3 identity/range owner join, no name selector",
+    "4 generatedparent typed gap, no call exclusion",
+    "5 no body/pattern preparation",
+    "6 capture once not perlookup",
+    "7 no world census/currentness grant",
+    "8 no immutable body/tree copy or wholefile pernode search"
+  ]
+}

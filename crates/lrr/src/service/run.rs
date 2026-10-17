@@ -156,7 +156,6 @@ impl<'a> MacroRun<'a> {
             base.request,
             manifest.graph.fingerprint(),
             base.epoch,
-            2_000_000,
         )?;
         let run = Self {
             base,
@@ -252,12 +251,6 @@ impl<'a> MacroRun<'a> {
             ));
         }
         if !self.units.contains_key(&unit) {
-            if self.units.len() >= 4096 {
-                return Err(Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "macro run consumer session count limit".into(),
-                ));
-            }
             self.inputs.verify()?;
             self.expansion_budget.check_deadline()?;
             let env = self
@@ -269,7 +262,25 @@ impl<'a> MacroRun<'a> {
             let mut context = self.base.clone();
             context.unit = unit;
             context.compile_environment = env.fingerprint();
-            let directory = env.cargo.get("CARGO_MANIFEST_DIR").ok_or_else(stale)?;
+            // Cargo units run their macros from the package root. A standalone
+            // (rustc-style) consumer has no package; like rustc it uses the
+            // directory of its root source file.
+            let directory = match env.cargo.get("CARGO_MANIFEST_DIR") {
+                Some(directory) => std::path::PathBuf::from(directory),
+                None => std::path::Path::new(
+                    &self
+                        .inputs
+                        .manifest
+                        .graph
+                        .units
+                        .get(&unit)
+                        .ok_or_else(stale)?
+                        .source_path,
+                )
+                .parent()
+                .ok_or_else(stale)?
+                .to_owned(),
+            };
             let remaining = deadline.saturating_duration_since(std::time::Instant::now());
             if remaining.is_zero() {
                 return Err(Diagnostic::new(
@@ -281,9 +292,9 @@ impl<'a> MacroRun<'a> {
                 context.clone(),
                 self.inputs.manifest,
                 self.allow_macro_execution,
-                std::path::PathBuf::from(directory),
+                directory,
                 deadline,
-                4 * 1024 * 1024,
+                usize::MAX,
             )?;
             self.units.insert(
                 unit,
@@ -347,7 +358,11 @@ impl<'a> MacroRun<'a> {
             }
             request.origin.validate_database(db)?;
             match &request.origin {
-                crate::expand::derive_origin::DeriveDeclarationOrigin::Generated(origin) => {
+                // A pure declarative parent needs only its adopted record
+                // (checked above); a procedural parent must be this run's output.
+                crate::expand::derive_origin::DeriveDeclarationOrigin::Generated(origin)
+                    if origin.key.procedural_epoch.is_some() =>
+                {
                     if origin.key.procedural_epoch != Some(self.base.epoch)
                         || self.outputs.get(&origin.key.fingerprint())
                             != Some(&origin.fingerprint())
@@ -359,6 +374,7 @@ impl<'a> MacroRun<'a> {
                         ));
                     }
                 }
+                crate::expand::derive_origin::DeriveDeclarationOrigin::Generated(_) => {}
                 crate::expand::derive_origin::DeriveDeclarationOrigin::Source {
                     selection, ..
                 } => {
@@ -495,6 +511,30 @@ impl<'a> MacroRun<'a> {
                 &active.context,
                 target,
             )?))
+        })();
+        if result.is_err() {
+            self.cancel();
+        }
+        result
+    }
+    /// Prepare a bound source function-like selection for the export and
+    /// definition site this run's frozen session selects.
+    pub fn prepare_selected_source(
+        &mut self,
+        db: &mut crate::db::memo::Database,
+        selection: &crate::expand::source_discovery::ProceduralSourceSelection,
+    ) -> Result<std::sync::Arc<super::function_macro_requests::PreparedFunctionRequest>, Diagnostic>
+    {
+        let result = (|| {
+            self.check_database(db)?;
+            self.expansion_budget.freeze()?;
+            let deadline = self.expansion_budget.invocation_deadline()?;
+            let unit = selection.input().scope().crate_key;
+            self.ensure_unit(db, unit, deadline)?;
+            let active = self.units.get(&unit).ok_or_else(stale)?;
+            Ok(std::sync::Arc::new(
+                selection.prepare_selected(&active.session, &active.context)?,
+            ))
         })();
         if result.is_err() {
             self.cancel();
@@ -756,6 +796,26 @@ impl<'a> MacroRun<'a> {
         self.inputs.verify()?;
         discovery.integrate_derive_append(db, request, record)
     }
+    /// Publish one consumer seal while keeping this run's sessions and adopted
+    /// outputs for a later consumer seal of the same request epoch.
+    pub fn publish_discovery_retained(
+        &mut self,
+        db: &mut crate::db::memo::Database,
+        discovery: &mut crate::expand::source_discovery::SourceDiscovery,
+    ) -> Result<VerifiedMacroRunInputs, Diagnostic> {
+        let result = (|| {
+            self.check_database(db)?;
+            discovery.require_run_budget(&self.expansion_budget)?;
+            let _record_count = discovery.sealed_expansions()?.len();
+            let certificate = self.certificate(db)?;
+            discovery.publish_macro_verified(db, &certificate)?;
+            Ok(certificate)
+        })();
+        if result.is_err() {
+            self.cancel();
+        }
+        result
+    }
     /// Verify actual files immediately before publication; retained certificates cannot publish.
     pub fn publish_discovery(
         &mut self,
@@ -803,11 +863,21 @@ impl<'a> MacroRun<'a> {
         active.session.cap_execution_deadline(deadline)?;
         let key = active.session.request_key(&active.context, request)?;
         let key_identity = key.fingerprint();
-        if !self.outputs.contains_key(&key_identity) && self.outputs.len() >= 100_000 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "macro run output receipt count limit".into(),
-            ));
+        if self.outputs.contains_key(&key_identity) {
+            // Exact-once per request epoch: a second consumer seal (for example
+            // the Type fixed point before Value discovery) shares the record this
+            // run already executed and adopted instead of re-executing the macro.
+            use crate::db::dependency::{InputKey, InputValue};
+            let adopted = db
+                .input(&InputKey::ExpansionRecord(key_identity))
+                .ok_or_else(stale)?;
+            let InputValue::ExpansionRecord(record) = adopted.as_ref() else {
+                return Err(stale());
+            };
+            if self.outputs.get(&key_identity) != Some(&record.descriptor().fingerprint()) {
+                return Err(stale());
+            }
+            return cache.validate(&active.context, record);
         }
         let token = active.coordinator.issue(
             crate::db::key::QueryKey::CurrentExpansionInput(Box::new(key.clone())),
@@ -847,7 +917,15 @@ impl<'a> MacroRun<'a> {
         &mut self,
         db: &mut crate::db::memo::Database,
     ) -> Result<VerifiedMacroRunInputs, Diagnostic> {
-        let result = (|| {
+        let result = self.certificate(db);
+        self.cancel();
+        result
+    }
+    fn certificate(
+        &mut self,
+        db: &mut crate::db::memo::Database,
+    ) -> Result<VerifiedMacroRunInputs, Diagnostic> {
+        {
             self.check_database(db)?;
             self.inputs.verify()?;
             self.expansion_budget.check_deadline()?;
@@ -857,9 +935,6 @@ impl<'a> MacroRun<'a> {
             e.digest(self.base.fingerprint());
             e.digest(self.inputs.preparation());
             e.u64(u64::try_from(self.units.len()).map_err(|_| stale())?);
-            if self.units.len() > 4096 || self.outputs.len() > 100_000 {
-                return Err(stale());
-            }
             let mut catalogs = std::collections::BTreeMap::new();
             for (unit, active) in &self.units {
                 let catalog = active.session.export_catalog(&active.context)?;
@@ -884,8 +959,6 @@ impl<'a> MacroRun<'a> {
                 catalogs,
                 outputs: self.outputs.clone(),
             })
-        })();
-        self.cancel();
-        result
+        }
     }
 }

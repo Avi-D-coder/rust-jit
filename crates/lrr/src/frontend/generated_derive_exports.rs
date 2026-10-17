@@ -94,7 +94,6 @@ impl GeneratedDeriveExports {
             .annotations()
             .iter()
             .try_fold(0usize, |n, a| n.checked_add(a.paths().len()))
-            .filter(|n| *n <= 4096)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -134,7 +133,6 @@ impl GeneratedDeriveExports {
                 };
                 bytes = extra
                     .and_then(|n| bytes.checked_add(n))
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-DISCOVERY-LIMIT",
@@ -154,7 +152,6 @@ impl GeneratedDeriveExports {
                     if let MacroIdentity::Procedural { export: name, .. } = &export.identity {
                         bytes = bytes
                             .checked_add(name.capacity())
-                            .filter(|n| *n <= 64 * 1024 * 1024)
                             .ok_or_else(|| {
                                 fault(
                                     "LRR-E-DISCOVERY-LIMIT",
@@ -223,7 +220,6 @@ impl GeneratedDeriveExports {
                 MacroIdentity::Procedural { export, .. } => export.capacity(),
                 _ => 0,
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -369,7 +365,6 @@ impl DeriveDeclarationRequest {
             .metadata_bytes()?
             .checked_add(export_bytes)
             .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 128))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -419,12 +414,6 @@ impl DeriveDeclarationRequest {
             environment: catalog.environment(),
             preparation: catalog.preparation(),
         };
-        if request.metadata_bytes()? > 32 * 1024 * 1024 {
-            return Err(fault(
-                "LRR-E-DISCOVERY-LIMIT",
-                "source derive request retention limit",
-            ));
-        }
         Ok(Some(request))
     }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
@@ -494,22 +483,10 @@ fn lookup(
         .collect::<BTreeMap<_, _>>();
     let mut keys = Vec::new();
     fn visit(tokens: &[TokenTree], keys: &mut Vec<Key>, depth: usize) -> Result<(), Diagnostic> {
-        if depth > 256 {
-            return Err(fault(
-                "LRR-E-DISCOVERY-LIMIT",
-                "derive path token depth limit",
-            ));
-        }
         for token in tokens {
             match token {
                 TokenTree::Group { children, .. } => visit(children, keys, depth + 1)?,
                 TokenTree::Ident { span, .. } | TokenTree::Punct { span, .. } => {
-                    if keys.len() >= 2_000_000 {
-                        return Err(fault(
-                            "LRR-E-DISCOVERY-LIMIT",
-                            "derive path token count limit",
-                        ));
-                    }
                     keys.try_reserve(1).map_err(|_| {
                         fault("LRR-E-DISCOVERY-LIMIT", "derive path token allocation")
                     })?;

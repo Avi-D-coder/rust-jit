@@ -2,9 +2,9 @@
 use super::term::{ConstTerm, GenericArg, InferVarKey, PlaceholderKey, RegionTerm, TyTerm};
 use crate::core::{diagnostic::Diagnostic, digest::Digest};
 use std::collections::BTreeMap;
+// Structural-nesting guard for symbolic type terms (type recursion; rustc bounds
+// type recursion by `recursion_limit`, compiler/rustc_interface/src/limits.rs).
 const MAX_DEPTH: usize = 256;
-const MAX_NODES: usize = 100_000;
-const MAX_STEPS: usize = 1_000_000;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-GENERIC-BINDING", message.into())
 }
@@ -37,7 +37,7 @@ fn validate(term: &TyTerm, transaction: Digest, universe: u32) -> Result<usize, 
     let mut count = 0usize;
     while let Some((term, depth)) = stack.pop() {
         count = count.checked_add(1).ok_or_else(limit)?;
-        if count > MAX_NODES || depth > MAX_DEPTH {
+        if depth > MAX_DEPTH {
             return Err(limit());
         }
         if let TyTerm::Infer(v) = term
@@ -107,9 +107,6 @@ impl Unifier {
         }
     }
     pub fn with_universe(transaction: Digest, universe: u32) -> Result<Self, Diagnostic> {
-        if universe > 256 {
-            return Err(limit());
-        }
         Ok(Self {
             universe,
             ..Self::new(transaction)
@@ -119,7 +116,6 @@ impl Unifier {
         let next = self
             .universe
             .checked_add(1)
-            .filter(|n| *n <= 256)
             .ok_or_else(limit)?;
         self.universe = next;
         Ok(next)
@@ -132,9 +128,6 @@ impl Unifier {
         }
         if self.variable_universes.contains_key(&key) || self.bindings.contains_key(&key) {
             return Err(fault("inference universe cannot be redeclared"));
-        }
-        if self.variable_universes.len() >= MAX_NODES {
-            return Err(limit());
         }
         self.variable_universes.insert(key, universe);
         Ok(())
@@ -171,9 +164,6 @@ impl Unifier {
                     if occurs(&staged, v, &t, &mut steps)? {
                         return Err(fault("recursive inference substitution"));
                     }
-                    if staged.len() >= MAX_NODES {
-                        return Err(limit());
-                    }
                     visible_substitution(&staged, &mut universes, v, &t, &mut steps)?;
                     staged.insert(v, t);
                 }
@@ -195,24 +185,20 @@ impl Unifier {
                 }
                 (TyTerm::Slice(a), TyTerm::Slice(b)) => work.push((*a, *b)),
                 (TyTerm::Array(a, x), TyTerm::Array(b, y)) if x == y => work.push((*a, *b)),
+                // A const generic length (`[T; N]` of an impl's `const N`)
+                // is the reached array's own length; rustc checked it.
+                (TyTerm::Array(a, ConstTerm::Param(_)), TyTerm::Array(b, _))
+                | (TyTerm::Array(a, _), TyTerm::Array(b, ConstTerm::Param(_))) => {
+                    work.push((*a, *b))
+                }
                 (TyTerm::Ref(r, m, a), TyTerm::Ref(s, n, b)) if r == s && m == n => {
                     work.push((*a, *b))
                 }
                 _ => return Err(fault("reached structural type contracts disagree")),
             }
         }
-        let mut nodes = 0usize;
-        let mut bytes = 0usize;
         for term in staged.values() {
-            nodes = nodes
-                .checked_add(validate(term, self.transaction, self.universe)?)
-                .ok_or_else(limit)?;
-            bytes = bytes
-                .checked_add(term.heap_bytes().ok_or_else(limit)?)
-                .ok_or_else(limit)?;
-            if nodes > MAX_NODES || bytes > 32 * 1024 * 1024 {
-                return Err(limit());
-            }
+            validate(term, self.transaction, self.universe)?;
         }
         self.bindings = staged;
         self.variable_universes = universes;
@@ -221,11 +207,7 @@ impl Unifier {
 }
 fn charge(steps: &mut usize) -> Result<(), Diagnostic> {
     *steps = steps.checked_add(1).ok_or_else(limit)?;
-    if *steps > MAX_STEPS {
-        Err(limit())
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
 fn resolve_head<'a>(
     bindings: &'a BTreeMap<InferVarKey, TyTerm>,
@@ -318,9 +300,6 @@ fn admit_variables(
     let mut work = vec![term];
     while let Some(term) = work.pop() {
         if let TyTerm::Infer(key) = term {
-            if !universes.contains_key(key) && universes.len() >= MAX_NODES {
-                return Err(limit());
-            }
             universes.entry(*key).or_insert(0);
         }
         work.extend(children(term));

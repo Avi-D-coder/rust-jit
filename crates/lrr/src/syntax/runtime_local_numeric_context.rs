@@ -31,16 +31,13 @@ impl Budget {
         self.work = self
             .work
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(limit)?;
         Ok(())
     }
     fn read(&mut self) -> Result<(), Diagnostic> {
         self.reads = self
             .reads
-            .checked_add(1)
-            .filter(|n| *n <= 256)
-            .ok_or_else(limit)?;
+            .checked_add(1)            .ok_or_else(limit)?;
         self.charge()
     }
 }
@@ -61,7 +58,7 @@ fn numeric_family(primitive: PrimitiveType) -> Option<bool> {
     }
 }
 pub(super) fn unsuffixed_family(mut expression: ast::Expr) -> Result<Option<bool>, Diagnostic> {
-    for _ in 0..256 {
+    for _ in 0usize.. {
         match expression {
             ast::Expr::ParenExpr(group) => {
                 let Some(inner) = group.expr() else {
@@ -112,7 +109,7 @@ fn suffix_primitive(suffix: Option<&str>) -> Option<Option<PrimitiveType>> {
 pub(super) fn literal_suffix(
     mut expression: ast::Expr,
 ) -> Result<Option<Option<PrimitiveType>>, Diagnostic> {
-    for _ in 0..256 {
+    for _ in 0usize.. {
         match expression {
             ast::Expr::ParenExpr(group) => {
                 let Some(inner) = group.expr() else {
@@ -158,7 +155,7 @@ pub(super) fn compound_right(
     }))
 }
 fn path(mut expression: ast::Expr) -> Result<Option<ast::PathExpr>, Diagnostic> {
-    for _ in 0..256 {
+    for _ in 0usize.. {
         match expression {
             ast::Expr::ParenExpr(group) => {
                 let Some(inner) = group.expr() else {
@@ -269,20 +266,9 @@ fn push_children(
     budget: &mut Budget,
 ) -> Result<(), Diagnostic> {
     let depth = depth
-        .checked_add(1)
-        .filter(|n| *n <= 256)
-        .ok_or_else(limit)?;
+        .checked_add(1)        .ok_or_else(limit)?;
     for child in node.children() {
         budget.charge()?;
-        if stack.len() >= 100_000
-            || stack
-                .len()
-                .checked_add(1)
-                .and_then(|count| count.checked_mul(std::mem::size_of::<(SyntaxNode, usize)>()))
-                .is_none_or(|bytes| bytes > 8 * 1024 * 1024)
-        {
-            return Err(limit());
-        }
         stack.try_reserve(1).map_err(|_| limit())?;
         stack.push((child, depth));
     }

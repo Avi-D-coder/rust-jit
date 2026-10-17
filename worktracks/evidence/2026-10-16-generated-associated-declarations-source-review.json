@@ -1,0 +1,163 @@
+{
+  "schema": "lrr/source-review/generated-associated-declaration-join/v1",
+  "source": [
+    {
+      "path": "crates/lrr/src/frontend/associated_declarations.rs",
+      "sha256": "74b88f3aac999ed64ac27cd17a2e47534e571f69a5625e4e01e8fa6737690828",
+      "bytes": 24053
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+      "sha256": "e315e8b0d99a8ab7b8d85bf12f951a5556b63c0f867819aa4944cc8188ff170d",
+      "bytes": 10812
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_associated_declarations.rs",
+      "sha256": "0ac84d76c07110a42e757e00499f54473565c4553bb86152d950f89a3fd205c4",
+      "bytes": 17377
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_associated_declaration_tests.rs",
+      "sha256": "cc57444274df98ed0f5bf419d9a8751f10542983c7dbcbb2dff2be8ea4315bec",
+      "bytes": 14545
+    },
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "sha256": "17789fd4019d70691d7ee7fb8a378068bb283a72d5e70a4601be45d9ea79c11c",
+      "bytes": 64802
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/item_output.rs",
+      "sha256": "3aa7ffe99efa3c4f4265d707b0e4d4d1b51d3911126868f4e679093bef14a266",
+      "bytes": 17749
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/declaration_output.rs",
+      "sha256": "ecbece2568a9966d2372736a079f47c8e7e7936b29a6c0be63b212b7f8fa5fe3",
+      "bytes": 10329
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_items.rs",
+      "sha256": "5273b6d36ef77c95127d884cfd7df8685fe1c3a7470597bd81431be4c448607b",
+      "bytes": 30439
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "0882d8a8dac83288855c4664a099a5beb76481b9ea5d7522d074ad42ab266ff9",
+      "bytes": 39639
+    }
+  ],
+  "status": "source-only successor; uncompiled/unexecuted; no currentness/catalog/member/call/runtime grant",
+  "historical_original": "/private/tmp/lrr-original-associated-declarations-v1/COMPONENT.json SHA97f0d9e7536229ccd08185c13abdbf91ed1bc12eeef0f7a570972c5509ee8179 preserved",
+  "precode": "worktracks/evidence/2026-10-16-generated-associated-declarations-precode.json",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-as-fn-body.rs",
+    "sha256": "6ae5e64fd603f1817e3e5a8b69c09b7b72cf39ab8ecc8d58df6706c3b9bf3797",
+    "acceptance": "actual original/user-produced associated source capture only; full main not run"
+  },
+  "common_factors": [
+    {
+      "symbol": "item_output::HeaderItems/capture_header/capture_headers",
+      "change": "Actual pinned AST path/header/name-span extraction shared by existing Items and new declaration admission. Same declaration-container order and v2 Items key inputs; function bodies opaque."
+    },
+    {
+      "symbol": "declaration_output::materialize_with_headers",
+      "change": "One real grammar parse, retains header captures from same root/span map, then ordinary declaration materialize_root; existing materialize/SyntaxSnapshot representation unchanged. No reparse or syntax wrapper."
+    },
+    {
+      "symbol": "generated_items::retain_generated_headers",
+      "change": "Exact existing lrr/v2/generated-header tag/text/clipped origins recipe and lrr/v2/generated-item expansion/path/header. Checked new count/range/capacity bounds; existing Items delegates. Resource bounds can refuse oversized captures; semantic key encodings unchanged."
+    },
+    {
+      "symbol": "GeneratedDeclarations::admit_attached/headers/metadata_bytes",
+      "change": "Retains actual common header facts at admission and accounts fixed Vec, structural paths/name capacities. Existing GeneratedDeclarations binding domain remains actual parent/producer/descriptor/epoch; new facts deterministic from same pinned output. Actual admitted_parsed accessor inherited from earlier parent overlay included explicitly."
+    },
+    {
+      "symbol": "ParsedFile::outline/outline_in_root/outline_associated_fragment",
+      "change": "Same original public root/traversal, plus authenticated caller-facing pure projection using exact actual MACRO_ITEMS node inside generated arena and genuine parent header/context. Parent context retained copies bounded before cloning. No fabricated ItemList/trait wrapper or public moduleowner relaxation."
+    }
+  ],
+  "authority": {
+    "chain": "Existing private-constructed SourceDeclarativeRequest captured through SyntaxRequestReceipt, exact output key/descriptor/parent inventory+invocation, expected cfg/epoch/source path/scope/admitted parse, original canonical owner and direct generated fragment producer ancestry. Only same owning associated grammar can carry original owner; body/nested scopes do not inherit it by name. Each issued child must be an actual direct MacroProducer Fragment row in actual parent scan.",
+    "owner": "Actual original PreparedSourceView plus original canonical join, trait DefKey vs impl Outline header child identity kept separate from raw scanner source/semantic IDs. Original producer-to-slot index is prepared once; no repeated original-source scans per generated request.",
+    "member": "Active scanner fragment range/kind joins unique actual retained pinned GeneratedHeader and common Outline row under genuine parent context. Name range/spelling/owning edition/physical context checked through a once-built actual token span-key index. Canonical generated identity is existing GeneratedItemKey; fragment-local DefKey is auxiliary metadata and is not substituted for expansion identity. Cold BodyHandle copy remaps only definition key, matching existing module generated-source convention.",
+    "not_granted": "No trait/member visibility/hygienic use selection, goal/applicability, namespace completeness/currentness, dictionary or body entry. Unexpanded output remains producer fact with no canonical function. Empty output is not absence. Linear issued path does not certify all sibling producers complete."
+  },
+  "stability": {
+    "preserved": "Existing public original Outline, Items AST ordering, generated-header/item domains, generated declaration binding domain, scanner v3 and impl semantic v2 unchanged. Existing key recipe source-factor reviewed; authored control compares real Items versus declaration admission on the exact same record.",
+    "new": "lrr/v1/generated-associated-declaration-source-join binds original join/owner, epoch, actual admitted outputs/record descriptors, actual contextual Outline and explicit generated header keys/body attachments. No pointer identity encoded. Producer locator index is derived from already encoded original facts, no original semantic domain migration."
+  },
+  "cost": {
+    "admission": "One additional bounded cold declaration-container header walk over same pinned AST; HeaderItems path/count limits reused, headers retained once. Declaration materialize_root already walks producer syntax; cold double visitation recorded. No second parse added. GeneratedDeclarations retained metadata increases by actual header vector/path/name buffers.",
+    "preparation": "Bounded chain<=256; actual parent producers checked once per distinct chain node; once-built sorted original producer locators and final output header/declaration/token-span indexes. O(sum chain scan producers + final indexed rows log rows + actual header/context comparisons), within existing scanner and 1m rows/128MiB component budget. Not claimed globally amortized/memoized across separately constructed factories. The existing common Outline also hashes body syntax and checks delimiter reliability for cold BodyHandle attachment; these body-byte/token walks remain, without executable lowering or type checking.",
+    "lookup": "header(ordinal) direct immutable locators; no parser/source walk/name resolution/query/body preparation. Existing original owner/associated lookup remains logarithmic.",
+    "roots": "Captured source/original owner borrowed; actual GeneratedDeclarations Arcs shared/explicitly exposed, receipt owned metadata and contextual Outline owned/accounted. No BodyIndex/ParsedFile deep copy. Caller/query-root integration must retain/account shared output allocations before consumer publication.",
+    "measurements": "None; no speed/scaling acceptance.",
+    "inherited": "Existing Items path can admit GeneratedItems and later GeneratedDeclarations::admit_item_output from the same record, retaining its older additional parse; this patch does not add a parse to either admission or close that prepare-once architecture debt. Key-equivalence control deliberately compares both actual transports. Associated direct output uses the one existing declaration admission parse."
+  },
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": "generated associated prepare + shared Outline",
+      "finding": "No assertion/expression evaluator. MA001/MA007/MA008 legacy removal outside source component remains held."
+    },
+    {
+      "mode": 2,
+      "symbols": "real grammar materialize_with_headers + admitted MACRO_ITEMS node",
+      "finding": "Actual generated AST enters same ordinary header kernel, no literal/break executor or display-text wrapper. Historical MA004/MA005 runtime obligations not closed."
+    },
+    {
+      "mode": 3,
+      "symbols": "actual GeneratedItemKey/owner/header/producer chain",
+      "finding": "No basename/macro-selected method, runtime descriptor choice or numeric policy. Physical-name context checked only as attachment; common M025 selection remains absent. MA003/MA006 held."
+    },
+    {
+      "mode": 4,
+      "symbols": "generated associated prepare",
+      "finding": "Adds genuine generated half rather than promoting original-only route; no language consumer hooked and no runtime rejection/compatibility acceptance. More general generated owner chains/ordinary member service remain explicit gaps."
+    },
+    {
+      "mode": 5,
+      "symbols": "HeaderItems/capture_header + Outline body handles",
+      "finding": "Body/initializer attachment metadata only; no lowering/typecheck/execution of cold body or pattern engine. MA002 unaffected."
+    },
+    {
+      "mode": 6,
+      "symbols": "materialize_with_headers + original producer index/final span indexes",
+      "finding": "No second parse. Headers extracted at admission, shared handles/locators used by projection/lookups. Factory still cold explicit preparation; query memo integration later. Cold double AST visitation recorded."
+    },
+    {
+      "mode": 7,
+      "symbols": "single source/issued path indexes",
+      "finding": "No full-world namespace map, global revision or hot currentness scan. No currentness guard minted by source component."
+    },
+    {
+      "mode": 8,
+      "symbols": "borrowed canonical owner/source + retained output Arcs",
+      "finding": "No immutable body/parser copy or whole-file per-node lookup. BodyHandle metadata copied only to attach actual generated definition identity; bounded shared roots explicit."
+    }
+  ],
+  "controls_authored_unexecuted": [
+    "actual_stock_trait_and_inherent_outputs_keep_real_canonical_owner_and_generated_identity",
+    "exact_items_header_keys_are_shared_with_existing_generated_items_transport",
+    "wrong_actual_owner_request_epoch_and_missing_chain_refuse_without_semantic_answer",
+    "genuine_wrapper_chain_keeps_parent_attachment_and_equal_outputs_distinct",
+    "generated_cfg_active_rows_join_actual_header_paths_without_reviving_disabled_members"
+  ],
+  "independent_review": {
+    "reviewer": "/root/runtime_validation_next",
+    "status": "partial read-only pass; adapter changed-leaf independent review incomplete; no compilation/execution",
+    "source": "generated0ac84d76/original74b88f3a/Outline17789fd4",
+    "finding": "No concrete defect found in inspected issued prepare/header chain, true parent producer/record/epoch/cfg/path/scope, direct Fragment slots, pinned header key and physical name span/edition/context, actual sole MACRO_ITEMS common Outline and remapped scalar BodyHandle metadata; checked retained/transient indexes. No body index copy or currentness/member/call authority inferred.",
+    "remaining": "Changed adapter item_output/declaration_output and shared GenItems/GenDecl admission/key factors need independent exact-source review plus frozen compile/tests before integration. Self source review covers exact unchanged key recipe/common cursor factor; it is not independent adapter acceptance."
+  },
+  "limits": [
+    "Independent adapter/shared admission factor review incomplete; do not promote this held source packet as integrated or accepted.",
+    "No Cargo/compiler/test command by worker; all new and inherited affected tests unexecuted on this successor.",
+    "No frontend/mod.rs hook applied. Existing shared production factors are source changes needing independent frozen compilation before integration.",
+    "Original-root canonical owner chain implemented; owners introduced by generated trait/impl declarations require their own genuine canonical parent admission later.",
+    "No public compiler-static correctness, caller name-resolution proof, complete M019 configured/facade catalog, M020-M026 solver/member/dictionary/call implementation.",
+    "Full unchanged main/written/user/wrapper/std runtime matrix, cleanup/suspension/epoch revocation and representative measurements remain held.",
+    "Associated function-like issued producer paths from an original canonical owner are implemented. Attribute replacement/derive and generated trait/impl owner admission require their own genuine attachment services; no general generated namespace completion implied."
+  ]
+}

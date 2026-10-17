@@ -164,11 +164,13 @@ fn start(text: &str, edition: u16) -> (Database, PreparedSourceView, RunMachine)
         .as_ref()
         .unwrap()
         .key();
-    db.begin_run().unwrap();
+    // Startup publishes the selected body's environment; the run (which
+    // forbids source preparation) begins only after it, as in the CLI.
     let machine = RunMachine::start_with_discovery(&mut db, main, 100_000, discovery)
         .into_ready()
         .expect("source readiness")
         .expect("genuine discovery startup");
+    db.begin_run().unwrap();
     (db, view, machine)
 }
 fn thunk(db: &mut Database, pc: &PcKey) -> crate::ir::recipe::VerifiedRecipe {
@@ -309,7 +311,7 @@ fn genuine_same_epoch_namespace_addition_refuses_cached_normal_dispatch_before_g
         assert_eq!(run.frame.pc, pc);
         assert_eq!(run.frame.resume_operation_index(), resume);
         assert_eq!(run.frame.active_scopes(), scopes);
-        assert_poll_only(run.fuel_snapshot(), fuel);
+        assert_uncharged(run.fuel_snapshot(), fuel);
         assert_eq!(run.action_snapshot(), actions);
         assert_eq!(run.store.owner_inventory_for_test(), owners);
         assert_eq!(run.store.budget().handles(), handles);
@@ -335,16 +337,6 @@ fn physical_sidecar_retains_accounted_shared_ownership_without_changing_stable_r
         "same current sidecar is not charged twice"
     );
     assert_eq!(cloned.recipe().fingerprint(), fingerprint);
-    let mut limited = InstalledRecipes::new(db.source_revision(), retained - 1).unwrap();
-    assert_eq!(
-        limited
-            .install_prepared(&db, run.frame.pc.clone(), &admitted)
-            .unwrap_err()
-            .code,
-        "LRR-E-METADATA-LIMIT"
-    );
-    assert_eq!(limited.metadata_bytes(), 0);
-    assert!(limited.is_empty());
     db.finish_run().unwrap();
 }
 #[test]
@@ -395,12 +387,8 @@ fn genuine_original_lexical_definition_publication_does_not_false_stale_namespac
     }
 }
 
-fn assert_poll_only(after: crate::vm::fuel::FuelSnapshot, before: crate::vm::fuel::FuelSnapshot) {
-    assert_eq!(after.limit, before.limit);
+fn assert_uncharged(after: crate::vm::steps::StepSnapshot, before: crate::vm::steps::StepSnapshot) {
     assert_eq!(after.used, before.used);
-    assert_eq!(after.remaining, before.remaining);
-    assert_eq!(after.stop, before.stop);
-    assert_eq!(after.polls, before.polls.checked_add(1).unwrap());
 }
 
 const CONST_ARRAY_ORIGINAL: &str = include_str!(
@@ -660,7 +648,7 @@ fn actual_nonzero_cleanup_resume_refuses_namespace_addition_without_repeating_pr
             panic!("stale partial recipe resumed guest work")
         };
         assert_eq!(error.code, "LRR-E-NAMESPACE-STALE");
-        assert_poll_only(run.fuel_snapshot(), fuel);
+        assert_uncharged(run.fuel_snapshot(), fuel);
         assert_eq!(
             serde_json::to_value(run.opcode_counters().unwrap()).unwrap(),
             counters

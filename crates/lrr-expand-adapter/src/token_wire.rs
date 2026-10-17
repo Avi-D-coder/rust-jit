@@ -3,7 +3,7 @@ mod model;
 pub(crate) mod pinned;
 use crate::AdapterError;
 pub use model::*;
-use model::{MAX_DEPTH, MAX_ITEMS, MAX_TEXT, error, limit};
+use model::{error, limit};
 use std::collections::BTreeMap;
 /// Lex captured source through the pinned lexer and remap all spans to owned source identities.
 /// Identifier spellings become NFC; source spans and literal spellings stay intact.

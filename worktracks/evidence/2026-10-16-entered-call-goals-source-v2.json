@@ -1,0 +1,43 @@
+{
+  "schema": "lrr/source-review/entered-call-goals/v2",
+  "status": "source-only coordinate correction; uncompiled/unexecuted",
+  "source_fingerprint": "962b18c7a3899309b57376fe3a8d0b67e4aa26c96611bc6c37afe2ac10497c16",
+  "frozen_payload": "/private/tmp/lrr-entered-call-goals-v2",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "before_sha256": "a8f45a785564084e3598d1ad16ec7dfc8593551e61aef57c5a2592321e4b64f6",
+      "sha256": "939907ec2971024ea919b593d0f8634f42bc4e0faa37b76ef2422c4b5b100d45",
+      "bytes": 31862
+    },
+    {
+      "path": "worktracks/04-calls-source-views/common-entered-call-goals-handoff.md",
+      "before_sha256": "383cf59237c14ad7b3e41b29d8c9da310b9c2063c068ee42d70d7c11a49378f8",
+      "sha256": "76ae9659e79d2b3aeb55c5418947324b1f039144e68e6d094c7d48d871528366",
+      "bytes": 14336
+    }
+  ],
+  "base_contract": "Apply only new goal leaf+record over frozen8694e0c0 V1. SourceCallable/shared proof/legacy constructor leaves unchanged and supplied only by V1. No root lowerer/DB/provider/module/engine source included.",
+  "defect": "V1 compared absolute PathExpr target.range with relative BodyIndex path.range. Actual contracts index_body688/1227 and entered_node_syntax99 establish difference. Goal call_range was already relative and correct.",
+  "correction": "Preserve range() absolute for actual AST consumer; add indexed_range() relative and checked same-actual-body projection equality at capture. Index matcher uses only relative. Explicit stable domain V2 records both; fixed range storage charged by size_of.",
+  "source_controls": "whole unchanged suffix all18calls x all4 x original/retained/user/wrapper, nonzero body offsets and exact absolute/relative projection/distinctness; existing phase/site/epoch/no-childcode controls. All unexecuted.",
+  "review": "All8 preserved except V1 path-authority usability conclusion amended. No new parser/type/evaluator/profile/origin gate/body demand/phase source planning/world scan/body copy; O(1) checked same-tree projection only.",
+  "commands": [
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/frontend/entered_call_goals.rs",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "not_run": [
+    "Cargo",
+    "native compilation",
+    "source controls",
+    "guest runtime",
+    "architecture matrix",
+    "milestone"
+  ]
+}

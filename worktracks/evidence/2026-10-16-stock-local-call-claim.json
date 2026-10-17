@@ -1,0 +1,29 @@
+{
+  "schema": "lrr/architecture-claim/stock-local-call/v1",
+  "status": "pre-code bounded claim; source-only test leaf",
+  "task": "LOCAL-024; T032/T033/T043/T045 common ordinary entered local call; no milestone closure",
+  "ownership": [
+    "crates/lrr/src/engine/run_stock_local_call_tests.rs"
+  ],
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/resolve/type-param-local-var-shadowing.rs",
+    "bytes": 398,
+    "sha256": "c90c918b7d21b237f7137bd8a744022bf5b63c5fd61253b30fd7d893ad259d23",
+    "original": "unchanged pinned run-pass import; no import edits"
+  },
+  "invariant": "Inner item fn f shadows outer local f via actual common Value/query44 source selection, then ordinary zero-argument call sealing, frame entry and cleanup exactly once; cold generic Foo/Box impl body remains unentered. No selected-body substitution.",
+  "existing_route": "run_source_preparation_tests::start/completed/child_bodies -> actual SourceDiscovery entry selection -> original/generated admitted SourceLocalPlan -> EnteredCall query44/Value39 -> reached locator publication -> normal CallSeal/CheckParameters -> explicit RunMachine frames/return cleanup",
+  "source_contexts": "Full source plain/user emitter/wrapper in editions2015/2018/2021/2024. Test-only pinned parser moves actual crate attributes to root position, preserves every remaining original item byte inside arbitrary emitter; no production parser/evaluator.",
+  "authority": "Actual parent source/index/body/header/edition, actual canonical local f ItemOutline/BodyKey, exact current child environment and retained parent identity; query/cold checks through actual DB trace.",
+  "costs": "Test-only O(source bytes) AST attribute adapter,3x4 harness executions; production unchanged. Common immutable Arc BodyIndex reused.",
+  "remaining_routes": "No production routes removed; legacy assertion/module/numeric routes remain held per E-R5-005/MA001-MA008. Zero legacy Assert opcode required for this runtime control.",
+  "acceptance": "Authored controls and source review only until independent validator compiles/runs exact frozen leaf. No full-fixture/native/compiler/JIT acceptance claim.",
+  "required_evidence": [
+    "actual all12 root executions",
+    "CallSeal1 CheckParameters1, no argument ops/no legacyAssert",
+    "actual f body cold before entry; no unrelated body/thunk queries",
+    "actual child-parent source/header/body identity and one retained child plan",
+    "all owners/continuations/pending metadata retired, source_revision stable"
+  ],
+  "precode": true
+}

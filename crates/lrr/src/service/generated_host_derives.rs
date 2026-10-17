@@ -167,11 +167,7 @@ pub(crate) fn prepare(
             bytes = bytes
                 .checked_add(decl.names().allocated_bytes()?)
                 .and_then(|n| n.checked_add(512))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("generated macro-host declaration metadata limit"))?;
-            if declarations.len() >= 4096 {
-                return Err(fault("generated macro-host declaration count limit"));
-            }
             origin.record(&decl);
             declarations.push(decl);
         }

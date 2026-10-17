@@ -29,7 +29,7 @@ pub(super) fn thunk(
         Ok(None) => return QueryPoll::Ready(Ok(None)),
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
-    let retained = match db.fetch(provider, QueryKey::PatternPlan(owner)) {
+    let retained = match db.fetch(provider, QueryKey::PatternPlan(owner.clone())) {
         QueryPoll::Ready(Ok(value)) => value,
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
@@ -54,26 +54,58 @@ pub(super) fn thunk(
             "pattern source-plan roots differ".into(),
         )));
     }
-    let binding = plan.requires_binding_admission(pc);
-    let recipe = if binding {
-        SyntaxProvider::scalar_binding_admission(db, index, pc).and_then(|proof| {
-            plan.lower(pc, Some(&proof))
-                .and_then(|recipe| recipe.with_namespace_witness(db))
-        })
-    } else {
-        plan.lower(pc, None)
-    };
+    // A destructuring `let`'s composite annotation is the entered Type
+    // service's selection (the same `let_annotations` route an ordinary
+    // `let` uses); its joined input guard stays with the installed recipe.
+    if pc == &owner
+        && plan.let_value_owner()
+        && matches!(
+            db.input(&super::dependency::InputKey::BodyEnvironment(pc.body.clone()))
+                .as_deref(),
+            Some(super::dependency::InputValue::BodyEnvironment(_))
+        )
+    {
+        let site = match parsed.let_annotation_site(handle, index, pc) {
+            Ok(site) => site,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        if let Some(site) = site {
+            let mut guards = Vec::new();
+            let written =
+                match super::let_annotation_thunk::select(db, pc, &site.shape, &mut guards) {
+                    QueryPoll::Ready(Ok(written)) => written,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+            let borrowed: Vec<&super::memo::PreparedInputGuard> =
+                guards.iter().map(Arc::as_ref).collect();
+            let guard = match super::memo::PreparedInputGuard::join(&borrowed) {
+                Ok(guard) => guard,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let recipe = plan
+                .lower_let_annotated(
+                    pc,
+                    crate::ir::op::HintRecipe::Written(Arc::new(written)),
+                )
+                .and_then(|recipe| recipe.with_shared_prepared_inputs(Arc::new(guard)));
+            return QueryPoll::Ready(Ok(Some(Provided {
+                value: match recipe {
+                    Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
+                    Err(error) => QueryValue::Error(error),
+                },
+                cacheable: true,
+            })));
+        }
+    }
+    // Identifier classification is ordinary Value-namespace resolution at the
+    // reached dispatcher; the immutable lowering is fully cacheable.
     QueryPoll::Ready(Ok(Some(Provided {
-        value: match recipe {
+        value: match plan.lower(pc) {
             Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
             Err(error) => QueryValue::Error(error),
         },
-        // Existing reached namespace absence/currentness admission is reminted
-        // independently; immutable structural source preparation remains cached.
-        cacheable: !binding,
+        cacheable: true,
     })))
 }
 
-#[cfg(test)]
-#[path = "pattern_plan_provider_tests.rs"]
-mod tests;

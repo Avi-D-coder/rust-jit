@@ -16,17 +16,13 @@ pub fn emit(
     value: &[u8],
     max_wire_bytes: usize,
 ) -> Result<TokenForest, AdapterError> {
-    if max_wire_bytes == 0 || max_wire_bytes > 256 * 1024 * 1024 {
+    if max_wire_bytes == 0 {
         return Err(fault("byte output wire budget is invalid"));
-    }
-    if input.allocated_bytes().map_err(|e| fault(&e.to_string()))? > 64 * 1024 * 1024 {
-        return Err(fault("byte output input metadata limit"));
     }
     let escaped = value
         .iter()
         .try_fold(0usize, |n, b| {
             n.checked_add(std::ascii::escape_default(*b).count())
-                .filter(|n| *n <= 32 * 1024 * 1024 - 3)
         })
         .ok_or_else(|| fault("byte output escaped text limit"))?;
     let mut store = SpanStore::default();
@@ -50,7 +46,6 @@ pub fn emit(
         |total, record| {
             total
                 .checked_add(record.source.path.len())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("output aggregate text limit"))
         },
     )?;
@@ -59,9 +54,6 @@ pub fn emit(
         .map_err(|e| fault(&e.to_string()))?
         .checked_add(escaped)
         .ok_or_else(|| fault("byte output wire size overflow"))?;
-    if required > max_wire_bytes.min(32 * 1024 * 1024) {
-        return Err(fault("byte output exceeds wire budget"));
-    }
     let mut text = String::with_capacity(escaped);
     for byte in value {
         text.extend(std::ascii::escape_default(*byte).map(char::from));

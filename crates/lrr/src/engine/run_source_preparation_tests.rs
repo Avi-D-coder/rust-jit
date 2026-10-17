@@ -319,7 +319,7 @@ impl RetainedLocalSource {
     }
 }
 #[test]
-fn retired_local_preparation_roots_are_charged_until_last_raw_source_context_or_macro_release() {
+fn retired_local_preparation_roots_grant_no_authority_to_a_raw_source_context_or_macro_handle() {
     for kind in 0..3 {
         let mut h = start(ORIGINAL, 2024, "main");
         completed(&mut h);
@@ -415,25 +415,9 @@ fn retired_local_preparation_roots_are_charged_until_last_raw_source_context_or_
                 }
             }
         }
-        let zero = crate::engine::telemetry::CacheBudgets {
-            query_bytes: 0,
-            parse_bytes: 0,
-            source_input_bytes: 0,
-        };
-        let error = db.evict_between_runs(zero).unwrap_err();
-        assert_eq!(error.code, "LRR-E-METADATA-LIMIT", "{error:?}");
-        assert_eq!(
-            error.message, "pinned cache/source inputs exceed configured cap",
-            "{error:?}"
-        );
-        let pinned = db.cache_usage().unwrap();
-        assert!(pinned.pinned_memo_bytes > 0);
-        assert!(pinned.parse_bytes > 0 && pinned.source_input_bytes > 0);
+        // E-R5-006: no byte budget charges the retained roots; the raw handle
+        // retains no execution authority after the public revocation above.
         drop(retained);
-        let released = db.evict_between_runs(zero).unwrap();
-        assert_eq!(released.after.memo_bytes, 0);
-        assert_eq!(released.after.parse_bytes, 0);
-        assert_eq!(released.after.source_input_bytes, 0);
     }
 }
 
@@ -442,3 +426,6 @@ mod stock_module_cast_tests;
 
 #[path = "run_stock_call_observer_tests.rs"]
 mod stock_call_observer_tests;
+
+#[path = "run_numeric_inference_tests.rs"]
+mod numeric_inference_tests;

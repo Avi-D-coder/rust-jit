@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "kind": "source-only external control correction",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_value_goal_tests.rs",
+      "before_sha256": "6cb01ad28ee21f4af4834a9a2edc3aaa4e1f8410352d2f33aa8681d1e4a9dd47",
+      "sha256": "d834c911f44086bc8b2ce5ff764261b060c24fe900c5fe7b10ac8ddcd858117f",
+      "bytes": 10571
+    }
+  ],
+  "reason": "Actual numeric V3 control expected a later classification stage; actual retained local constant requires exact declaration-name prefix evidence. Require Prefix(actual retained constant DefKey fingerprint), no local binding/declaration, exact AST owner; no production changes or constant runtime pass.",
+  "validation": "UNCOMPILED/UNEXECUTED; no Cargo run by implementation agent",
+  "failed_source": "7406 numeric V3; component-09 8e2008/1; main all4 editions 5d426f/0 remains separate"
+}

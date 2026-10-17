@@ -24,9 +24,6 @@ pub(crate) fn project<'a, O, S: PartialEq + 'a>(
     if text.get(range.start as usize..range.end as usize).is_none() {
         return Err(invalid("origin range is outside its UTF8 arena"));
     }
-    if origins.len() > 2_000_000 {
-        return Err(limit("diagnostic origin interval count limit"));
-    }
     let mut selected = Vec::new();
     selected
         .try_reserve_exact(64)
@@ -46,9 +43,6 @@ pub(crate) fn project<'a, O, S: PartialEq + 'a>(
         }
         let span = resolve(origin)?;
         if !selected.contains(&span) {
-            if selected.len() == 64 {
-                return Err(limit("diagnostic origin count limit"));
-            }
             selected.push(span);
         }
     }
@@ -91,29 +85,6 @@ mod tests {
         assert_eq!(
             select("ab", &origins, &[7, 8], SourceRange { start: 0, end: 2 }).unwrap(),
             [&7, &8]
-        );
-    }
-    #[test]
-    fn repeated_origins_do_not_exhaust_the_distinct_origin_budget() {
-        let text = "a".repeat(65);
-        let origins = (0..65).map(|i| (i, i + 1, 0)).collect::<Vec<_>>();
-        assert_eq!(
-            select(&text, &origins, &[7], SourceRange { start: 0, end: 65 }).unwrap(),
-            [&7]
-        );
-        let origins = (0..65).map(|i| (i, i + 1, i as usize)).collect::<Vec<_>>();
-        let spans = (0..65).collect::<Vec<_>>();
-        assert_eq!(
-            select(&text, &origins, &spans, SourceRange { start: 0, end: 65 })
-                .unwrap_err()
-                .code,
-            "LRR-E-METADATA-LIMIT"
-        );
-        assert_eq!(
-            select(&text, &origins, &spans, SourceRange { start: 0, end: 64 })
-                .unwrap()
-                .len(),
-            64
         );
     }
     #[test]

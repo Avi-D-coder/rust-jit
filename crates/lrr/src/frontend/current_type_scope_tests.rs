@@ -112,15 +112,36 @@ fn inline_type_bucket_retains_actual_value_parent_and_exact_namespace_all_editio
         ));
         let mut wrong = bucket.bucket.clone();
         wrong.namespace = Namespace::Value;
+        // Type completion grants no Value completeness at the inline scope:
+        // the Value fixed point certifies that module's own Value names as a
+        // separate contained Value facet, never through the Type receipt.
+        let value_facet = parent
+            .bucket_certificate(&wrong)
+            .unwrap()
+            .expect("the Value fixed point's own inline Value facet");
+        assert_eq!(value_facet.namespace, Namespace::Value);
         assert!(
-            parent.bucket_certificate(&wrong).unwrap().is_none(),
-            "Type completion grants no Value completeness at the inline scope"
+            parent
+                .value_scopes
+                .iter()
+                .any(|receipt| std::ptr::eq(receipt.scope(), value_facet))
+                && parent
+                    .type_scopes
+                    .iter()
+                    .all(|receipt| !std::ptr::eq(receipt.scope(), value_facet)),
+            "the Value answer is the contained Value facet, not the Type receipt"
+        );
+        let mut retyped = parent.clone();
+        retyped.value_scopes.clear();
+        assert!(
+            retyped.bucket_certificate(&wrong).unwrap().is_none(),
+            "a Type receipt alone grants no Value completeness"
         );
         assert!(
             matches!(db.fetch(&SyntaxProvider, QueryKey::SealedName(Box::new(
             SealedNameKey { seal: bucket.seal.clone(), bucket: wrong }))),
-            QueryPoll::Ready(Err(error)) if error.code == "LRR-E-QUERY-REQUEST"),
-            "an immutable parent cannot be retried as authority for another facet"
+            QueryPoll::Ready(Ok(_))),
+            "the inline Value facet answers its own namespace"
         );
         let mut absent = bucket.bucket.clone();
         absent.name = "not_declared_in_module".into();

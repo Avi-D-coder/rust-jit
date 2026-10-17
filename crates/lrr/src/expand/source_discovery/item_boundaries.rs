@@ -3,8 +3,6 @@
 use super::*;
 use crate::expand::body_macro_boundary::CompletedEmptyBoundary;
 
-const MAX_BOUNDARIES: usize = 100_000;
-const MAX_BYTES: usize = 64 * 1024 * 1024;
 
 pub(super) struct PendingItemBoundary {
     boundary: CompletedEmptyBoundary,
@@ -42,7 +40,6 @@ impl PendingItemBoundary {
             || key.procedural_epoch.is_some_and(|actual| actual != epoch)
             || source.selection().outline.cfg != cfg
             || prerequisites.is_empty()
-            || prerequisites.len() > MAX_BOUNDARIES
             || !actual_call
         {
             return Err(fault("pending item boundary actual owner differs"));
@@ -60,7 +57,6 @@ impl PendingItemBoundary {
             .and_then(|n| n.checked_add(job_bytes))
             .and_then(|n| n.checked_add(128))
             .and_then(|n| n.checked_add(source_bytes))
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(|| fault("pending item boundary metadata limit"))?;
         let mut jobs = Vec::new();
         jobs.try_reserve_exact(prerequisites.len())
@@ -89,7 +85,6 @@ impl PendingItemBoundary {
                     .checked_mul(std::mem::size_of::<DiscoveryJob>())
                     .and_then(|jobs| n.checked_add(jobs))
             })
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(|| fault("pending item boundary retained limit"))?;
         Ok(Self {
             boundary,
@@ -144,9 +139,6 @@ impl SourceDiscovery {
         if let Some(error) = &self.failed {
             return Err(error.clone());
         }
-        if self.pending_item_boundaries.len() > MAX_BOUNDARIES {
-            return Err(fault("pending item boundary count limit"));
-        }
         let mut ready = Vec::new();
         ready
             .try_reserve_exact(self.pending_item_boundaries.len())
@@ -162,9 +154,12 @@ impl SourceDiscovery {
                     .records
                     .get(identity)
                     .is_none_or(|record| !record.same_record(&boundary.record))
-                || self.generated_owners.get(identity).is_none_or(|(ordinal, scope)| {
-                    *ordinal != boundary.source_ordinal || scope != &boundary.call.scope
-                })
+                || self
+                    .generated_owners
+                    .get(identity)
+                    .is_none_or(|(ordinal, scope)| {
+                        *ordinal != boundary.source_ordinal || scope != &boundary.call.scope
+                    })
             {
                 return Err(fault("pending item boundary record/scope owner differs"));
             }
@@ -189,7 +184,6 @@ impl SourceDiscovery {
         self.completed_empty_boundaries
             .len()
             .checked_add(ready.len())
-            .filter(|count| *count <= MAX_BOUNDARIES)
             .ok_or_else(|| fault("completed item boundary count limit"))?;
         for identity in ready {
             let pending = self
@@ -218,6 +212,7 @@ impl SourceDiscovery {
             &self.module_routes,
             &self.nested_sources,
             &self.nested_inert_proofs,
+            &mut self.route_install,
         )?;
         self.work.namespace_changed()?;
         Ok(true)

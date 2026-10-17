@@ -1,0 +1,30 @@
+{
+  "schema": "lrr/precode/generated-impl-retained-scan/v1",
+  "owned": [
+    "crates/lrr/src/expand/generated_declarations.rs"
+  ],
+  "baseline": "219cb766fd906bf3d90ddbdde82d96c675ed0aa80c9c3ec52385fcf4757df2c1",
+  "invariant": "Exact admitted output descriptor/epoch/cfg and output-coordinate attachment determines existing canonical impl header; never reparse/rescan a retained declaration output for the same join.",
+  "tasks": [
+    "M018 discovery fixed point",
+    "M019 header prerequisite; no impl catalog completeness or trait applicability grant"
+  ],
+  "witness": "Unchanged upstream tests/ui/resolve/type-param-local-var-shadowing.rs whole-output emitter emits generic Foo and impl; V7 source54e7 lookup Defined and invocation selfwait; actual header job internals not traced.",
+  "route": "GeneratedItems::declaration_facet -> GeneratedDeclarations::admit_attached -> retained ParsedFile + DeclarationScan -> item_impl_headers -> existing declaration-job completion/inventory checks; root owns ordinary bridge.",
+  "coordinates": "Both pinned adapters use MacroItems on exact record. from_generated_declarations adds token-free SOURCE_FILE around MACRO_ITEMS; from_generated_items replaces root kind, preserving token offsets. Require text/origin equality before retained scan span join. GeneratedDeclarations fields are private and its sole constructor retains original output; no transformed arena accepted.",
+  "authority": "No namespace/catalog seal or currentness grant. Existing record/epoch/cfg checks retained; Items grammar and exact arena text/origins checked. Actual retained source/scope/header identity remains authoritative.",
+  "alternate_removed": "Only second ParsedFile::from_generated_items and scan_declarations inside item_impl_headers; ordinary execution/derive/currentness APIs unchanged.",
+  "cost": "Cold O(output text + origins + H*I) bounded comparisons, H impl headers and I retained impl rows; no syntax materialization or declaration traversal. Pair allocation bounded by checked impl count*size, existing parent handles borrowed. No hot path added.",
+  "closure": "Needs independent source review and frozen Cargo/runtime validation; worker executes neither. Direct ordinary bridge and wrapper child closure remain separately owned/held. Mixed unsupported blockers must not be cleared by mere impl presence.",
+  "all_eight": {
+    "1": "No evaluator; MA001 debt unchanged.",
+    "2": "No literal/break path; MA004/MA005 debt unchanged.",
+    "3": "No method/numeric selection; MA003/MA006 debt unchanged.",
+    "4": "Actual generated source proof retained; no exclusion.",
+    "5": "Declaration headers only, no executable/pattern preparation; MA002 debt unchanged.",
+    "6": "Remove repeat retained-output tree/scan; other repeated preparation unreviewed.",
+    "7": "No namespace/world census or unrelated invalidation.",
+    "8": "Borrow admitted scan/parser, no BodyIndex clone or whole-file syntax lookup."
+  },
+  "validation": "Source-only. No Cargo/compiler/tests."
+}

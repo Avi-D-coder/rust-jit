@@ -697,17 +697,12 @@ impl ParsedFile {
                         let (name, explicit) = calls::source_call_path(&call)?;
                         let mut written = Vec::new();
                         for argument in call.arg_list().ok_or_else(unsupported)?.args() {
-                            if written.len() >= 4096 {
-                                return Err(invalid("scalar call arguments limit"));
-                            }
                             written
                                 .try_reserve(1)
                                 .map_err(|_| invalid("scalar call arguments allocation"))?;
                             written.push(argument);
                         }
-                        if calls.len() >= usize::from(node.runtime_scalar_phases)
-                            || written.len() > 4096
-                        {
+                        if calls.len() >= usize::from(node.runtime_scalar_phases) {
                             return Err(invalid("scalar call count/arguments limit"));
                         }
                         written
@@ -731,7 +726,6 @@ impl ParsedFile {
                         written
                             .len()
                             .checked_mul(std::mem::size_of::<Option<ArgumentBorrowDraft>>())
-                            .filter(|n| *n <= 32 * 1024 * 1024)
                             .ok_or_else(|| invalid("scalar borrow draft metadata limit"))?;
                         borrows
                             .try_reserve_exact(written.len())
@@ -873,7 +867,7 @@ impl ParsedFile {
             .operands()
             .first()
             .ok_or_else(|| invalid("assertion predicate source absent"))?;
-        if range.end < range.start || range.end - range.start > 65_500 {
+        if range.end < range.start {
             return Err(invalid("assertion predicate spelling budget"));
         }
         Ok(self

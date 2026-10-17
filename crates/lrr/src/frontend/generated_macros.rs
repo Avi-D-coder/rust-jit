@@ -143,14 +143,12 @@ fn inherited_helper_bytes(
     for (source, introduced) in rows {
         count = count
             .checked_add(1)
-            .filter(|n| *n <= 4096)
             .ok_or_else(limit)?;
         bytes = introduced
             .checked_mul(96)
             .and_then(|n| n.checked_add(source))
             .and_then(|n| n.checked_add(128 + std::mem::size_of::<InheritedHelpers>()))
             .and_then(|n| n.checked_add(bytes))
-            .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(limit)?;
     }
     Ok(bytes)
@@ -474,7 +472,6 @@ impl GeneratedMacroCatalog {
         }
         self.metadata_bytes()?
             .checked_add(inherited_helper_bytes([(helpers.retained_bytes(), 0)])?)
-            .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(|| fault("original inherited helper metadata limit"))?;
         self.inherited_helpers
             .try_reserve_exact(1)
@@ -544,17 +541,12 @@ impl GeneratedMacroCatalog {
             .pending
             .as_ref()
             .ok_or_else(|| fault("derive output has no pending request"))?;
-        if !request.is_derive()
-            || request.key() != record.key()
-            || self.derive_outputs.contains_key(&record.key().invocation)
-            || self.derive_outputs.len() >= 4096
-        {
+        if !request.is_derive() || request.key() != record.key() || self.derive_outputs.contains_key(&record.key().invocation) {
             return Err(fault("derive output differs from pending occurrence"));
         }
         self.derive_output_bytes
             .checked_add(record.estimated_bytes()?)
             .and_then(|n| n.checked_add(128))
-            .filter(|n| *n <= 256 * 1024 * 1024)
             .ok_or_else(|| fault("retained derive output limit"))
     }
     pub(crate) fn retain_derive_output(
@@ -578,9 +570,6 @@ impl GeneratedMacroCatalog {
         counts: &mut BTreeMap<Digest, (usize, usize)>,
         depth: usize,
     ) -> Result<(), Diagnostic> {
-        if depth >= 256 || counts.len() >= 4096 {
-            return Err(fault("helper catalogue statistics limit"));
-        }
         let identity = self.record_identity();
         let own = (self.helper_receipt_count(), self.helper_inert_count()?);
         if let Some(old) = counts.get(&identity) {
@@ -610,10 +599,7 @@ impl GeneratedMacroCatalog {
     ) -> Result<usize, Diagnostic> {
         receipt.validate_request(request)?;
         if !matches!(&request.origin, crate::expand::derive_origin::DeriveDeclarationOrigin::Generated(parent)
-            if parent.fingerprint()==self.items.record().descriptor().fingerprint())
-            || self.helper_receipts.contains_key(&request.demand())
-            || self.helper_receipts.len() >= 100_000
-        {
+            if parent.fingerprint()==self.items.record().descriptor().fingerprint()) || self.helper_receipts.contains_key(&request.demand()) {
             return Err(fault(
                 "helper receipt origin differs or was already admitted",
             ));
@@ -621,7 +607,6 @@ impl GeneratedMacroCatalog {
         self.helper_receipt_bytes
             .checked_add(receipt.estimated_bytes()?)
             .and_then(|n| n.checked_add(128))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("generated helper receipt metadata limit"))
     }
     pub(crate) fn adopt_helper_receipt(
@@ -641,10 +626,7 @@ impl GeneratedMacroCatalog {
         if self
             .pending
             .as_ref()
-            .is_none_or(|request| request.key() != key)
-            || self.inflight.contains_key(&key.invocation)
-            || self.inflight.len() >= 100_000
-        {
+            .is_none_or(|request| request.key() != key) || self.inflight.contains_key(&key.invocation) {
             return Err(fault("parked child request differs or is duplicated"));
         }
         Ok(())
@@ -843,13 +825,9 @@ impl GeneratedMacroCatalog {
                 &event.kind
                 && contained_scope(child, &owner)
             {
-                if module_scopes.len() >= 1_000_000 {
-                    return Err(fault("generated module scope count limit"));
-                }
                 scope_bytes = scope_bytes
                     .checked_add(child.heap_bytes())
                     .and_then(|n| n.checked_add(160))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("generated module scope metadata limit"))?;
                 let parent = *module_scopes
                     .get(&event.scope)
@@ -885,7 +863,6 @@ impl GeneratedMacroCatalog {
             scope_bytes = scope_bytes
                 .checked_add(demand.metadata_bytes()?)
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("module parent scope metadata limit"))?;
             if module_sources
                 .insert(
@@ -981,7 +958,6 @@ impl GeneratedMacroCatalog {
             scope_bytes = scope_bytes
                 .checked_add(item.scope.heap_bytes())
                 .and_then(|n| n.checked_add(160))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("generated outward scope metadata limit"))?;
             outward
                 .try_reserve(1)
@@ -1016,12 +992,6 @@ impl GeneratedMacroCatalog {
             let index = *indices
                 .get(&identity)
                 .ok_or_else(|| fault("active generated call token facts absent"))?;
-            if call_sites.len() >= 100_000 {
-                return Err(Diagnostic::new(
-                    "LRR-E-DISCOVERY-LIMIT",
-                    "generated call-site index count limit".into(),
-                ));
-            }
             if call_sites
                 .insert(
                     identity,
@@ -1034,7 +1004,6 @@ impl GeneratedMacroCatalog {
             scope_bytes = scope_bytes
                 .checked_add(call.scope.heap_bytes())
                 .and_then(|n| n.checked_add(160))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("generated call scope metadata limit"))?;
             call_scopes.insert(identity, call.scope.clone());
             scopes.block(
@@ -1083,37 +1052,32 @@ impl GeneratedMacroCatalog {
                     header: item.header.clone(),
                     body: None,
                     constructor_fields: Vec::new(),
+                    variants: Vec::new(),
                     declaration_span: item.declaration_span,
                     header_span: item.header_span,
                 };
                 test_registration_candidate_bytes = test_registration_candidate_bytes
                     .checked_add(test_registration_bytes(&metadata)?)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("generated test registration candidate byte limit"))?;
-                if test_registration_candidates.len() >= 100_000
-                    || test_registration_candidates
+                if test_registration_candidates
                         .insert(identity, Arc::new(metadata))
-                        .is_some()
-                {
+                        .is_some() {
                     return Err(fault(
                         "generated test registration candidate count/conflict",
                     ));
                 }
             }
-            if call_sites.len() >= 100_000
-                || call_sites
+            if call_sites
                     .insert(
                         identity,
                         (header.start, GeneratedCallIndex::Attribute(index)),
                     )
-                    .is_some()
-            {
+                    .is_some() {
                 return Err(fault("generated attribute call index limit/conflict"));
             }
             scope_bytes = scope_bytes
                 .checked_add(item.scope.heap_bytes())
                 .and_then(|n| n.checked_add(160))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("generated attribute scope limit"))?;
             call_scopes.insert(identity, item.scope.clone());
             scopes.block(
@@ -1143,7 +1107,6 @@ impl GeneratedMacroCatalog {
                 .inherited_helpers
                 .len()
                 .checked_add(usize::from(local.is_some()))
-                .filter(|n| *n <= 4096)
                 .ok_or_else(|| fault("inherited helper scope count limit"))?;
             inherited_helper_bytes(
                 parent
@@ -1468,7 +1431,7 @@ impl GeneratedMacroCatalog {
             let end = origins.partition_point(|o| o.end <= range.end);
             let rows = origins
                 .get(start..end)
-                .filter(|r| !r.is_empty() && r.len() <= 1_000_000)
+                .filter(|r| !r.is_empty())
                 .ok_or_else(|| fault("completed attribute origins absent or excessive"))?;
             let mut encoded = StableEncoder::new("lrr/v2/completed-attribute-origin-sequence");
             encoded.u64(
@@ -1665,7 +1628,7 @@ impl GeneratedMacroCatalog {
             let end = rows.partition_point(|r| r.end <= range.end);
             let rows = rows
                 .get(start..end)
-                .filter(|r| !r.is_empty() && r.len() <= 1_000_000)
+                .filter(|r| !r.is_empty())
                 .ok_or_else(|| fault("derive origin range absent or excessive"))?;
             let mut e = StableEncoder::new("lrr/v2/completed-derive-item-origins");
             e.u64(u64::try_from(rows.len()).map_err(|_| fault("derive origin count overflow"))?);
@@ -1738,18 +1701,9 @@ impl GeneratedMacroCatalog {
                     .find(|r| r.key().invocation == path)
                     .ok_or_else(|| fault("completed derive append record absent"))?;
                 if !matches!(catalog.call_sites.get(&path), Some((_, GeneratedCallIndex::Derive(i, _))) if *i == item)
-                    || !matches!(
-                        &record.key().macro_identity,
-                        crate::expand::identity::MacroIdentity::Procedural {
-                            kind: crate::expand::identity::ProceduralKind::Derive,
-                            ..
-                        }
-                    )
+                    || !record.key().macro_identity.is_derive()
                 {
                     return Err(fault("completed derive append site differs"));
-                }
-                if outputs.len() >= 4096 {
-                    return Err(fault("derive append receipt count limit"));
                 }
                 outputs
                     .try_reserve(1)
@@ -1804,7 +1758,7 @@ impl GeneratedMacroCatalog {
             let end = rows.partition_point(|r| r.end <= range.end);
             let rows = rows
                 .get(start..end)
-                .filter(|r| !r.is_empty() && r.len() <= 1_000_000)
+                .filter(|r| !r.is_empty())
                 .ok_or_else(|| fault("helper origin range absent or excessive"))?;
             let mut e = StableEncoder::new("lrr/v2/completed-helper-token-origins");
             e.u64(u64::try_from(rows.len()).map_err(|_| fault("helper origin count overflow"))?);
@@ -1974,9 +1928,6 @@ impl GeneratedMacroCatalog {
         if let Some(context) = enclosing {
             loop {
                 let mut candidates = Vec::new();
-                if self.calls.len() > 100_000 {
-                    return Err(fault("empty derive work count limit"));
-                }
                 candidates
                     .try_reserve_exact(self.calls.len())
                     .map_err(|_| fault("empty derive work allocation"))?;
@@ -2025,7 +1976,6 @@ impl GeneratedMacroCatalog {
                             .helper_scope_bytes
                             .checked_add(helpers.retained_bytes())
                             .and_then(|n| n.checked_add(128))
-                            .filter(|n| *n <= 32 * 1024 * 1024)
                             .ok_or_else(|| fault("generated helper scope retention limit"))?;
                         self.helper_scopes.insert(id, helpers);
                         self.helper_scope_bytes = bytes;
@@ -2052,7 +2002,6 @@ impl GeneratedMacroCatalog {
                                 .derive_parent_view_bytes
                                 .checked_add(view.metadata_bytes()?)
                                 .and_then(|n| n.checked_add(128))
-                                .filter(|n| *n <= 32 * 1024 * 1024)
                                 .ok_or_else(|| fault("derive parent view retention limit"))?;
                             if self
                                 .derive_parent_views
@@ -2089,9 +2038,7 @@ impl GeneratedMacroCatalog {
                 }
                 GeneratedCallDemand::Ready(request) => {
                     if request.consumed_compiler_tests() != 0 {
-                        if request.consumed_compiler_tests() != 1
-                            || self.test_registrations.len() >= 100_000
-                        {
+                        if request.consumed_compiler_tests() != 1 {
                             return Err(fault(
                                 "generated compiler Test registration count unsupported",
                             ));
@@ -2131,11 +2078,8 @@ impl GeneratedMacroCatalog {
                                             fault("compiler test prefix size overflow")
                                         })?,
                                 )
-                                .filter(|n| *n <= 32 * 1024 * 1024)
                                 .ok_or_else(|| fault("compiler test prefix retention limit"))?;
-                            if self.compiler_test_prefixes.len() >= 100_000
-                                || self.compiler_test_prefixes.contains_key(&identity)
-                            {
+                            if self.compiler_test_prefixes.contains_key(&identity) {
                                 return Err(fault(
                                     "compiler test prefix count or identity conflict",
                                 ));
@@ -2163,7 +2107,6 @@ impl GeneratedMacroCatalog {
                             .derive_parent_view_bytes
                             .checked_add(view.metadata_bytes()?)
                             .and_then(|n| n.checked_add(128))
-                            .filter(|n| *n <= 32 * 1024 * 1024)
                             .ok_or_else(|| fault("later attribute parent view retention limit"))?;
                         if self.derive_parent_views.contains_key(&identity) {
                             return Err(fault("later attribute parent view already retained"));
@@ -2416,7 +2359,6 @@ impl GeneratedMacroCatalog {
                     .owners
                     .len()
                     .checked_add(1)
-                    .filter(|n| *n <= 4096)
                     .ok_or_else(|| fault("generated procedural source provider limit"))?;
                 let mut providers = Vec::new();
                 providers
@@ -2504,7 +2446,6 @@ impl GeneratedMacroCatalog {
             .owners
             .len()
             .checked_add(1)
-            .filter(|n| *n <= 4096)
             .ok_or_else(|| fault("derive replay provider count limit"))?;
         let mut providers = Vec::new();
         providers
@@ -2649,16 +2590,6 @@ impl GeneratedMacroCatalog {
         else {
             return Err(fault("empty annotation selection incomplete"));
         };
-        if self.empty_derives.len() >= 100_000
-            || self
-                .empty_derives
-                .len()
-                .checked_add(1)
-                .and_then(|n| n.checked_mul(std::mem::size_of::<EmptyDeriveCertificate>() + 128))
-                .is_none_or(|n| n > 32 * 1024 * 1024)
-        {
-            return Err(fault("empty derive certificate retention limit"));
-        }
         let members = self.empty_member_fingerprint(&plan)?;
         let certificate = EmptyDeriveCertificate {
             item,
@@ -2894,9 +2825,6 @@ impl GeneratedMacroCatalog {
                 "compiler Test attribute requires a free function".into(),
             ));
         }
-        if self.compiler_test_items.len() >= 100_000 {
-            return Err(fault("compiler test certificate count limit"));
-        }
         let scope = self
             .call_scopes
             .get(&identity)
@@ -3005,9 +2933,6 @@ impl GeneratedMacroCatalog {
             let cfg_descendants = parsed.derive_cfg_inputs_at(range, &self.cfg)?.descendants;
             let mut owners = BTreeMap::new();
             for group in members.into_iter().chain(cfg_descendants) {
-                if owners.len() >= 100_000 {
-                    return Err(fault("inherited helper member count limit"));
-                }
                 let key = (group.item.start, group.item.end);
                 if let Some(previous) = owners.get(&key) {
                     if previous != &group {
@@ -3059,9 +2984,6 @@ impl GeneratedMacroCatalog {
         let Some(proof) = self.inherited_item_fingerprint(item)? else {
             return Ok(false);
         };
-        if self.inherited_items.len() >= 100_000 {
-            return Err(fault("inherited helper item count limit"));
-        }
         let scope = self
             .call_scopes
             .get(&id)
@@ -3203,7 +3125,6 @@ impl GeneratedMacroCatalog {
                                         .owners
                                         .len()
                                         .checked_add(1)
-                                        .filter(|n| *n <= 4096)
                                         .ok_or_else(|| fault("derive provider count limit"))?,
                                 )
                                 .map_err(|_| fault("derive provider allocation"))?;
@@ -3298,7 +3219,6 @@ impl GeneratedMacroCatalog {
             .owners
             .len()
             .checked_add(1)
-            .filter(|n| *n <= 4096)
             .ok_or_else(|| fault("generated attribute source provider limit"))?;
         let mut providers = Vec::new();
         providers
@@ -3454,9 +3374,7 @@ impl GeneratedMacroCatalog {
             let mut outers = Vec::new();
             let count = ancestors
                 .len()
-                .checked_add(context.source_scope_count()?)
-                .filter(|n| *n <= 256)
-                .ok_or_else(|| fault("generated scope ancestry limit"))?;
+                .checked_add(context.source_scope_count()?)                .ok_or_else(|| fault("generated scope ancestry limit"))?;
             outers
                 .try_reserve_exact(count)
                 .map_err(|_| fault("generated outer scope allocation"))?;
@@ -3591,9 +3509,6 @@ impl GeneratedMacroCatalog {
             textual_scope: lexical,
             origin: Some(self.origin()),
         };
-        if self.scopes.metadata_bytes()? > 32 * 1024 * 1024 {
-            return Err(fault("generated compiler argument scope budget"));
-        }
         let mut scopes = self.scopes.as_ref().clone();
         scopes.omit_invocation_position(lexical, u64::from(*at))?;
         let resolver = GeneratedEagerResolver {
@@ -3670,11 +3585,7 @@ impl GeneratedMacroCatalog {
             for route in provider.routes_in(context.owners)? {
                 bytes = bytes
                     .checked_add(route.metadata_bytes()?)
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| fault("generated call route catalogue metadata budget"))?;
-                if routes.len() >= 100_000 {
-                    return Err(fault("generated source route catalogue count limit"));
-                }
                 routes
                     .try_reserve(1)
                     .map_err(|_| fault("generated source route allocation"))?;
@@ -3685,11 +3596,7 @@ impl GeneratedMacroCatalog {
             |route: Arc<super::source_macro_routes::SourceMacroRoutes>| -> Result<(), Diagnostic> {
                 bytes = bytes
                     .checked_add(route.metadata_bytes()?)
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| fault("generated call route catalogue metadata budget"))?;
-                if routes.len() >= 100_000 {
-                    return Err(fault("generated call route catalogue count limit"));
-                }
                 routes
                     .try_reserve(1)
                     .map_err(|_| fault("generated call route catalogue allocation failed"))?;
@@ -3937,9 +3844,6 @@ impl GeneratedMacroCatalog {
                     .call_sites
                     .get(&child.items.record().key().invocation)
                     .ok_or_else(|| fault("macro-use generated parent call order absent"))?;
-                if prefix.len() >= 255 {
-                    return Err(fault("macro-use generated order depth limit"));
-                }
                 prefix.push(*position);
             }
             for row in &mut routes.extern_aliases {
@@ -3990,7 +3894,6 @@ impl GeneratedMacroCatalog {
             .outward
             .len()
             .checked_add(child.outward.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| fault("child outward scope count limit"))?;
         let outward_growth = outward_count
             .saturating_sub(self.outward.capacity())
@@ -4002,13 +3905,11 @@ impl GeneratedMacroCatalog {
             .len()
             .checked_add(child.route_children.len())
             .and_then(|n| n.checked_add(1))
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("child route snapshot count limit"))?;
         let selections = self
             .selection_children
             .len()
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("selection child count limit"))?;
         selections
             .saturating_sub(self.selection_children.capacity())
@@ -4041,9 +3942,6 @@ impl GeneratedMacroCatalog {
             .and_then(|n| n.checked_add(binding_bytes))
             .ok_or_else(|| fault("child outward scope allocation overflow"))?;
         let previous = self.selection_children.capacity();
-        if self.selection_children.len() >= 100_000 {
-            return Err(fault("selection child count limit"));
-        }
         self.selection_children
             .try_reserve_exact(1)
             .map_err(|_| fault("selection child allocation"))?;
@@ -4059,7 +3957,6 @@ impl GeneratedMacroCatalog {
             .len()
             .checked_add(child.route_children.len())
             .and_then(|n| n.checked_add(1))
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("child route snapshot count limit"))?;
         let old = self.route_children.capacity();
         self.route_children
@@ -4093,7 +3990,6 @@ impl GeneratedMacroCatalog {
             .len()
             .checked_add(child.route_children.len())
             .and_then(|n| n.checked_add(1))
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("child route snapshot count limit"))?;
         if count > self.route_children.capacity() {
             return Err(fault(
@@ -4102,13 +3998,7 @@ impl GeneratedMacroCatalog {
         }
         let snapshots = std::mem::take(&mut child.route_children);
         let record = child.items.record_input();
-        if matches!(
-            record.key().macro_identity,
-            crate::expand::identity::MacroIdentity::Procedural {
-                kind: crate::expand::identity::ProceduralKind::Derive,
-                ..
-            }
-        ) {
+        if record.key().macro_identity.is_derive() {
             self.complete_derive_child(record, child)?;
         } else {
             self.complete_call_using(record, Some(child))?;
@@ -4199,7 +4089,6 @@ impl GeneratedMacroCatalog {
         let wire_bytes = self
             .completed_wire_bytes
             .checked_add(record.descriptor().wire_bytes)
-            .filter(|n| *n <= 256 * 1024 * 1024)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -4210,7 +4099,6 @@ impl GeneratedMacroCatalog {
             .completed_allocated_bytes
             .checked_add(record.estimated_bytes()?)
             .and_then(|n| n.checked_add(192))
-            .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -4221,7 +4109,6 @@ impl GeneratedMacroCatalog {
         let headers = self
             .completed_headers
             .checked_add(items.items().len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -4342,7 +4229,6 @@ impl GeneratedMacroCatalog {
         self.definitions
             .len()
             .checked_add(child.outward.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| fault("generated child definition count limit"))?;
         let bindings = child.root_bindings()?;
         self.outward
@@ -4401,7 +4287,7 @@ impl GeneratedMacroCatalog {
         context: CapturedMacroContext<'_>,
         ancestors: &[&Self],
     ) -> Result<(), Diagnostic> {
-        if !self.ready_for_outward() || self.pending.is_some() || ancestors.len() >= 256 {
+        if !self.ready_for_outward() || self.pending.is_some() {
             return Err(fault("generated selection revalidation context incomplete"));
         }
         for (id, prefix) in &self.compiler_test_prefixes {
@@ -4570,9 +4456,6 @@ impl GeneratedMacroCatalog {
                             }
                             continue;
                         }
-                        if span.source.path.len() > 64 * 1024 {
-                            return Err(fault("generated parent call site path limit"));
-                        }
                         let mut path = String::new();
                         path.try_reserve_exact(span.source.path.len())
                             .map_err(|_| fault("generated parent call site allocation"))?;
@@ -4628,9 +4511,6 @@ impl GeneratedMacroCatalog {
         if self.record_identity() == identity {
             return Ok(Some(self));
         }
-        if ancestors.len() >= 255 {
-            return Err(fault("completed module catalogue ancestry limit"));
-        }
         for child in &self.selection_children {
             ancestors
                 .try_reserve(1)
@@ -4679,7 +4559,6 @@ impl GeneratedMacroCatalog {
         self.definitions
             .len()
             .checked_add(ids.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| fault("module macro definition count limit"))?;
         if ids.iter().any(|id| self.definitions.contains_key(id)) {
             return Err(fault("module macro definition already admitted"));
@@ -4890,7 +4769,6 @@ fn test_registration_bytes(
     let mut charge = |amount: usize| -> Result<(), Diagnostic> {
         bytes = bytes
             .checked_add(amount)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("test registration storage limit"))?;
         Ok(())
     };
@@ -4946,18 +4824,19 @@ fn test_registration_bytes(
 #[cfg(test)]
 mod inherited_budget_tests {
     #[test]
-    fn inherited_environment_preflight_refuses_overflow_and_aggregate_allocation() {
+    fn inherited_environment_preflight_refuses_only_arithmetic_overflow() {
         assert!(super::inherited_helper_bytes([(1024, 2)]).is_ok());
-        for rows in [
-            vec![(usize::MAX, 0)],
-            vec![(0, usize::MAX)],
-            vec![(160 * 1024 * 1024, 0), (160 * 1024 * 1024, 0)],
-        ] {
+        for rows in [vec![(usize::MAX, 0)], vec![(0, usize::MAX)]] {
             assert_eq!(
                 super::inherited_helper_bytes(rows).unwrap_err().code,
                 "LRR-E-DISCOVERY-LIMIT"
             );
         }
-        assert!(super::inherited_helper_bytes(std::iter::repeat_n((0, 0), 4097)).is_err());
+        // E-R5-006: no aggregate or count ceiling.
+        assert!(
+            super::inherited_helper_bytes([(160 * 1024 * 1024, 0), (160 * 1024 * 1024, 0)])
+                .is_ok()
+        );
+        assert!(super::inherited_helper_bytes(std::iter::repeat_n((0, 0), 4097)).is_ok());
     }
 }

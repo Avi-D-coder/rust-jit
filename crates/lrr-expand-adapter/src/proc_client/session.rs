@@ -3,7 +3,7 @@ use super::{
     Capture, CapturedReader, CapturedSpanSource, handshake_with_deadline, mismatch,
     process_guard::{ProcessControl, ProcessGuard, StopReason},
     startup_remaining,
-    transport::{BoundedReader, BoundedWriter, MAX_PREVIEW_BYTES, MAX_REPLY_BYTES, ReplyAllowance},
+    transport::{BoundedReader, BoundedWriter, MAX_PREVIEW_BYTES, ReplyAllowance},
     verify,
 };
 use crate::{
@@ -321,16 +321,11 @@ impl ProcSession {
             )));
         }
         if config.artifacts.is_empty()
-            || config.artifacts.len() > 1024
             || !config.directory.is_absolute()
             || config.directory.to_str().is_none()
             || config.timeout.is_zero()
-            || config.timeout > Duration::from_secs(60)
             || config.wire_limit == 0
-            || config.wire_limit > MAX_REPLY_BYTES
             || config.output_limit == 0
-            || config.output_limit > 32 * 1024 * 1024
-            || config.environment.len() > 4096
         {
             return Err(fault(
                 "LRR-E-MACRO-OUTPUT",
@@ -349,8 +344,7 @@ impl ProcSession {
                     return None;
                 }
                 sum.checked_add(key.len())?.checked_add(value.len())
-            })
-            .filter(|bytes| *bytes <= 1024 * 1024);
+            });
         if env_bytes.is_none() {
             return Err(fault(
                 "LRR-E-MACRO-OUTPUT",
@@ -431,35 +425,25 @@ impl ProcSession {
                     guard.take_stderr()?,
                     guard.control(),
                 )?;
-                let drain_control = control.clone();
+                let _drain_control = control.clone();
                 let capture = spawn_stderr.clone();
-                let limit_hit = spawn_stderr_limit.clone();
+                let _limit_hit = spawn_stderr_limit.clone();
                 let reader = thread::Builder::new()
                     .name("lrr-macro-stderr".into())
                     .spawn(move || {
                         let mut input = stderr_pipe;
-                        let mut total = 0usize;
                         let mut bytes = [0u8; 4096];
                         loop {
                             let count = input.read(&mut bytes)?;
                             if count == 0 {
                                 return Ok(());
                             }
-                            total = total
-                                .checked_add(count)
-                                .ok_or_else(|| io::Error::other("macro stderr length overflow"))?;
                             let mut capture = capture
                                 .lock()
                                 .map_err(|_| io::Error::other("stderr recorder poisoned"))?;
                             let keep = (MAX_PREVIEW_BYTES - capture.bytes.len()).min(count);
                             capture.bytes.extend_from_slice(&bytes[..keep]);
                             capture.truncated |= keep < count;
-                            if total > 4 * 1024 * 1024 {
-                                limit_hit.store(true, Ordering::Release);
-                                drop(capture);
-                                let _ = drain_control.terminate();
-                                return Err(io::Error::other("macro stderr allowance exhausted"));
-                            }
                         }
                     })?;
                 *spawn_channels
@@ -678,23 +662,10 @@ impl ProcSession {
                 "wrong consuming unit or expansion epoch",
             ));
         }
-        if request.export.is_empty() || request.export.len() > 4096 || request.export.contains('\0')
-        {
+        if request.export.is_empty() || request.export.contains('\0') {
             return Err(fault("LRR-E-MACRO-NOT-FOUND", "invalid macro export name"));
         }
         request.input.validate()?;
-        if request.sources.len() > 4096
-            || request
-                .sources
-                .iter()
-                .try_fold(0usize, |sum, source| sum.checked_add(source.text().len()))
-                .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(fault(
-                "LRR-E-MACRO-OUTPUT",
-                "captured span source allowance exceeded",
-            ));
-        }
         let mut source_keys = std::collections::BTreeSet::new();
         for source in &request.sources {
             let identity = source.source();
@@ -739,17 +710,6 @@ impl ProcSession {
         }
         if let Some(error) = &self.closed {
             return Err(error.clone());
-        }
-        if self.attempts.len() >= 100_000
-            || self
-                .retained_bytes
-                .checked_add(self.config.output_limit.max(MAX_PREVIEW_BYTES + 512))
-                .is_none_or(|size| size > 64 * 1024 * 1024)
-        {
-            return Err(fault(
-                "LRR-E-MACRO-OUTPUT",
-                "session record allowance exhausted",
-            ));
         }
         let mac = self
             .macros
@@ -861,12 +821,6 @@ impl ProcSession {
             Ok(Ok(tree)) => store
                 .export_proc(&tree, request.identity)
                 .and_then(|forest| {
-                    if forest.encoded_len()? > self.config.output_limit {
-                        return Err(fault(
-                            "LRR-E-MACRO-OUTPUT",
-                            "procedural token output allowance exceeded",
-                        ));
-                    }
                     crate::grammar::validate_tree(&store, &tree, request.grammar)?;
                     Ok(Arc::new(forest))
                 }),
@@ -890,20 +844,6 @@ impl ProcSession {
             .map_err(|_| fault("LRR-E-MACRO-OUTPUT", "span callback recorder poisoned"))?
         {
             outcome = Err(error);
-        }
-        if let Ok(tokens) = &outcome
-            && self
-                .retained_bytes
-                .checked_add(tokens.allocated_bytes()?)
-                .and_then(|n| {
-                    n.checked_add(std::mem::size_of::<Attempt>() + std::mem::size_of::<Key>() + 256)
-                })
-                .is_none_or(|n| n > 64 * 1024 * 1024)
-        {
-            outcome = Err(fault(
-                "LRR-E-MACRO-OUTPUT",
-                "procedural session retained allocation allowance exceeded",
-            ));
         }
         let outcome = if outcome.is_ok() && control.disarm().is_err() {
             let code = if self.stderr_limit_hit.load(Ordering::Acquire) {

@@ -21,7 +21,6 @@ use crate::{
 };
 use serde::Serialize;
 use std::{collections::BTreeMap, io::Write, path::Path};
-const MAX_PACKET: usize = 4 * 1024 * 1024;
 fn fault(code: &'static str, message: impl Into<String>) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
@@ -160,12 +159,6 @@ impl Packet {
             super::capture_standalone_edition(path, false, edition)?;
         let (compiler, prepared, view, sources) =
             super::compile_inputs::PreparedCompileInputs::prepare(path, prepared, view, sources)?;
-        if sources.len() > 2000 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "pre-entry source context count limit",
-            ));
-        }
         let mut source_selections = Vec::new();
         source_selections
             .try_reserve_exact(sources.len())
@@ -194,23 +187,32 @@ impl Packet {
             crate::expand::source_declarative::engine_version(),
             compiler.catalog.clone(),
         )?;
-        // poll performs structural discovery only. Never service any expansion or effect demand.
-        let seal = match discovery.poll()? {
-            SourceDiscoveryStep::Sealed(seal) => seal,
-            SourceDiscoveryStep::Incomplete { diagnostic, .. } => return Err(diagnostic),
-            SourceDiscoveryStep::NeedSourceDeriveSelection { .. }
-            | SourceDiscoveryStep::NeedSourceDeriveExpansion { .. }
-            | SourceDiscoveryStep::NeedSourceDeriveAppend { .. }
-            | SourceDiscoveryStep::NeedDeriveAppend { .. }
-            | SourceDiscoveryStep::NeedDeriveDeclaration { .. }
-            | SourceDiscoveryStep::NeedAttributeSelection { .. }
-            | SourceDiscoveryStep::NeedProceduralSelection { .. }
-            | SourceDiscoveryStep::NeedExpansion { .. }
-            | SourceDiscoveryStep::NeedGeneratedExpansion { .. } => {
-                return Err(fault(
-                    "LRR-E-PREENTRY-EXPANSION-REQUIRED",
-                    "declaration discovery needs separately authorized expansion/library/world preparation; metadata leaf never invokes compiler or macro server",
-                ));
+        // Structural discovery services only LRR's own in-process declarative
+        // expansions (`macro_rules!`, including the library's own `assert!`,
+        // `panic!` and `println!` definitions). It never invokes a compiler,
+        // procedural macro server or guest effect.
+        let seal = loop {
+            match discovery.poll()? {
+                SourceDiscoveryStep::Sealed(seal) => break seal,
+                SourceDiscoveryStep::Incomplete { diagnostic, .. } => return Err(diagnostic),
+                SourceDiscoveryStep::NeedExpansion { request } => {
+                    discovery.admit_expansion(std::sync::Arc::new(request.expand()?))?
+                }
+                SourceDiscoveryStep::NeedGeneratedExpansion { request } => {
+                    discovery.admit_expansion(std::sync::Arc::new(request.expand()?))?
+                }
+                SourceDiscoveryStep::NeedSourceDeriveSelection { .. }
+                | SourceDiscoveryStep::NeedSourceDeriveExpansion { .. }
+                | SourceDiscoveryStep::NeedSourceDeriveAppend { .. }
+                | SourceDiscoveryStep::NeedDeriveAppend { .. }
+                | SourceDiscoveryStep::NeedDeriveDeclaration { .. }
+                | SourceDiscoveryStep::NeedAttributeSelection { .. }
+                | SourceDiscoveryStep::NeedProceduralSelection { .. } => {
+                    return Err(fault(
+                        "LRR-E-PREENTRY-EXPANSION-REQUIRED",
+                        "declaration discovery needs derive/attribute/procedural expansion; metadata leaf never invokes compiler or macro server",
+                    ));
+                }
             }
         };
         discovery.publish(&mut db)?;
@@ -280,12 +282,6 @@ impl Packet {
             ));
         }
         let source_dependencies = input.source_dependencies;
-        if input.compiler_inputs.len() > 4096 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "pre-entry compiler dependency count limit",
-            ));
-        }
         let mut stamps = BTreeMap::new();
         for (key, fingerprint) in &input.compiler_inputs {
             stamps.insert(key.clone(), *fingerprint);
@@ -320,22 +316,13 @@ impl Packet {
                 ));
             }
         }
-        if stamps.len() > 4096
-            || seal.input_dependencies().len() > 4096
-            || source_selections.len() > 10000
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "pre-entry dependency count limit",
-            ));
-        }
         let current_input_stamps = stamps
             .into_iter()
             .map(|(key, fingerprint)| DependencyStamp::Input { key, fingerprint })
             .collect();
         let mut query_dependencies = Vec::new();
         let mut query_kinds = BTreeMap::new();
-        if db.trace.truncated != 0 || db.trace.events.len() > 4096 {
+        if db.trace.truncated != 0 {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",
                 "pre-entry query trace incomplete or over limit",
@@ -392,7 +379,6 @@ impl Packet {
             let count = query_dependencies
                 .len()
                 .checked_add(event.dependencies.len())
-                .filter(|n| *n <= 4096)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -481,7 +467,6 @@ impl Packet {
                     .0
                     .len()
                     .checked_add(bytes.len())
-                    .filter(|n| *n <= MAX_PACKET)
                     .ok_or_else(|| std::io::Error::other("pre-entry packet byte limit"))?;
                 self.0
                     .try_reserve(size - self.0.len())
@@ -507,12 +492,6 @@ fn to_u64(value: usize) -> Result<u64, Diagnostic> {
     u64::try_from(value).map_err(|_| fault("LRR-E-METADATA-LIMIT", "metadata count width"))
 }
 fn snapshot_facts(snapshot: &Snapshot, edition: u16) -> Result<SnapshotFacts, Diagnostic> {
-    if snapshot.files().len() > 10000 {
-        return Err(fault(
-            "LRR-E-METADATA-LIMIT",
-            "pre-entry source count limit",
-        ));
-    }
     let mut files = Vec::new();
     files
         .try_reserve_exact(snapshot.files().len())
@@ -522,7 +501,6 @@ fn snapshot_facts(snapshot: &Snapshot, edition: u16) -> Result<SnapshotFacts, Di
         metadata = metadata
             .checked_add(path.as_str().len())
             .and_then(|n| n.checked_add(128))
-            .filter(|n| *n <= MAX_PACKET)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "pre-entry source metadata limit"))?;
         files.push(File {
             path: path.as_str().into(),

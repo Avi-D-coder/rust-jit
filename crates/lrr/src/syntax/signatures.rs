@@ -56,6 +56,78 @@ fn owned(node: Option<ra_ap_syntax::SyntaxNode>) -> Vec<TokenRecipe> {
     node.map_or_else(Vec::new, |n| tokens(&n, None))
 }
 impl ParsedFile {
+    /// Written Type tokens of a signature. A generated `$crate` root is
+    /// spelled with the crate its definition-site hygiene selects, as the
+    /// value-path lowering spells it, so the ordinary source Type service
+    /// resolves it in that crate (`&mut $crate::fmt::Formatter` of a
+    /// builtin derive names core's `Formatter`).
+    fn type_tokens(
+        &self,
+        node: Option<ra_ap_syntax::SyntaxNode>,
+    ) -> Result<Vec<TokenRecipe>, Diagnostic> {
+        let Some(node) = node else {
+            return Ok(Vec::new());
+        };
+        let mut result = Vec::new();
+        for token in node
+            .descendants_with_tokens()
+            .filter_map(|item| item.into_token())
+            .filter(|token| !token.kind().is_trivia())
+        {
+            let text = if token.text() == "$crate" {
+                match self.dollar_crate_root(super::ast_adapter::range(token.text_range()))? {
+                    Some((unit, _)) => {
+                        crate::frontend::callables::dollar_crate_type_segment(unit)
+                    }
+                    None => token.text().to_owned(),
+                }
+            } else {
+                token.text().to_owned()
+            };
+            result.push(TokenRecipe {
+                kind: token.kind() as u16,
+                text,
+            });
+        }
+        Ok(result)
+    }
+    /// Generic bounds are Type syntax too: a generated `$crate` root in a
+    /// bound (`T: $crate::clone::Clone` of a builtin derive) is spelled with
+    /// the crate its hygiene selects, as `type_tokens` spells parameter and
+    /// result types, so the ordinary bound lookup resolves it in that crate.
+    /// Own parameters come first, then the owner impl's or trait's, in
+    /// `owner_generics` order.
+    fn spell_generic_bounds(
+        &self,
+        function: &ast::Fn,
+        generics: &mut [DefinitionParameter],
+    ) -> Result<(), Diagnostic> {
+        let owner = function
+            .syntax()
+            .parent()
+            .and_then(|items| items.parent())
+            .and_then(|owner| {
+                ast::Impl::cast(owner.clone())
+                    .and_then(|i| i.generic_param_list())
+                    .or_else(|| ast::Trait::cast(owner).and_then(|t| t.generic_param_list()))
+            });
+        let written = function
+            .generic_param_list()
+            .into_iter()
+            .chain(owner)
+            .flat_map(|list| list.generic_params());
+        for (parameter, written) in generics.iter_mut().zip(written) {
+            let bounds = match written {
+                ast::GenericParam::TypeParam(p) => p.type_bound_list(),
+                ast::GenericParam::LifetimeParam(p) => p.type_bound_list(),
+                ast::GenericParam::ConstParam(_) => None,
+            };
+            if parameter.bounds.iter().any(|token| token.text == "$crate") {
+                parameter.bounds = self.type_tokens(bounds.map(|b| b.syntax().clone()))?;
+            }
+        }
+        Ok(())
+    }
     /// Capture only the selected initializer declaration's own generic syntax.
     /// A constant/static is not a function and has no function parameter/result
     /// signature. Associated owner context is retained by its source scope.
@@ -108,15 +180,45 @@ impl ParsedFile {
                 "signature declaration is not in its immutable source",
             ));
         }
-        let generics = capture_generics(function.generic_param_list())?;
+        let mut generics =
+            owner_generics(&function, capture_generics(function.generic_param_list())?)?;
+        self.spell_generic_bounds(&function, &mut generics)?;
         let list = function
             .param_list()
             .ok_or_else(|| fault("function lacks its parameter list"))?;
         let mut parameters = Vec::new();
         if let Some(receiver) = list.self_param() {
+            // The receiver's type as rustc reads it: `self`/`mut self` is
+            // `Self`, `&'a mut self` is `&'a mut Self`, `self: T` is `T`.
+            let ty = match receiver.ty() {
+                Some(ty) => self.type_tokens(Some(ty.syntax().clone()))?,
+                None => {
+                    let token = |kind: ra_ap_syntax::SyntaxKind, text: &str| {
+                        super::ast_adapter::TokenRecipe {
+                            kind: kind as u16,
+                            text: text.into(),
+                        }
+                    };
+                    let mut ty = Vec::new();
+                    if receiver.amp_token().is_some() {
+                        ty.push(token(ra_ap_syntax::SyntaxKind::AMP, "&"));
+                        if let Some(lifetime) = receiver.lifetime() {
+                            ty.push(token(
+                                ra_ap_syntax::SyntaxKind::LIFETIME_IDENT,
+                                &lifetime.syntax().text().to_string(),
+                            ));
+                        }
+                        if receiver.mut_token().is_some() {
+                            ty.push(token(ra_ap_syntax::SyntaxKind::MUT_KW, "mut"));
+                        }
+                    }
+                    ty.push(token(ra_ap_syntax::SyntaxKind::SELF_TYPE_KW, "Self"));
+                    ty
+                }
+            };
             parameters.push(ParameterRecipe {
                 pattern: tokens(receiver.syntax(), None),
-                ty: Vec::new(),
+                ty,
                 symbolic: None,
                 receiver: true,
                 variadic: false,
@@ -124,7 +226,7 @@ impl ParsedFile {
         }
         for parameter in list.params() {
             let variadic = parameter.dotdotdot_token().is_some();
-            let ty = owned(parameter.ty().map(|n| n.syntax().clone()));
+            let ty = self.type_tokens(parameter.ty().map(|n| n.syntax().clone()))?;
             if ty.is_empty() && !variadic {
                 return Err(fault("function parameter lacks a declared type"));
             }
@@ -159,17 +261,14 @@ impl ParsedFile {
             },
             generics,
             parameters,
-            result: owned(
+            result: self.type_tokens(
                 function
                     .ret_type()
                     .and_then(|r| r.ty())
                     .map(|n| n.syntax().clone()),
-            ),
-            predicates: owned(function.where_clause().map(|n| n.syntax().clone())),
+            )?,
+            predicates: self.type_tokens(function.where_clause().map(|n| n.syntax().clone()))?,
         };
-        if signature.estimated_bytes() > 32 * 1024 * 1024 {
-            return Err(fault("signature metadata exceeds the source recipe budget"));
-        }
         Ok(signature)
     }
 }
@@ -277,12 +376,6 @@ pub(crate) fn lower_type(
         ir::op::PrimitiveType as P,
         traits::term::{ConstTerm, ParamKey, RegionTerm, TyTerm as T},
     };
-    if depth > 256 {
-        return Err(Diagnostic::new(
-            "LRR-E-METADATA-LIMIT",
-            "signature type nesting limit exceeded".into(),
-        ));
-    }
     let key = |ordinal| ParamKey {
         definition,
         ordinal,
@@ -374,7 +467,6 @@ pub(crate) fn canonical_lifetime(name: &str) -> Option<String> {
     semantic_name(name.strip_prefix('\'')?).map(|name| format!("'{name}"))
 }
 
-const GENERIC_METADATA_LIMIT: usize = 32 * 1024 * 1024;
 
 /// Pure owned metadata capture. Check token counts and bytes before reserving
 /// syntax-dependent storage; this neither resolves names nor evaluates syntax.
@@ -405,7 +497,6 @@ fn generic_tokens(
         .ok_or_else(|| fault("generic token storage overflow"))?;
     *bytes = bytes
         .checked_add(charge)
-        .filter(|n| *n <= GENERIC_METADATA_LIMIT)
         .ok_or_else(|| fault("generic metadata exceeds the source recipe budget"))?;
     let mut result = Vec::new();
     result
@@ -428,19 +519,52 @@ fn generic_tokens(
     Ok(result)
 }
 
+/// An associated function's own generics followed by its owner's: an impl's
+/// parameters (`impl<T> W<T>`), or a trait's parameters and its implicit
+/// `Self`, as rustc's generics of an associated item. Own parameters keep
+/// their ordinals, so explicit arguments still address them.
+pub(crate) fn owner_generics(
+    function: &ast::Fn,
+    mut generics: Vec<DefinitionParameter>,
+) -> Result<Vec<DefinitionParameter>, Diagnostic> {
+    use ra_ap_syntax::ast::HasGenericParams;
+    let Some(owner) = function.syntax().parent().and_then(|items| items.parent()) else {
+        return Ok(generics);
+    };
+    let (inherited, implicit_self) = if let Some(implementation) = ast::Impl::cast(owner.clone()) {
+        (capture_generics(implementation.generic_param_list())?, false)
+    } else if let Some(definition) = ast::Trait::cast(owner) {
+        (capture_generics(definition.generic_param_list())?, true)
+    } else {
+        return Ok(generics);
+    };
+    for mut parameter in inherited {
+        parameter.ordinal = u32::try_from(generics.len())
+            .map_err(|_| fault("generic parameter index overflow"))?;
+        generics.push(parameter);
+    }
+    if implicit_self {
+        generics.push(DefinitionParameter {
+            ordinal: u32::try_from(generics.len())
+                .map_err(|_| fault("generic parameter index overflow"))?,
+            kind: GenericKind::Type,
+            name: "Self".into(),
+            bounds: Vec::new(),
+            default: Vec::new(),
+            const_type: Vec::new(),
+        });
+    }
+    Ok(generics)
+}
 pub(crate) fn capture_generics(
     list: Option<ast::GenericParamList>,
 ) -> Result<Vec<DefinitionParameter>, Diagnostic> {
     let mut generics = Vec::new();
     let mut names = BTreeSet::new();
     if let Some(list) = list {
-        if usize::from(list.syntax().text_range().len()) > GENERIC_METADATA_LIMIT {
-            return Err(fault("generic source exceeds the source recipe budget"));
-        }
         let count = list.generic_params().count();
         let mut bytes = count
             .checked_mul(std::mem::size_of::<DefinitionParameter>())
-            .filter(|n| *n <= GENERIC_METADATA_LIMIT)
             .ok_or_else(|| fault("generic parameter storage exceeds the source recipe budget"))?;
         u32::try_from(count).map_err(|_| fault("generic parameter index overflow"))?;
         generics
@@ -478,7 +602,6 @@ pub(crate) fn capture_generics(
             };
             bytes = bytes
                 .checked_add(name.capacity())
-                .filter(|n| *n <= GENERIC_METADATA_LIMIT)
                 .ok_or_else(|| fault("generic name storage exceeds the source recipe budget"))?;
             // Lifetimes occupy their own namespace; type/const parameter names
             // retain the existing common identity namespace and source ordinals.
@@ -574,7 +697,7 @@ mod tests {
     }
 
     #[test]
-    fn rustc_duplicate_const_parameter_retains_identity_and_bounded_tokens() {
+    fn rustc_duplicate_const_parameter_retains_identity_and_tokens() {
         const ORIGINAL: &str = include_str!(
             "../../../../fixtures/upstream/rustc-checkout/tests/ui/const-generics/defaults/self-referential.rs"
         );
@@ -597,14 +720,7 @@ mod tests {
         let mut bytes = 0;
         let captured = generic_tokens(Some(ty.syntax().clone()), &mut bytes).unwrap();
         assert_eq!(captured, tokens(ty.syntax(), None));
-        assert!(bytes > 0 && bytes <= GENERIC_METADATA_LIMIT);
-        let mut exhausted = GENERIC_METADATA_LIMIT;
-        assert_eq!(
-            generic_tokens(Some(ty.syntax().clone()), &mut exhausted)
-                .unwrap_err()
-                .code,
-            "LRR-E-CALL-SIGNATURE"
-        );
+        assert!(bytes > 0);
         for _ in 0..2 {
             let error = capture_generics(Some(list.clone())).unwrap_err();
             assert_eq!(error.code, "LRR-E-CALL-SIGNATURE");

@@ -26,9 +26,6 @@ impl ControlTarget {
 }
 fn label_name(label: &ast::Lifetime) -> Result<String, Diagnostic> {
     let token = required(label.lifetime_ident_token())?;
-    if token.text().len() > 64 * 1024 {
-        return Err(fault("constant loop label metadata limit"));
-    }
     semantic(required(token.text().strip_prefix('\''))?)
 }
 pub(super) fn reached_target(
@@ -49,10 +46,7 @@ fn resolve(
     is_continue: bool,
 ) -> Result<ControlTarget, Diagnostic> {
     let wanted = label.as_ref().map(label_name).transpose()?;
-    for (work, parent) in syntax.ancestors().skip(1).enumerate() {
-        if work >= 100_000 {
-            return Err(fault("constant loop target work limit"));
-        }
+    for parent in syntax.ancestors().skip(1) {
         if ast::Fn::can_cast(parent.kind())
             || ast::ClosureExpr::can_cast(parent.kind())
             || ast::Const::can_cast(parent.kind())

@@ -44,29 +44,16 @@ impl InputRequest {
             Self::CaptureCompileEnvironment { .. } => Ok(()),
             Self::Expand(r) => r.key.validate(),
             Self::CaptureModule { request, .. } => request.metadata_bytes().map(|_| ()),
-            Self::CaptureInclude { request, .. } => {
-                if request
-                    .metadata_bytes()
-                    .is_none_or(|n| n > 32 * 1024 * 1024)
-                {
-                    Err(Diagnostic::new(
+            Self::CaptureInclude { request, .. } => request
+                .metadata_bytes()
+                .map(|_| ())
+                .ok_or_else(|| {
+                    Diagnostic::new(
                         "LRR-E-QUERY-REQUEST",
-                        "include request metadata exceeds limit".into(),
-                    ))
-                } else {
-                    Ok(())
-                }
-            }
-            Self::CaptureGeneratedSource(r) => {
-                if r.path.as_str().len() > 64 * 1024 {
-                    Err(Diagnostic::new(
-                        "LRR-E-QUERY-REQUEST",
-                        "generated source request path exceeds limit".into(),
-                    ))
-                } else {
-                    Ok(())
-                }
-            }
+                        "include request metadata overflows".into(),
+                    )
+                }),
+            Self::CaptureGeneratedSource(_) => Ok(()),
         }
     }
 }

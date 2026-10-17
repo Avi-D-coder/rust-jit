@@ -45,9 +45,6 @@ struct Content {
     count: usize,
 }
 fn count(tokens: &[TokenTree], depth: usize) -> Result<usize, AdapterError> {
-    if depth > 256 {
-        return Err(fault("generated derive content depth limit"));
-    }
     tokens.iter().try_fold(0usize, |n, t| {
         let children = match t {
             TokenTree::Group { children, .. } => count(children, depth + 1)?,
@@ -55,7 +52,6 @@ fn count(tokens: &[TokenTree], depth: usize) -> Result<usize, AdapterError> {
         };
         n.checked_add(1)
             .and_then(|n| n.checked_add(children))
-            .filter(|n| *n <= 2_000_000)
             .ok_or_else(|| fault("generated derive content token limit"))
     })
 }
@@ -67,13 +63,7 @@ pub fn materialize(
     removed: &[usize],
     nodes: &[CfgNode],
 ) -> Result<TokenForest, AdapterError> {
-    if selected.start >= selected.end
-        || outer.len() > 4096
-        || removed.len() > 4096
-        || nodes.len() > 100_000
-        || input.encoded_len()? > 32 * 1024 * 1024
-        || input.allocated_bytes()? > 64 * 1024 * 1024
-    {
+    if selected.start >= selected.end {
         return Err(fault("generated derive input limit"));
     }
     let removed: BTreeSet<_> = removed.iter().copied().collect();
@@ -111,13 +101,7 @@ pub fn materialize(
         .filter_map(ast::AnyHasAttrs::cast)
     {
         if ast::attrs_including_inner(&owner).next().is_some() {
-            if owners.len() >= 100_001 {
-                return Err(fault("generated derive owner index limit"));
-            }
             for attr in ast::attrs_including_inner(&owner) {
-                if wrappers.len() >= 100_000 {
-                    return Err(fault("generated derive wrapper index limit"));
-                }
                 wrappers.insert(range(attr.syntax()), attr);
             }
             owners.insert(range(owner.syntax()), owner);
@@ -133,9 +117,6 @@ pub fn materialize(
         let owner = ast::AnyHasAttrs::cast(node.clone())
             .ok_or_else(|| fault("generated derive cfg owner absent"))?;
         for wrapper in ast::attrs_including_inner(&owner) {
-            if recipes.len() >= 100_000 {
-                return Err(fault("generated derive wrapper count limit"));
-            }
             recipes.insert(range(wrapper.syntax()), Vec::new());
         }
         for attribute in attributes {
@@ -175,7 +156,6 @@ pub fn materialize(
             || key.0 >= key.1
             || key == (selected.start, selected.end)
             || !seen.insert(key)
-            || node.attributes.len() > 4096
         {
             return Err(fault("generated derive cfg node range/count invalid"));
         }
@@ -220,9 +200,6 @@ pub fn materialize(
         let mut meta_index = BTreeMap::new();
         if !metas.is_empty() {
             for meta in wrapper.syntax().descendants().filter_map(ast::Meta::cast) {
-                if meta_index.len() >= 100_000 {
-                    return Err(fault("generated derive meta index limit"));
-                }
                 meta_index.insert(range(meta.syntax()), meta);
             }
         }
@@ -248,7 +225,6 @@ pub fn materialize(
             ))?;
             retained = retained
                 .checked_add(forest.allocated_bytes()?)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("generated derive recipe retention limit"))?;
             let count = count(roots(&forest), 0)?;
             contents.push(Content { forest, count });
@@ -292,7 +268,7 @@ pub fn materialize(
                             }
                         }
                         if next.as_ref().is_some_and(|t| t.text() == "[") {
-                            if occurrences.len() >= 100_000 || occurrences.try_reserve(1).is_err() {
+                            if occurrences.try_reserve(1).is_err() {
                                 error = Some(fault(
                                     "generated derive occurrence allocation/count limit",
                                 ));
@@ -324,7 +300,6 @@ pub fn materialize(
     let whole = store.export(&modified)?;
     retained
         .checked_add(whole.allocated_bytes()?)
-        .filter(|n| *n <= 128 * 1024 * 1024)
         .ok_or_else(|| fault("generated derive edit retention limit"))?;
     let mut edit = Rewrite {
         occurrences: &occurrences,
@@ -342,18 +317,14 @@ pub fn materialize(
     for forest in std::iter::once(&whole).chain(replacements.iter().flatten().map(|c| &c.forest)) {
         for row in forest.contexts() {
             let key = row.key();
-            if contexts.get(&key).is_some_and(|old| old != row)
-                || (!contexts.contains_key(&key) && contexts.len() >= 2_000_000)
-            {
+            if contexts.get(&key).is_some_and(|old| old != row) {
                 return Err(fault("generated derive context conflict/count limit"));
             }
             contexts.insert(key, row.clone());
         }
         for row in forest.spans() {
             let key = row.key();
-            if spans.get(&key).is_some_and(|old| old != row)
-                || (!spans.contains_key(&key) && spans.len() >= 2_000_000)
-            {
+            if spans.get(&key).is_some_and(|old| old != row) {
                 return Err(fault("generated derive span conflict/count limit"));
             }
             spans.insert(key, row.clone());
@@ -364,9 +335,6 @@ pub fn materialize(
         contexts.into_values().collect(),
         spans.into_values().collect(),
     )?;
-    if result.allocated_bytes()? > 64 * 1024 * 1024 || result.encoded_len()? > 32 * 1024 * 1024 {
-        return Err(fault("generated derive output limit"));
-    }
     let imported = store.import(&result)?;
     store.export(&imported)
 }
@@ -400,7 +368,6 @@ impl Rewrite<'_> {
         self.tokens = self
             .tokens
             .checked_add(n)
-            .filter(|n| *n <= 2_000_000)
             .ok_or_else(|| fault("generated derive rewritten token limit"))?;
         Ok(())
     }
@@ -413,9 +380,6 @@ impl Rewrite<'_> {
         Ok(value)
     }
     fn consume(&mut self, tokens: &[TokenTree], depth: usize) -> Result<(), AdapterError> {
-        if depth > 256 {
-            return Err(fault("generated derive consume depth limit"));
-        }
         for (at, token) in tokens.iter().enumerate() {
             if prefix(tokens, at).is_some() && self.occurrence()?.is_some() {
                 return Err(fault("generated derive nested meta edit conflict"));
@@ -431,9 +395,6 @@ impl Rewrite<'_> {
         tokens: &[TokenTree],
         depth: usize,
     ) -> Result<Vec<TokenTree>, AdapterError> {
-        if depth > 256 {
-            return Err(fault("generated derive rewrite depth limit"));
-        }
         let mut output = Vec::new();
         let mut at = 0;
         while at < tokens.len() {

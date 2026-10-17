@@ -22,7 +22,6 @@ use crate::{
     syntax::outline::ScopeKey,
 };
 use std::sync::Arc;
-const LIMIT: usize = 32 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MODULE-NAME", message.into())
 }
@@ -35,7 +34,6 @@ fn limit() -> Diagnostic {
 fn add(bytes: usize, n: usize) -> Result<usize, Diagnostic> {
     bytes
         .checked_add(n)
-        .filter(|n| *n <= LIMIT)
         .ok_or_else(limit)
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -131,7 +129,7 @@ impl CurrentModuleNameObservation {
                     .and_then(|n| n.checked_add(std::mem::size_of::<DependencyStamp>()))
                     .and_then(|n| observation.bytes.checked_add(n))
                 {
-                    Some(bytes) if bytes <= LIMIT => bytes,
+                    Some(bytes) => bytes,
                     _ => return QueryPoll::Ready(Err(limit())),
                 };
                 let outcome = match db.fetch(&SyntaxProvider, key.clone()) {
@@ -165,7 +163,6 @@ impl CurrentModuleNameObservation {
                 };
                 if extra
                     .checked_add(lookup_bytes)
-                    .filter(|bytes| *bytes <= LIMIT)
                     .is_none()
                 {
                     return QueryPoll::Ready(Err(limit()));
@@ -188,7 +185,7 @@ impl CurrentModuleNameObservation {
             observation.certificate = Some(DependencyStamp::Input { key, fingerprint });
         }
         observation.bytes = match observation.measure_bytes() {
-            Some(bytes) if bytes <= LIMIT => bytes,
+            Some(bytes) => bytes,
             _ => return QueryPoll::Ready(Err(limit())),
         };
         let mut request = StableEncoder::new("lrr/v1/current-module-name-request");
@@ -211,12 +208,7 @@ impl CurrentModuleNameObservation {
         // name answer and grants no declaration or absence authority.
         let selected = source.selection();
         selected.outline.parse.profile.validate_source()?;
-        if scope.owner.is_some()
-            || !source.outline().scopes.contains_key(scope)
-            || scope.crate_key != selected.outline.crate_key
-            || source.outline().profile != selected.outline.parse.profile
-            || name.len() > 64 * 1024
-        {
+        if scope.owner.is_some() || !source.outline().scopes.contains_key(scope) || scope.crate_key != selected.outline.crate_key || source.outline().profile != selected.outline.parse.profile {
             return Err(fault(
                 "module name request is outside actual selected source scope",
             ));

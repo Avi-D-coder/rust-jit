@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "scope": "correction to earlier limited capsule check990130e8: read-only path/module/literal-include closure inventory on exact failed frozen numeric source; no Rust compiler semantics inferred",
+  "failed_source": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-numeric-binding-pipeline-validation-v1/source",
+  "compiler_failure": "650c80/1,0bodies; new Value11 #[path] module missing",
+  "path_attributes_checked": 58,
+  "default_module_declarations_checked": 92,
+  "literal_include_paths_checked": 38,
+  "remaining_missing": [
+    {
+      "owner": "crates/lrr/src/facade/value_binding_prelude.rs:3",
+      "path": "crates/lrr/src/facade/retained_value_binding_prelude.rs",
+      "status": "pattern owner freezing exact separate dependency; no live source overlaid"
+    }
+  ],
+  "other_missing": [],
+  "limitations": "textual path inventory is bounded source review, not Rust module/typechecking or a guarantee of complete arbitrary macro-generated path dependency closure",
+  "excluded_textual_candidates": [
+    {
+      "file": "crates/lrr/src/cli/mod.rs",
+      "line": 1134,
+      "reason": "include! text inside a test Rust source String expression, not an owning Rust module include path"
+    },
+    {
+      "file": "crates/lrr/src/cli/mod.rs",
+      "line": 1269,
+      "reason": "include! text inside a test Rust source String expression, not an owning Rust module include path"
+    }
+  ],
+  "retained_dependency": "peer frozen minimal dependency1 manifest4a309c98 /private/tmp/lrr-value39-retained-prelude-dependency-v1/overlay"
+}

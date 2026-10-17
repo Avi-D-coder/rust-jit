@@ -1,0 +1,54 @@
+{
+  "status": "precode source-only prerequisite, frozen V4 untouched",
+  "witness": "Full unchanged macro-nested_stmt_macros.rs main calls actual generic module callee; first entry lacks BodyEnvironment in current module early-Ok route. Runtime next-gap hypothesis, not yet observed terminal.",
+  "invariant": "Actually reached canonical module functions acquire same source_body_context::capture, genuine owning module macro environment, SourceLocalPlan/header publication as entry/local calls; no fake lexical parent or caller macro substitution.",
+  "source_route": [
+    "EnteredModuleAdmission->SourceCallable",
+    "source_body_context::capture actual canonical rows/body index",
+    "CompletedSourceEnvironment actual sealed source and provider metadata",
+    "publish_body_environment_checked and actual SourceLocalPlan/declaration publication"
+  ],
+  "held_routes": [
+    "Current prepare_reached_local_source module early Ok to be replaced by root integration",
+    "Generated module boundary export remains actual missing authority until common source export exists; no permission inferred from token origins",
+    "Legacy run graph lacks completed macro authority, explicit unsupported remains"
+  ],
+  "costs": "Cold completed discovery snapshots actual runtime source macro indexes once, bounded aggregate metadata; factory direct keyed lookup plus genuine seal. First reached module captures immutable body context; existing current BodyEnvironment reuse avoids capture. Need prevent repeated SourceLocalPlan reconstruction after first completed publication; shared DB checked publisher/currentness preserved.",
+  "authority": "Private reached receipt binds actual caller call, opaque selected module admission, source/header/body/context/current inputs and actual per-source macro envelope. DB active run/coordinator/quota/retention remain enforced.",
+  "required_evidence": [
+    "Exact all8 source review",
+    "Actual canonical wrong source/header/body/scope/epoch/seal controls",
+    "Repeated entry reuse and cold function not prepared",
+    "Whole unchanged stock fixture terminal and route matrix; no result presumed"
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "b6886e49baae39af4ad9fa6fb55750dd0b7bca511172ca7c74b67ae40010faf1"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/body_macro_environment.rs",
+      "sha256": "17ffb56d258d8a00d565b3adf942e0e8a0e6307a1378476e6914ec4c378fb442"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs.rs",
+      "sha256": "f4f837e20183d00f2b3b443df2d94b5e60aa0d51deb5c0b0a14f6778d45ee962"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "sha256": "169593789e20bc98791f425a502cfc8dcf9e9e112d450d77e92a4f52dcfed44d"
+    }
+  ],
+  "hypothesis_correction": "Parent V5 precise source review established empty static_assert_exists body completed; failing SourceLocalPlan fetch was an unnecessary observer copied from Local harness. This component is not that stock runtime fix. Original precode witness hypothesis retained above as historical; runtime hooks held.",
+  "actual_future_witnesses": [
+    {
+      "path": "rustc/rust/tests/ui/numbers-arithmetic/shift.rs",
+      "contract": "unchanged run-pass main->test_expr module callee actual reached primitive casts require callee Body Type occurrence authority; later static/assert operations distinct gaps"
+    },
+    {
+      "path": "rustc/rust/tests/ui/resolve/resolve-pseudo-shadowing.rs",
+      "contract": "unchanged run-pass main->generic check module function->actual inner local check2 call; qualified Clone method later separate gap"
+    }
+  ],
+  "runtime_integration": "Unhooked prerequisite only; root V6 test-only observer correction is separate and production identical to V5."
+}

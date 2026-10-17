@@ -1,0 +1,34 @@
+{
+  "status": "source-only precode new independent testleaf; V7 and live existing leaves unchanged",
+  "invariant": "Original SourceBlob-backed actual local declaration without retained/generated receipt must consume genuine local BodyEnvironment and pass same checked source readiness as retained/generated; receipt stamp slot cannot conflate local owner with syntax input.",
+  "witness": "Unchanged official type-param-local-var-shadowing.rs, direct existing original source setup before any retained-entry adapter; actual f selected through common Value/canonical proof.",
+  "regression": "Root original readiness b22958db compared slot5 and falsely refused None receipt localchild ownerstamp versus root0. Corrected root731fbfe8 matches actual receiptNone/None or inherited Some Arc.",
+  "entrypoints": [
+    "existing lexical_inputs_tests::setup full ordinary SourceDiscovery",
+    "db.prepare_source_local_plan original main before CLI retained entry",
+    "prepare_entered_local_function actual source site",
+    "publish_ordinary_local_function /capture_local /publish_body_environment",
+    "pin_guest_body /require_execution_readiness /lease.require_current"
+  ],
+  "owned": [
+    "crates/lrr/src/db/body_lease_original_source_tests.rs"
+  ],
+  "future_registration": "root-only append child module in lexical_inputs_tests.rs to reuse existing private setup; no registration performed by worker",
+  "cold_cost": "Metadata control only; no guest Frame or executable thunk. Actual reached admission/body index captures are explicit test preparation, then lease checks must not run provider.",
+  "authority": "Actual source file preserved; no RetainedSyntax created; canonical local owner/environment/private proof minted by existing production APIs.",
+  "evidence": "positive all4 authored unexecuted; no Cargo or runtime acceptance.",
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/db/lexical_inputs_tests.rs",
+      "sha256": "4d37390fdff166097c8bfa3a0ce18c00b4e20699086be2ccd05bb2c80feb9e39"
+    },
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "67a851663ea57525ed878d2c15d9bbf111c7aa20cf990f9ad2ecae4fcdc79164"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "731fbfe89b7ee8fd247517d7c43835f9a8ff444484c03c8298f07f6ceae2094e"
+    }
+  ]
+}

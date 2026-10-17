@@ -1,0 +1,47 @@
+{
+  "status": "source-only separate new control; no Cargo/tests executed",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/body_lease_original_source_tests.rs",
+      "sha256": "0d73b1b776ab95df303c9dbb8003abd94d9bc0ad15f0b2a30c380f26b409a251",
+      "bytes": 4866,
+      "before_sha256": null
+    }
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "Existing production source receipt/lease APIs only, no interpreter/assertion implementation."
+    },
+    {
+      "mode": 2,
+      "review": "Full unchanged stock source passed existing setup; no selected body replacement or generated text parser."
+    },
+    {
+      "mode": 3,
+      "review": "Actual common Value local admission and canonical source body; no name/numeric profile permission."
+    },
+    {
+      "mode": 4,
+      "review": "Direct originalSource receiptNone is positive regression control for fixed false rejection; asserts no Retained/Generated syntax inputs or retained parser representation."
+    },
+    {
+      "mode": 5,
+      "review": "Only explicit actual selected f source metadata/body index capture, no guest Frame/Thunk/execution and no unselected bodies lowered."
+    },
+    {
+      "mode": 6,
+      "review": "Readiness/lease success requires zero provider runs after setup, no source replanning; existing genuine macro seal currentness remains."
+    },
+    {
+      "mode": 7,
+      "review": "Exact SourceBlob/owner/body/environment observations, no namespace scan or revision bypass."
+    },
+    {
+      "mode": 8,
+      "review": "Existing immutable index/parser/parent Arcs shared via production capture; no deep copies or whole-file search added to runtime."
+    }
+  ],
+  "scope": "One positive all4-edition metadata regression, not full stock execution or architecture acceptance. Exact V7 root readiness fix None/None already independently reviewed; full runtime remains validator-owned.",
+  "registration": "Root future child registration inside lexical_inputs_tests.rs (not body_leases.rs), so existing private setup/ready are reused. No existing leaf edited by worker."
+}

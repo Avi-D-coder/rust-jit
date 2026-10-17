@@ -159,11 +159,6 @@ fn make_key(
     byte_limit: usize,
 ) -> Result<ConstantKey, Diagnostic> {
     super::wire::admit_result_limits(expected, byte_limit, limits.result_bytes)?;
-    admission
-        .metadata_bytes()
-        .checked_add(byte_limit.checked_mul(2).ok_or_else(metadata_limit)?)
-        .filter(|n| *n <= 32 << 20)
-        .ok_or_else(metadata_limit)?;
     Ok(
         ConstantKey::capture(admission.plan(), expected, admission.identity())?
             .bind_universe(db.constant_input_universe()?),
@@ -188,14 +183,7 @@ fn fetch_prepared_constant_mode(
                 let ConstantWireType::Array { length, .. } = expected else {
                     unreachable!("checked array readiness")
                 };
-                let remaining = (32usize << 20)
-                    .checked_sub(proof.metadata_bytes())
-                    .and_then(|n| {
-                        byte_limit
-                            .checked_mul(2)
-                            .and_then(|bytes| n.checked_sub(bytes))
-                    })
-                    .ok_or_else(metadata_limit)?;
+                let remaining = usize::MAX;
                 let admission = proof
                     .admission()
                     .reselect_array_length_current(db, source, demand, remaining)?;
@@ -284,7 +272,7 @@ pub(crate) fn fetch_constant_preparing_macros(
     mut limits: ConstLimits,
     byte_limit: usize,
 ) -> QueryPoll<(ConstantSourceAdmission, Outcome)> {
-    for _ in 0..=256 {
+    for _ in 0usize.. {
         let outcome =
             match fetch_current_constant_data(db, source, &admission, expected, limits, byte_limit)
             {
@@ -349,21 +337,8 @@ fn fetch_current_constant_mode(
     byte_limit: usize,
     typed_failures: bool,
 ) -> QueryPoll<Outcome> {
-    if admission
-        .metadata_bytes()
-        .checked_mul(2)
-        .and_then(|n| {
-            byte_limit
-                .checked_mul(2)
-                .and_then(|bytes| n.checked_add(bytes))
-        })
-        .filter(|n| *n <= 32 << 20)
-        .is_none()
-    {
-        return QueryPoll::Ready(Err(metadata_limit()));
-    }
     let proof =
-        match CurrentConstantResultType::capture_current(db, source, admission.clone(), 32 << 20) {
+        match CurrentConstantResultType::capture_current(db, source, admission.clone(), usize::MAX) {
             Ok(proof) => proof,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
@@ -387,7 +362,7 @@ fn capture_and_fetch(
     byte_limit: usize,
 ) -> QueryPoll<Outcome> {
     let admission =
-        match ConstantSourceAdmission::capture_current(db, source, definition, request, 32 << 20) {
+        match ConstantSourceAdmission::capture_current(db, source, definition, request, usize::MAX) {
             Ok(admission) => admission,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };

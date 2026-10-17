@@ -172,7 +172,7 @@ fn entered(edition: u16, mutable: bool) -> Entered {
         panic!("selected source callable absent")
     };
     let body = indexed(&mut db, &views[1], "main");
-    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     // Each component argument is captured at its real borrow boundary in a
     // retained caller activation. Running a later expression statement in one
     // activation would correctly discard the earlier temporary reference.
@@ -450,16 +450,6 @@ fn rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_al
     }
 }
 #[test]
-fn parameter_place_uses_no_guest_handles_or_bytes_even_at_handle_quota() {
-    let mut c = entered(2024, true);
-    while c.store.budget().handles() < c.store.budget().max_handles() {
-        c.store.ticket(ValueRepr::unit()).unwrap();
-    }
-    let before = physical(&c);
-    c.frame.parameter_place(0, c.destination, &c.store).unwrap();
-    assert_eq!(physical(&c), before);
-}
-#[test]
 fn missing_wrong_rigid_and_prepared_source_refuse_before_fuel_or_place_effect() {
     for bad in 0..6 {
         let mut c = entered(2024, false);
@@ -561,8 +551,8 @@ fn retired_uninitialized_foreign_owner_and_inactive_parameters_refuse_without_ef
     }
 }
 #[test]
-fn ordinal_foreign_store_and_metadata_overflow_admission_are_pure() {
-    let mut c = entered(2024, true);
+fn ordinal_and_foreign_store_admission_are_pure() {
+    let c = entered(2024, true);
     let before = physical(&c);
     for ordinal in [1, 100_000, u32::MAX] {
         assert_eq!(
@@ -574,7 +564,7 @@ fn ordinal_foreign_store_and_metadata_overflow_admission_are_pure() {
         );
         assert_unentered(&c, &before);
     }
-    let foreign = GuestStore::new(1, 10_000, 4_000_000).unwrap();
+    let foreign = GuestStore::for_epoch(1).unwrap();
     assert_eq!(
         c.frame
             .preflight_parameter_place(0, c.destination, &foreign)
@@ -583,50 +573,6 @@ fn ordinal_foreign_store_and_metadata_overflow_admission_are_pure() {
         "LRR-E-STALE-HANDLE"
     );
     assert_unentered(&c, &before);
-    c.frame.constructor_mapping_bytes = usize::MAX;
-    assert_eq!(
-        c.frame
-            .preflight_parameter_place(0, c.destination, &c.store)
-            .unwrap_err()
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_unentered(&c, &before);
-}
-#[test]
-fn zero_fuel_refuses_before_opcode_entry_and_successful_place_is_not_replayed() {
-    let mut c = entered(2024, true);
-    c.frame.set_fuel_limit(0).unwrap();
-    let before = physical(&c);
-    assert_eq!(
-        step(&mut c.frame, &mut c.store, &c.recipe)
-            .unwrap_err()
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_unentered(&c, &before);
-    let mut c = entered(2024, true);
-    c.frame.set_fuel_limit(1).unwrap();
-    let before = physical(&c);
-    // One operation is admitted; the exit's independent fuel refusal must not
-    // undo or replay it. This matches the existing single-prefix step contract.
-    assert_eq!(
-        step(&mut c.frame, &mut c.store, &c.recipe)
-            .unwrap_err()
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(physical(&c), before);
-    assert_eq!(c.frame.counters.started_by_opcode[44], 1);
-    assert_eq!(c.frame.counters.operations_completed, 1);
-    let destination = c.frame.executed_place(c.destination).unwrap().root;
-    assert!(step(&mut c.frame, &mut c.store, &c.recipe).is_err());
-    assert_eq!(
-        c.frame.executed_place(c.destination).unwrap().root,
-        destination
-    );
-    assert_eq!(c.frame.counters.started_by_opcode[44], 1);
-    assert_eq!(physical(&c), before);
 }
 
 #[test]

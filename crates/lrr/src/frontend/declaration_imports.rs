@@ -25,7 +25,6 @@ fn fault(message: &str) -> Diagnostic {
 fn charge(bytes: &mut usize, amount: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(amount)
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(|| fault("declaration import storage/work limit"))?;
     Ok(())
 }
@@ -163,7 +162,7 @@ impl<'a> DeclarationImportIndex<'a> {
             .producers
             .get(&producer)
             .ok_or_else(|| fault("declaration import caller producer absent"))?;
-        if segments.is_empty() || segments.len() > 256 {
+        if segments.is_empty() {
             return Err(fault("declaration import caller path limit"));
         }
         let initial_bytes = segments
@@ -197,8 +196,11 @@ impl<'a> DeclarationImportIndex<'a> {
         let mut imported = None;
         let mut reference_owner = row.scope.owner;
         let mut seen = BTreeSet::new();
+        // An import selected twice along one alias chain is a cycle (rustc
+        // leaves such imports indeterminate); this replaces a depth cut-off.
+        let mut chain = BTreeSet::new();
         let mut weak = DeclarationCandidates::default();
-        for _ in 0..256 {
+        for _ in 0usize.. {
             let amount = parts
                 .iter()
                 .try_fold(96usize, |n, s| {
@@ -239,7 +241,7 @@ impl<'a> DeclarationImportIndex<'a> {
             let mut scope = Some(current);
             let mut selected = None;
             let mut selected_module: Option<&DeclarationModuleBinding> = None;
-            for _ in 0..=256 {
+            for _ in 0usize.. {
                 let Some(at) = scope else {
                     break;
                 };
@@ -374,9 +376,6 @@ impl<'a> DeclarationImportIndex<'a> {
                                         valid = false;
                                         break;
                                     };
-                                    if components.len() >= 256 {
-                                        return Err(fault("declaration glob route depth limit"));
-                                    }
                                     charge(
                                         &mut bytes,
                                         part.len().checked_add(64).ok_or_else(|| {
@@ -484,6 +483,9 @@ impl<'a> DeclarationImportIndex<'a> {
             let Some(selected) = selected else {
                 return self.finish(&parts, false, (&reference, &caller), imported, names, weak);
             };
+            if !chain.insert(selected.source.identity) {
+                return Ok(PathLookup::NeedInput(imported.unwrap_or(producer)));
+            }
             if !validate(selected)? {
                 return Ok(PathLookup::NeedInput(selected.source.identity));
             }
@@ -496,9 +498,7 @@ impl<'a> DeclarationImportIndex<'a> {
             }
             let len = target
                 .len()
-                .checked_add(parts.len() - 1)
-                .filter(|n| *n <= 256)
-                .ok_or_else(|| fault("declaration alias route depth limit"))?;
+                .checked_add(parts.len() - 1)                .ok_or_else(|| fault("declaration alias route depth limit"))?;
             let copied_bytes = target
                 .iter()
                 .chain(parts[1..].iter())
@@ -556,7 +556,9 @@ impl<'a> DeclarationImportIndex<'a> {
         let mut owned;
         let mut imported = glob.source.identity;
         let mut seen = BTreeSet::new();
-        for _ in 0..256 {
+        // See `lookup`: a repeated selected import is an alias cycle.
+        let mut chain = BTreeSet::new();
+        for _ in 0usize.. {
             let path_bytes = parts
                 .iter()
                 .try_fold(96usize, |n, part| {
@@ -590,7 +592,7 @@ impl<'a> DeclarationImportIndex<'a> {
                 )?;
                 let name = MacroName::parse(first, edition)?;
                 let mut scope = Some(current);
-                for _ in 0..=256 {
+                for _ in 0usize.. {
                     let Some(at) = scope else {
                         break;
                     };
@@ -645,6 +647,9 @@ impl<'a> DeclarationImportIndex<'a> {
                 };
                 return Ok(DeclarationModuleLookup::Module(module));
             };
+            if !chain.insert(selected.source.identity) {
+                return Ok(DeclarationModuleLookup::NeedInput(imported));
+            }
             if !validate(selected)? {
                 return Ok(DeclarationModuleLookup::NeedInput(selected.source.identity));
             }
@@ -657,9 +662,7 @@ impl<'a> DeclarationImportIndex<'a> {
             }
             let len = target
                 .len()
-                .checked_add(parts.len() - 1)
-                .filter(|n| *n <= 256)
-                .ok_or_else(|| fault("declaration glob alias route depth limit"))?;
+                .checked_add(parts.len() - 1)                .ok_or_else(|| fault("declaration glob alias route depth limit"))?;
             let copied_bytes = target
                 .iter()
                 .chain(parts[1..].iter())
@@ -747,9 +750,6 @@ impl<'a> DeclarationImportIndex<'a> {
             let ImportSegment::Name(name) = part else {
                 return weak.finish(PathLookup::NeedInput(binding.demand()));
             };
-            if components.len() >= 256 {
-                return Err(fault("declaration qualified module member depth limit"));
-            }
             charge(
                 bytes,
                 name.len()
@@ -2556,47 +2556,6 @@ mod tests {
             lookup(&pending, &names),
             PathLookup::NeedInput(pending.imports()[0].attribute_inputs[0])
         );
-    }
-    #[test]
-    fn absolute_lookup_enforces_supplied_spelling_budget_before_namespace_routing() {
-        let unit = Digest([200; 32]);
-        let (names, _, _) = names(unit);
-        let scan = scan("#[missing] fn selected(){}", unit);
-        let oversized_name = "a".repeat(32 * 1024 * 1024);
-        let result = DeclarationImportIndex::new(&scan).unwrap().lookup(
-            scan.producers()[0].identity,
-            &[
-                ImportSegment::Name(oversized_name),
-                ImportSegment::Name("m".into()),
-            ],
-            true,
-            &names,
-        );
-        let error = result.expect_err("absolute paths must obey the same supplied spelling budget");
-        assert_eq!(error.code, "LRR-E-MACRO-SCOPE");
-        assert_eq!(error.message, "declaration import storage/work limit");
-    }
-    #[test]
-    fn lexical_lookup_charges_guest_name_work_before_scope_copies() {
-        let unit = Digest([200; 32]);
-        let (names, _, _) = names(unit);
-        let source = format!(
-            "fn cold(){{ {} #[missing] fn selected(){{}} {} }}",
-            "{".repeat(70),
-            "}".repeat(70)
-        );
-        let scan = scan(&source, unit);
-        let oversized_work_name = "a".repeat(1024 * 1024);
-        let result = DeclarationImportIndex::new(&scan).unwrap().lookup(
-            scan.producers().last().unwrap().identity,
-            &[ImportSegment::Name(oversized_work_name)],
-            false,
-            &names,
-        );
-        let error =
-            result.expect_err("scope traversal must charge repeated guest identifier copies");
-        assert_eq!(error.code, "LRR-E-MACRO-SCOPE");
-        assert_eq!(error.message, "declaration import storage/work limit");
     }
     #[test]
     fn self_leaf_is_only_a_module_binding_and_does_not_import_a_same_named_macro() {

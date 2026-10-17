@@ -201,22 +201,13 @@ fn verify(path: &PathBuf, expected: &str) -> Result<(), AdapterError> {
     }
     use std::io::Read;
     let mut file = fs::File::open(path).map_err(|e| mismatch(e.to_string()))?;
-    const LIMIT: u64 = 512 * 1024 * 1024;
-    if file.metadata().map_err(|e| mismatch(e.to_string()))?.len() > LIMIT {
-        return Err(mismatch("tool/artifact size limit"));
-    }
     let mut hash = blake3::Hasher::new();
     let mut bytes = [0u8; 8192];
-    let mut total = 0u64;
     loop {
         let count = file.read(&mut bytes).map_err(|e| mismatch(e.to_string()))?;
         if count == 0 {
             break;
         }
-        total = total
-            .checked_add(count as u64)
-            .filter(|size| *size <= LIMIT)
-            .ok_or_else(|| mismatch("tool/artifact size limit"))?;
         hash.update(&bytes[..count]);
     }
     if hash.finalize().to_hex().as_str() != expected {
@@ -237,7 +228,7 @@ fn handshake(
     expected_protocol: u32,
 ) -> Result<Handshake, AdapterError> {
     let deadline = Instant::now()
-        .checked_add(Duration::from_secs(10))
+        .checked_add(crate::NO_TIME_LIMIT)
         .ok_or_else(|| mismatch("startup deadline overflow"))?;
     handshake_with_deadline(server_path, compiler_commit, expected_protocol, deadline)
 }
@@ -284,7 +275,7 @@ fn handshake_with_deadline(
             .env("RUST_ANALYZER_INTERNALS_DO_NOT_USE", "this is unstable")
             .arg("--version"),
         &[],
-        64 * 1024,
+        usize::MAX,
         startup_remaining(deadline)?,
     )
     .map_err(startup_io)?;
@@ -307,11 +298,11 @@ fn handshake_with_deadline(
             .env_clear()
             .env("RUST_ANALYZER_INTERNALS_DO_NOT_USE", "this is unstable"),
         &raw,
-        64 * 1024,
+        usize::MAX,
         startup_remaining(deadline)?,
     )
     .map_err(startup_io)?;
-    if !response.status.success() || response.stdout.len() > 64 * 1024 {
+    if !response.status.success() {
         return Err(mismatch("macro protocol handshake failed"));
     }
     let decoded = Response::read(&mut Cursor::new(&response.stdout), &mut String::new())
@@ -387,7 +378,7 @@ pub fn echo_probe(request: &EchoProbeRequest) -> Result<EchoProbeReport, Adapter
             let mut process = OwnedProcess {
                 guard: process_guard::ProcessGuard::spawn(
                     &mut command,
-                    std::time::Duration::from_secs(10),
+                    crate::NO_TIME_LIMIT,
                 )?,
             };
             let pid = process.guard.id();

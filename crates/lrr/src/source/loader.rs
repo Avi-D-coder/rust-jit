@@ -2,8 +2,7 @@
 use super::{
     manifest::{CrateKey, PackageKey, TargetKind},
     snapshot::{
-        CfgSet, MAX_SNAPSHOT_SOURCE, MAX_SOURCE_FILE, ProjectManifest, Snapshot, SourceBlob,
-        SourcePath,
+        CfgSet, ProjectManifest, Snapshot, SourceBlob, SourcePath,
     },
 };
 use crate::core::{
@@ -159,13 +158,6 @@ impl SourceLoader {
             if !seen.insert((path.clone(), directory.clone())) {
                 continue;
             }
-            if seen.len() > 100_000 {
-                return Err(fault(
-                    "LRR-E-SOURCE-LIMIT",
-                    "source module graph exceeds 100,000 files",
-                )
-                .into());
-            }
             self.canonical(&path)?; // Capability canonicalization refuses symlink escapes.
             let before = self
                 .root
@@ -173,9 +165,6 @@ impl SourceLoader {
                 .map_err(|e| fault("LRR-E-SOURCE-IO", e.to_string()))?;
             if !before.is_file() {
                 return Err(fault("LRR-E-SOURCE-IO", "source is not a regular file").into());
-            }
-            if before.len() > MAX_SOURCE_FILE as u64 {
-                return Err(fault("LRR-E-SOURCE-LIMIT", "source file exceeds 8 MiB").into());
             }
             let mut file = self
                 .root
@@ -199,13 +188,10 @@ impl SourceLoader {
                 if count == 0 {
                     break;
                 }
-                let size = bytes
+                let _size = bytes
                     .len()
                     .checked_add(count)
                     .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "source size overflow"))?;
-                if size > MAX_SOURCE_FILE {
-                    return Err(fault("LRR-E-SOURCE-LIMIT", "source grew past 8 MiB").into());
-                }
                 bytes
                     .try_reserve(count)
                     .map_err(|e| fault("LRR-E-SOURCE-LIMIT", e.to_string()))?;
@@ -226,9 +212,6 @@ impl SourceLoader {
                     bytes.len()
                 })
                 .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "snapshot size overflow"))?;
-            if total > MAX_SNAPSHOT_SOURCE {
-                return Err(fault("LRR-E-SOURCE-LIMIT", "snapshot exceeds 128 MiB").into());
-            }
             let blob = if directory.is_some() {
                 SourceBlob::new(bytes)?
             } else {

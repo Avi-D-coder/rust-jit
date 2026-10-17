@@ -37,7 +37,6 @@ use ra_ap_syntax::{
 };
 use std::sync::Arc;
 
-const LIMIT: usize = 32 * 1024 * 1024;
 const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
 macro_rules! ready {
     ($value:expr) => {
@@ -62,7 +61,6 @@ fn fault(message: &str) -> Diagnostic {
 fn add(bytes: usize, additional: usize) -> Result<usize, Diagnostic> {
     bytes
         .checked_add(additional)
-        .filter(|bytes| *bytes <= LIMIT)
         .ok_or_else(crate::runtime::arena::resource)
 }
 
@@ -794,9 +792,6 @@ fn written_target(
     let count = segment
         .generic_arg_list()
         .map_or(0, |list| list.generic_args().count());
-    if count > 100_000 {
-        return Err(crate::runtime::arena::resource());
-    }
     let mut bytes = add(
         name.text().len(),
         count

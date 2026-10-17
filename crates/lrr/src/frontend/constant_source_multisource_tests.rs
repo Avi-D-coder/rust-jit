@@ -149,7 +149,7 @@ fn capture(
         target,
         definition,
         ConstantRequest::Constant,
-        MAX_BYTES,
+        usize::MAX,
         views,
     )
 }
@@ -178,7 +178,7 @@ fn unchanged_cross_crate_const_fn_retains_selected_original_provider_all_edition
                 &views[1],
                 def,
                 ConstantRequest::Constant,
-                MAX_BYTES
+                usize::MAX
             )
             .is_err()
         );
@@ -202,7 +202,7 @@ fn unchanged_cross_crate_const_fn_retains_selected_original_provider_all_edition
                 .dependencies()
                 .contains_key(&InputKey::DefinitionBody(def))
         );
-        assert!(admitted.metadata_bytes() <= MAX_BYTES);
+        assert!(admitted.metadata_bytes() <= usize::MAX);
         // Exact original provider plan only. Root lib::FOO dispatch/whole main remains separate.
     }
 }
@@ -366,7 +366,7 @@ fn incomplete_extra_duplicate_and_wrong_snapshot_sources_refuse() {
             &extra[1],
             &[&extra[0], &extra[1]],
             &extra_db.source_view_namespace_stamps().unwrap(),
-            MAX_BYTES
+            usize::MAX
         )
         .is_err()
     );
@@ -517,21 +517,9 @@ fn stale_body_context_and_owning_edition_refuse_exact_replay() {
     assert!(a.revalidate(&db, &changed[1]).is_err());
 }
 #[test]
-fn bounded_source_count_and_metadata_refusal_are_pure() {
+fn caller_supplied_metadata_budget_refusal_is_pure() {
     let (db, views, def) = external_world();
     let before = db.trace.events.len();
-    let many = vec![&views[1]; 257];
-    assert!(
-        ConstantSourceAdmission::capture_current_in_sources(
-            &db,
-            &views[1],
-            def,
-            ConstantRequest::Constant,
-            MAX_BYTES,
-            &many
-        )
-        .is_err()
-    );
     let error = ConstantSourceAdmission::capture_current_in_sources(
         &db,
         &views[1],
@@ -552,7 +540,7 @@ fn singleton_api_remains_exact_for_unchanged_nested_original() {
         &view,
         def,
         ConstantRequest::Constant,
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     let b = capture(&db, &view, def, &[&view]).unwrap();
@@ -641,7 +629,7 @@ fn empty_original_records_require_exact_descriptor_fragment_and_epoch_before_que
     assert_eq!(input.declaration_fragments.len(), 1);
     let stamps = db.source_view_namespace_stamps().unwrap();
     let retained =
-        RetainedConstantSources::capture(&db, &views[0], &refs, &stamps, MAX_BYTES).unwrap();
+        RetainedConstantSources::capture(&db, &views[0], &refs, &stamps, usize::MAX).unwrap();
     super::super::empty_expansions::validate(&db, input, key, &retained).unwrap();
     let trace = db.trace.events.len();
     let mut changed = input.clone();

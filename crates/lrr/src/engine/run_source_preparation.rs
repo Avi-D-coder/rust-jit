@@ -63,13 +63,20 @@ impl ReachedLocalBody<'_> {
             {
                 return Err(call_fault("reached local source owner changed"));
             }
+            // The admitted site is the direct call, or the path of a function
+            // item value whose later call consumes the same admission.
             if !matches!(db.input(&InputKey::DefinitionBody(self.caller.body().definition)).as_deref(),
                 Some(InputValue::DefinitionBody(body)) if body.key() == *self.caller.body())
                 || !self
                     .caller
                     .nodes()
                     .get(self.site.0 as usize)
-                    .is_some_and(|node| node.role == NodeRole::Expression(ExpressionKind::Call))
+                    .is_some_and(|node| {
+                        matches!(
+                            node.role,
+                            NodeRole::Expression(ExpressionKind::Call | ExpressionKind::Path)
+                        )
+                    })
             {
                 return Err(call_fault("reached local caller source changed"));
             }
@@ -162,7 +169,44 @@ impl RunMachine {
                 "local body preparation requires reached ordinary call",
             )));
         }
-        let caller = Arc::clone(&self.frame.body);
+        // A call through a function item value consumes the admission its
+        // value path recorded: that path's own body and node are the site.
+        let admitted = callee
+            .local_source_contract()
+            .map(|contract| contract.site().clone());
+        let (caller, site) = match admitted {
+            Some(admitted)
+                if admitted.body != *self.frame.body.body() || admitted.node != site.0 =>
+            {
+                let caller = if admitted.body == *self.frame.body.body() {
+                    Arc::clone(&self.frame.body)
+                } else {
+                    match db.fetch(&SyntaxProvider, QueryKey::BodyStructure(admitted.body.clone())) {
+                        QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                            QueryValue::BodyStructure(index) if index.body() == &admitted.body => {
+                                Arc::clone(index)
+                            }
+                            _ => {
+                                return QueryPoll::Ready(Err(call_fault(
+                                    "local function value owner body differs",
+                                )));
+                            }
+                        },
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                };
+                if !caller.nodes().get(admitted.node as usize).is_some_and(|node| {
+                    node.role == NodeRole::Expression(ExpressionKind::Path)
+                }) {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "local function value admission is not a value path",
+                    )));
+                }
+                (caller, NodeId(admitted.node))
+            }
+            _ => (Arc::clone(&self.frame.body), site),
+        };
         let value = ready!(db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(owner.clone())));
         let QueryValue::SourceLocalPlan(parent) = value.value.as_ref() else {
             return QueryPoll::Ready(Err(call_fault("local parent plan variant differs")));

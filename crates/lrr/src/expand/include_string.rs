@@ -108,14 +108,7 @@ impl IncludeDataExpansion<'_> {
             }
         }
 
-        if self.max_wire_bytes == 0
-            || self.max_wire_bytes > 256 * 1024 * 1024
-            || self
-                .original
-                .allocated_bytes()
-                .map_err(|e| fault(&e.to_string()))?
-                > 64 * 1024 * 1024
-        {
+        if self.max_wire_bytes == 0 {
             return Err(fault("include string output limits are invalid"));
         }
         let descriptor = self
@@ -285,13 +278,6 @@ impl IncludeDataExpansion<'_> {
                         included,
                     )
                 })?;
-                if output
-                    .allocated_bytes()
-                    .map_err(|e| fault(&e.to_string()))?
-                    > 64 * 1024 * 1024
-                {
-                    return Err(fault("included syntax output resource limit"));
-                }
                 Ok(output)
             }
 

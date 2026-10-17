@@ -2,6 +2,22 @@
 use super::*;
 use crate::frontend::names::NameNamespaces;
 
+/// An admitted retained body (a definition's body re-published with its
+/// completed macro output) supersedes only that definition's original body
+/// derived inputs (body, body source, header/context attachments into the
+/// new syntax); its declaration and every constant are unchanged.
+pub(super) fn retained_body_publication(db: &Database, key: &InputKey) -> bool {
+    let (InputKey::DefinitionSource(definition)
+    | InputKey::DefinitionBody(definition)
+    | InputKey::DefinitionHeader(definition)
+    | InputKey::DeclarationContext(definition)) = key
+    else {
+        return false;
+    };
+    matches!(db.published_input(&InputKey::DefinitionSource(*definition)),
+        Some((InputValue::DefinitionSource(parse), _))
+            if db.published_input(&InputKey::RetainedSyntax(parse.content)).is_some())
+}
 pub(super) struct RetainedConstantSources {
     views: Vec<PreparedSourceView>,
     bytes: usize,
@@ -29,7 +45,7 @@ impl RetainedConstantSources {
         stamps: &BTreeMap<InputKey, Digest>,
         byte_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        if views.is_empty() || views.len() > 256 {
+        if views.is_empty() {
             return Err(limit());
         }
         let mut bytes = Some(std::mem::size_of::<Self>())
@@ -57,6 +73,7 @@ impl RetainedConstantSources {
                     if db
                         .published_input(key)
                         .is_none_or(|(_, actual)| actual != value.fingerprint())
+                        && !retained_body_publication(db, key)
                     {
                         return Err(fault(
                             "constant retained original source/compiler publication changed",
@@ -90,9 +107,7 @@ impl RetainedConstantSources {
         for key in stamps.keys() {
             if let InputKey::CapturedSource(location) = key {
                 captured_count = captured_count
-                    .checked_add(1)
-                    .filter(|n| *n <= 256)
-                    .ok_or_else(limit)?;
+                    .checked_add(1)                    .ok_or_else(limit)?;
                 let Some((InputValue::CapturedSource(selection), _)) = db.published_input(key)
                 else {
                     return Err(fault("constant captured source input variant differs"));
@@ -163,7 +178,9 @@ impl RetainedConstantSources {
         &self,
         target: &PreparedSourceView,
         value: &DiscoveryInput,
+        value_scope: &crate::db::seals::CertifiedScope,
         types: &DiscoveryInput,
+        type_scope: &crate::db::seals::CertifiedScope,
     ) -> Result<(), Diagnostic> {
         // Preserve the established exact singleton producer, including its
         // privately published compiler-facet import resolution. A raw source
@@ -189,7 +206,7 @@ impl RetainedConstantSources {
                 .collect::<Vec<_>>(),
         )?;
         for view in &self.views {
-            graph.require_source(view.selection(), view.outline())?;
+            graph.require_view(view)?;
         }
         let dependencies = target.source_dependencies()?;
         let mut units = BTreeSet::new();
@@ -212,14 +229,12 @@ impl RetainedConstantSources {
             }
         }
         let _ = graph.resolve_imports()?; // bounded pure fixed point; no arbitrary absence fallback.
-        for input in [value, types] {
-            let certified = input
-                .scope
-                .as_ref()
-                .ok_or_else(|| fault("constant retained scope absent"))?;
+        for certified in [value_scope, type_scope] {
             let replay =
                 graph.certified_scope(&certified.scope, certified.namespace, certified.edition)?;
-            if replay.fingerprint() != certified.fingerprint() {
+            // The raw source replay has no compiler-injected standard
+            // prelude; it reproduces the certificate's module answers.
+            if replay.module_fingerprint() != certified.module_fingerprint() {
                 return Err(fault(
                     "constant original namespace replay differs from published seal",
                 ));

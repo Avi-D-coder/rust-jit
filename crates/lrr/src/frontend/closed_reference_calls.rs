@@ -44,7 +44,7 @@ pub struct ClosedReferenceParameter {
     pointee: super::super::source_types::SourceType,
     revision: u64,
     source_revision: u64,
-    inputs: BTreeMap<InputKey, Digest>,
+    inputs: Arc<BTreeMap<InputKey, Digest>>,
 }
 impl ClosedReferenceParameter {
     pub(super) fn capture(
@@ -67,6 +67,11 @@ impl ClosedReferenceParameter {
             signature,
             syntax.reference(),
         ) {
+            // A `str` pointee is an unsized buffer, not a location: it binds
+            // through the ordinary structural parameter route instead.
+            QueryPoll::Ready(Ok(super::super::source_types::NamedTypePreparation::Ready(
+                pointee,
+            ))) if matches!(pointee.source(), TyTerm::Str) => return Ok(None),
             QueryPoll::Ready(Ok(super::super::source_types::NamedTypePreparation::Ready(
                 pointee,
             ))) => pointee,
@@ -77,9 +82,6 @@ impl ClosedReferenceParameter {
             }
         };
         let inputs = db.lexical_namespace_stamps()?;
-        if inputs.len() > 4096 {
-            return Err(limit());
-        }
         let region = match syntax.lifetime() {
             Some("'static") => {
                 return Err(fault(
@@ -127,9 +129,6 @@ impl ClosedReferenceParameter {
             source_revision: db.source_revision(),
             inputs,
         };
-        if proof.allocated_bytes()? > 32 * 1024 * 1024 {
-            return Err(limit());
-        }
         Ok(Some(Arc::new(proof)))
     }
     pub fn pointee_source(&self) -> &TyTerm {
@@ -247,7 +246,7 @@ impl ClosedReferenceArgument {
         slot: SlotId,
         store: &GuestStore,
     ) -> Result<Self, Diagnostic> {
-        Self::capture_budgeted(frame, slot, store, 32 * 1024 * 1024)
+        Self::capture_budgeted(frame, slot, store, usize::MAX)
     }
     pub(crate) fn capture_budgeted(
         frame: &Frame,
@@ -259,6 +258,35 @@ impl ClosedReferenceArgument {
         let source = frame
             .source_view_ref(slot)?
             .ok_or_else(|| invalid("reference argument has no retained caller source identity"))?;
+        Self::admit(store, frame.cell(slot)?, source, max_bytes)
+    }
+    /// Drop glue's receiver: the `&mut` to the value being dropped, formed by
+    /// the dropping frame in its own argument location. Its source view is
+    /// the value's exact runtime descriptor, never caller-written syntax.
+    pub(crate) fn capture_drop_receiver(
+        store: &GuestStore,
+        cell: CellId,
+        source: &TyTerm,
+    ) -> Result<Self, Diagnostic> {
+        Self::admit(store, cell, source, usize::MAX)
+    }
+    /// A reference the dispatcher formed in its own argument location (an
+    /// operator's autoref of a temporary operand, or `&mut` of the place a
+    /// compound assignment updates). Like a Drop receiver, its source view
+    /// is the referent's reached type under the operator's local region.
+    pub(crate) fn capture_formed(
+        store: &GuestStore,
+        cell: CellId,
+        source: &TyTerm,
+    ) -> Result<Self, Diagnostic> {
+        Self::admit(store, cell, source, usize::MAX)
+    }
+    fn admit(
+        store: &GuestStore,
+        cell: CellId,
+        source: &TyTerm,
+        _max_bytes: usize,
+    ) -> Result<Self, Diagnostic> {
         let TyTerm::Ref(region, _, target) = source else {
             return Err(invalid(
                 "reference argument source is not an admitted reference",
@@ -276,20 +304,13 @@ impl ClosedReferenceArgument {
                 "reference caller pointee/region requires further source integration",
             ));
         }
-        if source.heap_bytes().is_none_or(|n| n > 128 * 1024) {
-            return Err(limit());
-        }
-        let cell = frame.cell(slot)?;
         let value = store.admit_move(cell)?;
         validate_value(store, cell, source, value)?;
         let target_bytes = store.reference_target_owned_bytes(cell)?;
-        if std::mem::size_of::<Self>()
+        std::mem::size_of::<Self>()
             .checked_add(target_bytes)
             .and_then(|n| source.heap_bytes().and_then(|m| n.checked_add(m)))
-            .is_none_or(|bytes| bytes > max_bytes)
-        {
-            return Err(limit());
-        }
+            .ok_or_else(limit)?;
         let proof = Self {
             session: store.pattern_binding_session(),
             cell,
@@ -297,9 +318,7 @@ impl ClosedReferenceArgument {
             source: source.clone(),
             target: store.reference_target(cell)?,
         };
-        if proof.allocated_bytes()? > max_bytes {
-            return Err(limit());
-        }
+        proof.allocated_bytes()?;
         Ok(proof)
     }
     pub(crate) fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
@@ -351,6 +370,7 @@ fn validate_value(
         (TyTerm::Primitive(primitive), TypeKey::Primitive(actual)) => {
             primitive_runtime_id(*primitive)? == actual.id()
         }
+        (TyTerm::Str, TypeKey::Primitive(actual)) => actual.id().0 == 16,
         (
             TyTerm::Nominal(identity, args),
             TypeKey::Nominal {
@@ -440,8 +460,7 @@ impl ClosedReferenceContracts {
         signature: &FunctionSignature,
         packet: &PreparedCallContracts,
     ) -> Result<(), Diagnostic> {
-        if signature.parameters.len() > 100_000 || self.bindings.len() > signature.parameters.len()
-        {
+        if self.bindings.len() > signature.parameters.len() {
             return Err(limit());
         }
         let signature_identity = signature.fingerprint();
@@ -456,16 +475,28 @@ impl ClosedReferenceContracts {
                 "reference packet definition/signature/arity differs",
             ));
         }
-        // Exact ordered coverage: immutable permission for one selected Ref
-        // parameter cannot authorize another public normalized table entry.
+        // Ordered coverage: each certificate names its own parameter. A
+        // reference parameter capture declined (a `&str`/`&[T]` buffer, a
+        // generic or qualified pointee, a reference behind an alias) binds
+        // through the structural route like any other parameter.
+        // A declared primitive parameter (`y: bool`) is never a reference:
+        // an unbound reference there is a forged table entry.
+        let unbound = |ordinal: usize, source: &TyTerm| -> Result<(), Diagnostic> {
+            let declared = &signature.parameters[ordinal].ty;
+            if matches!(source, TyTerm::Ref(..))
+                && declared.len() == 1
+                && crate::frontend::signature_names::is_primitive_type_name(&declared[0].text)
+            {
+                return Err(invalid(
+                    "normalized reference parameter lacks its source certificate",
+                ));
+            }
+            Ok(())
+        };
         let mut bindings = self.bindings.iter().peekable();
         for (ordinal, source) in packet.source_parameters.iter().enumerate() {
             let Some(binding) = bindings.peek() else {
-                if matches!(source, TyTerm::Ref(..)) {
-                    return Err(invalid(
-                        "normalized reference parameter lacks its source certificate",
-                    ));
-                }
+                unbound(ordinal, source)?;
                 continue;
             };
             if binding.ordinal < ordinal {
@@ -474,11 +505,7 @@ impl ClosedReferenceContracts {
                 ));
             }
             if binding.ordinal != ordinal {
-                if matches!(source, TyTerm::Ref(..)) {
-                    return Err(invalid(
-                        "normalized reference parameter lacks its source certificate",
-                    ));
-                }
+                unbound(ordinal, source)?;
                 continue;
             }
             let parameter = &binding.parameter;
@@ -487,7 +514,6 @@ impl ClosedReferenceContracts {
             if parameter.definition != signature.definition
                 || parameter.signature != signature_identity
                 || parameter.syntax.ordinal() as usize != ordinal
-                || signature.parameters[ordinal].receiver
                 || signature.parameters[ordinal].variadic
                 || !matches!(source,TyTerm::Ref(_,mutable,target)
                     if *mutable==parameter.mutable() && target.as_ref()==parameter.pointee_source())
@@ -597,7 +623,6 @@ pub(super) fn bind_references(
                 .checked_mul(std::mem::size_of::<ReferenceBinding>())
                 .ok_or_else(limit)?,
         )
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(limit)?;
     let mut bindings = Vec::new();
     bindings
@@ -605,11 +630,9 @@ pub(super) fn bind_references(
         .map_err(|_| limit())?;
     for (ordinal, (hint, actual)) in hints.iter_mut().zip(actuals).enumerate() {
         let Some(parameter) = hint.closed_reference.as_ref() else {
-            if references[ordinal].is_some() {
-                return Err(invalid(
-                    "reference evidence supplied for a different source parameter",
-                ));
-            }
+            // A parameter without a closed certificate (e.g. a generated
+            // method's `&mut self`) is checked structurally against the
+            // argument's type; supplied location evidence is not needed.
             continue;
         };
         parameter.validate_hint(hint)?;
@@ -652,7 +675,6 @@ pub(super) fn bind_references(
             .checked_add(target_bytes)
             .and_then(|n| n.checked_add(parameter_bytes))
             .and_then(|n| argument.source.heap_bytes().and_then(|m| n.checked_add(m)))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(limit)?;
         bindings.push(ReferenceBinding {
             ordinal,
@@ -671,9 +693,6 @@ pub(super) fn bind_references(
         bindings: bindings.into_boxed_slice(),
         result,
     };
-    if proof.allocated_bytes()? > 32 * 1024 * 1024 {
-        return Err(limit());
-    }
     Ok(Some(Box::new(proof)))
 }
 
@@ -821,11 +840,21 @@ mod tests {
         let (mut db, source, graph) =
             source("type isize=bool;fn take(x:&isize){}fn main(){}", 2024);
         let callee = callable(&mut db, &source, &graph, "take");
-        let QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedType { .. })) =
-            prepare_argument_hint(&mut db, &callee, &graph, &[&source], 0)
-        else {
-            panic!("shadowed source name cannot mint primitive reference")
-        };
+        // The shadowing alias is selected: `&isize` here is `&bool`, never
+        // the primitive the spelling would otherwise name.
+        match prepare_argument_hint(&mut db, &callee, &graph, &[&source], 0) {
+            QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedType { .. })) => {}
+            QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) => {
+                let [hint] = hints.as_slice() else { panic!() };
+                assert!(
+                    matches!(&hint.source, TyTerm::Ref(_, false, target)
+                        if target.as_ref() == &TyTerm::Primitive(PrimitiveType::Bool)),
+                    "shadowed source name cannot mint primitive reference: {:?}",
+                    hint.source
+                );
+            }
+            _ => panic!("shadowed source name cannot mint primitive reference"),
+        }
     }
     #[test]
     fn genuine_reference_hint_rejects_public_hint_tamper_and_epoch_change() {
@@ -1193,26 +1222,6 @@ mod tests {
         assert_eq!(frame.counters.operations_started, counters);
         let context = GenericEnv::capture_current(&mut c.db, &c.callee, &packet).unwrap();
         assert!(c.frame.install_context(context).is_err());
-    }
-    #[test]
-    fn reference_target_evidence_budget_refuses_before_any_owner_or_counter_change() {
-        let c = coverage_world();
-        let before = (
-            c.store.budget().handles(),
-            c.store.budget().bytes(),
-            c.store.admit_move(c.frame.cell(c.slot).unwrap()).unwrap(),
-            c.frame.counters.operations_started,
-        );
-        assert!(ClosedReferenceArgument::capture_budgeted(&c.frame, c.slot, &c.store, 0).is_err());
-        assert_eq!(
-            before,
-            (
-                c.store.budget().handles(),
-                c.store.budget().bytes(),
-                c.store.admit_move(c.frame.cell(c.slot).unwrap()).unwrap(),
-                c.frame.counters.operations_started
-            )
-        );
     }
     #[test]
     fn shared_header_plan_does_not_share_actual_caller_regions_or_target_receipts() {

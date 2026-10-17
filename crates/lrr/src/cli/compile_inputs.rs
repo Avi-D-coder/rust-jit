@@ -53,15 +53,16 @@ fn captured_module_layouts(
         .parent()
         .unwrap_or(Path::new(""))
         .to_owned();
-    if sources.len() > 100_000 {
-        return Err(fault(
-            "LRR-E-SOURCE-LIMIT",
-            "captured source layout count limit",
-        ));
-    }
+    // Only the root crate's own modules share the root's directory layout;
+    // dependency crates captured in the same publication have their own roots.
+    let unit = root.selection().outline.crate_key;
+    let sources = sources
+        .iter()
+        .filter(|source| source.selection().outline.crate_key == unit)
+        .collect::<Vec<_>>();
     let source_index: BTreeMap<_, _> = sources
         .iter()
-        .map(|source| (source.selection().location_identity(), source))
+        .map(|source| (source.selection().location_identity(), *source))
         .collect();
     if source_index.len() != sources.len() {
         return Err(fault(
@@ -77,7 +78,7 @@ fn captured_module_layouts(
                     &source.selection().path,
                     &source.outline().root_scope.module_path,
                 ),
-                source,
+                *source,
             )
         })
         .collect();
@@ -93,17 +94,10 @@ fn captured_module_layouts(
         if !seen.insert((selection.location_identity(), directory.clone())) {
             continue;
         }
-        if seen.len() > 100_000 {
-            return Err(fault(
-                "LRR-E-SOURCE-LIMIT",
-                "captured module layout count limit",
-            ));
-        }
         metadata_bytes = metadata_bytes
             .checked_add(directory.as_os_str().len())
             .and_then(|n| n.checked_add(selection.path.as_str().len()))
             .and_then(|n| n.checked_add(256))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-SOURCE-LIMIT",
@@ -143,12 +137,6 @@ fn captured_module_layouts(
             let child_source = physical_index.get(&(&child, &module_path)).ok_or_else(|| {
                 fault("LRR-E-SOURCE-MODULE", "captured child module layout absent")
             })?;
-            if queue.len() >= 100_000 {
-                return Err(fault(
-                    "LRR-E-SOURCE-LIMIT",
-                    "captured module layout queue limit",
-                ));
-            }
             queue.try_reserve(1).map_err(|_| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -160,35 +148,50 @@ fn captured_module_layouts(
     }
     Ok(layouts)
 }
+type Prepared = (
+    PreparedCompileInputs,
+    PreparedSourceInputs,
+    PreparedSourceView,
+    Vec<PreparedSourceView>,
+);
 impl PreparedCompileInputs {
     pub fn prepare(
         path: &Path,
         prepared: PreparedSourceInputs,
         view: PreparedSourceView,
         sources: Vec<PreparedSourceView>,
-    ) -> Result<
-        (
-            Self,
-            PreparedSourceInputs,
-            PreparedSourceView,
-            Vec<PreparedSourceView>,
-        ),
-        Diagnostic,
-    > {
+    ) -> Result<Prepared, Diagnostic> {
+        Self::prepare_with_environment(path, prepared, view, sources, None)
+    }
+    /// `prepare` with the root environment an explicit standalone preparation
+    /// recorded for its consumer unit; it must be the root's captured cfg.
+    pub fn prepare_with_environment(
+        path: &Path,
+        prepared: PreparedSourceInputs,
+        view: PreparedSourceView,
+        sources: Vec<PreparedSourceView>,
+        recorded: Option<&CompileEnv>,
+    ) -> Result<Prepared, Diagnostic> {
         let unit = view.outline().root_scope.crate_key;
-        let environment = FrozenCompileEnvironment::new(
+        let standalone = CompileEnv {
             unit,
-            &CompileEnv {
-                unit,
-                host: profile::GUEST_TARGET.into(),
-                target: profile::GUEST_TARGET.into(),
-                cfg: view.captured_macro_cfg()?.clone(),
-                cargo: BTreeMap::new(),
-                rustc_env: BTreeMap::new(),
-                declared: BTreeMap::new(),
-                out_dir: None,
-            },
-        )?;
+            host: profile::GUEST_TARGET.into(),
+            target: profile::GUEST_TARGET.into(),
+            cfg: view.captured_macro_cfg()?.clone(),
+            cargo: BTreeMap::new(),
+            rustc_env: BTreeMap::new(),
+            declared: BTreeMap::new(),
+            out_dir: None,
+        };
+        if let Some(recorded) = recorded
+            && recorded.fingerprint() != standalone.fingerprint()
+        {
+            return Err(fault(
+                "LRR-E-TOOL-PREPARE-STALE",
+                "prepared root compile environment differs from the captured root",
+            ));
+        }
+        let environment = FrozenCompileEnvironment::new(unit, &standalone)?;
         let prepared = prepared.with_compile_environment(Arc::new(environment.clone()))?;
         let select = |source: &PreparedSourceView| -> Result<PreparedSourceView, Diagnostic> {
             match prepared.select(source.selection())? {
@@ -281,7 +284,17 @@ impl PreparedCompileInputs {
         db: &mut Database,
         snapshot: &mut Arc<crate::source::snapshot::Snapshot>,
     ) -> Result<(), Diagnostic> {
-        let outcome = self.discover(discovery, db);
+        self.discover_diagnostic_with(discovery, db, snapshot, None)
+    }
+    /// `discover_diagnostic` whose procedural steps execute through `procedural`.
+    pub fn discover_diagnostic_with(
+        &self,
+        discovery: &mut SourceDiscovery,
+        db: &mut Database,
+        snapshot: &mut Arc<crate::source::snapshot::Snapshot>,
+        procedural: Option<&mut super::proc_macros::ProceduralRun<'_>>,
+    ) -> Result<(), Diagnostic> {
+        let outcome = self.discover_with(discovery, db, procedural);
         let capture = discovery.diagnostic_snapshot(db, snapshot);
         match (outcome, capture) {
             (result, Ok(captured)) => {
@@ -301,6 +314,14 @@ impl PreparedCompileInputs {
         &self,
         discovery: &mut SourceDiscovery,
         db: &mut Database,
+    ) -> Result<(), Diagnostic> {
+        self.discover_with(discovery, db, None)
+    }
+    pub fn discover_with(
+        &self,
+        discovery: &mut SourceDiscovery,
+        db: &mut Database,
+        mut procedural: Option<&mut super::proc_macros::ProceduralRun<'_>>,
     ) -> Result<(), Diagnostic> {
         let context = DemandContext {
             request: discovery.key().fingerprint(),
@@ -328,7 +349,6 @@ impl PreparedCompileInputs {
                 };
                 phase_index = phase_index
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-DISCOVERY-LIMIT",
@@ -414,6 +434,13 @@ impl PreparedCompileInputs {
                 }
                 continue;
             }
+            let step = match procedural.as_deref_mut() {
+                Some(run) => match run.step(db, discovery, step)? {
+                    Some(step) => step,
+                    None => continue,
+                },
+                None => step,
+            };
             match step {
                 SourceDiscoveryStep::NeedDeriveAppend { .. }
                 | SourceDiscoveryStep::NeedSourceDeriveSelection { .. }
@@ -442,7 +469,6 @@ impl PreparedCompileInputs {
                                 .unresolved_module_sources()
                                 .count()
                                 .checked_add(discovery.unresolved_ordinary_module_sources().count())
-                                .filter(|n| *n <= 100_000)
                                 .ok_or_else(|| {
                                     fault("LRR-E-DISCOVERY-LIMIT", "module demand count limit")
                                 })?,
@@ -512,7 +538,6 @@ impl PreparedCompileInputs {
                             };
                             phase_index = phase_index
                                 .checked_add(1)
-                                .filter(|n| *n <= 100_000)
                                 .ok_or_else(|| {
                                     fault(
                                         "LRR-E-DISCOVERY-LIMIT",
@@ -543,12 +568,6 @@ impl PreparedCompileInputs {
                                         "adopted module requires additional captured input",
                                     ));
                                 }
-                            }
-                            if modules.len() >= 100_000 {
-                                return Err(fault(
-                                    "LRR-E-DISCOVERY-LIMIT",
-                                    "standalone module count limit",
-                                ));
                             }
                             modules.insert(producer, input);
                             progress = true;
@@ -623,19 +642,12 @@ pub fn capture_macro_export_facet(
     )?;
     let mut file = std::fs::File::open(recorded_path)
         .map_err(|error| fault("LRR-E-SOURCE-IO", error.to_string()))?;
-    let limit = crate::source::snapshot::MAX_SOURCE_FILE;
     let size = usize::try_from(
         file.metadata()
             .map_err(|error| fault("LRR-E-SOURCE-IO", error.to_string()))?
             .len(),
     )
     .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "macro-export source size overflow"))?;
-    if size > limit {
-        return Err(fault(
-            "LRR-E-SOURCE-LIMIT",
-            "macro-export source exceeds limit",
-        ));
-    }
     let mut bytes = Vec::new();
     bytes
         .try_reserve_exact(size)
@@ -651,8 +663,7 @@ pub fn capture_macro_export_facet(
         bytes
             .len()
             .checked_add(count)
-            .filter(|n| *n <= limit)
-            .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "macro-export capture exceeds limit"))?;
+            .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "macro-export capture length overflow"))?;
         bytes
             .try_reserve(count)
             .map_err(|_| fault("LRR-E-METADATA-LIMIT", "macro-export capture allocation"))?;

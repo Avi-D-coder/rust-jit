@@ -61,7 +61,7 @@ pub(super) fn fixture(edition: u16, complete: bool) -> Fixture {
             .unwrap()
             .identity;
         let source_declarative::SourceDeclarativeDemand::Ready(inner) = provider
-            .generated_declaration_demand(&nested, invocation)
+            .generated_declaration_demand(&nested, invocation, None)
             .unwrap()
         else {
             panic!("actual stock nested request absent")

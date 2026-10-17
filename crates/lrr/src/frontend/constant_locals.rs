@@ -128,19 +128,6 @@ mod tests {
         locals.pop().unwrap();
         assert!(locals.get("x").is_none());
     }
-    #[test]
-    fn local_scope_stack_caps_activation_and_balances_failure_cleanup() {
-        let mut locals = LocalScopes::default();
-        for _ in 0..128 {
-            locals.push().unwrap();
-        }
-        assert_eq!(locals.push().unwrap_err().code, "LRR-E-CONST-LIMIT");
-        for _ in 0..128 {
-            locals.pop().unwrap();
-        }
-        assert!(locals.scopes.is_empty());
-        assert_eq!(locals.bindings, 0);
-    }
 }
 #[derive(Default)]
 pub(super) struct LocalScopes {
@@ -149,9 +136,6 @@ pub(super) struct LocalScopes {
 }
 impl LocalScopes {
     pub(super) fn push(&mut self) -> Result<(), Diagnostic> {
-        if self.scopes.len() >= 128 {
-            return Err(fault("LRR-E-CONST-LIMIT", "constant local scope limit"));
-        }
         self.scopes
             .try_reserve(1)
             .map_err(|_| fault("LRR-E-CONST-LIMIT", "constant local scope allocation"))?;
@@ -196,9 +180,7 @@ impl LocalScopes {
         if !scope.contains_key(&name) {
             self.bindings = self
                 .bindings
-                .checked_add(1)
-                .filter(|n| *n <= 256)
-                .ok_or_else(|| fault("LRR-E-CONST-LIMIT", "constant local binding limit"))?;
+                .checked_add(1)                .ok_or_else(|| fault("LRR-E-CONST-LIMIT", "constant local binding limit"))?;
         }
         scope.insert(name, LocalCell { value, mutable });
         Ok(())

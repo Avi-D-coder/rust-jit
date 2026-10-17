@@ -21,7 +21,7 @@ pub(crate) enum SourceArtifactRef<'a> {
     LocalPlan(&'a Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     BodyEnvironment(&'a Arc<super::BodyEnvironmentInput>),
     CompletedEnvironment(&'a Arc<crate::expand::source_discovery::CompletedSourceEnvironment>),
-    Pattern(&'a Arc<crate::syntax::pattern_product::PatternProductPlan>),
+    Pattern(&'a Arc<crate::syntax::pattern_tree::PatternTree>),
     StringLiteral(&'a Arc<crate::syntax::string_literal::PreparedStringLiteral>),
 }
 impl<'a> SourceArtifactRef<'a> {
@@ -84,8 +84,8 @@ impl<'a> SourceArtifactRef<'a> {
     }
     pub(crate) fn index(self) -> Option<&'a Arc<crate::syntax::body_index::BodyIndex>> {
         match self {
-            Self::Pattern(value) => Some(value.index()),
-            Self::StringLiteral(_)
+            Self::Pattern(_)
+            | Self::StringLiteral(_)
             | Self::SourceSyntaxInput(_)
             | Self::CompletedSourceSyntax(_)
             | Self::PreparedBodySyntax(_)
@@ -179,7 +179,7 @@ impl QueryValue {
                     .filter_map(|recipe| recipe.source_call())
                     .map(|plan| SourceArtifactRef::LocalPlan(plan.retained_plan())),
             )
-            .chain(self.product_roots().map(SourceArtifactRef::Pattern))
+            .chain(self.pattern_roots().map(SourceArtifactRef::Pattern))
             .chain(
                 recipe
                     .into_iter()
@@ -189,9 +189,9 @@ impl QueryValue {
     }
     /// Actual handles, without cloning or allocation. Shared allocation
     /// charging and owner deduplication belong to the coordinator.
-    pub(crate) fn product_roots(
+    pub(crate) fn pattern_roots(
         &self,
-    ) -> impl Iterator<Item = &Arc<crate::syntax::pattern_product::PatternProductPlan>> {
+    ) -> impl Iterator<Item = &Arc<crate::syntax::pattern_tree::PatternTree>> {
         let plan = match self {
             Self::PatternPlan(plan) => Some(plan),
             _ => None,
@@ -201,8 +201,8 @@ impl QueryValue {
             _ => None,
         };
         plan.into_iter()
-            .flat_map(|plan| plan.products())
-            .chain(recipe.into_iter().flat_map(|recipe| recipe.product_roots()))
+            .flat_map(|plan| plan.trees())
+            .chain(recipe.into_iter().flat_map(|recipe| recipe.pattern_roots()))
     }
     pub fn parse_bytes(&self) -> usize {
         match self {

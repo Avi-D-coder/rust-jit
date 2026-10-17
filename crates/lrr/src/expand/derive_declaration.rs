@@ -56,13 +56,9 @@ pub fn parse_derive_attribute(
     tokens: &[TokenRecipe],
     edition: u16,
 ) -> Result<DeriveExportNames, Diagnostic> {
-    if tokens.len() > 8202 {
-        return Err(fault("derive declaration token limit"));
-    }
     tokens
         .iter()
         .try_fold(0usize, |n, t| n.checked_add(t.text.capacity()))
-        .filter(|n| *n <= 1024 * 1024)
         .ok_or_else(|| fault("derive declaration byte limit"))?;
     let mut cursor = 0usize;
     let take = |cursor: &mut usize, expected: &str| -> Result<(), Diagnostic> {
@@ -76,9 +72,6 @@ pub fn parse_derive_attribute(
         let t = tokens
             .get(*cursor)
             .ok_or_else(|| fault("missing derive declaration identifier"))?;
-        if t.text.len() > 64 * 1024 {
-            return Err(fault("derive declaration identifier limit"));
-        }
         let n = macro_name(&t.text, edition)
             .ok_or_else(|| fault("invalid derive declaration identifier"))?;
         *cursor += 1;
@@ -93,12 +86,7 @@ pub fn parse_derive_attribute(
         if tokens.get(cursor).is_some_and(|t| t.text != ")") {
             take(&mut cursor, "attributes")?;
             take(&mut cursor, "(")?;
-            let mut count = 0usize;
             while tokens.get(cursor).is_some_and(|t| t.text != ")") {
-                count += 1;
-                if count > 4096 {
-                    return Err(fault("derive helper count limit"));
-                }
                 helpers.insert(name(&mut cursor)?);
                 if tokens.get(cursor).is_some_and(|t| t.text == ",") {
                     cursor += 1;

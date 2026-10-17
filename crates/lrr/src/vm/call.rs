@@ -38,6 +38,13 @@ impl ArgumentPacket {
     pub fn discard(&self, store: &mut GuestStore) -> Result<(), Diagnostic> {
         store.discard_arguments(self.batch)
     }
+    /// Hand the sealed argument tickets to a closed facade intrinsic.
+    pub(crate) fn take_tickets(
+        &self,
+        store: &mut GuestStore,
+    ) -> Result<Vec<crate::runtime::cell::TicketId>, Diagnostic> {
+        store.take_arguments(self.batch)
+    }
 }
 
 /// Installed dispatcher facts for a selected call's unevaluated argument slots.
@@ -48,6 +55,12 @@ pub(crate) struct CallStartFacts {
         crate::ir::pc::SlotId,
         Option<TypeId>,
         Option<crate::traits::term::TyTerm>,
+    )>,
+    /// Partial declared parameter Types of arguments without an exact hint.
+    pub(crate) partial: Vec<(
+        crate::ir::pc::SlotId,
+        std::sync::Arc<crate::ir::written_type::WrittenType>,
+        super::frame::PartialArguments,
     )>,
 }
 

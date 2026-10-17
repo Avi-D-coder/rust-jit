@@ -134,12 +134,6 @@ pub(crate) fn certify_inert_binding(
         PathLookup::Absent => {}
         PathLookup::Defined(definition) => encode(definition)?,
         PathLookup::Ambiguous(definitions) => {
-            if definitions.len() > 4096 {
-                return Err(Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "inert attribute candidate count limit".into(),
-                ));
-            }
             // Namespace lookup supplies sorted definitions. Refuse a malformed
             // candidate set rather than encoding unstable or duplicate rows.
             if definitions.windows(2).any(|rows| rows[0] >= rows[1]) {

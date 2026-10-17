@@ -187,9 +187,6 @@ impl GeneratedCallRequest {
             spans.into_values().collect(),
         )
         .map_err(|e| fault(&e.message))?;
-        if input.encode().map_err(|e| fault(&e.message))?.len() > 32 * 1024 * 1024 {
-            return Err(fault("derive input and site metadata limit"));
-        }
         let call_edition = match span.edition {
             Edition::E2015 => 2015,
             Edition::E2018 => 2018,
@@ -356,7 +353,6 @@ impl GeneratedCallRequest {
             .map_err(|e| fault(&e.message))?
             .checked_add(std::mem::size_of::<ProcInvocation>())
             .and_then(|n| n.checked_add(export.capacity()))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("generated procedural input byte limit"))?;
         for provider in providers {
             let source = provider.module_source();
@@ -380,15 +376,11 @@ impl GeneratedCallRequest {
             if sources.contains_key(&source_key) {
                 continue;
             }
-            if sources.len() >= 4096 {
-                return Err(fault("generated procedural source count limit"));
-            }
             let blob = source.captured_macro_blob()?;
             let text = blob.text()?;
             bytes
                 .checked_add(text.len())
                 .and_then(|n| n.checked_add(base.source.path.capacity()))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("generated procedural capture byte limit"))?;
             let captured = CapturedSpanSource::new(
                 base.source.clone(),
@@ -399,7 +391,6 @@ impl GeneratedCallRequest {
             .map_err(|e| fault(&e.message))?;
             bytes = bytes
                 .checked_add(captured.heap_bytes().map_err(|e| fault(&e.message))?)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("generated procedural capture byte limit"))?;
             sources.insert(source_key, captured);
         }
@@ -437,15 +428,11 @@ impl GeneratedCallRequest {
             .iter()
             .any(|source| source.source() == definition_source.source())
         {
-            if request.sources.len() >= 4096 {
-                return Err(fault("generated procedural source count limit"));
-            }
             request.sources.push(definition_source);
         }
         if let Some(tokens) = &request.attributes {
             bytes
                 .checked_add(tokens.allocated_bytes().map_err(|e| fault(&e.message))?)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("generated procedural attribute input limit"))?;
         }
         self.key.macro_identity = selected.identity().clone();
@@ -497,9 +484,6 @@ impl GeneratedCallRequest {
             range: SourceRange::checked(call.start, call.end)?,
         };
         let mut path = String::new();
-        if call.source.path.len() > 64 * 1024 {
-            return Err(limit());
-        }
         path.try_reserve_exact(call.source.path.len())
             .map_err(|_| limit())?;
         path.push_str(&call.source.path);
@@ -530,7 +514,6 @@ impl GeneratedCallRequest {
                     .export
                     .len()
                     .checked_add(site.source.path.len())
-                    .filter(|n| *n <= 64 * 1024)
                     .ok_or_else(limit)?;
                 let _ = budget;
                 name.try_reserve_exact(request.export.len())
@@ -573,9 +556,6 @@ impl GeneratedCallRequest {
                     continue;
                 }
                 let mut path = String::new();
-                if selected.path.as_str().len() > 64 * 1024 {
-                    return Err(limit());
-                }
                 path.try_reserve_exact(selected.path.as_str().len())
                     .map_err(|_| limit())?;
                 path.push_str(selected.path.as_str());
@@ -605,30 +585,18 @@ impl GeneratedCallRequest {
             failure_span: None,
             parents,
         };
-        if origin.heap_bytes().is_none_or(|n| n > 64 * 1024) {
-            return Err(limit());
-        }
         Ok(origin)
     }
     pub(crate) fn with_diagnostic_parents(
         mut self,
         parents: Vec<crate::syntax::origin::ExpansionOrigin>,
     ) -> Result<Self, Diagnostic> {
-        if parents.len() > 256 {
-            return Err(fault("generated procedural origin depth limit"));
-        }
         let origin = self
             .diagnostic_origin
             .as_mut()
             .and_then(Arc::get_mut)
             .ok_or_else(|| fault("generated procedural origin is absent or already shared"))?;
         origin.parents = parents;
-        if origin.heap_bytes().is_none_or(|n| n > 64 * 1024) {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "generated procedural origin chain storage limit".into(),
-            ));
-        }
         Ok(self)
     }
     pub(crate) fn diagnostic_origin(&self) -> Option<Arc<crate::syntax::origin::MacroOrigin>> {
@@ -687,7 +655,6 @@ impl GeneratedCallRequest {
                     >())
                     .ok_or_else(|| fault("generated procedural source metadata overflow"))?,
             )
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("generated procedural metadata limit"))?;
         Ok(bytes)
     }
@@ -748,9 +715,6 @@ impl GeneratedCallRequest {
         // The two pinned wire representations have distinct Rust types. Use
         // their exact codec bridge, preserving token/context/site identities.
         let bytes = input.encode().map_err(|error| fault(&error.message))?;
-        if bytes.len() > 32 * 1024 * 1024 {
-            return Err(fault("generated syntax receipt input byte limit"));
-        }
         let input = lrr_expand_adapter::token_wire::TokenForest::decode(&bytes)
             .map_err(|error| fault(&error.message))?;
         Ok((

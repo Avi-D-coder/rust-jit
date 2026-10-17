@@ -500,6 +500,7 @@ fn original_frame_contracts() -> (
         source_result: signature.result_symbolic.clone(),
         result_descriptor: None,
         normalized_deferred_return: None,
+        structural_references: false,
     };
     (signature, contracts, p)
 }

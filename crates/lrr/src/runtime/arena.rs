@@ -55,62 +55,43 @@ impl<T> Handle<T> {
         }
     }
 }
+/// Run epoch plus unlimited allocation observations. E-R5-006: rustc has no
+/// guest handle or memory limit; the OS bounds memory, so nothing here refuses.
 #[derive(Debug)]
 pub struct RunBudget {
     epoch: u32,
-    max_handles: u32,
-    max_bytes: usize,
     handles: u32,
     bytes: usize,
 }
 impl RunBudget {
-    pub fn new(epoch: u32, max_handles: u32, max_bytes: usize) -> Result<Self, Diagnostic> {
-        if epoch == 0 || max_handles > 8_000_000 || max_bytes > 1024 * 1024 * 1024 {
-            return Err(resource());
+    // E-R5-006: ignored, remove at callers (`_max_handles`, `_max_bytes`).
+    pub fn new(epoch: u32, _max_handles: u32, _max_bytes: usize) -> Result<Self, Diagnostic> {
+        Self::for_epoch(epoch)
+    }
+    pub fn for_epoch(epoch: u32) -> Result<Self, Diagnostic> {
+        if epoch == 0 {
+            return Err(stale());
         }
         Ok(Self {
             epoch,
-            max_handles,
-            max_bytes,
             handles: 0,
             bytes: 0,
         })
     }
-    pub(crate) fn max_handles(&self) -> u32 {
-        self.max_handles
-    }
-    pub(crate) fn max_bytes(&self) -> usize {
-        self.max_bytes
-    }
     pub fn epoch(&self) -> u32 {
         self.epoch
     }
+    /// Cumulative handles allocated in this run (observation only).
     pub fn handles(&self) -> u32 {
         self.handles
     }
+    /// Currently owned guest bytes (observation only).
     pub fn bytes(&self) -> usize {
         self.bytes
     }
-    pub(crate) fn check(&self, handles: u32, bytes: usize) -> Result<(), Diagnostic> {
-        if self
-            .handles
-            .checked_add(handles)
-            .is_none_or(|n| n > self.max_handles)
-            || self
-                .bytes
-                .checked_add(bytes)
-                .is_none_or(|n| n > self.max_bytes)
-        {
-            Err(resource())
-        } else {
-            Ok(())
-        }
-    }
-    pub(crate) fn charge(&mut self, handles: u32, bytes: usize) -> Result<(), Diagnostic> {
-        self.check(handles, bytes)?;
-        self.handles += handles;
-        self.bytes += bytes;
-        Ok(())
+    pub(crate) fn charge(&mut self, handles: u32, bytes: usize) {
+        self.handles = self.handles.saturating_add(handles);
+        self.bytes = self.bytes.saturating_add(bytes);
     }
     fn release(&mut self, bytes: usize) {
         self.bytes = self
@@ -135,9 +116,9 @@ impl<T> GuestArena<T> {
             owned_bytes: vec![0],
         })
     }
-    /// Empty arena metadata for an owner that admits all capacity at first use.
+    /// Empty arena metadata for an owner that reserves all capacity at first use.
     /// Unlike the legacy constructor, even the sentinel buffers are deferred
-    /// and charged by reserve before they become retained allocations.
+    /// until reserve.
     pub(crate) fn new_lazy(epoch: u32) -> Result<Self, Diagnostic> {
         if epoch == 0 {
             return Err(stale());
@@ -149,21 +130,12 @@ impl<T> GuestArena<T> {
         })
     }
     fn initialize_lazy(&mut self, count: usize, budget: &mut RunBudget) -> Result<(), Diagnostic> {
+        // Handle indexes are u32 (Handle encoding), not a policy limit.
         let total = count
             .checked_add(1)
             .filter(|n| *n <= u32::MAX as usize)
             .ok_or_else(resource)?;
-        let predicted = total
-            .checked_mul(std::mem::size_of::<Option<T>>())
-            .and_then(|n| {
-                total
-                    .checked_mul(std::mem::size_of::<usize>())
-                    .and_then(|m| n.checked_add(m))
-            })
-            .ok_or_else(resource)?;
-        budget.check(0, predicted)?;
-        // Keep both temporary buffers local until actual allocator capacity has
-        // passed the budget. Failure retains no uncharged sentinel allocation.
+        // Keep both temporary buffers local until both allocations succeed.
         let mut entries = Vec::new();
         entries.try_reserve_exact(total).map_err(|_| resource())?;
         let mut sizes = Vec::new();
@@ -178,57 +150,23 @@ impl<T> GuestArena<T> {
                     .and_then(|m| n.checked_add(m))
             })
             .ok_or_else(resource)?;
-        budget.charge(0, actual)?;
+        budget.charge(0, actual);
         entries.push(None);
         sizes.push(0);
         self.entries = entries;
         self.owned_bytes = sizes;
         Ok(())
     }
-    /// Predict the checked incremental arena capacity without allocation or
-    /// logical publication, so a caller can admit a complete multi-arena batch.
-    pub(crate) fn reservation_bytes(&self, count: usize) -> Result<usize, Diagnostic> {
-        let end = self
-            .entries
+    /// Check that `count` more entries fit the u32 handle index space (the
+    /// Handle encoding, not a resource policy) without allocating.
+    pub(crate) fn admits(&self, count: usize) -> Result<(), Diagnostic> {
+        self.entries
             .len()
             .max(1) // A lazy arena still reserves its unaddressable sentinel.
             .checked_add(count)
             .filter(|n| *n <= u32::MAX as usize)
-            .ok_or_else(resource)?;
-        let new_entries = end.saturating_sub(self.entries.capacity());
-        let new_sizes = end.saturating_sub(self.owned_bytes.capacity());
-        new_entries
-            .checked_mul(std::mem::size_of::<Option<T>>())
-            .and_then(|n| {
-                new_sizes
-                    .checked_mul(std::mem::size_of::<usize>())
-                    .and_then(|m| n.checked_add(m))
-            })
+            .map(|_| ())
             .ok_or_else(resource)
-    }
-    /// Conservative transient capacity for the atomic replacement path. Old
-    /// buffers remain charged while their replacements are admitted together.
-    pub(crate) fn atomic_reservation_bytes(&self, count: usize) -> Result<usize, Diagnostic> {
-        let end = self
-            .entries
-            .len()
-            .max(1)
-            .checked_add(count)
-            .filter(|n| *n <= u32::MAX as usize)
-            .ok_or_else(resource)?;
-        let entries = if end > self.entries.capacity() {
-            end.checked_mul(std::mem::size_of::<Option<T>>())
-                .ok_or_else(resource)?
-        } else {
-            0
-        };
-        let sizes = if end > self.owned_bytes.capacity() {
-            end.checked_mul(std::mem::size_of::<usize>())
-                .ok_or_else(resource)?
-        } else {
-            0
-        };
-        entries.checked_add(sizes).ok_or_else(resource)
     }
     /// Reserve all replacement buffers before moving any retained record. A
     /// failure may not leave an uncharged allocator-grown buffer in the arena.
@@ -249,34 +187,25 @@ impl<T> GuestArena<T> {
             .checked_add(count)
             .filter(|n| *n <= u32::MAX as usize)
             .ok_or_else(resource)?;
-        budget.check(0, self.atomic_reservation_bytes(count)?)?;
+        // Geometric growth keeps repeated single-entry reservations amortized.
         let mut entries = if end > self.entries.capacity() {
             let mut values = Vec::new();
-            values.try_reserve_exact(end).map_err(|_| resource())?;
+            values
+                .try_reserve_exact(end.max(self.entries.capacity().saturating_mul(2)))
+                .map_err(|_| resource())?;
             Some(values)
         } else {
             None
         };
         let mut sizes = if end > self.owned_bytes.capacity() {
             let mut values = Vec::new();
-            values.try_reserve_exact(end).map_err(|_| resource())?;
+            values
+                .try_reserve_exact(end.max(self.owned_bytes.capacity().saturating_mul(2)))
+                .map_err(|_| resource())?;
             Some(values)
         } else {
             None
         };
-        let entry_bytes = entries
-            .as_ref()
-            .map_or(Some(0), |v| {
-                v.capacity().checked_mul(std::mem::size_of::<Option<T>>())
-            })
-            .ok_or_else(resource)?;
-        let size_bytes = sizes
-            .as_ref()
-            .map_or(Some(0), |v| {
-                v.capacity().checked_mul(std::mem::size_of::<usize>())
-            })
-            .ok_or_else(resource)?;
-        budget.check(0, entry_bytes.checked_add(size_bytes).ok_or_else(resource)?)?;
         let entry_delta = entries
             .as_ref()
             .map_or(Some(0), |v| {
@@ -293,8 +222,8 @@ impl<T> GuestArena<T> {
                     .and_then(|n| n.checked_mul(std::mem::size_of::<usize>()))
             })
             .ok_or_else(resource)?;
-        budget.charge(0, entry_delta.checked_add(size_delta).ok_or_else(resource)?)?;
-        // No fallible allocation, budget step or guest callback follows the
+        budget.charge(0, entry_delta.checked_add(size_delta).ok_or_else(resource)?);
+        // No fallible allocation or guest callback follows the
         // first move. Capacities include all old entries and the incoming batch.
         if let Some(mut values) = entries.take() {
             values.append(&mut self.entries);
@@ -313,24 +242,27 @@ impl<T> GuestArena<T> {
         if self.entries.is_empty() {
             return self.initialize_lazy(count, budget);
         }
-        let predicted = self.reservation_bytes(count)?;
-        budget.check(0, predicted)?;
+        self.entries
+            .len()
+            .checked_add(count)
+            .filter(|n| *n <= u32::MAX as usize)
+            .ok_or_else(resource)?;
         let old_entries = self.entries.capacity();
         let old_sizes = self.owned_bytes.capacity();
-        self.entries
-            .try_reserve_exact(count)
-            .map_err(|_| resource())?;
+        // Amortized growth: exact per-allocation reservation existed only for
+        // byte accounting and made append-only arenas quadratic.
+        self.entries.try_reserve(count).map_err(|_| resource())?;
         let entry_charge = (self.entries.capacity() - old_entries)
             .checked_mul(std::mem::size_of::<Option<T>>())
             .ok_or_else(resource)?;
-        budget.charge(0, entry_charge)?;
+        budget.charge(0, entry_charge);
         self.owned_bytes
-            .try_reserve_exact(count)
+            .try_reserve(count)
             .map_err(|_| resource())?;
         let size_charge = (self.owned_bytes.capacity() - old_sizes)
             .checked_mul(std::mem::size_of::<usize>())
             .ok_or_else(resource)?;
-        budget.charge(0, size_charge)?;
+        budget.charge(0, size_charge);
         Ok(())
     }
     pub fn allocate(
@@ -339,9 +271,8 @@ impl<T> GuestArena<T> {
         owned_bytes: usize,
         budget: &mut RunBudget,
     ) -> Result<Handle<T>, Diagnostic> {
-        budget.check(1, owned_bytes)?;
         self.reserve(1, budget)?;
-        budget.charge(1, owned_bytes)?;
+        budget.charge(1, owned_bytes);
         let index = u32::try_from(self.entries.len()).map_err(|_| resource())?;
         self.entries.push(Some(value));
         self.owned_bytes.push(owned_bytes);

@@ -1,0 +1,47 @@
+{
+  "kind": "common-genuine-cold-Type-entry-component",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "e196a876c47697aefc5d98091e9574fa2c44f40e24daf7bd559192e809ec6ef9",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/type_preparation.rs",
+      "bytes": 3667,
+      "sha256": "29620d51b0897e631251a285621ab88f29e00963ca48bd145dc6a0e5b6a6c4dc"
+    },
+    {
+      "path": "crates/lrr/src/cli/type_preparation_tests.rs",
+      "bytes": 7566,
+      "sha256": "d5b551568c3771f9752a65d7e9df96d1470f55944688e0011b22692aaae26f49"
+    },
+    {
+      "path": "crates/lrr/src/cli/mod.rs",
+      "bytes": 82762,
+      "sha256": "941ad670711dde3f98b6cc62bfa45055fff52149a368cc736b37b1a09ef35857"
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "symbol": "Database::require_source_preparation",
+      "sha256": "f693ee47a1e5ef6be6020050f687d6120ad68026bc5899ace863c4dd71d6a59c",
+      "owner": "root supplies coordinator quiescence helper; not included overlay"
+    },
+    {
+      "path": "crates/lrr/src/cli/compile_inputs.rs",
+      "symbols": [
+        "PreparedCompileInputs::prepare",
+        "discover_diagnostic",
+        "discover"
+      ],
+      "sha256": "140d0f32172d363d1aba4360be244e08937dd0aafbbb5ab873365662cac3511b",
+      "owner": "existing ordinary compiler coordinator unchanged by worker"
+    }
+  ],
+  "runtime_witness": "tests/ui/borrowck/borrowck-assign-to-subfield.rs complete unchanged main all4; existing qualified S and issue40847 remain separate demanded outcomes",
+  "holds": [
+    "TypeScopeReceipt hot projection requires actual ordinary resolver dependency footprint and coordinator generated bucket publication",
+    "no macro effect exact-once runtime acceptance inferred from source review",
+    "cold Type+Value pure declarative repeated work and two discovery root sets; no speed claim",
+    "selected test-runner owning entry not switched by standalone-only component"
+  ]
+}

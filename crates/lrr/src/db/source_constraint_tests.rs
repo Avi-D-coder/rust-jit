@@ -179,3 +179,94 @@ fn cold_source_call_shape_does_not_prepare_its_signature_or_executable_body() {
         }
     }
 }
+#[test]
+fn operator_binding_and_hidden_region_facts_are_retained_structurally() {
+    use crate::syntax::source_constraints::SourceOperator as O;
+    let text = "fn main() {\n    let n = 3;\n    let mut m = -n + 1u16;\n    m <<= 2;\n    m = m % 7;\n    if n == m { }\n    let _ = n;\n    let f = || n;\n    n;\n    unexpanded!(n);\n}\n";
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, body) = world(text, edition);
+        let value = db
+            .fetch(&SyntaxProvider, QueryKey::SourceConstraints(body.clone()))
+            .into_ready()
+            .unwrap()
+            .unwrap();
+        let QueryValue::SourceConstraints(plan) = value.value.as_ref() else {
+            panic!("source plan absent");
+        };
+        let operations: Vec<_> = plan
+            .facts()
+            .iter()
+            .filter_map(|fact| fact.operation())
+            .collect();
+        assert_eq!(
+            operations,
+            [
+                O::Arithmetic,
+                O::Negate,
+                O::CompoundShift,
+                O::Assign,
+                O::Arithmetic,
+                O::Comparison
+            ]
+        );
+        let suffixed = plan
+            .facts()
+            .iter()
+            .filter(|fact| fact.kind() == FactKind::SuffixedInteger)
+            .map(|fact| fact.suffix())
+            .collect::<Vec<_>>();
+        assert_eq!(suffixed, [Some(crate::ir::op::PrimitiveType::U16)]);
+        // Every indexed `n` read (the closure body's included) is a
+        // candidate path; the unexpanded macro call is retained only as a
+        // hidden region that may read `n`.
+        let row = plan.named("n").expect("binding spelling row");
+        assert_eq!(row.paths().len(), 5);
+        assert_eq!(row.bindings().len(), 1);
+        assert_eq!(row.hidden().len(), 1);
+        assert_eq!(plan.paths_named("n"), row.paths());
+        let binding = row.bindings()[0];
+        assert_eq!(plan.fact(binding).unwrap().kind(), FactKind::BindingPattern);
+        assert_eq!(plan.name_of(binding).unwrap().0, "n");
+        assert!(row.hidden()[0] > binding);
+        // `let` pattern edges, the pattern engine's retained trees for every
+        // `let` root (the wildcard included) and discarding statements.
+        assert!(plan.uses(binding).iter().any(
+            |edge| edge.ordinal == 0 && plan.fact(edge.parent).unwrap().kind() == FactKind::Let
+        ));
+        let occurrence = plan
+            .occurrence(binding)
+            .expect("binding occurrence in its tree");
+        assert_eq!(occurrence.root, binding);
+        assert!(occurrence.steps.is_empty() && !occurrence.by_reference);
+        let lets: Vec<_> = plan
+            .facts()
+            .iter()
+            .filter(|fact| fact.kind() == FactKind::Let)
+            .map(|fact| fact.operand(0).unwrap())
+            .collect();
+        assert_eq!(lets.len(), 4);
+        assert!(lets.iter().all(|root| plan.tree(*root).is_some()));
+        assert!(lets.iter().any(|root| matches!(
+            plan.tree(*root).unwrap().root(),
+            crate::syntax::pattern_tree::PatternNode::Wildcard
+        )));
+        assert_eq!(
+            plan.facts()
+                .iter()
+                .filter(|fact| fact.kind() == FactKind::Discard)
+                .count(),
+            4
+        );
+        let conditional = plan
+            .facts()
+            .iter()
+            .find(|fact| fact.kind() == FactKind::If)
+            .unwrap();
+        assert_eq!(conditional.operands().len(), 3);
+        assert!(conditional.operand(1).is_some() && conditional.operand(2).is_none());
+        assert!(!db.trace.events.iter().any(|event| matches!(
+            event.key,
+            QueryKey::Thunk(_) | QueryKey::FunctionSignature(_) | QueryKey::EnteredValue(_)
+        )));
+    }
+}

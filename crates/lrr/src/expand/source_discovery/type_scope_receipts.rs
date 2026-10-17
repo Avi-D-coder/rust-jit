@@ -33,7 +33,7 @@ fn universe(
     compiler: &BTreeMap<InputKey, Digest>,
     dependencies: Digest,
 ) -> Result<Digest, Diagnostic> {
-    if sources.is_empty() || sources.len() > 4096 || records.len() > 4096 || compiler.len() > 4096 {
+    if sources.is_empty() {
         return Err(unavailable());
     }
     let mut bytes = 0usize;
@@ -43,7 +43,6 @@ fn universe(
     for source in sources {
         bytes = bytes
             .checked_add(source.metadata_bytes()?)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(unavailable)?;
         encoder.string(source.path.as_str());
         encoder.record(&source.outline);
@@ -54,7 +53,6 @@ fn universe(
         bytes = bytes
             .checked_add(128)
             .and_then(|n| n.checked_add(key.heap_bytes()))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(unavailable)?;
         encoder.record(key);
         encoder.digest(*fingerprint);
@@ -70,7 +68,7 @@ impl TypeScopeReceipt {
     pub(crate) fn require_publication(&self, parent: Digest) -> Result<(), Diagnostic> {
         self.profile.validate_source()?;
         if self.parent != parent
-            || self.scope.namespace != Namespace::Type
+            || !matches!(self.scope.namespace, Namespace::Type | Namespace::Value)
             || self.scope.scope.owner.is_some()
             || self.scope.edition != self.profile.edition
         {
@@ -101,8 +99,11 @@ impl TypeScopeReceipt {
     ) -> Result<(), Diagnostic> {
         // This immutable searched receipt does not change across candidates.
         let fingerprint = self.fingerprint();
-        if !publication
-            .type_scopes
+        let members = match self.scope.namespace {
+            Namespace::Value => &publication.value_scopes,
+            _ => &publication.type_scopes,
+        };
+        if !members
             .iter()
             .any(|proof| proof.fingerprint() == fingerprint)
         {
@@ -126,7 +127,7 @@ impl TypeScopeReceipt {
             ));
         }
         if publication.seal.unresolved_frontiers() != 0
-            || self.scope.namespace != Namespace::Type
+            || !matches!(self.scope.namespace, Namespace::Type | Namespace::Value)
             || self.scope.edition != self.profile.edition
         {
             return Err(Diagnostic::new(
@@ -308,7 +309,39 @@ impl SourceDiscovery {
         records: &[ExpansionDescriptor],
         derived: &BTreeMap<InputKey, InputValue>,
     ) -> Result<Vec<TypeScopeReceipt>, Diagnostic> {
+        self.scope_receipts(db, sources, records, derived, Namespace::Type)
+    }
+    /// Value facets of the other module scopes this Value fixed point
+    /// completed (rustc resolves `m::C` in module `m`'s own Value namespace).
+    /// Only a Value discovery establishes Value facts; the primary scope keeps
+    /// its own certificate. Unresolved scopes stay explicitly unavailable.
+    pub(super) fn value_scope_receipts(
+        &self,
+        db: &Database,
+        sources: &[SourceSelection],
+        records: &[ExpansionDescriptor],
+        derived: &BTreeMap<InputKey, InputValue>,
+    ) -> Result<Vec<TypeScopeReceipt>, Diagnostic> {
+        if self.namespace != Namespace::Value {
+            return Ok(Vec::new());
+        }
+        self.scope_receipts(db, sources, records, derived, Namespace::Value)
+    }
+    fn scope_receipts(
+        &self,
+        db: &Database,
+        sources: &[SourceSelection],
+        records: &[ExpansionDescriptor],
+        derived: &BTreeMap<InputKey, InputValue>,
+        namespace: Namespace,
+    ) -> Result<Vec<TypeScopeReceipt>, Diagnostic> {
+        let _span = crate::core::timing::Span::enter(|| "discovery type_scope_receipts".into());
         let seal = self.seal.as_ref().ok_or_else(unavailable)?;
+        // Contained Type facets nest only in a scope publication; an impl or
+        // test catalogue seal carries none (consumers demand the facet).
+        if !matches!(seal.domain(), crate::db::seals::SealDomain::Scope { .. }) {
+            return Ok(Vec::new());
+        }
         // A Value fixed point is not a Type fixed point. Retain no positive
         // receipt if the actual ordinary import frontier is unestablished.
         if !self.imports.pending.is_empty()
@@ -318,11 +351,7 @@ impl SourceDiscovery {
         {
             return Ok(Vec::new());
         }
-        if sources.is_empty()
-            || sources.len() > 4096
-            || records.len() > 4096
-            || self.compiler_inputs.len() > 4096
-        {
+        if sources.is_empty() {
             // This optional bounded facet cannot establish that larger universe.
             // Preserve ordinary publication; reached consumers demand the facet.
             return Ok(Vec::new());
@@ -341,22 +370,21 @@ impl SourceDiscovery {
             .keys()
             .filter(|key| matches!(key, InputKey::UnitCompileEnv(_)))
             .count();
-        if count > 4096
-            || count
-                .checked_mul(std::mem::size_of::<(Digest, Digest)>())
-                .is_none_or(|n| n > 32 * 1024 * 1024)
-        {
-            return Err(unavailable());
-        }
         let mut compiler_world = Vec::new();
         compiler_world
             .try_reserve_exact(count)
             .map_err(|_| crate::runtime::arena::resource())?;
-        for (key, fingerprint) in stamps {
+        for (key, fingerprint) in stamps.iter().map(|(key, stamp)| (key.clone(), *stamp)) {
             if let InputKey::UnitCompileEnv(unit) = key {
+                // A configured dependency world (for example a macro-export SDK
+                // discovery) can coexist with its consumer's environment rows.
+                // This optional facet then cannot describe that wider world.
                 if !sources.iter().any(|source| {
                     source.outline.crate_key == unit && source.outline.module_path.is_empty()
-                }) || !matches!(db.published_input(&InputKey::UnitCompileEnv(unit)), Some((InputValue::UnitCompileEnv(environment), current)) if environment.unit() == unit && current == fingerprint)
+                }) {
+                    return Ok(Vec::new());
+                }
+                if !matches!(db.published_input(&InputKey::UnitCompileEnv(unit)), Some((InputValue::UnitCompileEnv(environment), current)) if environment.unit() == unit && current == fingerprint)
                 {
                     return Err(Diagnostic::new(
                         "LRR-E-CALL-CONTEXT",
@@ -384,11 +412,7 @@ impl SourceDiscovery {
                 .checked_add(128)
                 .and_then(|n| n.checked_add(scope.heap_bytes()))
                 .and_then(|n| n.checked_add(profile.semantics.capacity()))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(unavailable)?;
-            if owner_count >= 4096 {
-                return Err(unavailable());
-            }
             owners
                 .entry(scope.clone())
                 .or_default()
@@ -418,15 +442,47 @@ impl SourceDiscovery {
         let mut bytes = 0usize;
         // One exact immutable seal is the parent of every receipt in this batch.
         let parent = seal.fingerprint();
+        // Receipts are a pure function of these facts and the (unchanged)
+        // graph state; a republication of the same discovery reuses them.
+        let memo_key = {
+            let mut e = StableEncoder::new("lrr/v1/scope-receipt-batch");
+            e.u32(namespace.tag());
+            e.digest(parent);
+            e.digest(universe);
+            e.sequence(&compiler_world, |e, (unit, fingerprint)| {
+                e.digest(*unit);
+                e.digest(*fingerprint);
+            });
+            e.record(&self.scope);
+            e.u64(self.graph.mutation_generation());
+            e.sequence(&owners.iter().collect::<Vec<_>>(), |e, (scope, profiles)| {
+                e.record(*scope);
+                e.sequence(&profiles.iter().collect::<Vec<_>>(), |e, profile| e.record(*profile));
+            });
+            e.finish()
+        };
+        if let Ok(memo) = self.receipt_memo.lock()
+            && let Some((key, receipts)) = memo.get(&namespace.tag())
+            && *key == memo_key
+        {
+            return Ok(receipts.clone());
+        }
         // Each observed profile is a separate lookup identity. Different
         // owning editions in one lexical module never erase one another.
+        // One immutable graph certifies every scope of this batch.
+        let mut certification = crate::frontend::names::CertificationBatch::default();
         for (scope, profiles) in owners {
+            // The primary Value scope is certified by the seal itself.
+            if namespace == Namespace::Value && scope == self.scope {
+                continue;
+            }
             for profile in profiles {
-                let certified =
-                    match self
-                        .graph
-                        .certified_scope(&scope, Namespace::Type, profile.edition)
-                    {
+                let certified = match self.graph.certified_scope_in(
+                    &mut certification,
+                    &scope,
+                    namespace,
+                    profile.edition,
+                ) {
                         Ok(scope) => scope,
                         // This is an explicit unavailable prerequisite, never absence.
                         Err(error) if error.code == "LRR-E-CATALOG-INCOMPLETE" => continue,
@@ -442,13 +498,15 @@ impl SourceDiscovery {
                 bytes = bytes
                     .checked_add(proof.metadata_bytes()?)
                     .and_then(|n| n.checked_add(128))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(unavailable)?;
                 receipts
                     .try_reserve(1)
                     .map_err(|_| crate::runtime::arena::resource())?;
                 receipts.push(proof);
             }
+        }
+        if let Ok(mut memo) = self.receipt_memo.lock() {
+            memo.insert(namespace.tag(), (memo_key, receipts.clone()));
         }
         Ok(receipts)
     }

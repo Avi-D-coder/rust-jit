@@ -56,14 +56,10 @@ impl IncludedSourceView {
         if captured.kind() != crate::source::include_paths::IncludeKind::Syntax
             || record.key() != &producer
             || dependencies.len() < 2
-            || dependencies.len() > 100_000
         {
             return Err(fault("included source view identity/kind mismatch"));
         }
-        if diagnostic_origin.invocation_identity != producer.invocation
-            || diagnostic_origin.parents.len() > 256
-            || diagnostic_origin.heap_bytes().is_none_or(|n| n > 64 * 1024)
-        {
+        if diagnostic_origin.invocation_identity != producer.invocation {
             return Err(fault("included diagnostic producer differs"));
         }
         let mut bytes = tokens
@@ -97,7 +93,6 @@ impl IncludedSourceView {
             .ok_or_else(|| fault("included source view request metadata overflow"))?;
             bytes = bytes
                 .checked_add(extra)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("included source view metadata limit"))?;
         }
         let mut identity = StableEncoder::new("lrr/v2/included-source-view");
@@ -137,7 +132,6 @@ impl IncludedSourceView {
             spans::SourceRange,
             token_wire::SourceIdentity,
         };
-        const LIMIT: usize = 64 * 1024;
         let limit = || {
             Diagnostic::new(
                 "LRR-E-METADATA-LIMIT",
@@ -152,9 +146,7 @@ impl IncludedSourceView {
         let count = parent
             .map_or(Some(0), |parent| {
                 parent.diagnostic_origin.parents.len().checked_add(1)
-            })
-            .filter(|n| *n <= 256)
-            .ok_or_else(limit)?;
+            })            .ok_or_else(limit)?;
         let mut parents = Vec::new();
         parents.try_reserve_exact(count).map_err(|_| limit())?;
         let mut bytes = std::mem::size_of::<MacroOrigin>()
@@ -164,7 +156,6 @@ impl IncludedSourceView {
                     .checked_mul(std::mem::size_of::<ExpansionOrigin>())
                     .ok_or_else(limit)?,
             )
-            .filter(|n| *n <= LIMIT)
             .ok_or_else(limit)?;
         if let Some(parent) = parent {
             for (expansion, identity, location) in parent
@@ -179,7 +170,7 @@ impl IncludedSourceView {
                 )))
             {
                 let invocation = location
-                    .map(|at| at.copy_with_limit(LIMIT.saturating_sub(bytes)))
+                    .map(|at| at.copy_with_limit(usize::MAX))
                     .transpose()?;
                 bytes = bytes
                     .checked_add(
@@ -187,7 +178,6 @@ impl IncludedSourceView {
                             .as_ref()
                             .map_or(0, |at| at.source.path.capacity()),
                     )
-                    .filter(|n| *n <= LIMIT)
                     .ok_or_else(limit)?;
                 parents.push(ExpansionOrigin {
                     expansion,
@@ -195,9 +185,6 @@ impl IncludedSourceView {
                     invocation,
                 });
             }
-        }
-        if span.source.path.len() > LIMIT.saturating_sub(bytes) {
-            return Err(limit());
         }
         let mut path = String::new();
         path.try_reserve_exact(span.source.path.len())
@@ -220,9 +207,6 @@ impl IncludedSourceView {
             failure_span: None,
             parents,
         };
-        if origin.heap_bytes().is_none_or(|n| n > LIMIT) {
-            return Err(limit());
-        }
         Ok(Arc::new(origin))
     }
     pub(crate) fn diagnostic_origin(&self) -> &Arc<crate::syntax::origin::MacroOrigin> {

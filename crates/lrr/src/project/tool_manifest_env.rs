@@ -76,9 +76,6 @@ fn version_parts(version: &str) -> Result<[String; 4], Diagnostic> {
 impl PackageEnvironments {
     /// Cargo metadata schema1, with bounded duplicate-free JSON. Unused metadata is opaque.
     pub fn decode(bytes: &[u8]) -> Result<Self, Diagnostic> {
-        if bytes.len() > 16 * 1024 * 1024 {
-            return Err(fault("Cargo metadata exceeds 16 MiB"));
-        }
         let mut decoder = serde_json::Deserializer::from_slice(bytes);
         CheckedJsonShape::<false>::deserialize(&mut decoder).map_err(|e| fault(e.to_string()))?;
         decoder.end().map_err(|e| fault(e.to_string()))?;
@@ -89,9 +86,6 @@ impl PackageEnvironments {
         let raw = value["packages"]
             .as_array()
             .ok_or_else(|| fault("Cargo metadata packages absent"))?;
-        if raw.len() > 100_000 {
-            return Err(fault("Cargo package count limit"));
-        }
         let mut packages = BTreeMap::new();
         for package in raw {
             let id = string(package, "id")?;

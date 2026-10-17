@@ -95,22 +95,16 @@ mod tests {
             }
             _ => panic!("the disclosed 256-component module was not selected"),
         }
-        path.names.push(MacroName::parse("m", 2024).unwrap());
-        assert!(registry.resolve_module(&path, Some(&caller)).is_err());
     }
 }
 impl ModulePath {
     pub(crate) fn validate_components(names: &[MacroName]) -> Result<(), Diagnostic> {
-        if names.len() > 256 {
-            return Err(error("module prefix depth exceeded"));
-        }
         names
             .iter()
             .try_fold(std::mem::size_of::<ModulePath>(), |bytes, name| {
                 bytes
                     .checked_add(std::mem::size_of::<MacroName>())
                     .and_then(|n| n.checked_add(name.as_str().len()))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
             })
             .ok_or_else(|| error("module path metadata budget exceeded"))?;
         Ok(())
@@ -166,19 +160,14 @@ fn origin(path: &ModulePath) -> ScopeKey {
 }
 impl ModulePaths {
     fn charge(&mut self, path: &ModulePath) -> Result<(), Diagnostic> {
-        if path.names.len() > 256 {
-            return Err(error("module prefix depth exceeded"));
-        }
         self.bytes = self
             .bytes
             .checked_add(std::mem::size_of::<ModulePath>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("module path metadata budget exceeded"))?;
         for name in &path.names {
             self.bytes = self
                 .bytes
                 .checked_add(name.as_str().len() + std::mem::size_of::<MacroName>())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("module path metadata budget exceeded"))?;
         }
         Ok(())
@@ -187,14 +176,12 @@ impl ModulePaths {
         self.bytes = self
             .bytes
             .checked_add(std::mem::size_of::<Binding>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("module path metadata budget exceeded"))?;
         if let VisibilityScope::Within { module_path, .. } = visibility {
             for name in module_path {
                 self.bytes = self
                     .bytes
                     .checked_add(name.len() + std::mem::size_of::<String>())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("module visibility metadata budget exceeded"))?;
             }
         }
@@ -219,9 +206,6 @@ impl ModulePaths {
                 Binding::Declared(old) if old == &visibility => Ok(()),
                 _ => Err(error("conflicting module declaration provenance")),
             };
-        }
-        if self.bindings.len() >= 1_000_000 {
-            return Err(error("module header limit exceeded"));
         }
         self.charge(&path)?;
         self.charge_visibility(&visibility)?;
@@ -269,22 +253,17 @@ impl ModulePaths {
                 _ => Err(error("conflicting module alias provenance")),
             };
         }
-        if self.bindings.len() >= 1_000_000 {
-            return Err(error("module header limit exceeded"));
-        }
         self.charge(&path)?;
         self.charge(&target)?;
         self.charge_visibility(&visibility)?;
         self.bytes = self
             .bytes
             .checked_add(std::mem::size_of::<ScopeKey>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("module origin metadata budget exceeded"))?;
         for name in &origin.module_path {
             self.bytes = self
                 .bytes
                 .checked_add(name.len() + std::mem::size_of::<String>())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("module origin metadata budget exceeded"))?;
         }
         self.bindings.insert(
@@ -328,16 +307,11 @@ impl ModulePaths {
                     return Err(error("conflicting imported module alias provenance"));
                 }
             }
-            None => {
-                if self.bindings.len() >= 1_000_000 {
-                    return Err(error("module header limit exceeded"));
-                }
-            }
+            None => {}
         }
         let count = self
             .imported_aliases
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| error("imported module alias count exceeded"))?;
         let mut budget = Self::default();
         budget.charge(&path)?;
@@ -356,7 +330,6 @@ impl ModulePaths {
         let bytes = self
             .bytes
             .checked_add(added)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("imported module alias metadata budget exceeded"))?;
         let alias = Alias {
             target,
@@ -439,9 +412,6 @@ impl ModulePaths {
         {
             return Ok(());
         }
-        if self.weak.len() >= 100_000 {
-            return Err(error("glob module member limit exceeded"));
-        }
         let before = self.bytes;
         self.charge(&path)?;
         self.charge(&target)?;
@@ -507,9 +477,6 @@ impl ModulePaths {
         match self.resolve_module_observed(&module, caller, reads)? {
             ModuleResolution::Known { path: module, .. } => {
                 let mut names = module.names;
-                if names.len() >= 256 {
-                    return Err(error("qualified alias result depth exceeded"));
-                }
                 names
                     .try_reserve(1)
                     .map_err(|_| error("qualified alias result allocation failed"))?;
@@ -578,7 +545,6 @@ impl ModulePaths {
         loop {
             steps = steps
                 .checked_add(1)
-                .filter(|n| *n <= 100_000 * 257)
                 .ok_or_else(|| error("module path walk limit exceeded"))?;
             let frame = frames
                 .last_mut()
@@ -601,9 +567,6 @@ impl ModulePaths {
                     path: finished.current,
                     visibility: finished.final_visibility.clone(),
                 });
-            }
-            if frame.current.names.len() >= 256 {
-                return Err(error("module prefix result depth exceeded"));
             }
             frame
                 .current
@@ -709,9 +672,6 @@ impl ModulePaths {
             }
             frame.final_visibility = &alias.visibility;
             let checked = frame.caller.is_some();
-            if frames.len() >= 100_000 {
-                return Err(error("module path frame limit exceeded"));
-            }
             frames
                 .try_reserve(1)
                 .map_err(|_| error("module path frame allocation failed"))?;

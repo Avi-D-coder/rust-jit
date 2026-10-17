@@ -1,0 +1,25 @@
+{
+  "schema": "lrr/source-review/child-impl-frontier/v1",
+  "status": "source-only; no Cargo/compiler/tests",
+  "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+  "sha256": "09486c90c720533046cc653132dc980fd435ea59f0ec22ca40a5485c46b86816",
+  "bytes": 8983,
+  "authority": "Rootjob is actual v2 digest of root output fingerprint. Exact root parent scan/cfg/epoch/Items/source producer verified. Child selected by unique actual record.same_record (key+output+wire); actual cfg/scope/epoch; parent_inventory finds unique actual parent scan and actual parent_invocation producer with same grammar until exact root Arc. Shared ActiveImplProjection kernel joins actual raw Impl ranges to canonical retained scan header; every identity must occur in genuine completed ancestor inventory, built from scans excluding actual replacement masks. No equal-count/listing grant. Immutable CompletedDeclarationFragment can only be built by genuine traversal with completed root index.",
+  "finding": {
+    "kind": "prepare-once prerequisite",
+    "source": "Each resolve calls completed.syntax_outputs (full traversal + Arc list), sorts complete scan index, scans inventory perheader. C waiters repeat O(C*(OlogO+H*I)) cold preparation, plus parent producer scans.",
+    "required": "Once-per-actual-ancestor immutable AncestorImplCompletion shared Arc, retained actual output handles, sorted scan and record identities, canonical actual inventory identity set. Exact cached Completed root Arc checked by coordinator. Child parentwalk/canonicaljoin remain exact. Parent approved separate new helper implementation; original review source preserved."
+  },
+  "bounds": "MAX_OUTPUTS100000/MAX_DEPTH256/MAX_BYTES64MiB, checked scans/headers vectors; same_record full wire can cost wire length for matching records. No unbounded new counter found. Root GeneratedItems/record retained catalog-owner accounting still requires actual wiring review.",
+  "all8": {
+    "1": "No evaluator.",
+    "2": "Actual generated source/canonical scan identities.",
+    "3": "No name/numeric/macro whitelist.",
+    "4": "Common generated-child evidence join, no originalgate.",
+    "5": "Declaration headers only; cold bodies not lowered.",
+    "6": "Repeated ancestor preparation identified; new once-only shared index is required before promotion.",
+    "7": "Dedicated exact closure/frontier, no unrelated release or world namespace scan in helper.",
+    "8": "OutputArc list shared syntax; repeated fullancestor listing/index identified, no deep BodyIndex clone."
+  },
+  "unexecuted": "No stockwrapper/component/negative/epoch/suspension/exactonce control executed by reviewer. Root lifecycle and frontier release scope wiring not yet reviewed."
+}

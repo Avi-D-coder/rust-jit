@@ -18,11 +18,6 @@ pub use edit::SyntaxEdit;
 mod seed;
 pub use seed::SyntaxAttachmentSeed;
 
-const MAX_TEXT: u32 = 32 * 1024 * 1024;
-const MAX_NODES: usize = 2_000_000;
-const MAX_DEPTH: usize = 4096;
-const MAX_RETAINED_INPUT: usize = 64 * 1024 * 1024;
-
 /// Single-node grammar slots. Lists use `attach_list` to preserve caller scope.
 #[derive(Clone, Copy, Debug)]
 pub enum FragmentSlot {
@@ -82,31 +77,14 @@ fn error(message: &str) -> AdapterError {
 }
 
 fn check_tree(root: &SyntaxNode) -> Result<(), AdapterError> {
-    if u32::from(root.text_range().len()) > MAX_TEXT {
-        return Err(error("attached syntax text budget"));
-    }
-    let mut depth = 0usize;
-    let mut count = 0usize;
-    for event in root.preorder() {
-        match event {
-            WalkEvent::Enter(_) => {
-                depth += 1;
-                count += 1;
-                if depth > MAX_DEPTH || count > MAX_NODES {
-                    return Err(error("attached syntax structure budget"));
-                }
-            }
-            WalkEvent::Leave(_) => depth -= 1,
-        }
-    }
     crate::grammar::validate_complete_syntax(root)
 }
 
 fn check_origins(map: &SpanMap, length: u32) -> Result<(), AdapterError> {
     let mut previous = 0;
-    for (count, (end, _)) in map.iter().enumerate() {
+    for (end, _) in map.iter() {
         let end = u32::from(end);
-        if end <= previous || end > length || count >= MAX_NODES {
+        if end <= previous || end > length {
             return Err(error("attached syntax origin ordering/budget"));
         }
         previous = end;
@@ -133,7 +111,7 @@ fn splice_origins(
     let mut last = 0;
     let mut count = 0;
     let mut push = |offset: u32, origin| -> Result<(), AdapterError> {
-        if offset <= last || offset > final_len || count >= MAX_NODES {
+        if offset <= last || offset > final_len {
             return Err(error("attached origin splice ordering/budget"));
         }
         result.push(offset.into(), origin);
@@ -191,9 +169,6 @@ fn replace_node(target: &SyntaxNode, replacement: &SyntaxNode) -> Result<SyntaxN
 impl SyntaxAttachment {
     pub fn parse(input: &TokenForest, grammar: DeclarationGrammar) -> Result<Self, AdapterError> {
         let retained_input_bytes = input.allocated_bytes()?;
-        if retained_input_bytes > MAX_RETAINED_INPUT {
-            return Err(error("attachment retained input budget"));
-        }
         let mut store = SpanStore::default();
         let (root, origins) = declaration_output::parse_root(input, grammar, &mut store)?;
         check_tree(&root)?;
@@ -265,7 +240,6 @@ impl SyntaxAttachment {
         let retained_input_bytes = self
             .retained_input_bytes
             .checked_add(output.allocated_bytes()?)
-            .filter(|bytes| *bytes <= MAX_RETAINED_INPUT)
             .ok_or_else(|| error("attachment retained input budget"))?;
         // A fork shares the original store. Only importing an actual new
         // output needs the existing transaction's private mutable copy.
@@ -298,7 +272,6 @@ impl SyntaxAttachment {
         let final_len = old_len
             .checked_sub(u32::from(range.len()))
             .and_then(|length| length.checked_add(replacement_len))
-            .filter(|length| *length <= MAX_TEXT)
             .ok_or_else(|| error("attached syntax text budget"))?;
         let origins = splice_origins(
             &self.origins,

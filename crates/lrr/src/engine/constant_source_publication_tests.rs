@@ -109,7 +109,7 @@ fn actual_borrowed_source_publication_joins_real_length_parent_and_two_fresh_tem
             32 << 20,
         )
         .unwrap();
-        let mut store = GuestStore::new(1, 10000, 4 << 20).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let (mut frame, nodes, body) = frame(&view, &db, &text, &mut store);
         let views = [&view];
         let immutable = success(&parent).payload().decode_value().unwrap();
@@ -144,7 +144,8 @@ fn actual_borrowed_source_publication_joins_real_length_parent_and_two_fresh_tem
                 .unwrap();
             let mut activation = frame
                 .begin_constant_publication_chunks(prepared, &mut store, |frame| {
-                    frame.fuel.charge()
+                    frame.fuel.charge();
+                    Ok(())
                 })
                 .unwrap();
             let mut published = false;
@@ -272,7 +273,7 @@ fn same_definition_length_query_cannot_substitute_for_named_constant_value() {
         32 << 20,
     )
     .unwrap();
-    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (mut frame, nodes, body) = frame(&view, &db, text, &mut store);
     enter(&mut frame, nodes[0]);
     let node = nodes[0];

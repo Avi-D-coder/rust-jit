@@ -1,0 +1,73 @@
+{
+  "component": "common-configured-macro-module-coordinator-v1",
+  "source_fingerprint": "ee1537a7f659915f4377a6e8a2575c20e06d26109e21a457ba452788d467d2a9",
+  "status": "source-only uncompiled/unexecuted; actual configured SDK production caller, fullcore seal and standard-macro runtime remain held",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/macro_export_modules.rs",
+      "sha256": "0d7eae196c9551e376d2bb05528a52145a1c204ff3585a2eafb3595cef1fde8d",
+      "bytes": 28764
+    },
+    {
+      "path": "crates/lrr/src/cli/macro_export_modules_tests.rs",
+      "sha256": "d3c954b1d99f49af227ef46dddb0232502df5d95e2b3979437f3379539951f0d",
+      "bytes": 6704
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "25d0512fd021f2b1ed83795e664c51922bc6934eb5fa5cc4a1234451fa63c79b",
+      "bytes": 14359
+    },
+    {
+      "path": "crates/lrr/src/cli/mod.rs",
+      "sha256": "67e751e8ce39bc9168a55def962fc8a26e4f0ba78b440c8c1400d5d1331bfa8b",
+      "bytes": 82548
+    }
+  ],
+  "dependencies": [
+    "TypedCompiler5 immutable df15e13f/source24bc1326 including SourceCompilerPreparation public(crate) Ready/NeedModule and root SAME module graph demand reexport; originalmodule6 source201e4878 plus PathBuf-only correction18db6785.",
+    "Root Database::require_source_preparation readonly quiescent active-query/run guard newly added beside require_coordinator; root owns exact memo.rs successor, do not substitute unrelated live memo source.",
+    "Existing actual schema4 MacroExport facets/current scalar source receipts, actual SourceCapture/ExpansionCoordinator module record protocol, role-only adoption/source refresh predecessors; no new DB/source providers.",
+    "Root-owned cli/mod.rs one-line pub(crate) mod macro_export_modules entry included with root authorization; baseline diff is only this line.",
+    "Existing fixture manifest333cases/536files + original rustc licenses, unchanged module root/aux, core source and issue26251; no original bytes changed."
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/configured-macro-module-coordinator-handoff.md",
+    "sha256": "79a83fb884e9c7b8d47e0e2c82231ab2d2b6704e1a5f0d1b270e49706dcf6835",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "test_filter": "configured_module_preparation_tests",
+  "new_test_bodies": 4,
+  "worker_commands": "rustfmt --edition 2024 --config skip_children=true on owned leaves; git diff --check. No Cargo/Rust/native execution.",
+  "witnesses": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/modules/special_module_name_ignore.rs",
+      "sha256": "625d6e0b5a2afecde7837b523ac24be8613f1776cd970a9667ae6e64bbce240b",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/modules/auxiliary/dummy_lib.rs",
+      "sha256": "a9df76705f5a753027c014becfbda7e74777d7fb0560711f510ef6656eccada7",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/library/core/src/lib.rs",
+      "sha256": "f7da20c347fb8722a6cfc28b6f899fc8359bd99775ba0f2b34f6f86346a0f1f2",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/match/issue-26251.rs",
+      "sha256": "a0993bf1d51fa8bcc9028b10f76a89f62c675097104ed2fce379967e7e8b98be",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    }
+  ]
+}

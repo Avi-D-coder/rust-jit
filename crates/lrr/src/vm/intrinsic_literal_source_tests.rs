@@ -118,23 +118,13 @@ struct LiteralContext {
     recipe: VerifiedRecipe,
     destination: SlotId,
 }
-fn literal_context(
-    text: &str,
-    edition: u16,
-    kind: LiteralKind,
-    fuel: u64,
-    handles: u32,
-    bytes: usize,
-) -> LiteralContext {
-    literal_context_in(text, edition, kind, fuel, handles, bytes, "main")
+fn literal_context(text: &str, edition: u16, kind: LiteralKind) -> LiteralContext {
+    literal_context_in(text, edition, kind, "main")
 }
 fn literal_context_in(
     text: &str,
     edition: u16,
     kind: LiteralKind,
-    fuel: u64,
-    handles: u32,
-    bytes: usize,
     function: &str,
 ) -> LiteralContext {
     let (mut db, view, _) = source(text, edition);
@@ -196,9 +186,8 @@ fn literal_context_in(
         }
     }
     let (pc, recipe, destination) = selected.expect("selected ordinary source literal absent");
-    let mut store = GuestStore::new(1, handles, bytes).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(std::sync::Arc::clone(index), pc.clone(), &mut store).unwrap();
-    frame.set_fuel_limit(fuel).unwrap();
     // Keep the exact recipe's charged scope prefix; enter only outer ancestors.
     let node = &index.nodes()[pc.node as usize];
     let mut scope = match recipe.recipe().operations.first() {
@@ -262,7 +251,7 @@ fn unchanged_official_bool_char_initializers_and_bindings_keep_intrinsic_source_
                 ValueRepr::character('a'),
             ),
         ] {
-            let mut c = literal_context(original, edition, kind, 100, 1000, 1_000_000);
+            let mut c = literal_context(original, edition, kind);
             assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
             assert_eq!(
                 c.store
@@ -340,7 +329,7 @@ fn unannotated_local_returns_through_source_normalized_alias_all_editions() {
             let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
                 panic!()
             };
-            let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+            let mut store = GuestStore::for_epoch(1).unwrap();
             let mut frame = Frame::new(
                 index.as_ref().clone(),
                 index.pc(NodeId(0), Phase::Entry).unwrap(),
@@ -348,7 +337,6 @@ fn unannotated_local_returns_through_source_normalized_alias_all_editions() {
             )
             .unwrap();
             frame.install_context(context).unwrap();
-            frame.set_fuel_limit(100).unwrap();
             let mut returned = None;
             let mut variable_seen = false;
             for _ in 0..64 {
@@ -422,7 +410,7 @@ fn ordinary_literals_reject_rigid_nominal_or_wrong_primitive_source_before_entry
         ),
     ] {
         for bad in [0, 1, 2] {
-            let mut c = literal_context(text, 2024, kind, 100, 1000, 1_000_000);
+            let mut c = literal_context(text, 2024, kind);
             let source = match bad {
                 0 => TyTerm::Param(ParamKey {
                     definition: c.frame.body.body().definition,
@@ -447,7 +435,7 @@ fn ordinary_literals_reject_rigid_nominal_or_wrong_primitive_source_before_entry
             assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-TYPE-CONTEXT");
             assert_untouched(&c, before, Some(source));
         }
-        let mut c = literal_context(text, 2024, kind, 100, 1000, 1_000_000);
+        let mut c = literal_context(text, 2024, kind);
         c.frame
             .set_source_view(c.destination, Some(TyTerm::Primitive(primitive)))
             .unwrap();
@@ -460,14 +448,7 @@ fn ordinary_literals_reject_rigid_nominal_or_wrong_primitive_source_before_entry
 }
 #[test]
 fn wrong_parent_descriptor_refuses_without_recovering_source() {
-    let mut c = literal_context(
-        "fn main(){let value=true;}",
-        2024,
-        LiteralKind::Bool,
-        100,
-        1000,
-        1_000_000,
-    );
+    let mut c = literal_context("fn main(){let value=true;}", 2024, LiteralKind::Bool);
     c.frame.set_hint(c.destination, Some(TypeId(7))).unwrap();
     let before = footprint(&c);
     // Slots begin with a strict storage hint. The existing descriptor guard
@@ -479,19 +460,11 @@ fn wrong_parent_descriptor_refuses_without_recovering_source() {
         "literal violates declared destination descriptor"
     );
     assert_eq!(c.frame.hint(c.destination).unwrap(), Some(TypeId(7)));
-    assert!(c.frame.fuel_snapshot().stop.is_none());
     assert_untouched(&c, before, None);
 }
 #[test]
 fn forged_literal_source_span_and_stale_body_recipe_refuse_before_entry() {
-    let mut c = literal_context(
-        "fn main(){let value=true;}",
-        2024,
-        LiteralKind::Bool,
-        100,
-        1000,
-        1_000_000,
-    );
+    let mut c = literal_context("fn main(){let value=true;}", 2024, LiteralKind::Bool);
     let r = c.recipe.recipe();
     let mut draft = RecipeDraft {
         key: r.key.clone(),
@@ -513,92 +486,12 @@ fn forged_literal_source_span_and_stale_body_recipe_refuse_before_entry() {
     let before = footprint(&c);
     assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-INTERNAL-IR");
     assert_untouched(&c, before, None);
-    let mut fresh = literal_context(
-        "fn main(){let value=false;}",
-        2024,
-        LiteralKind::Bool,
-        100,
-        1000,
-        1_000_000,
-    );
-    let old = literal_context(
-        "fn main(){let value=true;}",
-        2024,
-        LiteralKind::Bool,
-        100,
-        1000,
-        1_000_000,
-    );
+    let mut fresh = literal_context("fn main(){let value=false;}", 2024, LiteralKind::Bool);
+    let old = literal_context("fn main(){let value=true;}", 2024, LiteralKind::Bool);
     fresh.recipe = old.recipe;
     let before = footprint(&fresh);
     assert_eq!(run(&mut fresh).unwrap_err().code, "LRR-E-INTERNAL-IR");
     assert_untouched(&fresh, before, None);
-}
-#[test]
-fn literal_fuel_refusal_keeps_exact_prefix_and_single_write_no_replay() {
-    let text = "fn main(){let value=true;}";
-    let probe = literal_context(text, 2024, LiteralKind::Bool, 100, 1000, 1_000_000);
-    let prefix = prefix(&probe);
-    assert_eq!(prefix, 0);
-    for limit in 0..=prefix + 1 {
-        let mut c = literal_context(text, 2024, LiteralKind::Bool, limit, 1000, 1_000_000);
-        let before = footprint(&c);
-        let error = run(&mut c).unwrap_err();
-        assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-        assert_eq!(error.message, "guest opcode fuel exhausted");
-        assert_eq!(c.frame.status(), FrameStatus::Faulted);
-        assert_eq!(
-            c.frame.fuel_snapshot().stop,
-            Some(crate::vm::fuel::FuelStop::Exhausted)
-        );
-        assert_eq!(c.frame.fuel_snapshot().used, limit);
-        assert_eq!(c.frame.fuel_snapshot().remaining, 0);
-        assert_eq!(c.frame.counters.operations_started, limit);
-        assert_eq!(c.frame.counters.operations_completed, limit);
-        assert_eq!(c.frame.counters.exits_completed, 0);
-        if limit <= prefix {
-            assert_untouched(&c, before, None)
-        } else {
-            assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-            assert_eq!(
-                c.frame.source_view(c.destination).unwrap(),
-                Some(TyTerm::Primitive(PrimitiveType::Bool))
-            );
-        }
-        let counters = serde_json::to_value(c.frame.counters()).unwrap();
-        let fuel = c.frame.fuel_snapshot();
-        let after = footprint(&c);
-        assert!(run(&mut c).is_err());
-        assert_eq!(footprint(&c), after);
-        assert_eq!(c.frame.fuel_snapshot(), fuel);
-        assert_eq!(serde_json::to_value(c.frame.counters()).unwrap(), counters);
-    }
-}
-#[test]
-fn literal_whole_ticket_cell_quota_refuses_without_an_unowned_ticket() {
-    let text = "fn main(){let value=true;}";
-    let probe = literal_context(text, 2024, LiteralKind::Bool, 100, 1000, 1_000_000);
-    let baseline = probe.store.budget().handles();
-    assert_eq!(prefix(&probe), 0);
-    for free in [0, 1] {
-        let mut c = literal_context(
-            text,
-            2024,
-            LiteralKind::Bool,
-            100,
-            baseline + free,
-            1_000_000,
-        );
-        let before = footprint(&c);
-        assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-        assert_untouched(&c, before, None);
-    }
-    // Arena reservation growth must be checked together before cell or ticket.
-    let baseline_bytes = probe.store.budget().bytes();
-    let mut c = literal_context(text, 2024, LiteralKind::Bool, 100, 1000, baseline_bytes);
-    let before = footprint(&c);
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_untouched(&c, before, None);
 }
 #[test]
 fn byte_source_is_intrinsic_but_unsuffixed_integer_does_not_invent_source_metadata() {
@@ -611,7 +504,7 @@ fn byte_source_is_intrinsic_but_unsuffixed_integer_does_not_invent_source_metada
             ),
             ("fn main(){let value=1;}", LiteralKind::Integer, None),
         ] {
-            let mut c = literal_context(text, edition, kind, 100, 1000, 1_000_000);
+            let mut c = literal_context(text, edition, kind);
             assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
             assert_eq!(c.frame.source_view(c.destination).unwrap(), expected);
         }
@@ -649,7 +542,7 @@ fn official_suffixed_numeric_initializers_retain_written_source_through_binding_
                 ValueRepr::f64(4.999999999999),
             ),
         ] {
-            let mut c = literal_context(original, edition, kind, 100, 1000, 1_000_000);
+            let mut c = literal_context(original, edition, kind);
             assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
             assert_eq!(
                 c.store
@@ -712,50 +605,6 @@ fn official_suffixed_numeric_initializers_retain_written_source_through_binding_
 }
 
 #[test]
-fn suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay() {
-    for (text, kind, primitive) in [
-        (
-            "fn main(){let value=7u8;}",
-            LiteralKind::Integer,
-            PrimitiveType::U8,
-        ),
-        (
-            "fn main(){let value=1.5f32;}",
-            LiteralKind::Float,
-            PrimitiveType::F32,
-        ),
-    ] {
-        let probe = literal_context(text, 2024, kind, 100, 1000, 1_000_000);
-        let prefix = prefix(&probe);
-        for limit in 0..=prefix + 1 {
-            let mut c = literal_context(text, 2024, kind, limit, 1000, 1_000_000);
-            let before = footprint(&c);
-            let error = run(&mut c).unwrap_err();
-            assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-            assert_eq!(error.message, "guest opcode fuel exhausted");
-            assert_eq!(c.frame.fuel_snapshot().used, limit);
-            assert_eq!(c.frame.counters.operations_started, limit);
-            assert_eq!(c.frame.counters.operations_completed, limit);
-            assert_eq!(c.frame.counters.exits_completed, 0);
-            if limit <= prefix {
-                assert_untouched(&c, before, None);
-            } else {
-                assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-                assert_eq!(
-                    c.frame.source_view(c.destination).unwrap(),
-                    Some(TyTerm::Primitive(primitive))
-                );
-            }
-            let stopped = footprint(&c);
-            let started = c.frame.counters.operations_started;
-            assert!(run(&mut c).is_err());
-            assert_eq!(footprint(&c), stopped);
-            assert_eq!(c.frame.counters.operations_started, started);
-        }
-    }
-}
-
-#[test]
 fn byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_editions() {
     const TEXT: &str = "fn main(){let value=b'a';}";
     for edition in [2015, 2018, 2021, 2024] {
@@ -763,7 +612,7 @@ fn byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_
             TyTerm::Nominal(Digest::of_bytes(b"byte source rigid nominal"), vec![]),
             TyTerm::Primitive(PrimitiveType::Char),
         ] {
-            let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+            let mut c = literal_context(TEXT, edition, LiteralKind::Byte);
             c.frame
                 .set_source_view(c.destination, Some(bad.clone()))
                 .unwrap();
@@ -775,7 +624,7 @@ fn byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_
             assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-TYPE-CONTEXT");
             assert_untouched(&c, before, Some(bad));
         }
-        let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+        let mut c = literal_context(TEXT, edition, LiteralKind::Byte);
         let param = TyTerm::Param(ParamKey {
             definition: c.frame.body.body().definition,
             ordinal: 0,
@@ -787,7 +636,7 @@ fn byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_
         assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-TYPE-CONTEXT");
         assert_untouched(&c, before, Some(param));
 
-        let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+        let mut c = literal_context(TEXT, edition, LiteralKind::Byte);
         c.frame.set_hint(c.destination, Some(TypeId(7))).unwrap();
         let before = footprint(&c);
         let error = run(&mut c).unwrap_err();
@@ -798,7 +647,7 @@ fn byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_
         );
         assert_untouched(&c, before, None);
 
-        let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+        let mut c = literal_context(TEXT, edition, LiteralKind::Byte);
         let r = c.recipe.recipe();
         let mut draft = RecipeDraft {
             key: r.key.clone(),
@@ -821,84 +670,11 @@ fn byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_
         assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-INTERNAL-IR");
         assert_untouched(&c, before, None);
 
-        let mut fresh = literal_context(
-            "fn main(){let value=b'b';}",
-            edition,
-            LiteralKind::Byte,
-            100,
-            1000,
-            1_000_000,
-        );
-        fresh.recipe =
-            literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000).recipe;
+        let mut fresh = literal_context("fn main(){let value=b'b';}", edition, LiteralKind::Byte);
+        fresh.recipe = literal_context(TEXT, edition, LiteralKind::Byte).recipe;
         let before = footprint(&fresh);
         assert_eq!(run(&mut fresh).unwrap_err().code, "LRR-E-INTERNAL-IR");
         assert_untouched(&fresh, before, None);
-    }
-}
-#[test]
-fn byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions() {
-    const TEXT: &str = "fn main(){let value=b'a';}";
-    for edition in [2015, 2018, 2021, 2024] {
-        let probe = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
-        assert_eq!(prefix(&probe), 0);
-        for limit in [0, 1] {
-            let mut c = literal_context(TEXT, edition, LiteralKind::Byte, limit, 1000, 1_000_000);
-            let before = footprint(&c);
-            let error = run(&mut c).unwrap_err();
-            assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-            assert_eq!(error.message, "guest opcode fuel exhausted");
-            assert_eq!(c.frame.fuel_snapshot().used, limit);
-            assert_eq!(c.frame.counters.operations_started, limit);
-            assert_eq!(c.frame.counters.operations_completed, limit);
-            if limit == 0 {
-                assert_untouched(&c, before, None)
-            } else {
-                assert_eq!(
-                    c.frame.source_view(c.destination).unwrap(),
-                    Some(TyTerm::Primitive(PrimitiveType::U8))
-                );
-                let cell = c.frame.cell(c.destination).unwrap();
-                let value = c.store.read_scalar(cell).unwrap();
-                let u8_type =
-                    crate::runtime::shape::PrimitiveIdentity::from_recipe(PrimitiveType::U8)
-                        .unwrap()
-                        .id();
-                assert_eq!(value, ValueRepr::unsigned(u8_type, 97).unwrap());
-            }
-            let stopped = footprint(&c);
-            let fuel = c.frame.fuel_snapshot();
-            let counters = serde_json::to_value(c.frame.counters()).unwrap();
-            assert!(run(&mut c).is_err());
-            assert_eq!(footprint(&c), stopped);
-            assert_eq!(c.frame.fuel_snapshot(), fuel);
-            assert_eq!(serde_json::to_value(c.frame.counters()).unwrap(), counters);
-        }
-        let handles = probe.store.budget().handles();
-        for free in [0, 1] {
-            let mut c = literal_context(
-                TEXT,
-                edition,
-                LiteralKind::Byte,
-                100,
-                handles + free,
-                1_000_000,
-            );
-            let before = footprint(&c);
-            assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-            assert_untouched(&c, before, None);
-        }
-        let mut c = literal_context(
-            TEXT,
-            edition,
-            LiteralKind::Byte,
-            100,
-            1000,
-            probe.store.budget().bytes(),
-        );
-        let before = footprint(&c);
-        assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-        assert_untouched(&c, before, None);
     }
 }
 

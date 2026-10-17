@@ -30,10 +30,10 @@ struct Context {
     initializer: NodeId,
     owner_binding: Option<NodeId>,
 }
-fn context(mutable: bool, fuel: u64) -> Context {
-    context_source(ORIGINAL, mutable, fuel)
+fn context(mutable: bool) -> Context {
+    context_source(ORIGINAL, mutable)
 }
-fn context_source(original: &str, mutable: bool, fuel: u64) -> Context {
+fn context_source(original: &str, mutable: bool) -> Context {
     let facts = scope_fixture_facts::original_reference_patterns(original);
     let facts = facts.iter().find(|fact| fact.mutable == mutable).unwrap();
     let parsed = ParsedFile::parse(
@@ -73,9 +73,8 @@ fn context_source(original: &str, mutable: bool, fuel: u64) -> Context {
     let entry = body
         .pc(facts.owner_statement.map_or(statement, id), Phase::Entry)
         .unwrap();
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body.clone(), entry, &mut store).unwrap();
-    frame.set_fuel_limit(fuel).unwrap();
     let mut scopes = vec![];
     let mut scope = Some(body.nodes()[statement.0 as usize].scope);
     while let Some(id) = scope {
@@ -146,7 +145,7 @@ fn target(c: &Context) -> CellId {
 }
 #[test]
 fn rustc_intrinsic_reference_places_share_their_reserved_value_statement_scope() {
-    let c = context_source(PLACE_ORIGINAL, false, 100);
+    let c = context_source(PLACE_ORIGINAL, false);
     let macro_node = c
         .frame
         .body
@@ -188,7 +187,7 @@ fn rustc_intrinsic_reference_places_share_their_reserved_value_statement_scope()
 #[test]
 fn rustc_reference_pattern_verifier_rejects_unrelated_target_or_result_slots() {
     use crate::ir::{recipe::RecipeDraft, validate::verify};
-    let mut c = context(false, 100);
+    let mut c = context(false);
     let r = reach_commit(&mut c);
     let draft = || RecipeDraft {
         key: r.recipe().key.clone(),
@@ -231,7 +230,7 @@ fn rustc_reference_pattern_verifier_rejects_unrelated_target_or_result_slots() {
 }
 #[test]
 fn rustc_reference_pattern_slots_are_deterministic_and_checked_before_frame_publication() {
-    let c = context(false, 100);
+    let c = context(false);
     let repeated = c.parsed.index_body(&c.handle, Default::default()).unwrap();
     assert_eq!(repeated.fingerprint(), c.frame.body.fingerprint());
     let slot = c.frame.body.nodes()[c.statement.0 as usize].runtime_temporaries[0].unwrap();
@@ -263,7 +262,7 @@ fn rustc_reference_pattern_slots_are_deterministic_and_checked_before_frame_publ
 }
 #[test]
 fn rustc_initialized_ref_pattern_borrows_original_local_without_reading_or_moving_it() {
-    let mut c = context_source(PLACE_ORIGINAL, false, 100);
+    let mut c = context_source(PLACE_ORIGINAL, false);
     let r = reach_commit(&mut c);
     let target = target(&c);
     let original = c.store.read_scalar(target).unwrap();
@@ -297,7 +296,7 @@ fn rustc_initialized_ref_pattern_borrows_original_local_without_reading_or_movin
     assert!(c.store.read_reference(reference).is_err());
 }
 fn successful_binding(mutable: bool) {
-    let mut c = context(mutable, 100);
+    let mut c = context(mutable);
     let r = reach_commit(&mut c);
     let target = target(&c);
     let original = c.store.read_scalar(target).unwrap();
@@ -370,50 +369,4 @@ fn rustc_initialized_ref_pattern_preserves_initializer_owner_through_statement_c
 #[test]
 fn rustc_initialized_ref_mut_pattern_keeps_binding_immutable_and_referent_mutable() {
     successful_binding(true);
-}
-#[test]
-fn rustc_initialized_ref_pattern_fuel_refusal_preserves_target_before_borrow_publication() {
-    let mut witness = context(false, 100);
-    reach_commit(&mut witness);
-    let fuel = witness.frame.fuel_snapshot().used.checked_add(1).unwrap();
-    let mut c = context(false, fuel);
-    let r = reach_commit(&mut c);
-    let target = target(&c);
-    let state = c.store.state(target).unwrap();
-    let epoch = c.store.location_epoch(target).unwrap();
-    let handles = c.store.budget().handles();
-    assert_eq!(run(&mut c, &r).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.status(), FrameStatus::Faulted);
-    assert!(c.frame.binding(c.binding).is_err());
-    assert_eq!(c.store.state(target).unwrap(), state);
-    assert_eq!(c.store.location_epoch(target).unwrap(), epoch);
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-    assert_eq!(c.frame.counters.started_by_opcode[38], 1);
-    assert_eq!(c.frame.counters.started_by_opcode[31], 0);
-    assert_eq!(c.frame.counters.started_by_opcode[7], 0);
-}
-#[test]
-fn rustc_initialized_ref_mut_pattern_cancellation_preserves_target_before_place_publication() {
-    let mut c = context(true, 100);
-    let r = reach_commit(&mut c);
-    let target = target(&c);
-    let state = c.store.state(target).unwrap();
-    let epoch = c.store.location_epoch(target).unwrap();
-    let handles = c.store.budget().handles();
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(run(&mut c, &r).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.status(), FrameStatus::Faulted);
-    assert_eq!(
-        c.frame.fuel_snapshot().stop,
-        Some(crate::vm::fuel::FuelStop::Cancelled)
-    );
-    assert!(c.frame.binding(c.binding).is_err());
-    assert_eq!(c.store.state(target).unwrap(), state);
-    assert_eq!(c.store.location_epoch(target).unwrap(), epoch);
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-    assert_eq!(c.frame.counters.started_by_opcode[38], 0);
-    assert_eq!(c.frame.counters.started_by_opcode[31], 0);
-    assert_eq!(c.frame.counters.started_by_opcode[7], 0);
 }

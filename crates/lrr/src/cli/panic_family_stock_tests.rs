@@ -40,9 +40,15 @@ fn unchanged_rustc_panic_family_mains_have_actual_guest_messages_all_editions() 
             .find_map(|line| line.strip_prefix("//@ error-pattern:"))
             .expect("unchanged upstream runtime message assertion");
         for edition in [2015, 2018, 2021, 2024] {
-            let StandaloneOutcome::Captured(packet) =
-                standalone_edition_with_capture(&path, None, edition, true, None).unwrap()
-            else {
+            let StandaloneOutcome::Captured(packet) = standalone_edition_with_capture(
+                &path,
+                None,
+                edition,
+                &super::crate_graph::ExternCrates::default(),
+                true,
+                None,
+            )
+            .unwrap() else {
                 panic!("actual requested capture required")
             };
             assert!(packet.guest_complete(), "{name}/{edition}");

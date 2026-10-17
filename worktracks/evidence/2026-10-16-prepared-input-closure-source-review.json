@@ -1,0 +1,35 @@
+{
+  "kind": "read-only-prepared-input-closure-review",
+  "status": "source-only-no-test-execution",
+  "source": {
+    "path": "crates/lrr/src/db/prepared_inputs.rs",
+    "bytes": 9342,
+    "sha256": "b81f6eaa653e036a91e883158028272303705a4ecc2e764464893a1324bb0742"
+  },
+  "inspected": [
+    "Database::{publish_inputs,fetch,suspended,cache_usage,evict_between_runs,memo_owners}",
+    "PreparedInputGuard::require_current",
+    "Database::capture_prepared_inputs",
+    "DependencyStamp::{heap_bytes,same_key}"
+  ],
+  "conclusions": {
+    "positive_negative_tests": "Corrected whole-universe publications retain true positive and unrelated values while changing only tested absence. Positive replacement invalidates retained oldguard. No provider/event occurs on require_current.",
+    "unchanged_derived_value": "Dependencies returns constant semantic query result across positive input change; child provider can reexecute with same fp and parent ValidatedReuse. Fresh capture follows current descendant closure while oldguard remains invalid. No unconditional descendant revision equality needed to preserve pure semantic reuse.",
+    "conflicts": "Each query expected fp validated before visited skip, so repeat edge with different expected fp cannot hide behind DAG dedup. Duplicate InputKey with unequal fp rejects; final current published/missingfp check validates all leafstamps.",
+    "purity": "Capture is cold/read-only database traversal; guards do not fetch or replan. Cacheable successful installed caller fetches real Outcome first. Generic method can accept an Error memo fp if manually used, but it grants no executable/fact authority; no concrete stale admission found.",
+    "bounds": "Summed dependency edges<=100000 implies at most100001 distinct reachable query nodes, bounded queue/visited scratch; retained inputs Vec and cloned key heap checked<=32MiB before cloning. Uses borrowed memo/key roots during capture; no body copy/world scan. Key heap accounting inherits existing DependencyStamp service.",
+    "eviction_after_capture": "Guard stores owned exact leaf stamps, so later descendant/root memo eviction cannot weaken currentness; positive/negative values compared directly against current publishedinput.",
+    "availability_omission": "Valid root memo may be externally retained/current while unpinned descendants are evicted between runs. Root fetch fastMemoHit leaves childmemo absent; a new InstalledRecipes table capture then safely refuses prepared operation memo is absent despite unchanged valid inputs. This is source-supported cache-admission availability gap, not stale facts acceptance."
+  },
+  "minimal_omission_witness": "Existing synthetic Dependencies key1->key2. Retain root Outcome, evict query cache down to pinnedroot allowance (positive input retained), so key2 can evict. Same revision root fetch hits existing validmemo; capture cannot find key2. Real BoundRecord constructor payload may similarly be retained by prior installed/run handle across quiescence. No execution performed.",
+  "ready_fix_direction": [
+    "Retain/reuse checked immutable leaf closure with actual prepared root once captured, accounting its exclusive bytes; no private authority sidecache",
+    "Or cold installation fetches missing query descendants under the real provider then rechecks expected fprints and captures; no provider work or planning in hot guard. API/ownership belongs to root."
+  ],
+  "scope_limits": [
+    "No new test run; actual synthetic success/failure terminals unclaimed",
+    "Existing transitive footprint may be coarse due source/seal services; this review does not close mode7",
+    "No changes to root prepared_inputs/memo/engine source",
+    "Actual suffixmain failure diagnosis takes priority when solevalidator reports"
+  ]
+}

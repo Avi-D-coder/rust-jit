@@ -126,7 +126,7 @@ fn unchanged_stock_generated_names_point_back_to_their_actual_definition_tokens(
             .unwrap()
             .identity;
         let source_declarative::SourceDeclarativeDemand::Ready(inner) = provider
-            .generated_declaration_demand(&nested, invocation)
+            .generated_declaration_demand(&nested, invocation, None)
             .unwrap()
         else {
             panic!("stock nested expansion absent")

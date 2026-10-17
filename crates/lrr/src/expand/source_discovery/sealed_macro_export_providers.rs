@@ -20,9 +20,8 @@ use crate::{
     },
 };
 use std::sync::Arc;
-const MAX_ROOTS: usize = 100_000;
-const MAX_FACETS: usize = 256;
-const MAX_BYTES: usize = 512 * 1024 * 1024;
+/// Informational accounting only (E-R5-006): no ceiling below address space.
+const MAX_BYTES: usize = usize::MAX;
 const ARC: usize = 2 * std::mem::size_of::<usize>();
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-EXPORT-PUBLICATION", message.into())
@@ -30,14 +29,10 @@ fn invalid(message: &str) -> Diagnostic {
 fn add(bytes: &mut usize, amount: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(amount)
-        .filter(|n| *n <= MAX_BYTES)
         .ok_or_else(crate::runtime::arena::resource)?;
     Ok(())
 }
 fn rows<T>(bytes: &mut usize, count: usize) -> Result<(), Diagnostic> {
-    if count > MAX_ROOTS {
-        return Err(crate::runtime::arena::resource());
-    }
     add(
         bytes,
         count
@@ -138,7 +133,6 @@ impl SealedMacroExportProviders {
         while let Some(current) = owner {
             count = count
                 .checked_add(1)
-                .filter(|count| *count <= 256)
                 .ok_or_else(crate::runtime::arena::resource)?;
             current.guard.require_current(db)?;
             owner = current.imports.as_deref();
@@ -287,7 +281,6 @@ impl SourceDiscovery {
         }
         if self.namespace != Namespace::Macro
             || facets.is_empty()
-            || facets.len() > MAX_FACETS
             || facets.len() != self.sources.len()
         {
             return QueryPoll::Ready(Err(invalid(
@@ -452,7 +445,6 @@ impl SourceDiscovery {
             while let Some(current) = parent {
                 count = count
                     .checked_add(1)
-                    .filter(|count| *count <= 256)
                     .ok_or_else(crate::runtime::arena::resource)?;
                 parent = current.imports.as_deref();
             }
@@ -480,9 +472,9 @@ impl SourceDiscovery {
         }
         let mut locations = BTreeSet::new();
         let mut seen_states: Vec<PreparedSourceView> = Vec::new();
-        let state_limit = MAX_FACETS
+        let state_limit = facets
+            .len()
             .checked_add(self.staged_modules.len())
-            .filter(|n| *n <= MAX_ROOTS)
             .ok_or_else(crate::runtime::arena::resource)?;
         rows::<PreparedSourceView>(&mut bytes, state_limit)?;
         seen_states

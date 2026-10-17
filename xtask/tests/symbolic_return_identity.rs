@@ -155,6 +155,7 @@ fn original_generic_return_rebinding_preserves_source_identity_at_equal_descript
         source_result: Some(TyTerm::Param(template)),
         result_descriptor: Some(TypeId(1)),
         normalized_deferred_return: None,
+        structural_references: false,
     };
     let before = GenericEnv::capture(&signatures[0], &contracts)
         .unwrap()

@@ -49,7 +49,6 @@ impl BindingBudget {
         self.bytes = self
             .bytes
             .checked_add(bytes)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("local binding metadata limit exceeded"))?;
         Ok(())
     }
@@ -64,9 +63,6 @@ impl BindingBudget {
             .ok_or_else(|| error("receiver name missing"))?;
         if name.syntax().text() != "self" {
             return Err(error("receiver name is not self"));
-        }
-        if result.len() >= 100_000 {
-            return Err(error("local binding count limit exceeded"));
         }
         self.charge(
             std::mem::size_of::<LocalBindingRecipe>()
@@ -121,7 +117,6 @@ impl BindingBudget {
             self.visited = self
                 .visited
                 .checked_add(1)
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("binding pattern syntax limit exceeded"))?;
             if ast::Expr::can_cast(node.kind())
                 || ast::Item::can_cast(node.kind())
@@ -131,9 +126,6 @@ impl BindingBudget {
             }
             let mut children = Vec::new();
             for child in node.children() {
-                if children.len() >= 1_000_000 {
-                    return Err(error("binding pattern frontier limit exceeded"));
-                }
                 children
                     .try_reserve(1)
                     .map_err(|_| error("binding pattern allocation failed"))?;
@@ -142,7 +134,6 @@ impl BindingBudget {
             stack
                 .len()
                 .checked_add(children.len())
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("binding pattern frontier limit exceeded"))?;
             stack
                 .try_reserve(children.len())
@@ -154,9 +145,6 @@ impl BindingBudget {
             let name = pat
                 .name()
                 .ok_or_else(|| error("binding pattern name missing"))?;
-            if result.len() >= 100_000 {
-                return Err(error("local binding count limit exceeded"));
-            }
             let len = usize::from(name.syntax().text_range().len());
             self.charge(
                 len.checked_mul(2)
@@ -228,9 +216,6 @@ pub(crate) fn cfg_enabled(
 ) -> Result<bool, Diagnostic> {
     let mut pending = Vec::new();
     for meta in attrs.filter_map(|a| a.meta()) {
-        if pending.len() >= 100_000 {
-            return Err(error("binding cfg frontier limit exceeded"));
-        }
         pending
             .try_reserve(1)
             .map_err(|_| error("binding cfg allocation failed"))?;
@@ -241,7 +226,6 @@ pub(crate) fn cfg_enabled(
     while let Some(meta) = pending.pop() {
         count = count
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| error("binding cfg attribute limit exceeded"))?;
         match meta {
             ast::Meta::CfgMeta(c) => {
@@ -261,9 +245,6 @@ pub(crate) fn cfg_enabled(
                 )? =>
             {
                 for m in c.metas() {
-                    if pending.len() >= 100_000 {
-                        return Err(error("binding cfg frontier limit exceeded"));
-                    }
                     pending
                         .try_reserve(1)
                         .map_err(|_| error("binding cfg allocation failed"))?;

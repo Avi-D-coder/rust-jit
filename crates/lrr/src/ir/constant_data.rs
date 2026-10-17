@@ -8,9 +8,6 @@ use crate::{
     runtime::{shape::PrimitiveIdentity, value::ValueRepr},
 };
 use std::sync::Arc;
-const MAX_BYTES: usize = 1 << 20;
-const MAX_DEPTH: usize = 128;
-const MAX_NODES: usize = 100_000;
 fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
@@ -34,48 +31,10 @@ impl ConstValue {
         Ok(Self(Immutable::Scalar(value)))
     }
     /// Only the pure evaluator may build an array outside the checked codec.
-    /// Every child is already private immutable data; validate the aggregate
-    /// work/depth/bytes before allocating its shared field storage.
+    /// Every child is already private immutable data. E-R5-006: rustc has no
+    /// constant aggregate size, node or depth limit, so none is applied here.
     pub(crate) fn from_elements(values: Vec<Self>) -> Result<Self, Diagnostic> {
-        let mut nodes = 1usize;
-        let mut bytes = 9usize;
-        for child in &values {
-            let part = child.bounded_field_bytes(1, &mut nodes).ok_or_else(|| {
-                fault(
-                    "LRR-E-CONST-RESOURCE",
-                    "immutable constant aggregate exceeds fixed limits",
-                )
-            })?;
-            bytes = bytes.checked_add(part).ok_or_else(|| {
-                fault(
-                    "LRR-E-CONST-RESOURCE",
-                    "immutable constant byte size overflow",
-                )
-            })?;
-        }
-        if bytes
-            .checked_add(8)
-            .and_then(|n| n.checked_add(Self::DOMAIN.len()))
-            .is_none_or(|n| n > MAX_BYTES)
-        {
-            return Err(fault(
-                "LRR-E-CONST-RESOURCE",
-                "immutable constant aggregate exceeds fixed limits",
-            ));
-        }
         Ok(Self(Immutable::Array(values.into())))
-    }
-    fn bounded_field_bytes(&self, depth: usize, nodes: &mut usize) -> Option<usize> {
-        if depth >= MAX_DEPTH {
-            return None;
-        }
-        *nodes = nodes.checked_add(1).filter(|n| *n <= MAX_NODES)?;
-        match &self.0 {
-            Immutable::Scalar(_) => Some(17),
-            Immutable::Array(fields) => fields.iter().try_fold(9usize, |bytes, field| {
-                bytes.checked_add(field.bounded_field_bytes(depth + 1, nodes)?)
-            }),
-        }
     }
     pub fn scalar(&self) -> Option<ValueRepr> {
         match &self.0 {
@@ -133,24 +92,21 @@ pub mod wire;
 mod tests {
     use super::*;
     #[test]
-    fn immutable_array_factory_and_wire_share_checked_depth_and_handle_boundaries() {
+    fn immutable_array_factory_and_wire_share_nesting_and_handle_boundaries() {
         // LRR-specific wire/ownership boundary, not an upstream language case.
+        // E-R5-006: nesting deeper than the former 128-level cap round-trips.
         let mut value = ConstValue::from_scalar(ValueRepr::unit()).unwrap();
         let mut ty = wire::ConstantWireType::Scalar(PrimitiveType::Unit);
-        for _ in 1..MAX_DEPTH {
+        for _ in 0..200 {
             value = ConstValue::from_elements(vec![value]).unwrap();
             ty = wire::ConstantWireType::Array {
                 element: Box::new(ty),
                 length: 1,
             };
         }
-        let bytes = wire::encode(&value, &ty, MAX_BYTES).unwrap();
-        let replay = wire::decode(&bytes, &ty, MAX_BYTES).unwrap();
+        let bytes = wire::encode_value(&value, &ty).unwrap();
+        let replay = wire::decode_value(&bytes, &ty).unwrap();
         assert_eq!(value.fingerprint(), replay.fingerprint());
-        assert_eq!(
-            ConstValue::from_elements(vec![value]).unwrap_err().code,
-            "LRR-E-CONST-RESOURCE"
-        );
         assert!(
             ConstValue::from_scalar(ValueRepr {
                 kind: 8,
@@ -158,12 +114,6 @@ mod tests {
                 payload: 1
             })
             .is_err()
-        );
-        let zero = ConstValue::from_scalar(ValueRepr::unit()).unwrap();
-        let excessive = vec![zero; MAX_NODES];
-        assert_eq!(
-            ConstValue::from_elements(excessive).unwrap_err().code,
-            "LRR-E-CONST-RESOURCE"
         );
     }
 }

@@ -6,15 +6,75 @@ use crate::{
         BodyTypeOrigin, BodyTypeSegment, BodyTypeUse,
     },
     ir::pc::NodeId,
+    syntax::ast_adapter::range,
+};
+use ra_ap_syntax::{
+    AstNode,
+    ast::{self, HasName},
 };
 const AUTO: &str = include_str!(
     "../../../../fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs"
 );
+fn original_with_actual_body_output() -> String {
+    let parsed = ra_ap_syntax::SourceFile::parse(AUTO, ra_ap_syntax::Edition::Edition2024);
+    assert!(parsed.errors().is_empty());
+    let main = parsed
+        .tree()
+        .syntax()
+        .children()
+        .filter_map(ast::Fn::cast)
+        .find(|function| function.name().is_some_and(|name| name.text() == "main"))
+        .expect("unchanged original main");
+    let main_start = usize::try_from(range(main.syntax().text_range()).start).unwrap();
+    let body = main
+        .syntax()
+        .children()
+        .find_map(ast::BlockExpr::cast)
+        .expect("actual main block");
+    let insert = usize::try_from(range(body.syntax().text_range()).end)
+        .unwrap()
+        .checked_sub(1)
+        .unwrap();
+    assert_eq!(&AUTO[insert..insert + 1], "}");
+    format!(
+        "{}macro_rules! lrr_provenance_noop {{()=>{{()}}}}\n{}\nlrr_provenance_noop!();\n{}",
+        &AUTO[..main_start],
+        &AUTO[main_start..insert],
+        &AUTO[insert..]
+    )
+}
 #[test]
 fn unchanged_auto_original_type_survives_retained_macro_output_in_all_editions() {
+    // A real body attachment is essential. Merely requesting retained syntax
+    // for this original main otherwise returns an empty output list and rightly
+    // keeps the raw Type row Original without exercising structural survival.
+    let controlled = original_with_actual_body_output();
     for edition in [2015, 2018, 2021, 2024] {
         for retained in [false, true] {
-            let (mut db, plan) = world(AUTO, edition, retained);
+            let (mut db, plan) = world(&controlled, edition, retained);
+            if retained {
+                let unit = plan
+                    .context()
+                    .source()
+                    .retained_inputs()
+                    .find_map(|input| match input.as_ref() {
+                        InputValue::RetainedSyntax(unit) => Some(unit),
+                        _ => None,
+                    })
+                    .expect("actual retained source receipt");
+                assert!(
+                    !unit.prepared().outputs().is_empty(),
+                    "structural Original witness must contain an actual body expansion"
+                );
+            } else {
+                assert!(
+                    !plan
+                        .context()
+                        .source()
+                        .retained_inputs()
+                        .any(|input| matches!(input.as_ref(), InputValue::RetainedSyntax(_)))
+                );
+            }
             let fingerprint = plan.context().body_type_occurrences().fingerprint();
             let start = db.trace.events.len();
             let mut count = 0;

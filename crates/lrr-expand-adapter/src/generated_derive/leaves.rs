@@ -93,11 +93,7 @@ fn push(
     *bytes = bytes
         .checked_add(text.capacity())
         .and_then(|n| n.checked_add(128))
-        .filter(|n| *n <= 128 * 1024 * 1024)
         .ok_or_else(|| fault("generated derive original lexical retention limit"))?;
-    if units.len() >= 2_000_000 {
-        return Err(fault("generated derive original lexical count limit"));
-    }
     units
         .try_reserve(1)
         .map_err(|_| fault("generated derive original lexical allocation"))?;
@@ -111,9 +107,6 @@ fn flatten(
     bytes: &mut usize,
     depth: usize,
 ) -> Result<(), AdapterError> {
-    if depth > 256 {
-        return Err(fault("generated derive original lexical depth limit"));
-    }
     let delimiter = match delimiter.kind {
         tt::DelimiterKind::Parenthesis => Some(("(", ")")),
         tt::DelimiterKind::Brace => Some(("{", "}")),

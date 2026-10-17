@@ -121,6 +121,15 @@ impl PreparedSourceLocalPlan {
             return QueryPoll::Ready(Err(error("return Type actual annotation recipe differs")));
         }
         let (root, _) = self.entered.local_hygiene();
+        let use_name = |name: ast::NameRef| -> Result<LocalTypeUse, Diagnostic> {
+            let span = range(name.syntax().text_range());
+            Ok(LocalTypeUse {
+                name: name.text().to_string(),
+                range: span,
+                context: source.identifier_context_or_original(span, root)?,
+                edition: parsed.token_edition(span)?,
+            })
+        };
         let name = if let ast::Type::PathType(path) = &ty {
             checked!(
                 path.path()
@@ -143,25 +152,32 @@ impl PreparedSourceLocalPlan {
         } else {
             None
         };
+        // A compound result's leaf names are its actual occurrences here,
+        // captured on this demand only (the plan retains no result rows).
+        let shape = match name {
+            Some(_) => None,
+            None => checked!(HeaderShape::capture(&ty, &use_name)),
+        };
         let field = HeaderField {
             parameter: None,
             range: result_range,
             tokens: syntax,
             name,
+            shape,
         };
         let header = HeaderTypeSite {
             owner: self.field_types.owner,
             item,
             field: &field,
+            leaf: None,
         };
-        self.prepare_header_type(
-            db,
-            header,
-            super::super::DeclarationTypeSite::Return {
-                definition: signature.definition,
-                range: result_range,
-            },
-            &signature.scope,
-        )
+        let site = super::super::DeclarationTypeSite::Return {
+            definition: signature.definition,
+            range: result_range,
+        };
+        if let Some(shape) = &field.shape {
+            return self.prepare_compound_header_type(db, &header, shape, &site, &signature.scope);
+        }
+        self.prepare_header_type(db, header, site, &signature.scope)
     }
 }

@@ -1,0 +1,75 @@
+{
+  "schema": "lrr/source-review/child-impl-authority-controls/v1",
+  "status": "source-only/uncompiled/unexecuted controls and exact root read-only review",
+  "root": {
+    "path": "crates/lrr/src/expand/source_discovery.rs",
+    "sha256": "1ff5651b4ad0be25292c06795e2e3bebcd10be752993b1c95f9700330801306a"
+  },
+  "owned": {
+    "path": "crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs",
+    "sha256": "862de931e86105defa9af27f8e2c1b779ddb3b862532c2f41bdf565b6d84d5b0",
+    "bytes": 7212
+  },
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "sha256": "d5b059acb26d9141682abbb7ec1d55b97a25760876f4714ce99c0cd84ef57746"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "sha256": "4b0056db1c09f4ed603dfb356d3a7b96911b86edeb75b57bfe95696dfe1911a5"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_projection.rs",
+      "sha256": "c416dd7857fcdd690cab01f3aa5a79f2a90ad2146ce3b6b9603207fe65f96a56"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19"
+    }
+  ],
+  "registration": "Root applies supplied child-module patch to existing item_boundary_tests.rs; worker edits no existing hook or production file. Prefix expand::source_discovery::original_inert_tests::item_boundary_tests::item_impl_child_tests::",
+  "witness": "Reuse actual emitted(edition) pinned AST adapter for unchanged official type-param-local-var-shadowing, existing source prepare/discovery/seal. Replace only helper terminal invocation with real wrapper macro invoking emitter. Original source bytes and root attrs preserved by existing adapter; no mini language/sourcebody substitute.",
+  "root_review": [
+    "Ordinary and derive admission map actual rootrecord key fingerprint to existing stable item-declaration-job after genuine declaration facet and conflict/budget preflight. No catalogjob/declarationjob conflation.",
+    "Generated child admission selects actual active/root parent catalog, validates actual pending record and preflight_park_child, obtains actual child via child_for_discovery, retains child+parent items Arcs, same plan projection/scope/cfg/epoch. Mixed nonimpl blocker branch still refuses.",
+    "Child projection/waiter/catalog/record metadata and job counts checked before mutation; work.preflight_complete validates actual update. Plan publication and parent.park_child happen in fail-stop closure, then actual child catalog/waiter+producer/records/owner/jobs become reachable. Items payload stays existing once-charged childcatalog allocation; waiter adds handles and projection/cfg/scope proof storage.",
+    "Handler waits actual nested_completed ancestor, constructs shared AncestorImplCompletion once peractualjob, reserves64MiB conservative prebudget and charges actual vector capacities+cache allowance. Existing child waiters share Arc cache.",
+    "Handler compares actual nested_completed Arc with prepared.completed Arc BEFORE resolve; exact equal keys/records are insufficient. Child resolve then checks selected actual parent firstedge and actual producer chain, commoncanonicalkernel and realinventoryheaders.",
+    "Only after resolve nonempty verifiedheaders does handler work.complete + release exact scope/frontier + remove producer/waiter. Final publishing closure poisons on error. No child executable body/Type preparation.",
+    "Errors from cache preparation, actual Arc mismatch or pure resolve BEFORE publication closure return without self.failed. Active genuine ticket remains, so same failure repeats and no workseal bypass found. Controls assert exact repeated refusal/no release, not an unsupported general failstop claim.",
+    "Parent pending-boundary and work Sealed guard checked previously; root changed afterward must repin review. Wrapper acceptance is future actual validator evidence, not inferred from this source."
+  ],
+  "controls": [
+    {
+      "name": "actual_stock_child_requires_its_selected_parent_epoch_and_ancestor",
+      "oracle": "Actual completed stockwrapper positive reconstructs receipt from real root and child selection catalogs, obtains nonempty actual canonicalheaders. Genuine wrongparent is admitted childItems substituted as parent; exact parentedge error. Changed epoch and ancestor produce exact common owner diagnostics. Stable waiterfingerprint must differ for changed parent/ancestor."
+    },
+    {
+      "name": "equal_source_metadata_cannot_substitute_another_actual_completed_arc_owner",
+      "oracle": "Run realwrapper A to completion, pause equal-source independent B after genuine childadmission. Assert selected sourcekeys equal but publication Arcs differ, ancestor tuple matches. Inject A actual cache into B; all B genuinejobs execute normally. Root must reject exact completedowner mismatch, preserve childfrontier/producer/notcompleted/no source seal, and repeat same diagnostic. No fabricated job completion or body."
+    }
+  ],
+  "costs": "Tests only; production rootcache once-perancestor O(NlogN+inventorysort) and perchild bounded parentwalk/kernel. No fullworld dispatch scan, parser replay or BodyIndex clone introduced; no performance measurement.",
+  "all_eight": {
+    "1": "No assertion/expression evaluator; MA001/7/8 runtime debt unchanged.",
+    "2": "Actual full generated stock output, no scalar/break path; MA004/5 held.",
+    "3": "No numeric/method/tokenname rule; MA003/6 held.",
+    "4": "Real generated child+actualselectedparent+current ancestor ownership, no fake original source.",
+    "5": "Real cold declarations, no main/Foo::foo/Type/pattern execution; MA002 held.",
+    "6": "Actual rootcache indexes once, child borrowed lookup; controls use genuine preparation.",
+    "7": "Actual relevant recorded work/subtree, no worldcensus or unrelated runtime invalidation.",
+    "8": "Actual shared source/items/records/completion Arcs, no immutable BodyIndex/tree copies or pernode wholefile search."
+  },
+  "unexecuted_gaps": [
+    "V9 actualstockwrapper direct runtime has priority; new controls not run",
+    "Controls require real wrapper declaration closure to complete; failures remain failures",
+    "All negative authority controls scoped edition2024; primary runtime owning editions separately validated",
+    "No fullfixture/runtime cleanup/exactonce or global configuredworld/facade/trait catalog claim"
+  ],
+  "execution": "rustfmt only, no Cargo/compiler/tests/guest/native by worker"
+}

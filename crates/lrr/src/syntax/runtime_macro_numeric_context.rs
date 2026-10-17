@@ -106,7 +106,6 @@ fn operand_name(
     let bytes = range
         .end
         .checked_sub(range.start)
-        .filter(|n| *n <= 65_536)
         .ok_or_else(|| error("numeric comparison operand source budget"))?;
     let root = parsed.parsed.tree();
     let text_range = ra_ap_syntax::TextRange::new(range.start.into(), range.end.into());
@@ -143,7 +142,7 @@ fn operand_name(
     if args.next().is_some() {
         return Ok(None);
     }
-    for _ in 0..256 {
+    for _ in 0usize.. {
         match expression {
             ast::Expr::ParenExpr(group) => {
                 let Some(inner) = group.expr() else {
@@ -244,7 +243,6 @@ pub(super) fn request(
     if initializer_site {
         let statement = source
             .ancestors()
-            .take(257)
             .filter_map(ast::LetStmt::cast)
             .find(|statement| {
                 let range = statement.syntax().text_range();
@@ -290,7 +288,6 @@ pub(super) fn request(
     }
     let selected = source
         .ancestors()
-        .take(257)
         .filter_map(ast::BinExpr::cast)
         .find(|binary| {
             let range = binary.syntax().text_range();
@@ -310,7 +307,7 @@ pub(super) fn request(
     let Some(ast::Expr::PathExpr(left)) = binary.lhs() else {
         return Ok(None);
     };
-    if compound_local_primitive(parsed, index, body, &left)?.is_some()
+    if compound_local_primitive(parsed, index, body, &left, None)?.is_some()
         || compound_local_definition_context(parsed, index, body, &left)?.is_some()
     {
         return Ok(None);
@@ -323,10 +320,7 @@ pub(super) fn request(
         .get(binding.0 as usize)
         .ok_or_else(|| error("numeric binding source absent"))?
         .range;
-    for (work, syntax) in root.descendants().enumerate() {
-        if work >= 100_000 {
-            return Err(error("numeric initializer source work limit"));
-        }
+    for syntax in root.descendants() {
         let Some(statement) = ast::LetStmt::cast(syntax) else {
             continue;
         };

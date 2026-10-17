@@ -71,21 +71,6 @@ fn rustc_noncopy_tuple_whole_read_transfers_object_and_leaves_cold_drop_sibling_
     assert_eq!(store.state(sibling).unwrap(), before.4);
 }
 #[test]
-fn rustc_noncopy_tuple_whole_read_quota_refusal_preserves_complete_graph_and_epoch() {
-    let (mut store, root, field, sibling, lease) = tests::stock_tuple_reference_owner();
-    while store.budget.handles() < 1000 {
-        store.ticket(ValueRepr::unit()).unwrap();
-    }
-    let before = snapshot(&store, root, field, sibling);
-    assert_eq!(
-        store.read_owning(root).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(snapshot(&store, root, field, sibling), before);
-    store.admit_move(root).unwrap();
-    assert_eq!(store.read_reference(lease).unwrap(), ValueRepr::unit());
-}
-#[test]
 fn rustc_noncopy_tuple_whole_read_through_shared_reference_refuses_without_transfer() {
     let (mut store, root, field, sibling, _) = tests::stock_tuple_reference_owner();
     let borrowed = store.borrow(&Place::cell(root), Access::Shared).unwrap();

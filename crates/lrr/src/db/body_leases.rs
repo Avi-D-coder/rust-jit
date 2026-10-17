@@ -264,7 +264,6 @@ impl Database {
                 .count();
             let count = live
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "body execution lease count limit"))?;
             let mut registry = Vec::new();
             registry
@@ -278,23 +277,7 @@ impl Database {
             );
             let old = metadata(self.body_leases.capacity(), self.body_leases.len())?;
             let new = metadata(registry.capacity(), count)?;
-            let total = self
-                .cache_usage()?
-                .memo_bytes
-                .checked_sub(old)
-                .and_then(|n| n.checked_add(new))
-                .ok_or_else(|| {
-                    fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "body execution lease accounting overflow",
-                    )
-                })?;
-            if total > self.run_budgets.unwrap_or_default().query_bytes {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "body execution source lease exceeds query cap",
-                ));
-            }
+            let _ = (old, new); // E-R5-006: no byte accounting.
             let owner = Arc::new(BodyExecutionOwner {
                 body: body.clone(),
                 _body: handle,

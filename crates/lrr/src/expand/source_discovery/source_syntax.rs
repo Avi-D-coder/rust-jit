@@ -36,14 +36,10 @@ impl SourceDiscovery {
             }
             return Ok(());
         }
-        if self.syntax_requests.len() >= 4096 {
-            return Err(fault("issued syntax attachment count budget"));
-        }
         let bytes = self
             .syntax_request_bytes
             .checked_add(receipt.metadata_bytes()?)
             .and_then(|n| n.checked_add(128))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("issued syntax attachment metadata budget"))?;
         self.syntax_requests.insert(key, receipt);
         self.syntax_request_bytes = bytes;
@@ -107,7 +103,7 @@ impl SourceDiscovery {
         &self,
         seal: &crate::db::seals::Seal,
     ) -> Result<BTreeMap<Digest, Arc<CompletedSourceSyntax>>, Diagnostic> {
-        use crate::expand::source_declarative::assembly::SourceAssemblySeed;
+        use crate::expand::source_declarative::assembly::LazySourceAssemblySeed;
         let Some((_, _, providers)) = &self.declarative else {
             return Ok(BTreeMap::new());
         };
@@ -126,6 +122,12 @@ impl SourceDiscovery {
                            output: &Arc<GeneratedDeclarations>|
          -> Result<(), Diagnostic> {
             let key = output.record().key();
+            // A derive output is appended after its annotated item, never
+            // attached at a function-like call site; several derives of one
+            // item share that item's producer. Its record stays in the seal.
+            if key.macro_identity.is_derive() {
+                return Ok(());
+            }
             if output.epoch() != self.epoch
                 || seal
                     .input_dependencies()
@@ -153,13 +155,11 @@ impl SourceDiscovery {
             }
             count = count
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(crate::runtime::arena::resource)?;
             bytes = bytes
                 .checked_add(
                     512 + 16 * std::mem::size_of::<((Digest, Digest), completed::SyntaxReply)>(),
                 )
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(crate::runtime::arena::resource)?;
             let receipt_key = key.fingerprint();
             let receipt = match receipts.get(&receipt_key) {
@@ -170,7 +170,6 @@ impl SourceDiscovery {
                         bytes = bytes
                             .checked_add(actual.metadata_bytes()?)
                             .and_then(|n| n.checked_add(256))
-                            .filter(|n| *n <= 32 * 1024 * 1024)
                             .ok_or_else(crate::runtime::arena::resource)?;
                         let receipt = Arc::new(actual.clone());
                         receipts.insert(receipt_key, Arc::clone(&receipt));
@@ -216,11 +215,12 @@ impl SourceDiscovery {
                 .nested_sources
                 .get(&ordinal)
                 .ok_or_else(|| fault("source syntax declaration inventory absent"))?;
-            let seed = SourceAssemblySeed::prepare(provider, index, self.epoch)?;
+            let seed = LazySourceAssemblySeed::new(provider, index.scan_handle(), self.epoch);
             let replies = by_source
                 .remove(&index.scan().fingerprint())
                 .unwrap_or_default();
-            let plan = CompletedSourceSyntax::capture(seed, replies, self.key.clone(), seal_value)?;
+            let plan =
+                CompletedSourceSyntax::capture_lazy(seed, replies, self.key.clone(), seal_value)?;
             insert_plan(&mut plans, &mut retained, plan)?;
         }
         for module in self.staged_modules.values().filter(|module| {
@@ -233,9 +233,10 @@ impl SourceDiscovery {
                     .prepared_source()
                     .declaration_inventory(Default::default())?,
             };
-            let seed = SourceAssemblySeed::from_scan(&module.provider, &scan, self.epoch)?;
+            let seed = LazySourceAssemblySeed::new(&module.provider, &scan, self.epoch);
             let replies = by_source.remove(&scan.fingerprint()).unwrap_or_default();
-            let plan = CompletedSourceSyntax::capture(seed, replies, self.key.clone(), seal_value)?;
+            let plan =
+                CompletedSourceSyntax::capture_lazy(seed, replies, self.key.clone(), seal_value)?;
             insert_plan(&mut plans, &mut retained, plan)?;
         }
         Ok(plans)
@@ -246,15 +247,11 @@ fn insert_plan(
     retained: &mut usize,
     plan: Arc<CompletedSourceSyntax>,
 ) -> Result<(), Diagnostic> {
-    if plans.len() >= 100_000 {
-        return Err(fault("completed source syntax owner limit"));
-    }
     *retained = retained
         .checked_add(plan.metadata_bytes())
         .and_then(|n| {
             n.checked_add(256 + 16 * std::mem::size_of::<(Digest, Arc<CompletedSourceSyntax>)>())
         })
-        .filter(|n| *n <= 512 * 1024 * 1024)
         .ok_or_else(crate::runtime::arena::resource)?;
     let key = crate::db::key::QueryKey::Outline(plan.source().outline.clone()).fingerprint();
     if plans.insert(key, plan).is_some() {

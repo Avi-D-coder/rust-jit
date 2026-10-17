@@ -12,8 +12,6 @@ use crate::{
     },
     syntax::pure_constants::ConstantPlan,
 };
-const MAX_PAYLOAD: usize = 1 << 20;
-const MAX_METADATA: usize = 32 << 20;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-MEMO", message.into())
 }
@@ -53,14 +51,7 @@ impl ConstMemoPayload {
                 "constant content type differs from query".into(),
             ));
         }
-        let type_bytes = value_type.metadata_bytes()?;
-        byte_limit
-            .checked_mul(2)
-            .and_then(|n| n.checked_add(type_bytes))
-            .and_then(|n| n.checked_add(identity.profile().semantics.len()))
-            .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 128))
-            .filter(|n| *n <= MAX_METADATA)
-            .ok_or_else(|| invalid("constant content transient metadata budget"))?;
+        value_type.metadata_bytes()?;
         let bytes = wire::encode(value, value_type, byte_limit)?;
         Ok(Self {
             definition: identity.definition(),
@@ -89,20 +80,12 @@ impl ConstMemoPayload {
             ));
         }
         plan.profile().validate_source()?;
-        if byte_limit == 0 || byte_limit > MAX_PAYLOAD {
+        if byte_limit == 0 {
             return Err(invalid("constant payload byte budget exceeds profile"));
         }
         let value_type = evaluation.value_type();
         let type_identity = value_type.fingerprint_checked()?;
-        let type_bytes = value_type.metadata_bytes()?;
-        let reserved = byte_limit
-            .checked_mul(2)
-            .and_then(|n| n.checked_add(type_bytes))
-            .and_then(|n| n.checked_add(plan.profile().semantics.len()))
-            .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 128))
-            .filter(|n| *n <= MAX_METADATA)
-            .ok_or_else(|| invalid("constant payload transient metadata budget"))?;
-        let _ = reserved;
+        value_type.metadata_bytes()?;
         let bytes = wire::encode(evaluation.value(), value_type, byte_limit)?;
         let mut dependencies = StableEncoder::new("lrr/v1/pure-constant-memo-dependencies");
         dependencies.sequence(evaluation.dependencies(), |encoder, dependency| {
@@ -147,7 +130,7 @@ impl ConstMemoPayload {
     /// Fresh immutable decoding only. Owning guest arrays still require the runtime
     /// construction/cleanup transaction; this method creates no GuestStore cells.
     pub fn decode_value(&self) -> Result<ConstValue, Diagnostic> {
-        wire::decode(&self.bytes, &self.value_type, MAX_PAYLOAD)
+        wire::decode(&self.bytes, &self.value_type, usize::MAX)
     }
     pub fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         std::mem::size_of::<Self>()
@@ -155,7 +138,6 @@ impl ConstMemoPayload {
             .and_then(|n| n.checked_add(self.bytes.len()))
             .and_then(|n| n.checked_add(self.profile.semantics.capacity()))
             .and_then(|n| n.checked_add(self.value_type.metadata_bytes().ok()?))
-            .filter(|n| *n <= MAX_METADATA)
             .ok_or_else(|| invalid("constant payload metadata overflow"))
     }
 }

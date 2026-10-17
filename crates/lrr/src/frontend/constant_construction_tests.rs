@@ -117,10 +117,10 @@ pub(crate) fn result(
         view,
         definition,
         ConstantRequest::Constant,
-        MAX_METADATA,
+        usize::MAX,
     )
     .unwrap();
-    CurrentConstantResultType::capture_current(db, view, admission, MAX_METADATA).unwrap()
+    CurrentConstantResultType::capture_current(db, view, admission, usize::MAX).unwrap()
 }
 pub(crate) fn query(
     db: &mut Database,
@@ -155,7 +155,7 @@ fn unchanged_declared_array_source_length_and_parent_queries_bind_actual_descrip
         let (_, demand) = result.array().unwrap();
         let child = result
             .admission()
-            .reselect_array_length_current(&db, &view, demand, MAX_METADATA)
+            .reselect_array_length_current(&db, &view, demand, usize::MAX)
             .unwrap();
         let length = query(&mut db, &view, &child, &demand.expected_wire());
         assert_eq!(
@@ -192,7 +192,7 @@ fn unchanged_declared_array_source_length_and_parent_queries_bind_actual_descrip
             &result,
             success(&parent),
             Some((&child, success(&length))),
-            MAX_METADATA,
+            usize::MAX,
         )
         .unwrap();
         let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
@@ -230,7 +230,7 @@ fn source_constructor_requires_real_length_query_not_parent_wire_count() {
             &ready,
             success(&parent),
             None,
-            MAX_METADATA
+            usize::MAX
         )
         .is_err()
     );
@@ -253,7 +253,7 @@ fn exact_current_other_length_value_cannot_complete_parent_array_type() {
     let (_, d) = other.array().unwrap();
     let child = other
         .admission()
-        .reselect_array_length_current(&db, &view, d, MAX_METADATA)
+        .reselect_array_length_current(&db, &view, d, usize::MAX)
         .unwrap();
     let length = query(&mut db, &view, &child, &d.expected_wire());
     let parent = query(
@@ -269,7 +269,7 @@ fn exact_current_other_length_value_cannot_complete_parent_array_type() {
             &ready,
             success(&parent),
             Some((&child, success(&length))),
-            MAX_METADATA
+            usize::MAX
         )
         .is_err()
     );
@@ -291,7 +291,7 @@ fn scalar_source_readiness_binds_only_actual_current_success_record() {
         &ready,
         success(&parent),
         None,
-        MAX_METADATA,
+        usize::MAX,
     )
     .unwrap();
     let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
@@ -321,7 +321,7 @@ fn scalar_source_readiness_binds_only_actual_current_success_record() {
             &ready,
             success(&other),
             None,
-            MAX_METADATA
+            usize::MAX
         )
         .is_err()
     );
@@ -343,7 +343,7 @@ fn stale_real_source_query_and_descriptor_run_epoch_never_gain_publication_autho
             &ready,
             success(&parent),
             None,
-            MAX_METADATA,
+            usize::MAX,
         )
         .unwrap();
         let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
@@ -362,7 +362,7 @@ fn stale_real_source_query_and_descriptor_run_epoch_never_gain_publication_autho
             &ready,
             success(&parent),
             None,
-            MAX_METADATA
+            usize::MAX
         )
         .is_err()
     );
@@ -391,7 +391,7 @@ fn empty_array_requires_actual_zero_length_and_retains_source_element_identity()
     let (_, d) = ready.array().unwrap();
     let child = ready
         .admission()
-        .reselect_array_length_current(&db, &view, d, MAX_METADATA)
+        .reselect_array_length_current(&db, &view, d, usize::MAX)
         .unwrap();
     let length = query(&mut db, &view, &child, &d.expected_wire());
     let parent = query(
@@ -406,7 +406,7 @@ fn empty_array_requires_actual_zero_length_and_retains_source_element_identity()
         &ready,
         success(&parent),
         Some((&child, success(&length))),
-        MAX_METADATA,
+        usize::MAX,
     )
     .unwrap();
     let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
@@ -443,7 +443,7 @@ fn forged_content_only_typed_value_cannot_replace_actual_current_memo_success() 
             &ready,
             &forged,
             None,
-            MAX_METADATA
+            usize::MAX
         )
         .is_err()
     );
@@ -461,7 +461,7 @@ fn forged_content_only_typed_value_cannot_replace_actual_current_memo_success() 
 }
 
 #[test]
-fn original_root_inert_attribute_cannot_be_retired_by_uncertified_length_capture() {
+fn original_root_builtin_inert_attribute_needs_no_certificate_for_length_capture() {
     for edition in [2015, 2018, 2021, 2024] {
         let (db, view, definition) = world(ORIGINAL, "ARR", edition);
         let ready = result(&db, &view, definition);
@@ -469,13 +469,15 @@ fn original_root_inert_attribute_cannot_be_retired_by_uncertified_length_capture
         let cold =
             crate::syntax::pure_constants::ConstantSource::capture_prepared(&view, definition)
                 .unwrap();
+        // `#![allow(dead_code)]` is builtin inert: it is never a macro call, so
+        // an uncertified capture plans the same exact length.
         assert_eq!(
-            cold.array_length(demand.range()).unwrap_err().code,
-            "LRR-E-CONST-SOURCE"
+            cold.array_length(demand.range()).unwrap().range(),
+            demand.range()
         );
         let child = ready
             .admission()
-            .reselect_array_length_current(&db, &view, demand, MAX_METADATA)
+            .reselect_array_length_current(&db, &view, demand, usize::MAX)
             .unwrap();
         assert_eq!(child.plan().range(), demand.range());
         assert_eq!(child.plan().owner_definition(), definition);

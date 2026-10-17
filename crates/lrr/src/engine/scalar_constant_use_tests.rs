@@ -9,16 +9,10 @@ use crate::{
         constant_path_selection::ConstantPathOutcome,
         constants::ConstLimits,
     },
-    runtime::cell::CellState,
     source::manifest::Namespace,
     syntax::{body_index::BodyIndexLimits, outline::BodyHandle, spans::SourceRange},
 };
 use std::{collections::BTreeSet, sync::Arc};
-const MODULE: &str = include_str!(
-    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs"
-);
-const NESTED: &str =
-    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs");
 fn source(text: &str, name: &str, edition: u16) -> (Database, PreparedSourceView, Digest) {
     let (mut db, view, definition) = world(text, name, edition);
     let selected = view
@@ -139,7 +133,7 @@ fn selected_path(
     views: &[&PreparedSourceView],
 ) -> ConstantPathSelection {
     let ConstantPathOutcome::Selected(path) =
-        ConstantPathSelection::capture_current(db, view, body, range, views, MAX_BYTES).unwrap()
+        ConstantPathSelection::capture_current(db, view, body, range, views, usize::MAX).unwrap()
     else {
         panic!("original source constant path unresolved")
     };
@@ -154,129 +148,11 @@ fn ready<'a>(poll: ScalarUsePreparation<'a>) -> PreparedScalarConstantUse<'a> {
 }
 
 #[test]
-fn store_session_actual_source_scalar_site_refuses_foreign_store_before_query() {
-    let text = format!("{NESTED}\nfn scalar_use(){{let actual=X;}}");
-    let (mut db, view, definition) = source(&text, "X", 2024);
-    let result = result(&db, &view, definition);
-    let mut sa = GuestStore::new(1, 10000, 4 << 20).unwrap();
-    let mut sb = GuestStore::new(1, 10000, 4 << 20).unwrap();
-    let (a, body, range) = source_frame(&db, &view, &text, "X", &mut sa);
-    let (b, _, _) = source_frame(&db, &view, &text, "X", &mut sb);
-    assert_eq!(a.constant_frame_anchor(), b.constant_frame_anchor());
-    let views = [&view];
-    let path = selected_path(&db, &view, &body, range, &views);
-    let sources = ScalarUseSources {
-        caller: &view,
-        views: &views,
-        target: &view,
-        result: &result,
-        path: &path,
-    };
-    let site = ScalarConstantUseSite::capture_current(&db, &a, &sa, sources, MAX_BYTES).unwrap();
-    let before = (
-        db.trace.events.len(),
-        sb.budget().handles(),
-        sb.budget().bytes(),
-        b.fuel.snapshot().used,
-    );
-    assert!(
-        matches!(ScalarConstantUseSite::capture_current(&db, &a, &sb, sources, MAX_BYTES), Err(e) if e.code == "LRR-E-STALE-HANDLE")
-    );
-    assert!(
-        matches!(site.fetch_current(&mut db, &b, &sb, ConstLimits::default()), QueryPoll::Ready(Err(e)) if e.code == "LRR-E-CONST-USE")
-    );
-    assert_eq!(
-        before,
-        (
-            db.trace.events.len(),
-            sb.budget().handles(),
-            sb.budget().bytes(),
-            b.fuel.snapshot().used
-        )
-    );
-}
-#[test]
-fn unchanged_module_bits_and_nested_x_scalar_recipe_publish_with_one_charge_all_editions() {
-    for (original, name, needle, expected) in
-        [(MODULE, "BITS", "u8::BITS", 8), (NESTED, "X", "X", 22)]
-    {
-        let text = format!("{original}\nfn scalar_use(){{let actual={needle};}}");
-        for edition in [2015, 2018, 2021, 2024] {
-            let (mut db, view, definition) = source(&text, name, edition);
-            let result = result(&db, &view, definition);
-            let mut store = GuestStore::new(1, 10000, 4 << 20).unwrap();
-            let (mut frame, body, range) = source_frame(&db, &view, &text, needle, &mut store);
-            let views = [&view];
-            let path = selected_path(&db, &view, &body, range, &views);
-            let site = ScalarConstantUseSite::capture_current(
-                &db,
-                &frame,
-                &store,
-                ScalarUseSources {
-                    caller: &view,
-                    views: &views,
-                    target: &view,
-                    result: &result,
-                    path: &path,
-                },
-                MAX_BYTES,
-            )
-            .unwrap();
-            let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
-            let before = (
-                store.budget().handles(),
-                frame.fuel.snapshot().used,
-                db.trace.events.len(),
-            );
-            let recipe = ready(site.accept_poll(&db, &frame, &store, &query));
-            assert_eq!(
-                before,
-                (
-                    store.budget().handles(),
-                    frame.fuel.snapshot().used,
-                    db.trace.events.len()
-                )
-            );
-            let mut charges = 0;
-            recipe
-                .publish_with_opcode_charge(&mut frame, &mut store, |frame| {
-                    charges += 1;
-                    frame.fuel.charge()
-                })
-                .unwrap();
-            assert_eq!(charges, 1);
-            assert_eq!(frame.fuel.snapshot().used, 1);
-            let CellState::Live(value) =
-                store.state(frame.cell(site.destination).unwrap()).unwrap()
-            else {
-                panic!("scalar result not published")
-            };
-            assert_eq!(value.payload, expected);
-            assert_eq!(
-                frame.source_view_ref(site.destination).unwrap(),
-                Some(recipe.construction.source_term())
-            );
-            let mut duplicate_charges = 0;
-            assert!(
-                recipe
-                    .publish_with_opcode_charge(&mut frame, &mut store, |frame| {
-                        duplicate_charges += 1;
-                        frame.fuel.charge()
-                    })
-                    .is_err()
-            );
-            assert_eq!(duplicate_charges, 0);
-            // Source query + physical publication only. Original main's assert,
-            // struct/array and complete interpreter continuations remain unexecuted.
-        }
-    }
-}
-#[test]
 fn scalar_adapter_transport_only_needinput_and_readyerr_preserve_no_value_state() {
     let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
     let (db, view, definition) = source(text, "X", 2024);
     let result = result(&db, &view, definition);
-    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
     let views = [&view];
     let path = selected_path(&db, &view, &body, range, &views);
@@ -291,7 +167,7 @@ fn scalar_adapter_transport_only_needinput_and_readyerr_preserve_no_value_state(
             result: &result,
             path: &path,
         },
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     // Disclosed transport control: current scalar provider is input-complete.
@@ -338,7 +214,7 @@ fn genuine_cached_scalar_numeric_failure_remains_exact_diagnostic_without_recipe
     let text = "const BAD:u8=1u8/0u8;fn scalar_use(){let value=BAD;}fn main(){}";
     let (mut db, view, definition) = source(text, "BAD", 2024);
     let result = result(&db, &view, definition);
-    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (frame, body, range) = source_frame(&db, &view, text, "BAD", &mut store);
     let views = [&view];
     let path = selected_path(&db, &view, &body, range, &views);
@@ -353,7 +229,7 @@ fn genuine_cached_scalar_numeric_failure_remains_exact_diagnostic_without_recipe
             result: &result,
             path: &path,
         },
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
@@ -404,7 +280,7 @@ fn current_other_scalar_query_cannot_fill_selected_constant_recipe() {
         .def_key
         .fingerprint();
     let other = result(&db, &view, b);
-    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (frame, body, range) = source_frame(&db, &view, text, "A", &mut store);
     let views = [&view];
     let path = selected_path(&db, &view, &body, range, &views);
@@ -419,7 +295,7 @@ fn current_other_scalar_query_cannot_fill_selected_constant_recipe() {
             result: &selected,
             path: &path,
         },
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     let (other_frame, other_body, other_range) = source_frame(&db, &view, text, "B", &mut store);
@@ -435,7 +311,7 @@ fn current_other_scalar_query_cannot_fill_selected_constant_recipe() {
             result: &other,
             path: &other_path,
         },
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     let query = other_site.fetch_current(&mut db, &other_frame, &store, ConstLimits::default());
@@ -451,7 +327,7 @@ fn scalar_site_source_query_revision_and_worker_epoch_require_fresh_capture() {
         let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
         let (mut db, view, definition) = source(text, "X", 2024);
         let result = result(&db, &view, definition);
-        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let (frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
         let views = [&view];
         let path = selected_path(&db, &view, &body, range, &views);
@@ -466,7 +342,7 @@ fn scalar_site_source_query_revision_and_worker_epoch_require_fresh_capture() {
                 result: &result,
                 path: &path,
             },
-            MAX_BYTES,
+            usize::MAX,
         )
         .unwrap();
         let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
@@ -495,7 +371,7 @@ fn scalar_site_foreign_frame_and_changed_pc_refuse_before_opcode_charge() {
     let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
     let (mut db, view, definition) = source(text, "X", 2024);
     let result = result(&db, &view, definition);
-    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let (mut frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
     let views = [&view];
     let path = selected_path(&db, &view, &body, range, &views);
@@ -510,7 +386,7 @@ fn scalar_site_foreign_frame_and_changed_pc_refuse_before_opcode_charge() {
             result: &result,
             path: &path,
         },
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
@@ -542,7 +418,7 @@ fn scalar_site_metadata_and_array_readiness_refuse_without_query_or_guest_work()
     ] {
         let (db, view, definition) = source(text, name, 2024);
         let result = result(&db, &view, definition);
-        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let (frame, body, range) = source_frame(&db, &view, text, needle, &mut store);
         let views = [&view];
         let path = selected_path(&db, &view, &body, range, &views);
@@ -559,7 +435,7 @@ fn scalar_site_metadata_and_array_readiness_refuse_without_query_or_guest_work()
                     result: &result,
                     path: &path
                 },
-                if name == "X" { 1 } else { MAX_BYTES }
+                if name == "X" { 1 } else { usize::MAX }
             )
             .is_err()
         );
@@ -567,50 +443,47 @@ fn scalar_site_metadata_and_array_readiness_refuse_without_query_or_guest_work()
     }
 }
 #[test]
-fn scalar_charge_cancellation_or_exhaustion_never_publishes_reserved_value() {
-    for cancel in [false, true] {
-        let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
-        let (mut db, view, definition) = source(text, "X", 2024);
-        let result = result(&db, &view, definition);
-        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
-        let (mut frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
-        let views = [&view];
-        let path = selected_path(&db, &view, &body, range, &views);
-        let site = ScalarConstantUseSite::capture_current(
-            &db,
-            &frame,
-            &store,
-            ScalarUseSources {
-                caller: &view,
-                views: &views,
-                target: &view,
-                result: &result,
-                path: &path,
-            },
-            MAX_BYTES,
-        )
-        .unwrap();
-        let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
-        let recipe = ready(site.accept_poll(&db, &frame, &store, &query));
-        let before = store.budget().handles();
-        let mut charges = 0;
-        if !cancel {
-            frame.fuel = crate::vm::fuel::RunFuel::new(0).unwrap();
-        }
-        assert!(
-            recipe
-                .publish_with_opcode_charge(&mut frame, &mut store, |frame| {
-                    charges += 1;
-                    if cancel {
-                        frame.fuel.cancellation().cancel();
-                    }
-                    frame.fuel.charge()
-                })
-                .is_err()
-        );
-        assert_eq!(charges, 1);
-        assert_eq!(before, store.budget().handles());
-        assert!(frame.cell(site.destination).is_err());
-        assert_eq!(frame.source_view_ref(site.destination).unwrap(), None);
-    }
+fn scalar_charge_failure_never_publishes_reserved_value() {
+    let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
+    let (mut db, view, definition) = source(text, "X", 2024);
+    let result = result(&db, &view, definition);
+    let mut store = GuestStore::for_epoch(1).unwrap();
+    let (mut frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
+    let views = [&view];
+    let path = selected_path(&db, &view, &body, range, &views);
+    let site = ScalarConstantUseSite::capture_current(
+        &db,
+        &frame,
+        &store,
+        ScalarUseSources {
+            caller: &view,
+            views: &views,
+            target: &view,
+            result: &result,
+            path: &path,
+        },
+        usize::MAX,
+    )
+    .unwrap();
+    let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
+    let recipe = ready(site.accept_poll(&db, &frame, &store, &query));
+    let before = store.budget().handles();
+    let mut charges = 0;
+    // An opcode-entry failure (e.g. a counter overflow) must leave the
+    // reserved value unpublished; no fuel budget exists (E-R5-006).
+    assert!(
+        recipe
+            .publish_with_opcode_charge(&mut frame, &mut store, |_| {
+                charges += 1;
+                Err(crate::core::diagnostic::Diagnostic::new(
+                    "LRR-E-TEST-CHARGE",
+                    "injected opcode entry failure".into(),
+                ))
+            })
+            .is_err()
+    );
+    assert_eq!(charges, 1);
+    assert_eq!(before, store.budget().handles());
+    assert!(frame.cell(site.destination).is_err());
+    assert_eq!(frame.source_view_ref(site.destination).unwrap(), None);
 }

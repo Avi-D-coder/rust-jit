@@ -8,7 +8,6 @@ use crate::{
         provider::{Provided, SyntaxProvider},
         value::QueryValue,
     },
-    engine::telemetry::CacheBudgets,
     frontend::source_body_context,
     ir::pc::{NodeId, Phase},
     source::{
@@ -192,21 +191,10 @@ fn unchanged_local_structs_publish_selected_headers_for_the_shared_schema_query(
     }
 }
 #[test]
-fn local_header_publication_conflict_and_budget_refusals_are_atomic() {
+fn local_header_publication_conflict_refusal_is_atomic() {
     let (mut db, context) = setup(ORIGINAL, 2024);
     let definition = local(&context, "A");
-    db.run_budgets = Some(CacheBudgets {
-        query_bytes: 0,
-        ..CacheBudgets::default()
-    });
-    let before = stamps(&db);
-    let revision = db.revision;
-    assert!(matches!(db.publish_local_declaration(&context, definition),
-        QueryPoll::Ready(Err(error)) if error.code == "LRR-E-METADATA-LIMIT"));
-    assert_eq!(stamps(&db), before);
-    assert_eq!(db.revision, revision);
     absent(&db, definition);
-    db.run_budgets = None;
     let mut rows = source_rows(&db);
     let mut wrong = context.source().parsed().key();
     wrong.content = Digest([243; 32]);

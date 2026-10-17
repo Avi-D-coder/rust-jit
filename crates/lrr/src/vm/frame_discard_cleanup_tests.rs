@@ -66,9 +66,8 @@ fn context(expanded: bool) -> Context {
     };
     let (source, scope) = (*source, *scope);
     assert_eq!(source, owner);
-    let mut store = GuestStore::new(1, 10000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body.clone(), pc, &mut store).unwrap();
-    frame.set_fuel_limit(10000).unwrap();
     let mut ancestry = vec![];
     let mut cursor = Some(scope);
     while let Some(id) = cursor {
@@ -242,48 +241,4 @@ fn rustc_unit_pair_discard_dispatch_keeps_scope_and_owner_until_completion() {
     assert_eq!(c.frame.counters.operations_completed, 2);
     assert!(!c.frame.has_cleanup_activation());
     assert!(!c.frame.active_scopes.contains(&c.scope));
-}
-#[test]
-fn rustc_unit_pair_discard_cancellation_preserves_pending_owner_and_live_fields() {
-    let mut c = context(true);
-    reach_partial(&mut c);
-    let states: Vec<_> = c
-        .fields
-        .iter()
-        .map(|field| c.store.state(*field).unwrap())
-        .collect();
-    let before = (
-        c.frame.pc.clone(),
-        c.frame.counters.operations_started,
-        c.frame.counters.operations_completed,
-        c.frame.counters.cleanup_elements_completed,
-        c.store.budget().handles(),
-        c.frame.fuel_snapshot().used,
-    );
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.status, FrameStatus::Faulted);
-    assert_eq!(
-        (
-            c.frame.pc.clone(),
-            c.frame.counters.operations_started,
-            c.frame.counters.operations_completed,
-            c.frame.counters.cleanup_elements_completed,
-            c.store.budget().handles(),
-            c.frame.fuel_snapshot().used
-        ),
-        before
-    );
-    assert_eq!(
-        c.fields
-            .iter()
-            .map(|field| c.store.state(*field).unwrap())
-            .collect::<Vec<_>>(),
-        states
-    );
-    assert!(c.frame.has_cleanup_activation());
-    assert_eq!(c.frame.cell(c.source).unwrap(), c.root);
-    assert_eq!(c.store.state(c.root).unwrap(), CellState::Dropping);
-    assert_eq!(c.frame.active_scopes.last(), Some(&c.scope));
-    // Fatal cancellation never counts as guest panic or a successful fixture.
 }

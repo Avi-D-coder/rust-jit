@@ -7,16 +7,13 @@ use crate::{
     core::diagnostic::Diagnostic,
     db::value::{QueryValue, SourceArtifactRef},
     engine::telemetry::CacheUsage,
-    syntax::{body_index::BodyIndex, pattern_product::PatternProductPlan},
+    syntax::{body_index::BodyIndex, pattern_tree::PatternTree},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
 
-const MAX_ARTIFACTS: usize = 100_000;
-const MAX_REGISTRY_BYTES: usize = 32 * 1024 * 1024;
-const MAX_RETAINED_ARTIFACT_BYTES: usize = 128 * 1024 * 1024;
 // Includes a conservative BTree node allowance and the retirement lease.
 const ROW_BYTES: usize = 64 + std::mem::size_of::<(usize, RetainedSourceArtifact)>();
 const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
@@ -28,7 +25,7 @@ enum RetainedSourceArtifact {
     LocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     BodyEnvironment(Arc<super::super::BodyEnvironmentInput>),
     CompletedEnvironment(Arc<crate::expand::source_discovery::CompletedSourceEnvironment>),
-    Pattern(Arc<PatternProductPlan>),
+    Pattern(Arc<PatternTree>),
     StringLiteral(Arc<crate::syntax::string_literal::PreparedStringLiteral>),
 }
 impl RetainedSourceArtifact {
@@ -70,14 +67,8 @@ impl RetainedSourceArtifact {
 pub(super) struct SourcePlanPins {
     roots: BTreeMap<usize, RetainedSourceArtifact>,
     retained_bytes: usize,
-    #[cfg(test)]
-    artifact_count_limit: Option<usize>,
 }
 impl SourcePlanPins {
-    #[cfg(test)]
-    pub(super) fn set_test_artifact_limit(&mut self, maximum: usize) {
-        self.artifact_count_limit = Some(maximum.min(MAX_ARTIFACTS));
-    }
     #[cfg(test)]
     pub(super) fn registered_artifact_count(&self) -> usize {
         self.roots.len()
@@ -191,9 +182,6 @@ impl SourcePlanPins {
         &mut self,
         roots: impl Fn() -> I,
     ) -> Result<(), Diagnostic> {
-        let maximum = MAX_ARTIFACTS;
-        #[cfg(test)]
-        let maximum = self.artifact_count_limit.unwrap_or(maximum);
         // Preflight all new rows before publishing any. Repeated handles within
         // one recipe do not allocate repeated registry rows.
         let mut new = BTreeSet::new();
@@ -204,18 +192,8 @@ impl SourcePlanPins {
                 if new.insert(allocation) {
                     additional =
                         account_add(additional, account_add(ROW_BYTES, root.admission_bytes()?)?)?;
-                    if account_add(self.retained_bytes, additional)? > MAX_RETAINED_ARTIFACT_BYTES {
-                        return Err(limit());
-                    }
                 }
-                let count = self.roots.len().checked_add(new.len()).ok_or_else(limit)?;
-                if count > maximum
-                    || count
-                        .checked_mul(ROW_BYTES)
-                        .is_none_or(|n| n > MAX_REGISTRY_BYTES)
-                {
-                    return Err(limit());
-                }
+                self.roots.len().checked_add(new.len()).ok_or_else(limit)?;
             }
         }
         let retained_bytes = account_add(self.retained_bytes, additional)?;
@@ -427,20 +405,7 @@ impl Database {
         environment: &Arc<crate::expand::source_discovery::CompletedSourceEnvironment>,
     ) -> Result<(), Diagnostic> {
         self.require_source_preparation()?;
-        let row = self
-            .source_plan_pins
-            .extra_bytes(SourceArtifactRef::CompletedEnvironment(environment))?;
-        if row != 0 {
-            // Existing roots may share allocations; this standalone coordinator
-            // admission intentionally overcharges rather than assuming sharing.
-            let additional = account_add(row, environment.retained_metadata_bytes()?)?;
-            let usage = self.cache_usage()?;
-            if account_add(usage.memo_bytes, additional)?
-                > self.run_budgets.unwrap_or_default().query_bytes
-            {
-                return Err(limit());
-            }
-        }
+        // E-R5-006: no query byte budget; the OS bounds retained memory.
         self.source_plan_pins.register_completed(environment)
     }
     pub(super) fn account_source_artifacts(

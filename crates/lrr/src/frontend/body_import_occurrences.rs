@@ -68,9 +68,6 @@ impl PreparedMacroImportOccurrences {
         source: &AdmittedBodyContext,
         facts: &EnteredMacroFacts,
     ) -> Result<Self, Diagnostic> {
-        if facts.imports.len() > 100_000 {
-            return Err(crate::runtime::arena::resource());
-        }
         let mut rows = Vec::new();
         rows.try_reserve_exact(facts.imports.len())
             .map_err(|_| crate::runtime::arena::resource())?;
@@ -102,9 +99,7 @@ impl PreparedMacroImportOccurrences {
             // `use foo::{self as alias}`. Rename tokens never supply context.
             for node in leaf.syntax().ancestors() {
                 depth = depth
-                    .checked_add(1)
-                    .filter(|n| *n <= 256)
-                    .ok_or_else(crate::runtime::arena::resource)?;
+                    .checked_add(1)                    .ok_or_else(crate::runtime::arena::resource)?;
                 if ast::Use::can_cast(node.kind()) {
                     break;
                 }
@@ -116,9 +111,7 @@ impl PreparedMacroImportOccurrences {
                 };
                 loop {
                     depth = depth
-                        .checked_add(1)
-                        .filter(|n| *n <= 256)
-                        .ok_or_else(crate::runtime::arena::resource)?;
+                        .checked_add(1)                        .ok_or_else(crate::runtime::arena::resource)?;
                     let segment = path
                         .segment()
                         .ok_or_else(|| fault("macro import path segment absent"))?;
@@ -172,7 +165,6 @@ impl PreparedMacroImportOccurrences {
             |bytes, row| {
                 bytes
                     .checked_add(row.name.capacity())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(crate::runtime::arena::resource)
             },
         )?;

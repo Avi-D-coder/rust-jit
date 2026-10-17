@@ -18,6 +18,17 @@ use ra_ap_syntax::{
     ast::{self, HasName},
 };
 
+#[path = "declaration_scan/trait_headers.rs"]
+mod trait_headers;
+pub use trait_headers::{
+    AssociatedDeclarationHeader, AssociatedDeclarationKind, AssociatedDeclarationOwner,
+    DeclarationNameContext, DeclarationNameOccurrence, ScannedTrait,
+};
+
+#[cfg(test)]
+#[path = "declaration_scan/trait_header_tests.rs"]
+mod trait_header_tests;
+
 #[derive(Clone, Copy, Debug)]
 pub struct DeclarationScanLimits {
     pub nodes: usize,
@@ -29,11 +40,11 @@ pub struct DeclarationScanLimits {
 impl Default for DeclarationScanLimits {
     fn default() -> Self {
         Self {
-            nodes: 1_000_000,
-            impls: 1_000_000,
-            producers: 100_000,
-            depth: 256,
-            metadata_bytes: 32 * 1024 * 1024,
+            nodes: usize::MAX,
+            impls: usize::MAX,
+            producers: usize::MAX,
+            depth: usize::MAX,
+            metadata_bytes: usize::MAX,
         }
     }
 }
@@ -129,11 +140,6 @@ pub struct ScannedImport {
     pub attribute_inputs: Vec<Digest>,
 }
 #[derive(Clone, Debug)]
-pub struct AssociatedDeclarationHeader {
-    pub range: SourceRange,
-    pub header: Vec<TokenRecipe>,
-}
-#[derive(Clone, Debug)]
 pub struct ScannedImpl {
     /// Exact source attachment; distinct repeated headers remain distinct entries.
     pub identity: Digest,
@@ -152,6 +158,8 @@ pub struct DeclarationScan {
     cfg: Digest,
     generated_origin: Option<Digest>,
     impls: Vec<ScannedImpl>,
+    traits: Vec<ScannedTrait>,
+    associated_fragments: Vec<AssociatedDeclarationHeader>,
     producers: Vec<DeclarationProducer>,
     lexical_scopes: Vec<DeclarationLexicalScope>,
     macro_definitions: Vec<ScannedMacroDefinition>,
@@ -159,12 +167,15 @@ pub struct DeclarationScan {
     imports: Vec<ScannedImport>,
     cost: DeclarationScanCost,
     retained_bytes: usize,
+    /// The immutable completed scan's stable fingerprint, computed once.
+    fingerprint_memo: std::sync::OnceLock<Digest>,
 }
 impl std::fmt::Debug for DeclarationScan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeclarationScan")
             .field("fingerprint", &self.fingerprint())
             .field("impl_count", &self.impls.len())
+            .field("trait_count", &self.traits.len())
             .field("producer_count", &self.producers.len())
             .finish()
     }
@@ -187,6 +198,14 @@ impl DeclarationScan {
     }
     pub fn impls(&self) -> &[ScannedImpl] {
         &self.impls
+    }
+    pub fn traits(&self) -> &[ScannedTrait] {
+        &self.traits
+    }
+    /// Direct associated-slot output facts. Actual parent declaration attachment
+    /// remains in GeneratedDeclarations; this is never a guessed trait/impl owner.
+    pub fn associated_fragments(&self) -> &[AssociatedDeclarationHeader] {
+        &self.associated_fragments
     }
     pub fn producers(&self) -> &[DeclarationProducer] {
         &self.producers
@@ -216,7 +235,16 @@ fn position(e: &mut StableEncoder, r: SourceRange) {
 }
 impl StableEncode for DeclarationScan {
     const DOMAIN: &'static str =
-        "lrr/v2/declaration-skeleton-with-scoped-module-bindings-and-token-editions";
+        "lrr/v3/declaration-skeleton-with-trait-and-associated-source-facts";
+    // A scan is immutable once `scan_declarations_in_scope` returns it; the
+    // fingerprint is never requested while the scan is being built.
+    fn fingerprint(&self) -> Digest {
+        *self.fingerprint_memo.get_or_init(|| {
+            let mut encoder = StableEncoder::new(Self::DOMAIN);
+            self.encode_fields(&mut encoder);
+            encoder.finish()
+        })
+    }
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.string(self.path.as_str());
         e.record(&self.parse);
@@ -229,7 +257,24 @@ impl StableEncode for DeclarationScan {
             position(e, h.range);
             e.record(&h.scope);
             e.sequence(&h.containers, |e, r| position(e, *r));
+            e.sequence(&h.associated, trait_headers::encode_associated);
         });
+        e.sequence(&self.traits, |e, row| {
+            e.digest(row.identity);
+            e.digest(row.header_identity);
+            e.option(&row.name, trait_headers::encode_name);
+            position(e, row.range);
+            e.sequence(&row.header, |e, token| e.record(token));
+            e.option(&row.generic_params, |e, r| position(e, *r));
+            e.option(&row.where_clause, |e, r| position(e, *r));
+            e.option(&row.supertraits, |e, r| position(e, *r));
+            e.sequence(&row.associated, trait_headers::encode_associated);
+            e.record(&row.scope);
+            e.sequence(&row.containers, |e, r| position(e, *r));
+            e.record(&row.lexical_scope);
+            e.sequence(&row.attribute_inputs, |e, id| e.digest(*id));
+        });
+        e.sequence(&self.associated_fragments, trait_headers::encode_associated);
         e.sequence(&self.producers, |e, p| {
             e.digest(p.identity);
             e.u8(match p.kind {
@@ -333,7 +378,6 @@ impl Budget {
                 .cost
                 .inspected_tokens
                 .checked_add(1)
-                .filter(|n| *n <= 2_000_000)
                 .ok_or_else(limit)?;
             self.charge(std::mem::size_of::<TokenRecipe>() + token.text().len() + 32)?;
             result.try_reserve_exact(1).map_err(|_| limit())?;
@@ -398,9 +442,6 @@ fn lexical_context(
                     "declaration module name is invalid".into(),
                 )
             })?;
-            if scope.module_path.len() >= 256 {
-                return Err(limit());
-            }
             scope
                 .module_path
                 .try_reserve_exact(1)
@@ -554,7 +595,6 @@ impl ParsedFile {
             || limits.producers > ceiling.producers
             || limits.depth > ceiling.depth
             || limits.metadata_bytes > ceiling.metadata_bytes
-            || scope.module_path.len() > 256
         {
             return Err(limit());
         }
@@ -580,6 +620,8 @@ impl ParsedFile {
             cfg: cfg.fingerprint(),
             generated_origin: self.generated_origin,
             impls: Vec::new(),
+            traits: Vec::new(),
+            associated_fragments: Vec::new(),
             producers: Vec::new(),
             lexical_scopes: Vec::new(),
             macro_definitions: Vec::new(),
@@ -587,6 +629,7 @@ impl ParsedFile {
             imports: Vec::new(),
             cost: DeclarationScanCost::default(),
             retained_bytes: 0,
+            fingerprint_memo: std::sync::OnceLock::new(),
         };
         let root = self.parsed.tree();
         let root_range = range(root.syntax().text_range());
@@ -691,6 +734,15 @@ impl ParsedFile {
                 };
                 if let Some(name) = &unqualified_attribute {
                     budget.charge(name.capacity().checked_add(32).ok_or_else(limit)?)?;
+                }
+                // Builtin inert and tool attributes are never macro calls.
+                let path_text: String = path.iter().map(|token| token.text.as_str()).collect();
+                if unqualified_attribute
+                    .as_deref()
+                    .is_some_and(super::outline::is_builtin_inert_attribute)
+                    || super::outline::is_tool_attribute(&path_text)
+                {
+                    continue;
                 }
                 let (scope, containers) = lexical_context(&node, &scan.scope, &mut budget)?;
                 scan.producers.try_reserve_exact(1).map_err(|_| limit())?;
@@ -848,33 +900,55 @@ impl ParsedFile {
                 });
                 continue;
             }
+            if let Some(item) = ast::Trait::cast(node.clone()) {
+                if scan
+                    .traits
+                    .len()
+                    .checked_add(scan.impls.len())
+                    .ok_or_else(limit)?
+                    >= limits.impls
+                {
+                    return Err(limit());
+                }
+                let row = trait_headers::capture_trait(
+                    self,
+                    &scan,
+                    cfg,
+                    &item,
+                    lexical_scope,
+                    &mut budget,
+                )?;
+                trait_headers::reserve_one(&mut scan.traits, &mut budget)?;
+                scan.traits.push(row);
+            }
             if let Some(item) = ast::Impl::cast(node.clone()) {
-                if scan.impls.len() >= limits.impls {
+                if scan
+                    .traits
+                    .len()
+                    .checked_add(scan.impls.len())
+                    .ok_or_else(limit)?
+                    >= limits.impls
+                {
                     return Err(limit());
                 }
                 budget.charge(std::mem::size_of::<ScannedImpl>() + 64)?;
                 let list = item.assoc_item_list();
                 let header =
                     budget.tokens(&node, list.as_ref().map(|l| l.syntax().text_range()))?;
-                let mut associated = Vec::new();
-                if let Some(list) = list {
-                    for member in list
-                        .syntax()
-                        .children()
-                        .filter(|n| ast::AssocItem::can_cast(n.kind()))
-                    {
-                        if !enabled(&member, cfg)?.0 {
-                            continue;
-                        }
-                        budget.charge(std::mem::size_of::<AssociatedDeclarationHeader>() + 32)?;
-                        let header = budget.tokens(&member, body_exclusion(&member))?;
-                        associated.try_reserve_exact(1).map_err(|_| limit())?;
-                        associated.push(AssociatedDeclarationHeader {
-                            range: range(member.text_range()),
-                            header,
-                        });
-                    }
-                }
+                let selected = range(node.text_range());
+                let identity = source_identity(&scan, selected, 0);
+                let associated = match list.as_ref() {
+                    Some(list) => trait_headers::associated_list(
+                        self,
+                        &scan,
+                        cfg,
+                        list,
+                        AssociatedDeclarationOwner::Impl(identity),
+                        lexical_scope,
+                        &mut budget,
+                    )?,
+                    None => Vec::new(),
+                };
                 let mut e = StableEncoder::new("lrr/v2/scanned-impl-header");
                 let (scope, containers) = lexical_context(&node, &scan.scope, &mut budget)?;
                 e.record(&self.profile);
@@ -883,10 +957,9 @@ impl ParsedFile {
                 e.sequence(&associated, |e, h| {
                     e.sequence(&h.header, |e, t| e.record(t))
                 });
-                let selected = range(node.text_range());
                 scan.impls.try_reserve_exact(1).map_err(|_| limit())?;
                 scan.impls.push(ScannedImpl {
-                    identity: source_identity(&scan, selected, 0),
+                    identity,
                     header_identity: e.finish(),
                     range: selected,
                     header,
@@ -894,6 +967,34 @@ impl ParsedFile {
                     scope,
                     containers,
                 });
+            }
+            if root_kind == DeclarationScopeKind::AssociatedItems
+                && node.parent().is_some_and(|parent| {
+                    matches!(
+                        parent.kind(),
+                        ra_ap_syntax::SyntaxKind::SOURCE_FILE
+                            | ra_ap_syntax::SyntaxKind::MACRO_ITEMS
+                    )
+                })
+                && ast::AssocItem::can_cast(node.kind())
+            {
+                if scan.associated_fragments.len() >= limits.nodes {
+                    return Err(limit());
+                }
+                let row = trait_headers::associated(
+                    self,
+                    &scan,
+                    cfg,
+                    &node,
+                    AssociatedDeclarationOwner::Fragment {
+                        grammar: self.declaration_grammar.unwrap_or(GrammarSlot::Items),
+                        lexical_scope: root_scope,
+                    },
+                    lexical_scope,
+                    &mut budget,
+                )?;
+                trait_headers::reserve_one(&mut scan.associated_fragments, &mut budget)?;
+                scan.associated_fragments.push(row);
             }
             if let Some(call) = ast::MacroCall::cast(node.clone()) {
                 if scan.producers.len() >= limits.producers {
@@ -1191,7 +1292,7 @@ mod scope_kind_tests {
         assert_eq!(digests.len(), kinds.len());
         assert_eq!(
             DeclarationScan::DOMAIN,
-            "lrr/v2/declaration-skeleton-with-scoped-module-bindings-and-token-editions"
+            "lrr/v3/declaration-skeleton-with-trait-and-associated-source-facts"
         );
         let parsed = generated("#[m] fn cold(){}", GrammarSlot::Items);
         let scans = kinds.map(|kind| capture(&parsed, Some(kind)));

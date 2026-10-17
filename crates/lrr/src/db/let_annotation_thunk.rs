@@ -1,0 +1,182 @@
+//! Cold selection of a `let` statement's composite or non-primitive
+//! annotation through the entered Type service: each written named leaf is its own indexed Type
+//! occurrence's `PreparedTypePlan`, so a local, imported, qualified or
+//! macro-emitted Type name resolves exactly as at any other Type use. The
+//! installed recipe retains the joined input closure of every selected leaf.
+use super::{
+    dependency::{InputKey, InputValue},
+    key::QueryKey,
+    memo::{Database, PreparedInputGuard},
+    poll::QueryPoll,
+    provider::{Provided, SyntaxProvider},
+    value::QueryValue,
+};
+use crate::{
+    core::diagnostic::Diagnostic,
+    ir::{pc::PcKey, written_type::WrittenType},
+    syntax::{
+        body_index::BodyIndex,
+        outline::BodyHandle,
+        parse::ParsedFile,
+        thunks_let_annotations::{AnnotationShape, LetAnnotation},
+    },
+    traits::term::TyTerm,
+};
+use std::sync::Arc;
+macro_rules! ready {
+    ($value:expr) => {
+        match $value {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+    };
+}
+fn fault(message: &str) -> Diagnostic {
+    Diagnostic::new("LRR-E-TYPE-CONTEXT", message.into())
+}
+fn unsupported(message: &str) -> Diagnostic {
+    Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
+}
+pub(super) fn thunk(
+    db: &mut Database,
+    parsed: &ParsedFile,
+    body: &BodyHandle,
+    index: &BodyIndex,
+    pc: &PcKey,
+) -> QueryPoll<Option<Provided>> {
+    let environment = db.input(&InputKey::BodyEnvironment(pc.body.clone()));
+    let Some(InputValue::BodyEnvironment(_)) = environment.as_deref() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let site = match parsed.let_annotation_site(body, index, pc) {
+        Ok(Some(site)) => site,
+        Ok(None) => return QueryPoll::Ready(Ok(None)),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let mut guards = Vec::new();
+    let written = ready!(select(db, pc, &site.shape, &mut guards));
+    let guard = {
+        let borrowed: Vec<&PreparedInputGuard> = guards.iter().map(Arc::as_ref).collect();
+        match PreparedInputGuard::join(&borrowed) {
+            Ok(guard) => guard,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        }
+    };
+    let annotation = LetAnnotation {
+        range: site.range,
+        written: Arc::new(written),
+    };
+    let recipe = match parsed.initial_thunk_with_let_annotation(body, index, pc, &annotation) {
+        Ok(recipe) => recipe,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    QueryPoll::Ready(
+        recipe
+            .with_shared_prepared_inputs(Arc::new(guard))
+            .map(|recipe| {
+                Some(Provided {
+                    value: QueryValue::Thunk(Box::new(recipe)),
+                    cacheable: true,
+                })
+            }),
+    )
+}
+pub(crate) fn select(
+    db: &mut Database,
+    pc: &PcKey,
+    shape: &AnnotationShape,
+    guards: &mut Vec<Arc<PreparedInputGuard>>,
+) -> QueryPoll<WrittenType> {
+    QueryPoll::Ready(Ok(match shape {
+        AnnotationShape::Leaf(node) => {
+            let key = PcKey {
+                body: pc.body.clone(),
+                node: node.0,
+                phase: 0,
+            };
+            let prepared = ready!(db.fetch(&SyntaxProvider, QueryKey::PreparedTypePlan(key)));
+            let QueryValue::PreparedTypePlan(plan) = prepared.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault(
+                    "annotation prepared Type plan variant differs",
+                )));
+            };
+            if !prepared.cacheable {
+                return QueryPoll::Ready(Err(fault(
+                    "annotation Type dependencies are not retained",
+                )));
+            }
+            guards.push(Arc::clone(plan.guard()));
+            let source = plan.goal().source_type();
+            if let Some(primitive) = source.primitive() {
+                WrittenType::Primitive(primitive)
+            } else if matches!(source.source(), TyTerm::Str) {
+                WrittenType::Str
+            } else if matches!(source.source(), TyTerm::Nominal(_, args) if args.is_empty()) {
+                WrittenType::Nominal(Box::new(source.clone()))
+            } else {
+                return QueryPoll::Ready(Err(unsupported(
+                    "local annotation Type requires further source type integration",
+                )));
+            }
+        }
+        // `()` is the unit primitive, the one canonical spelling.
+        AnnotationShape::Tuple(members) if members.is_empty() => {
+            WrittenType::Primitive(crate::ir::op::PrimitiveType::Unit)
+        }
+        AnnotationShape::Tuple(members) => {
+            let mut written = Vec::new();
+            for member in members {
+                written.push(ready!(select(db, pc, member, guards)));
+            }
+            WrittenType::Tuple(written)
+        }
+        AnnotationShape::Array(element, len) => {
+            WrittenType::Array(Box::new(ready!(select(db, pc, element, guards))), *len)
+        }
+        AnnotationShape::Slice(element) => {
+            WrittenType::Slice(Box::new(ready!(select(db, pc, element, guards))))
+        }
+        AnnotationShape::Ref {
+            region,
+            mutable,
+            target,
+        } => WrittenType::Ref {
+            region: region.clone(),
+            mutable: *mutable,
+            target: Box::new(ready!(select(db, pc, target, guards))),
+        },
+        AnnotationShape::Infer => WrittenType::Infer,
+        AnnotationShape::Dyn(node) => {
+            let principal = ready!(
+                crate::frontend::nominal_constructors::dyn_annotation_principal(
+                    db, &pc.body, *node
+                )
+            );
+            guards.extend(principal.guards);
+            WrittenType::Dyn(crate::traits::term::DynSchemaKey(principal.identity))
+        }
+        AnnotationShape::Generic(node, arguments) => {
+            let base = ready!(
+                crate::frontend::nominal_constructors::generic_annotation_base(db, &pc.body, *node)
+            );
+            if base.type_parameters != arguments.len() {
+                return QueryPoll::Ready(Err(Diagnostic::new(
+                    "LRR-E-GENERIC-BINDING",
+                    "written type argument count differs from the declaration".into(),
+                )));
+            }
+            guards.extend(base.guards);
+            let mut args = Vec::new();
+            for argument in arguments {
+                args.push(ready!(select(db, pc, argument, guards)));
+            }
+            WrittenType::Generic {
+                identity: base.identity,
+                definition: base.definition,
+                schema: base.schema,
+                args,
+            }
+        }
+    }))
+}

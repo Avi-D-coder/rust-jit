@@ -152,9 +152,6 @@ impl IncludeArguments {
         descriptor: &CompileInputDescriptor,
         input: &TokenForest,
     ) -> Result<Self, Diagnostic> {
-        if input.allocated_bytes().map_err(|e| fault(e.to_string()))? > 64 * 1024 * 1024 {
-            return Err(fault("include operand metadata exceeds limit"));
-        }
         if !matches!(
             descriptor.kind(),
             CompileInputKind::Include
@@ -255,9 +252,6 @@ impl IncludeArguments {
                 return Err(fault("nested include expansion record key mismatch"));
             }
             let mut resumed = Self::parse(descriptor, &record.tokens()?)?;
-            if self.producers.len() >= 256 {
-                return Err(fault("include operand producer chain exceeds limit"));
-            }
             let mut producer_bytes = (self.producers.len() + 1)
                 * std::mem::size_of::<(crate::expand::identity::ExpansionKey, Digest)>();
             for key in self
@@ -268,7 +262,6 @@ impl IncludeArguments {
             {
                 producer_bytes = producer_bytes
                     .checked_add(crate::expand::record::key_heap_bytes(key))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("include producer metadata exceeds limit"))?;
             }
             resumed.root_tokens = self.root_tokens;
@@ -303,13 +296,10 @@ impl IncludeArguments {
             dependency::{InputKey, InputValue},
             poll::{ExpansionRequest, InputRequest, QueryPoll},
         };
-        match original.allocated_bytes() {
-            Ok(bytes) if bytes <= 64 * 1024 * 1024 => {}
-            _ => {
-                return QueryPoll::Ready(Err(fault(
-                    "resolved include original metadata exceeds limit",
-                )));
-            }
+        if original.allocated_bytes().is_err() {
+            return QueryPoll::Ready(Err(fault(
+                "resolved include original metadata overflows",
+            )));
         }
         let wire = match original.encode() {
             Ok(wire) => wire,

@@ -32,7 +32,6 @@ use crate::{
     traits::term::TyTerm,
     vm::frame::{Frame, FrameStatus},
 };
-const MAX_BYTES: usize = 32 << 20;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-USE", message.into())
 }
@@ -97,7 +96,7 @@ impl<'a> ScalarConstantUseSite<'a> {
                         .checked_mul(std::mem::size_of::<&PreparedSourceView>())?,
                 )
             })
-            .filter(|n| *n <= byte_limit && byte_limit <= MAX_BYTES)
+            .filter(|n| *n <= byte_limit)
             .ok_or_else(limit)?;
         frame.require_store(store)?;
         sources.result.revalidate(db, sources.target)?;
@@ -232,7 +231,7 @@ impl<'a> ScalarConstantUseSite<'a> {
             self.sources.result.admission(),
             &scalar.wire_type(),
             limits,
-            bytes.min(1 << 20),
+            bytes,
         )
     }
     fn diagnostic(&self, error: &Diagnostic) -> Diagnostic {

@@ -1,0 +1,48 @@
+{
+  "kind": "common-cold-prepared-input-missing-descendant-repair",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "0b0b0dfbfdef49b55155b49c3c7a5891d25c10eab51656c810f99caf2b8ce9eb",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "bytes": 27212,
+      "sha256": "0b0b0dfbfdef49b55155b49c3c7a5891d25c10eab51656c810f99caf2b8ce9eb"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/04-calls-source-views/common-cold-prepared-input-repair-handoff.md",
+    "sha256": "df481cbe565e9252885ae1a34a16d362485f33fed33ba6dc647286f326bdc684"
+  },
+  "api": "Database::prepare_input_guard(&mut self,provider:&impl Provider,key:&QueryKey,expected:Digest)->QueryPoll<PreparedInputGuard>",
+  "root_integration": {
+    "path": "crates/lrr/src/engine/install.rs",
+    "sha256": "225fee71bce79122ed7a1c9a17e9d0c88e1cf0d97f668f43d90f8f835f6517be",
+    "scope": "Parent-owned cold callsite propagates ReadyErr/NeedInput before installation; not overlaid by this one-leaf component"
+  },
+  "predecessor": {
+    "path": "crates/lrr/src/db/prepared_inputs.rs",
+    "sha256": "b81f6eaa653e036a91e883158028272303705a4ecc2e764464893a1324bb0742",
+    "actual_test_failure": "bed679/1 exact_transitive_inputs_survive_memo_eviction_and_reject_changed_absence: zeroquerybudget contradicts mandatory currentinput pinnedfloor; corrected test floor preserves checks",
+    "source_review": "worktracks/evidence/2026-10-16-prepared-input-closure-source-review.json"
+  },
+  "test_selectors": [
+    "db::memo::prepared_inputs::tests::exact_transitive_inputs_survive_memo_eviction_and_reject_changed_absence",
+    "db::memo::prepared_inputs::tests::positive_changes_and_wrong_root_fingerprint_cannot_refresh_guard",
+    "db::memo::prepared_inputs::tests::retained_current_root_cold_repairs_only_its_evicted_child",
+    "db::memo::prepared_inputs::tests::missing_child_changed_output_or_real_demand_cannot_mint_a_guard"
+  ],
+  "limits": {
+    "dependency_edges": 100000,
+    "retained_fast_guard_bytes": 33554432,
+    "cold_repair_conservative_scratch_and_guard_bytes": 33554432
+  },
+  "invariant": "Only actual missing descendants permit cold provider work. Exact stored query fprints/cacheability +actual positive/negative leafstamps preserved. No stale root refresh, new authority, sidecache or hot provider call.",
+  "evidence_scope": "Pure query/memo protocol controls using existing synthetic key/value helpers; primary unchanged upstream A/B integration/runtime/cleanup remains separate. No actual test pass, speed claim, milestone or feature closure.",
+  "holds": [
+    "All four controls uncompiled/unexecuted on successor",
+    "Real guest suspension/Frame exact-once remains separate",
+    "Actual upstream suffix main2a3855/1 fails ordinary signature-to-local numeric constraint, root-owned repair; no call argument guard relaxed",
+    "Actual A/B fullfixture Drop and qualifiedprefix/macro-origin matrices remain separate",
+    "Inherited coarse source/seal dependency footprint stays mode7 hold"
+  ]
+}

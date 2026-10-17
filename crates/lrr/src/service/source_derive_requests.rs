@@ -37,8 +37,17 @@ pub struct SourceDeriveSelection {
     registry: TokenForest,
     site: Key,
     definition: MacroDefinition,
-    catalog: Arc<PreparedProcCatalog>,
+    executor: DeriveExecutor,
     receipts: Vec<Digest>,
+}
+/// Who expands the selected derive: the run's procedural catalog export, or
+/// the pinned adapter's builtin expander for a library builtin derive.
+enum DeriveExecutor {
+    Procedural(Arc<PreparedProcCatalog>),
+    Builtin {
+        kind: lrr_expand_adapter::builtin_macros::BuiltinDeriveKind,
+        facts: lrr_expand_adapter::builtin_macros::DeriveContainerFacts,
+    },
 }
 impl SourceDeriveSelection {
     pub(crate) fn new(
@@ -51,10 +60,7 @@ impl SourceDeriveSelection {
         receipts: Vec<Digest>,
     ) -> Result<Self, Diagnostic> {
         let site = Key(input.selected().first_span.0);
-        if !registry.spans().iter().any(|s| s.key() == site)
-            || receipts.is_empty()
-            || receipts.len() > 4096
-        {
+        if !registry.spans().iter().any(|s| s.key() == site) || receipts.is_empty() {
             return Err(fault(
                 "source derive site or helper receipt inventory differs",
             ));
@@ -74,11 +80,146 @@ impl SourceDeriveSelection {
             registry,
             site,
             definition: request.definition.clone(),
-            catalog,
+            executor: DeriveExecutor::Procedural(catalog),
             receipts,
         };
         selected.metadata_bytes()?;
         Ok(selected)
+    }
+    /// A library builtin derive occurrence (`#[derive(Clone)]` resolving to
+    /// `core::clone::Clone`), selected by its exact definition identity.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn builtin(
+        source: &PreparedSourceView,
+        scope: ScopeKey,
+        input: DeriveOccurrenceInput,
+        registry: TokenForest,
+        origin: DeriveDeclarationOrigin,
+        definition: MacroDefinition,
+        kind: lrr_expand_adapter::builtin_macros::BuiltinDeriveKind,
+        facts: lrr_expand_adapter::builtin_macros::DeriveContainerFacts,
+        receipts: Vec<Digest>,
+    ) -> Result<Self, Diagnostic> {
+        let site = Key(input.selected().first_span.0);
+        if !registry.spans().iter().any(|s| s.key() == site) || receipts.is_empty() {
+            return Err(fault(
+                "builtin derive site or helper receipt inventory differs",
+            ));
+        }
+        let selected = Self {
+            source: source.share(),
+            origin,
+            scope,
+            input,
+            registry,
+            site,
+            definition,
+            executor: DeriveExecutor::Builtin { kind, facts },
+            receipts,
+        };
+        selected.metadata_bytes()?;
+        Ok(selected)
+    }
+    pub(crate) fn is_builtin(&self) -> bool {
+        matches!(self.executor, DeriveExecutor::Builtin { .. })
+    }
+    fn catalog(&self) -> Result<&Arc<PreparedProcCatalog>, Diagnostic> {
+        match &self.executor {
+            DeriveExecutor::Procedural(catalog) => Ok(catalog),
+            DeriveExecutor::Builtin { .. } => Err(fault(
+                "builtin derive selection has no procedural export",
+            )),
+        }
+    }
+    /// The in-process expansion request of a builtin derive occurrence: the
+    /// exact item input joined with the derive path's span record.
+    pub(crate) fn builtin_request(
+        &self,
+        compile_env: Digest,
+        engine: Digest,
+    ) -> Result<crate::expand::source_declarative::SourceDeclarativeRequest, Diagnostic> {
+        let DeriveExecutor::Builtin { kind, facts } = &self.executor else {
+            return Err(fault("procedural derive selection has no builtin expander"));
+        };
+        let site = self
+            .registry
+            .spans()
+            .iter()
+            .find(|span| span.key() == self.site)
+            .ok_or_else(|| fault("builtin derive site absent"))?;
+        let item = TokenForest::decode(
+            &self
+                .input
+                .item()
+                .encode()
+                .map_err(|e| fault(&e.to_string()))?,
+        )
+        .map_err(|e| fault(&e.message))?;
+        let [lrr_expand_adapter::token_wire::TokenTree::Group { .. }] = item.roots() else {
+            return Err(fault("builtin derive item input root differs"));
+        };
+        // The site's context chain joins the item's own records.
+        let mut contexts = std::collections::BTreeMap::new();
+        for row in item.contexts() {
+            contexts.insert(row.key(), row.clone());
+        }
+        let registry_contexts: std::collections::BTreeMap<_, _> = self
+            .registry
+            .contexts()
+            .iter()
+            .map(|row| (row.key(), row))
+            .collect();
+        let mut pending = vec![site.context];
+        while let Some(key) = pending.pop() {
+            if contexts.contains_key(&key) {
+                continue;
+            }
+            let row = registry_contexts
+                .get(&key)
+                .ok_or_else(|| fault("builtin derive site context absent"))?;
+            if let Some(parent) = row.parent {
+                pending.push(parent);
+            }
+            contexts.insert(key, (*row).clone());
+        }
+        let mut spans = std::collections::BTreeMap::new();
+        for row in item.spans() {
+            spans.insert(row.key(), row.clone());
+        }
+        spans.insert(site.key(), site.clone());
+        let input = TokenForest::new(
+            item.roots().to_vec(),
+            contexts.into_values().collect(),
+            spans.into_values().collect(),
+        )
+        .map_err(|e| fault(&e.message))?;
+        let encoded = input.encode().map_err(|e| fault(&e.message))?;
+        let mut tokens = StableEncoder::new("lrr/v2/builtin-derive-input");
+        tokens.bytes(&encoded);
+        tokens.u8(u8::from(facts.derives_copy));
+        tokens.u8(u8::from(facts.derives_ord));
+        let key = crate::expand::identity::ExpansionKey {
+            macro_identity: MacroIdentity::BuiltinDerive {
+                definition: self.definition.identity,
+            },
+            invocation: self.input.identity(),
+            input_tokens: tokens.finish(),
+            consumer_compile_env: compile_env,
+            parent_context: Digest(site.context.0),
+            definition_edition: self.definition.definition_edition,
+            call_edition: self.source.outline().profile.edition,
+            grammar: crate::expand::identity::GrammarSlot::Items,
+            engine_version: engine,
+            procedural_epoch: None,
+        };
+        crate::expand::source_declarative::SourceDeclarativeRequest::builtin_derive(
+            key,
+            input,
+            self.site,
+            self.definition.defining_unit,
+            *kind,
+            *facts,
+        )
     }
     pub(crate) fn declaration_site_span(
         &self,
@@ -135,7 +276,6 @@ impl SourceDeriveSelection {
                 n.checked_add(receipt_capacity.checked_mul(std::mem::size_of::<Digest>())?)
             })
             .and_then(|n| n.checked_add(origin.metadata_bytes().ok()?))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("source derive selection metadata limit"))?;
         Ok(bytes)
     }
@@ -143,16 +283,18 @@ impl SourceDeriveSelection {
         &self,
         request: &PreparedFunctionRequest,
     ) -> Result<bool, Diagnostic> {
-        let selected = self
-            .catalog
+        let DeriveExecutor::Procedural(catalog) = &self.executor else {
+            return Ok(false);
+        };
+        let selected = catalog
             .select(&self.definition, ProceduralKind::Derive)?
             .ok_or_else(|| fault("source derive export absent"))?;
         Ok(request.source_derive_proof() == Some(self.fingerprint())
             && request.source() == self.source()
             && request.key().invocation == self.input.identity()
             && &request.key().macro_identity == selected.identity()
-            && request.key().consumer_compile_env == self.catalog.environment()
-            && request.key().procedural_epoch == Some(self.catalog.epoch()))
+            && request.key().consumer_compile_env == catalog.environment()
+            && request.key().procedural_epoch == Some(catalog.epoch()))
     }
     /// Retain the actual occurrence token anchor after exact request binding.
     pub(crate) fn diagnostic_origin(
@@ -168,12 +310,6 @@ impl SourceDeriveSelection {
             .iter()
             .find(|span| span.key() == self.site)
             .ok_or_else(|| fault("source derive failure origin site absent"))?;
-        if span.source.path.len() > 64 * 1024 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "source derive origin path limit".into(),
-            ));
-        }
         let mut path = String::new();
         path.try_reserve_exact(span.source.path.len())
             .map_err(|_| {
@@ -191,7 +327,7 @@ impl SourceDeriveSelection {
             },
             range: crate::syntax::spans::SourceRange::checked(span.start, span.end)?,
         };
-        self.catalog
+        self.catalog()?
             .source_failure_origin(&self.definition, request.key(), invocation)
     }
     pub(crate) fn prepare(
@@ -199,14 +335,14 @@ impl SourceDeriveSelection {
         session: &MacroSession,
         context: &DemandContext,
     ) -> Result<PreparedFunctionRequest, Diagnostic> {
+        let catalog = self.catalog()?;
         if context.unit != self.scope.crate_key
-            || session.export_catalog(context)?.fingerprint() != self.catalog.fingerprint()
+            || session.export_catalog(context)?.fingerprint() != catalog.fingerprint()
         {
             return Err(fault("source derive session/catalog/consumer differs"));
         }
         self.metadata_bytes()?;
-        let selected = self
-            .catalog
+        let selected = catalog
             .select(&self.definition, ProceduralKind::Derive)?
             .ok_or_else(|| fault("source derive selected export absent"))?;
         let MacroIdentity::Procedural {
@@ -266,7 +402,14 @@ impl StableEncode for SourceDeriveSelection {
         e.record(&self.origin);
         e.record(&self.scope);
         e.digest(self.input.identity());
-        e.digest(self.catalog.fingerprint());
+        match &self.executor {
+            DeriveExecutor::Procedural(catalog) => e.digest(catalog.fingerprint()),
+            DeriveExecutor::Builtin { kind, facts } => {
+                e.string(kind.name());
+                e.u8(u8::from(facts.derives_copy));
+                e.u8(u8::from(facts.derives_ord));
+            }
+        }
         e.digest(self.definition.identity);
         e.digest(self.definition.defining_unit);
         e.u32(u32::from(self.definition.definition_edition));

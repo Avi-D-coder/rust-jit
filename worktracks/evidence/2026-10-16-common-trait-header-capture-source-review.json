@@ -1,0 +1,140 @@
+{
+  "schema": "lrr/source-review/common-trait-header-capture/v1",
+  "baseline_commit": "adb43b9b7dc5118d139a4c7a31e0271a2b9cff41",
+  "source": [
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan.rs",
+      "sha256": "22c0a2ef4c5aabee0b6f4d8ed283cf1ca17f864361c6c0834d83613833e6ec14",
+      "bytes": 54674
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan/trait_headers.rs",
+      "sha256": "385552dd364208e6ee40fef0f5bea2741f96ace3b4ce1987b68b433709a72a93",
+      "bytes": 12404
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan/trait_header_tests.rs",
+      "sha256": "37ef41247af8ef53dafd5ba6b9c67fa4cfbba79359516cd92c208a2e465d2a92",
+      "bytes": 11170
+    }
+  ],
+  "status": "source-only intermediate prerequisite; uncompiled and unexecuted; no milestone/runtime acceptance",
+  "precode": "worktracks/evidence/2026-10-16-common-trait-header-capture-precode.json",
+  "primary_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-as-fn-body.rs",
+    "sha256": "6ae5e64fd603f1817e3e5a8b69c09b7b72cf39ab8ecc8d58df6706c3b9bf3797",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "acceptance": "unchanged input only; no fullmain execution by this packet"
+  },
+  "actual_entrypoints": [
+    "ParsedFile::scan_declarations_in_scope",
+    "trait_headers::capture_trait",
+    "trait_headers::associated_list/associated",
+    "ParsedFile::token_edition/identifier_context",
+    "Budget::tokens/body_exclusion",
+    "GeneratedDeclarations::admit actual generated-slot controls"
+  ],
+  "authority": {
+    "raw_facts": "Trait/Impl owner points to exact source entry; Fragment owner retains actual grammar and root lexical scope, not a fabricated enclosing declaration.",
+    "names": "Raw AST spelling/range/owning token edition and actual physical context, Original or explicit UnattachedGenerated. No normalization wrapper, published DefKey, trait identity, method selection or namespace absence.",
+    "producer": "MacroProducer uses actual existing source-entry tag2; producer still must complete through existing discovery.",
+    "body": "Only function-body and const-initializer ranges; token capture excludes those executable children. No body index/preparation/type/query/VM changes.",
+    "future": "Canonical Outline/DefKey/source/header and actual GeneratedDeclarations parent inventory/producer joins remain mandatory before member/call authority."
+  },
+  "encoding": {
+    "preserved": "Existing lrr/v2/declaration-source-entry tags0-5 and lrr/v2/scanned-impl-header exact semantic field order unchanged. Impl header still profile+scope+raw header+associated raw token headers, excludes bodies.",
+    "new": "Source-entry tags6trait/7associated; lrr/v1/scanned-trait-header profile/scope/raw header/associated raw headers.",
+    "migration": "DeclarationScan domain v3 includes actual trait and associated source facts. All scan fingerprints, generated declaration bindings/parse identities and downstream declaration job/dependency keys must be reconstructed on new source. Old validation fingerprints remain historical; no witness hashes changed."
+  },
+  "cost": {
+    "cold": "Existing AST declaration walk plus immediate associated-list header visits; associated syntax is visited both by helper and skeleton walker. O(nodes+header tokens+captured metadata) within existing node/depth/impl/metadata limits; combined trait+impl count shares existing impl cap. New Vec/String reserves checked and actual capacity charged.",
+    "hot": "No execution/dispatch/currentness path changed; no query added.",
+    "ownership": "New owned fact rows/token headers within existing retained DeclarationScan, no BodyIndex/ParsedFile deep clone or new root registry.",
+    "measurements": "None; no speed/scaling claim."
+  },
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": [
+        "trait_headers::capture_trait",
+        "trait_headers::associated"
+      ],
+      "finding": "No expression/assertion evaluator added; source header projection only. Existing MA001 alternate evaluators outside owned slice remain held."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "ParsedFile::scan_declarations_in_scope",
+        "GeneratedDeclarations::admit controls"
+      ],
+      "finding": "Same AST scanner for original/generated actual declaration grammars; no literal/break executor or synthetic body wrapper. MA004/MA005 runtime repair not closed."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "DeclarationNameOccurrence",
+        "AssociatedDeclarationOwner"
+      ],
+      "finding": "No name-only selector, numeric inference or method whitelist; raw facts explicitly require later common member service. MA003/MA006 not closed."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "trait_headers::name",
+        "DeclarationNameContext"
+      ],
+      "finding": "No origin-based refusal of ordinary semantics added. Missing generated hygiene attachment is explicitly represented, never promoted to name equivalence or callable authority."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "body_exclusion",
+        "trait_headers::associated"
+      ],
+      "finding": "Only skeleton headers and body/initializer ranges captured; no executable arms, pattern compiler, type checking or cold callee body preparation. MA002 pattern repair outside scope."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "trait_headers::associated_list",
+        "ParsedFile::scan_declarations_in_scope"
+      ],
+      "finding": "No reparse or runtime planning. Shared associated capture replaces old inline impl capture; helper and existing skeleton walk still inspect associated syntax twice cold, recorded rather than claiming perfect single visitation."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "DeclarationScan::encode_fields",
+        "trait_headers::capture_trait"
+      ],
+      "finding": "No world namespace census or hot invalidation policy added. Explicit scan-domain migration requires fresh immutable dependency identities; unrelated runtime publication semantics untouched."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "Budget",
+        "trait_headers::reserve_one",
+        "DeclarationScan::traits/associated_fragments"
+      ],
+      "finding": "Owned bounded row/header buffers only; borrowed AST, no immutable body clone, whole-file per-phase lookup, or new execution root."
+    }
+  ],
+  "independent_review": {
+    "reviewer": "/root/runtime_validation_next",
+    "kind": "read-only exact live source review against frozen V10 old impl capture",
+    "finding": "No concrete authority/API/metadata defect found; old impl semantic encoding preserved, real context/producer IDs and scan v3 migration confirmed. No tests or compilation."
+  },
+  "tests_authored_unexecuted": [
+    "unchanged_stock_trait_and_impl_macro_headers_capture_real_owners_all_editions",
+    "real_stock_generated_associated_slots_and_identical_outputs_keep_source_identity",
+    "cfg_binders_and_body_ranges_are_facts_without_changing_impl_header_semantics",
+    "unattached_generated_context_and_checked_resource_refusal_do_not_mint_authority"
+  ],
+  "gaps": [
+    "No Cargo/compiler/test command by worker. All new tests and four owning editions unexecuted for this source.",
+    "No user/wrapper/std fullmain associated-call compatibility, cleanup/suspension/epoch invalidation or runtime pass inferred.",
+    "Held traits/header.rs::same_requirements compares old associated range/header fields. Future exact fact transport consumer must compare all new row fields (derived Eq) before authority expansion; worker did not edit held consumer.",
+    "M017 symbolic type/name/binder service, M018 source propagation, M019 live/facade ImplCatalog completeness, M020/M021 goals/applicability/member/default body selection and actual callable joins remain gated.",
+    "No trait header query/catalog publication added, no removal of existing alternate runtime routes justified by this prerequisite."
+  ]
+}

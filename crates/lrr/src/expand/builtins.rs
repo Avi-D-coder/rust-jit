@@ -7,12 +7,11 @@ use crate::{
     project::tool_manifest::CompileEnv,
 };
 use std::collections::BTreeMap;
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
 }
 fn text(value: &str) -> Result<(), Diagnostic> {
-    if value.len() > 64 * 1024 || value.contains('\0') {
+    if value.contains('\0') {
         return Err(fault("invalid compile-input string"));
     }
     Ok(())
@@ -27,7 +26,6 @@ fn name(value: &str) -> Result<(), Diagnostic> {
 fn charge(bytes: &mut usize, amount: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(amount)
-        .filter(|n| *n <= MAX_BYTES)
         .ok_or_else(|| fault("compile-input environment metadata limit"))?;
     Ok(())
 }
@@ -66,9 +64,6 @@ impl FrozenCompileEnvironment {
                 charge(&mut bytes, value.capacity())?;
             }
         }
-        if bytes > MAX_BYTES {
-            return Err(fault("compile environment metadata limit"));
-        }
         Ok(bytes)
     }
 
@@ -99,7 +94,6 @@ impl FrozenCompileEnvironment {
             .len()
             .checked_add(input.cargo.len())
             .and_then(|n| n.checked_add(input.rustc_env.len()))
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("compile-input environment entry limit"))?;
         let mut bytes = input.cfg.metadata_bytes()?;
         charge(

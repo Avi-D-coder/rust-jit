@@ -105,13 +105,9 @@ impl CompileInputCatalog {
                 .checked_add(facet.metadata_bytes()?)
                 .ok_or_else(|| fault("primitive method facet metadata overflow"))?;
         }
-        if bytes > 64 * 1024 {
-            return Err(fault("compiler facet retained metadata limit"));
-        }
         for facet in &self.macro_exports {
             bytes = bytes.checked_add(facet.metadata_bytes())
                 .and_then(|n| n.checked_add(std::mem::size_of::<std::sync::Arc<crate::expand::source_declarative::macro_exports::SourceMacroExportFacet>>()))
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("compiler macro-export retained metadata limit"))?;
         }
         Ok(bytes)

@@ -67,7 +67,6 @@ impl DeclaredParameterType {
                     .heap_bytes()
                     .ok_or_else(crate::runtime::arena::resource)?,
             )
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)
     }
 }
@@ -265,6 +264,11 @@ fn classify(
         QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Type(source)))) => {
             ready(definition, signature, ordinal, source)
         }
+        // A single written name selecting a struct/enum declaration names that
+        // nominal type without generic arguments.
+        QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Nominal(nominal)))) => {
+            ready(definition, signature, ordinal, TyTerm::Nominal(nominal, Vec::new()))
+        }
         QueryPoll::Ready(Ok(NamedTypePreparation::Alias(other))) => {
             QueryPoll::Ready(Ok(ParameterTypeGoal::NeedAlias(other)))
         }
@@ -290,9 +294,6 @@ pub(crate) fn prepare_local_query(
                 QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
             }
         };
-    }
-    if ordinal >= 100_000 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
     }
     let selected = ready!(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)));
     let QueryValue::FunctionSignature(signature) = selected.value.as_ref() else {
@@ -334,9 +335,6 @@ pub(crate) fn prepare_local_query(
         signature: selected.fingerprint,
         goal,
     };
-    if result.estimated_bytes() > 32 * 1024 * 1024 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     QueryPoll::Ready(Ok(result))
 }
 /// Common consumer. Local declarations use their retained pure memo. Ordinary
@@ -349,9 +347,6 @@ pub(crate) fn prepare(
     definition: Digest,
     ordinal: usize,
 ) -> QueryPoll<ParameterTypeGoal> {
-    if ordinal >= 100_000 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     if db
         .input(&InputKey::LocalDeclarationOwner(definition))
         .is_some()
@@ -389,11 +384,34 @@ pub(crate) fn prepare(
     if parameter.ty.len() != 1 {
         return match &parameter.symbolic {
             Some(source) => ready(definition, selected.fingerprint, ordinal, source.clone()),
-            None => QueryPoll::Ready(Ok(ParameterTypeGoal::NeedType {
-                definition,
-                syntax: parameter.ty.clone(),
-            })),
+            None => match source_types::resolve_written_type(
+                db,
+                graph,
+                sources,
+                signature,
+                &parameter.ty,
+            ) {
+                QueryPoll::Ready(Ok(Some(source))) => {
+                    ready(definition, selected.fingerprint, ordinal, source)
+                }
+                QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(ParameterTypeGoal::NeedType {
+                    definition,
+                    syntax: parameter.ty.clone(),
+                })),
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            },
         };
+    }
+    // `Self` (a receiver's or a written parameter's) is the impl's written
+    // self type: a parameterized nominal of a generic impl, or the bare
+    // nominal (`impl<'a> S<'a>`, whose region arguments are not data).
+    if parameter.ty[0].text == "Self" {
+        if let QueryPoll::Ready(Ok(Some(source))) =
+            source_types::resolve_written_type(db, graph, sources, signature, &parameter.ty)
+        {
+            return ready(definition, selected.fingerprint, ordinal, source);
+        }
     }
     let named = source_types::prepare_named(db, graph, sources, signature, &parameter.ty[0].text);
     classify(definition, selected.fingerprint, ordinal, named)

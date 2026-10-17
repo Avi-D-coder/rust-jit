@@ -112,10 +112,9 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
     ready!(owner.require_current(db));
     let completed = environment.macros().source_environment();
     let mut sources = Vec::new();
-    if completed.sources().len() > 100_000
-        || sources
-            .try_reserve_exact(completed.sources().len())
-            .is_err()
+    if sources
+        .try_reserve_exact(completed.sources().len())
+        .is_err()
     {
         return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
     }

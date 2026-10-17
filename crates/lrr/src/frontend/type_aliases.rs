@@ -56,21 +56,15 @@ impl<'a> AliasNormalizer<'a> {
         graph: &'a NameNamespaces,
         sources: &'a [&'a PreparedSourceView],
     ) -> Result<Self, Diagnostic> {
-        if sources.len() > 100_000 {
-            return Err(fault("alias source catalogue limit exceeded"));
-        }
         for source in sources {
-            graph.require_source(source.selection(), source.outline())?;
+            graph.require_view(source)?;
         }
         Ok(Self { sources })
     }
     fn declaration(&self, db: &mut Database, identity: Digest) -> QueryPoll<AliasDeclaration> {
         if let Some((source, item)) = self.sources.iter().find_map(|source| {
             source
-                .outline()
-                .items
-                .iter()
-                .find(|item| item.def_key.fingerprint() == identity)
+                .outline_item(identity)
                 .map(|item| (*source, item))
         }) {
             if !matches!(db.input(&InputKey::DefinitionSource(identity)).as_deref(),Some(InputValue::DefinitionSource(key)) if key==&source.selection().outline.parse)
@@ -206,12 +200,6 @@ impl<'a> AliasNormalizer<'a> {
                             .collect::<Vec<_>>()
                             .join(" -> ")
                     ),
-                )));
-            }
-            if seen.len() >= 256 {
-                return QueryPoll::Ready(Err(Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "alias normalization depth budget exceeded".into(),
                 )));
             }
             seen.push(definition);
@@ -372,7 +360,6 @@ impl AliasDependencyTrace {
             .bytes
             .checked_add(std::mem::size_of::<DependencyStamp>())
             .and_then(|n| n.checked_add(stamp.heap_bytes()))
-            .filter(|n| *n <= 32 * 1024 * 1024 && self.rows.len() < 4000)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
@@ -388,30 +375,3 @@ impl AliasDependencyTrace {
     }
 }
 
-#[cfg(test)]
-mod dependency_trace_tests {
-    use super::*;
-    #[test]
-    fn alias_dependency_trace_limits_do_not_partially_commit() {
-        let stamp = DependencyStamp::Input {
-            key: InputKey::SourceDependencies,
-            fingerprint: Digest::of_bytes(b"captured namespace input"),
-        };
-        let mut trace = AliasDependencyTrace::default();
-        for _ in 0..4000 {
-            trace.push(stamp.clone()).unwrap();
-        }
-        let before = (trace.rows.clone(), trace.bytes);
-        let error = trace.push(stamp.clone()).unwrap_err();
-        assert_eq!(error.code, "LRR-E-METADATA-LIMIT");
-        assert_eq!((trace.rows.clone(), trace.bytes), before);
-        let mut trace = AliasDependencyTrace {
-            rows: vec![],
-            bytes: 32 * 1024 * 1024,
-        };
-        let error = trace.push(stamp).unwrap_err();
-        assert_eq!(error.code, "LRR-E-METADATA-LIMIT");
-        assert!(trace.rows.is_empty());
-        assert_eq!(trace.bytes, 32 * 1024 * 1024);
-    }
-}

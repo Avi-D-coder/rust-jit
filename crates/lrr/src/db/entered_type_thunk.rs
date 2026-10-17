@@ -4,7 +4,7 @@
 use super::{
     dependency::{InputKey, InputValue},
     key::QueryKey,
-    memo::Database,
+    memo::{Database, PreparedInputGuard},
     poll::QueryPoll,
     provider::{Provided, SyntaxProvider},
     value::QueryValue,
@@ -17,9 +17,32 @@ use crate::{
         outline::BodyHandle,
         parse::ParsedFile,
         source_constraints::FactKind,
+        thunks_let_annotations::{AnnotationShape, LetAnnotation},
     },
 };
+use ra_ap_syntax::{AstNode, ast};
 use std::sync::Arc;
+/// Whether a written Type contains a trait object.
+fn object(shape: &AnnotationShape) -> bool {
+    match shape {
+        AnnotationShape::Dyn(_) => true,
+        AnnotationShape::Leaf(_) | AnnotationShape::Infer => false,
+        AnnotationShape::Tuple(members) => members.iter().any(object),
+        AnnotationShape::Generic(_, arguments) => arguments.iter().any(object),
+        AnnotationShape::Array(inner, _) | AnnotationShape::Slice(inner) => object(inner),
+        AnnotationShape::Ref { target, .. } => object(target),
+    }
+}
+/// A generic target with an unsized slice argument (`Box<[T]>`): rustc's
+/// unsizing coercion cast (`CoerceUnsized`), like a trait-object target.
+fn unsizing(shape: &AnnotationShape) -> bool {
+    match shape {
+        AnnotationShape::Generic(_, arguments) => arguments
+            .iter()
+            .any(|argument| matches!(argument, AnnotationShape::Slice(_)) || unsizing(argument)),
+        _ => false,
+    }
+}
 macro_rules! ready {
     ($value:expr) => {
         match $value {
@@ -90,6 +113,61 @@ pub(super) fn thunk(
     else {
         return QueryPoll::Ready(Err(fault("cast Type lacks canonical indexed syntax")));
     };
+    // The written structure of the target, as a `let` annotation's: a
+    // trait-object target is a coercion cast; a named target is a primitive
+    // cast; any other structure needs its own cast integration.
+    let written = match parsed
+        .entered_node_syntax(body, index, NodeId(pc.node))
+        .map(|syntax| syntax.and_then(ast::CastExpr::cast).and_then(|cast| cast.ty()))
+    {
+        Ok(Some(written)) => written,
+        Ok(None) => return QueryPoll::Ready(Err(fault("cast actual Type syntax absent"))),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let shape = match parsed.annotation_shape(body, index, pc.body.definition, &written) {
+        Ok(shape) => shape,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    match &shape {
+        // A named (possibly parenthesized) target: its entered Type goal.
+        Some(AnnotationShape::Leaf(_)) => {}
+        Some(shape) if object(shape) || unsizing(shape) => {
+            let mut guards = Vec::new();
+            let selected = ready!(super::let_annotation_thunk::select(db, pc, shape, &mut guards));
+            let guard = {
+                let borrowed: Vec<&PreparedInputGuard> = guards.iter().map(Arc::as_ref).collect();
+                match PreparedInputGuard::join(&borrowed) {
+                    Ok(guard) => guard,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            };
+            let coercion = LetAnnotation {
+                range: crate::syntax::ast_adapter::range(written.syntax().text_range()),
+                written: Arc::new(selected),
+            };
+            let recipe = match parsed.initial_thunk_with_cast_coercion(body, index, pc, &coercion) {
+                Ok(recipe) => recipe,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            return QueryPoll::Ready(recipe.with_shared_prepared_inputs(Arc::new(guard)).map(
+                |recipe| {
+                    Some(Provided {
+                        value: QueryValue::Thunk(Box::new(recipe)),
+                        cacheable: true,
+                    })
+                },
+            ));
+        }
+        _ => {
+            return QueryPoll::Ready(Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                format!(
+                    "cast to `{}` requires its pointer, function-pointer or reference cast integration",
+                    written.syntax().text()
+                ),
+            )));
+        }
+    }
     let key = PcKey {
         body: pc.body.clone(),
         node: target.id.0,

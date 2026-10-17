@@ -4,10 +4,7 @@
 use crate::core::digest::StableEncode;
 use crate::{
     core::{diagnostic::Diagnostic, digest::Digest},
-    frontend::constants::{
-        ConstValue,
-        wire::{self, ConstantWireType},
-    },
+    frontend::constants::{ConstValue, wire::ConstantWireType},
     frontend::{
         constant_construction::SelectedGuestConstantType,
         constant_path_selection::ConstantPathSelection,
@@ -120,12 +117,6 @@ impl<'a> AdmittedConstantUse<'a> {
                 "selected constant original site/span/destination differs".into(),
             ));
         }
-        std::mem::size_of::<Self>()
-            .checked_add(construction.metadata_bytes())
-            .and_then(|n| n.checked_add(path.metadata_bytes()))
-            .and_then(|n| n.checked_add(construction.source_term().heap_bytes()?))
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(crate::runtime::arena::resource)?;
         let source = construction.source_term().clone();
         let ty = binding.ty();
         let content = Digest::of_bytes(construction.parent().payload().bytes());
@@ -188,19 +179,6 @@ impl<'a> AdmittedConstantUse<'a> {
             && path.identity() == instruction.path()
             && binding.construction().parent().key() == instruction.query()
     }
-    pub(crate) fn metadata_bytes(&self) -> Option<usize> {
-        let retained = match &self._authority {
-            PublicationAuthority::SelectedSource { path, binding, .. } => binding
-                .construction()
-                .metadata_bytes()
-                .checked_add(path.metadata_bytes())?,
-            #[cfg(test)]
-            PublicationAuthority::PhysicalFixtureOnly => 0,
-        };
-        std::mem::size_of::<Self>()
-            .checked_add(retained)?
-            .checked_add(self.source.heap_bytes()?)
-    }
     /// Immutable agreement data only; never a source/type authority constructor.
     pub(crate) fn content_identity(&self) -> Digest {
         self.content
@@ -262,7 +240,10 @@ impl<'a> AdmittedConstantUse<'a> {
         value: &ConstValue,
         ty: &ConstantWireType,
     ) -> Result<bool, Diagnostic> {
-        Ok(Digest::of_bytes(&wire::encode(value, ty, 1 << 20)?) == self.content)
+        Ok(
+            Digest::of_bytes(&crate::ir::constant_data::wire::encode_value(value, ty)?)
+                == self.content,
+        )
     }
 }
 /// Test-only physical injection. It is NOT source/namespace/query/type authority
@@ -287,7 +268,7 @@ pub(crate) fn physical_fixture_use<'a>(
         body_index: frame.body.fingerprint(),
         source,
         ty,
-        content: Digest::of_bytes(&wire::encode(value, wire, 1 << 20)?),
+        content: Digest::of_bytes(&crate::ir::constant_data::wire::encode_value(value, wire)?),
     })
 }
 

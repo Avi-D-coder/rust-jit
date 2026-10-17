@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "component": "common-completed-source-environment-v1",
+  "baseline": "856b5654682f428b61ef7c8a832202940c916c02",
+  "status": "source-only-uncompiled-unexecuted",
+  "source_fingerprint": "af5d73ae41ae2a1f8649d3c70856b78be04987e83d24a6010d93d3861828ad1c",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs_tests.rs",
+      "sha256": "1c4442f2cb657c5d12ac027d85ff4aa246e58deb3fcdf5dd1fc9f5dc222fb3bc",
+      "bytes": 14684
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "sha256": "31f550a375d038f70bc76a08d7388e7c6efefe6da9f563264694ef4301f72748",
+      "bytes": 19480
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "5f6d9236ca54289a4382f5402b9751eddbbe07992868b2de47a7ca369d57bdf1",
+      "bytes": 14063
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "d4679a3532709e821845a8b3909de5273108877985cd290e6a3a705a1a7c38fc",
+      "bytes": 15948
+    },
+    {
+      "path": "crates/lrr/src/expand/scopes.rs",
+      "sha256": "2000473165bad7a533c9fa2ddc3367693c474a52ce076d73e79b85a887c9f1ab",
+      "bytes": 31395
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "4e3e01b379c774946492a7b2e8f4b119be0c7af7244349e3615c57d6674e473e",
+      "bytes": 507539
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/body_macro_environment.rs",
+      "sha256": "17ffb56d258d8a00d565b3adf942e0e8a0e6307a1378476e6914ec4c378fb442",
+      "bytes": 11172
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "f7f4228e636a6f342b3789a86977661b5ef526194412586ea024634b8c7c61db",
+      "bytes": 7835
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment_tests.rs",
+      "sha256": "74067c6e1d54839a19489bcad798112a508e2b47e4cf66decf46822f8eabf4b3",
+      "bytes": 4762
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "sha256": "771344b4ae0ed59a3601d1f5a440bd1eed8bfdb87446846b1646610b5d5af82a",
+      "bytes": 17334
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/retained_original_inert_tests.rs",
+      "sha256": "1d22503d64483ab0b55bebcb5e56e7ae0fd783544aa0e4e9679e2ead9a34cc88",
+      "bytes": 4620
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_names.rs",
+      "sha256": "f0e940465a1f5919ee5231cf7360c37c8496c8471c1406085df2956215e4801d",
+      "bytes": 103375
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_names/retention.rs",
+      "sha256": "3058ee2f2915591c10fd4655295388a274b84a079d259e83f552bdb3f28f8282",
+      "bytes": 5564
+    },
+    {
+      "path": "crates/lrr/src/frontend/module_paths.rs",
+      "sha256": "7af4454455f456d89bd9b65ef03c5f3cc074fd52b1f9085b2c53181d7f843f34",
+      "bytes": 26196
+    },
+    {
+      "path": "crates/lrr/src/frontend/module_paths/retention.rs",
+      "sha256": "e667ee8d2fe89692947905e27b2b24c59d0fb1c3f445144f79c7621d248612cf",
+      "bytes": 1436
+    },
+    {
+      "path": "crates/lrr/src/frontend/names.rs",
+      "sha256": "f68784cf1e9a018db531cd8be70466ab3ff0278f0ab3b713e17c25cb340314fb",
+      "bytes": 110046
+    },
+    {
+      "path": "crates/lrr/src/frontend/names_retention.rs",
+      "sha256": "0928355224ae01cdf4b09a1267615f4099e6c77ae6ff7e1ba0cb8fa8ce0d42a3",
+      "bytes": 7407
+    },
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "sha256": "6b52d01810358dc9f6034485a4cdd34dd9b69da684811e0d60aa7f32e0e8472f",
+      "bytes": 58579
+    },
+    {
+      "path": "crates/lrr/src/vm/context_return_tests.rs",
+      "sha256": "a985504392217d82418e213073c0330de1a24bedeb01f1c6e4e841f66ca1f37e",
+      "bytes": 30577
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/03-control-flow-patterns/completed-source-environment-handoff.md",
+    "sha256": "54251c82480146f54e0ac70d0ec4275dabaf1feb5b1f0f7d7f8dcd6fd2d35909"
+  },
+  "dependencies": [
+    "actual previously frozen typedCompiler5/selectedenv4 and root body-environment query prerequisites",
+    "root engine/run.rs RunNames completed Arc join plus completed_source_environment(db) registration before guest entry",
+    "root engine/test_catalog.rs Arc graph join"
+  ],
+  "exclusions": [
+    "reference peer unfinished nested local parent source_body_context successor",
+    "pure qualified Type path query integration",
+    "common installed bound constructor query integration",
+    "fullcore cross-root source authority repair"
+  ],
+  "new_test_bodies": 2,
+  "tests": "none executed; sole validator owns Cargo"
+}

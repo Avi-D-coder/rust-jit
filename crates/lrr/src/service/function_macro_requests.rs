@@ -73,7 +73,7 @@ impl FunctionInvocationInput {
             .ok_or_else(|| fault("active original function-like invocation absent"))?;
         let provider = SourceDeclarative::new(source.share())?;
         let range = source.macro_token_group(call.range, false)?;
-        let delimited = crate::expand::source_declarative::group(&provider.owned_forest()?, range)?;
+        let delimited = crate::expand::source_declarative::group(&*provider.owned_forest()?, range)?;
         let delimited = TokenForest::decode(&delimited.encode().map_err(|e| fault(&e.message))?)
             .map_err(|e| fault(&e.message))?;
         let [crate::syntax::token_wire::TokenTree::Group { open, .. }] = delimited.roots() else {
@@ -113,7 +113,7 @@ impl FunctionInvocationInput {
             .ok_or_else(|| fault("cold procedural source invocation absent"))?;
         let provider = SourceDeclarative::new(source.share())?;
         let range = source.macro_token_group(producer.range, false)?;
-        let delimited = crate::expand::source_declarative::group(&provider.owned_forest()?, range)?;
+        let delimited = crate::expand::source_declarative::group(&*provider.owned_forest()?, range)?;
         let delimited = TokenForest::decode(&delimited.encode().map_err(|e| fault(&e.message))?)
             .map_err(|e| fault(&e.message))?;
         let [crate::syntax::token_wire::TokenTree::Group { open, .. }] = delimited.roots() else {
@@ -268,9 +268,6 @@ impl FunctionInvocationInput {
                     .ok_or_else(|| fault("procedural source metadata overflow"))?;
             }
         }
-        if bytes > 512 * 1024 * 1024 {
-            return Err(fault("procedural input metadata limit"));
-        }
         Ok(bytes)
     }
     pub fn grammar(&self) -> crate::expand::identity::GrammarSlot {
@@ -364,6 +361,63 @@ impl FunctionInvocationInput {
         };
         self.resolve_definition(session, context, &definition, target)
     }
+    /// Prepare the request for the export the frozen catalog selects for this
+    /// definition, using that producer's captured definition site exactly as
+    /// attribute and derive requests do. Assembly executes no helper.
+    pub(crate) fn resolve_selected(
+        &self,
+        session: &MacroSession,
+        context: &DemandContext,
+        definition: &crate::expand::scopes::MacroDefinition,
+    ) -> Result<PreparedFunctionRequest, Diagnostic> {
+        let catalog = session.export_catalog(context)?;
+        let selected = catalog
+            .select(definition, ProceduralKind::Function)?
+            .ok_or_else(|| fault("source candidate is not a prepared procedural function"))?;
+        let MacroIdentity::Procedural {
+            artifact, export, ..
+        } = selected.identity()
+        else {
+            return Err(fault("source procedural export kind differs"));
+        };
+        let site = session
+            .source_definition_site(*artifact)
+            .ok_or_else(|| fault("procedural definition site is not captured"))?;
+        let arguments = lrr_expand_adapter::token_wire::TokenForest::decode(
+            &self.arguments.encode().map_err(|e| fault(&e.message))?,
+        )
+        .map_err(|e| fault(&e.message))?;
+        let registry = crate::expand::procedural_sites::merge(site, &arguments)?;
+        let definition_source = crate::expand::procedural_sites::source(site)?;
+        let call_source = arguments
+            .spans()
+            .iter()
+            .find(|span| span.key() == self.call_site)
+            .map(|span| span.source.clone())
+            .ok_or_else(|| fault("owned source call site absent"))?;
+        let emitted = self.emitted.as_ref().is_some_and(|emitted| {
+            emitted
+                .sources
+                .iter()
+                .any(|owned| owned.source() == definition_source.source())
+        });
+        let mut sources = Vec::new();
+        if !emitted && definition_source.source() != &call_source {
+            sources.push(definition_source);
+        }
+        let target = ResolvedItemTarget {
+            artifact: Key(artifact.0),
+            export: export.clone(),
+            scope: Key(self.scope.fingerprint().0),
+            parent_origin: self.parent_origin(),
+            registry: &registry,
+            definition_site: Key(site.site.0),
+            call_site: self.call_site,
+            mixed_site: self.call_site,
+            sources,
+        };
+        self.resolve_definition(session, context, definition, target)
+    }
     pub(crate) fn resolve_definition(
         &self,
         session: &MacroSession,
@@ -414,18 +468,12 @@ impl FunctionInvocationInput {
             {
                 return Err(fault("generated procedural emission epoch differs"));
             }
-            if target
-                .sources
-                .len()
-                .checked_add(emitted.sources.len())
-                .is_none_or(|n| n > 4096)
-                || target.sources.iter().any(|row| {
-                    emitted
-                        .sources
-                        .iter()
-                        .any(|owned| owned.source() == row.source())
-                })
-            {
+            if target.sources.iter().any(|row| {
+                emitted
+                    .sources
+                    .iter()
+                    .any(|owned| owned.source() == row.source())
+            }) {
                 return Err(fault("generated procedural capture count/conflict"));
             }
             target
@@ -441,9 +489,6 @@ impl FunctionInvocationInput {
                 None,
             )
             .map_err(|e| fault(&e.message))?;
-            if target.sources.len() >= 4096 {
-                return Err(fault("source procedural capture count limit"));
-            }
             target
                 .sources
                 .try_reserve(1)

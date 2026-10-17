@@ -6,14 +6,6 @@ pub(super) fn validate(
     key: &SealKey,
     sources: &RetainedConstantSources,
 ) -> Result<(), Diagnostic> {
-    if input.records.len() > 256 || input.declaration_fragments.len() > 256 {
-        return Err(limit());
-    }
-    if input.records.len() != input.declaration_fragments.len() {
-        return Err(fault(
-            "original empty expansion descriptors/fragments are incomplete",
-        ));
-    }
     let views = sources.views();
     let mut seen = BTreeSet::new();
     let mut wire_bytes = 0usize;
@@ -28,40 +20,57 @@ pub(super) fn validate(
                     && view.selection().outline.cfg == scan.cfg()
             })
             .ok_or_else(|| fault("original empty expansion source not retained"))?;
-        let record = fragment.require_original_empty_record(source, key.epoch)?;
+        // Empty original records keep their exact module-definition owner
+        // join; a declaration-free body output contributes no namespace fact
+        // whatever its definition, so only its current publication is joined.
+        // A declaration-free body output joins its whole actual nested
+        // expansion tree; an original item-position output must be empty.
+        let (records, declaration_free) =
+            match fragment.require_original_empty_record(source, key.epoch) {
+                Ok(record) => (vec![record], false),
+                Err(error) => match fragment
+                    .require_original_declaration_free_tree(source, key.epoch)
+                {
+                    Ok(records) => (records, true),
+                    Err(_) => return Err(error),
+                },
+            };
+        for record in &records {
+            let descriptor = record.descriptor();
+            wire_bytes = wire_bytes
+                .checked_add(descriptor.wire_bytes)
+                .ok_or_else(limit)?;
+            let identity = descriptor.key.fingerprint();
+            if !seen.insert(identity)
+                || input
+                    .records
+                    .iter()
+                    .filter(|actual| {
+                        actual.key == descriptor.key
+                            && actual.output == descriptor.output
+                            && actual.wire_bytes == descriptor.wire_bytes
+                    })
+                    .count()
+                    != 1
+            {
+                return Err(fault(
+                    "original empty expansion descriptor is missing or duplicated",
+                ));
+            }
+            let Some((InputValue::ExpansionRecord(actual), _)) =
+                db.published_input(&InputKey::ExpansionRecord(identity))
+            else {
+                return Err(fault("original empty expansion current publication absent"));
+            };
+            if !actual.same_record(record) {
+                return Err(fault("original empty expansion current payload differs"));
+            }
+        }
+        if declaration_free {
+            continue;
+        }
+        let record = records[0];
         let descriptor = record.descriptor();
-        if descriptor.wire_bytes > 65_536 {
-            return Err(limit());
-        }
-        wire_bytes = wire_bytes
-            .checked_add(descriptor.wire_bytes)
-            .filter(|bytes| *bytes <= 16 * 1024 * 1024)
-            .ok_or_else(limit)?;
-        let identity = descriptor.key.fingerprint();
-        if !seen.insert(identity)
-            || input
-                .records
-                .iter()
-                .filter(|actual| {
-                    actual.key == descriptor.key
-                        && actual.output == descriptor.output
-                        && actual.wire_bytes == descriptor.wire_bytes
-                })
-                .count()
-                != 1
-        {
-            return Err(fault(
-                "original empty expansion descriptor is missing or duplicated",
-            ));
-        }
-        let Some((InputValue::ExpansionRecord(actual), _)) =
-            db.published_input(&InputKey::ExpansionRecord(identity))
-        else {
-            return Err(fault("original empty expansion current publication absent"));
-        };
-        if !actual.same_record(record) {
-            return Err(fault("original empty expansion current payload differs"));
-        }
         let crate::expand::identity::MacroIdentity::Declaration { definition } =
             &descriptor.key.macro_identity
         else {
@@ -87,6 +96,12 @@ pub(super) fn validate(
                 "original empty expansion exact module definition owner absent or ambiguous",
             ));
         }
+    }
+    // Every published descriptor belongs to exactly one joined record.
+    if seen.len() != input.records.len() {
+        return Err(fault(
+            "original empty expansion descriptors/fragments are incomplete",
+        ));
     }
     Ok(())
 }

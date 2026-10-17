@@ -37,9 +37,6 @@ fn limit() -> Diagnostic {
     )
 }
 fn text(value: &str) -> Result<String, Diagnostic> {
-    if value.len() > 65_536 {
-        return Err(limit());
-    }
     let mut output = String::new();
     output.try_reserve_exact(value.len()).map_err(|_| limit())?;
     output.push_str(value);
@@ -158,7 +155,6 @@ impl GeneratedBreak {
             })
             .and_then(|n| n.checked_add(literal))
             .and_then(|n| n.checked_add(lifetime))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(limit)
     }
     pub(crate) fn into_provenance(self) -> (TokenForest, Vec<TokenOrigin>) {
@@ -167,7 +163,7 @@ impl GeneratedBreak {
 }
 
 fn scalar(mut expression: ast::Expr, span: &BodySpan) -> Result<LiteralRecipe, Diagnostic> {
-    for _ in 0..256 {
+    for _ in 0usize.. {
         match expression {
             ast::Expr::ParenExpr(group) => {
                 expression = group
@@ -183,8 +179,7 @@ fn scalar(mut expression: ast::Expr, span: &BodySpan) -> Result<LiteralRecipe, D
                         | SyntaxKind::BYTE
                         | SyntaxKind::TRUE_KW
                         | SyntaxKind::FALSE_KW
-                ) || u32::from(literal.syntax().text_range().len()) > 65_536
-                {
+                ) {
                     return Err(unsupported(
                         "generated break requires a bounded scalar literal payload",
                     ));
@@ -219,13 +214,10 @@ pub(crate) fn try_decode_break(
         return Err(invalid("generated break input is not an expansion record"));
     };
     record.key().validate()?;
-    if record.key().grammar != GrammarSlot::Statements
-        || !matches!(
+    if record.key().grammar != GrammarSlot::Statements || !matches!(
             record.key().macro_identity,
             MacroIdentity::Declaration { .. }
-        )
-        || record.wire().len() > 32 * 1024 * 1024
-    {
+        ) {
         return Err(invalid(
             "generated break record grammar/identity/bound differs",
         ));
@@ -250,7 +242,6 @@ pub(crate) fn try_decode_break(
                     .checked_mul(std::mem::size_of::<TokenOrigin>())?,
             )
         })
-        .filter(|n| *n <= 64 * 1024 * 1024)
         .ok_or_else(limit)?;
     let parsed = ParsedFile::from_generated_declarations(
         &output.syntax,
@@ -277,7 +268,6 @@ pub(crate) fn try_decode_break(
     for statement in root.children() {
         count = count
             .checked_add(1)
-            .filter(|n| *n <= 4096)
             .ok_or_else(limit)?;
         if statement.kind() == SyntaxKind::ERROR {
             return Err(unsupported(
@@ -310,7 +300,6 @@ pub(crate) fn try_decode_break(
     for node in broken.syntax().descendants() {
         work = work
             .checked_add(1)
-            .filter(|n| *n <= 4096)
             .ok_or_else(limit)?;
         if node.kind() == SyntaxKind::ATTR {
             return Err(unsupported(
@@ -343,7 +332,6 @@ pub(crate) fn try_decode_break(
                 let span_key = Key(origin.span.0);
                 pieces = pieces
                     .checked_add(1)
-                    .filter(|n| *n <= 16)
                     .ok_or_else(limit)?;
                 let position = tokens
                     .spans()
@@ -453,10 +441,7 @@ pub(crate) fn target_label_range(
         .checked_add(node.range.end)
         .ok_or_else(limit)?;
     let root = parsed.entered_body_root(handle)?;
-    for (work, syntax) in root.descendants().enumerate() {
-        if work >= 100_000 {
-            return Err(limit());
-        }
+    for syntax in root.descendants() {
         if u32::from(syntax.text_range().start()) != start
             || u32::from(syntax.text_range().end()) != end
         {
@@ -508,10 +493,7 @@ pub(crate) fn target_continuation(
         .checked_add(node.range.end)
         .ok_or_else(limit)?;
     let root = parsed.entered_body_root(handle)?;
-    for (work, syntax) in root.descendants().enumerate() {
-        if work >= 100_000 {
-            return Err(limit());
-        }
+    for syntax in root.descendants() {
         if ast::Expr::can_cast(syntax.kind())
             && u32::from(syntax.text_range().start()) == start
             && u32::from(syntax.text_range().end()) == end
@@ -628,8 +610,8 @@ mod tests {
                     defining_unit: adapter::Key([1; 32]),
                     definition_edition: edition(owning),
                 },
-                2_000_000,
-                32 * 1024 * 1024,
+                usize::MAX,
+                usize::MAX,
             )
             .unwrap();
         InputValue::ExpansionRecord(

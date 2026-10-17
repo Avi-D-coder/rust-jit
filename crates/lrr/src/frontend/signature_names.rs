@@ -29,7 +29,7 @@ impl<'a> SignatureNames<'a> {
         source: &PreparedSourceView,
         signature: &'a FunctionSignature,
     ) -> Result<Self, Diagnostic> {
-        graph.require_source(source.selection(), source.outline())?;
+        graph.require_view(source)?;
         let item = source
             .outline()
             .items
@@ -124,6 +124,10 @@ impl<'a> SignatureNames<'a> {
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-CONTEXT", message.into())
+}
+/// Whether `name` spells a builtin primitive type (`bool`, `i32`, `str`).
+pub(crate) fn is_primitive_type_name(name: &str) -> bool {
+    builtin(name).is_some()
 }
 fn builtin(name: &str) -> Option<SignatureName> {
     use PrimitiveType as P;
@@ -221,10 +225,20 @@ fn prepare_type_name(
     generics: &[crate::syntax::signatures::DefinitionParameter],
     name: &str,
 ) -> Result<PreparedTypeName, Diagnostic> {
+    // A trait's associated functions carry `Self` as a generic parameter.
     if name == "Self" {
-        return Ok(PreparedTypeName::Local(SignatureName::NeedOwnerContext(
-            scope.clone(),
-        )));
+        return Ok(PreparedTypeName::Local(
+            generics
+                .iter()
+                .find(|p| p.kind == GenericKind::Type && p.name == "Self")
+                .map(|parameter| {
+                    SignatureName::Parameter(ParamKey {
+                        definition,
+                        ordinal: parameter.ordinal,
+                    })
+                })
+                .unwrap_or_else(|| SignatureName::NeedOwnerContext(scope.clone())),
+        ));
     }
     let name = crate::expand::scopes::MacroName::parse(name, edition)?;
     if let Some(parameter) = generics

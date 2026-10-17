@@ -23,7 +23,6 @@ fn snapshot_bytes(snapshot: &SyntaxSnapshot) -> Result<usize, Diagnostic> {
     let syntax = snapshot.syntax();
     let add = |a: usize, b: usize| {
         a.checked_add(b)
-            .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(|| fault("retained syntax metadata budget"))
     };
     let array = |n: usize, size: usize| {
@@ -140,7 +139,6 @@ impl ParsedFile {
         for span in selected {
             bytes
                 .checked_add(span.source.path.len())
-                .filter(|n| *n <= 64 * 1024)
                 .ok_or_else(limit)?;
             let mut path = String::new();
             path.try_reserve_exact(span.source.path.len())
@@ -148,7 +146,6 @@ impl ParsedFile {
             path.push_str(&span.source.path);
             bytes = bytes
                 .checked_add(path.capacity())
-                .filter(|n| *n <= 64 * 1024)
                 .ok_or_else(limit)?;
             let projected = SpanRecord {
                 source: owned::SourceIdentity {
@@ -193,10 +190,7 @@ impl ParsedFile {
             return Err(fault("retained source unit requires item grammar"));
         }
         let syntax = snapshot.syntax();
-        if syntax.syntax.is_empty()
-            || syntax.syntax.len() > 6_000_000
-            || syntax.text.len() > 32 * 1024 * 1024
-        {
+        if syntax.syntax.is_empty() {
             return Err(fault("retained syntax event/text budget"));
         }
         let retained_bytes = snapshot_bytes(&snapshot)?;
@@ -216,7 +210,6 @@ impl ParsedFile {
                     }
                     depth = depth
                         .checked_add(1)
-                        .filter(|n| *n <= 4096)
                         .ok_or_else(|| fault("retained syntax depth budget"))?;
                     builder.start_node(if position == 0 {
                         ra_ap_syntax::SyntaxKind::SOURCE_FILE
@@ -254,7 +247,6 @@ impl ParsedFile {
             .checked_mul(32)
             .and_then(|n| n.checked_add(syntax.text.len()))
             .and_then(|n| n.checked_add(retained_bytes))
-            .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(|| fault("retained source metadata budget"))?;
         let identity = Digest(snapshot.identity().0);
         let owned = Self {
@@ -285,9 +277,6 @@ impl ParsedFile {
         &self,
         root: &ra_ap_syntax::SyntaxNode,
     ) -> Result<Digest, Diagnostic> {
-        if u32::from(root.text_range().len()) > 32 * 1024 * 1024 {
-            return Err(fault("body representation text budget"));
-        }
         if self.retained_syntax.is_none() {
             let text = root.text();
             let mut content = String::new();
@@ -300,10 +289,7 @@ impl ParsedFile {
         let mut hash = StableEncoder::new("lrr/v2/retained-body-syntax");
         hash.string(lrr_expand_adapter::UPSTREAM_COMMIT);
         hash.record(&self.profile);
-        for (count, event) in root.preorder_with_tokens().enumerate() {
-            if count >= 6_000_000 {
-                return Err(fault("body representation event budget"));
-            }
+        for event in root.preorder_with_tokens() {
             match event {
                 ra_ap_syntax::WalkEvent::Enter(ra_ap_syntax::NodeOrToken::Node(node)) => {
                     hash.u8(0);

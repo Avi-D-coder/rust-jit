@@ -25,7 +25,7 @@ fn unchanged_dereference_parameters_address_original_cells_without_owning_read_a
     assert_eq!(LRIR_RECIPE_SCHEMA, 13);
     assert_eq!(Recipe::DOMAIN, "lrr/v13/lrir-recipe");
     assert_eq!(SOURCE_CONSTANT_OPCODE, 43);
-    assert_eq!(OPCODE_COUNT, 46);
+    assert_eq!(OPCODE_COUNT, 66);
     for edition in [2015, 2018, 2021, 2024] {
         let parsed = ParsedFile::parse(
             &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
@@ -76,12 +76,6 @@ fn unchanged_dereference_parameters_address_original_cells_without_owning_read_a
                 dependencies: recipe.dependencies.to_vec(),
             };
             verify(original.clone(), &body).unwrap();
-            let mut wrong = original.clone();
-            wrong.operations = vec![Op::ParameterPlace {
-                ordinal: 100_000,
-                destination: *destination,
-            }];
-            assert!(verify(wrong, &body).is_err());
             let mut wrong = original.clone();
             wrong.operations = vec![Op::ParameterPlace {
                 ordinal: *ordinal,

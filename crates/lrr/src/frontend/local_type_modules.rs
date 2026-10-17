@@ -213,7 +213,6 @@ impl LexicalTypeModule {
                         .checked_sub(std::mem::size_of::<SourceSelection>())
                 })?)
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let mut e = StableEncoder::new("lrr/v1/entered-type-lexical-module");
         e.digest(admitted.identity());

@@ -56,6 +56,100 @@ impl RetainedOriginalDeclaration {
     }
 }
 impl Database {
+    /// A macro-generated function whose locator names a current retained
+    /// admission of it: project its retained rows exactly like an original
+    /// member. None while the locator still names the generated unit itself.
+    pub(crate) fn retained_generated_declaration(
+        &mut self,
+        definition: Digest,
+    ) -> QueryPoll<Option<RetainedOriginalDeclaration>> {
+        let Some(InputValue::DefinitionSource(parse)) = self
+            .input(&InputKey::DefinitionSource(definition))
+            .as_deref()
+            .cloned()
+        else {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated callable locator absent",
+            )));
+        };
+        let Some(input) = self.input(&InputKey::RetainedSyntax(parse.content)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let InputValue::RetainedSyntax(unit) = input.as_ref() else {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated retained callable source variant differs",
+            )));
+        };
+        if unit.key() != &parse
+            || unit.generated_unit().is_none() && unit.generated_associated().is_none()
+        {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated retained callable source differs",
+            )));
+        }
+        match unit.require_current(self) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+        }
+        let parsed = match self.fetch(
+            &super::super::super::provider::SyntaxProvider,
+            QueryKey::ParseFile(parse.clone()),
+        ) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+        };
+        let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "generated retained callable parse result differs",
+            )));
+        };
+        let result = (|| {
+            let source = self
+                .prepared_source(unit.prepared().source())?
+                .ok_or_else(|| {
+                    fault(
+                        "LRR-E-CALL-CONTEXT",
+                        "generated retained callable source lease absent",
+                    )
+                })?;
+            let (_, expected) = super::generated_rows(unit, &source, parsed, definition)?;
+            if !self.has_definition_rows(&expected) {
+                return Err(fault(
+                    "LRR-E-CALL-CONTEXT",
+                    "generated retained callable requires its exact published rows",
+                ));
+            }
+            let (
+                Some(InputValue::DefinitionHeader(header)),
+                Some(InputValue::DefinitionBody(body)),
+                Some(InputValue::DeclarationContext(context)),
+            ) = (
+                expected.get(&InputKey::DefinitionHeader(definition)),
+                expected.get(&InputKey::DefinitionBody(definition)),
+                expected.get(&InputKey::DeclarationContext(definition)),
+            )
+            else {
+                return Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "generated retained callable row set differs",
+                ));
+            };
+            Ok(Some(RetainedOriginalDeclaration {
+                parse: parse.clone(),
+                header: header.clone(),
+                body: body.clone(),
+                context: context.clone(),
+                lease: RetainedSourceLease(input.clone()),
+            }))
+        })();
+        QueryPoll::Ready(result)
+    }
     /// The normal name graph still selects the original declaration. Only a
     /// genuine current retained publication may project its new body/locations.
     /// None means the locator still names the actual original source parse.

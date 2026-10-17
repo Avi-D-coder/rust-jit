@@ -38,6 +38,7 @@ mod macro_anchors;
 pub use macro_anchors::MacroDefinitionAnchor;
 #[path = "body_selection.rs"]
 mod body_selection;
+pub(crate) use body_selection::GeneratedBodyTarget;
 #[path = "source_occurrences.rs"]
 mod source_occurrences;
 pub use source_occurrences::SourceOccurrence;
@@ -45,16 +46,13 @@ use source_occurrences::SourceOccurrences;
 
 #[path = "assembly_seed.rs"]
 mod seed;
-pub(crate) use seed::SourceAssemblySeed;
+pub(crate) use seed::{LazySourceAssemblySeed, SourceAssemblySeed};
 
-const MAX_CALLS: usize = 100_000;
-const MAX_METADATA: usize = 128 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-EXPANSION-INPUT", message.into())
 }
 fn charge(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_add(b)
-        .filter(|n| *n <= MAX_METADATA)
         .ok_or_else(|| {
             Diagnostic::new(
                 "LRR-E-METADATA-LIMIT",
@@ -108,7 +106,48 @@ pub struct PreparedSourceSyntax {
     pending: Vec<Digest>,
     // Only finish_for_body may mint a body-scoped readiness certificate.
     selected_body: Option<Digest>,
+    // A selected macro-generated function: its exact producing record and
+    // declaration location in this retained tree (finish_for_generated_body).
+    selected_generated: Option<GeneratedBodyAnchor>,
     identity: Digest,
+}
+/// Structural location of one selected generated function in the retained
+/// tree. Positions come only from the actual splice path; this grants no
+/// name, member or entry authority by itself.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GeneratedBodyAnchor {
+    definition: Digest,
+    record: Digest,
+    output: SourceRange,
+    declaration: SourceRange,
+    body: SourceRange,
+}
+impl GeneratedBodyAnchor {
+    pub fn definition(&self) -> Digest {
+        self.definition
+    }
+    /// Key fingerprint of the expansion record whose output wrote the item.
+    pub fn record(&self) -> Digest {
+        self.record
+    }
+    /// The item's declaration range in that record's own output text.
+    pub fn output_range(&self) -> SourceRange {
+        self.output
+    }
+    pub fn declaration_range(&self) -> SourceRange {
+        self.declaration
+    }
+    pub fn body_range(&self) -> SourceRange {
+        self.body
+    }
+    fn encode(&self, e: &mut StableEncoder) {
+        e.digest(self.definition);
+        e.digest(self.record);
+        for range in [self.output, self.declaration, self.body] {
+            e.u32(range.start);
+            e.u32(range.end);
+        }
+    }
 }
 impl PreparedSourceSyntax {
     /// Structural positions, independent of copied diagnostic token origins.
@@ -136,6 +175,11 @@ impl PreparedSourceSyntax {
     }
     pub(crate) fn ready_for_admission(&self) -> bool {
         self.selected_body.is_some() || self.pending.is_empty()
+    }
+    /// The selected generated function anchor, when this preparation was
+    /// scoped to a macro-generated function body.
+    pub fn selected_generated(&self) -> Option<&GeneratedBodyAnchor> {
+        self.selected_generated.as_ref()
     }
     pub(crate) fn permits_body(&self, definition: Digest) -> bool {
         self.selected_body.map_or_else(
@@ -204,7 +248,16 @@ impl SourceSyntaxAssembly {
         scan: &Arc<DeclarationScan>,
         epoch: u64,
     ) -> Result<Self, Diagnostic> {
-        let source = &provider.source;
+        Self::from_source(&provider.source, &*provider.owned_forest()?, scan, epoch)
+    }
+    /// The same initial assembly from its provider's source view and that
+    /// provider's own owned token forest.
+    pub(crate) fn from_source(
+        source: &PreparedSourceView,
+        forest: &lrr_expand_adapter::token_wire::TokenForest,
+        scan: &Arc<DeclarationScan>,
+        epoch: u64,
+    ) -> Result<Self, Diagnostic> {
         let selection = source.selection();
         if epoch == 0
             || scan.parse() != &selection.outline.parse
@@ -214,8 +267,7 @@ impl SourceSyntaxAssembly {
         {
             return Err(fault("source syntax assembly caller/scan/epoch differs"));
         }
-        let forest = provider.owned_forest()?;
-        let tree = SyntaxAttachment::parse(&forest, DeclarationGrammar::Items).map_err(adapter)?;
+        let tree = SyntaxAttachment::parse(forest, DeclarationGrammar::Items).map_err(adapter)?;
         let captured = tree.materialize().map_err(adapter)?;
         let occurrences = SourceOccurrences::new(
             Digest(tree.syntax_identity().map_err(adapter)?.0),
@@ -267,7 +319,7 @@ impl SourceSyntaxAssembly {
             return Err(fault("source syntax invocation capture incomplete"));
         }
         let originals = anchors::capture(source, &tree)?;
-        let macro_definitions = macro_anchors::capture(source, &scan, &captured, &forest)?;
+        let macro_definitions = macro_anchors::capture(source, &scan, &captured, forest)?;
         macro_anchors::validate(&macro_definitions, &captured)?;
         let retained_bytes = charge(
             charge(scan.retained_bytes(), source.prepared_metadata_bytes()?)?,
@@ -372,9 +424,6 @@ impl SourceSyntaxAssembly {
             .checked_sub(1)
             .and_then(|n| n.checked_add(replacement.len()))
             .ok_or_else(|| fault("source syntax call count overflow"))?;
-        if self.outputs.len() >= MAX_CALLS {
-            return Err(fault("source syntax output count limit"));
-        }
         let retained_bytes = charge(
             charge(self.retained_bytes, output.metadata_bytes()?)?,
             std::mem::size_of::<Arc<GeneratedDeclarations>>(),
@@ -481,12 +530,19 @@ impl SourceSyntaxAssembly {
     }
 
     pub fn finish(self) -> Result<PreparedSourceSyntax, Diagnostic> {
-        self.finish_scope(None)
+        self.finish_scope(None, None)
     }
     fn finish_scope(
         mut self,
         selected_body: Option<Digest>,
+        selected_generated: Option<GeneratedBodyAnchor>,
     ) -> Result<PreparedSourceSyntax, Diagnostic> {
+        if selected_generated
+            .as_ref()
+            .is_some_and(|anchor| Some(anchor.definition) != selected_body)
+        {
+            return Err(fault("selected generated body anchor differs"));
+        }
         let mut pending = Vec::new();
         pending
             .try_reserve_exact(self.calls.len())
@@ -502,13 +558,18 @@ impl SourceSyntaxAssembly {
         anchors::validate(&self.source, syntax.clone(), &self.originals)?;
         self.outputs
             .sort_by_key(|output| output.record().key().fingerprint());
-        let mut identity = StableEncoder::new(if selected_body.is_some() {
+        let mut identity = StableEncoder::new(if selected_generated.is_some() {
+            "lrr/v1/prepared-source-syntax/selected-generated-body-structural-occurrences"
+        } else if selected_body.is_some() {
             "lrr/v6/prepared-source-syntax/selected-body-structural-occurrences"
         } else {
             "lrr/v5/prepared-source-syntax/structural-occurrences"
         });
         if let Some(definition) = selected_body {
             identity.digest(definition);
+        }
+        if let Some(anchor) = &selected_generated {
+            anchor.encode(&mut identity);
         }
         identity.string(self.source.selection().path.as_str());
         identity.record(&self.source.selection().outline);
@@ -551,14 +612,12 @@ impl SourceSyntaxAssembly {
             expansion_definitions: self.expansion_definitions,
             pending,
             selected_body,
+            selected_generated,
             identity: identity.finish(),
         })
     }
 }
 fn expansion_metadata(count: usize) -> Result<usize, Diagnostic> {
-    if count > MAX_CALLS {
-        return Err(fault("source expansion definition count limit"));
-    }
     charge(
         0,
         count
@@ -578,9 +637,6 @@ fn reserve_calls(calls: &mut Vec<CallBinding>, count: usize) -> Result<(), Diagn
         .map_err(|_| fault("source syntax call allocation"))
 }
 fn charge_calls(bytes: usize, count: usize) -> Result<usize, Diagnostic> {
-    if count > MAX_CALLS {
-        return Err(fault("source syntax call count limit"));
-    }
     charge(
         bytes,
         count

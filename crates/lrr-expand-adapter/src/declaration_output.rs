@@ -100,14 +100,23 @@ pub fn materialize(
     materialize_root(&root, &map, &store)
 }
 
+/// Retain header facts from the same admitted pinned tree, without parsing a
+/// second time or altering the ordinary declaration/snapshot representation.
+pub fn materialize_with_headers(
+    input: &TokenForest,
+    grammar: DeclarationGrammar,
+) -> Result<(DeclarationSyntax, Vec<crate::item_output::Item>), AdapterError> {
+    let mut store = SpanStore::default();
+    let (root, map) = parse_root(input, grammar, &mut store)?;
+    let headers = crate::item_output::capture_headers(&root, &map, &store)?;
+    Ok((materialize_root(&root, &map, &store)?, headers))
+}
+
 pub(crate) fn parse_root(
     input: &TokenForest,
     grammar: DeclarationGrammar,
     store: &mut SpanStore,
 ) -> Result<(syntax::SyntaxNode, span::SpanMap), AdapterError> {
-    if input.encoded_len()? > 32 * 1024 * 1024 || input.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(error("declaration output input budget"));
-    }
     let entry = grammar.entry_point();
     let tree = store.import(input)?;
     let (parsed, map) = syntax_bridge::token_tree_to_syntax_node(&tree, entry, &mut |context| {
@@ -142,9 +151,6 @@ pub(crate) fn materialize_root(
 ) -> Result<DeclarationSyntax, AdapterError> {
     let length = u32::from(root.text_range().len());
     let count = map.iter().count();
-    if length > 32 * 1024 * 1024 || count > 2_000_000 {
-        return Err(error("declaration output text/origin budget"));
-    }
     let mut origins = Vec::new();
     origins
         .try_reserve_exact(count)
@@ -175,9 +181,6 @@ pub(crate) fn materialize_root(
             continue;
         };
         if let Some(definition) = ast::MacroRules::cast(node.clone()) {
-            if definitions.len() >= 100_000 {
-                return Err(error("generated definition capture count limit"));
-            }
             let name = definition
                 .name()
                 .ok_or_else(|| error("generated definition name absent"))?;
@@ -192,7 +195,6 @@ pub(crate) fn materialize_root(
             bytes = bytes
                 .checked_add(body.allocated_bytes()?)
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 256 * 1024 * 1024)
                 .ok_or_else(|| error("generated macro capture retention budget"))?;
             definitions
                 .try_reserve_exact(1)
@@ -208,9 +210,6 @@ pub(crate) fn materialize_root(
             continue;
         }
         if let Some(call) = ast::MacroCall::cast(node.clone()) {
-            if calls.len() >= 100_000 {
-                return Err(error("generated call capture count limit"));
-            }
             let path = call
                 .path()
                 .ok_or_else(|| error("generated call path absent"))?;
@@ -239,7 +238,6 @@ pub(crate) fn materialize_root(
                 .checked_add(path.allocated_bytes()?)
                 .and_then(|n| n.checked_add(input_bytes))
                 .and_then(|n| n.checked_add(160))
-                .filter(|n| *n <= 256 * 1024 * 1024)
                 .ok_or_else(|| error("generated macro capture retention budget"))?;
             calls
                 .try_reserve_exact(1)

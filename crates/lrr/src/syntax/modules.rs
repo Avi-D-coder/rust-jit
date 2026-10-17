@@ -24,16 +24,13 @@ impl InlineModuleLayout {
     pub(crate) fn append(&mut self, child: Self) -> Result<(), Diagnostic> {
         self.directory
             .len()
-            .checked_add(child.directory.len())
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| error("combined inline layout depth limit"))?;
+            .checked_add(child.directory.len())            .ok_or_else(|| error("combined inline layout depth limit"))?;
         self.directory
             .iter()
             .chain(&child.directory)
             .try_fold(0usize, |n, part| {
                 n.checked_add(part.len()).and_then(|n| n.checked_add(64))
             })
-            .filter(|n| *n <= 64 * 1024)
             .ok_or_else(|| error("combined inline layout metadata limit"))?;
         self.directory
             .try_reserve(child.directory.len())
@@ -51,9 +48,6 @@ pub(crate) fn inline_module_layout(
     cfg_values: &CfgSet,
     module_path: &[String],
 ) -> Result<InlineModuleLayout, Diagnostic> {
-    if module_path.len() > 256 {
-        return Err(error("inline module layout depth limit"));
-    }
     if !super::attributes::source_root_enabled(tree, cfg_values)? {
         return Err(error("inline caller root is cfg-disabled"));
     }
@@ -66,15 +60,11 @@ pub(crate) fn inline_module_layout(
         for module in parent.children().filter_map(ast::Module::cast) {
             work = work
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| error("inline module layout work limit"))?;
             let Some(name) = module.name() else {
                 continue;
             };
             let text = name.text();
-            if text.len() > 64 * 1024 {
-                return Err(error("inline module name metadata limit"));
-            }
             let name = super::ast_adapter::semantic_name(text)
                 .ok_or_else(|| error("inline module canonical name unavailable"))?;
             if &name != wanted {
@@ -105,7 +95,6 @@ pub(crate) fn inline_module_layout(
         bytes = bytes
             .checked_add(part.len())
             .and_then(|n| n.checked_add(64))
-            .filter(|n| *n <= 64 * 1024)
             .ok_or_else(|| error("inline module layout metadata limit"))?;
         layout
             .directory
@@ -125,9 +114,6 @@ pub(crate) fn cfg(
     values: &CfgSet,
     depth: usize,
 ) -> Result<bool, Diagnostic> {
-    if depth >= 128 {
-        return Err(error("cfg nesting exceeds 128"));
-    }
     match predicate {
         ast::CfgPredicate::CfgAtom(atom) => {
             if atom.true_token().is_some() {
@@ -196,12 +182,7 @@ fn attributes(module: &ast::Module, values: &CfgSet) -> Result<(bool, Option<Str
     let mut pending: Vec<_> = module.attrs().filter_map(|a| a.meta()).collect();
     let mut path = None;
     let mut enabled = true;
-    let mut processed = 0;
     while let Some(meta) = pending.pop() {
-        processed += 1;
-        if processed > 100_000 {
-            return Err(error("module attribute limit exceeded"));
-        }
         match meta {
             ast::Meta::CfgMeta(meta) => {
                 enabled &= cfg(
@@ -295,12 +276,7 @@ pub(crate) fn external_module_declarations_from_tree(
         .map(|m| (m, Vec::<String>::new(), false, Vec::<String>::new()))
         .collect();
     let mut result = Vec::new();
-    let mut count = 0;
     while let Some((module, directory, file_relative, mut module_path)) = queue.pop() {
-        count += 1;
-        if count > 100_000 {
-            return Err(error("module declaration limit exceeded"));
-        }
         let (enabled, path_override) = attributes(&module, cfg_values)?;
         if !enabled {
             continue;
@@ -311,9 +287,6 @@ pub(crate) fn external_module_declarations_from_tree(
         let text = name.text();
         let name = super::ast_adapter::semantic_name(text)
             .ok_or_else(|| error("module name unavailable"))?;
-        if module_path.len() >= 256 {
-            return Err(error("logical module depth exceeds 256"));
-        }
         module_path.push(name.clone());
         if let Some(items) = module.item_list() {
             let (mut child_directory, child_file_relative) = if let Some(path) = path_override {

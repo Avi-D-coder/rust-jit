@@ -47,7 +47,6 @@ pub(crate) struct ConstantChunkActivation {
     abandoned: Vec<Building>,
     failure: Option<Diagnostic>,
     finished: bool,
-    metadata: usize,
     fields_charged: u64,
 }
 pub(crate) enum ConstantChunkPoll {
@@ -60,9 +59,6 @@ pub(crate) enum ConstantChunkPoll {
     Failed(Diagnostic),
 }
 impl ConstantChunkActivation {
-    pub(crate) fn metadata_bytes(&self) -> usize {
-        self.metadata
-    }
     pub(crate) fn fields_charged(&self) -> u64 {
         self.fields_charged
     }
@@ -87,43 +83,9 @@ impl GuestStore {
         if destination_cells > 1 || STEP_BYTES > CHUNK_BYTES {
             return Err(resource());
         }
-        let mut stack = Vec::new();
-        let mut cleanup = Vec::new();
-        let mut abandoned = Vec::new();
-        stack.try_reserve_exact(MAX_DEPTH).map_err(|_| resource())?;
-        abandoned
-            .try_reserve_exact(MAX_DEPTH)
-            .map_err(|_| resource())?;
-        cleanup
-            .try_reserve_exact(MAX_DEPTH * 3)
-            .map_err(|_| resource())?;
-        let metadata = plan
-            .totals
-            .metadata
-            .checked_add(std::mem::size_of::<ConstantChunkActivation>())
-            .and_then(|n| {
-                n.checked_add(
-                    stack
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<Building>())?,
-                )
-            })
-            .and_then(|n| {
-                n.checked_add(
-                    cleanup
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<Cleanup>())?,
-                )
-            })
-            .and_then(|n| {
-                n.checked_add(
-                    abandoned
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<Building>())?,
-                )
-            })
-            .filter(|n| *n <= MAX_METADATA)
-            .ok_or_else(resource)?;
+        let stack = Vec::new();
+        let cleanup = Vec::new();
+        let abandoned = Vec::new();
         self.reserve_constant_instantiation_with_destination(&plan.totals, destination_cells)?;
         Ok(ConstantChunkActivation {
             session: self.pattern_binding_session(),
@@ -136,7 +98,6 @@ impl GuestStore {
             abandoned,
             failure: None,
             finished: false,
-            metadata,
             fields_charged: 0,
         })
     }
@@ -314,17 +275,7 @@ impl GuestStore {
         if a.failure.is_some() {
             return Ok(());
         }
-        a.failure = Some(
-            if error
-                .heap_bytes()
-                .and_then(|n| n.checked_add(a.metadata))
-                .is_some_and(|n| n <= MAX_METADATA)
-            {
-                error
-            } else {
-                resource()
-            },
-        );
+        a.failure = Some(error);
         // Stage each pending owner during a later counted cleanup step. Avoid
         // draining all active nesting/commit state in an already full chunk.
 
@@ -430,7 +381,7 @@ impl GuestStore {
     pub(crate) fn advance_constant_chunks(
         &mut self,
         a: &mut ConstantChunkActivation,
-        fuel: &mut RunFuel,
+        steps_counter: &mut RunSteps,
     ) -> ConstantChunkPoll {
         if a.session != self.pattern_binding_session()
             || a.epoch != self.budget.epoch()
@@ -458,12 +409,6 @@ impl GuestStore {
                     return ConstantChunkPoll::Failed(e);
                 }
             } else {
-                if let Err(e) = fuel.poll() {
-                    if let Err(e) = self.constant_chunk_failure(a, e) {
-                        return ConstantChunkPoll::Failed(e);
-                    };
-                    continue;
-                }
                 let result = (|| -> Result<Option<PendingConstantResult>, Diagnostic> {
                     if let Some(c) = &mut a.commit {
                         if c.next < c.count {
@@ -508,7 +453,7 @@ impl GuestStore {
                             if b.child_started {
                                 return Err(ownership());
                             }
-                            fuel.charge()?;
+                            steps_counter.charge();
                             a.fields_charged =
                                 a.fields_charged.checked_add(1).ok_or_else(resource)?;
                             b.child_started = true;

@@ -39,7 +39,6 @@ use ra_ap_syntax::{
     ast::{self, HasName},
 };
 use std::sync::Arc;
-const LIMIT: usize = 32 * 1024 * 1024;
 macro_rules! polled {
     ($v:expr) => {
         match $v {
@@ -139,6 +138,10 @@ pub struct EnteredValueGoal {
     local: Option<Digest>,
     target: Option<BindingTarget>,
     declaration: Option<SelectedValueDeclaration>,
+    // The ordinary Value lookup selected a closed library facade function.
+    facade: Option<crate::facade::functions::LibraryFunction>,
+    // Selected through a qualified written path (the dispatcher's route).
+    qualified: bool,
     demand: Option<ValueGoalDemand>,
     occurrence: Digest,
     reads: Digest,
@@ -182,6 +185,16 @@ impl EnteredValueGoal {
     pub(crate) fn declaration(&self) -> Option<&SelectedValueDeclaration> {
         self.declaration.as_ref()
     }
+    /// A closed library facade function selected by the ordinary lookup, as
+    /// `CallResolver::select` selects it for the dispatcher.
+    pub(crate) fn facade(&self) -> Option<crate::facade::functions::LibraryFunction> {
+        self.facade
+    }
+    /// Whether this selection came from a qualified written path, which the
+    /// dispatcher resolves on its own written-path route.
+    pub(crate) fn qualified(&self) -> bool {
+        self.qualified
+    }
     pub(crate) fn pending(&self) -> Option<ValueGoalDemand> {
         self.demand
     }
@@ -190,7 +203,6 @@ impl EnteredValueGoal {
         let mut add = |n: usize| -> Result<(), Diagnostic> {
             bytes = bytes
                 .checked_add(n)
-                .filter(|n| *n <= LIMIT)
                 .ok_or_else(crate::runtime::arena::resource)?;
             Ok(())
         };
@@ -237,6 +249,9 @@ impl StableEncode for EnteredValueGoal {
             e.record(&declaration.context);
             e.option(&declaration.owner, |e, owner| e.record(owner));
         });
+        // The facade function's definition identity is folded into `reads`.
+        e.bool(self.facade.is_some());
+        e.bool(self.qualified);
         e.option(&self.demand, |e, demand| match demand {
             ValueGoalDemand::Occurrence => e.u8(0),
             ValueGoalDemand::PathAdjustment => e.u8(1),
@@ -307,6 +322,8 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
         local: None,
         target: None,
         declaration: None,
+        facade: None,
+        qualified: false,
         demand: None,
         occurrence: Digest([0; 32]),
         reads: Digest([0; 32]),
@@ -330,12 +347,17 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
     };
     let (root, hygiene) = plan.entered.local_hygiene();
     let adapter = plan.adapter();
+    // The owning root pattern of a binding target (absolute source range).
+    let mut recipe_root = crate::syntax::spans::SourceRange { start: 0, end: 0 };
     let (name, name_range, target) = match indexed.role {
         NodeRole::Pattern => {
             let Some(pattern) = ast::IdentPat::cast(syntax) else {
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
-            // @/structural targets require the retained canonical group join.
+            // An `@` subpattern target requires the retained canonical group
+            // join. A binding nested in a tuple/struct/reference pattern is
+            // the same local at its own occurrence; its recipe names the
+            // owning root pattern, checked against the occurrence row below.
             if pattern.pat().is_some() {
                 return goal.needs(ValueGoalDemand::Occurrence);
             }
@@ -347,7 +369,10 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             let Some(recipe) = recipe else {
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
-            if recipe.pattern_range != range(pattern.syntax().text_range()) {
+            if !recipe
+                .pattern_range
+                .contains(range(pattern.syntax().text_range()))
+            {
                 return goal.needs(ValueGoalDemand::Occurrence);
             }
             checked!(
@@ -355,7 +380,6 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
                     .name
                     .len()
                     .checked_add(recipe.raw_name.len())
-                    .filter(|bytes| *bytes <= 2 * 1024 * 1024)
                     .ok_or_else(crate::runtime::arena::resource)
             );
             let target = BindingTarget {
@@ -365,6 +389,7 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
                 name_range,
                 classification: recipe.classification,
             };
+            recipe_root = recipe.pattern_range;
             (
                 checked!(owned_spelling(name.text())),
                 name_range,
@@ -379,7 +404,7 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
             if path.qualifier().is_some() || path.coloncolon_token().is_some() {
-                return goal.needs(ValueGoalDemand::PathAdjustment);
+                return qualified(db, goal, &expression);
             }
             let Some(segment) = path.segment() else {
                 return goal.needs(ValueGoalDemand::Occurrence);
@@ -398,9 +423,6 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
         }
         _ => return goal.needs(ValueGoalDemand::Occurrence),
     };
-    if name.len() > 1024 * 1024 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     let edition = checked!(source.parsed().token_edition(name_range));
     let raw = checked!(source.identifier_context_or_original(name_range, root));
     let local_context = checked!(hygiene.name_local(raw));
@@ -412,14 +434,16 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
     occurrence.digest(Digest(raw.0));
     occurrence.digest(Digest(local_context.0.0));
     goal.occurrence = occurrence.finish();
-    if edition != plan.entered.parent.source().outline.parse.profile.edition {
-        return goal.needs(ValueGoalDemand::PathAdjustment);
-    }
+    // A token owned by another edition (macro output from another crate):
+    // its hygienic local bindings resolve exactly as the body's own, and a
+    // module request carries the token's edition. An item selection by such
+    // a token remains held below.
+    let foreign = edition != plan.entered.parent.source().outline.parse.profile.edition;
     if let Some(target) = target {
         if checked!(crate::frontend::names::owned_name(&name, edition)).as_str() != target.name {
             return QueryPoll::Ready(Err(error("Value binding target spelling differs")));
         }
-        use crate::frontend::scalar_pattern_binding::occurrences::PatternLocalOccurrence;
+        use crate::frontend::pattern_binding_occurrences::PatternLocalOccurrence;
         use crate::syntax::pattern_bindings::{BindingContext, BindingUncertainty};
         let Some(row) = plan.pattern_occurrences.for_local(target.identity) else {
             return goal.needs(ValueGoalDemand::Occurrence);
@@ -429,8 +453,19 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             &goal.key,
             row.pattern()
         ));
+        let root_range = source
+            .index()
+            .nodes()
+            .get(row.root().0 as usize)
+            .and_then(|root| {
+                let start = source.body().range.start;
+                Some(crate::syntax::spans::SourceRange {
+                    start: start.checked_add(root.range.start)?,
+                    end: start.checked_add(root.range.end)?,
+                })
+            });
         if row.pattern() != node
-            || row.root() != node
+            || root_range != Some(recipe_root)
             || row.name_range() != name_range
             || row.name() != target.name
             || row.edition() != Some(edition)
@@ -568,12 +603,19 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
         NameLookup::Absent if goal.target.is_some() => {
             goal.local = goal.target.as_ref().map(|target| target.identity)
         }
+        NameLookup::Defined(_) if foreign => return goal.needs(ValueGoalDemand::PathAdjustment),
         NameLookup::Defined(selected) => {
             return selected_declaration(db, goal, selected);
         }
         NameLookup::NeedInput(id) => {
-            use crate::frontend::scalar_pattern_binding::occurrences::PatternLocalOccurrence;
+            use crate::frontend::pattern_binding_occurrences::PatternLocalOccurrence;
             let Some(prior) = plan.pattern_occurrences.for_local(id) else {
+                // The same hygienic prefix selected one of this function's
+                // own parameters: an ordinary local with no body pattern.
+                if goal.target.is_none() && adapter.parameter_recipe(id).is_some() {
+                    goal.local = Some(id);
+                    return QueryPoll::Ready(goal.finish());
+                }
                 return goal.needs(ValueGoalDemand::Prefix(id));
             };
             // A real earlier lexical binding may be shadowed by a fresh binding.
@@ -620,14 +662,127 @@ fn certify(
     seed.digest(module);
     reads.certify(db, environment, seed.finish(), |_, _| Ok(()))
 }
+/// A qualified value path (`m::f`, `::core::panicking::panic`, a generated
+/// `$crate::…` root) selected through the dispatcher's own route: its written
+/// spelling resolved by `CallResolver::lookup_written` in the caller's
+/// completed environment. Type-relative paths (`P::f`) remain pending.
+fn qualified(
+    db: &mut Database,
+    mut goal: EnteredValueGoal,
+    expression: &ast::PathExpr,
+) -> QueryPoll<EnteredValueGoal> {
+    let plan = Arc::clone(&goal.plan);
+    let source = plan.context().source();
+    let Some(spelled) = checked!(
+        source
+            .parsed()
+            .written_value_spelling(expression, source.index().cfg())
+    ) else {
+        return goal.needs(ValueGoalDemand::PathAdjustment);
+    };
+    goal.qualified = true;
+    let path_range = range(expression.syntax().text_range());
+    let mut occurrence = StableEncoder::new("lrr/v1/entered-value-qualified-occurrence");
+    occurrence.string(&spelled);
+    occurrence.u32(path_range.start);
+    occurrence.u32(path_range.end);
+    goal.occurrence = occurrence.finish();
+    if let Some(missing) = plan.missing_expansions.first() {
+        return goal.needs(ValueGoalDemand::ExpansionDefinition(*missing));
+    }
+    let Some(environment) = plan.environment() else {
+        return goal.needs(ValueGoalDemand::ModulePublication);
+    };
+    let environment = Arc::clone(environment.macros().source_environment());
+    let sources: Vec<_> = environment.sources().iter().collect();
+    let resolver = checked!(crate::frontend::callables::CallResolver::new(
+        environment.names(),
+        &sources
+    ));
+    let caller = goal.key.body.definition;
+    let lookup = polled!(resolver.lookup_written(db, caller, &spelled, Namespace::Value));
+    let mut impl_owned = false;
+    let selected = match lookup {
+        NameLookup::Defined(selected) => selected,
+        // A type-relative associated function (`P::f`, `Self::f`): the
+        // dispatcher's own route with this environment's shared impl index.
+        NameLookup::Absent => {
+            let members = checked!(environment.member_index());
+            let resolver = resolver.with_members(Some(&members));
+            let selection = polled!(resolver.source_function(db, caller, &spelled));
+            // An associated constant (`Type::NAME`, `<T as Tr>::NAME`): an
+            // impl/trait member, never a body-local declaration.
+            if let crate::frontend::callables::CallSelection::NeedValue(definition) = &selection
+                && definition.item_kind == crate::source::manifest::ItemKind::Constant
+            {
+                let identity = definition.fingerprint();
+                let edition = match db.input(&InputKey::DefinitionHeader(identity)).as_deref() {
+                    Some(InputValue::DefinitionHeader(header)) => header.profile.edition,
+                    _ => return goal.needs(ValueGoalDemand::DeclarationPublication(identity)),
+                };
+                let selected = NameDefinition {
+                    namespace: Namespace::Value,
+                    identity,
+                    defining_unit: definition.crate_key,
+                    definition_edition: edition,
+                };
+                let mut reads = StableEncoder::new("lrr/v1/entered-value-qualified-read");
+                reads.string(&spelled);
+                reads.record(&selected);
+                goal.reads = reads.finish();
+                return declaration(db, goal, selected, true);
+            }
+            let crate::frontend::callables::CallSelection::Source(callee) = selection else {
+                return goal.needs(ValueGoalDemand::PathAdjustment);
+            };
+            impl_owned = callee.signature().scope.owner.is_some()
+                && callee.definition().enclosing_impl == callee.signature().scope.owner;
+            NameDefinition {
+                namespace: Namespace::Value,
+                identity: callee.identity(),
+                defining_unit: callee.definition().crate_key,
+                definition_edition: callee.signature().header.profile.edition,
+            }
+        }
+        _ => return goal.needs(ValueGoalDemand::PathAdjustment),
+    };
+    let mut reads = StableEncoder::new("lrr/v1/entered-value-qualified-read");
+    reads.string(&spelled);
+    reads.record(&selected);
+    goal.reads = reads.finish();
+    declaration(db, goal, selected, impl_owned)
+}
+
 fn selected_declaration(
+    db: &mut Database,
+    goal: EnteredValueGoal,
+    selected: NameDefinition,
+) -> QueryPoll<EnteredValueGoal> {
+    declaration(db, goal, selected, false)
+}
+/// `impl_owned`: an associated function selected by its owning impl. An
+/// impl introduces no body or namespace; it has the module's environment.
+fn declaration(
     db: &mut Database,
     mut goal: EnteredValueGoal,
     selected: NameDefinition,
+    impl_owned: bool,
 ) -> QueryPoll<EnteredValueGoal> {
     let id = selected.identity;
     if selected.namespace != Namespace::Value {
         return QueryPoll::Ready(Err(error("Value goal selected another namespace")));
+    }
+    // A closed library facade function has no source declaration; the
+    // dispatcher selects it by this same definition identity.
+    if goal.target.is_none()
+        && let Some(function) = crate::facade::functions::select(&selected)
+    {
+        let mut identity = StableEncoder::new("lrr/v1/entered-value-facade");
+        identity.digest(goal.reads);
+        identity.digest(id);
+        goal.reads = identity.finish();
+        goal.facade = Some(function);
+        return QueryPoll::Ready(goal.finish());
     }
     let source = db.input(&InputKey::DefinitionSource(id));
     let header = db.input(&InputKey::DefinitionHeader(id));
@@ -652,7 +807,7 @@ fn selected_declaration(
             .ok_or_else(|| error("Value goal actual header stamp absent"))
     );
     let cached_header = checked!(goal.plan.field_types.header_identity(id, header_stamp));
-    let owner = if context.scope.owner.is_some() {
+    let owner = if context.scope.owner.is_some() && !impl_owned {
         let owner = db.input(&InputKey::LocalDeclarationOwner(id));
         let Some(owner) = owner else {
             return goal.needs(ValueGoalDemand::DeclarationOwner(id));
@@ -689,7 +844,15 @@ fn selected_declaration(
         // late::try_resolve_as_non_binding permits fresh bindings to shadow
         // Fn/AssocFn, but not constant/constructor/static definitions. Resolve
         // the actual canonical source kind before admitting this binding.
-        return shadowed_definition_binding(db, goal, selected, source, header, context);
+        return shadowed_definition_binding(
+            db,
+            goal,
+            selected,
+            source,
+            header,
+            context,
+            Some((cached_header, owner)),
+        );
     }
     checked!(
         source
@@ -698,7 +861,6 @@ fn selected_declaration(
             .len()
             .checked_add(context.scope.heap_bytes())
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<EnteredValueGoal>()))
-            .filter(|bytes| *bytes <= LIMIT)
             .ok_or_else(crate::runtime::arena::resource)
     );
     goal.declaration = Some(SelectedValueDeclaration {
@@ -711,6 +873,10 @@ fn selected_declaration(
     QueryPoll::Ready(goal.finish())
 }
 
+/// `non_binding`: the cached header identity and local owner of the selected
+/// declaration. A non-function selection then makes the identifier pattern a
+/// path to that declaration (a constant, unit constructor or static), as in
+/// rustc; without it, such a selection stays pending.
 pub(super) fn shadowed_definition_binding(
     db: &mut Database,
     mut goal: EnteredValueGoal,
@@ -718,6 +884,7 @@ pub(super) fn shadowed_definition_binding(
     source: &ParseKey,
     header: &crate::syntax::outline::HeaderRecipe,
     context: &DeclarationContext,
+    non_binding: Option<(Option<Digest>, Option<BodyKey>)>,
 ) -> QueryPoll<EnteredValueGoal> {
     use crate::{
         frontend::callables::entered_module::{
@@ -747,7 +914,17 @@ pub(super) fn shadowed_definition_binding(
         }
     };
     if canonical_kind != ItemKind::Function {
-        return goal.needs(ValueGoalDemand::BindingClassification(id));
+        let Some((cached_header, owner)) = non_binding else {
+            return goal.needs(ValueGoalDemand::BindingClassification(id));
+        };
+        goal.declaration = Some(SelectedValueDeclaration {
+            definition: selected,
+            source: source.clone(),
+            header: cached_header.unwrap_or_else(|| header.fingerprint()),
+            context: context.clone(),
+            owner,
+        });
+        return QueryPoll::Ready(goal.finish());
     }
     let parsed = polled!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(source.clone())));
     let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
@@ -821,11 +998,7 @@ fn pattern_prelude(
     if proofs.next().is_some() {
         return QueryPoll::Ready(Err(error("pattern prelude receipt is ambiguous")));
     }
-    checked!(proof.metadata_bytes().and_then(|bytes| {
-        (bytes <= LIMIT)
-            .then_some(())
-            .ok_or_else(crate::runtime::arena::resource)
-    }));
+    checked!(proof.metadata_bytes());
     let retained = checked!(proof.retain(source, &request.bucket.scope));
     QueryPoll::Ready(Ok(matches!(
         retained.lookup(&request.bucket.name),
@@ -835,9 +1008,6 @@ fn pattern_prelude(
 }
 
 fn owned_spelling(text: &str) -> Result<String, Diagnostic> {
-    if text.len() > 1024 * 1024 {
-        return Err(crate::runtime::arena::resource());
-    }
     let mut owned = String::new();
     owned
         .try_reserve_exact(text.len())

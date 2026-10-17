@@ -46,6 +46,7 @@ pub mod source_declarative;
 
 pub mod generated_call_request;
 
+pub(crate) mod body_macro_boundary;
 pub mod generated_syntax;
 
 pub(crate) mod string_chain;
@@ -71,5 +72,3 @@ pub(crate) mod procedural_sites;
 #[allow(dead_code)]
 #[path = "../../../lrr-expand-adapter/tests/support/declarative.rs"]
 pub(crate) mod declarative_test_fixture;
-
-pub(crate) mod body_macro_boundary;

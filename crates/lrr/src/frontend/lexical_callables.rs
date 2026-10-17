@@ -27,7 +27,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone)]
 pub(crate) struct LexicalAdmission {
     plan: LexicalFunctionPlan,
-    namespace_stamps: BTreeMap<InputKey, Digest>,
+    namespace_stamps: std::sync::Arc<BTreeMap<InputKey, Digest>>,
     metadata_bytes: usize,
 }
 impl LexicalAdmission {
@@ -256,7 +256,6 @@ impl LexicalAdmission {
                 .checked_add(std::mem::size_of::<(InputKey, Digest)>())
                 .and_then(|n| n.checked_add(128))
                 .and_then(|n| n.checked_add(key.heap_bytes()))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("lexical certificate metadata limit"))?;
         }
         let proof = Self {

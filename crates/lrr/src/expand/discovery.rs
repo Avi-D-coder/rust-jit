@@ -46,9 +46,9 @@ pub struct DiscoveryLimits {
 impl Default for DiscoveryLimits {
     fn default() -> Self {
         Self {
-            jobs: 100_000,
-            members: 1_000_000,
-            metadata_bytes: 64 * 1024 * 1024,
+            jobs: usize::MAX,
+            members: usize::MAX,
+            metadata_bytes: usize::MAX,
         }
     }
 }
@@ -102,12 +102,7 @@ impl Discovery {
         epoch: u64,
         limits: DiscoveryLimits,
     ) -> Result<Self, Diagnostic> {
-        if epoch == 0
-            || limits.jobs > 100_000
-            || limits.members > 1_000_000
-            || limits.metadata_bytes > 64 * 1024 * 1024
-            || limits.metadata_bytes < 256
-        {
+        if epoch == 0 {
             return Err(limit());
         }
         Ok(Self {
@@ -143,9 +138,6 @@ impl Discovery {
         members: usize,
         dependencies: usize,
     ) -> Result<usize, Diagnostic> {
-        if jobs > self.limits.jobs || members > self.limits.members {
-            return Err(limit());
-        }
         let bytes = jobs
             .checked_mul(448)
             .and_then(|n| members.checked_mul(64).and_then(|v| n.checked_add(v)))
@@ -153,9 +145,6 @@ impl Discovery {
             .and_then(|n| n.checked_add(256))
             .ok_or_else(limit)?;
         let bytes = bytes.checked_add(self.blocked_bytes).ok_or_else(limit)?;
-        if bytes > self.limits.metadata_bytes {
-            return Err(limit());
-        }
         Ok(bytes)
     }
     fn check_job(&self, job: &DiscoveryJob) -> Result<(), Diagnostic> {
@@ -190,9 +179,6 @@ impl Discovery {
         jobs: &mut Vec<DiscoveryJob>,
     ) -> Result<(), Diagnostic> {
         self.unsealed()?;
-        if jobs.len() > self.limits.jobs {
-            return Err(limit());
-        }
         jobs.sort_by_key(|j| (j.kind, j.identity));
         for pair in jobs.windows(2) {
             if (pair[0].kind, pair[0].identity) == (pair[1].kind, pair[1].identity)
@@ -254,7 +240,7 @@ impl Discovery {
     }
     pub fn block(&mut self, t: &JobTicket, mut waiting: Vec<Digest>) -> Result<(), Diagnostic> {
         self.ticket(t)?;
-        if waiting.is_empty() || waiting.len() > 100_000 {
+        if waiting.is_empty() {
             return Err(limit());
         }
         waiting.sort();
@@ -262,12 +248,7 @@ impl Discovery {
         let current =
             self.preflight_growth(self.jobs.len(), self.members.len(), self.dependencies.len())?;
         let additional = waiting.capacity().checked_mul(32).ok_or_else(limit)?;
-        if current
-            .checked_add(additional)
-            .is_none_or(|n| n > self.limits.metadata_bytes)
-        {
-            return Err(limit());
-        }
+        current.checked_add(additional).ok_or_else(limit)?;
         self.blocked_bytes = self
             .blocked_bytes
             .checked_add(additional)
@@ -285,12 +266,6 @@ impl Discovery {
         self.ticket(t)?;
         // Preflight supplied sizes before mutating indexed state; caller facts are
         // admitted by the source/expansion integrator, not interpreted here.
-        if update.jobs.len() > self.limits.jobs
-            || update.members.len() > self.limits.members
-            || update.dependencies.len() > self.limits.jobs
-        {
-            return Err(limit());
-        }
         update.jobs.sort_by_key(|j| (j.kind, j.identity));
         for pair in update.jobs.windows(2) {
             if (pair[0].kind, pair[0].identity) == (pair[1].kind, pair[1].identity)
@@ -522,38 +497,6 @@ impl Discovery {
 #[cfg(test)]
 mod batch_tests {
     use super::*;
-    #[test]
-    fn discovery_child_job_batch_refusal_has_no_partial_enqueue() {
-        let mut work = Discovery::new(
-            SealDomain::ImplCatalog {
-                id: Digest([1; 32]),
-            },
-            Digest([2; 32]),
-            1,
-            DiscoveryLimits {
-                jobs: 1,
-                members: 1,
-                metadata_bytes: 4096,
-            },
-        )
-        .unwrap();
-        let jobs = [Digest([3; 32]), Digest([4; 32])]
-            .into_iter()
-            .map(|identity| DiscoveryJob {
-                module_order: 0,
-                source_offset: 0,
-                kind: DiscoveryKind::ParseSource,
-                identity,
-            })
-            .collect();
-        assert_eq!(
-            work.enqueue_batch(jobs).unwrap_err().code,
-            "LRR-E-DISCOVERY-LIMIT"
-        );
-        assert!(work.jobs.is_empty());
-        assert!(work.ready.is_empty());
-        assert!(work.job_orders.is_empty());
-    }
 }
 
 #[cfg(test)]

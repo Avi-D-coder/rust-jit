@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "component": "common-value39-module-import-correction-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "failed_source": "e29bfef4 numeric capsule V2; compile d16aaa/1,18errors,zero bodies; original untouched",
+  "source_fingerprint": "3e3a062b887febf955ea3916fe24317afdb8ec4091837a32ec33f030653ae7f5",
+  "payload": "/private/tmp/lrr-value39-module-import-correction-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/scalar_pattern_binding.rs",
+      "before_sha256": "d2d7c4a4627b0536fe70c4c039b68f9e62a29bd5583ec2a648610615a5e783da",
+      "sha256": "2a840edb810ef85d1822b1e17ef3c2542300af03ad50b5d8124acc713c310d90",
+      "bytes": 39823,
+      "change": "only missing module entry, derived exact failed capsule parent; live parent not overwritten"
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "before_sha256": "a664e8a2dd9dc54824d777d34ff3edad6721d8ca1d737a3308705420d0865135",
+      "sha256": "e2185d447aef61e48dca1c84773185a672c08a3433c64140fe5612f5a9e2c29f",
+      "bytes": 14694,
+      "change": "replace obsolete NamespaceRead import with actually used shared NamespaceReadCertification; same source algorithm"
+    }
+  ],
+  "excluded": [
+    "root source_constraints thunk argument threading correction owned by parent",
+    "ordinal-index2 source/test leaves",
+    "all other live scalar_pattern_binding changes not present in failed capsule"
+  ],
+  "dependencies": [
+    "frozen Value11 occurrence/header/source-goal leaves",
+    "retained prelude dependency1 4a309c98 source1a035631",
+    "root numeric40/41 guard/currentness joins remain separately frozen"
+  ],
+  "review": [
+    "Module hook only exposes the already reviewed source-binding occurrence implementation through its declared parent fault/limit helpers; no new semantics/authority/policy",
+    "Qualified import names same actual common current read certifier; no resolver, evaluator or source-admission change",
+    "Existing all8 Value11 source review applies to its implementation, with mechanical source-path correction only; compilation/execution still unclaimed"
+  ]
+}

@@ -170,12 +170,6 @@ impl CompletedStandaloneRuntimeMacros {
         for (source, _) in &sources {
             profiles.insert(source.selection().outline.parse.profile.clone());
         }
-        if profiles.len() > 4 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "completed runtime macro profile count limit".into(),
-            ));
-        }
         let mut catalogs = BTreeMap::new();
         let mut exports = Vec::new();
         exports

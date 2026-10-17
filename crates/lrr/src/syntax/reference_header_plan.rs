@@ -100,10 +100,16 @@ impl ParsedFile {
         let list = function
             .param_list()
             .ok_or_else(|| fault("closed reference function parameters absent"))?;
-        if signature.parameters.len() > 100_000 {
-            return Err(metadata("reference header parameter limit"));
-        }
-        let admitted_owner = context.scope.owner.is_none() && list.self_param().is_none();
+        // Functions of an impl are ordinary declarations of its module; trait
+        // bodies still need their implementing owner.
+        let impl_owned = function
+            .syntax()
+            .parent()
+            .and_then(|items| items.parent())
+            .is_some_and(|owner| {
+                ast::Impl::can_cast(owner.kind()) || ast::Trait::can_cast(owner.kind())
+            });
+        let admitted_owner = context.scope.owner.is_none() || impl_owned;
         let mut parameters = Vec::new();
         parameters
             .try_reserve_exact(signature.parameters.len())
@@ -134,7 +140,21 @@ impl ParsedFile {
             }
             let ordinal = u32::try_from(ordinal)
                 .map_err(|_| metadata("reference header ordinal overflow"))?;
-            let captured = if admitted_owner && !parameter.receiver && !parameter.variadic {
+            let captured = if admitted_owner && parameter.receiver {
+                match list.self_param() {
+                    Some(receiver) if receiver.ty().is_some() => self
+                        .closed_reference_type(
+                            receiver.ty(),
+                            signature_fingerprint,
+                            ReferenceRole::Parameter,
+                        )?
+                        .map(|reference| ClosedReferenceSyntax { reference, ordinal }),
+                    Some(receiver) => self
+                        .closed_reference_receiver(&receiver, signature_fingerprint)?
+                        .map(|reference| ClosedReferenceSyntax { reference, ordinal }),
+                    None => None,
+                }
+            } else if admitted_owner && !parameter.variadic {
                 self.closed_reference_type(ty, signature_fingerprint, ReferenceRole::Parameter)?
                     .map(|reference| ClosedReferenceSyntax { reference, ordinal })
             } else {
@@ -149,9 +169,6 @@ impl ParsedFile {
                     )
                     .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
                     .ok_or_else(|| metadata("reference header metadata size"))?;
-            }
-            if bytes > 32 * 1024 * 1024 {
-                return Err(metadata("reference header metadata limit"));
             }
             parameters.push(captured.map(Arc::new));
         }
@@ -173,9 +190,6 @@ impl ParsedFile {
                 )
                 .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
                 .ok_or_else(|| metadata("reference header metadata size"))?;
-        }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(metadata("reference header metadata limit"));
         }
         Ok(ReferenceHeaderPlan {
             definition: signature.definition,

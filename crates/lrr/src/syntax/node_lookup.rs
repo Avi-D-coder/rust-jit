@@ -8,7 +8,6 @@ use super::{
 };
 use crate::{core::diagnostic::Diagnostic, ir::pc::NodeId};
 use ra_ap_syntax::{AstNode, NodeOrToken, SyntaxNode, TextRange, ast};
-const MAX_DEPTH: usize = 4096;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-BODY-INDEX", message.into())
 }
@@ -85,7 +84,6 @@ impl ParsedFile {
             .ok_or_else(|| invalid("macro call syntax attachment absent"))?;
         let function = syntax
             .ancestors()
-            .take(MAX_DEPTH)
             .find_map(ast::Fn::cast)
             .ok_or_else(|| invalid("macro call function owner absent"))?;
         let body = function
@@ -142,7 +140,7 @@ impl ParsedFile {
         let mut node = root.syntax().clone();
         // Return the outermost matching node at the exact indexed range, as
         // ordinary source preorder did, without visiting unrelated siblings.
-        for _ in 0..MAX_DEPTH {
+        for _ in 0usize.. {
             if node.text_range() == target && selected(&node) {
                 return Ok(Some(node));
             }

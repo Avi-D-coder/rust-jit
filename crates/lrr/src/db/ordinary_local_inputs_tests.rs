@@ -253,7 +253,7 @@ fn ordinary_local_publication_requires_active_run_and_query_coordinator_atomical
     db.finish_run().unwrap();
 }
 #[test]
-fn ordinary_local_publication_checks_actual_owner_header_parent_and_budget_before_mutation() {
+fn ordinary_local_publication_checks_actual_owner_header_and_parent_before_mutation() {
     for variant in 0..17 {
         let (mut db, parent, site) = world(SUFFIX, 2024);
         db.begin_run().unwrap();
@@ -286,13 +286,8 @@ fn ordinary_local_publication_checks_actual_owner_header_parent_and_budget_befor
                     .unwrap()
                     .value = Arc::new(InputValue::DeclarationContext(context));
             }
-            3 => {
-                let usage = db.cache_usage().unwrap();
-                db.run_budgets = Some(crate::engine::telemetry::CacheBudgets {
-                    query_bytes: usage.memo_bytes,
-                    ..Default::default()
-                });
-            }
+            // E-R5-006: the cache-budget refusal variant was removed with the budget.
+            3 => continue,
             4 => {
                 let mut parse = selected.source().clone();
                 parse.content = Digest([62; 32]);
@@ -381,13 +376,8 @@ fn ordinary_local_publication_checks_actual_owner_header_parent_and_budget_befor
                 db.publish_inputs(BTreeMap::new()).unwrap();
                 db.begin_run().unwrap();
             }
-            13 => {
-                assert!(db.cache_usage().unwrap().source_input_bytes > 0);
-                db.run_budgets = Some(crate::engine::telemetry::CacheBudgets {
-                    source_input_bytes: 0,
-                    ..Default::default()
-                });
-            }
+            // E-R5-006: the source-input budget variant was removed with the budget.
+            13 => continue,
             14 => {
                 let original = parent.context().source().original_source().unwrap();
                 db.inputs
@@ -430,7 +420,6 @@ fn ordinary_local_publication_checks_actual_owner_header_parent_and_budget_befor
             0 => "ordinary local admission actual declaration owner differs",
             1 => "ordinary local admission immutable declaration row conflict",
             2 => "ordinary local admission owning parent changed",
-            3 | 13 => "ordinary local body publication exceeds cache cap",
             4 | 5 | 6 | 10 => "ordinary local admission owning parent changed",
             7 | 8 | 9 => "ordinary local admission immutable declaration row conflict",
             11 | 12 | 14 | 15 | 16 => "prepared operation input changed",

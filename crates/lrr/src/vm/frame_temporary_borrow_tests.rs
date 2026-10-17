@@ -20,7 +20,7 @@ struct Context {
     borrow: NodeId,
     operand: NodeId,
 }
-fn context(fuel: u64) -> Context {
+fn context() -> Context {
     let facts = scope_fixture_facts::original_temporary_borrow(ORIGINAL, "a");
     let parsed = ParsedFile::parse(
         &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
@@ -57,9 +57,8 @@ fn context(fuel: u64) -> Context {
         id(facts.operand),
     );
     let entry = body.pc(statement, Phase::Entry).unwrap();
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body.clone(), entry, &mut store).unwrap();
-    frame.set_fuel_limit(fuel).unwrap();
     let mut scopes = vec![];
     let mut scope = Some(body.nodes()[statement.0 as usize].scope);
     while let Some(id) = scope {
@@ -111,7 +110,7 @@ fn target(c: &Context) -> CellId {
 }
 #[test]
 fn rustc_literal_temporary_borrow_evaluates_once_and_survives_statement_cleanup() {
-    let mut c = context(100);
+    let mut c = context();
     let r = reach_borrow(&mut c);
     let target = target(&c);
     let original = c.store.read_scalar(target).unwrap();
@@ -147,51 +146,4 @@ fn rustc_literal_temporary_borrow_evaluates_once_and_survives_statement_cleanup(
     assert_eq!(c.store.state(target).unwrap(), CellState::Dropped);
     assert_eq!(c.store.state(owner).unwrap(), CellState::Dropped);
     assert!(c.store.read_reference(reference).is_err());
-}
-#[test]
-fn rustc_literal_temporary_borrow_fuel_refusal_preserves_owner_without_reference_publication() {
-    let mut witness = context(100);
-    reach_borrow(&mut witness);
-    let fuel = witness.frame.fuel_snapshot().used;
-    let mut c = context(fuel);
-    let r = reach_borrow(&mut c);
-    let target = target(&c);
-    let state = c.store.state(target).unwrap();
-    let epoch = c.store.location_epoch(target).unwrap();
-    let handles = c.store.budget().handles();
-    let destination = c.frame.body.nodes()[c.borrow.0 as usize].value.unwrap();
-    assert_eq!(run(&mut c, &r).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.status(), FrameStatus::Faulted);
-    assert!(c.frame.cell(destination).is_err());
-    assert_eq!(c.store.state(target).unwrap(), state);
-    assert_eq!(c.store.location_epoch(target).unwrap(), epoch);
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-    assert_eq!(c.frame.counters.started_by_opcode[31], 0);
-}
-#[test]
-fn rustc_literal_temporary_borrow_cancellation_preserves_owner_without_reference_publication() {
-    let mut c = context(100);
-    let r = reach_borrow(&mut c);
-    let target = target(&c);
-    let state = c.store.state(target).unwrap();
-    let epoch = c.store.location_epoch(target).unwrap();
-    let handles = c.store.budget().handles();
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(run(&mut c, &r).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.status(), FrameStatus::Faulted);
-    assert_eq!(
-        c.frame.fuel_snapshot().stop,
-        Some(crate::vm::fuel::FuelStop::Cancelled)
-    );
-    assert!(
-        c.frame
-            .cell(c.frame.body.nodes()[c.borrow.0 as usize].value.unwrap())
-            .is_err()
-    );
-    assert_eq!(c.store.state(target).unwrap(), state);
-    assert_eq!(c.store.location_epoch(target).unwrap(), epoch);
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-    assert_eq!(c.frame.counters.started_by_opcode[31], 0);
 }

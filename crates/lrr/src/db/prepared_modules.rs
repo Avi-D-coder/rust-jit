@@ -28,15 +28,11 @@ impl Database {
             .len()
             .checked_add(modules.len())
             .and_then(|n| n.checked_add(ordinary.len()))
-            .filter(|n| *n <= 100_000)
             .ok_or_else(limit)?;
         // Bound both the eventual vector and the transient identity set before
         // cloning any weak handle. Pointer identity deduplicates allocations;
         // it never enters a source key, diagnostic identity or stable encoding.
-        count
-            .checked_mul(128)
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(limit)?;
+        count.checked_mul(128).ok_or_else(limit)?;
         let mut staged = Vec::new();
         staged.try_reserve_exact(count).map_err(|_| limit())?;
         let mut seen = BTreeSet::new();

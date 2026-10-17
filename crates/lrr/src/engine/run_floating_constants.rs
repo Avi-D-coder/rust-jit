@@ -1,12 +1,9 @@
-//! Bounded run-owned source proofs. No guest value is produced here.
+//! Run-owned source proofs. No guest value is produced here.
 use super::super::runtime_macros::floating_constants::FloatingFrameSite;
 use super::*;
 use crate::{
     db::dependency::{InputKey, InputValue},
-    frontend::{
-        call_contracts::primitive_runtime_id, primitive_constants::FloatingConstantRecipe,
-        runtime_macro_plan::RuntimeNoItemProof,
-    },
+    frontend::{call_contracts::primitive_runtime_id, runtime_macro_plan::RuntimeNoItemProof},
     traits::term::TyTerm,
 };
 impl RunMachine {
@@ -22,19 +19,7 @@ impl RunMachine {
             }
             return Ok(());
         }
-        let bytes = proof
-            .allocated_bytes()
-            .and_then(|n| n.checked_add(96))
-            .and_then(|n| self.runtime_no_item_bytes.checked_add(n))
-            .filter(|n| *n <= 4 * 1024 * 1024 && self.runtime_no_item_proofs.len() < 4096)
-            .ok_or_else(|| {
-                Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "runtime no-item certificate budget".into(),
-                )
-            })?;
         self.runtime_no_item_proofs.insert(key, proof);
-        self.runtime_no_item_bytes = bytes;
         Ok(())
     }
     pub(super) fn bootstrap_no_item_proofs(
@@ -51,28 +36,6 @@ impl RunMachine {
         };
         if snapshot.seal.key() != *key || snapshot.seal.fingerprint() != seal_fingerprint {
             return Err(call_fault("matched discovery input certificate differs"));
-        }
-        if snapshot.runtime_no_item_proofs.len() > 4096 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "sealed no-item certificate count".into(),
-            ));
-        }
-        let total = snapshot
-            .runtime_no_item_proofs
-            .iter()
-            .try_fold(self.runtime_no_item_bytes, |bytes, (_, proof)| {
-                proof
-                    .allocated_bytes()
-                    .and_then(|n| n.checked_add(96))
-                    .and_then(|n| bytes.checked_add(n))
-            })
-            .filter(|bytes| *bytes <= 4 * 1024 * 1024);
-        if total.is_none() {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "sealed no-item certificate copy budget".into(),
-            ));
         }
         for (_, proof) in &snapshot.runtime_no_item_proofs {
             self.retain_no_item_proof(proof.clone())?
@@ -146,25 +109,8 @@ impl RunMachine {
                 self.runtime_no_item_proofs.values(),
             ) {
                 QueryPoll::Ready(Ok(Some(plan))) => {
-                    let bytes = plan
-                        .recipe()
-                        .metadata_bytes()
-                        .checked_add(
-                            std::mem::size_of::<FloatingConstantRecipe>()
-                                + std::mem::size_of::<PcKey>()
-                                + 128,
-                        )
-                        .and_then(|n| self.floating_plan_bytes.checked_add(n))
-                        .filter(|n| *n <= 4 * 1024 * 1024 && self.floating_plans.len() < 4096);
-                    let Some(bytes) = bytes else {
-                        return QueryPoll::Ready(Err(Diagnostic::new(
-                            "LRR-E-METADATA-LIMIT",
-                            "floating source proof budget".into(),
-                        )));
-                    };
                     let recipe = plan.recipe().clone();
                     self.floating_plans.insert(pc, plan);
-                    self.floating_plan_bytes = bytes;
                     return QueryPoll::Ready(Ok(Some(recipe)));
                 }
                 QueryPoll::Ready(Ok(None)) => {}

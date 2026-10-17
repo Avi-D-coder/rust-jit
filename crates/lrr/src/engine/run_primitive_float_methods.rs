@@ -18,19 +18,7 @@ impl RunMachine {
             }
             return Ok(());
         }
-        let bytes = method
-            .allocated_bytes()
-            .and_then(|n| n.checked_add(std::mem::size_of::<PcKey>() + 128))
-            .and_then(|n| self.primitive_method_bytes.checked_add(n))
-            .filter(|n| *n <= 4 * 1024 * 1024 && self.primitive_methods.len() < 4096)
-            .ok_or_else(|| {
-                Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "primitive method proof budget".into(),
-                )
-            })?;
         self.primitive_methods.insert(key.clone(), (method, recipe));
-        self.primitive_method_bytes = bytes;
         Ok(())
     }
     pub(super) fn revalidate_primitive_method(

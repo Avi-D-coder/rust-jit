@@ -61,7 +61,17 @@ impl CompilerAttributePreparation {
             let mut descriptors = StableEncoder::new("lrr/v1/compiler-attribute-preparation-rows");
             let mut count = 0usize;
             let mut eligible = true;
-            for row in rows {
+            for (row, attribute) in rows.zip(&item.header.attributes) {
+                // Predefined tool attributes (`rustfmt::skip`) are inert by the
+                // outline's own classification; they are not compiler candidates
+                // but do not disqualify the item's builtin rows.
+                if attribute.class == crate::syntax::outline::AttributeClass::ToolLint {
+                    descriptors.u8(0);
+                    descriptors.string(&attribute.name);
+                    count += 1;
+                    continue;
+                }
+                descriptors.u8(1);
                 // Qualified attributes never become compiler candidates by their
                 // last spelling. The retained AST path is authoritative syntax.
                 let [ImportSegment::Name(name)] = row.segments.as_slice() else {
@@ -94,15 +104,22 @@ impl CompilerAttributePreparation {
                 descriptors.digest(descriptor.definition_identity());
                 count += 1;
             }
-            if eligible && count != 0 && count == item.header.attributes.len() {
+            if eligible
+                && count != 0
+                && count
+                    == item
+                        .header
+                        .attributes
+                        .iter()
+                        .filter(|attribute| {
+                            crate::syntax::outline::attribute_may_name_macro(attribute)
+                        })
+                        .count()
+            {
                 result.bytes = result
                     .bytes
                     .checked_add(std::mem::size_of::<(Digest, Candidate)>() + 128)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("compiler preparation metadata limit"))?;
-                if result.candidates.len() >= 100_000 {
-                    return Err(fault("compiler preparation item count limit"));
-                }
                 result.candidates.insert(
                     item.def_key.fingerprint(),
                     Candidate {
@@ -164,7 +181,6 @@ impl CompilerAttributePreparation {
             .pending_producers()
             .count()
             .checked_mul(160)
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("compiler attribute final pending-set temporary limit"))?;
         let pending: std::collections::BTreeSet<_> =
             provider.macro_index().pending_producers().collect();

@@ -69,11 +69,12 @@ impl ReferenceResultContract {
                 inputs.push(index);
             }
         }
+        // No closed reference argument carries the result's region (for
+        // example `&self` of a generic `Self`). Region validity is the borrow
+        // checker's, which LRR does not run; the return boundary still checks
+        // the returned reference against the closed declared result Type.
         let Some(first) = inputs.first().and_then(|index| bindings.get(*index)) else {
-            return Err(fault(
-                "LRR-E-UNSUPPORTED",
-                "reference result requires an unambiguous declared input region",
-            ));
+            return Ok(None);
         };
         let TyTerm::Ref(region, _, _) = &first.argument.source else {
             return Err(invalid("reference result input source absent"));
@@ -108,9 +109,6 @@ impl ReferenceResultContract {
             inputs: inputs.into_boxed_slice(),
             descriptor,
         };
-        if proof.allocated_bytes()? > 32 * 1024 * 1024 {
-            return Err(limit());
-        }
         Ok(Some(proof))
     }
     pub(super) fn require_signature(

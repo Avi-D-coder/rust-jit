@@ -202,7 +202,6 @@ fn import_metadata(bytes: &mut usize, count: usize, text: usize) -> Result<(), D
         .checked_mul(160)
         .and_then(|n| n.checked_add(text))
         .and_then(|n| bytes.checked_add(n))
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(|| error("body named import metadata limit"))?;
     Ok(())
 }
@@ -315,14 +314,7 @@ impl EnteredMacroIndex<'_> {
             .bindings
             .len()
             .checked_add(self.facts.events.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| error("source local row count exceeded"))?;
-        if publications.len() > 100_000 {
-            return Err(error("local publication count exceeded"));
-        }
-        if expansions.len() > 1_000_000 {
-            return Err(error("local expansion metadata count exceeded"));
-        }
         let mut emitted_bytes = publications
             .len()
             .checked_mul(std::mem::size_of::<SourceLocalPublication>())
@@ -346,7 +338,6 @@ impl EnteredMacroIndex<'_> {
                         .checked_mul(std::mem::size_of::<(Digest, &SourceLocalPublication)>())?,
                 )
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("local publication index metadata exceeded"))?;
         let mut producers = BTreeMap::new();
         for event in &self.facts.events {
@@ -371,7 +362,6 @@ impl EnteredMacroIndex<'_> {
                 .ok_or_else(|| error("publication source metadata overflow"))?;
             emitted_bytes = emitted_bytes
                 .checked_add(provenance_bytes)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("publication source metadata exceeded"))?;
             if publication.source.canonical()? != *self.parent.source() || publication.body != *body
             {
@@ -385,13 +375,11 @@ impl EnteredMacroIndex<'_> {
                         .checked_mul(std::mem::size_of::<EmittedLocalDeclaration>())
                         .ok_or_else(|| error("emitted declaration metadata overflow"))?,
                 )
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("emitted declaration metadata exceeded"))?;
             for declaration in &publication.declarations {
                 if let EmittedLocalDeclaration::Binding { name, .. } = declaration {
                     emitted_bytes = emitted_bytes
                         .checked_add(name.len())
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| error("emitted name metadata exceeded"))?;
                 }
             }
@@ -420,7 +408,6 @@ impl EnteredMacroIndex<'_> {
             count = count
                 .checked_sub(1)
                 .and_then(|n| n.checked_add(publication.declarations.len()))
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("emitted source local row count exceeded"))?;
         }
         let metadata = count
@@ -453,7 +440,6 @@ impl EnteredMacroIndex<'_> {
                 )
             })
             .and_then(|n| n.checked_add(emitted_bytes))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("source local metadata limit exceeded"))?;
         let _ = metadata;
         let (context, facts) = self.local_hygiene();
@@ -533,9 +519,6 @@ impl EnteredMacroIndex<'_> {
                     "duplicate pattern binding requires equivalence or diagnostic resolution",
                 ));
             }
-        }
-        if expansions.len() > 1_000_000 {
-            return Err(error("local expansion metadata count exceeded"));
         }
         for (expansion, definition) in expansions {
             locals.register_expansion(*expansion, definition.clone())?;
@@ -677,7 +660,6 @@ impl EnteredMacroIndex<'_> {
                 item_bytes = item_bytes
                     .checked_add(name.as_str().len())
                     .and_then(|n| n.checked_add(160))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("body item namespace metadata limit"))?;
                 item_candidates
                     .entry((row.scope, *namespace, name))
@@ -692,7 +674,6 @@ impl EnteredMacroIndex<'_> {
             if let Some(producer) = row.attribute_input {
                 item_bytes = item_bytes
                     .checked_add(128)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("body attribute frontier metadata limit"))?;
                 item_frontiers
                     .entry(row.scope)
@@ -707,7 +688,6 @@ impl EnteredMacroIndex<'_> {
                 }
                 item_bytes = item_bytes
                     .checked_add(128)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("body item frontier metadata limit"))?;
                 item_frontiers
                     .entry(event.scope)
@@ -721,7 +701,6 @@ impl EnteredMacroIndex<'_> {
         for (index, import) in namespace.imports.iter().enumerate() {
             item_bytes = item_bytes
                 .checked_add(128)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("body import frontier metadata limit"))?;
             if let crate::syntax::imports::ImportKind::Named { alias } = &import.source.kind {
                 let name = alias.as_deref().or_else(|| {
@@ -736,7 +715,6 @@ impl EnteredMacroIndex<'_> {
                 if let Some(name) = name {
                     item_bytes = item_bytes
                         .checked_add(name.len())
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| error("body named import metadata limit"))?;
                     named_imports
                         .entry((import.scope, MacroName::parse(name, edition)?))
@@ -766,7 +744,6 @@ impl EnteredMacroIndex<'_> {
             .bindings
             .len()
             .checked_mul(16 * std::mem::size_of::<((u32, u32), u32)>() + 256)
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let mut binding_names = BTreeMap::new();
         let mut binding_identity = StableEncoder::new("lrr/v1/entered-binding-name-index");
@@ -805,6 +782,17 @@ impl EnteredMacroIndex<'_> {
     }
 }
 impl SourceLocalIndex<'_> {
+    /// The entered function parameter introducing local `identity`, if any.
+    /// A parameter's pattern lies in the signature, outside the indexed body.
+    pub(in crate::frontend::source_locals) fn parameter_recipe(
+        &self,
+        identity: Digest,
+    ) -> Option<&crate::syntax::local_bindings::LocalBindingRecipe> {
+        self.entered.facts.bindings.iter().find(|binding| {
+            binding.identity == identity
+                && binding.form == crate::syntax::local_bindings::BindingForm::Parameter
+        })
+    }
     pub(in crate::frontend::source_locals) fn binding_recipe(
         &self,
         range: crate::syntax::spans::SourceRange,
@@ -853,7 +841,7 @@ impl SourceLocalIndex<'_> {
         let mut memo = ImportMemo::default();
         let mut records = Vec::new();
         while let Some(ordinal) = scope {
-            if !seen.insert(ordinal) || seen.len() > 256 {
+            if !seen.insert(ordinal) {
                 return Err(error("anonymous body ancestry limit"));
             }
             if let Some(id) = self
@@ -868,7 +856,6 @@ impl SourceLocalIndex<'_> {
                     AnonymousImportOutcome::Ready(record) => {
                         bytes = bytes
                             .checked_add(record.estimated_bytes()?)
-                            .filter(|n| *n <= 32 * 1024 * 1024)
                             .ok_or_else(|| error("anonymous body metadata limit"))?;
                         records
                             .try_reserve(1)
@@ -1010,7 +997,6 @@ impl SourceLocalIndex<'_> {
         while let Some(task) = tasks.pop() {
             *work = work
                 .checked_add(1)
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("body glob route work limit"))?;
             import_metadata(&mut bytes, 1, 0)?;
             match task {
@@ -1054,7 +1040,7 @@ impl SourceLocalIndex<'_> {
                     active,
                     mut ancestry,
                 } => {
-                    if !ancestry.insert(scope) || ancestry.len() > 256 {
+                    if !ancestry.insert(scope) {
                         return Err(error("body glob route ancestry limit"));
                     }
                     let first = if source.absolute {
@@ -1084,9 +1070,6 @@ impl SourceLocalIndex<'_> {
                         charge_route(&mut bytes, &self.namespace().imports[*index].source)?;
                         let mut active = active.clone();
                         active.insert(*index);
-                        if active.len() > 256 {
-                            return Err(error("body glob route depth limit"));
-                        }
                         import_metadata(&mut bytes, active.len() + 2, 0)?;
                         let child = results.len();
                         results.push(Vec::new());
@@ -1132,9 +1115,6 @@ impl SourceLocalIndex<'_> {
                                 next.path.extend_from_slice(&source.path[1..]);
                                 next.scope = candidate.scope;
                                 next.absolute = candidate.absolute;
-                                if next.path.len() > 256 {
-                                    return Err(error("body glob module path depth limit"));
-                                }
                                 let text = next
                                     .path
                                     .iter()
@@ -1193,7 +1173,6 @@ impl SourceLocalIndex<'_> {
         while let Some((scope, source)) = stack.pop() {
             *work = work
                 .checked_add(1)
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("body module alias work limit"))?;
             let text = source
                 .path
@@ -1206,9 +1185,6 @@ impl SourceLocalIndex<'_> {
                 })
                 .ok_or_else(|| error("body module alias path size overflow"))?;
             import_metadata(&mut bytes, source.path.len(), text)?;
-            if source.path.len() > 256 {
-                return Err(error("body module alias path depth limit"));
-            }
             if !seen.insert((scope, source.fingerprint())) {
                 continue;
             }
@@ -1232,7 +1208,7 @@ impl SourceLocalIndex<'_> {
                 let mut current = Some(scope);
                 let mut ancestry = BTreeSet::new();
                 while let Some(scope) = current {
-                    if !ancestry.insert(scope) || ancestry.len() > 256 {
+                    if !ancestry.insert(scope) {
                         return Err(error("body module alias ancestry limit"));
                     }
                     if let Some(imports) = self.named_imports.get(&(scope, name.clone())) {
@@ -1274,9 +1250,6 @@ impl SourceLocalIndex<'_> {
                         })
                         .ok_or_else(|| error("body module alias path size overflow"))?;
                     import_metadata(&mut bytes, next.path.len(), text)?;
-                    if next.path.len() > 256 {
-                        return Err(error("body module alias path depth limit"));
-                    }
                     stack.push((scope, next));
                 }
             } else {
@@ -1299,7 +1272,6 @@ impl SourceLocalIndex<'_> {
         for index in self.glob_imports.get(&scope).into_iter().flatten() {
             *work = work
                 .checked_add(1)
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("body glob work limit"))?;
             let import = &self.namespace().imports[*index].source;
             for route in self.import_routes(scope, import, names, work)? {
@@ -1377,7 +1349,6 @@ impl SourceLocalIndex<'_> {
                 import_metadata(&mut scratch_bytes, 1, name.as_str().len())?;
                 *work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 1_000_000)
                     .ok_or_else(|| error("body named import work limit"))?;
                 if let Some(id) = self.item_frontiers.get(&scope).and_then(|ids| ids.first()) {
                     demands.insert(*id);
@@ -1395,7 +1366,6 @@ impl SourceLocalIndex<'_> {
                     for index in imports {
                         *work = work
                             .checked_add(1)
-                            .filter(|n| *n <= 1_000_000)
                             .ok_or_else(|| error("body named import work limit"))?;
                         let row = self
                             .namespace()
@@ -1644,7 +1614,7 @@ impl SourceLocalIndex<'_> {
             self.entered.local_hygiene().1.name_item(site.context)?;
         }
         names.require_source(site.source, self.entered.parent.view.outline())?;
-        if path.is_empty() || path.len() > 256 {
+        if path.is_empty() {
             return Err(error("qualified body module path depth limit"));
         }
         let text = path
@@ -1665,7 +1635,7 @@ impl SourceLocalIndex<'_> {
             let mut current = Some(scope.ordinal);
             let mut seen = BTreeSet::new();
             while let Some(scope) = current {
-                if !seen.insert(scope) || seen.len() > 256 {
+                if !seen.insert(scope) {
                     return Err(error("qualified body path ancestry limit"));
                 }
                 if let Some(producer) = self.item_frontiers.get(&scope).and_then(|ids| ids.first())
@@ -1993,7 +1963,7 @@ impl SourceLocalIndex<'_> {
         let mut import_work = 0usize;
         let mut memo = ImportMemo::default();
         while let Some(ordinal) = current {
-            if !seen.insert(ordinal) || seen.len() > 256 {
+            if !seen.insert(ordinal) {
                 return Err(error("ordinary body item ancestry limit"));
             }
             if site.namespace == crate::source::manifest::Namespace::Value

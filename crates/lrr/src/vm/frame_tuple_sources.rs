@@ -75,6 +75,7 @@ impl Frame {
             ConstructionResult::Observed(_) => {
                 std::borrow::Cow::Owned(store.observed_construction_key(active.guard)?)
             }
+            ConstructionResult::PendingNominal => return Ok(false),
         };
         match key.as_ref() {
             TypeKey::Tuple(members) if members.len() == operands.len() => {
@@ -132,7 +133,13 @@ impl Frame {
                     .clone(),
             );
         }
-        let source = TyTerm::Tuple(members);
+        // `()` is the unit type, spelled `Primitive(Unit)` like a declared
+        // unit result; only a non-empty tuple keeps its member sources.
+        let source = if members.is_empty() {
+            TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit)
+        } else {
+            TyTerm::Tuple(members)
+        };
         self.preflight_source_view(destination, Some(&source))?;
         Ok(Some(source))
     }

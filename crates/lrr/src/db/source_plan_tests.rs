@@ -328,11 +328,10 @@ fn retained_pattern_plan_accounts_its_parser_and_index_after_all_wrappers_retire
     let index = Arc::downgrade(plan.index());
     drop(plan);
     assert!(parsed.upgrade().is_none());
-    // Product retirement leases defer final index destruction to this boundary.
-    assert!(index.upgrade().is_some());
+    // Retained pattern trees own no body index: the plan was its last owner.
+    assert!(index.upgrade().is_none());
     let budget = input_floor_budget(&db);
     let eviction = db.evict_between_runs(budget).unwrap();
-    assert!(index.upgrade().is_none());
     assert!(db.memos.is_empty());
     assert_eq!(eviction.after.memo_entries, 0);
     assert_eq!(eviction.after.memo_bytes, eviction.after.pinned_memo_bytes);
@@ -422,7 +421,7 @@ fn externally_retained_product_pins_its_owner_without_cloning_the_index() {
     let (outer, inner) = db.memo_owners();
     assert!(!QueryPin::new(value).external(&outer, &inner));
     let before = Arc::strong_count(plan.index());
-    let product = Arc::clone(plan.products().next().expect("actual source product"));
+    let product = Arc::clone(plan.trees().next().expect("actual source product"));
     assert_eq!(Arc::strong_count(plan.index()), before);
     assert!(QueryPin::new(value).external(&outer, &inner));
     let weak = Arc::downgrade(&product);
@@ -444,47 +443,10 @@ fn externally_retained_product_pins_its_owner_without_cloning_the_index() {
 }
 
 #[test]
-fn product_only_lease_is_charged_after_outer_plan_and_body_memos_retire() {
-    let (mut db, plan) = pattern_world();
-    let product = Arc::clone(plan.products().next().expect("actual source product"));
-    let product_bytes = product.metadata_bytes() + 2 * std::mem::size_of::<usize>();
-    let index_bytes = product.index().estimated_bytes() + 2 * std::mem::size_of::<usize>();
-    let weak = Arc::downgrade(&product);
-    let index = Arc::downgrade(product.index());
-    drop(plan);
-    db.memos.clear();
-    let usage = db.cache_usage().unwrap();
-    assert!(usage.pinned_memo_bytes >= product_bytes + index_bytes);
-    // Published-owner-only input pins and dead Signature/ParseFile weak rows
-    // remain reclaimable until between-run pruning. Their registry overhead
-    // need not be pinned; the actual retained graph and index must be.
-    assert!(
-        db.evict_between_runs(CacheBudgets {
-            query_bytes: product_bytes + index_bytes - 1,
-            ..CacheBudgets::default()
-        })
-        .is_err()
-    );
-    drop(product);
-    // Retirement lease defers the final graph/index destructor until the
-    // between-run coordinator, even after every source memo was invalidated.
-    assert!(weak.upgrade().is_some());
-    assert!(index.upgrade().is_some());
-    let budget = input_floor_budget(&db);
-    let eviction = db.evict_between_runs(budget).unwrap();
-    assert!(weak.upgrade().is_none());
-    assert!(index.upgrade().is_none());
-    assert_eq!(
-        eviction.after.memo_bytes,
-        db.cache_usage().unwrap().memo_bytes
-    );
-}
-
-#[test]
 fn cached_product_roots_have_no_false_external_index_owner_and_evict_exactly() {
     let (mut db, plan) = pattern_world();
     let owner = plan.owner().clone();
-    let products: Vec<_> = plan.products().map(Arc::downgrade).collect();
+    let products: Vec<_> = plan.trees().map(Arc::downgrade).collect();
     assert!(!products.is_empty());
     drop(plan);
     db.memos
@@ -509,10 +471,10 @@ fn retirement_only_product_pins_an_independently_cached_body_allocation() {
     let key = QueryKey::BodyStructure(plan.index().body().clone());
     let body_bytes = plan.index().estimated_bytes() + 2 * std::mem::size_of::<usize>();
     let product_bytes: usize = plan
-        .products()
+        .trees()
         .map(|product| product.metadata_bytes() + 2 * std::mem::size_of::<usize>())
         .sum();
-    let products: Vec<_> = plan.products().map(Arc::downgrade).collect();
+    let products: Vec<_> = plan.trees().map(Arc::downgrade).collect();
     drop(plan);
     db.memos.retain(|candidate, _| *candidate == key);
     db.query_pins.clear();
@@ -532,7 +494,7 @@ fn retirement_only_product_pins_an_independently_cached_body_allocation() {
 fn external_source_plan_keeps_graph_retirement_lease_across_quiescent_pruning() {
     let (mut db, plan) = pattern_world();
     let graph = plan
-        .products()
+        .trees()
         .next()
         .expect("actual retained source graph");
     let weak = Arc::downgrade(graph);
@@ -660,31 +622,3 @@ fn cached_only_literal_receipt_can_reclaim_to_mandatory_input_budget() {
     assert_eq!(report.after.parse_bytes, 0);
 }
 
-#[test]
-fn rejected_literal_retention_cannot_publish_a_successful_memo() {
-    let (mut db, request, proof) = string_literal_world(2015);
-    drop(proof);
-    db.memos.clear();
-    db.evict_between_runs(CacheBudgets::default()).unwrap();
-    assert_eq!(db.source_plan_pins.registered_artifact_count(), 0);
-    // Exercise the real registry preflight with a reduced count bound. Source
-    // admission, the pinned parser and ordinary provider remain unchanged.
-    db.source_plan_pins.set_test_artifact_limit(0);
-    let failure = match db.fetch(&super::super::provider::SyntaxProvider, request.clone()) {
-        QueryPoll::Ready(Err(error)) => error,
-        _ => panic!("literal registry bound must reject admission"),
-    };
-    assert_eq!(failure.code, "LRR-E-METADATA-LIMIT");
-    assert!(db.memo(&request).is_none(), "rejected recipe was published");
-    assert_eq!(db.source_plan_pins.registered_artifact_count(), 0);
-
-    db.source_plan_pins.set_test_artifact_limit(usize::MAX);
-    let outcome = db
-        .fetch(&super::super::provider::SyntaxProvider, request.clone())
-        .into_ready()
-        .unwrap()
-        .unwrap();
-    assert!(matches!(outcome.value.as_ref(), QueryValue::Thunk(_)));
-    assert!(db.memo(&request).is_some());
-    assert_eq!(db.source_plan_pins.registered_artifact_count(), 1);
-}

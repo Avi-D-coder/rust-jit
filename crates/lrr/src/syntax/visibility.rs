@@ -96,7 +96,6 @@ impl VisibilityScope {
                     text.len()
                         .checked_add(token.text.len())
                         .and_then(|n| n.checked_add(1))
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| error("visibility recipe text limit exceeded"))?;
                     text.try_reserve(token.text.len() + 1)
                         .map_err(|_| error("visibility recipe allocation failed"))?;
@@ -139,9 +138,6 @@ impl VisibilityScope {
                     ast::VisibilityKind::In(mut qualifier) => {
                         let mut segments = Vec::new();
                         loop {
-                            if segments.len() >= 256 {
-                                return Err(error("visibility path depth exceeded"));
-                            }
                             let segment = qualifier
                                 .segment()
                                 .and_then(|s| s.kind())
@@ -176,9 +172,6 @@ impl VisibilityScope {
                             match segment {
                                 ast::PathSegmentKind::Name(name) => {
                                     named = true;
-                                    if path.len() >= 256 {
-                                        return Err(error("visibility scope depth exceeded"));
-                                    }
                                     let name = semantic_name(&name.syntax().text().to_string())
                                         .ok_or_else(|| error("invalid visibility name"))?;
                                     path.try_reserve(1)

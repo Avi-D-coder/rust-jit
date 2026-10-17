@@ -1,0 +1,80 @@
+{
+  "schema": "lrr/source-review/declared-return-type/v1",
+  "status": "source-only; uncompiled/unexecuted; future query/prepared plan/normal call contract integration held",
+  "source_fingerprint": "129f3c8b8db7ea96dc5c1a697a3aef6e0a5a3ab14e0a4e25fe339608111349a6",
+  "frozen_payload": "/private/tmp/lrr-declared-return-type-v1",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/declaration_return_types.rs",
+      "sha256": "230b2e4ed1337ead47c0efc70382104d14ca50ebe4838b9896363370c5e69aeb",
+      "bytes": 7315
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_return_goals.rs",
+      "sha256": "7bfdb3bfac58a510fc3089264252abb2fa71821737f56059db2b700973bcfdae",
+      "bytes": 19921
+    },
+    {
+      "path": "worktracks/04-calls-source-views/common-declared-return-type-handoff.md",
+      "sha256": "b00d9dcd960b630eb04162be9120dbe1ad277084bdc8b30d368b4f3d89ea6c22",
+      "bytes": 8864
+    }
+  ],
+  "dependencies_not_in_payload": [
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "ba037c7a7d497d81f5de04fb34f83cb7906bd1c38abebe798e470526aa4439c6"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "f8fef4c1610ae330cda3a18bcb02281dca558fc967cfde64404b80af8749a491"
+    },
+    {
+      "path": "crates/lrr/src/syntax/signatures.rs",
+      "sha256": "282b7c551edd7b1942efc24afcf45de83009c51e6c06c7f65dc2ef6a6853a462"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "4da2a783184d70adc5a60d5bbf252c8baba3ba379206e5d703a4f9f4bdc2fd55"
+    }
+  ],
+  "base_contract": "Two NEW frontend leaves only plus bounded record. Root owns field_types child hook mod returns; DeclarationTypeSite::Return + stabletag2; frontend source_return_goals registration; future DB44/45 pure memo/provider/guard/root accounting and normal engine consumers. Do not overwrite shared root files with this payload.",
+  "api": [
+    "PreparedSourceLocalPlan.prepare_return_type(db, &FunctionSignature)->QueryPoll<NamedTypePreparation>",
+    "source_return_goals.prepare_local_query(db,definition)->QueryPoll<ReturnGoalObservation>",
+    "ReturnGoalObservation matches/signature_identity/goal/estimated_bytes/StableEncode; ReturnTypeGoal Ready(DeclaredReturnType)|NeedAlias|NeedName; Ready definition/signature_identity/source/require/allocated_bytes"
+  ],
+  "proof": "Actual current canonical item/source/context/LocalOwner/header stamp and exact signature; direct immutable Fn return Type range/tokens/context/edition, borrowed HeaderItem generics; same HeaderTypeSite/prepare_header_type/LocalTypePrefix.prepare_named. Implicit Unit comes from verified absent return annotation, never Type spelling.",
+  "cost": "Cold O(D) canonical row+O(logD) map, direct Fn locator, O(H) current header comparison, O(R) return Type token capture and genuine prefix service once per FUTURE memo. No child BodyStructure/executable lowering, new parser, body copy, world scan or installed planning introduced. Existing excluded-body tokens helper still traverses cold body before filtering in original signature/field capture; not extended here.",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "source_controls": "whole unchanged suffix nine declared results + actual main implicitUnit all4 editions x original/retained/user/wrapper; appended genuine named generic/nested/alias owner; stale generated epoch, signature substitution and revoked source"
+  },
+  "remaining": [
+    "Root actual future44/45 memo and single guard capture/retention, cached callplan/normal call contracts and primitive_result route removal",
+    "Explicit module Type needs common declaration environment/occurrence transport; module implicitUnit supported by actual FunctionSignature",
+    "Nested structural Type hygiene pending; local alias normalization reaches existing AliasContext diagnostic, no alias acceptance",
+    "No guest runtime/fullfixture/matrix/milestone/JIT acceptance"
+  ],
+  "all_eight_review": "Separate pass in exact handoff: no evaluator/scalar path/context numeric or method policy/origin gate/eager body-pattern prep/repeated installed planning/world census/body clone or file search. Names actual shared symbols, remaining routes, cold costs and unexecuted matrix.",
+  "commands": [
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/frontend/declaration_return_types.rs crates/lrr/src/frontend/source_return_goals.rs",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "not_run": [
+    "Cargo",
+    "native compilation",
+    "inline source tests",
+    "guest runtime",
+    "strict/milestone",
+    "architecture matrix"
+  ]
+}

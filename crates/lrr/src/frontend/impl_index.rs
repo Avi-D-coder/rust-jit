@@ -30,10 +30,7 @@ fn fault() -> Diagnostic {
 }
 impl ImplHeaderIndex {
     pub fn from_scans(mut sources: Vec<Arc<DeclarationScan>>) -> Result<Self, Diagnostic> {
-        if sources.len() > 4096 {
-            return Err(fault());
-        }
-        sources.sort_by_key(|s| s.fingerprint());
+        sources.sort_by_cached_key(|s| s.fingerprint());
         let mut seen = BTreeSet::new();
         let mut headers = Vec::new();
         let mut producers = Vec::new();
@@ -44,19 +41,7 @@ impl ImplHeaderIndex {
             }
             bytes = bytes
                 .checked_add(source.retained_bytes().checked_mul(2).ok_or_else(fault)?)
-                .filter(|n| *n <= 256 * 1024 * 1024)
                 .ok_or_else(fault)?;
-            if headers
-                .len()
-                .checked_add(source.impls().len())
-                .is_none_or(|n| n > 1_000_000)
-                || producers
-                    .len()
-                    .checked_add(source.producers().len())
-                    .is_none_or(|n| n > 100_000)
-            {
-                return Err(fault());
-            }
             headers
                 .try_reserve_exact(source.impls().len())
                 .map_err(|_| fault())?;
@@ -79,9 +64,6 @@ impl ImplHeaderIndex {
         mut self,
         proofs: &[Arc<crate::expand::source_replacement::SourceReplacementProof>],
     ) -> Result<Self, Diagnostic> {
-        if proofs.len() > 100_000 {
-            return Err(fault());
-        }
         let mut ranges = std::collections::BTreeMap::<
             crate::core::digest::Digest,
             Vec<crate::syntax::spans::SourceRange>,
@@ -89,7 +71,6 @@ impl ImplHeaderIndex {
         proofs
             .len()
             .checked_mul(192)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(fault)?;
         for proof in proofs {
             let rows = ranges.entry(proof.attachment()).or_default();
@@ -157,14 +138,6 @@ impl ImplHeaderIndex {
             crate::syntax::spans::SourceRange,
         )],
     ) -> Result<Self, Diagnostic> {
-        if masks.len() > 100_000
-            || masks
-                .len()
-                .checked_mul(128)
-                .is_none_or(|n| n > 32 * 1024 * 1024)
-        {
-            return Err(fault());
-        }
         let mut ranges =
             std::collections::BTreeMap::<_, Vec<crate::syntax::spans::SourceRange>>::new();
         for (identity, range) in masks {
@@ -288,7 +261,6 @@ impl DeclarationMacroIndex {
             )
             .and_then(|n| n.checked_add(scan.macro_definitions().len().checked_mul(512)?))
             .and_then(|n| n.checked_add(scan.producers().len().checked_mul(256)?))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(fault)?;
         let root = crate::expand::source_hygiene::source_root(
             scan.scope().crate_key,
@@ -373,7 +345,6 @@ impl DeclarationMacroIndex {
                         .and_then(|n| n.checked_add(384))
                         .ok_or_else(fault)?,
                 )
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(fault)?;
             let frontier = local_import_frontiers.entry(row.lexical_scope).or_default();
             if let Some(name) = name {
@@ -400,7 +371,6 @@ impl DeclarationMacroIndex {
             .and_then(|n| n.checked_add(producer_rows.len().checked_mul(192)?))
             .and_then(|n| n.checked_add(definition_rows.len().checked_mul(128)?))
             .and_then(|n| n.checked_add(import_frontier_bytes))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(fault)?;
         Ok(Self {
             pending: producer_rows.keys().copied().collect(),
@@ -498,7 +468,7 @@ impl DeclarationMacroIndex {
         indexes: &[ArgumentDeclarationMacroIndex],
         catalog: &super::runtime_macro_catalog::RuntimeMacroCatalog,
     ) -> Result<(), Diagnostic> {
-        if !self.pending.contains(&invocation) || indexes.is_empty() || indexes.len() > 10_000 {
+        if !self.pending.contains(&invocation) || indexes.is_empty() {
             return Err(fault());
         }
         for index in indexes {
@@ -617,9 +587,7 @@ impl DeclarationMacroIndex {
         let mut depth = 0usize;
         while let Some(current) = scope {
             depth = depth
-                .checked_add(1)
-                .filter(|n| *n <= 256)
-                .ok_or_else(fault)?;
+                .checked_add(1)                .ok_or_else(fault)?;
             if let Some(frontier) = self.local_import_frontiers.get(&current)
                 && let Some(input) = frontier.named.get(&head).copied().or(frontier.glob)
             {
@@ -708,9 +676,6 @@ impl ArgumentDeclarationMacroIndex {
             DeclarationMacroParent::Generated(index) => index.depth,
             DeclarationMacroParent::Argument(index) => index.depth,
         };
-        if depth > 256 {
-            return Err(fault());
-        }
         let origin = match &outer {
             DeclarationMacroParent::Source(_) => None,
             DeclarationMacroParent::Generated(index) => Some(index.origin),
@@ -769,7 +734,6 @@ impl ArgumentDeclarationMacroIndex {
             .and_then(|n| n.checked_add(scopes.metadata_bytes().ok()?))
             .and_then(|n| n.checked_add(declarations.metadata_bytes().ok()?))
             .and_then(|n| n.checked_add(pending.len().checked_mul(128)?))
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(fault)?;
         Ok(Self {
             argument,
@@ -806,7 +770,6 @@ impl ArgumentDeclarationMacroIndex {
         let bytes = self
             .retained_bytes
             .checked_add(128)
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(fault)?;
         self.scopes.publish(
             producer.lexical_scope,
@@ -887,16 +850,12 @@ impl ArgumentDeclarationMacroIndex {
             .try_reserve_exact(
                 self.depth
                     .checked_add(1)
-                    .filter(|n| *n <= 257)
                     .ok_or_else(fault)?,
             )
             .map_err(|_| fault())?;
         result.push(self.source_outer()?);
         let mut parent = &self.outer;
         loop {
-            if result.len() > 256 {
-                return Err(fault());
-            }
             match parent {
                 DeclarationMacroParent::Source(_) => break,
                 DeclarationMacroParent::Argument(index) => {
@@ -1070,9 +1029,6 @@ impl DeclarationMacroParent {
     ) -> Result<Self, Diagnostic> {
         match self {
             Self::Source(index) => {
-                if index.retained_metadata_bytes() > 64 * 1024 * 1024 {
-                    return Err(fault());
-                }
                 let producer = index.producer(invocation)?;
                 let mut snapshot = index.as_ref().clone();
                 snapshot.scopes.omit_invocation_position(
@@ -1082,9 +1038,6 @@ impl DeclarationMacroParent {
                 Ok(Self::Source(Arc::new(snapshot)))
             }
             Self::Argument(index) => {
-                if index.metadata_bytes() > 64 * 1024 * 1024 {
-                    return Err(fault());
-                }
                 let producer = index.producer(invocation)?;
                 let mut snapshot = index.as_ref().clone();
                 snapshot.scopes.omit_invocation_position(
@@ -1116,21 +1069,11 @@ impl DeclarationMacroParent {
                 result.try_reserve_exact(257).map_err(|_| fault())?;
                 let mut child = index.as_ref();
                 loop {
-                    if result.len() >= 256 {
-                        return Err(fault());
-                    }
                     result.push(child.parent.outer(child.output.parent_invocation())?);
                     match &child.parent {
                         Self::Source(_) => break,
                         Self::Argument(parent) => {
                             let outers = parent.outer_scopes()?;
-                            if result
-                                .len()
-                                .checked_add(outers.len())
-                                .is_none_or(|n| n > 257)
-                            {
-                                return Err(fault());
-                            }
                             result.extend(outers);
                             break;
                         }
@@ -1193,9 +1136,7 @@ impl GeneratedDeclarationMacroIndex {
             DeclarationMacroParent::Generated(index) => index.depth,
         };
         let depth = depth
-            .checked_add(1)
-            .filter(|n| *n <= 256)
-            .ok_or_else(fault)?;
+            .checked_add(1)            .ok_or_else(fault)?;
         output
             .metadata_bytes()?
             .checked_add(
@@ -1208,7 +1149,6 @@ impl GeneratedDeclarationMacroIndex {
             )
             .and_then(|n| n.checked_add(output.scan().macro_definitions().len().checked_mul(512)?))
             .and_then(|n| n.checked_add(output.scan().producers().len().checked_mul(256)?))
-            .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(fault)?;
         let mut facts = parent.facts().clone();
         facts.extend(output.hygiene_facts()?)?;
@@ -1308,7 +1248,6 @@ impl GeneratedDeclarationMacroIndex {
             .and_then(|n| n.checked_add(definitions.len().checked_mul(128)?))
             .and_then(|n| n.checked_add(producers.len().checked_mul(256)?))
             .and_then(|n| n.checked_add(outward_bytes))
-            .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(fault)?;
         let parent_bytes = match &parent {
             DeclarationMacroParent::Source(index) => index.retained_bytes,
@@ -1317,7 +1256,6 @@ impl GeneratedDeclarationMacroIndex {
         };
         let retained_bytes = local_bytes
             .checked_add(parent_bytes)
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(fault)?;
         let pending_order = output
             .scan()
@@ -1399,7 +1337,6 @@ impl GeneratedDeclarationMacroIndex {
             outward
                 .len()
                 .checked_add(child.outward.len())
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(fault)?;
             outward
                 .try_reserve_exact(child.outward.len())
@@ -1411,9 +1348,7 @@ impl GeneratedDeclarationMacroIndex {
                     .try_reserve_exact(
                         row.order
                             .len()
-                            .checked_add(1 + usize::from(append_ordinal.is_some()))
-                            .filter(|n| *n <= 256)
-                            .ok_or_else(fault)?,
+                            .checked_add(1 + usize::from(append_ordinal.is_some()))                            .ok_or_else(fault)?,
                     )
                     .map_err(|_| fault())?;
                 order.push(producer.range.start);
@@ -1432,7 +1367,6 @@ impl GeneratedDeclarationMacroIndex {
         publication.retained_bytes = publication
             .retained_bytes
             .checked_add(outward_bytes)
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(fault)?;
         if complete {
             self.pending_order
@@ -1494,7 +1428,6 @@ impl GeneratedDeclarationMacroIndex {
             }
             bytes = bytes
                 .checked_add(binding.metadata_bytes()?)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(fault)?;
             bindings.push(binding);
         }
@@ -1521,7 +1454,7 @@ impl GeneratedDeclarationMacroIndex {
     }
     pub(crate) fn source_index(&self) -> Result<&DeclarationMacroIndex, Diagnostic> {
         let mut parent = &self.parent;
-        for _ in 0..=256 {
+        for _ in 0usize.. {
             match parent {
                 DeclarationMacroParent::Source(index) => return Ok(index),
                 DeclarationMacroParent::Argument(index) => return Ok(&index.source),
@@ -1541,7 +1474,7 @@ impl GeneratedDeclarationMacroIndex {
             return Ok(DeclarationBodyOwner::Generated(&self.output));
         }
         let mut parent = &self.parent;
-        for _ in 0..=256 {
+        for _ in 0usize.. {
             match parent {
                 DeclarationMacroParent::Source(index) => {
                     return index.body_owner(definition);
@@ -1666,10 +1599,7 @@ impl GeneratedDeclarationMacroIndex {
         identity: crate::core::digest::Digest,
         scans: &[Arc<DeclarationScan>],
     ) -> Result<(), Diagnostic> {
-        if !self.pending.contains(&identity)
-            || scans.len() > 10_000
-            || scans.iter().any(|scan| !scan.producers().is_empty())
-        {
+        if !self.pending.contains(&identity) || scans.iter().any(|scan| !scan.producers().is_empty()) {
             return Err(fault());
         }
         let producer = self.producer(identity)?;
@@ -1822,7 +1752,6 @@ impl DeclarationPublication {
             .and_then(|n| n.checked_add(declaration_bytes))
             .and_then(|n| n.checked_add(fact_bytes))
             .and_then(|n| n.checked_add(ancestry_bytes))
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(fault)?;
         Ok(())
     }

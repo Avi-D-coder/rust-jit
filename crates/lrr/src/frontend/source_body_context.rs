@@ -91,17 +91,14 @@ impl AdmittedBodyContext {
                 return Err(fault("local execution body/index/source differs"));
             }
             let mut current = self;
-            let mut depth = 0usize;
             while let Some(local) = &current.local_body {
-                depth += 1;
                 let parent = local.parent().context().source();
                 let same_receipt = match (&current.source_receipt, &parent.source_receipt) {
                     (None, None) => true,
                     (Some(child), Some(owner)) => Arc::ptr_eq(child, owner),
                     _ => false,
                 };
-                if depth > 256
-                    || parent.parsed.key() != *parse
+                if parent.parsed.key() != *parse
                     || !same_receipt
                     || !parent.body().range.contains(current.body().range)
                     || parent.body().range == current.body().range
@@ -144,7 +141,31 @@ impl AdmittedBodyContext {
         }
         match self.source_receipt.as_deref() {
             Some(InputValue::GeneratedSyntax(unit)) => Some(unit),
+            // A retained admission of a generated function keeps its unit's
+            // module macro boundary: only its body's calls were attached.
+            Some(InputValue::RetainedSyntax(unit)) => unit.generated_unit(),
             _ => None,
+        }
+    }
+    /// This body's declaration context in its generated unit's own output
+    /// coordinates (the insertion boundary's anchor), for either locator.
+    fn generated_unit_context(&self) -> Result<DeclarationContext, Diagnostic> {
+        match self.source_receipt.as_deref() {
+            Some(InputValue::GeneratedSyntax(_)) => Ok(self.context().clone()),
+            Some(InputValue::RetainedSyntax(unit)) => {
+                let anchor = unit
+                    .prepared()
+                    .selected_generated()
+                    .filter(|anchor| anchor.definition() == self.body().def_key)
+                    .ok_or_else(|| fault("retained generated body anchor absent"))?;
+                Ok(DeclarationContext {
+                    scope: self.context().scope.clone(),
+                    range: anchor.output_range(),
+                })
+            }
+            _ => Err(fault(
+                "generated boundary supplied for another owning source",
+            )),
         }
     }
     fn refresh_identity(&mut self) {
@@ -183,7 +204,7 @@ impl AdmittedBodyContext {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
-        let Some(InputValue::GeneratedSyntax(unit)) = self.source_receipt.as_deref() else {
+        let Some(unit) = self.generated_source() else {
             return QueryPoll::Ready(Err(fault(
                 "generated boundary supplied for another owning source",
             )));
@@ -193,7 +214,10 @@ impl AdmittedBodyContext {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
-        if let Err(error) = boundary.declaration_outer(self.body().def_key, self.context()) {
+        if let Err(error) = self
+            .generated_unit_context()
+            .and_then(|context| boundary.declaration_outer(self.body().def_key, &context))
+        {
             return QueryPoll::Ready(Err(error));
         }
         if let Some(current) = &self.generated_boundary {
@@ -269,6 +293,30 @@ impl AdmittedBodyContext {
             return Err(fault("identifier escapes admitted declaration"));
         }
         self.parsed.identifier_context(range)
+    }
+    /// The context of a declaration owner's identifier (an impl or trait
+    /// generic parameter), which lies outside the admitted declaration. Only
+    /// plain original source, which carries no expansion marks, supplies it:
+    /// its original root. Generated or expanded owners stay without one.
+    pub(super) fn owner_identifier_context(
+        &self,
+        range: crate::syntax::spans::SourceRange,
+        original: crate::syntax::token_wire::Key,
+    ) -> Result<Option<crate::syntax::token_wire::Key>, Diagnostic> {
+        if self.context().range.contains(range) {
+            return self.identifier_context_or_original(range, original).map(Some);
+        }
+        let plain = match self.source_receipt.as_deref() {
+            None => true,
+            Some(InputValue::RetainedSyntax(unit)) => unit.prepared().outputs().is_empty(),
+            _ => false,
+        };
+        Ok((plain
+            && self.local_parent().is_none()
+            && self
+                .original_source()
+                .is_some_and(|source| source.selection().outline.parse == self.parsed.key()))
+        .then_some(original))
     }
     pub(super) fn identifier_context_or_original(
         &self,
@@ -580,41 +628,135 @@ fn capture_inner(
                 "entered source retained original source owner ambiguous",
             ));
         }
-        // The admitted immutable assembly anchors and already-published rows
-        // certify this original member. Do not rebuild its complete outline at
-        // every reached entered source operation merely to rediscover the same anchor.
-        let original_item = owner
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.fingerprint() == definition)
-            .ok_or_else(|| fault("entered source retained original declaration absent"))?;
-        let mut anchors = unit
-            .prepared()
-            .original_declarations()
-            .iter()
-            .filter(|anchor| anchor.original_definition() == definition);
-        let anchor = anchors
-            .next()
-            .ok_or_else(|| fault("entered source retained original declaration anchor absent"))?;
-        let current = db
-            .prepared_source(owner.selection())?
-            .ok_or_else(|| fault("entered source retained original source lease absent"))?;
-        if anchors.next().is_some()
-            || !owner.same_publication(&current)
-            || anchor.original_range() != original_item.declaration_span
-            || anchor.declaration_range() != declaration.range
-            || anchor.body_range() != Some(handle.range)
-            || original_item.scope != declaration.scope
-            || original_item.header.fingerprint() != header.fingerprint()
-            || !declaration.range.contains(anchor.header_range())
-        {
-            return Err(fault(
-                "entered source retained original declaration rows differ",
-            ));
+        if let Some(generated) = unit.generated_unit() {
+            // A retained admission of a macro-generated function: its exact
+            // structural anchor, owning unit and current signature join here,
+            // the same checks the unit's own publication receives below.
+            let anchor = unit
+                .prepared()
+                .selected_generated()
+                .filter(|anchor| anchor.definition() == definition)
+                .ok_or_else(|| fault("entered source retained generated anchor absent"))?;
+            let selected = generated
+                .definitions
+                .get(&definition)
+                .ok_or_else(|| fault("entered source retained generated definition absent"))?;
+            let current = db
+                .prepared_source(owner.selection())?
+                .ok_or_else(|| fault("entered source retained original source lease absent"))?;
+            if !owner.same_publication(&current)
+                || anchor.declaration_range() != declaration.range
+                || anchor.body_range() != handle.range
+                || selected.crate_key != declaration.scope.crate_key
+                || selected.module_path != declaration.scope.module_path
+                || declaration.scope.crate_key != generated.scope.crate_key
+                || !declaration
+                    .scope
+                    .module_path
+                    .starts_with(&generated.scope.module_path)
+                || selected.item_kind != crate::source::manifest::ItemKind::Function
+            {
+                return Err(fault(
+                    "entered source retained generated declaration rows differ",
+                ));
+            }
+            let signature = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition))
+            {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
+            };
+            if !matches!(signature.value.as_ref(), QueryValue::FunctionSignature(signature)
+                if signature.definition == definition && signature.header == *header && signature.scope == declaration.scope)
+            {
+                return Err(fault(
+                    "entered source retained generated signature proof differs",
+                ));
+            }
+            // Like its unit's own publication, the generated declaration has
+            // no original module owner; its macro boundary is the unit's.
+            source_receipt = Some(input.clone());
+        } else if let Some(associated) = unit.generated_associated() {
+            // A macro-generated associated function retained inside its
+            // original impl/trait: the anchored declaration, its actual owner
+            // scope and the current signature join here.
+            let anchor = unit
+                .prepared()
+                .selected_generated()
+                .filter(|anchor| anchor.definition() == definition)
+                .ok_or_else(|| fault("entered source retained associated anchor absent"))?;
+            let current = db
+                .prepared_source(owner.selection())?
+                .ok_or_else(|| fault("entered source retained original source lease absent"))?;
+            if !owner.same_publication(&current)
+                || anchor.declaration_range() != declaration.range
+                || anchor.body_range() != handle.range
+                || associated.scope != declaration.scope
+            {
+                return Err(fault(
+                    "entered source retained associated declaration rows differ",
+                ));
+            }
+            match associated.def_key.item_kind {
+                crate::source::manifest::ItemKind::Function => {
+                    let signature = match db
+                        .fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition))
+                    {
+                        QueryPoll::Ready(Ok(value)) => value,
+                        QueryPoll::Ready(Err(error)) => return Err(error),
+                        QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
+                    };
+                    if !matches!(signature.value.as_ref(), QueryValue::FunctionSignature(signature)
+                        if signature.definition == definition && signature.header == *header && signature.scope == declaration.scope)
+                    {
+                        return Err(fault(
+                            "entered source retained associated signature proof differs",
+                        ));
+                    }
+                }
+                crate::source::manifest::ItemKind::Constant => {
+                    parsed.initializer_parameters(header, declaration, handle)?;
+                }
+                _ => return Err(fault("admitted declaration has no executable body proof")),
+            }
+            source_receipt = Some(input.clone());
+        } else {
+            // The admitted immutable assembly anchors and already-published rows
+            // certify this original member. Do not rebuild its complete outline at
+            // every reached entered source operation merely to rediscover the same anchor.
+            let original_item = owner
+                .outline()
+                .items
+                .iter()
+                .find(|item| item.def_key.fingerprint() == definition)
+                .ok_or_else(|| fault("entered source retained original declaration absent"))?;
+            let mut anchors = unit
+                .prepared()
+                .original_declarations()
+                .iter()
+                .filter(|anchor| anchor.original_definition() == definition);
+            let anchor = anchors.next().ok_or_else(|| {
+                fault("entered source retained original declaration anchor absent")
+            })?;
+            let current = db
+                .prepared_source(owner.selection())?
+                .ok_or_else(|| fault("entered source retained original source lease absent"))?;
+            if anchors.next().is_some()
+                || !owner.same_publication(&current)
+                || anchor.original_range() != original_item.declaration_span
+                || anchor.declaration_range() != declaration.range
+                || anchor.body_range() != Some(handle.range)
+                || original_item.scope != declaration.scope
+                || original_item.header.fingerprint() != header.fingerprint()
+                || !declaration.range.contains(anchor.header_range())
+            {
+                return Err(fault(
+                    "entered source retained original declaration rows differ",
+                ));
+            }
+            original = Some((*owner).share());
+            source_receipt = Some(input.clone());
         }
-        original = Some((*owner).share());
-        source_receipt = Some(input.clone());
     } else if let Some(input) = db.input(&InputKey::GeneratedSyntax(parse.content)) {
         let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
             return Err(fault("entered source generated source input differs"));
@@ -746,7 +888,6 @@ fn capture_inner(
                 .transpose()?
                 .unwrap_or(0),
         )
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(crate::runtime::arena::resource)?;
     let mut admitted = AdmittedBodyContext {
         parsed: Arc::clone(parsed),
@@ -1084,10 +1225,19 @@ impl AdmittedBodyContext {
                 Some(InputValue::RetainedSyntax(_))
             )
         {
-            let Some(owner) = self.original_source() else {
-                return QueryPoll::Ready(Err(fault("retained body original publication absent")));
-            };
-            let proof = match db.retained_original_declaration(owner, self.body().def_key) {
+            let generated = matches!(self.source_receipt.as_deref(),
+                Some(InputValue::RetainedSyntax(unit))
+                    if unit.generated_unit().is_some() || unit.generated_associated().is_some());
+            let proof = match if generated {
+                db.retained_generated_declaration(self.body().def_key)
+            } else {
+                let Some(owner) = self.original_source() else {
+                    return QueryPoll::Ready(Err(fault(
+                        "retained body original publication absent",
+                    )));
+                };
+                db.retained_original_declaration(owner, self.body().def_key)
+            } {
                 QueryPoll::Ready(Ok(Some(proof))) => proof,
                 QueryPoll::Ready(Ok(None)) => {
                     return QueryPoll::Ready(Err(fault("retained body declaration bridge absent")));
@@ -1113,17 +1263,16 @@ impl AdmittedBodyContext {
         if let Some(parent) = self.local_parent() {
             macro_hygiene = parent.context().macro_hygiene().cloned();
             macro_ancestry = parent.context().macro_ancestry().cloned();
-            if parent.context().macro_outers().len() > 256
-                || macro_outers
-                    .try_reserve_exact(parent.context().macro_outers().len())
-                    .is_err()
+            if macro_outers
+                .try_reserve_exact(parent.context().macro_outers().len())
+                .is_err()
             {
                 return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
             }
             macro_outers.extend(parent.context().macro_outers().iter().cloned());
         }
         if let Some(boundary) = &generated_boundary {
-            let Some(InputValue::GeneratedSyntax(unit)) = self.source_receipt.as_deref() else {
+            let Some(unit) = self.generated_source() else {
                 return QueryPoll::Ready(Err(fault(
                     "generated macro boundary supplied for another source kind",
                 )));
@@ -1133,7 +1282,10 @@ impl AdmittedBodyContext {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
-            let selected = match boundary.declaration_outer(self.body().def_key, self.context()) {
+            let selected = match self
+                .generated_unit_context()
+                .and_then(|context| boundary.declaration_outer(self.body().def_key, &context))
+            {
                 Ok(selected) => selected,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
@@ -1141,7 +1293,7 @@ impl AdmittedBodyContext {
                 .scopes()
                 .len()
                 .checked_add(usize::from(selected.is_some()));
-            let Some(count) = count.filter(|n| *n <= 256) else {
+            let Some(count) = count else {
                 return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
             };
             if macro_outers.try_reserve_exact(count).is_err() {
@@ -1202,7 +1354,6 @@ impl AdmittedBodyContext {
                             std::mem::size_of::<super::macro_boundary::RetainedMacroScope>(),
                         )?)
                     })
-                    .filter(|bytes| *bytes <= 32 * 1024 * 1024)
                     .ok_or_else(crate::runtime::arena::resource)
             }) {
                 Ok(bytes) => bytes,

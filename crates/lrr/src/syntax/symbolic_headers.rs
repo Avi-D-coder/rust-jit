@@ -61,9 +61,6 @@ fn names(binder: Option<ast::ForBinder>) -> Result<BTreeMap<String, u32>, Diagno
             .text()
             .to_string();
         let name = canonical_lifetime(&written).ok_or_else(unsupported)?;
-        if names.len() >= 100_000 {
-            return Err(limit());
-        }
         if name == "'static" || name == "'_" || names.contains_key(&name) {
             return Err(unsupported());
         }
@@ -75,11 +72,6 @@ fn names(binder: Option<ast::ForBinder>) -> Result<BTreeMap<String, u32>, Diagno
 /// Captures the predicate binder separately from any function-type binder.
 /// It does not select the trait, certify its bounds, or publish a runtime view.
 pub fn function_predicate(predicate: &ast::WherePred) -> Result<Binder<TyTerm>, Diagnostic> {
-    if predicate.syntax().text_range().len() > ra_ap_syntax::TextSize::from(1024 * 1024)
-        || predicate.syntax().descendants().take(100_001).count() > 100_000
-    {
-        return Err(limit());
-    }
     let outer = names(predicate.for_binder())?;
     let variables = vec![BoundKind::Region; outer.len()];
     let mut scopes = vec![outer];
@@ -101,11 +93,6 @@ pub(crate) fn capture_function_type(
     parameters: &[DefinitionParameter],
     depth: usize,
 ) -> Result<TyTerm, Diagnostic> {
-    if ty.syntax().text_range().len() > ra_ap_syntax::TextSize::from(1024 * 1024)
-        || ty.syntax().descendants().take(100_001).count() > 100_000
-    {
-        return Err(limit());
-    }
     let depth = u32::try_from(depth).map_err(|_| limit())?;
     let result = parse(
         ty,
@@ -124,9 +111,6 @@ fn parse(
     context: Option<(Digest, &[DefinitionParameter])>,
     elision: &mut ReferenceElision,
 ) -> Result<TyTerm, Diagnostic> {
-    if depth > 256 || scopes.len() > 256 {
-        return Err(limit());
-    }
     // Return each branch result directly. Wrapping a match in Ok with a ? in
     // every arm retains many large result temporaries in recursive debug frames.
     match ty {
@@ -241,9 +225,6 @@ fn reference_type(
     let region = if written.as_deref().is_none_or(|name| name == "'_") {
         match elision {
             ReferenceElision::Input { variables, .. } => {
-                if *variables >= 100_000 {
-                    return Err(limit());
-                }
                 let index = *variables;
                 *variables = variables.checked_add(1).ok_or_else(limit)?;
                 RegionTerm::Bound { depth: 0, index }
@@ -373,9 +354,6 @@ fn function_type(
         || function.const_token().is_some()
     {
         return Err(unsupported());
-    }
-    if scopes.len() >= 256 {
-        return Err(limit());
     }
     let mut variable_count = u32::try_from(variables.len()).map_err(|_| limit())?;
     scopes.push(variables);

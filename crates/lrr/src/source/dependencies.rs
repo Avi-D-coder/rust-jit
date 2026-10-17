@@ -25,13 +25,18 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-UNIT-GRAPH", message.into())
 }
 impl SourceDependencies {
+    /// Actual captured source roots only. This read does not certify a Cargo
+    /// unit graph, native/live world membership or any declaration closure.
+    pub(crate) fn root(&self, unit: Digest) -> Option<&SourceSelection> {
+        self.roots.get(&unit)
+    }
+    pub(crate) fn root_count(&self) -> usize {
+        self.roots.len()
+    }
     pub(crate) fn prepare(
         roots: Vec<SourceSelection>,
         rows: Vec<SourceDependency>,
     ) -> Result<Self, Diagnostic> {
-        if roots.len() > 100_000 || rows.len() > 100_000 {
-            return Err(fault("source dependency graph count limit"));
-        }
         let mut graph = Self {
             roots: BTreeMap::new(),
             aliases: BTreeMap::new(),
@@ -43,7 +48,6 @@ impl SourceDependencies {
             bytes = bytes
                 .checked_add(root.metadata_bytes()?)
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("source dependency root metadata limit"))?;
             if !root.outline.module_path.is_empty()
                 || root.canonical()? != root
@@ -55,9 +59,6 @@ impl SourceDependencies {
             }
         }
         for row in rows {
-            if row.alias.len() > 4096 {
-                return Err(fault("source dependency alias text limit"));
-            }
             let root = graph
                 .roots
                 .get(&row.consumer)
@@ -77,7 +78,6 @@ impl SourceDependencies {
                         .ok_or_else(|| fault("source dependency alias size overflow"))?,
                 )
                 .and_then(|n| n.checked_add(384))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("source dependency alias metadata limit"))?;
             if let Some(old) = graph.aliases.insert((row.consumer, alias), row.provider)
                 && old != row.provider

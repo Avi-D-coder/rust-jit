@@ -18,9 +18,6 @@ pub enum Phase {
     Commit,
     Exit,
     Operand(u16),
-    /// Charged ordinary pattern transaction cleanup/retry continuation. Source
-    /// indexing admits this only for real pattern/arm/condition owners.
-    PatternCleanup,
 }
 impl Phase {
     pub fn code(self) -> Result<u16, Diagnostic> {
@@ -28,7 +25,6 @@ impl Phase {
             Self::Entry => Ok(0),
             Self::Commit => Ok(1),
             Self::Exit => Ok(2),
-            Self::PatternCleanup => Ok(u16::MAX),
             Self::Operand(n) => {
                 n.checked_add(3)
                     .filter(|code| *code < u16::MAX)
@@ -44,7 +40,6 @@ impl Phase {
             0 => Self::Entry,
             1 => Self::Commit,
             2 => Self::Exit,
-            u16::MAX => Self::PatternCleanup,
             n => Self::Operand(n - 3),
         }
     }
@@ -60,11 +55,9 @@ mod tests {
             Phase::Exit,
             Phase::Operand(0),
             Phase::Operand(u16::MAX - 4),
-            Phase::PatternCleanup,
         ] {
             assert_eq!(Phase::from_code(phase.code().unwrap()), phase);
         }
         assert!(Phase::Operand(u16::MAX - 3).code().is_err());
-        assert_eq!(Phase::PatternCleanup.code().unwrap(), u16::MAX);
     }
 }

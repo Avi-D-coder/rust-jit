@@ -111,6 +111,10 @@ fn actual_named_renamed_glob_shadow_and_visibility_worlds_equal_old_global() {
     }
 }
 
+/// An alias at or above the scope (and a missing scope) keeps the global
+/// fallback; an immediate child alias (the crate root here) only adds its
+/// own spelling. Either way the certified answers equal the old global
+/// enumeration.
 #[test]
 fn aliases_module_roots_ambiguity_and_missing_scope_keep_old_fallback() {
     for text in [
@@ -122,11 +126,13 @@ fn aliases_module_roots_ambiguity_and_missing_scope_keep_old_fallback() {
         graph.resolve_imports().unwrap();
         for path in [vec![], vec!["alias"], vec!["not_disclosed"]] {
             let selected = scope(&outline, &path);
-            assert!(
-                graph
-                    .scoped_certification_candidates(&selected, Namespace::Type, 2024)
-                    .is_none()
-            );
+            if !path.is_empty() {
+                assert!(
+                    graph
+                        .scoped_certification_candidates(&selected, Namespace::Type, 2024)
+                        .is_none()
+                );
+            }
             for ns in [Namespace::Value, Namespace::Type, Namespace::Macro] {
                 equivalent(&graph, &selected, ns, 2024);
             }
@@ -147,11 +153,12 @@ fn aliases_module_roots_ambiguity_and_missing_scope_keep_old_fallback() {
         .dependency(outline.root_scope.crate_key, "renamed", provider, 2024)
         .unwrap();
     // A module-only alias to a crate root has no destination item row. The
-    // same spelling in the provider's genuine source is in the old universe.
+    // same spelling in the provider's genuine source is in the old universe,
+    // so the immediate child alias contributes exactly that spelling.
     assert!(
         graph
             .scoped_certification_candidates(&outline.root_scope, Namespace::Type, 2024)
-            .is_none()
+            .is_some_and(|names| names.iter().any(|name| name.as_str() == "renamed"))
     );
     equivalent(&graph, &outline.root_scope, Namespace::Type, 2024);
     assert!(

@@ -77,9 +77,6 @@ pub(super) fn capture(
         }
         ast::ArrayExprKind::ElementList(expressions) => {
             for expression in expressions {
-                if operands.len() >= 10_000 {
-                    return Err(fault("vec argument count limit"));
-                }
                 operands
                     .try_reserve(1)
                     .map_err(|_| fault("vec argument allocation"))?;
@@ -106,7 +103,6 @@ pub(super) fn capture(
         for node in operand.syntax().descendants() {
             nodes = nodes
                 .checked_add(1)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| fault("vec argument structural work limit"))?;
             no_item_syntax &= !ast::Item::can_cast(node.kind())
                 && !ast::MacroExpr::can_cast(node.kind())

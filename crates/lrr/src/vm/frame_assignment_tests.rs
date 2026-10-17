@@ -30,12 +30,7 @@ struct AssignmentFrame {
     incoming_text: Option<String>,
 }
 
-fn original_assignment(
-    source: &str,
-    local: &str,
-    ordinal: usize,
-    max_handles: u32,
-) -> AssignmentFrame {
+fn original_assignment(source: &str, local: &str, ordinal: usize) -> AssignmentFrame {
     let facts = facts::local_assignment(source, local, ordinal);
     let parsed = ParsedFile::parse(
         &SourceBlob::new(source.as_bytes().to_vec()).unwrap(),
@@ -84,7 +79,7 @@ fn original_assignment(
     };
     assert_eq!(*binding, pattern);
     let (source, destination) = (*source, *destination);
-    let mut store = GuestStore::new(1, max_handles, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body, pc, &mut store).unwrap();
     let mut scopes = Vec::new();
     let mut scope = Some(assignment.scope);
@@ -160,7 +155,7 @@ fn execute(context: &mut AssignmentFrame) -> Result<crate::vm::step::StepOutcome
 
 #[test]
 fn rustc_original_string_assignment_transfers_rhs_and_reclaims_old_owner_once() {
-    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0, 1000);
+    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0);
     let before = states(&context);
     let CellState::Live(old) = before.2 else {
         panic!("original old String absent")
@@ -211,70 +206,8 @@ fn rustc_original_string_assignment_transfers_rhs_and_reclaims_old_owner_once() 
 }
 
 #[test]
-fn rustc_string_assignment_whole_batch_quota_refusal_preserves_both_owners() {
-    // LRR-specific quota variants of the same original assignment operation.
-    // Each limit admits setup and some, but not all, replacement/result handles.
-    for limit in 8..=10 {
-        let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0, limit);
-        assert_eq!(context.store.budget().handles(), 7);
-        let before = states(&context);
-        assert_eq!(
-            execute(&mut context).unwrap_err().code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(states(&context), before);
-        assert!(
-            context
-                .frame
-                .slot(context.destination)
-                .unwrap()
-                .cell
-                .is_none()
-        );
-        assert_eq!(context.frame.counters.operations_completed, 0);
-    }
-}
-
-#[test]
-fn rustc_string_assignment_existing_result_cell_reserves_all_transfer_tickets() {
-    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0, 10);
-    let destination = context
-        .frame
-        .prepare_write(context.destination, &mut context.store)
-        .unwrap();
-    let before = states(&context);
-    assert_eq!(
-        execute(&mut context).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(states(&context), before);
-    assert_eq!(context.store.state(destination).unwrap(), CellState::Uninit);
-}
-
-#[test]
-fn rustc_string_assignment_fuel_refusal_preserves_rhs_and_replaced_value() {
-    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0, 1000);
-    context.frame.set_fuel_limit(0).unwrap();
-    let before = states(&context);
-    assert_eq!(
-        execute(&mut context).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(states(&context), before);
-    assert_eq!(context.frame.fuel_snapshot().used, 0);
-    assert!(
-        context
-            .frame
-            .slot(context.destination)
-            .unwrap()
-            .cell
-            .is_none()
-    );
-}
-
-#[test]
 fn rustc_original_uninitialized_string_assignment_establishes_storage_contract() {
-    let mut context = original_assignment(STRING_INITIALIZATION, "x", 0, 1000);
+    let mut context = original_assignment(STRING_INITIALIZATION, "x", 0);
     let target = context.frame.binding(context.binding).unwrap();
     assert_eq!(context.store.state(target).unwrap(), CellState::Uninit);
     assert_eq!(
@@ -300,28 +233,8 @@ fn rustc_original_uninitialized_string_assignment_establishes_storage_contract()
 }
 
 #[test]
-fn rustc_uninitialized_string_assignment_reserves_result_before_rhs_transfer() {
-    let mut context = original_assignment(STRING_INITIALIZATION, "x", 0, 7);
-    assert_eq!(context.store.budget().handles(), 5);
-    let before = states(&context);
-    assert_eq!(
-        execute(&mut context).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(states(&context), before);
-    assert!(
-        context
-            .frame
-            .slot(context.destination)
-            .unwrap()
-            .cell
-            .is_none()
-    );
-}
-
-#[test]
 fn rustc_string_assignment_reinitializes_moved_location_without_reviving_old_epoch() {
-    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0, 1000);
+    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0);
     let target = context.frame.binding(context.binding).unwrap();
     let old = context.store.move_from(target).unwrap();
     let before = states(&context);
@@ -342,9 +255,9 @@ fn rustc_string_assignment_reinitializes_moved_location_without_reviving_old_epo
 
 #[test]
 fn rustc_original_immutable_local_accepts_first_assignment_and_refuses_second() {
-    let mut first = original_assignment(IMMUTABLE_ASSIGNMENT, "v", 0, 1000);
+    let mut first = original_assignment(IMMUTABLE_ASSIGNMENT, "v", 0);
     execute(&mut first).unwrap();
-    let mut second = original_assignment(IMMUTABLE_ASSIGNMENT, "v", 1, 1000);
+    let mut second = original_assignment(IMMUTABLE_ASSIGNMENT, "v", 1);
     let target = second.frame.binding(second.binding).unwrap();
     let facts = facts::local_assignment(IMMUTABLE_ASSIGNMENT, "v", 0);
     let original_first = ValueRepr::signed(TypeId(8), facts.incoming_integer.unwrap()).unwrap();
@@ -366,7 +279,7 @@ fn rustc_original_immutable_local_accepts_first_assignment_and_refuses_second() 
 
 #[test]
 fn rustc_string_assignment_forged_rhs_target_alias_refuses_before_fuel() {
-    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0, 1000);
+    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0);
     let target = context.frame.binding(context.binding).unwrap();
     // A malformed prepared frame cannot consume its own destination as RHS.
     // This differs from valid source `x=x`, whose RHS has a separate ticket.
@@ -387,7 +300,7 @@ fn rustc_string_assignment_forged_rhs_target_alias_refuses_before_fuel() {
 
 #[test]
 fn local_assignment_forged_structural_owner_refuses_before_owner_change() {
-    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0, 1000);
+    let mut context = original_assignment(STRING_REPLACEMENT, "greeting", 0);
     // LRR-specific forged-owner control. Closed tuples now have a selected
     // intrinsic cleanup policy, but their binding owner must still use the exact
     // indexed FrameSlot ordinal. The deliberately forged 0/1 owners below must
@@ -456,7 +369,7 @@ fn local_assignment_forged_structural_owner_refuses_before_owner_change() {
 
 #[test]
 fn rustc_original_unit_assignment_replaces_after_completed_rhs_without_epoch_change() {
-    let mut context = original_assignment(UNIT_ASSIGNMENT, "_u2", 0, 1000);
+    let mut context = original_assignment(UNIT_ASSIGNMENT, "_u2", 0);
     let before = states(&context);
     assert!(matches!(
         execute(&mut context).unwrap(),

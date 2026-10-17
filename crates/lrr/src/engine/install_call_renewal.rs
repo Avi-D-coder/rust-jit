@@ -6,7 +6,6 @@ use crate::{
     frontend::explicit_type_arguments::PreparedExplicitTypeArguments,
     syntax::body_index::BodyIndex,
 };
-const MAX_PHASES: usize = 100_000;
 #[derive(Clone, Copy)]
 enum RenewalScope {
     Publisher,
@@ -105,38 +104,14 @@ impl InstalledRecipes {
         let mut last = first.clone();
         last.phase = u16::MAX;
         let count = self.by_pc.range(first.clone()..=last.clone()).count();
-        if count == 0 || count > MAX_PHASES {
-            return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+        if count == 0 {
+            return QueryPoll::Ready(Err(invalid("call renewal has no installed phase")));
         }
-        checked!(
-            count
-                .checked_mul(std::mem::size_of::<Replacement>())
-                .and_then(|bytes| bytes.checked_add(self.bytes))
-                .filter(|bytes| *bytes <= self.limit)
-                .ok_or_else(crate::runtime::arena::resource)
-        );
         let mut replacements = Vec::<Replacement>::new();
         checked!(
             replacements
                 .try_reserve_exact(count)
                 .map_err(|_| crate::runtime::arena::resource())
-        );
-        let scratch = checked!(
-            replacements
-                .capacity()
-                .checked_mul(std::mem::size_of::<Replacement>())
-                .ok_or_else(crate::runtime::arena::resource)
-        );
-        checked!(
-            self.bytes
-                .checked_add(scratch)
-                .filter(|bytes| *bytes <= self.limit)
-                .ok_or_else(crate::runtime::arena::resource)
-        );
-        let arc_headers = checked!(
-            count
-                .checked_mul(2 * std::mem::size_of::<usize>())
-                .ok_or_else(crate::runtime::arena::resource)
         );
         let mut old_charge = 0usize;
         let mut new_charge = 0usize;
@@ -191,16 +166,6 @@ impl InstalledRecipes {
                     .checked_add(checked!(recipe_charge(recipe)))
                     .ok_or_else(crate::runtime::arena::resource)
             );
-            // Bound simultaneous old/new immutable recipes, Arc headers and
-            // staging capacity before cloning another owned recipe.
-            checked!(
-                self.bytes
-                    .checked_add(new_charge)
-                    .and_then(|bytes| bytes.checked_add(scratch))
-                    .and_then(|bytes| bytes.checked_add(arc_headers))
-                    .filter(|bytes| *bytes <= self.limit)
-                    .ok_or_else(crate::runtime::arena::resource)
-            );
             let index = checked!(
                 id.0.checked_sub(1)
                     .map(|i| i as usize)
@@ -215,7 +180,6 @@ impl InstalledRecipes {
             self.bytes
                 .checked_sub(old_charge)
                 .and_then(|bytes| bytes.checked_add(new_charge))
-                .filter(|bytes| *bytes <= self.limit)
                 .ok_or_else(crate::runtime::arena::resource)
         );
         // All fallible work and relevant currentness checks precede the swap.

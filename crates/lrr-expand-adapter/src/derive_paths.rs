@@ -24,26 +24,15 @@ fn fault(message: &str) -> AdapterError {
     }
 }
 pub fn parse(input: &TokenForest) -> Result<Vec<DerivePath>, AdapterError> {
-    if input.encoded_len()? > 32 * 1024 * 1024 || input.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("derive path input retention limit"));
-    }
     let mut store = SpanStore::default();
     let tree = store.import(input)?;
     if tree.top_subtree().delimiter.kind != tt::DelimiterKind::Parenthesis {
         return Err(fault("derive arguments require parentheses"));
     }
-    let mut parts = Vec::new();
-    parts
-        .try_reserve_exact(4098)
-        .map_err(|_| fault("derive path part allocation"))?;
-    parts.extend(
-        tree.token_trees()
-            .split(|t| matches!(t,tt::TtElement::Leaf(tt::Leaf::Punct(p)) if p.char==','))
-            .take(4098),
-    );
-    if parts.len() > 4097 {
-        return Err(fault("derive path count limit"));
-    }
+    let parts: Vec<_> = tree
+        .token_trees()
+        .split(|t| matches!(t,tt::TtElement::Leaf(tt::Leaf::Punct(p)) if p.char==','))
+        .collect();
     let mut result = Vec::new();
     let mut bytes = 0usize;
     for (index, part) in parts.iter().enumerate() {
@@ -93,11 +82,7 @@ pub fn parse(input: &TokenForest) -> Result<Vec<DerivePath>, AdapterError> {
                 .to_string();
             bytes = bytes
                 .checked_add(name.len() + std::mem::size_of::<String>())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("derive path metadata limit"))?;
-            if segments.len() >= 256 {
-                return Err(fault("derive path depth limit"));
-            }
             segments.push(name);
             match path.qualifier() {
                 Some(parent) => path = parent,
@@ -112,7 +97,6 @@ pub fn parse(input: &TokenForest) -> Result<Vec<DerivePath>, AdapterError> {
         let tokens = store.export(&path_tokens)?;
         bytes = bytes
             .checked_add(tokens.allocated_bytes()?)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("derive path token retention limit"))?;
         result.push(DerivePath {
             absolute,

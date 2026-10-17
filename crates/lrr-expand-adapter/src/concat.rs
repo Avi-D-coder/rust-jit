@@ -16,11 +16,7 @@ pub fn literal_value(
     max_input_bytes: usize,
     max_output_bytes: usize,
 ) -> Result<String, AdapterError> {
-    if max_input_bytes == 0
-        || max_input_bytes > 64 * 1024 * 1024
-        || max_output_bytes == 0
-        || max_output_bytes > 32 * 1024 * 1024
-    {
+    if max_input_bytes == 0 || max_output_bytes == 0 {
         return Err(fault(
             "concat limits must be positive reductions of fixed bounds",
         ));

@@ -1,0 +1,87 @@
+{
+  "schema": "lrr/source-review/qualified-associated-call-next-join/v1",
+  "baseline_commit": "adb43b9b7dc5118d139a4c7a31e0271a2b9cff41",
+  "status": "read-only source diagnosis and actionable next factor; no production/test edits or executions",
+  "document": "worktracks/05-trait-goal-engine/qualified-associated-call-next-source-join.md",
+  "document_sha256": "dc41a191f4189570c3321728bcad5293be81fded776ff6397bea975260f415c5",
+  "source": [
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "cf1ab99b168126b826140a3b6fa033275ae66400958c7fe54ec2a824620a5c6b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "7399d14c0305c2c0260f3928f14e01be09344b8a85b3fc1c7556c570b0f55e36"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358"
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "sha256": "e2185d447aef61e48dca1c84773185a672c08a3433c64140fe5612f5a9e2c29f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "4da2a783184d70adc5a60d5bbf252c8baba3ba379206e5d703a4f9f4bdc2fd55"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_view.rs",
+      "sha256": "765371e18019141116bc31fcb796efeae4be17c258acbbc35b26dd28903d783c"
+    },
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "sha256": "2aac4453aabef9bf1a87b9368436ca745df3a88124e27a67e71aee965ab62bcc"
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan.rs",
+      "sha256": "22c0a2ef4c5aabee0b6f4d8ed283cf1ca17f864361c6c0834d83613833e6ec14"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_items.rs",
+      "sha256": "379038cfaca9befd94bce7b4969593f34164124a5a5c2f29e6045d90f45440dc"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "5e315b6701f907f085ce1c4ca6dc79a12cd4a6bf1895d280663cf25c30e53e1d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declared_item_names.rs",
+      "sha256": "891c78b6128bbed75c679535c0081a55e742b9b71d86c0777719421180dceeae"
+    },
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/declaration_output.rs",
+      "sha256": "d73de51a9f8f5d5883e2e4796ca3551c6248526a09f05b059d73454b9271f4d9"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/item_output.rs",
+      "sha256": "82ad2a9d11adad5f3dcc834ee4c789178c3a5f55d46088de40e3b2740055e168"
+    },
+    {
+      "path": "crates/lrr/src/traits/term.rs",
+      "sha256": "9b82b1eba60151e99408cb9c8db4671178636acd8d181912a8799fe8a02741da"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "6e791921964933def4568f3a3a1b04f749ded8a030e81e83fb1037462fc39975"
+    }
+  ],
+  "concrete_boundaries": [
+    "Value39 qualified PathExpr remains PathAdjustment; Query44 retains pending",
+    "Module canonical function refuses ownerSome correctly",
+    "Outline original associated DefKeys and scanner raw IDs/impl semantic headers are different identities",
+    "GeneratedDeclarations retains real associated grammar/tree/parent chain but declaration_output captures MacroRules definitions only",
+    "GeneratedItems requires Items; GeneratedHeaderPlan requires ownerNone; do not relax or forge keys",
+    "Existing Frame TyTerm propagation/source_types nominal preparation recognized; missing complete member-facing source/ParamEnv join remains"
+  ],
+  "next_deliverable": "Real canonical associated source/header/owner index through factored existing outline and pinned header extraction, no placeholder-only API or method selection shortcut",
+  "remaining": "M017-M026 ordered services/seals and actual runtime/matrix evidence remain gated"
+}

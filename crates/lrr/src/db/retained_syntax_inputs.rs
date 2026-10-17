@@ -27,13 +27,7 @@ impl Database {
                 };
             }
             let bytes = input_metadata_bytes(&key, &value)?;
-            let total = account_add(self.cache_usage()?.memo_bytes, bytes)?;
-            if total > self.run_budgets.unwrap_or_default().query_bytes {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "retained syntax input exceeds query metadata cap",
-                ));
-            }
+            let _ = bytes; // E-R5-006: no byte accounting.
             let revision = self
                 .revision
                 .checked_add(1)

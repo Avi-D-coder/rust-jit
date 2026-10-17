@@ -56,19 +56,17 @@ fn rustc_deferred_local_cleanup_keeps_primary_declaration_order_after_reverse_in
         .collect();
     let scope = primary[0].2;
     assert!(primary.iter().all(|(_, _, found)| *found == scope));
-    // Each independent run stops after a different number of actual retirements.
-    // It never retries a fatal resource fault or changes tested source bytes.
-    for completed in 0..=facts.expected_tags.len() {
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    // E-R5-006: the former per-prefix runs stopped by fuel are gone; the one
+    // complete run must retire every primary binding exactly once.
+    {
+        let completed = facts.expected_tags.len();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(NodeId(0), Phase::Entry).unwrap(),
             &mut store,
         )
         .unwrap();
-        frame
-            .set_fuel_limit(u64::try_from(completed).unwrap())
-            .unwrap();
         let mut ancestry = Vec::new();
         let mut current = Some(scope);
         while let Some(id) = current {
@@ -106,13 +104,7 @@ fn rustc_deferred_local_cleanup_keeps_primary_declaration_order_after_reverse_in
                 )
             })
             .collect();
-        let result = frame.leave(scope, &mut store);
-        if completed == facts.expected_tags.len() {
-            result.unwrap();
-        } else {
-            assert_eq!(result.unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-            assert_eq!(frame.active_scopes().last(), Some(&scope));
-        }
+        frame.leave(scope, &mut store).unwrap();
         assert_eq!(
             frame.counters.cleanup_elements_completed,
             u64::try_from(completed).unwrap()

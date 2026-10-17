@@ -1,0 +1,49 @@
+{
+  "schema": "lrr/source-review/nested-statement-macro-generic-calls/v1",
+  "status": "source-only; no actual fixture terminal or pass claimed",
+  "task": "Bounded source prerequisite diagnosis for unchanged3 static_assert_exists::<Bar/Baz/Xyzzy>() calls after grault wrapper emission",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-nested_stmt_macros.rs",
+    "bytes": 344,
+    "sha256": "abef2c55f007cf929838a1cae6e3e329f8bf4747979db3e78b11580d5b86eb49",
+    "directives": "run-pass; no auxiliary directive in file",
+    "actual_source": "grault expands foo plus Xyzzy; foo emits Bar and Baz. Generic target static_assert_exists<T>(){} is an ordinary module function. Do not specialize on these names or empty body."
+  },
+  "inspected_source_sha256": {
+    "crates/lrr/src/syntax/thunks.rs": "a145463c0f06a6544526db75db2f453d197251d2a8817fe12640ac50608d4384",
+    "crates/lrr/src/engine/run.rs": "cafa2eded5d5f22ecb535a27d13ba91937e92401e9b8b5ddf518996965ab6341",
+    "crates/lrr/src/frontend/body_type_occurrences.rs": "a00f9adc71e2a365096667f3f7dceaf9933093f1741f3ec6b22270523572950e",
+    "crates/lrr/src/frontend/source_local_plan.rs": "5c1d9076f1b7b56ff1a590a975da7ff159911fcf260f4dd843d32e4dc906fa14",
+    "crates/lrr/src/frontend/body_type_declarations.rs": "68c533d0168d9435805073d9a900639cb568f03fad10b94ce9a359f7735d96ea",
+    "crates/lrr/src/frontend/source_types.rs": "4da2a783184d70adc5a60d5bbf252c8baba3ba379206e5d703a4f9f4bdc2fd55",
+    "crates/lrr/src/frontend/call_contracts.rs": "73287aa8be81c8b2273e15a31fc3f9687bb4a7d94aff790b846c08c3b28d10bc"
+  },
+  "current_route": {
+    "lowering": "initial_call_thunk captures actual argument AST but explicit Type args are display String values. It walks ancestor StmtList declarations comparing printed generic strings by MacroName, refuses equal-spelled local nominal/type names. Actual emitted3local structs hit this gate before ordinary CallSeal.",
+    "call_preparation": "prepare_selected_argument_call receives explicit &[String], refetches caller FunctionSignature, builds SignatureNames/AliasNormalizer from source catalogue and resolves strings in caller declaration namespace. This is not the actual entered explicit Type token namespace. It only maps Primitive/Param to runtime descriptor; selected nominal Type ends explicit structural layout refusal.",
+    "ordinary_contracts": "Once actual selected SourceType+descriptor exist, existing call_contracts explicit substitution/runtime binding can bind actual callee GenericKind::Type ordinal, with existing source/current call guards and ordinary zeroargument CallSeal/return/cleanup. It does not require a special generic/noargument evaluator.",
+    "existing_shared_type_service": "PreparedBodyTypeOccurrences captures indexed PathType nodes, including actual generic argument Type AST; SourceLocalPlan prefix uses exact token context/edition/lexical scopes and final BodyTypeDeclaration joins real owning row/source/header/schema. SourceType::materialize handles its certified TypeKey. These are common services to extend/consume."
+  },
+  "specific_missing_joins": [
+    "Real retained occurrence proof: BodyTypeOccurrences currently marks any RetainedSyntax with nonempty outputs NeedRetainedOccurrence. The original caller-written Bar/Baz/Xyzzy Type tokens must join their actual retained token origins; generated local declaration facts separately require their own actual admitted output identity/context and canonical row. No deleting origin guard or blanket original inference.",
+    "Actual callsite + exact explicit generic Type ordinal\u2192retained PathType NodeId association, including source ranges/context/edition and actual selected callee generic ordinal. Display strings may remain diagnostics only, never grant Type selection.",
+    "Prepare selected local header publication/canonical identity under existing actual BodyEnvironment; use same local prefix/BodyTypeDeclaration/SourceType schema service, not caller module SignatureNames for body-local names. Unit struct Type descriptor must come from actual schema proof, not runtime tag/layout or an unneeded-type-parameter shortcut.",
+    "Memoized/prepared explicit call context retained once with relevant positive/negative/source/epoch deps and actual opaque SourceType; installed phases consume handle/readonly guards. No perphase header/wholegraph reconstruction. Existing ordinary call/argument/suspension/GenericEnv/reachedbody path remains one continuation owner."
+  ],
+  "removal_conditions": [
+    "Delete initial_call_thunk local_type ancestor/text scan only after shared exact explicit Type occurrence plan is retained; keep genuine unsupported features typed pending.",
+    "Replace prepare_selected_argument_call printed-string SignatureNames/AliasNormalizer explicit lookup with same certified body Type service. Do not broaden lexical_numeric_function certificate to generic structs or preserve oldgraph fallback on missingproof.",
+    "Retire any old original-only lexical callee candidate gate only once genuine selected Value declaration service handles exact source origin; not required to invent newcallee resolver for this modulefunction."
+  ],
+  "eight_mode_review": {
+    "1": "No assertion evaluator needed; static_assert_exists is ordinary selected source function despite its name.",
+    "2": "Nested generated declarations must attach ordinary owning main tree; calls remain CallSeal\u2192ordinary frame.",
+    "3": "Three Type args differ only selected actual declaration; no name/emptygeneric specialcase.",
+    "4": "Current retained occurrence demand is genuine authority gap and must be joined uniformly; cannot turn it into permanent origin exclusion.",
+    "5": "Declared generic header suffices for selection; no calleeBodyStructure/Thunk until actual call. No allbranch executable prep.",
+    "6": "Current perphase ancestor scan/argument string reconstruction and reached graph/signature work are migration debt. Proposed consumption must memo existing immutable facts, not repeated prepare.",
+    "7": "Current AliasNormalizer catalogue preflight/declaration graph explicit lookup is legacy debt; use relevant local/module source deps, preserve safetyrefusals.",
+    "8": "Existing PathType capture is indexed; use real retained parser/index Arc, direct node/range/ordinal associations. Remove ancestor statement scans for explicit Type authority."
+  },
+  "execution": "No Cargo/native command, no runtime/source edits; actual language acceptance held pending production integration and unchanged fixture terminals."
+}

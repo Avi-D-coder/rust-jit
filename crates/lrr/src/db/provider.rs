@@ -42,11 +42,7 @@ impl SyntaxProvider {
         use crate::source::{changes::SourceSelection, snapshot::SourcePath};
         let fail = |message: &str| Diagnostic::new("LRR-E-QUERY-REQUEST", message.into());
         key.source.parse.profile.validate_source()?;
-        if key.path.len() > 64 * 1024
-            || key.bucket.name.len() > 64 * 1024
-            || key.bucket.scope.owner.is_some()
-            || key.heap_bytes() > 32 * 1024 * 1024
-        {
+        if key.bucket.scope.owner.is_some() {
             return Err(fail("current module-name request limit/owner differs"));
         }
         let selection = SourceSelection {
@@ -150,37 +146,6 @@ impl SyntaxProvider {
             return Err(fail("pattern owning Value namespace certificate changed"));
         }
         Ok(Some((source, certificate)))
-    }
-    pub(super) fn scalar_binding_admission(
-        db: &mut Database,
-        index: &crate::syntax::body_index::BodyIndex,
-        pc: &crate::ir::pc::PcKey,
-    ) -> Result<crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission, Diagnostic>
-    {
-        let (source, certificate) = Self::original_scope_inputs(db, pc)?.ok_or_else(|| {
-            Diagnostic::new(
-                "LRR-E-PATTERN-BINDING",
-                "pattern owning Value namespace is not currently sealed".into(),
-            )
-        })?;
-        let InputValue::DiscoverySeal(sealed) = certificate.as_ref() else {
-            return Err(Diagnostic::new(
-                "LRR-E-PATTERN-BINDING",
-                "original scope certificate variant differs".into(),
-            ));
-        };
-        let published = source.replay_published_macro_index(sealed)?;
-        let proof = crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission::capture_query_current(
-            db, &source, &published, index, pc, 64 * 1024 * 1024,
-        )?;
-        if proof.allocated_bytes() > 64 * 1024 * 1024 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "pattern namespace admission exceeds its preparation budget".into(),
-            ));
-        }
-        proof.revalidate(db)?;
-        Ok(proof)
     }
     fn runtime_numeric_thunk(
         db: &mut Database,
@@ -1157,6 +1122,14 @@ impl Provider for SyntaxProvider {
                         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                     }
                     match super::entered_type_thunk::thunk(db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => {
+                            return QueryPoll::Ready(Ok(provided));
+                        }
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                    match super::let_annotation_thunk::thunk(db, parsed, handle, index, pc) {
                         QueryPoll::Ready(Ok(Some(provided))) => {
                             return QueryPoll::Ready(Ok(provided));
                         }

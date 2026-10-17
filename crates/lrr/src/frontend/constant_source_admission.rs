@@ -28,7 +28,6 @@ use retained_sources::RetainedConstantSources;
 mod child_request;
 #[path = "constant_empty_expansions.rs"]
 mod empty_expansions;
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
 }
@@ -89,9 +88,6 @@ impl CurrentConstantTypeCertificate {
                     .ok_or_else(limit)?,
             )
             .ok_or_else(limit)?;
-        if bytes > 64 * 1024 {
-            return Err(limit());
-        }
         Ok(bytes)
     }
 }
@@ -102,10 +98,35 @@ pub(crate) enum ConstantRequest {
     ConstCall(Vec<ConstValue>),
     ArrayLength(SourceRange),
 }
+/// The owning body of a body-local constant or static: its actual entered
+/// item rows and block scopes (an immutable retained plan fact). These rows,
+/// with the published `LocalDeclarationOwner`, select the declaration and the
+/// lexical block items its initializer may name; the module's own seals
+/// still certify every module name.
+#[derive(Debug, Clone)]
+pub(crate) struct LocalConstantScope {
+    owner: crate::source::manifest::BodyKey,
+    parsed: std::sync::Arc<crate::syntax::parse::ParsedFile>,
+    facts: std::sync::Arc<crate::syntax::entered_macros::EnteredMacroFacts>,
+}
+impl LocalConstantScope {
+    pub(crate) fn new(
+        owner: crate::source::manifest::BodyKey,
+        parsed: std::sync::Arc<crate::syntax::parse::ParsedFile>,
+        facts: std::sync::Arc<crate::syntax::entered_macros::EnteredMacroFacts>,
+    ) -> Self {
+        Self {
+            owner,
+            parsed,
+            facts,
+        }
+    }
+}
 /// Immutable privately minted publication certificate. The plan carries no guest
 /// state. Revalidate this packet before publishing/reusing a query result.
 #[derive(Debug, Clone)]
 pub(crate) struct ConstantSourceAdmission {
+    local: Option<LocalConstantScope>,
     selection: SourceSelection,
     definition: Digest,
     request: ConstantRequest,
@@ -125,11 +146,7 @@ pub(crate) struct ConstantSourceAdmission {
 fn value_bytes(value: &ConstValue, depth: usize, nodes: &mut usize) -> Result<usize, Diagnostic> {
     *nodes = nodes
         .checked_add(1)
-        .filter(|n| *n <= 100_000)
         .ok_or_else(limit)?;
-    if depth > 64 {
-        return Err(limit());
-    }
     let mut bytes = std::mem::size_of::<ConstValue>() + 128;
     if let Some(elements) = value.elements() {
         for value in elements {
@@ -145,9 +162,6 @@ fn value_bytes(value: &ConstValue, depth: usize, nodes: &mut usize) -> Result<us
 fn request_bytes(request: &ConstantRequest) -> Result<usize, Diagnostic> {
     let mut bytes = std::mem::size_of::<ConstantRequest>() + 128;
     if let ConstantRequest::ConstCall(arguments) = request {
-        if arguments.len() > 256 {
-            return Err(limit());
-        }
         let mut nodes = 0;
         for value in arguments {
             bytes = bytes
@@ -157,26 +171,36 @@ fn request_bytes(request: &ConstantRequest) -> Result<usize, Diagnostic> {
     }
     Ok(bytes)
 }
-fn validate_seal(
+/// The selected certificate is the seal's own primary scope or a facet it
+/// contains for another module scope of the same fixed point (`mod m`'s
+/// Value/Type names). A contained facet is checked against its current
+/// enclosing publication; neither grants more than the names it certifies.
+fn validate_seal<'a>(
     db: &Database,
     source: &PreparedSourceView,
-    input: &DiscoveryInput,
+    input: &'a DiscoveryInput,
     key: &SealKey,
     scope: &crate::syntax::outline::ScopeKey,
     namespace: Namespace,
     sources: &RetainedConstantSources,
-) -> Result<(), Diagnostic> {
+) -> Result<&'a crate::db::seals::CertifiedScope, Diagnostic> {
     key.validate()?;
+    let profile = &source.selection().outline.parse.profile;
     let certified = input
+        .scope_certificate(scope, namespace, profile)?
+        .ok_or_else(|| fault("constant namespace scope absent"))?;
+    let primary = input
         .scope
         .as_ref()
-        .ok_or_else(|| fault("constant namespace scope absent"))?;
+        .is_some_and(|own| std::ptr::eq(own, certified));
     if input.seal.key() != *key
         || certified.scope != *scope
         || certified.namespace != namespace
-        || certified.edition != source.selection().outline.parse.profile.edition
-        || !matches!(input.seal.domain(), SealDomain::Scope {id, namespace: actual}
-            if *id == scope.fingerprint() && *actual == namespace)
+        || certified.edition != profile.edition
+        || !matches!(input.seal.domain(), SealDomain::Scope { .. })
+        || primary
+            && !matches!(input.seal.domain(), SealDomain::Scope {id, namespace: actual}
+                if *id == scope.fingerprint() && *actual == namespace)
         || !sources.matches_seal_sources(&input.sources)
         || input.seal.unresolved_frontiers() != 0
     {
@@ -184,13 +208,16 @@ fn validate_seal(
             "constant namespace source/scope/world differs or is incomplete",
         ));
     }
+    if !primary {
+        input
+            .scope_receipt(scope, namespace, profile)
+            .ok_or_else(|| fault("constant contained namespace facet absent"))?
+            .require_current(db, input)?;
+    }
     if !matches!(db.published_input(&InputKey::ExpansionEpoch), Some((InputValue::ExpansionEpoch(epoch),_)) if *epoch == key.epoch)
         || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint() == input.source_dependencies)
     {
         return Err(fault("constant namespace epoch/source graph changed"));
-    }
-    if input.compiler_inputs.len() > 100_000 {
-        return Err(limit());
     }
     for (key, fingerprint) in &input.compiler_inputs {
         if db
@@ -212,7 +239,7 @@ fn validate_seal(
             "generated/native constant namespace requires separate admission",
         ));
     }
-    Ok(())
+    Ok(certified)
 }
 impl ConstantSourceAdmission {
     pub(crate) fn capture_current(
@@ -222,7 +249,16 @@ impl ConstantSourceAdmission {
         request: ConstantRequest,
         byte_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        Self::capture_current_impl(db, source, definition, request, byte_limit, &[], &[source])
+        Self::capture_current_impl(
+            db,
+            source,
+            definition,
+            request,
+            byte_limit,
+            &[],
+            &[source],
+            None,
+        )
     }
     #[cfg(test)]
     pub(crate) fn capture_current_with_macro_proofs(
@@ -241,6 +277,7 @@ impl ConstantSourceAdmission {
             byte_limit,
             proofs,
             &[source],
+            None,
         )
     }
     /// Views are evidence, not authority: both actual current namespace seals
@@ -253,8 +290,30 @@ impl ConstantSourceAdmission {
         byte_limit: usize,
         views: &[&PreparedSourceView],
     ) -> Result<Self, Diagnostic> {
-        Self::capture_current_impl(db, source, definition, request, byte_limit, &[], views)
+        Self::capture_current_impl(db, source, definition, request, byte_limit, &[], views, None)
     }
+    /// A body-local constant/static of `local`'s owning body.
+    pub(crate) fn capture_current_local_in_sources(
+        db: &Database,
+        source: &PreparedSourceView,
+        definition: Digest,
+        request: ConstantRequest,
+        byte_limit: usize,
+        views: &[&PreparedSourceView],
+        local: LocalConstantScope,
+    ) -> Result<Self, Diagnostic> {
+        Self::capture_current_impl(
+            db,
+            source,
+            definition,
+            request,
+            byte_limit,
+            &[],
+            views,
+            Some(local),
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
     fn capture_current_impl(
         db: &Database,
         source: &PreparedSourceView,
@@ -263,11 +322,9 @@ impl ConstantSourceAdmission {
         byte_limit: usize,
         proofs: &[crate::frontend::constant_macro_admission::AdmittedConstantPanic],
         views: &[&PreparedSourceView],
+        local: Option<LocalConstantScope>,
     ) -> Result<Self, Diagnostic> {
-        if proofs.len() > 256
-            || byte_limit < std::mem::size_of::<Self>() + 256
-            || byte_limit > MAX_BYTES
-        {
+        if byte_limit < std::mem::size_of::<Self>() + 256 {
             return Err(limit());
         }
         let stamps = db.source_view_namespace_stamps()?;
@@ -285,15 +342,58 @@ impl ConstantSourceAdmission {
         }
         source.require_original_hygiene()?;
         source.require_declaration_syntax()?;
-        let item = source
+        let item = match source
             .outline()
             .items
             .iter()
             .find(|i| i.def_key.fingerprint() == definition)
-            .ok_or_else(|| fault("constant owning declaration absent"))?;
-        if item.scope.owner.is_some() {
-            return Err(fault("lexical/associated constant admission prerequisite"));
-        }
+        {
+            // A module item, or an associated constant of an impl or trait
+            // (its capture admits only a non-generic owner's direct const).
+            Some(item) => {
+                if item.scope.owner.is_some()
+                    && item.def_key.item_kind != crate::source::manifest::ItemKind::Constant
+                {
+                    return Err(fault("lexical/associated constant admission prerequisite"));
+                }
+                item
+            }
+            // A body-local item: its owning body's actual entered row, whose
+            // owner the coordinator published with the reached body.
+            None => {
+                let local = local
+                    .as_ref()
+                    .ok_or_else(|| fault("constant owning declaration absent"))?;
+                if !matches!(db.published_input(&InputKey::LocalDeclarationOwner(definition)),
+                    Some((InputValue::LocalDeclarationOwner(owner), _)) if owner == &local.owner)
+                {
+                    return Err(fault("local constant owning body publication differs"));
+                }
+                let row = local
+                    .facts
+                    .items
+                    .iter()
+                    .find(|row| row.item.def_key.fingerprint() == definition)
+                    .ok_or_else(|| fault("constant owning declaration absent"))?;
+                if row.item.scope.owner.is_none() || row.attribute_input.is_some() {
+                    return Err(fault("local constant declaration row differs"));
+                }
+                &row.item
+            }
+        };
+        let is_local = item.scope.owner.is_some()
+            && !source
+                .outline()
+                .items
+                .iter()
+                .any(|i| i.def_key.fingerprint() == definition);
+        // A module item's own scope; a block item's enclosing module, whose
+        // seals certify the module names its initializer may name.
+        let module_scope = crate::syntax::outline::ScopeKey {
+            crate_key: item.scope.crate_key,
+            module_path: item.scope.module_path.clone(),
+            owner: None,
+        };
         let body = item
             .body
             .as_ref()
@@ -303,9 +403,15 @@ impl ConstantSourceAdmission {
             scope: item.scope.clone(),
             range: item.declaration_span,
         };
-        if !matches!(db.published_input(&InputKey::DefinitionSource(definition)), Some((InputValue::DefinitionSource(parse),_)) if parse == &source.selection().outline.parse)
+        // A block item lives in its owning body's actual (possibly retained)
+        // admitted source; a module item in the selected original source.
+        let owning_parse = match &local {
+            Some(local) if is_local => local.parsed.key(),
+            _ => source.selection().outline.parse.clone(),
+        };
+        if !matches!(db.published_input(&InputKey::DefinitionSource(definition)), Some((InputValue::DefinitionSource(parse),_)) if parse == &owning_parse)
             || !matches!(db.published_input(&InputKey::DefinitionHeader(definition)), Some((InputValue::DefinitionHeader(header),_)) if header == &item.header)
-            || !matches!(db.published_input(&InputKey::DefinitionBody(definition)), Some((InputValue::DefinitionBody(actual),_)) if actual == body)
+            || !is_local && !matches!(db.published_input(&InputKey::DefinitionBody(definition)), Some((InputValue::DefinitionBody(actual),_)) if actual == body)
             || !matches!(db.published_input(&InputKey::DeclarationContext(definition)), Some((InputValue::DeclarationContext(actual),_)) if actual == &context)
         {
             return Err(fault(
@@ -316,6 +422,7 @@ impl ConstantSourceAdmission {
             if db
                 .published_input(key)
                 .is_none_or(|(_, actual)| actual != value.fingerprint())
+                && !retained_sources::retained_body_publication(db, key)
             {
                 return Err(fault(
                     "constant original source/compile publication changed",
@@ -350,45 +457,51 @@ impl ConstantSourceAdmission {
         {
             return Err(limit());
         }
-        let value = db.source_view_scope_certificate(source.selection(), &item.scope)?;
+        let value = db.source_view_scope_certificate(source.selection(), &module_scope)?;
         let InputValue::DiscoverySeal(value_input) = value.as_ref() else {
             return Err(fault("constant Value seal variant differs"));
         };
         let value_seal = value_input.seal.key();
-        validate_seal(
+        let value_scope = validate_seal(
             db,
             source,
             value_input,
             &value_seal,
-            &item.scope,
+            &module_scope,
             Namespace::Value,
             &sources,
         )?;
-        let type_seal = SealKey {
-            domain: SealDomain::Scope {
-                id: item.scope.fingerprint(),
-                namespace: Namespace::Type,
-            },
-            unit_graph: value_seal.unit_graph,
-            epoch: value_seal.epoch,
-        };
-        let (type_value, type_fingerprint) = db
-            .published_input(&InputKey::DiscoverySeal(type_seal.clone()))
+        let type_value = db
+            .source_view_type_scope_certificate(source.selection(), &module_scope)?
             .ok_or_else(|| fault("constant current Type namespace certificate prerequisite"))?;
-        let InputValue::DiscoverySeal(type_input) = type_value else {
+        let InputValue::DiscoverySeal(type_input) = type_value.as_ref() else {
             return Err(fault("constant Type seal variant differs"));
         };
-        validate_seal(
+        let type_seal = type_input.seal.key();
+        let type_fingerprint = db
+            .published_input(&InputKey::DiscoverySeal(type_seal.clone()))
+            .map(|(_, fingerprint)| fingerprint)
+            .ok_or_else(|| fault("constant current Type namespace certificate prerequisite"))?;
+        let type_scope = validate_seal(
             db,
             source,
             type_input,
             &type_seal,
-            &item.scope,
+            &module_scope,
             Namespace::Type,
             &sources,
         )?;
-        sources.validate_names(source, value_input, type_input)?;
-        let captured = ConstantSource::capture_prepared(source, definition)?;
+        sources.validate_names(source, value_input, value_scope, type_input, type_scope)?;
+        let captured = match &local {
+            Some(local) if is_local => ConstantSource::capture_local(
+                source,
+                std::sync::Arc::clone(&local.parsed),
+                definition,
+                &local.facts.items,
+                &local.facts.scopes,
+            )?,
+            _ => ConstantSource::capture_prepared(source, definition)?,
+        };
         if captured.selection() != Some(source.selection()) || captured.scope() != &item.scope {
             return Err(fault("constant prepared capture source owner differs"));
         }
@@ -398,15 +511,37 @@ impl ConstantSourceAdmission {
         for declaration in captured.declarations() {
             // Anonymous constants retain source/header/body identities in the
             // captured declaration inventory, but declare no Value name bucket.
+            if declaration.is_local() {
+                // Selected by the entered block scope, not the module seal:
+                // its row belongs to the same published owning body.
+                let owner = local
+                    .as_ref()
+                    .map(|local| &local.owner)
+                    .ok_or_else(|| fault("local constant member has no owning body"))?;
+                if !matches!(db.published_input(&InputKey::LocalDeclarationOwner(declaration.definition())),
+                    Some((InputValue::LocalDeclarationOwner(actual), _)) if actual == owner)
+                {
+                    return Err(fault("local constant member owning body differs"));
+                }
+                continue;
+            }
+            // The admitted associated member itself, selected by the member
+            // index (never by an unqualified name).
+            if declaration.context().scope.owner.is_some() {
+                if declaration.definition() != definition {
+                    return Err(fault("captured associated member differs from admission"));
+                }
+                continue;
+            }
             if declaration.is_anonymous() {
                 continue;
             }
             let bucket = BucketKey {
-                scope: item.scope.clone(),
+                scope: module_scope.clone(),
                 namespace: Namespace::Value,
                 name: declaration.name().into(),
             };
-            if !matches!(value_input.scope.as_ref().ok_or_else(|| fault("constant Value scope absent"))?.lookup(&bucket)?,
+            if !matches!(value_scope.lookup(&bucket)?,
                 NameLookup::Defined(found) if found.identity == declaration.definition()
                     && found.namespace == Namespace::Value && found.defining_unit == item.scope.crate_key
                     && found.definition_edition == source.selection().outline.parse.profile.edition)
@@ -417,16 +552,13 @@ impl ConstantSourceAdmission {
             }
         }
         let mut absent = BTreeSet::new();
-        let certified = type_input
-            .scope
-            .as_ref()
-            .ok_or_else(|| fault("constant Type scope absent"))?;
+        let certified = type_scope;
         for spelling in [
             "bool", "char", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize",
             "f32", "f64",
         ] {
             let bucket = BucketKey {
-                scope: item.scope.clone(),
+                scope: module_scope.clone(),
                 namespace: Namespace::Type,
                 name: spelling.into(),
             };
@@ -458,9 +590,6 @@ impl ConstantSourceAdmission {
             if producer.kind != crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
             {
                 return Err(fault("current inert producer is not an attribute"));
-            }
-            if inert_attributes.len() >= 256 {
-                return Err(limit());
             }
             if inert_attributes
                 .insert(
@@ -500,6 +629,7 @@ impl ConstantSourceAdmission {
             return Err(fault("constant selected plan owner/body differs"));
         }
         Ok(Self {
+            local,
             selection: source.selection().clone(),
             definition,
             request,
@@ -525,12 +655,10 @@ impl ConstantSourceAdmission {
         demand: &crate::frontend::constants::query_macro_demand::ConstantMacroDemand,
     ) -> Result<Self, Diagnostic> {
         demand.validate_current(db, source, self)?;
-        if self.macro_proofs.len() >= 256
-            || self
+        if self
                 .macro_proofs
                 .iter()
-                .any(|proof| proof.range() == demand.range())
-        {
+                .any(|proof| proof.range() == demand.range()) {
             return Err(fault(
                 "constant macro demand repeated or exceeded its proof budget",
             ));
@@ -538,7 +666,6 @@ impl ConstantSourceAdmission {
         self.bytes
             .checked_mul(2)
             .and_then(|n| n.checked_add(256))
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(limit)?;
         let proof =
             crate::frontend::constant_macro_admission::CurrentConstantMacroProof::capture_current(
@@ -560,6 +687,7 @@ impl ConstantSourceAdmission {
             self.byte_limit,
             &proofs,
             &self.sources.views(),
+            self.local.clone(),
         )
     }
     pub(crate) fn plan(&self) -> &ConstantPlan {
@@ -591,6 +719,7 @@ impl ConstantSourceAdmission {
             self.byte_limit,
             &self.macro_proofs,
             &self.sources.views(),
+            self.local.clone(),
         )?;
         if self.identity() != fresh.identity() {
             return Err(fault("constant source plan/certificate changed"));

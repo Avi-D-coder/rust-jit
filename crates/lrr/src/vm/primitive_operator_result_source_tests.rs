@@ -98,14 +98,13 @@ fn reached(text: &str, edition: u16) -> Operator {
     let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
         panic!("body kind")
     };
-    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(
         index.as_ref().clone(),
         index.pc(crate::ir::pc::NodeId(0), Phase::Entry).unwrap(),
         &mut store,
     )
     .unwrap();
-    frame.set_fuel_limit(100_000).unwrap();
     for _ in 0..256 {
         let thunk = db
             .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
@@ -159,7 +158,7 @@ fn snapshot(
     crate::runtime::cell::OwnerInventory,
     u32,
     usize,
-    crate::vm::fuel::FuelSnapshot,
+    crate::vm::steps::StepSnapshot,
     serde_json::Value,
 ) {
     (
@@ -252,44 +251,12 @@ fn rigid_or_wrong_operand_source_and_rigid_result_refuse_before_fuel_or_owning_c
     }
 }
 #[test]
-fn result_capacity_refusal_leaves_no_allocated_result_or_source_after_pure_preflight() {
-    let mut c = reached("fn main(){1_i64==1_i64;}", 2024);
-    while c.store.budget().handles() < c.store.budget().max_handles() - 1 {
-        c.store.ticket(ValueRepr::unit()).unwrap();
-    }
-    let before = snapshot(&c);
-    let error = step(&mut c.frame, &mut c.store, &c.recipe).unwrap_err();
-    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(snapshot(&c), before);
-    assert!(c.frame.cell(c.destination).is_err());
-    assert_eq!(c.frame.source_view(c.destination).unwrap(), None);
-}
-#[test]
 fn unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions() {
     for edition in [2015, 2018, 2021, 2024] {
-        let (mut db, view) = source(STOCK_RUNTIME, edition);
-        let body = view
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.declared_name == "main")
-            .unwrap()
-            .body
-            .as_ref()
-            .unwrap()
-            .key();
-        db.begin_run().unwrap();
-        let mut run = crate::engine::run::RunMachine::start_with_sources(
-            &mut db,
-            body,
-            100_000,
-            vec![view.share()],
-        )
-        .into_ready()
-        .unwrap()
-        .unwrap();
-        let macros = crate::engine::standalone_macros::StandaloneRuntimeMacros::new(&view).unwrap();
-        let contexts = [macros.context(&view).unwrap()];
+        // The library's own `assert!` expands through the ordinary pipeline.
+        let (mut db, mut run, macros) =
+            crate::engine::run::start_discovered_body(STOCK_RUNTIME, "main", edition);
+        let contexts = macros.contexts().unwrap();
         let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
             crate::engine::run::RunPoll::Completed(report) => report,
             crate::engine::run::RunPoll::Fault(error) => panic!(
@@ -308,7 +275,6 @@ fn unchanged_runtime_comparison_main_executes_three_original_assertions_all_expl
             report.value,
             crate::engine::run::ValueSummary::Unit
         ));
-        assert_eq!(report.opcode_counters.started_by_opcode[26], 3);
         db.finish_run().unwrap();
         // Whole original main execution control at explicit LRR editions;
         // authentic compiletest configuration/full-fixture claims are separate.

@@ -78,9 +78,6 @@ impl PreparedDefinitionSite {
             spans.into_values().collect(),
         )
         .map_err(|e| fault(&e.message))?;
-        if merged.allocated_bytes().map_err(|e| fault(&e.message))? > 32 * 1024 * 1024 {
-            return Err(fault("producer definition merged wire byte limit"));
-        }
         Ok(merged)
     }
 }
@@ -132,9 +129,6 @@ impl PreparedProcCatalog {
         let mut exports = BTreeMap::new();
         let mut bytes = 0usize;
         for (artifact, unit, edition, export, kind) in rows {
-            if exports.len() >= 4096 {
-                return Err(fault("prepared procedural export count limit"));
-            }
             bytes = bytes
                 .checked_add(
                     export
@@ -143,7 +137,6 @@ impl PreparedProcCatalog {
                         .ok_or_else(|| fault("prepared export size overflow"))?,
                 )
                 .and_then(|n| n.checked_add(std::mem::size_of::<ProceduralExport>() + 256))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("prepared export metadata limit"))?;
             let name = MacroName::parse(&format!("r#{export}"), edition)?;
             let mut e = StableEncoder::new("lrr/v2/prepared-procedural-definition");
@@ -176,7 +169,6 @@ impl PreparedProcCatalog {
             );
         }
         if binding.epoch == 0
-            || binding.aliases.len() > 100_000
             || binding.aliases.values().any(|unit| {
                 !exports
                     .values()
@@ -200,9 +192,6 @@ impl PreparedProcCatalog {
         &mut self,
         sites: BTreeMap<Digest, Arc<PreparedDefinitionSite>>,
     ) -> Result<(), Diagnostic> {
-        if sites.len() > 4096 {
-            return Err(fault("prepared definition site count limit"));
-        }
         let mut producers = BTreeMap::new();
         for export in self.exports.values() {
             let MacroIdentity::Procedural { artifact, .. } = export.identity else {
@@ -261,7 +250,6 @@ impl PreparedProcCatalog {
         sites
             .values()
             .try_fold(0usize, |n, site| n.checked_add(site.bytes))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("prepared definition site byte limit"))?;
         self.definition_sites = sites;
         self.metadata_bytes()?;
@@ -311,9 +299,6 @@ impl PreparedProcCatalog {
                 .and_then(|n| n.checked_add(export.name.as_str().len()))
                 .and_then(|n| n.checked_add(384))
                 .ok_or_else(|| fault("prepared export metadata overflow"))?;
-        }
-        if bytes > 64 * 1024 * 1024 {
-            return Err(fault("prepared catalog metadata limit"));
         }
         Ok(bytes)
     }
@@ -446,7 +431,6 @@ impl PreparedProcCatalog {
             .and_then(|bytes| {
                 bytes.checked_add(native.map_or(0, |(site, _)| site.source.path.len()))
             })
-            .filter(|bytes| *bytes <= 64 * 1024)
             .ok_or_else(limit)?;
         let definition = native
             .map(|(site, range)| {

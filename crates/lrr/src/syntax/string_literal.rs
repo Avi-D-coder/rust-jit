@@ -18,7 +18,6 @@ use crate::{
 };
 use ra_ap_syntax::{AstNode, AstToken, ast};
 use std::sync::Arc;
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-IR", message.into())
 }
@@ -66,19 +65,6 @@ impl PreparedStringLiteral {
         }
         let token = ast::String::cast(literal.token())
             .ok_or_else(|| invalid("string receipt requires actual String token"))?;
-        if token
-            .syntax()
-            .text()
-            .len()
-            .checked_mul(2)
-            .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 1024))
-            .is_none_or(|n| n > MAX_BYTES)
-        {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "string literal source budget".into(),
-            ));
-        }
         let edition = parsed.token_edition(crate::syntax::ast_adapter::range(
             token.syntax().text_range(),
         ))?;
@@ -93,12 +79,6 @@ impl PreparedStringLiteral {
                 )
             })?
             .into_owned();
-        if value.capacity() > MAX_BYTES {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "decoded string literal budget".into(),
-            ));
-        }
         let proof = Self {
             entry: entry.clone(),
             profile: index.profile().clone(),

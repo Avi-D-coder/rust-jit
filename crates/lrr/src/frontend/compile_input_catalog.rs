@@ -24,6 +24,18 @@ pub(crate) use ordinary_modules::CompilerInjectedImport;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
 }
+/// The stable builtin derives and the core module that defines each.
+pub(crate) const BUILTIN_DERIVES: [(&str, &str); 9] = [
+    ("clone", "Clone"),
+    ("marker", "Copy"),
+    ("fmt", "Debug"),
+    ("default", "Default"),
+    ("hash", "Hash"),
+    ("cmp", "PartialEq"),
+    ("cmp", "Eq"),
+    ("cmp", "PartialOrd"),
+    ("cmp", "Ord"),
+];
 pub struct CompileInputCatalog {
     unit: Digest,
     edition: u16,
@@ -37,6 +49,8 @@ pub struct CompileInputCatalog {
     value_binding: Option<value_binding::CompilerValueBindingFacet>,
     primitive_float_methods:
         Option<std::sync::Arc<crate::facade::primitive_float_methods::PrimitiveFloatMethods>>,
+    /// Real library macro definitions (E-R5-006 on-demand decision).
+    library: Option<std::sync::Arc<super::library_macros::LibraryMacros>>,
 }
 impl CompileInputCatalog {
     /// Caller supplies a compiler-owned facet. User macros cannot construct descriptors.
@@ -79,7 +93,24 @@ impl CompileInputCatalog {
             attributes: None,
             value_binding: None,
             primitive_float_methods: None,
+            library: None,
         })
+    }
+    /// The standard library's real macro definitions, when this facet owns
+    /// the standard facades.
+    pub(crate) fn library(&self) -> Option<&std::sync::Arc<super::library_macros::LibraryMacros>> {
+        self.library.as_ref()
+    }
+    /// The compiler expander of a library `#[rustc_builtin_macro]` derive
+    /// definition (`core::clone::Clone`, ...), selected by definition identity.
+    pub(crate) fn builtin_derive(
+        &self,
+        definition: &MacroDefinition,
+    ) -> Option<lrr_expand_adapter::builtin_macros::BuiltinDeriveKind> {
+        let library = self.library.as_ref()?;
+        lrr_expand_adapter::builtin_macros::BuiltinDeriveKind::from_name(
+            library.builtin(definition)?,
+        )
     }
     /// Retain actual configured declaration facets separately from compiler
     /// globals and runtime facade bodies. This does not grant source-seal or
@@ -107,9 +138,6 @@ impl CompileInputCatalog {
                     "macro-export facets belong to different preparations",
                 ));
             }
-            if self.macro_exports.len() >= 256 {
-                return Err(fault("macro-export facet count limit"));
-            }
             if self.macro_exports.iter().any(|old| {
                 old.source().selection().location_identity()
                     == facet.source().selection().location_identity()
@@ -118,7 +146,6 @@ impl CompileInputCatalog {
             }
             bytes = bytes
                 .checked_add(facet.metadata_bytes())
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("macro-export facet retained budget"))?;
             self.macro_exports
                 .try_reserve(1)
@@ -193,6 +220,26 @@ impl CompileInputCatalog {
         self.primitive_float_methods = Some(std::sync::Arc::new(
             crate::facade::primitive_float_methods::PrimitiveFloatMethods::for_profile(profile)?,
         ));
+        // Compile-input builtins are the library's own `#[rustc_builtin_macro]`
+        // definitions, as in rustc; no second identity names the same macro.
+        let library = super::library_macros::LibraryMacros::for_profile(profile)?;
+        if let Some(attributes) = self.attributes.take() {
+            self.attributes = Some(
+                attributes.rebind(|descriptor| library.resolve("core", descriptor.name()))?,
+            );
+        }
+        let mut definitions = BTreeMap::new();
+        for (_, descriptor) in std::mem::take(&mut self.definitions).into_values() {
+            let route = library
+                .exported("core", descriptor.name())
+                .ok_or_else(|| fault("library compile-input builtin definition absent"))?;
+            definitions.insert(
+                route.definition.identity,
+                (route.definition.clone(), descriptor),
+            );
+        }
+        self.definitions = definitions;
+        self.library = Some(library);
         Ok(self)
     }
     pub(crate) fn runtime_catalog(
@@ -288,6 +335,25 @@ impl CompileInputCatalog {
                 ));
             }
         }
+        if let Some(library) = &self.library {
+            for name in ["panic", "assert"] {
+                let route = library
+                    .exported("core", name)
+                    .ok_or_else(|| fault("library compiler global definition absent"))?;
+                globals.push((MacroName::parse(name, self.edition)?, route.definition.clone()));
+            }
+            // The builtin derives the standard preludes re-export
+            // (`core::prelude::v1::{Clone, Copy, Debug, ..}`): the library's own
+            // `#[rustc_builtin_macro] pub macro Clone($item:item)` definitions,
+            // found after every user, import and macro-use binding.
+            for (module, name) in BUILTIN_DERIVES {
+                let definition = library
+                    .resolve_path("core", &[module, name])
+                    .ok_or_else(|| fault("library builtin derive definition absent"))?;
+                globals.push((MacroName::parse(name, self.edition)?, definition));
+            }
+            return Ok(globals);
+        }
         let runtime =
             super::runtime_macro_catalog::RuntimeMacroCatalog::new(self.unit, self.edition)?;
         for definition in runtime.definitions() {
@@ -344,7 +410,12 @@ impl CompileInputCatalog {
             textual_import_definitions: Default::default(),
             implicit_disabled: BTreeSet::new(),
         };
+        // The library's own routes export its macros (including compile-input
+        // builtins); only facets without the library publish these rows.
         for (definition, descriptor) in self.definitions.values() {
+            if self.library.is_some() {
+                break;
+            }
             routes.definitions.push(DefinitionRoute {
                 path: MacroPath::new(
                     exporting_unit,
@@ -354,7 +425,7 @@ impl CompileInputCatalog {
                 visibility: Visibility::Public,
             });
         }
-        if !self.facades.is_empty() {
+        if !self.facades.is_empty() && self.library.is_none() {
             let runtime = self
                 .runtime_catalog()?
                 .ok_or_else(|| fault("standard runtime catalog absent"))?;
@@ -399,6 +470,17 @@ impl CompileInputCatalog {
                                 .components()
                                 .last()
                                 .is_some_and(|name| name.as_str() == "test")
+                        {
+                            continue;
+                        }
+                        // The library's own crate roots already export its
+                        // builtin attribute macros (`pub use ..::derive`).
+                        if prelude.is_none()
+                            && self.library.as_ref().is_some_and(|library| {
+                                definition.path.components().last().is_some_and(|name| {
+                                    library.resolve("core", name.as_str()).is_some()
+                                })
+                            })
                         {
                             continue;
                         }
@@ -448,27 +530,16 @@ mod tests {
                             .any(|(name, value)| name.as_str() == descriptor.name()
                                 && value == definition)
                     );
-                    for prelude in [
-                        None,
-                        Some("v1"),
-                        Some("rust_2015"),
-                        Some("rust_2018"),
-                        Some("rust_2021"),
-                        Some("rust_2024"),
-                    ] {
-                        let mut path = match prelude {
-                            Some(name) => vec![
-                                MacroName::parse("prelude", edition).unwrap(),
-                                MacroName::parse(name, edition).unwrap(),
-                            ],
-                            None => vec![],
-                        };
+                    // Crate-root reexports (`core::derive`) are the library's own
+                    // routes (library_macros_tests); the facet exports preludes.
+                    for prelude in ["v1", "rust_2015", "rust_2018", "rust_2021", "rust_2024"] {
+                        let mut path = vec![
+                            MacroName::parse("prelude", edition).unwrap(),
+                            MacroName::parse(prelude, edition).unwrap(),
+                        ];
                         path.push(MacroName::parse(descriptor.name(), edition).unwrap());
-                        let expected = if prelude.is_none() && descriptor.name() == "test" {
-                            super::super::macro_names::PathLookup::Absent
-                        } else {
-                            super::super::macro_names::PathLookup::Defined(definition.clone())
-                        };
+                        let expected =
+                            super::super::macro_names::PathLookup::Defined(definition.clone());
                         assert_eq!(
                             names.lookup(&MacroPath::new(unit, path).unwrap()).unwrap(),
                             expected

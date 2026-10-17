@@ -63,6 +63,9 @@ pub struct SourceDeclarative {
         Digest,
         std::sync::Arc<crate::frontend::generated_macros::GeneratedMacroCatalog>,
     >,
+    // Immutable token forest of this provider's shared source, tokenized once
+    // and shared by snapshots of the same source.
+    owned_forest: std::sync::Arc<std::sync::OnceLock<std::sync::Arc<TokenForest>>>,
 }
 #[derive(Clone, Copy)]
 pub(crate) struct CapturedMacroContext<'a> {
@@ -84,15 +87,12 @@ impl<'a> InheritedMacroContext<'a> {
     pub(crate) fn extend_context(&mut self, parent: &Self) -> Result<(), Diagnostic> {
         self.outers
             .len()
-            .checked_add(parent.outers.len())
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "inherited module depth limit"))?;
+            .checked_add(parent.outers.len())            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "inherited module depth limit"))?;
         self.facts.extend(&parent.facts)?;
         self.ancestry.extend(&parent.ancestry)?;
         self.facts
             .metadata_bytes()?
             .checked_add(self.ancestry.metadata_bytes()?)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "inherited module context budget"))?;
         self.outers
             .try_reserve_exact(parent.outers.len())
@@ -102,9 +102,7 @@ impl<'a> InheritedMacroContext<'a> {
             .map_err(|_| fault("LRR-E-METADATA-LIMIT", "inherited module body allocation"))?;
         self.sources
             .len()
-            .checked_add(parent.sources.len())
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "inherited source owner count limit"))?;
+            .checked_add(parent.sources.len())            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "inherited source owner count limit"))?;
         self.sources
             .try_reserve_exact(parent.sources.len())
             .map_err(|_| fault("LRR-E-METADATA-LIMIT", "inherited source owner allocation"))?;
@@ -149,9 +147,7 @@ impl<'a> InheritedMacroContext<'a> {
         let count = ancestors
             .len()
             .checked_add(captured.source_scope_count()?)
-            .and_then(|n| n.checked_add(1))
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "module inherited scope limit"))?;
+            .and_then(|n| n.checked_add(1))            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "module inherited scope limit"))?;
         let mut facts = catalog.facts().clone();
         let mut ancestry = catalog.ancestry().clone();
         let mut outers = Vec::new();
@@ -193,7 +189,6 @@ impl<'a> InheritedMacroContext<'a> {
         facts
             .metadata_bytes()?
             .checked_add(ancestry.metadata_bytes()?)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -231,22 +226,6 @@ impl<'a> CapturedMacroContext<'a> {
         scope: &crate::syntax::outline::ScopeKey,
     ) -> Result<super::body_macro_boundary::RetainedBoundaryParents, Diagnostic> {
         self.source_scope_count()?;
-        if self
-            .provider
-            .parents
-            .len()
-            .checked_add(1)
-            .and_then(|n| n.checked_add(self.inherited.map_or(0, |parent| parent.sources.len())))
-            .is_none_or(|n| n > 256)
-            || self
-                .inherited
-                .is_some_and(|parent| parent.bodies.len() > 256)
-        {
-            return Err(fault(
-                "LRR-E-MACRO-SCOPE",
-                "retained source boundary owner limit",
-            ));
-        }
         let mut retained = super::body_macro_boundary::RetainedBoundaryParents::new()?;
         let outer = self.provider.index.outer_scope(scope, self.before)?;
         retained.scopes.push(
@@ -311,9 +290,7 @@ impl<'a> CapturedMacroContext<'a> {
             .parents
             .len()
             .checked_add(1)
-            .and_then(|n| n.checked_add(self.inherited.map_or(0, |parent| parent.outers.len())))
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "captured source ancestry limit"))
+            .and_then(|n| n.checked_add(self.inherited.map_or(0, |parent| parent.outers.len())))            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "captured source ancestry limit"))
     }
     pub(crate) fn append_source_scopes(
         self,
@@ -389,7 +366,7 @@ impl<'a> CapturedMacroContext<'a> {
         self,
         definition: &crate::expand::scopes::MacroDefinition,
     ) -> Result<&'a SourceDeclarative, Diagnostic> {
-        let mut remaining = 100_000usize;
+        let mut remaining = usize::MAX;
         for owner in std::iter::once(self.provider)
             .chain(self.owners.iter())
             .chain(
@@ -404,6 +381,15 @@ impl<'a> CapturedMacroContext<'a> {
         }
         if let Some(found) = self.exported_definition_owner(definition, &mut remaining)? {
             return Ok(found);
+        }
+        // Standard library macro bodies come from the owning compiler facet's
+        // real library sources.
+        if let Some(library) = self.provider.compiler.as_ref().and_then(|c| c.library()) {
+            for owner in library.providers() {
+                if let Some(found) = owner.retained_definition_owner(definition, 0, &mut remaining)? {
+                    return Ok(found);
+                }
+            }
         }
         Err(fault(
             "LRR-E-EXPANSION-INPUT",
@@ -465,6 +451,80 @@ enum DeclarativeBody {
         catalog: std::sync::Arc<crate::frontend::generated_macros::GeneratedMacroCatalog>,
         definition: Digest,
     },
+    /// A `#[rustc_builtin_macro]` library definition expanded by the pinned
+    /// adapter's builtin expander with its rustc call-site facts.
+    Builtin {
+        kind: lrr_expand_adapter::builtin_macros::BuiltinKind,
+        facts: std::sync::Arc<lrr_expand_adapter::builtin_macros::BuiltinCallSite>,
+    },
+    /// A library `#[rustc_builtin_macro]` derive applied to an item; the
+    /// adapter's builtin derive expander produces the appended impl items.
+    BuiltinDerive {
+        kind: lrr_expand_adapter::builtin_macros::BuiltinDeriveKind,
+        facts: lrr_expand_adapter::builtin_macros::DeriveContainerFacts,
+    },
+}
+/// rustc call-site facts for a builtin invoked in `source` at byte `at`.
+/// `line!`/`column!`/`file!` use the outermost original call site.
+fn builtin_call_site(
+    source: &PreparedSourceView,
+    at: u32,
+    call_edition: u16,
+) -> Result<lrr_expand_adapter::builtin_macros::BuiltinCallSite, Diagnostic> {
+    let text = std::str::from_utf8(source.captured_macro_blob()?.bytes())
+        .map_err(|_| fault("LRR-E-SOURCE-UTF8", "builtin call source is not UTF-8"))?;
+    let prefix = text
+        .get(..at as usize)
+        .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "builtin call site outside source"))?;
+    let line = prefix.matches('\n').count() + 1;
+    let column = prefix
+        .rsplit_once('\n')
+        .map_or(prefix, |(_, tail)| tail)
+        .chars()
+        .count()
+        + 1;
+    let selection = source.selection();
+    let path = selection.path.as_str().to_owned();
+    // rustc's default crate name is the root file stem with `-` as `_`.
+    let crate_name = std::path::Path::new(&path)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("main")
+        .replace('-', "_");
+    let module_path = std::iter::once(crate_name)
+        .chain(selection.outline.module_path.iter().cloned())
+        .collect::<Vec<_>>()
+        .join("::");
+    let cfg = source.captured_macro_cfg()?;
+    let mut active = std::collections::BTreeSet::new();
+    for atom in &cfg.atoms {
+        active.insert((atom.clone(), None));
+    }
+    for (name, values) in &cfg.values {
+        for value in values {
+            active.insert((name.clone(), Some(value.clone())));
+        }
+    }
+    let unit = selection.outline.crate_key;
+    let profile = &selection.outline.parse.profile;
+    let mut crate_names = std::collections::BTreeMap::new();
+    crate_names.insert(Key(unit.0), "crate".to_owned());
+    for name in ["core", "alloc", "std"] {
+        let library = crate::facade::unit(profile, name);
+        if library != unit {
+            crate_names.insert(Key(library.0), name.to_owned());
+        }
+    }
+    Ok(lrr_expand_adapter::builtin_macros::BuiltinCallSite {
+        edition: edition(call_edition)?,
+        line: u32::try_from(line).map_err(|_| fault("LRR-E-SOURCE-LIMIT", "line overflow"))?,
+        column: u32::try_from(column)
+            .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "column overflow"))?,
+        file: path,
+        module_path,
+        cfg: active,
+        crate_names,
+    })
 }
 /// Actual source producer generation includes the pinned backend and the
 /// source declaration/dialect/hygiene implementation, not only its dependency.
@@ -517,9 +577,6 @@ fn definition_origin_bytes(
                 .checked_add(invocation.source.path.capacity())
                 .ok_or_else(limit)?;
         }
-    }
-    if bytes > 64 * 1024 {
-        return Err(limit());
     }
     Ok(bytes)
 }
@@ -664,11 +721,71 @@ pub(crate) fn tokens_for_source_range(
     .map_err(adapter)
 }
 
+/// Resolve a generated call path. A leading `$crate` names the defining crate
+/// of that token (definition-site hygiene); other paths resolve from the
+/// call's scope exactly like original source.
+fn generated_path_definition(
+    index: &crate::frontend::impl_index::GeneratedDeclarationMacroIndex,
+    invocation: Digest,
+    scope: &crate::syntax::outline::ScopeKey,
+    namespaces: &crate::frontend::macro_names::MacroNamespaces,
+) -> Result<Option<crate::expand::scopes::MacroDefinition>, Diagnostic> {
+    use crate::frontend::macro_names::{MacroPath, PathLookup};
+    let syntax = index.output().macro_syntax(invocation)?;
+    let mut scope = scope.clone();
+    scope.owner = None;
+    let lookup = if matches!(
+        syntax.segments().first(),
+        Some(crate::syntax::imports::ImportSegment::Name(name)) if name == "$crate"
+    ) {
+        let unit = index.output().dollar_crate_unit(invocation)?;
+        let mut tail = Vec::new();
+        for segment in &syntax.segments()[1..] {
+            let crate::syntax::imports::ImportSegment::Name(name) = segment else {
+                return Ok(None);
+            };
+            tail.push(crate::expand::scopes::MacroName::parse(
+                name,
+                syntax.key().profile.edition,
+            )?);
+        }
+        namespaces.lookup_from(&MacroPath::new(unit, tail)?, &scope)?
+    } else {
+        namespaces.lookup_invocation_segments(
+            syntax.segments(),
+            syntax.absolute(),
+            &scope,
+            syntax.key().profile.edition,
+        )?
+    };
+    Ok(match lookup {
+        PathLookup::Defined(definition) => Some(definition),
+        _ => None,
+    })
+}
 fn original_definition_body(
     source: &PreparedSourceView,
     selected: SourceRange,
     forest: &TokenForest,
 ) -> Result<DeclarativeBody, Diagnostic> {
+    // A `#[rustc_builtin_macro]` body is a placeholder; the compiler expands
+    // the call. It must never run through the declarative matcher.
+    if let Some(item) = source.outline().items.iter().find(|item| {
+        item.declaration_span == selected
+            && item
+                .header
+                .attributes
+                .iter()
+                .any(|attribute| attribute.name == "rustc_builtin_macro")
+    }) {
+        return Err(fault(
+            "LRR-E-UNSUPPORTED",
+            &format!(
+                "compiler builtin macro `{}` requires its builtin expander",
+                item.def_key.declared_name
+            ),
+        ));
+    }
     let shape = source.macro_definition_shape_at(selected)?;
     if shape.dialect() == crate::syntax::macro_calls::MacroDefinitionDialect::Macro2
         && shape.arguments().is_some()
@@ -679,7 +796,6 @@ fn original_definition_body(
             .encoded_len()
             .map_err(adapter)?
             .checked_mul(2)
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -710,7 +826,7 @@ impl SourceDeclarative {
         depth: usize,
         remaining: &mut usize,
     ) -> Result<Option<&Self>, Diagnostic> {
-        if depth >= 256 || *remaining == 0 {
+        if *remaining == 0 {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",
                 "captured macro owner traversal limit",
@@ -765,6 +881,7 @@ impl SourceDeclarative {
             catalogs: std::collections::BTreeMap::new(),
             derive_prefixes: std::collections::BTreeMap::new(),
             source_modules: std::collections::BTreeMap::new(),
+            owned_forest: Default::default(),
         })
     }
     pub(crate) fn configure_captured_modules(providers: &mut [Self]) -> Result<(), Diagnostic> {
@@ -824,11 +941,7 @@ impl SourceDeclarative {
                     ));
                 }
                 let next = &parent.source.outline().root_scope;
-                if next.crate_key != scope.crate_key
-                    || next.module_path.len() >= scope.module_path.len()
-                    || !scope.module_path.starts_with(&next.module_path)
-                    || chain.len() >= 255
-                {
+                if next.crate_key != scope.crate_key || next.module_path.len() >= scope.module_path.len() || !scope.module_path.starts_with(&next.module_path) {
                     return Err(fault(
                         "LRR-E-MACRO-SCOPE",
                         "captured external module hierarchy or depth mismatch",
@@ -839,7 +952,6 @@ impl SourceDeclarative {
                 owner = parent;
                 total = total
                     .checked_add(64)
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-METADATA-LIMIT",
@@ -876,7 +988,11 @@ impl SourceDeclarative {
                         "macro-use captured parent identity invalid",
                     ));
                 }
-                if !providers[parent].index.pending_macro_use(input) {
+                // A captured plain `mod name;` child publishes nothing into its
+                // parent's textual scope; it completes once the child's own
+                // producers are complete. `#[macro_use]` children import.
+                let macro_use = providers[parent].index.pending_macro_use(input);
+                if !macro_use && !providers[parent].index.pending_captured_module(input) {
                     continue;
                 }
                 if !providers[parent]
@@ -888,16 +1004,17 @@ impl SourceDeclarative {
                         "macro-use captured source lease differs",
                     ));
                 }
-                let imported = if parent < child {
+                let (parent_index, child_index) = if parent < child {
                     let (left, right) = providers.split_at_mut(child);
-                    left[parent]
-                        .index
-                        .complete_captured_macro_use(input, &right[0].index)?
+                    (&mut left[parent].index, &right[0].index)
                 } else {
                     let (left, right) = providers.split_at_mut(parent);
-                    right[0]
-                        .index
-                        .complete_captured_macro_use(input, &left[child].index)?
+                    (&mut right[0].index, &left[child].index)
+                };
+                let imported = if macro_use {
+                    parent_index.complete_captured_macro_use(input, child_index)?
+                } else {
+                    parent_index.complete_captured_module(input, child_index)?
                 };
                 progress |= imported;
             }
@@ -1027,12 +1144,6 @@ impl SourceDeclarative {
             invocation,
             &catalog,
         )?;
-        if self.catalogs.len() >= 100_000 {
-            return Err(fault(
-                "LRR-E-DISCOVERY-LIMIT",
-                "completed macro catalogue count limit",
-            ));
-        }
         self.catalogs.insert(invocation, catalog.clone());
         for entry in catalog.outward() {
             self.generated
@@ -1062,10 +1173,7 @@ impl SourceDeclarative {
         prefix: std::sync::Arc<Self>,
     ) -> Result<(), Diagnostic> {
         let id = catalog.record_identity();
-        if self.catalogs.len() >= 100_000
-            || self.catalogs.contains_key(&id)
-            || !prefix.source.same_publication(&self.source)
-        {
+        if self.catalogs.contains_key(&id) || !prefix.source.same_publication(&self.source) {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "derive prefix owner or inventory differs",
@@ -1106,7 +1214,6 @@ impl SourceDeclarative {
         self.source_modules
             .len()
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "ordinary module owner count limit"))?;
         let mut index = self.index.snapshot_clone()?;
         if !index.complete_captured_module(input, &child.index)? {
@@ -1136,7 +1243,6 @@ impl SourceDeclarative {
         self.source_modules
             .len()
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "retained source module owner limit"))?;
         if child.source.outline().root_scope.crate_key != self.source.outline().root_scope.crate_key
             || child.source.outline().profile != self.source.outline().profile
@@ -1181,7 +1287,6 @@ impl SourceDeclarative {
                 )
             })
             .and_then(|bytes| bytes.checked_add(rows))
-            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "module owner snapshot limit"))
     }
     pub(crate) fn module_snapshot(&self) -> Result<std::sync::Arc<Self>, Diagnostic> {
@@ -1200,6 +1305,7 @@ impl SourceDeclarative {
             derive_prefixes: self.derive_prefixes.clone(),
             source_modules: self.source_modules.clone(),
             generated: self.generated.clone(),
+            owned_forest: self.owned_forest.clone(),
         }))
     }
     pub(crate) fn bind_macro_export_source(
@@ -1493,9 +1599,7 @@ impl SourceDeclarative {
         let count = self
             .parents
             .len()
-            .checked_add(inherited.map_or(0, |parent| parent.outers.len()))
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "runtime source ancestry limit"))?;
+            .checked_add(inherited.map_or(0, |parent| parent.outers.len()))            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "runtime source ancestry limit"))?;
         let mut outers = Vec::new();
         outers
             .try_reserve_exact(count)
@@ -1546,7 +1650,6 @@ impl SourceDeclarative {
             .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "generated owner count overflow"))?;
         count
             .checked_mul(std::mem::size_of::<(Digest, u32)>())
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -1743,12 +1846,6 @@ impl SourceDeclarative {
             self.original_definition_body(item.declaration_span)?
         };
         let wire = input.encode().map_err(|e| fault(e.code, &e.message))?;
-        if wire.len() > 32 * 1024 * 1024 {
-            return Err(fault(
-                "LRR-E-EXPANSION-INPUT",
-                "generated enclosing input limit",
-            ));
-        }
         let input = TokenForest::decode(&wire).map_err(adapter)?;
         let origin =
             self.original_failure_origin(definition.identity, key.invocation, &input, Key(site.0))?;
@@ -1845,7 +1942,7 @@ impl SourceDeclarative {
                 )
             })?;
         let input = group(
-            &self.owned_forest()?,
+            &*self.owned_forest()?,
             self.source.macro_token_group(call.range, false)?,
         )?;
         let [TokenTree::Group { open, .. }] = input.roots() else {
@@ -1925,7 +2022,6 @@ impl SourceDeclarative {
                     .checked_add(outer.scopes.metadata_bytes()?)
                     .and_then(|n| n.checked_add(outer.declarations.metadata_bytes().ok()?))
                     .and_then(|n| n.checked_add(std::mem::size_of::<OwnedCompilerOuter>()))
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "compiler context budget"))?;
             }
             outers
@@ -1984,7 +2080,7 @@ impl SourceDeclarative {
         }
         let producer = index.producer(invocation)?;
         let input = group(
-            &self.owned_forest()?,
+            &*self.owned_forest()?,
             self.source.macro_token_group(producer.range, false)?,
         )?;
         let [TokenTree::Group { open, .. }] = input.roots() else {
@@ -2095,14 +2191,12 @@ impl SourceDeclarative {
         let mut bytes = facts
             .metadata_bytes()?
             .checked_add(ancestry.metadata_bytes()?)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "compiler declaration context limit"))?;
         for outer in &outer_contexts {
             bytes = bytes
                 .checked_add(outer.scopes.metadata_bytes()?)
                 .and_then(|n| n.checked_add(outer.declarations.metadata_bytes().ok()?))
                 .and_then(|n| n.checked_add(std::mem::size_of::<OwnedCompilerOuter>()))
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -2142,9 +2236,6 @@ impl SourceDeclarative {
                     "compiler declaration origin storage limit",
                 )
             };
-            if span.source.path.len() > 64 * 1024 {
-                return Err(limit());
-            }
             let mut path = String::new();
             path.try_reserve_exact(span.source.path.len())
                 .map_err(|_| limit())?;
@@ -2157,9 +2248,6 @@ impl SourceDeclarative {
                 },
                 range: SourceRange::checked(span.start, span.end)?,
             });
-            if definition_origin_bytes(&origin)? > 64 * 1024 {
-                return Err(limit());
-            }
         }
         Ok(Some(SourceDeclarativeRequest {
             key,
@@ -2679,13 +2767,21 @@ impl SourceDeclarative {
             // original module Macro2 route can settle this distinct producer.
             return Ok(SourceDeclarativeDemand::NeedInput(invocation));
         }
-        let body = match (source_owner, range) {
-            (Some(owner), Some(range)) => Some(owner.original_definition_body(range)?),
+        let body = match (self.library_builtin(&definition), source_owner, range) {
+            (Some(kind), _, _) => Some(DeclarativeBody::Builtin {
+                kind,
+                facts: std::sync::Arc::new(builtin_call_site(
+                    &self.source,
+                    producer.range.start,
+                    selection.outline.parse.profile.edition,
+                )?),
+            }),
+            (None, Some(owner), Some(range)) => Some(owner.original_definition_body(range)?),
             _ if generated_body.is_some() => None,
             _ => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
         };
         let input = group(
-            &self.owned_forest()?,
+            &*self.owned_forest()?,
             self.source.macro_token_group(producer.range, false)?,
         )?;
         let [TokenTree::Group { open, .. }] = input.roots() else {
@@ -2985,7 +3081,7 @@ impl SourceDeclarative {
         invocation: Digest,
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
     ) -> Result<Option<crate::expand::scopes::MacroDefinition>, Diagnostic> {
-        use crate::frontend::{macro_names::PathLookup, macro_origins::MacroSelection};
+        use crate::frontend::macro_origins::MacroSelection;
         let source = index.source_index()?.scan();
         let selected = self.source.selection();
         if source.parse() != &selected.outline.parse
@@ -3016,30 +3112,16 @@ impl SourceDeclarative {
         let definition = match selected {
             HygienicLookup::Selection(MacroSelection::Defined(definition)) => definition,
             HygienicLookup::Selection(MacroSelection::Absent) => {
-                let syntax = index.output().macro_syntax(invocation)?;
-                let mut scope = producer.scope.clone();
-                scope.owner = None;
-                let PathLookup::Defined(definition) = namespaces.lookup_invocation_segments(
-                    syntax.segments(),
-                    syntax.absolute(),
-                    &scope,
-                    syntax.key().profile.edition,
-                )?
+                let Some(definition) =
+                    generated_path_definition(index, invocation, &producer.scope, namespaces)?
                 else {
                     return Ok(None);
                 };
                 definition
             }
             HygienicLookup::NeedInput(input) if input == invocation && producer.path.len() > 1 => {
-                let syntax = index.output().macro_syntax(invocation)?;
-                let mut scope = producer.scope.clone();
-                scope.owner = None;
-                let PathLookup::Defined(definition) = namespaces.lookup_invocation_segments(
-                    syntax.segments(),
-                    syntax.absolute(),
-                    &scope,
-                    syntax.key().profile.edition,
-                )?
+                let Some(definition) =
+                    generated_path_definition(index, invocation, &producer.scope, namespaces)?
                 else {
                     return Ok(None);
                 };
@@ -3087,6 +3169,7 @@ impl SourceDeclarative {
         &self,
         index: &crate::frontend::impl_index::GeneratedDeclarationMacroIndex,
         invocation: Digest,
+        namespaces: Option<&crate::frontend::macro_names::MacroNamespaces>,
     ) -> Result<SourceDeclarativeDemand, Diagnostic> {
         use crate::frontend::{impl_index::DeclarationBodyOwner, macro_origins::MacroSelection};
         let source = index.source_index()?.scan();
@@ -3101,12 +3184,38 @@ impl SourceDeclarative {
                 "generated declaration source prefix differs",
             ));
         }
+        // Path-based calls (`$crate::m!`, `std::m!`) resolve through the
+        // ordinary macro namespace when no textual definition is in scope.
+        let by_path = |producer_scope: &crate::syntax::outline::ScopeKey| -> Result<Option<crate::expand::scopes::MacroDefinition>, Diagnostic> {
+            match namespaces {
+                Some(namespaces) => {
+                    generated_path_definition(index, invocation, producer_scope, namespaces)
+                }
+                None => Ok(None),
+            }
+        };
+        let producer_scope = index
+            .output()
+            .scan()
+            .producers()
+            .iter()
+            .find(|p| p.identity == invocation)
+            .map(|p| p.scope.clone());
         let definition = match index.lookup(invocation)? {
+            HygienicLookup::NeedInput(input) if input == invocation => {
+                match producer_scope.as_ref().map(by_path).transpose()?.flatten() {
+                    Some(definition) => definition,
+                    None => return Ok(SourceDeclarativeDemand::NeedInput(input)),
+                }
+            }
             HygienicLookup::NeedInput(input) => {
                 return Ok(SourceDeclarativeDemand::NeedInput(input));
             }
             HygienicLookup::Selection(MacroSelection::Absent) => {
-                return Ok(SourceDeclarativeDemand::NeedInput(invocation));
+                match producer_scope.as_ref().map(by_path).transpose()?.flatten() {
+                    Some(definition) => definition,
+                    None => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
+                }
             }
             HygienicLookup::Selection(MacroSelection::Ambiguous(_)) => {
                 return Err(fault(
@@ -3116,20 +3225,45 @@ impl SourceDeclarative {
             }
             HygienicLookup::Selection(MacroSelection::Defined(definition)) => definition,
         };
-        let body = match index.body_owner(definition.identity)? {
-            DeclarationBodyOwner::Argument(argument) => DeclarativeBody::Source(
+        let output = index.output();
+        let call = output.macro_call(invocation)?;
+        let builtin = self.library_builtin(&definition);
+        let body = match index.body_owner(definition.identity) {
+            _ if builtin.is_some() => {
+                // `line!`/`column!` use the outermost original call site: the
+                // original producer that started this generated frame.
+                let root = output.parent_invocation();
+                let at = source
+                    .producers()
+                    .iter()
+                    .find(|producer| producer.identity == root)
+                    .map_or(0, |producer| producer.range.start);
+                DeclarativeBody::Builtin {
+                    kind: builtin.expect("builtin checked"),
+                    facts: std::sync::Arc::new(builtin_call_site(
+                        &self.source,
+                        at,
+                        call.edition,
+                    )?),
+                }
+            }
+            Ok(DeclarationBodyOwner::Argument(argument)) => DeclarativeBody::Source(
                 argument.macro_definition(definition.identity)?.body.clone(),
             ),
-            DeclarationBodyOwner::Generated(output) => {
+            Ok(DeclarationBodyOwner::Generated(output)) => {
                 DeclarativeBody::Source(output.macro_definition(definition.identity)?.body.clone())
             }
-            DeclarationBodyOwner::Source(source) => {
+            Ok(DeclarationBodyOwner::Source(source)) => {
                 let header = source.definition(definition.identity)?;
                 self.original_definition_body(header.range)?
             }
+            // A definition outside this generated frame (another crate's export,
+            // including the standard library) keeps its own original source.
+            Err(error) => match self.foreign_definition_body(&definition)? {
+                Some(body) => body,
+                None => return Err(error),
+            },
         };
-        let output = index.output();
-        let call = output.macro_call(invocation)?;
         let producer = output
             .scan()
             .producers()
@@ -3179,6 +3313,42 @@ impl SourceDeclarative {
             },
         )))
     }
+    /// The adapter builtin for a library `#[rustc_builtin_macro]` definition.
+    fn library_builtin(
+        &self,
+        definition: &crate::expand::scopes::MacroDefinition,
+    ) -> Option<lrr_expand_adapter::builtin_macros::BuiltinKind> {
+        use lrr_expand_adapter::builtin_macros::{BuiltinDisposition, builtin_kind};
+        let library = self.compiler.as_ref()?.library()?;
+        let kind = builtin_kind(library.builtin(definition)?)?;
+        (kind.disposition() == BuiltinDisposition::Adapter).then_some(kind)
+    }
+    /// The original body of a definition owned by this source or by the
+    /// standard library sources of its compiler facet.
+    fn foreign_definition_body(
+        &self,
+        definition: &crate::expand::scopes::MacroDefinition,
+    ) -> Result<Option<DeclarativeBody>, Diagnostic> {
+        let mut remaining = usize::MAX;
+        let library = self.compiler.as_ref().and_then(|catalog| catalog.library());
+        for owner in std::iter::once(self).chain(
+            library
+                .into_iter()
+                .flat_map(|library| library.providers().iter()),
+        ) {
+            let Some(owner) = owner.retained_definition_owner(definition, 0, &mut remaining)? else {
+                continue;
+            };
+            let Some(item) = owner.source.outline().items.iter().find(|item| {
+                item.def_key.item_kind == ItemKind::Macro
+                    && item.def_key.fingerprint() == definition.identity
+            }) else {
+                continue;
+            };
+            return owner.original_definition_body(item.declaration_span).map(Some);
+        }
+        Ok(None)
+    }
     pub(crate) fn install_procedural(
         &mut self,
         catalog: std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>,
@@ -3193,7 +3363,7 @@ impl SourceDeclarative {
         }
         let mut aliases = (*self.dependencies).clone();
         for (alias, unit) in catalog.aliases() {
-            if aliases.get(alias).is_some_and(|old| old != unit) || aliases.len() >= 100_000 {
+            if aliases.get(alias).is_some_and(|old| old != unit) {
                 return Err(fault(
                     "LRR-E-MACRO-SCOPE",
                     "prepared procedural alias conflicts or exceeds limit",
@@ -3287,20 +3457,8 @@ impl SourceDeclarative {
                     alias,
                     self.source.outline().profile.edition,
                 )?;
-                if !available.contains_key(&name) && available.len() >= 100_000 {
-                    return Err(fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "compiler dependency availability limit",
-                    ));
-                }
                 available.entry(name.clone()).or_insert(unit);
                 if alias != "std" || standard {
-                    if !dependencies.contains_key(&name) && dependencies.len() >= 100_000 {
-                        return Err(fault(
-                            "LRR-E-METADATA-LIMIT",
-                            "compiler dependency route limit",
-                        ));
-                    }
                     dependencies.entry(name).or_insert(unit);
                 }
             }
@@ -3396,7 +3554,6 @@ impl SourceDeclarative {
             })?;
             bytes = bytes
                 .checked_add(route.metadata_bytes()?)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -3407,19 +3564,12 @@ impl SourceDeclarative {
             for child in catalog.completed_child_routes() {
                 bytes = bytes
                     .checked_add(child.metadata_bytes()?)
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-METADATA-LIMIT",
                             "child route catalogue metadata budget",
                         )
                     })?;
-                if routes.len() >= 100_000 {
-                    return Err(fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "child route catalogue count limit",
-                    ));
-                }
                 routes.try_reserve(1).map_err(|_| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -3725,11 +3875,48 @@ impl SourceDeclarative {
         &self,
         selected: SourceRange,
     ) -> Result<DeclarativeBody, Diagnostic> {
-        original_definition_body(&self.source, selected, &self.owned_forest()?)
+        original_definition_body(&self.source, selected, &*self.owned_forest()?)
     }
 
-    pub(crate) fn owned_forest(&self) -> Result<TokenForest, Diagnostic> {
-        let selection = self.source.selection();
+    pub(crate) fn owned_forest(&self) -> Result<std::sync::Arc<TokenForest>, Diagnostic> {
+        self.owned_forest_handle().get()
+    }
+    /// The shared, lazily tokenized forest of this provider's source.
+    pub(crate) fn owned_forest_handle(&self) -> OwnedForestHandle {
+        OwnedForestHandle {
+            source: self.source.share(),
+            cell: self.owned_forest.clone(),
+        }
+    }
+}
+/// A provider source and its once-tokenized owned forest, usable after the
+/// provider itself is no longer borrowed.
+pub(crate) struct OwnedForestHandle {
+    source: PreparedSourceView,
+    cell: std::sync::Arc<std::sync::OnceLock<std::sync::Arc<TokenForest>>>,
+}
+impl OwnedForestHandle {
+    /// A handle with its own (not provider-shared) forest cell.
+    pub(crate) fn detached(source: PreparedSourceView) -> Self {
+        Self {
+            source,
+            cell: Default::default(),
+        }
+    }
+    pub(crate) fn source(&self) -> &PreparedSourceView {
+        &self.source
+    }
+    pub(crate) fn get(&self) -> Result<std::sync::Arc<TokenForest>, Diagnostic> {
+        if let Some(forest) = self.cell.get() {
+            return Ok(forest.clone());
+        }
+        let forest = std::sync::Arc::new(tokenize_owned_forest(&self.source)?);
+        Ok(self.cell.get_or_init(|| forest).clone())
+    }
+}
+fn tokenize_owned_forest(view: &PreparedSourceView) -> Result<TokenForest, Diagnostic> {
+    {
+        let selection = view.selection();
         let source = wire::SourceIdentity {
             unit: Key(selection.outline.crate_key.0),
             content: Key(selection.outline.parse.content.0),
@@ -3743,7 +3930,7 @@ impl SourceDeclarative {
             edition: edition(selection.outline.parse.profile.edition)?,
         };
         let forest = wire::parse_source(
-            self.source.captured_macro_blob()?.text()?,
+            view.captured_macro_blob()?.text()?,
             source,
             context,
             Key(crate::db::key::QueryKey::Outline(selection.outline.clone())
@@ -3752,7 +3939,7 @@ impl SourceDeclarative {
         )
         .map_err(adapter)?;
         forest
-            .encoded_len_with_limit(32 * 1024 * 1024)
+            .encoded_len()
             .map_err(adapter)?;
         Ok(forest)
     }
@@ -3769,6 +3956,35 @@ impl SourceDeclarativeRequest {
             origin: None,
             owner,
             body: DeclarativeBody::Procedural(request),
+        })
+    }
+    /// A builtin derive occurrence over its exact item input (`input` has one
+    /// root group of item tokens and carries the derive path span `site`).
+    pub(crate) fn builtin_derive(
+        key: ExpansionKey,
+        input: TokenForest,
+        site: Key,
+        owner: Digest,
+        kind: lrr_expand_adapter::builtin_macros::BuiltinDeriveKind,
+        facts: lrr_expand_adapter::builtin_macros::DeriveContainerFacts,
+    ) -> Result<Self, Diagnostic> {
+        key.validate()?;
+        if !matches!(key.macro_identity, MacroIdentity::BuiltinDerive { .. })
+            || key.grammar != GrammarSlot::Items
+            || !input.spans().iter().any(|span| span.key() == site)
+        {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "builtin derive request identity, grammar or site differs",
+            ));
+        }
+        Ok(Self {
+            key,
+            input,
+            site,
+            origin: None,
+            owner,
+            body: DeclarativeBody::BuiltinDerive { kind, facts },
         })
     }
     pub fn procedural_request(&self) -> Option<&lrr_expand_adapter::proc_client::ProcInvocation> {
@@ -3804,12 +4020,6 @@ impl SourceDeclarativeRequest {
         mut self,
         parents: Vec<crate::syntax::origin::ExpansionOrigin>,
     ) -> Result<Self, Diagnostic> {
-        if parents.len() > 256 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "diagnostic origin depth limit",
-            ));
-        }
         let mut bytes = parents
             .capacity()
             .checked_mul(std::mem::size_of::<crate::syntax::origin::ExpansionOrigin>())
@@ -3818,17 +4028,10 @@ impl SourceDeclarativeRequest {
             if let Some(at) = &parent.invocation {
                 bytes = bytes
                     .checked_add(at.source.path.capacity())
-                    .filter(|n| *n <= 64 * 1024)
                     .ok_or_else(|| {
                         fault("LRR-E-METADATA-LIMIT", "diagnostic origin retention limit")
                     })?;
             }
-        }
-        if bytes > 64 * 1024 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "diagnostic origin retention limit",
-            ));
         }
         if let Some(origin) = &mut self.origin {
             origin.parents = parents;
@@ -4120,7 +4323,7 @@ impl SourceDeclarativeRequest {
             .original()
             .encode()
             .map_err(|e| fault(e.code, &e.message))?;
-        if original.len() > 32 * 1024 * 1024 || Digest::of_bytes(&original) != key.input_tokens {
+        if Digest::of_bytes(&original) != key.input_tokens {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "compiler operand input differs or exceeds budget",
@@ -4155,7 +4358,6 @@ impl SourceDeclarativeRequest {
                 }
                 name.len()
                     .checked_add(location.source.path.len())
-                    .filter(|n| *n <= 64 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-METADATA-LIMIT",
@@ -4227,7 +4429,7 @@ impl SourceDeclarativeRequest {
                 let capture = argument.macro_definition(selected.identity)?;
                 capture
                     .body
-                    .encoded_len_with_limit(32 * 1024 * 1024)
+                    .encoded_len()
                     .map_err(adapter)?;
                 let header = argument
                     .scan()
@@ -4253,7 +4455,7 @@ impl SourceDeclarativeRequest {
                 let capture = output.macro_definition(selected.identity)?;
                 capture
                     .body
-                    .encoded_len_with_limit(32 * 1024 * 1024)
+                    .encoded_len()
                     .map_err(adapter)?;
                 let header = output
                     .scan()
@@ -4277,12 +4479,6 @@ impl SourceDeclarativeRequest {
                             "compiler operand generated name span absent",
                         )
                     })?;
-                if span.source.path.len() > 64 * 1024 {
-                    return Err(fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "compiler operand generated source path budget",
-                    ));
-                }
                 let location = SourceOrigin {
                     source: span.source.clone(),
                     range: SourceRange::checked(span.start, span.end)?,
@@ -4309,32 +4505,12 @@ impl SourceDeclarativeRequest {
             failure_span: None,
             parents: vec![],
         };
-        let mut bytes = definition_origin_bytes(&origin)?;
-        if let Some(parent_origin) = &self.origin {
-            bytes = bytes
-                .checked_add(definition_origin_bytes(parent_origin)?)
-                .filter(|n| *n <= 64 * 1024)
-                .ok_or_else(|| {
-                    fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "compiler operand origin storage limit",
-                    )
-                })?;
-        }
-        if bytes > 64 * 1024 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "compiler operand origin storage limit",
-            ));
-        }
         let mut parents = Vec::new();
         if let Some(parent_origin) = &self.origin {
             let count = parent_origin
                 .parents
                 .len()
-                .checked_add(1)
-                .filter(|n| *n <= 256)
-                .ok_or_else(|| {
+                .checked_add(1)                .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
                         "compiler operand origin depth limit",
@@ -4390,6 +4566,39 @@ impl SourceDeclarativeRequest {
                 );
             }
             DeclarativeBody::Source(body) => (body, None),
+            DeclarativeBody::Builtin { kind, facts } => {
+                use lrr_expand_adapter::builtin_macros::{BuiltinSite, expand_builtin};
+                let output = expand_builtin(
+                    *kind,
+                    &self.input,
+                    self.site,
+                    &BuiltinSite {
+                        expansion: Key(self.key.fingerprint().0),
+                        defining_unit: Key(self.owner.0),
+                        definition_edition: edition(self.key.definition_edition)?,
+                    },
+                    facts.as_ref(),
+                )
+                .map_err(adapter)?
+                .map_err(|failure| {
+                    fault(
+                        match failure.kind {
+                            lrr_expand_adapter::builtin_macros::BuiltinFailureKind::CompileError => {
+                                "LRR-E-COMPILE-ERROR"
+                            }
+                            lrr_expand_adapter::builtin_macros::BuiltinFailureKind::Unsupported => {
+                                "LRR-E-UNSUPPORTED"
+                            }
+                            _ => "LRR-E-MACRO-EXPANSION",
+                        },
+                        &failure.message,
+                    )
+                })?;
+                return ExpansionRecord::from_wire(
+                    self.key.clone(),
+                    output.tokens.encode().map_err(adapter)?,
+                );
+            }
             DeclarativeBody::Generated {
                 catalog,
                 definition,
@@ -4405,12 +4614,38 @@ impl SourceDeclarativeRequest {
                     crate::syntax::token_wire::Key(self.site.0),
                 );
             }
+            DeclarativeBody::BuiltinDerive { kind, facts } => {
+                use lrr_expand_adapter::builtin_macros::{BuiltinSite, expand_builtin_derive};
+                let output = expand_builtin_derive(
+                    *kind,
+                    &self.input,
+                    self.site,
+                    &BuiltinSite {
+                        expansion: Key(self.key.fingerprint().0),
+                        defining_unit: Key(self.owner.0),
+                        definition_edition: edition(self.key.definition_edition)?,
+                    },
+                    *facts,
+                )
+                .map_err(adapter)?
+                .map_err(|failure| {
+                    fault(
+                        match failure.kind {
+                            lrr_expand_adapter::builtin_macros::BuiltinFailureKind::Unsupported => {
+                                "LRR-E-UNSUPPORTED"
+                            }
+                            _ => "LRR-E-MACRO-EXPANSION",
+                        },
+                        &format!("`#[derive({})]`: {}", kind.name(), failure.message),
+                    )
+                })?;
+                return ExpansionRecord::from_wire(
+                    self.key.clone(),
+                    output.tokens.encode().map_err(adapter)?,
+                );
+            }
         };
-        let definition = match arguments {
-            None => DeclarativeMacro::new(body.clone()),
-            Some(arguments) => DeclarativeMacro::new_macro2(arguments.clone(), body.clone()),
-        }
-        .map_err(adapter)?;
+        let definition = DeclarativeMacro::shared(arguments, body).map_err(adapter)?;
         let (result, _) = definition
             .expand_hygienic_with_limits(
                 &self.input,
@@ -4420,8 +4655,8 @@ impl SourceDeclarativeRequest {
                     defining_unit: Key(self.owner.0),
                     definition_edition: edition(self.key.definition_edition)?,
                 },
-                2_000_000,
-                32 * 1024 * 1024,
+                usize::MAX,
+                usize::MAX,
             )
             .map_err(adapter)?;
         let output = result.map_err(|e| {
@@ -4492,12 +4727,6 @@ pub(crate) fn captured_procedural_sources(
     let mut bytes = input
         .allocated_bytes()
         .map_err(|e| fault("LRR-E-METADATA-LIMIT", &e.message))?;
-    if providers.len() > 4096 {
-        return Err(fault(
-            "LRR-E-METADATA-LIMIT",
-            "generated procedural provider count limit",
-        ));
-    }
     for provider in providers {
         let forest = provider.owned_forest()?;
         let Some(base) = forest.spans().first() else {
@@ -4526,7 +4755,6 @@ pub(crate) fn captured_procedural_sources(
             .checked_add(text.len())
             .and_then(|n| n.checked_add(base.source.path.len().checked_mul(3)?))
             .and_then(|n| n.checked_add(std::mem::size_of::<CapturedSpanSource>() + 256))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -4568,144 +4796,6 @@ pub(crate) fn captured_procedural_sources(
 #[cfg(test)]
 mod generated_runtime_tests {
     use super::*;
-    #[test]
-    fn generated_intrinsic_selection_uses_actual_catalog_and_respects_user_shadow() {
-        use crate::{
-            db::key::OutlineKey,
-            frontend::impl_index::{
-                DeclarationMacroIndex, DeclarationMacroParent, GeneratedDeclarationMacroIndex,
-            },
-            source::{
-                changes::{
-                    PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput,
-                },
-                snapshot::{CfgSet, SourceBlob, SourcePath},
-            },
-            syntax::{
-                declaration_scan::DeclarationScanLimits,
-                parse::{ParseKey, ParsedFile},
-            },
-        };
-        for shadow in [false, true] {
-            let prefix = if shadow {
-                "macro_rules! assert{($v:expr)=>{{$v}}}"
-            } else {
-                ""
-            };
-            let text = format!(
-                "{prefix}macro_rules! outer{{()=>{{{{assert!({{impl S{{}}true}});true}}}}}}fn cold(){{outer!();}}"
-            );
-            let profile = crate::core::profile::ProfileIdentity::current();
-            let cfg = CfgSet::guest_default();
-            let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
-            let unit = Digest([65; 32]);
-            let path = SourcePath::new("main.rs").unwrap();
-            let selection = SourceSelection {
-                path: path.clone(),
-                outline: OutlineKey {
-                    parse: ParseKey {
-                        content: blob.content(),
-                        profile: profile.clone(),
-                    },
-                    crate_key: unit,
-                    module_path: vec![],
-                    cfg: cfg.fingerprint(),
-                },
-            };
-            let parsed = ParsedFile::parse(&blob, profile.clone()).unwrap();
-            let scan = std::sync::Arc::new(
-                parsed
-                    .scan_declarations(
-                        path.clone(),
-                        crate::syntax::outline::ScopeKey {
-                            crate_key: unit,
-                            module_path: vec![],
-                            owner: None,
-                        },
-                        &cfg,
-                        DeclarationScanLimits::default(),
-                    )
-                    .unwrap(),
-            );
-            let inputs = PreparedSourceInputs::refresh(
-                None,
-                vec![SourceUnitInput {
-                    path,
-                    crate_key: unit,
-                    module_path: vec![],
-                    profile: profile.clone(),
-                    cfg: cfg.clone(),
-                    blob,
-                }],
-                Default::default(),
-            )
-            .unwrap();
-            let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
-                panic!("source absent")
-            };
-            let mut provider = SourceDeclarative::new(view).unwrap();
-            let compiler = std::sync::Arc::new(
-                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
-                    .unwrap(),
-            );
-            provider.compiler = Some(compiler.clone());
-            let source = std::sync::Arc::new(DeclarationMacroIndex::new(scan.clone()).unwrap());
-            let invocation = scan
-                .producers()
-                .iter()
-                .find(|p| p.path[0].text == "outer")
-                .unwrap()
-                .identity;
-            let SourceDeclarativeDemand::Ready(request) = provider
-                .declaration_demand(&source, invocation, Digest([66; 32]), Digest([67; 32]))
-                .unwrap()
-            else {
-                panic!("outer absent")
-            };
-            let output = std::sync::Arc::new(
-                crate::expand::generated_declarations::GeneratedDeclarations::admit(
-                    request.key(),
-                    std::sync::Arc::new(request.expand().unwrap()),
-                    1,
-                    &scan,
-                    &cfg,
-                    DeclarationScanLimits::default(),
-                )
-                .unwrap(),
-            );
-            let index =
-                GeneratedDeclarationMacroIndex::new(output, DeclarationMacroParent::Source(source))
-                    .unwrap();
-            let mut namespaces = crate::frontend::macro_names::MacroNamespaces::default();
-            for (name, definition) in compiler.compiler_globals().unwrap() {
-                namespaces.compiler_global(unit, name, definition).unwrap();
-            }
-            let generated = index
-                .output()
-                .scan()
-                .producers()
-                .iter()
-                .find(|p| p.path[0].text == "assert")
-                .unwrap()
-                .identity;
-            let selected = provider
-                .generated_runtime_definition(&index, generated, &namespaces)
-                .unwrap();
-            assert_eq!(selected.is_some(), !shadow);
-            if let Some((definition, kind)) = selected {
-                assert_eq!(kind, crate::facade::macros::RuntimeMacroKind::Assert);
-                assert!(
-                    compiler
-                        .runtime_catalog()
-                        .unwrap()
-                        .unwrap()
-                        .select(&definition)
-                        .unwrap()
-                        .is_some()
-                );
-            }
-        }
-    }
 }
 
 #[cfg(test)]

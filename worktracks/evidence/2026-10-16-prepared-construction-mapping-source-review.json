@@ -1,0 +1,50 @@
+{
+  "kind": "read-only-prepared-construction-mapping-source-review",
+  "status": "source-only-uncompiled-unexecuted",
+  "source": {
+    "path": "crates/lrr/src/vm/frame.rs",
+    "bytes": 313704,
+    "sha256": "6e791921964933def4568f3a3a1b04f749ded8a030e81e83fb1037462fc39975"
+  },
+  "predecessor": {
+    "component": "artifacts/macos-first/common-installed-record-binding-v1/COMPONENT.json",
+    "sha256": "ea9ac48e69b0641a2edbc38a6ac9b8340359f95df6e24c196d69fc1922800442",
+    "frame_sha256": "82eb60079577082cc99d4164c81711889781388880b8e2aad15a9ed87626b4ba"
+  },
+  "scope": "Independently reviewed exact diff plus current frame metadata/finish/cleanup and existing QueryPin ownership. No root production edits, Cargo, tests or runtime claims.",
+  "verdict": "No fatal source defect identified in this narrow mapping successor; runtime/quota/failure controls unexecuted.",
+  "invariant": "Prepared construction retains the actual immutable query allocation through field moves and cleanup, reads its checked written-to-storage mapping, preserves ordinary owner/type/cleanup authority and charges actual inline/shared allocation ownership without per-construction map clone.",
+  "inspected_symbols": [
+    "ConstructionMapping::{fields,heap_bytes}",
+    "ActiveConstruction::{mapping_bytes,storage_field}",
+    "Frame::{metadata_bytes,prepare_nominal_constructor,prepare_installed_nominal_constructor,prepare_nominal_hints,preflight_prepared_constructor,start_prepared_constructor,preflight_nominal_mapping,begin_nominal_with_mapping,constructor_field,preflight_constructor_field,finish_constructor,constructor_cleanup_next}",
+    "Database QueryPin::{new,external},cache_usage retired_values generic outer QueryValue accounting",
+    "PreparedRecordConstructorHandle::{from_query,prepared}"
+  ],
+  "findings": {
+    "authority": "Prepared branch still requires exact query PC, entered body/profile/node, cached plan identity equal checked mapping identity and nominal result source. It consumes the private query bound variant, never source semantics from a guest descriptor. Normal installed/current input guards remain engine-owned; retaining data alone refreshes no authority.",
+    "lifetime": "ActiveConstruction owns PreparedRecordConstructorHandle (Arc<QueryValue>), so mapping slice remains live across operands and suspended Drop cleanup. ActiveConstruction clones only Arc; finish drops stored construction only after commit, cleanup retains actual handle while ticket remains and drops at exhaustion. Generic weak QueryPin outer tracking/retired_values sees active owner and charges actual query payload; no new registry/inner Arc rebind.",
+    "quota": "Frame::metadata_bytes multiplies actual size_of<Slot>, including inline Option<ActiveConstruction>/mapping enum handle. Prepared mapping has no separate map heap; payload remains query-pin accounting. Legacy map heap keeps checked F*4+Arc overhead. preflight_nominal_mapping checked total and same resource cap; both finish/cleanup subtract exact mapping_bytes (zero for prepared map, actual source operands still charged).",
+    "failure_order": "Prepared hints preserve actual destination/map/source checks before materialization, share ordinary runtime materializer. start preflight precedes taking pending facts; Prepared Arc clone cannot allocate, mapping preflight precedes GuestStore nominal guard. Failure before store guard leaves no new active construction; field commit/cleanup order unchanged. Actual source descriptor materialization/fuel and rollback behavior unexecuted.",
+    "copy_removal": "Prepared branch does not allocate Vec/mapArc, clone BoundNominalConstructor/ConstructorPlan, hash full plan, parse source or query. It borrows cached bound mapping through actual handle. O(1) extra handle/field access; runtime field type materialization/hints still O(F+source type descriptor work). Legacy mapcopy remains explicitly held.",
+    "change_extent": "Full diff from frozen16 contains only mapping enum/access/accounting factoring, legacy peak charge moved into caller, prepared extra charge0 and shared start kernel. No unrelated frame semantics changed."
+  },
+  "eight_modes": {
+    "1": "No assertion/expression evaluator; ordinary constructor VM route only. Legacy other evaluators remain out-of-scope hold.",
+    "2": "No literal/break macro path; Prepared query source selected ordinary constructor and actual same storage transfer/cleanup. Macro runtime parity not exercised.",
+    "3": "No method/name/numeric special rule or layout inference. Existing bound source schema and private map authority retained.",
+    "4": "Prepared mapping branch is source-origin agnostic; no generated refusal or bypass added. Missing source/Type authority remains typed upstream.",
+    "5": "No pattern logic or eager executable operand checks. Current constructor map/field hints only; reached operands still ordinary eager execution.",
+    "6": "Actual prepared mapping reused without reconstruction/hash/parse; runtime hints/descriptors still per construction; source binder memo/installed guard remain from prior component.",
+    "7": "No namespace lookup/census/currentness redesign in Frame. Engine owns actual prepared input guards; existing source revision/coarse dependencies/recipe census hold unchanged.",
+    "8": "Actual Arc<QueryValue> through ActiveConstruction replaces immutable mapVec+Arc copy. Inline handle size accounted; no BodyIndex clone/node scan added. Historical unprepared mapcopy and constructor thunk full-file AST lookup remain."
+  },
+  "remaining_holds": [
+    "No actual compile, frame construction, field order/resource failure or cleanup test result for this leaf",
+    "Pending constructor dynamic aggregate API accounting unverified; exact sole ConstructStart recipe plus first peak preflight means no demonstrated production interleaving defect",
+    "Existing descriptor interning before fuel is inherited common-route behavior; no independent runtime atomicity claim",
+    "Full ordinary/user/wrapper/standard macro runtime matrix, relevant invalidation refinement and stock fullfixture acceptance remain separate",
+    "Sole validator owns suffix-main execution; diagnose actual first typed failure only after its terminal"
+  ],
+  "next_evidence": "Root combine exact frozen mapping successor with constructor/control packets. Retention2 checks actual query payload after memo replacement, not guest runtime; actual stock main must cover start/materialization/cleanup."
+}

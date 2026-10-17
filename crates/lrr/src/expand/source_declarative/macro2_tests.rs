@@ -619,11 +619,19 @@ fn genuine_original_macro2_output_cannot_publish_generated_macro2_as_rules() {
         crate::expand::generated_items::GeneratedItems::admit(request.key(), Arc::new(output), 1)
             .unwrap();
     let parsed = ParsedFile::from_generated_items(&items).unwrap();
+    // Generated output may contain macro 2.0 items at outline time; the
+    // generated-dialect refusal belongs to definition capture when selected.
+    let outline = parsed.outline(root, vec![], &CfgSet::guest_default()).unwrap();
+    let macro2 = outline
+        .items
+        .iter()
+        .find(|item| item.def_key.item_kind == crate::source::manifest::ItemKind::Macro)
+        .expect("generated macro 2.0 item retained by the outline");
     let refusal = parsed
-        .outline(root, vec![], &CfgSet::guest_default())
+        .macro_definition_shape_at(macro2.declaration_span)
         .unwrap_err();
     assert_eq!(refusal.code, "LRR-E-MACRO2-SOURCE");
-    assert!(refusal.message.contains("non-original-module"));
+    assert!(refusal.message.contains("generated macro2"));
 }
 
 #[test]

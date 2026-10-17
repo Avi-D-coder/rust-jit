@@ -8,7 +8,7 @@ use super::{
 use crate::{
     core::{diagnostic::Diagnostic, digest::Digest},
     frontend::types::{
-        FieldRecipe, FieldShape, MAX_SCHEMA_BYTES, MAX_SCHEMA_FIELDS, NominalSchema, VariantRecipe,
+        FieldRecipe, FieldShape, NominalSchema, VariantRecipe,
         schema_fault, schema_limit,
     },
     source::snapshot::CfgSet,
@@ -28,7 +28,7 @@ impl ParsedFile {
         context: &DeclarationContext,
         cfg: &CfgSet,
     ) -> Result<NominalSchema, Diagnostic> {
-        self.nominal_schema_with_field_limit(definition, header, context, cfg, MAX_SCHEMA_FIELDS)
+        self.nominal_schema_with_field_limit(definition, header, context, cfg, usize::MAX)
     }
     fn nominal_schema_with_field_limit(
         &self,
@@ -38,8 +38,8 @@ impl ParsedFile {
         cfg: &CfgSet,
         field_limit: usize,
     ) -> Result<NominalSchema, Diagnostic> {
-        let mut remaining_fields = field_limit.min(MAX_SCHEMA_FIELDS);
-        if header.profile != self.profile || header.estimated_bytes() > MAX_SCHEMA_BYTES {
+        let mut remaining_fields = field_limit;
+        if header.profile != self.profile {
             return Err(schema_fault(
                 "schema/source profile or header budget mismatch",
             ));
@@ -77,9 +77,6 @@ impl ParsedFile {
                     if !enabled(&variant, cfg)? {
                         continue;
                     }
-                    if variants.len() >= MAX_SCHEMA_FIELDS {
-                        return Err(schema_limit());
-                    }
                     let name = variant
                         .name()
                         .and_then(|name| semantic_name(name.text()))
@@ -110,9 +107,6 @@ impl ParsedFile {
             generics,
             variants,
         };
-        if schema.estimated_bytes() > MAX_SCHEMA_BYTES {
-            return Err(schema_limit());
-        }
         Ok(schema)
     }
 }
@@ -204,9 +198,6 @@ fn capture_fields(
     })
 }
 fn push_field(fields: &mut Vec<FieldRecipe>, field: FieldRecipe) -> Result<(), Diagnostic> {
-    if fields.len() >= MAX_SCHEMA_FIELDS {
-        return Err(schema_limit());
-    }
     fields.try_reserve(1).map_err(|_| schema_limit())?;
     fields.push(field);
     Ok(())
@@ -749,19 +740,18 @@ mod tests {
         }
         assert_eq!(admitted[0], admitted[1]);
         // No discriminator cast, match evaluation or complete stock assertion
-        // is claimed. The original generic E2 remains an explicit binding demand.
+        // is claimed. The original generic E2's unit variant binds with its
+        // type parameter left to the construction's context.
         let generic = demand(&mut db, &outline, "E2");
         let names = SchemaNames::from_database(&mut db, &graph, &source, &generic)
             .into_ready()
             .unwrap()
             .unwrap();
-        assert_eq!(
-            names.bind_variant(Some("V3")).unwrap(),
-            NominalBinding::Deferred {
-                field: None,
-                demand: NominalBindingDemand::GenericContext,
-            }
-        );
+        let NominalBinding::Ready(bound) = names.bind_variant(Some("V3")).unwrap() else {
+            panic!("generic unit variant must bind without its type context");
+        };
+        assert!(bound.fields().is_empty());
+        assert_eq!(bound.type_parameters(), 1);
         assert!(
             !db.trace
                 .events

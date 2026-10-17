@@ -48,7 +48,36 @@ pub fn token_text(tokens: &[TokenRecipe]) -> String {
 
 /// Validate one source identifier using the pinned parser. Keep upstream AST
 /// handles inside the syntax boundary, including for edition-sensitive names.
+///
+/// The answer is a pure function of `(text, edition)`; it is memoized per
+/// process so hot name lookups do not re-parse the same identifier.
 pub(crate) fn macro_name(text: &str, edition: u16) -> Option<String> {
+    shared_macro_name(text, edition).map(|name| name.as_ref().to_owned())
+}
+/// The validated spelling, shared by every equal name: validation is a pure
+/// function of (spelling, edition), so one immutable copy serves them all.
+pub(crate) fn shared_macro_name(text: &str, edition: u16) -> Option<std::sync::Arc<str>> {
+    type Names = std::collections::HashMap<
+        u16,
+        std::collections::HashMap<String, Option<std::sync::Arc<str>>>,
+    >;
+    static VALIDATED: std::sync::OnceLock<std::sync::RwLock<Names>> = std::sync::OnceLock::new();
+    let cache = VALIDATED.get_or_init(Default::default);
+    if let Ok(names) = cache.read()
+        && let Some(found) = names.get(&edition).and_then(|names| names.get(text))
+    {
+        return found.clone();
+    }
+    let validated = validate_macro_name(text, edition).map(std::sync::Arc::<str>::from);
+    if let Ok(mut names) = cache.write() {
+        names
+            .entry(edition)
+            .or_default()
+            .insert(text.to_owned(), validated.clone());
+    }
+    validated
+}
+fn validate_macro_name(text: &str, edition: u16) -> Option<String> {
     let edition = match edition {
         2015 => Edition::Edition2015,
         2018 => Edition::Edition2018,
@@ -57,9 +86,6 @@ pub(crate) fn macro_name(text: &str, edition: u16) -> Option<String> {
         _ => return None,
     };
     // The token wire ceiling bounds owned source spellings before parsing.
-    if text.len() > 32 * 1024 * 1024 {
-        return None;
-    }
     // The pinned parser accepts some invalid path keywords structurally. Use
     // its lexer-backed identifier helpers as well as the exact AST spelling.
     let unescaped = text.strip_prefix("r#");
@@ -95,18 +121,19 @@ pub(crate) fn macro_name(text: &str, edition: u16) -> Option<String> {
 /// Canonicalize an already validated AST/owned semantic name. Semantic names
 /// may be reserved source keywords after a raw prefix has been removed.
 pub(crate) fn semantic_name(text: &str) -> Option<String> {
-    if text.len() > 32 * 1024 * 1024 {
-        return None;
+    let text = text.strip_prefix("r#").unwrap_or(text);
+    // ASCII text is already in NFC.
+    if text.is_ascii() {
+        return Some(text.to_owned());
     }
     // NFC is identity normalization, not compatibility folding. Keep the
     // original source token/range unchanged; normalize only the owned name.
     let mut normalized = String::new();
     normalized.try_reserve(text.len()).ok()?;
-    for scalar in text.strip_prefix("r#").unwrap_or(text).nfc() {
+    for scalar in text.nfc() {
         normalized
             .len()
-            .checked_add(scalar.len_utf8())
-            .filter(|size| *size <= 32 * 1024 * 1024)?;
+            .checked_add(scalar.len_utf8())?;
         normalized.try_reserve(scalar.len_utf8()).ok()?;
         normalized.push(scalar);
     }
@@ -115,9 +142,6 @@ pub(crate) fn semantic_name(text: &str) -> Option<String> {
 
 /// Prepared module contexts are semantic paths, independent of source spelling.
 pub(crate) fn semantic_module_path(path: &[String]) -> Option<Vec<String>> {
-    if path.len() > 256 {
-        return None;
-    }
     let mut result = Vec::new();
     result.try_reserve(path.len()).ok()?;
     let mut bytes = 0usize;
@@ -127,8 +151,7 @@ pub(crate) fn semantic_module_path(path: &[String]) -> Option<Vec<String>> {
             return None;
         }
         bytes = bytes
-            .checked_add(canonical.len())
-            .filter(|n| *n <= 32 * 1024 * 1024)?;
+            .checked_add(canonical.len())?;
         result.push(canonical);
     }
     Some(result)
@@ -137,9 +160,6 @@ pub(crate) fn semantic_module_path(path: &[String]) -> Option<Vec<String>> {
 /// Decode a bounded owned string token using the pinned AST implementation.
 pub(crate) fn string_value(text: &str, edition: u16) -> Option<String> {
     use ra_ap_syntax::{AstToken, ast::IsString};
-    if text.len() > 128 * 1024 {
-        return None;
-    }
     let edition = match edition {
         2015 => Edition::Edition2015,
         2018 => Edition::Edition2018,

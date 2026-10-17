@@ -16,8 +16,6 @@ use crate::{
 };
 use std::sync::Arc;
 
-const MAX_DEPTH: usize = 256;
-const MAX_BYTES: usize = 64 * 1024 * 1024;
 
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
@@ -62,7 +60,6 @@ impl ChildImplFrontier {
             .and_then(|n| n.checked_add(128))
             .ok_or_else(|| fault("child impl frontier metadata overflow"))?
             .checked_add(cfg.metadata_bytes()?)
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(|| fault("child impl frontier metadata limit"))?;
         Ok(Self {
             ancestor_job,
@@ -139,7 +136,6 @@ impl ChildImplFrontier {
         pairs
             .len()
             .checked_mul(std::mem::size_of::<Digest>())
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(|| fault("child impl resolved header limit"))?;
         let mut headers = Vec::new();
         headers
@@ -164,10 +160,7 @@ impl ChildImplFrontier {
         cfg: Digest,
     ) -> Result<(), Diagnostic> {
         let mut visited = Vec::new();
-        visited
-            .try_reserve_exact(MAX_DEPTH)
-            .map_err(|_| fault("child impl ancestry allocation"))?;
-        for depth in 0..MAX_DEPTH {
+        for depth in 0usize.. {
             if current == root {
                 return Ok(());
             }

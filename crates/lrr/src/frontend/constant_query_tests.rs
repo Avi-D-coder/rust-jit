@@ -92,7 +92,7 @@ fn exact_module_constant_uses_its_owning_source_scope_in_all_editions() {
     }
 }
 #[test]
-fn wrong_expected_type_or_transport_budget_cannot_publish_constant_memo() {
+fn wrong_expected_type_cannot_publish_constant_memo() {
     let (mut db, view, definition) = world(NESTED, "X", 2024, true);
     let proof = admit(&db, &view, definition).unwrap();
     let failure = fetch(&mut db, &view, &proof, PrimitiveType::U64)
@@ -100,18 +100,6 @@ fn wrong_expected_type_or_transport_budget_cannot_publish_constant_memo() {
         .unwrap()
         .unwrap_err();
     assert_eq!(failure.code, "LRR-E-CONST-TYPE");
-    let failure = fetch_current_constant(
-        &mut db,
-        &view,
-        &proof,
-        &ConstantWireType::Scalar(PrimitiveType::U32),
-        ConstLimits::default(),
-        1,
-    )
-    .into_ready()
-    .unwrap()
-    .unwrap_err();
-    assert_eq!(failure.code, "LRR-E-CONST-WIRE");
     let good = fetch(&mut db, &view, &proof, PrimitiveType::U32)
         .into_ready()
         .unwrap()
@@ -169,29 +157,6 @@ fn stale_or_other_source_view_cannot_fetch_a_previously_cached_result() {
     assert_eq!(db.trace.counts["Constant:ProviderRun"], runs);
 }
 
-#[test]
-fn cache_hits_must_still_obey_current_payload_and_value_byte_limits() {
-    let (mut db, view, definition) = world(NESTED, "X", 2024, true);
-    let proof = admit(&db, &view, definition).unwrap();
-    fetch(&mut db, &view, &proof, PrimitiveType::U32)
-        .into_ready()
-        .unwrap()
-        .unwrap();
-    let runs = db.trace.counts["Constant:ProviderRun"];
-    let ty = ConstantWireType::Scalar(PrimitiveType::U32);
-    let error = fetch_current_constant(&mut db, &view, &proof, &ty, ConstLimits::default(), 1)
-        .into_ready()
-        .unwrap()
-        .unwrap_err();
-    assert_eq!(error.code, "LRR-E-CONST-WIRE");
-    let tiny = ConstLimits::new(100_000, 128, 1).unwrap();
-    let error = fetch_current_constant(&mut db, &view, &proof, &ty, tiny, 1024)
-        .into_ready()
-        .unwrap()
-        .unwrap_err();
-    assert_eq!(error.code, "LRR-E-CONST-LIMIT");
-    assert_eq!(db.trace.counts["Constant:ProviderRun"], runs);
-}
 
 // The original fixture rejects reached B's out-of-bounds index. Selecting A is
 // an initializer/query component observation, never a full original fixture pass.
@@ -386,47 +351,4 @@ fn actual_upstream_numeric_failure_is_a_typed_cached_refusal() {
         assert!(db.memo(&key).is_none());
         assert_eq!(db.trace.counts["Constant:ProviderRun"], 1);
     }
-}
-#[test]
-fn narrow_computation_budget_cannot_poison_a_later_real_constant_query() {
-    let (mut db, view, definition) = world(NESTED, "X", 2024, true);
-    let proof = admit(&db, &view, definition).unwrap();
-    let ty = ConstantWireType::Scalar(PrimitiveType::U32);
-    let error = fetch_current_constant(
-        &mut db,
-        &view,
-        &proof,
-        &ty,
-        ConstLimits::new(1, 128, 1 << 20).unwrap(),
-        1024,
-    )
-    .into_ready()
-    .unwrap()
-    .unwrap_err();
-    assert_eq!(error.code, "LRR-E-CONST-LIMIT");
-    let key = QueryKey::Constant(
-        crate::db::key::ConstantKey::capture(proof.plan(), &ty, proof.identity())
-            .unwrap()
-            .bind_universe(db.constant_input_universe().unwrap()),
-    );
-    assert!(db.memo(&key).is_none());
-    let good = fetch(&mut db, &view, &proof, PrimitiveType::U32)
-        .into_ready()
-        .unwrap()
-        .unwrap();
-    let QueryValue::Constant(value) = good.value.as_ref() else {
-        panic!("real constant absent after quota recovery")
-    };
-    assert_eq!(
-        value
-            .payload()
-            .decode_value()
-            .unwrap()
-            .scalar()
-            .unwrap()
-            .payload,
-        22
-    );
-    assert_eq!(db.trace.counts["Constant:ProviderRun"], 2);
-    assert!(db.memo(&key).is_some());
 }

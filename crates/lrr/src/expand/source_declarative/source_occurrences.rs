@@ -3,8 +3,6 @@
 use super::*;
 use lrr_expand_adapter::syntax_attachment::SyntaxEdit;
 
-const MAX_INTERVALS: usize = 100_000;
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 
 /// Coordinates in the initial normalized attachment root are deliberately not
 /// raw SourceBlob offsets. Consumers must separately join actual token origins,
@@ -61,7 +59,6 @@ fn bytes(capacity: usize) -> Result<usize, Diagnostic> {
     capacity
         .checked_mul(std::mem::size_of::<Interval>())
         .and_then(|n| n.checked_add(std::mem::size_of::<SourceOccurrences>()))
-        .filter(|n| *n <= MAX_BYTES)
         .ok_or_else(resource)
 }
 impl SourceOccurrences {
@@ -105,7 +102,7 @@ impl SourceOccurrences {
         } else if interval.range.start != 0 {
             return Err(fault("structural occurrence initial interval differs"));
         }
-        if intervals.len() >= MAX_INTERVALS || intervals.len() == intervals.capacity() {
+        if intervals.len() == intervals.capacity() {
             return Err(resource());
         }
         intervals.push(interval);
@@ -141,18 +138,15 @@ impl SourceOccurrences {
         let attachment = self.attachments;
         let attachments = attachment
             .checked_add(1)
-            .filter(|n| *n <= MAX_CALLS as u32)
             .ok_or_else(resource)?;
         let capacity = self
             .intervals
             .len()
             .checked_add(3)
-            .filter(|n| *n <= MAX_INTERVALS)
             .ok_or_else(resource)?;
         // Bound both old and candidate allocation while the edit is staged.
         bytes(capacity)?
             .checked_add(self.metadata_bytes()?)
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(resource)?;
         let mut next = Vec::new();
         next.try_reserve_exact(capacity).map_err(|_| resource())?;
@@ -237,7 +231,7 @@ impl SourceOccurrences {
         Ok(())
     }
     pub(super) fn validate(&self, len: u32) -> Result<(), Diagnostic> {
-        if self.len != len || self.intervals.len() > MAX_INTERVALS {
+        if self.len != len {
             return Err(fault("structural occurrence root length/count differs"));
         }
         self.metadata_bytes()?;
@@ -307,6 +301,42 @@ impl SourceOccurrences {
             },
             Origin::Pending => SourceOccurrence::Pending,
         })
+    }
+    /// Inverse structural projection: the current root range of an exact
+    /// output-relative range of one attached record. Only the actual splice
+    /// path places output intervals, so this never consults token origins.
+    /// None when the range is not (or no longer) one contiguous output run.
+    pub(super) fn project_generated(
+        &self,
+        record: Digest,
+        range: SourceRange,
+    ) -> Result<Option<SourceRange>, Diagnostic> {
+        let mut found = None;
+        for interval in &self.intervals {
+            let Origin::Generated(output) = interval.origin else {
+                continue;
+            };
+            let end = interval
+                .offset
+                .checked_add(interval.range.len())
+                .ok_or_else(resource)?;
+            if output.record != record || range.start < interval.offset || range.end > end {
+                continue;
+            }
+            if found.is_some() {
+                return Err(fault("structural generated occurrence is ambiguous"));
+            }
+            let start = interval
+                .range
+                .start
+                .checked_add(range.start - interval.offset)
+                .ok_or_else(resource)?;
+            found = Some(SourceRange::checked(
+                start,
+                start.checked_add(range.len()).ok_or_else(resource)?,
+            )?);
+        }
+        Ok(found)
     }
     pub(super) fn encode(&self, e: &mut StableEncoder) {
         e.digest(self.initial_syntax);

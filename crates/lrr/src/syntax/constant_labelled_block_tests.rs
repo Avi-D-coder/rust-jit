@@ -242,7 +242,7 @@ fn return_propagates_through_labelled_blocks_without_becoming_a_block_value() {
     }
 }
 #[test]
-fn labelled_activations_remain_bounded_and_preserve_reached_value_type_errors() {
+fn labelled_activations_preserve_reached_value_type_errors() {
     for text in [
         "const A:u8='b:{break 'b true;};",
         "const A:i32='a: loop { 'a: { break 'a 3; } };",
@@ -250,15 +250,4 @@ fn labelled_activations_remain_bounded_and_preserve_reached_value_type_errors() 
         let error = evaluate(&plan(text, 2024), ConstLimits::default()).unwrap_err();
         assert_eq!(error.diagnostic().code, "LRR-E-CONST-TYPE");
     }
-    let mut text = String::from("const A:i32=");
-    for _ in 0..130 {
-        text.push_str("'b:{");
-    }
-    text.push('1');
-    for _ in 0..130 {
-        text.push('}');
-    }
-    text.push(';');
-    let error = evaluate(&plan(&text, 2024), ConstLimits::default()).unwrap_err();
-    assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
 }

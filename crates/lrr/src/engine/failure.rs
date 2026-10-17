@@ -1,5 +1,7 @@
-//! Bounded owned dispatcher facts for a terminal internal defect. Capturing
-//! these facts cannot query, compile, perform I/O or retain guest values.
+//! Owned dispatcher facts for a terminal internal defect. Capturing these
+//! facts cannot query, compile, perform I/O or retain guest values. E-R5-006:
+//! no byte budget applies; the record summarizes long frame/recipe lists with
+//! explicit omission counts as a report format, not an execution limit.
 use super::run::RunMachine;
 use crate::{
     core::digest::{Digest, StableEncode},
@@ -8,7 +10,6 @@ use crate::{
 };
 use serde::Serialize;
 
-const MAX_BYTES: usize = 64 * 1024;
 const MAX_FRAMES: usize = 64;
 const MAX_RECIPES: usize = 64;
 const MAX_OPS: usize = 1024;
@@ -80,12 +81,6 @@ pub(crate) fn generated_origin(
             "generated fault publication differs".into(),
         )
     };
-    let limit = || {
-        Diagnostic::new(
-            "LRR-E-METADATA-LIMIT",
-            "generated fault origin retention limit".into(),
-        )
-    };
     let Some((pc, _)) = run.diagnostic_frames().next() else {
         return Err(invalid());
     };
@@ -112,27 +107,9 @@ pub(crate) fn generated_origin(
     };
     let span = run.diagnostic_current_span()?;
     let selected = unit.items.project_body_source_spans(body, &span)?;
-    let mut tokens = Vec::new();
-    tokens
-        .try_reserve_exact(selected.len())
-        .map_err(|_| limit())?;
-    let mut bytes = std::mem::size_of::<GeneratedOperationOrigin>()
-        .checked_add(
-            tokens
-                .capacity()
-                .checked_mul(std::mem::size_of::<crate::syntax::token_wire::SpanRecord>())
-                .ok_or_else(limit)?,
-        )
-        .ok_or_else(limit)?;
+    let mut tokens = Vec::with_capacity(selected.len());
     for original in selected {
-        bytes = bytes
-            .checked_add(original.source.path.len())
-            .filter(|n| *n <= MAX_BYTES)
-            .ok_or_else(limit)?;
-        let mut path = String::new();
-        path.try_reserve_exact(original.source.path.len())
-            .map_err(|_| limit())?;
-        path.push_str(&original.source.path);
+        let path = original.source.path.clone();
         tokens.push(crate::syntax::token_wire::SpanRecord {
             source: SourceIdentity {
                 path,
@@ -150,40 +127,7 @@ pub(crate) fn generated_origin(
         if producer.invocation_identity != unit.items.record().key().invocation {
             return Err(invalid());
         }
-        let invocation = producer
-            .invocation
-            .as_ref()
-            .map(|at| at.copy_with_limit(MAX_BYTES.saturating_sub(bytes)))
-            .transpose()?;
-        if let Some(at) = &invocation {
-            bytes = bytes
-                .checked_add(at.source.path.capacity())
-                .filter(|n| *n <= MAX_BYTES)
-                .ok_or_else(limit)?;
-        }
-        let definition = producer
-            .definition
-            .as_ref()
-            .map(|original| {
-                let remaining = MAX_BYTES.saturating_sub(bytes);
-                if original.name.len() > remaining {
-                    return Err(limit());
-                }
-                let mut name = String::new();
-                name.try_reserve_exact(original.name.len())
-                    .map_err(|_| limit())?;
-                name.push_str(&original.name);
-                let location = original
-                    .location
-                    .copy_with_limit(remaining.saturating_sub(name.capacity()))?;
-                Ok::<_, Diagnostic>(crate::syntax::origin::DefinitionOrigin {
-                    identity: original.identity,
-                    name,
-                    location,
-                })
-            })
-            .transpose()?;
-        (invocation, definition)
+        (producer.invocation.clone(), producer.definition.clone())
     } else {
         (
             run.diagnostic_invocation_origin(unit.items.record().key().invocation)?,
@@ -192,37 +136,12 @@ pub(crate) fn generated_origin(
     };
     let mut parents = Vec::new();
     if let Some(producer) = &unit.producer_origin {
-        if producer.parents.len() > 256 {
-            return Err(limit());
-        }
-        parents
-            .try_reserve_exact(producer.parents.len())
-            .map_err(|_| limit())?;
-        bytes = bytes
-            .checked_add(
-                parents
-                    .capacity()
-                    .checked_mul(std::mem::size_of::<crate::syntax::origin::ExpansionOrigin>())
-                    .ok_or_else(limit)?,
-            )
-            .filter(|n| *n <= MAX_BYTES)
-            .ok_or_else(limit)?;
+        parents.reserve_exact(producer.parents.len());
         for parent in &producer.parents {
-            let invocation = parent
-                .invocation
-                .as_ref()
-                .map(|at| at.copy_with_limit(MAX_BYTES.saturating_sub(bytes)))
-                .transpose()?;
-            if let Some(at) = &invocation {
-                bytes = bytes
-                    .checked_add(at.source.path.capacity())
-                    .filter(|n| *n <= MAX_BYTES)
-                    .ok_or_else(limit)?;
-            }
             parents.push(crate::syntax::origin::ExpansionOrigin {
                 expansion: parent.expansion,
                 invocation_identity: parent.invocation_identity,
-                invocation,
+                invocation: parent.invocation.clone(),
             });
         }
     }
@@ -235,14 +154,10 @@ pub(crate) fn generated_origin(
         tokens,
         parents,
     };
-    if record.heap_bytes().is_none_or(|n| n > MAX_BYTES) {
-        return Err(limit());
-    }
     Ok(Some(record))
 }
 
 /// Capture only entered frame indexes and immutable published source facts.
-/// A single shared byte budget covers every frame and copied source path.
 pub(crate) fn guest_stack(
     run: &RunMachine,
     db: &mut crate::db::memo::Database,
@@ -262,24 +177,13 @@ pub(crate) fn guest_stack(
             "guest frame publication differs".into(),
         )
     };
-    let limit = || {
-        Diagnostic::new(
-            "LRR-E-METADATA-LIMIT",
-            "guest stack origin retention limit".into(),
-        )
-    };
     let mut stack = GuestStackOrigin {
-        frames: Vec::new(),
+        frames: Vec::with_capacity(MAX_FRAMES),
         omitted_frames: 0,
     };
-    stack
-        .frames
-        .try_reserve_exact(MAX_FRAMES)
-        .map_err(|_| limit())?;
-    let mut bytes = stack.heap_bytes().ok_or_else(limit)?;
     for indexed in run.diagnostic_frame_spans() {
         if stack.frames.len() == MAX_FRAMES {
-            stack.omitted_frames = stack.omitted_frames.checked_add(1).ok_or_else(limit)?;
+            stack.omitted_frames = stack.omitted_frames.saturating_add(1);
             continue;
         }
         let (pc, body) = indexed?;
@@ -302,27 +206,9 @@ pub(crate) fn guest_stack(
                     return Err(invalid());
                 };
                 let spans = unit.items.project_body_source_spans(handle, &body)?;
-                locations
-                    .try_reserve_exact(spans.len())
-                    .map_err(|_| limit())?;
-                bytes = bytes
-                    .checked_add(
-                        locations
-                            .capacity()
-                            .checked_mul(std::mem::size_of::<SourceOrigin>())
-                            .ok_or_else(limit)?,
-                    )
-                    .filter(|n| *n <= MAX_BYTES)
-                    .ok_or_else(limit)?;
+                locations.reserve_exact(spans.len());
                 for span in spans {
-                    bytes = bytes
-                        .checked_add(span.source.path.len())
-                        .filter(|n| *n <= MAX_BYTES)
-                        .ok_or_else(limit)?;
-                    let mut path = String::new();
-                    path.try_reserve_exact(span.source.path.len())
-                        .map_err(|_| limit())?;
-                    path.push_str(&span.source.path);
+                    let path = span.source.path.clone();
                     locations.push(SourceOrigin {
                         source: SourceIdentity {
                             path,
@@ -332,23 +218,10 @@ pub(crate) fn guest_stack(
                         range: SourceRange::checked(span.start, span.end)?,
                     });
                 }
-            } else if let Some(at) =
-                run.diagnostic_source_origin(&body, MAX_BYTES.saturating_sub(bytes))?
-            {
+            } else if let Some(at) = run.diagnostic_source_origin(&body)? {
                 if at.source.content.0 != parse.content.0 {
                     return Err(invalid());
                 }
-                locations.try_reserve_exact(1).map_err(|_| limit())?;
-                bytes = bytes
-                    .checked_add(
-                        locations
-                            .capacity()
-                            .checked_mul(std::mem::size_of::<SourceOrigin>())
-                            .ok_or_else(limit)?,
-                    )
-                    .and_then(|n| n.checked_add(at.source.path.capacity()))
-                    .filter(|n| *n <= MAX_BYTES)
-                    .ok_or_else(limit)?;
                 locations.push(at);
             }
         }
@@ -357,9 +230,6 @@ pub(crate) fn guest_stack(
             body,
             locations,
         });
-    }
-    if stack.heap_bytes().is_none_or(|n| n > MAX_BYTES) {
-        return Err(limit());
     }
     Ok(stack)
 }
@@ -374,8 +244,6 @@ fn exit_tag(exit: &RecipeExit) -> &'static str {
         RecipeExit::Effect { .. } => "effect",
         RecipeExit::Next(_) => "next",
         RecipeExit::Branch { .. } => "branch",
-        RecipeExit::PatternRetry { .. } => "pattern_retry",
-        RecipeExit::PatternNext { .. } => "pattern_next",
         RecipeExit::Control(ControlRecipe::Return { .. }) => "return",
         RecipeExit::Control(ControlRecipe::Break { .. }) => "break",
         RecipeExit::Control(ControlRecipe::Continue { .. }) => "continue",
@@ -465,9 +333,6 @@ impl ExecutionRecord {
             native_region_ids: Vec::new(),
             native_context_availability: "guest native emission is not implemented",
         };
-        if record.heap_bytes().is_none_or(|bytes| bytes > MAX_BYTES) {
-            return Err(CaptureLimit);
-        }
         Ok(record)
     }
     pub(crate) fn heap_bytes(&self) -> Option<usize> {

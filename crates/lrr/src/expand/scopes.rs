@@ -9,13 +9,19 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+/// A validated identifier spelling. Equal spellings share one immutable
+/// allocation, so names and the paths built from them clone cheaply.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct MacroName(String);
+pub struct MacroName(std::sync::Arc<str>);
 impl MacroName {
     pub fn parse(text: &str, edition: u16) -> Result<Self, Diagnostic> {
-        ast_adapter::macro_name(text, edition)
+        ast_adapter::shared_macro_name(text, edition)
             .map(Self)
-            .ok_or_else(|| error("invalid macro identifier or edition"))
+            .ok_or_else(|| {
+                error(&format!(
+                    "invalid macro identifier or edition: {text:?} in edition {edition}"
+                ))
+            })
     }
     // Receiver names use the local namespace's keyword identity. Macro source
     // identifiers still go through the pinned identifier validator above.
@@ -27,7 +33,7 @@ impl MacroName {
         }
     }
     pub(crate) fn retained_heap_bytes(&self) -> usize {
-        self.0.capacity()
+        self.0.len()
     }
     pub fn as_str(&self) -> &str {
         &self.0
@@ -104,16 +110,12 @@ pub struct TextualScopes {
     scopes: BTreeMap<ScopeKey, Scope>,
     headers: usize,
 }
-const MAX_HEADERS: usize = 1_000_000;
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
 impl TextualScopes {
     /// Cold immutable environment encoding; never name resolution or a hot guard.
     pub(crate) fn semantic_fingerprint(&self) -> Result<Digest, Diagnostic> {
-        if self.metadata_bytes()? > 64 * 1024 * 1024 {
-            return Err(error("textual environment encoding budget"));
-        }
         let mut e = StableEncoder::new("lrr/v1/textual-scope-environment");
         e.u64(self.scopes.len() as u64);
         for (key, scope) in &self.scopes {
@@ -195,7 +197,6 @@ impl TextualScopes {
     fn admit(&self, count: usize) -> Result<usize, Diagnostic> {
         self.headers
             .checked_add(count)
-            .filter(|n| *n <= MAX_HEADERS)
             .ok_or_else(|| error("macro scope header limit exceeded"))
     }
     fn get(&self, key: ScopeKey) -> Result<&Scope, Diagnostic> {
@@ -404,9 +405,6 @@ impl TextualScopes {
         if self.get(key)?.pending.get(&at) != Some(&invocation) {
             return Err(error("stale derive prefix view producer"));
         }
-        if self.metadata_bytes()? > 32 * 1024 * 1024 {
-            return Err(error("derive prefix view metadata limit"));
-        }
         let mut view = self.clone();
         view.complete_prefix(key, at, invocation)?;
         Ok(view)
@@ -463,18 +461,12 @@ impl TextualScopes {
         while let Some(next) = work.pop() {
             match next {
                 Work::Definition(definition) => {
-                    if candidates.len() >= MAX_HEADERS {
-                        return Err(error("macro-use candidate count limit"));
-                    }
                     candidates
                         .try_reserve(1)
                         .map_err(|_| error("macro-use candidate allocation"))?;
                     candidates.push(definition.clone());
                 }
                 Work::Scope(key, before, depth) => {
-                    if depth >= 256 {
-                        return Err(error("macro-use scope depth limit"));
-                    }
                     let scope = self.get(key)?;
                     if require_frontiers
                         && let Some((_, invocation)) = scope.pending.range(..before).next()
@@ -489,11 +481,9 @@ impl TextualScopes {
                         .checked_add(
                             definitions.map_or(0, |positions| positions.range(..before).count()),
                         )
-                        .filter(|n| *n <= MAX_HEADERS)
                         .ok_or_else(|| error("macro-use candidate event count limit"))?;
                     count
                         .checked_mul(64)
-                        .filter(|n| *n <= 64 * 1024 * 1024)
                         .ok_or_else(|| error("macro-use candidate event metadata limit"))?;
                     let mut positions = BTreeSet::new();
                     positions.extend(scope.exports.range(..before).map(|(at, _)| *at));
@@ -502,9 +492,6 @@ impl TextualScopes {
                     }
                     for at in positions {
                         if let Some(child) = scope.exports.get(&at) {
-                            if work.len() >= MAX_HEADERS {
-                                return Err(error("macro-use candidate work limit"));
-                            }
                             work.try_reserve(1)
                                 .map_err(|_| error("macro-use candidate work allocation"))?;
                             work.push(Work::Scope(*child, at, depth + 1));
@@ -512,7 +499,6 @@ impl TextualScopes {
                         if let Some(batch) = definitions.and_then(|positions| positions.get(&at)) {
                             work.len()
                                 .checked_add(batch.len())
-                                .filter(|n| *n <= MAX_HEADERS)
                                 .ok_or_else(|| error("macro-use candidate work limit"))?;
                             work.try_reserve(batch.len())
                                 .map_err(|_| error("macro-use candidate work allocation"))?;
@@ -536,9 +522,6 @@ impl TextualScopes {
         let mut names = BTreeSet::new();
         let mut bytes = 0usize;
         while let Some((key, before, depth)) = work.pop() {
-            if depth >= 256 {
-                return Err(error("local binding scope depth limit"));
-            }
             let scope = self.get(key)?;
             if let Some((_, input)) = scope.pending.range(..before).next() {
                 return Ok(LocalBindings::NeedInput(*input));
@@ -548,14 +531,12 @@ impl TextualScopes {
                     bytes = bytes
                         .checked_add(name.as_str().len())
                         .and_then(|n| n.checked_add(96))
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| error("local binding name metadata limit"))?;
                     names.insert(name.clone());
                 }
             }
             work.len()
                 .checked_add(scope.exports.range(..before).count())
-                .filter(|n| *n <= MAX_HEADERS)
                 .ok_or_else(|| error("local binding scope work limit"))?;
             work.try_reserve(scope.exports.range(..before).count())
                 .map_err(|_| error("local binding scope work allocation"))?;
@@ -575,7 +556,6 @@ impl TextualScopes {
             bindings
                 .len()
                 .checked_add(candidates.len())
-                .filter(|n| *n <= MAX_HEADERS)
                 .ok_or_else(|| error("local binding count limit"))?;
             bytes = candidates
                 .len()
@@ -586,7 +566,6 @@ impl TextualScopes {
                         .ok_or_else(|| error("local binding size overflow"))?,
                 )
                 .and_then(|n| bytes.checked_add(n))
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| error("local binding metadata limit"))?;
             bindings
                 .try_reserve_exact(candidates.len())
@@ -635,7 +614,6 @@ impl TextualScopes {
                     candidates
                         .len()
                         .checked_add(local.len())
-                        .filter(|n| *n <= MAX_HEADERS)
                         .ok_or_else(|| error("macro candidate limit exceeded"))?;
                     candidates
                         .try_reserve(local.len())

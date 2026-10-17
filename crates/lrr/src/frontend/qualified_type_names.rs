@@ -24,7 +24,6 @@ use crate::{
     syntax::{imports::ImportSegment, token_wire::Key},
 };
 use std::sync::Arc;
-const LIMIT: usize = 32 * 1024 * 1024;
 macro_rules! polled {
     ($value:expr) => {
         match $value {
@@ -109,7 +108,6 @@ impl QualifiedTypeObservation {
                     .map_or(Ok(0), |answer| answer.metadata_bytes())?,
             )
             .and_then(|n| n.checked_add(self.module.as_ref().map_or(0, |key| key.heap_bytes())))
-            .filter(|n| *n <= LIMIT)
             .ok_or_else(crate::runtime::arena::resource)?;
         self.fingerprint = StableEncode::fingerprint(&self);
         Ok(self)
@@ -194,8 +192,13 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
     else {
         return proof.pending(QualifiedTypeDemand::SourceOccurrence);
     };
-    if occurrence.shape() != BodyTypeShape::Named
-        || matches!(
+    // A generic application's owner (`m::W<u8>`) is selected like any
+    // qualified Type; its written arguments are separate occurrences, and only
+    // the generic-base kernel reaches this query for that shape.
+    if !matches!(
+        occurrence.shape(),
+        BodyTypeShape::Named | BodyTypeShape::NeedGenericArguments
+    ) || matches!(
             occurrence.origin(),
             BodyTypeOrigin::NeedGeneratedBoundary | BodyTypeOrigin::NeedRetainedOccurrence
         )
@@ -230,12 +233,8 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
         path_bytes = checked!(
             path_bytes
                 .checked_add(identifier.name().len())
-                .filter(|n| *n <= 1024 * 1024)
                 .ok_or_else(crate::runtime::arena::resource)
         );
-        if parts.len() >= 256 {
-            return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-        }
         let raw = checked!(
             plan.context()
                 .source()
@@ -317,9 +316,6 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
         occurrence.absolute(),
         environment.names()
     ));
-    if reads.metadata_bytes() > LIMIT {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     proof.lookup = Some(lookup);
     let selected = match proof.lookup.as_ref() {
         Some(NameLookup::Defined(selected)) => Some(selected.clone()),

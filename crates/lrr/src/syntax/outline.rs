@@ -129,25 +129,80 @@ impl StableEncode for HeaderRecipe {
         e.record(&self.visibility);
     }
 }
+/// Header tokens without doc comments and `#[doc ...]`/`#![doc ...]` attributes.
+fn undocumented(tokens: &[TokenRecipe]) -> impl Iterator<Item = &TokenRecipe> {
+    let mut skip = vec![false; tokens.len()];
+    let mut index = 0;
+    while index < tokens.len() {
+        let text = tokens[index].text.as_str();
+        if ["///", "//!", "/**", "/*!"]
+            .iter()
+            .any(|prefix| text.starts_with(prefix))
+        {
+            skip[index] = true;
+            index += 1;
+            continue;
+        }
+        if text == "#" {
+            let open = if tokens.get(index + 1).is_some_and(|t| t.text == "!") {
+                index + 2
+            } else {
+                index + 1
+            };
+            if tokens.get(open).is_some_and(|t| t.text == "[")
+                && tokens.get(open + 1).is_some_and(|t| t.text == "doc")
+            {
+                let mut depth = 0usize;
+                let mut end = open;
+                while end < tokens.len() {
+                    match tokens[end].text.as_str() {
+                        "[" => depth += 1,
+                        "]" => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+                for flag in &mut skip[index..=end.min(tokens.len() - 1)] {
+                    *flag = true;
+                }
+                index = end + 1;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    tokens
+        .iter()
+        .zip(skip)
+        .filter_map(|(token, skip)| (!skip).then_some(token))
+}
 impl HeaderRecipe {
     /// Semantic equality across an explicitly admitted source-coordinate
     /// transformation. Attribute source locations remain separate attachments;
     /// ordinary equality still checks them for exact current-source consumers.
+    /// Documentation is inert: a doc comment and the `#[doc = "..."]`
+    /// attribute it denotes (rustc's normalization, which an attached syntax
+    /// tree performs) are the same declaration header.
     pub(crate) fn same_semantics(&self, other: &Self) -> bool {
-        self.profile == other.profile
-            && self.tokens == other.tokens
-            && self.context == other.context
-            && self.visibility == other.visibility
-            && self.attributes.len() == other.attributes.len()
-            && self
+        fn attributes(header: &HeaderRecipe) -> impl Iterator<Item = &AttributeRecipe> {
+            header
                 .attributes
                 .iter()
-                .zip(&other.attributes)
-                .all(|(left, right)| {
-                    left.name == right.name
-                        && left.class == right.class
-                        && left.tokens == right.tokens
-                })
+                .filter(|attribute| attribute.name != "doc")
+        }
+        self.profile == other.profile
+            && undocumented(&self.tokens).eq(undocumented(&other.tokens))
+            && self.context == other.context
+            && self.visibility == other.visibility
+            && attributes(self).count() == attributes(other).count()
+            && attributes(self).zip(attributes(other)).all(|(left, right)| {
+                left.name == right.name && left.class == right.class && left.tokens == right.tokens
+            })
     }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
@@ -224,9 +279,42 @@ pub struct ItemOutline {
     pub scope: ScopeKey,
     pub header: HeaderRecipe,
     pub constructor_fields: Vec<Visibility>,
+    /// Enum items only: the cfg-enabled variants in declaration order. Rustc
+    /// resolves an enum like a module whose members are its variants (Type
+    /// namespace always, Value namespace for unit/tuple variants).
+    #[serde(default)]
+    pub variants: Vec<VariantOutline>,
     pub body: Option<BodyHandle>,
     pub declaration_span: SourceRange,
     pub header_span: SourceRange,
+}
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub enum VariantOutlineShape {
+    Unit,
+    Tuple,
+    Record,
+}
+/// Declaration facts of one enum variant: its written name and constructor
+/// shape. Field types and discriminants stay in the demand-owned type schema.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct VariantOutline {
+    pub name: String,
+    pub shape: VariantOutlineShape,
+}
+impl VariantOutline {
+    /// Unit and tuple variants also bind a constructor in the Value namespace.
+    pub fn has_value_constructor(&self) -> bool {
+        self.shape != VariantOutlineShape::Record
+    }
+}
+/// Stable namespace identity of an enum variant. It is derived from the
+/// owning enum's definition identity and the variant's semantic name, so a
+/// variant selected through any path, import or glob names the same member.
+pub fn variant_identity(enumeration: Digest, semantic_name: &str) -> Digest {
+    let mut e = StableEncoder::new("lrr/v1/enum-variant-definition");
+    e.digest(enumeration);
+    e.string(semantic_name);
+    e.finish()
 }
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ScopeMembers {
@@ -355,7 +443,12 @@ impl ItemOutline {
             .try_fold(0usize, |n, v| {
                 n.checked_add(std::mem::size_of::<Visibility>())
                     .and_then(|n| n.checked_add(super::imports::visibility_bytes(v)))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
+            })
+            .and_then(|n| {
+                self.variants.iter().try_fold(n, |n, variant| {
+                    n.checked_add(std::mem::size_of::<VariantOutline>())
+                        .and_then(|n| n.checked_add(variant.name.capacity()))
+                })
             })
             .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "constructor metadata size limit"))
     }
@@ -369,6 +462,19 @@ impl StableEncode for Outline {
             e.record(&item.def_key);
             e.record(&item.header);
             e.sequence(&item.constructor_fields, |e, v| e.record(v));
+            // The header tokens already cover an enum's variant list; the
+            // captured members are encoded too so the namespace facts derived
+            // from them are explicit. Non-enum encodings are unchanged.
+            if !item.variants.is_empty() {
+                e.sequence(&item.variants, |e, variant| {
+                    e.string(&variant.name);
+                    e.u32(match variant.shape {
+                        VariantOutlineShape::Unit => 0,
+                        VariantOutlineShape::Tuple => 1,
+                        VariantOutlineShape::Record => 2,
+                    });
+                });
+            }
             e.option(&item.body, |e, b| e.record(b));
         });
         e.sequence(&self.extern_crates, |e, row| e.record(row));
@@ -460,6 +566,11 @@ impl Outline {
                             .iter()
                             .map(String::capacity)
                             .sum::<usize>()
+                        + i.variants.capacity() * std::mem::size_of::<VariantOutline>()
+                        + i.variants
+                            .iter()
+                            .map(|variant| variant.name.capacity())
+                            .sum::<usize>()
                 })
                 .sum::<usize>()
             + self
@@ -502,20 +613,58 @@ pub(crate) fn constructor_fields(
         bytes = bytes
             .checked_add(std::mem::size_of::<Visibility>())
             .and_then(|n| n.checked_add(super::imports::visibility_bytes(&vis)))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-SOURCE-LIMIT",
                     "constructor visibility metadata limit",
                 )
             })?;
-        if result.len() >= 1_000_000 {
-            return Err(fault("LRR-E-SOURCE-LIMIT", "constructor field count limit"));
-        }
         result
             .try_reserve(1)
             .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "constructor field allocation failed"))?;
         result.push(vis);
+    }
+    Ok(result)
+}
+/// The cfg-enabled variants of an enum item, in declaration order. Other items
+/// have none. Only names and constructor shapes are captured here.
+pub(crate) fn enum_variants(
+    item: &ast::Item,
+    cfg: &CfgSet,
+) -> Result<Vec<VariantOutline>, Diagnostic> {
+    let ast::Item::Enum(item) = item else {
+        return Ok(vec![]);
+    };
+    let Some(list) = item.variant_list() else {
+        return Ok(vec![]);
+    };
+    let mut result = Vec::new();
+    for variant in list.variants() {
+        let (enabled, _) = super::attributes::effective_metas(
+            variant.attrs().filter_map(|a| a.meta()).collect(),
+            cfg,
+        )?;
+        if !enabled {
+            continue;
+        }
+        let Some(name) = variant.name() else {
+            return Err(fault(
+                "LRR-E-PARSE-BLOCKS-ENTRY",
+                "enum variant lacks its declared name",
+            ));
+        };
+        let shape = match variant.field_list() {
+            None => VariantOutlineShape::Unit,
+            Some(ast::FieldList::TupleFieldList(_)) => VariantOutlineShape::Tuple,
+            Some(ast::FieldList::RecordFieldList(_)) => VariantOutlineShape::Record,
+        };
+        result
+            .try_reserve(1)
+            .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "enum variant allocation failed"))?;
+        result.push(VariantOutline {
+            name: name.text().to_string(),
+            shape,
+        });
     }
     Ok(result)
 }
@@ -577,8 +726,8 @@ pub(crate) fn attributes_from_meta(
             "derive" => AttributeClass::Derive,
             "repr" => AttributeClass::Representation,
             "path" if matches!(item, ast::Item::Module(_)) => AttributeClass::ModulePath,
-            "rustfmt::skip" => AttributeClass::ToolLint,
-            n if n.starts_with("clippy::") => AttributeClass::ToolLint,
+            n if is_tool_attribute(n) => AttributeClass::ToolLint,
+            n if is_builtin_inert_attribute(n) => AttributeClass::Harmless,
             _ => AttributeClass::TransformUnsupported,
         };
         result.push(AttributeRecipe {
@@ -589,6 +738,33 @@ pub(crate) fn attributes_from_meta(
         });
     }
     Ok((enabled, result))
+}
+
+/// Whether an item attribute can name a macro transformation; builtin inert
+/// and tool attributes never do, and the declaration scan records no
+/// producer for them.
+pub(crate) fn attribute_may_name_macro(attribute: &AttributeRecipe) -> bool {
+    !(is_tool_attribute(&attribute.name) || is_builtin_inert_attribute(&attribute.name))
+}
+/// rustc_resolve's predefined attribute tools (`PREDEFINED_TOOLS`); their
+/// attribute paths never name a macro transformation.
+pub(crate) fn is_tool_attribute(path: &str) -> bool {
+    ["clippy", "rustfmt", "diagnostic", "miri", "rust_analyzer"]
+        .iter()
+        .any(|tool| path.strip_prefix(tool).is_some_and(|rest| rest.starts_with("::")))
+}
+/// A single-segment builtin inert attribute (`stable`, `inline`, `allow`, ...)
+/// always names the builtin in rustc; a macro of the same name would be an
+/// ambiguity error. rustc also reserves every `rustc*` attribute name for the
+/// compiler (rustc_resolve/src/macros.rs). For programs rustc accepts these
+/// are therefore inert, never attribute macro calls.
+pub(crate) fn is_builtin_inert_attribute(name: &str) -> bool {
+    !name.contains("::")
+        && (name.starts_with("rustc")
+            || crate::expand::builtin_attributes::inert_descriptor(name)
+                .ok()
+                .flatten()
+                .is_some())
 }
 
 /// Pinned parser recovery can retain a malformed declaration as ERROR rather
@@ -604,9 +780,10 @@ fn retain_declaration_parse_boundary(
     for child in container.children() {
         work = work
             .checked_add(1)
-            .filter(|count| *count <= 100_000)
             .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "declaration recovery work limit"))?;
-        if child.kind() != ra_ap_syntax::SyntaxKind::ERROR {
+        if child.kind() != ra_ap_syntax::SyntaxKind::ERROR
+            || super::parse::is_final_method_modifier(&child)
+        {
             continue;
         }
         let error_range = range(child.text_range());
@@ -625,9 +802,7 @@ fn retain_declaration_parse_boundary(
             .blockers
             .len()
             .checked_add(1)
-            .filter(|count| *count <= 100_000)
             .and_then(|count| count.checked_mul(std::mem::size_of::<ScopeBlocker>()))
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "declaration recovery metadata limit"))?;
         members.blockers.try_reserve(1).map_err(|_| {
             fault(
@@ -665,6 +840,92 @@ impl ParsedFile {
             )?,
             owner: None,
         };
+        self.outline_in_root(
+            initial,
+            Vec::new(),
+            cfg,
+            self.parsed.tree().syntax().clone(),
+        )
+    }
+    /// Pure header projection of an admitted associated fragment. The caller
+    /// must authenticate this actual parent row and the issued producer chain;
+    /// this helper grants no publication, currentness or member selection.
+    pub(crate) fn outline_associated_fragment(
+        &self,
+        parent: &ItemOutline,
+        cfg: &CfgSet,
+    ) -> Result<Outline, Diagnostic> {
+        use crate::expand::identity::GrammarSlot;
+        let (grammar, owner) = match parent.def_key.item_kind {
+            ItemKind::Trait => (GrammarSlot::TraitItems, parent.def_key.fingerprint()),
+            ItemKind::Impl => (
+                GrammarSlot::ImplItems,
+                parent.def_key.enclosing_impl.ok_or_else(|| {
+                    fault("LRR-E-SOURCE-PARSE", "associated impl identity is absent")
+                })?,
+            ),
+            _ => {
+                return Err(fault(
+                    "LRR-E-SOURCE-PARSE",
+                    "associated parent is not a trait or impl",
+                ));
+            }
+        };
+        if self.generated_origin.is_none() || self.declaration_grammar != Some(grammar) {
+            return Err(fault(
+                "LRR-E-SOURCE-PARSE",
+                "associated output grammar/source differs",
+            ));
+        }
+        // Parent context is copied into each immediate header by the ordinary
+        // kernel. Bound that real retained storage before cloning any context.
+        // GeneratedDeclarations preserves the admitted MACRO_ITEMS node inside
+        // its arena SOURCE_FILE. Enter that actual node; never reparse or
+        // substitute a synthetic associated-item list around its text.
+        let tree = self.parsed.tree();
+        let mut roots = tree.syntax().children();
+        let root = roots
+            .next()
+            .filter(|root| root.kind() == ra_ap_syntax::SyntaxKind::MACRO_ITEMS)
+            .ok_or_else(|| fault("LRR-E-SOURCE-PARSE", "associated admitted root absent"))?;
+        if roots.next().is_some() || root.text_range() != tree.syntax().text_range() {
+            return Err(fault(
+                "LRR-E-SOURCE-PARSE",
+                "associated admitted arena root differs",
+            ));
+        }
+        let count = root
+            .children()
+            .filter(|node| ast::Item::can_cast(node.kind()))
+            .count();
+        let context_base = parent
+            .header
+            .tokens
+            .capacity()
+            .checked_mul(std::mem::size_of::<TokenRecipe>())
+            .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "associated header context limit"))?;
+        let context_bytes = parent
+            .header
+            .tokens
+            .iter()
+            .try_fold(context_base, |bytes, token| {
+                bytes.checked_add(token.text.capacity())
+            })
+            .and_then(|n| n.checked_mul(count.checked_add(1)?))
+            .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "associated header context limit"))?;
+        let _ = context_bytes;
+        let mut scope = parent.scope.clone();
+        scope.owner = Some(owner);
+        self.outline_in_root(scope, parent.header.tokens.clone(), cfg, root)
+    }
+    fn outline_in_root(
+        &self,
+        initial: ScopeKey,
+        initial_context: Vec<TokenRecipe>,
+        cfg: &CfgSet,
+        admitted_root: SyntaxNode,
+    ) -> Result<Outline, Diagnostic> {
+        let crate_key = initial.crate_key;
         let mut outline = Outline {
             cfg: cfg.fingerprint(),
             item_invocations: Vec::new(),
@@ -681,22 +942,20 @@ impl ParsedFile {
         if !super::attributes::source_root_enabled(&root, cfg)? {
             return Ok(outline);
         }
-        retain_declaration_parse_boundary(root.syntax(), &initial, self.content, &mut outline)?;
-        let mut stack: Vec<_> = root
-            .syntax()
+        retain_declaration_parse_boundary(&admitted_root, &initial, self.content, &mut outline)?;
+        let mut stack: Vec<_> = admitted_root
             .children()
             .filter_map(ast::Item::cast)
-            .map(|i| (i, initial.clone(), Vec::<TokenRecipe>::new()))
+            .map(|i| (i, initial.clone(), initial_context.clone()))
             .collect();
         stack.reverse();
         let mut import_budget = super::imports::ImportBudget::default();
         let mut ordinals: BTreeMap<(ScopeKey, Namespace, String), u32> = BTreeMap::new();
-        let mut count = 0;
+        // Rust permits several inherent impls with identical headers in one
+        // module (core's two `impl Duration` blocks). The first keeps its header
+        // identity; each later repetition is distinguished by its occurrence.
+        let mut impl_headers: BTreeMap<(ScopeKey, Digest), u32> = BTreeMap::new();
         while let Some((item, scope, context)) = stack.pop() {
-            count += 1;
-            if count > 100_000 {
-                return Err(fault("LRR-E-SOURCE-LIMIT", "outline item limit"));
-            }
             let (enabled, attributes) = attributes(&item, cfg)?;
             if !enabled {
                 continue;
@@ -820,10 +1079,13 @@ impl ParsedFile {
                     )
                 }
                 ast::Item::MacroDef(i) => {
-                    if self.generated_origin.is_some() || scope.owner.is_some() {
+                    // A generated or assembled source may contain original
+                    // macro 2.0 items; the generated-dialect refusal belongs to
+                    // definition capture when one is actually selected.
+                    if scope.owner.is_some() {
                         return Err(fault(
                             "LRR-E-MACRO2-SOURCE",
-                            "non-original-module macro2 declaration dialect admission is not established",
+                            "macro2 declaration inside an impl/trait owner is not admitted",
                         ));
                     }
                     container = i
@@ -970,7 +1232,22 @@ impl ParsedFile {
                 visibility: visibility(node),
             };
             let impl_identity = if kind == ItemKind::Impl {
-                Some(header.fingerprint())
+                let header_identity = header.fingerprint();
+                let occurrence = impl_headers
+                    .entry((scope.clone(), header_identity))
+                    .or_default();
+                let repeated = *occurrence;
+                *occurrence = occurrence.checked_add(1).ok_or_else(|| {
+                    fault("LRR-E-SOURCE-LIMIT", "repeated impl header count overflow")
+                })?;
+                Some(if repeated == 0 {
+                    header_identity
+                } else {
+                    let mut identity = StableEncoder::new("lrr/v2/repeated-impl-identity");
+                    identity.digest(header_identity);
+                    identity.u32(repeated);
+                    identity.finish()
+                })
             } else {
                 scope.owner
             };
@@ -1027,9 +1304,6 @@ impl ParsedFile {
                     .ok_or_else(|| fault("LRR-E-PARSE-BLOCKS-ENTRY", "extern crate name absent"))?
                     .text()
                     .to_string();
-                if outline.extern_crates.len() >= 100_000 {
-                    return Err(fault("LRR-E-SOURCE-LIMIT", "extern crate count exceeded"));
-                }
                 outline
                     .extern_crates
                     .try_reserve(1)
@@ -1166,7 +1440,9 @@ impl ParsedFile {
                     ItemKind::Impl | ItemKind::Trait => {
                         let mut s = scope.clone();
                         s.owner = Some(if kind == ItemKind::Impl {
-                            header.fingerprint()
+                            impl_identity.ok_or_else(|| {
+                                fault("LRR-E-SOURCE-PARSE", "impl identity is absent")
+                            })?
                         } else {
                             definition
                         });
@@ -1242,6 +1518,7 @@ impl ParsedFile {
                 scope,
                 header,
                 constructor_fields: constructor_fields(&item, cfg)?,
+                variants: enum_variants(&item, cfg)?,
                 body,
                 declaration_span: span,
                 header_span,

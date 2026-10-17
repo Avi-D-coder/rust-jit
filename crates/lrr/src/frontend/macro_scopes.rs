@@ -45,9 +45,6 @@ fn error(message: &str) -> Diagnostic {
 impl MacroDeclarations {
     /// Encode retained declaration facts without recomputing hygiene normal forms.
     pub(crate) fn semantic_fingerprint(&self) -> Result<Digest, Diagnostic> {
-        if self.metadata_bytes()? > 64 * 1024 * 1024 {
-            return Err(error("macro declaration encoding budget"));
-        }
         let mut e = crate::core::digest::StableEncoder::new("lrr/v1/macro-declaration-environment");
         e.u64(self.declarations.len() as u64);
         for (identity, row) in &self.declarations {
@@ -138,9 +135,6 @@ impl MacroDeclarations {
                 Err(error("conflicting macro declaration metadata"))
             };
         }
-        if self.declarations.len() >= 1_000_000 {
-            return Err(error("macro declaration table limit exceeded"));
-        }
         Ok(())
     }
     pub(crate) fn copy_selected(
@@ -153,7 +147,6 @@ impl MacroDeclarations {
         self.declarations
             .len()
             .checked_add(identities.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| error("imported declaration count limit"))?;
         for identity in identities {
             let row = other
@@ -219,9 +212,6 @@ impl MacroDeclarations {
         ancestry: &ExpansionAncestry,
         require_frontiers: bool,
     ) -> Result<HygienicLookup, Diagnostic> {
-        if outers.len() > 256 {
-            return Err(error("macro source chain depth exceeded"));
-        }
         let comparison = facts.name_item(reference.context)?;
         ancestry.descendant_of(reference.origin, None)?;
         let candidates = |scopes: &TextualScopes, scope, before| {
@@ -246,7 +236,6 @@ impl MacroDeclarations {
                     definitions
                         .len()
                         .checked_add(extra.len())
-                        .filter(|n| *n <= 1_000_000)
                         .ok_or_else(|| error("joined macro candidate limit exceeded"))?;
                     definitions
                         .try_reserve(extra.len())

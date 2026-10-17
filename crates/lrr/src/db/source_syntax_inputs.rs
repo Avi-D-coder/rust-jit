@@ -14,13 +14,11 @@ use crate::{
     syntax::parse::ParsedFile,
 };
 const ARC: usize = 2 * std::mem::size_of::<usize>();
-const LIMIT: usize = 128 * 1024 * 1024;
 fn invalid(message: &str) -> Diagnostic {
     fault("LRR-E-EXPANSION-INPUT", message)
 }
 fn size(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_add(b)
-        .filter(|n| *n <= LIMIT)
         .ok_or_else(crate::runtime::arena::resource)
 }
 pub struct CompletedSourceSyntaxInput {
@@ -319,17 +317,7 @@ impl Database {
             Ok(n) => n,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        let usage = match self.cache_usage() {
-            Ok(usage) => usage,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        if usage
-            .memo_bytes
-            .checked_add(row_bytes)
-            .is_none_or(|bytes| bytes > self.run_budgets.unwrap_or_default().query_bytes)
-        {
-            return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-        }
+        let _ = row_bytes; // E-R5-006: no byte accounting.
         if let Err(error) = self.source_plan_pins.register_syntax_input(&input) {
             return QueryPoll::Ready(Err(error));
         }

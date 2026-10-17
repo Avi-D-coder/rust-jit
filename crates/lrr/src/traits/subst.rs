@@ -5,9 +5,9 @@ use super::term::{
 };
 use crate::core::diagnostic::Diagnostic;
 use std::collections::BTreeMap;
+// Binder/type nesting guard (type recursion; rustc bounds type recursion by
+// `recursion_limit`, compiler/rustc_interface/src/limits.rs).
 const MAX_DEPTH: u32 = 256;
-const MAX_NODES: usize = 100_000;
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-GENERIC-BINDING", message.into())
 }
@@ -26,9 +26,6 @@ impl Budget {
     fn charge(&mut self, nodes: usize, bytes: usize) -> Result<(), Diagnostic> {
         self.nodes = self.nodes.checked_add(nodes).ok_or_else(limit)?;
         self.bytes = self.bytes.checked_add(bytes).ok_or_else(limit)?;
-        if self.nodes > MAX_NODES || self.bytes > MAX_BYTES {
-            return Err(limit());
-        }
         Ok(())
     }
     fn vector<T>(&mut self, count: usize) -> Result<Vec<T>, Diagnostic> {
@@ -79,9 +76,6 @@ impl Substitution {
             let (n, b) = term.measure().ok_or_else(limit)?;
             nodes = nodes.checked_add(n).ok_or_else(limit)?;
             bytes = bytes.checked_add(b).ok_or_else(limit)?;
-        }
-        if nodes > MAX_NODES || bytes > MAX_BYTES {
-            return Err(limit());
         }
         self.values.insert(entry, value);
         self.nodes = nodes;
@@ -610,7 +604,7 @@ pub fn instantiate_binder(
     transaction: crate::core::digest::Digest,
     universe: u32,
 ) -> Result<TyTerm, Diagnostic> {
-    if universe == 0 || universe > MAX_DEPTH || binder.variables.len() > MAX_NODES {
+    if universe == 0 || universe > MAX_DEPTH {
         return Err(limit());
     }
     validate_binder_type(binder)?;

@@ -17,7 +17,7 @@ use crate::{
         macro_origins::ExpansionAncestry,
         macro_scopes::MacroDeclarations,
         names::{NameLookup, NameNamespaces},
-        scalar_pattern_binding::occurrences::PreparedPatternBindingOccurrences,
+        pattern_binding_occurrences::PreparedPatternBindingOccurrences,
         source_body_context::PreparedBodyContext,
         source_macros::{
             EnteredMacroIndex, OwnedRuntimeOuter, PublishedMacroIndex, SourceMacroIndex,
@@ -80,6 +80,7 @@ pub(crate) struct LocalTypePrefix {
     module_selector: Option<LocalTypeModuleSelector>,
     fingerprint: Digest,
 }
+#[derive(Clone)]
 enum DeclarationTypeSite {
     Return {
         definition: Digest,
@@ -95,6 +96,7 @@ enum DeclarationTypeSite {
         range: crate::syntax::spans::SourceRange,
     },
 }
+#[derive(Clone)]
 pub(crate) struct LocalTypeUse {
     name: String,
     range: crate::syntax::spans::SourceRange,
@@ -451,7 +453,7 @@ impl PreparedSourceLocalPlan {
         let type_names = LocalTypeNames::prepare(&context, root, &hygiene)?;
         let field_types = field_types::DeclarationFieldTypes::prepare(&context, root, &hygiene)?;
         let pattern_occurrences =
-            PreparedPatternBindingOccurrences::capture(Arc::clone(&context), 32 * 1024 * 1024)?;
+            PreparedPatternBindingOccurrences::capture(Arc::clone(&context), usize::MAX)?;
         let module_bytes = lexical_module.extra_bytes();
         let mut identity = StableEncoder::new("lrr/v5/owned-local-source-environment");
         identity.digest(context.source().identity());
@@ -503,13 +505,11 @@ impl PreparedSourceLocalPlan {
                 )
             })
             .and_then(|n| n.checked_add(module_bytes))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         // Bound the newly retained allocation independently of shared roots.
         tables
             .metadata_bytes()?
             .checked_add(exclusive_bytes)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         Ok(Self {
             entered,
@@ -567,6 +567,29 @@ impl PreparedSourceLocalPlan {
         db: &mut Database,
         node: crate::ir::pc::NodeId,
     ) -> QueryPoll<LocalTypePrefix> {
+        self.type_prefix_with(db, node, false)
+    }
+    /// The declaration a generic-applied written Type (`Opt<i32>`) names,
+    /// selected by the same prefix/declaration kernel as any Type occurrence;
+    /// its arguments are separate indexed occurrences of their own.
+    pub(crate) fn generic_base_body_type(
+        self: &Arc<Self>,
+        db: &mut Database,
+        node: crate::ir::pc::NodeId,
+    ) -> QueryPoll<type_declarations::BodyTypeOutcome> {
+        let prefix = match self.type_prefix_with(db, node, true) {
+            QueryPoll::Ready(Ok(prefix)) => prefix,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        type_declarations::prepare(db, prefix)
+    }
+    fn type_prefix_with(
+        self: &Arc<Self>,
+        db: &mut Database,
+        node: crate::ir::pc::NodeId,
+        generic_base: bool,
+    ) -> QueryPoll<LocalTypePrefix> {
         match self.require_current(db) {
             QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -588,7 +611,8 @@ impl PreparedSourceLocalPlan {
             if matches!(
                 occurrence.origin(),
                 BodyTypeOrigin::NeedGeneratedBoundary | BodyTypeOrigin::NeedRetainedOccurrence
-            ) || occurrence.shape() != BodyTypeShape::Named
+            ) || (occurrence.shape() != BodyTypeShape::Named
+                && !(generic_base && occurrence.shape() == BodyTypeShape::NeedGenericArguments))
             {
                 return Ok(LocalTypePrefixSelection::NeedSource(
                     occurrence.next_authority_demand(),
@@ -657,7 +681,6 @@ impl PreparedSourceLocalPlan {
             proof
                 .exclusive_metadata_bytes()?
                 .checked_add(self.exclusive_bytes)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(crate::runtime::arena::resource)?;
             proof.fingerprint = StableEncode::fingerprint(&proof);
             Ok(proof)
@@ -780,7 +803,8 @@ fn expansion_definitions(
                             | MacroIdentity::Builtin { definition } => {
                                 entered.retained_definition(definition)?
                             }
-                            MacroIdentity::Procedural { .. } => None,
+                            MacroIdentity::Procedural { .. }
+                            | MacroIdentity::BuiltinDerive { .. } => None,
                         };
                         if let Some(definition) = selected {
                             if definition.definition_edition != record.key().definition_edition {
@@ -814,7 +838,6 @@ fn expansion_definitions(
     known
         .len()
         .checked_add(missing.len())
-        .filter(|n| *n <= 1_000_000)
         .ok_or_else(crate::runtime::arena::resource)?;
     Ok((known.into_iter().collect(), missing.into_iter().collect()))
 }
@@ -838,6 +861,21 @@ impl LocalTypePrefix {
     pub(crate) fn prepare_named(
         self,
         db: &mut Database,
+    ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {
+        self.prepare_named_with(db, false)
+    }
+    /// The base of a written generic application (`Option<u8>`): a selected
+    /// generic declaration names its nominal, the written arguments applying.
+    pub(crate) fn prepare_named_base(
+        self,
+        db: &mut Database,
+    ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {
+        self.prepare_named_with(db, true)
+    }
+    fn prepare_named_with(
+        self,
+        db: &mut Database,
+        generic_base: bool,
     ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {
         use crate::frontend::{
             current_module_names::ModuleNameCompletion,
@@ -875,6 +913,11 @@ impl LocalTypePrefix {
                         SignatureName::Primitive(primitive) => QueryPoll::Ready(
                             SourceType::selected_primitive(primitive).map(NamedTypePreparation::Ready),
                         ),
+                        // The builtin unsized `str`, classified by the same
+                        // completed lookup as every builtin Type name.
+                        SignatureName::Str => QueryPoll::Ready(
+                            SourceType::selected_str().map(NamedTypePreparation::Ready),
+                        ),
                         other => QueryPoll::Ready(Ok(NamedTypePreparation::Name(other))),
                     };
                 }
@@ -884,6 +927,11 @@ impl LocalTypePrefix {
             type_declarations::BodyTypeOutcome::Ready(proof) => {
                 QueryPoll::Ready(Ok(NamedTypePreparation::Ready(proof.source_type().clone())))
             }
+            type_declarations::BodyTypeOutcome::Pending(
+                type_declarations::BodyTypeDemand::GenericArguments(identity),
+            ) if generic_base => QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                crate::frontend::type_aliases::AliasTarget::Nominal(identity),
+            ))),
             type_declarations::BodyTypeOutcome::Pending(demand) => QueryPoll::Ready(Err(
                 Diagnostic::new("LRR-E-TYPE-CONTEXT", format!("Type requires actual source authority: {demand:?}")),
             )),

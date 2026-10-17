@@ -8,9 +8,6 @@ use unicode_normalization::UnicodeNormalization;
 // Identifiers carry canonical semantic spelling, while their span continues
 // to address the original source bytes. Literals never use this conversion.
 fn canonical_identifier(text: &str) -> Result<String, AdapterError> {
-    if text.len() > MAX_TEXT {
-        return Err(limit("identifier text limit"));
-    }
     let mut result = String::new();
     result
         .try_reserve(text.len())
@@ -19,7 +16,6 @@ fn canonical_identifier(text: &str) -> Result<String, AdapterError> {
         result
             .len()
             .checked_add(scalar.len_utf8())
-            .filter(|size| *size <= MAX_TEXT)
             .ok_or_else(|| limit("normalized identifier text limit"))?;
         result
             .try_reserve(scalar.len_utf8())
@@ -72,9 +68,6 @@ pub(crate) fn group(
     *count = count
         .checked_add(1)
         .ok_or_else(|| error("upstream token count overflow"))?;
-    if depth > MAX_DEPTH || *count > MAX_ITEMS {
-        return Err(limit("upstream token limit"));
-    }
     let open = resolve(d.open)?;
     let close = resolve(d.close)?;
     let mut tokens = Vec::new();
@@ -85,9 +78,6 @@ pub(crate) fn group(
                 *count = count
                     .checked_add(1)
                     .ok_or_else(|| error("upstream token count overflow"))?;
-                if *count > MAX_ITEMS {
-                    return Err(limit("upstream token limit"));
-                }
                 let key = resolve(*leaf.span())?;
                 match leaf {
                     tt::Leaf::Ident(i) => TokenTree::Ident {
@@ -127,9 +117,6 @@ pub(super) fn parse(
     retained: &[ContextRecord],
     file_slot: u32,
 ) -> Result<TokenForest, AdapterError> {
-    if text.len() > MAX_TEXT {
-        return Err(limit("source token byte limit"));
-    }
     if retained.is_empty() && (context.parent.is_some() || context.expansion.is_some()) {
         return Err(error("source tokens require a root context"));
     }

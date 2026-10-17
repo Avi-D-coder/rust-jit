@@ -50,7 +50,6 @@ impl ValueBindingPrelude {
             .metadata_bytes()?
             .checked_sub(std::mem::size_of::<Self>())
             .and_then(|heap| heap.checked_add(std::mem::size_of::<RetainedValueBindingPrelude>()))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("retained Value prelude metadata limit"))?;
         let mut source_identity = StableEncoder::new("lrr/v1/retained-value-prelude-source");
         source_identity.string(self.source.path.as_str());

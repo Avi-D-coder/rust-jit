@@ -1,0 +1,69 @@
+{
+  "schema": "lrr/source-review/item-boundary-controls/v1",
+  "status": "source-only controls, uncompiled/unexecuted; target future post-V8 seal-guard source",
+  "leaf": {
+    "path": "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+    "sha256": "4b0056db1c09f4ed603dfb356d3a7b96911b86edeb75b57bfe95696dfe1911a5",
+    "bytes": 9327
+  },
+  "production_read_only": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "17b1ef6d68a7c9fcf71d2c8eedef15cb11702eef2d4dd1e3cb41dc4035348dc6"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundaries.rs",
+      "sha256": "09379f72a5e17b3f755082b0db3641cdadb5e996b938a035ff2ebd7076e3a58c"
+    }
+  ],
+  "fixture": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/resolve/type-param-local-var-shadowing.rs",
+    "sha256": "c90c918b7d21b237f7137bd8a744022bf5b63c5fd61253b30fd7d893ad259d23",
+    "bytes": 398,
+    "unchanged": true
+  },
+  "registration": "Root-owned two-line child module registration in source_discovery/original_inert_tests.rs; patch supplied separately, no parent file edited.",
+  "seal_analysis": [
+    "Admission prepares Pending with all actual typed update.jobs before work.complete enqueues them; then records/owners/pending installed before later poll. No genuine source execution can interleave during this admission.",
+    "complete_ready_item_boundaries runs before every work.poll, including iteration immediately following final actual job completion. Thus normal incomplete prerequisites imply live workjobs; complete prerequisites are consumed before worklist sealing. No ordinary all-complete-but-pending bypass found.",
+    "Malformed internal wrong-kind/nonexistent prerequisite is not necessarily a blocked job, so helper false readiness alone cannot exclude worklist sealing. Root successor adds explicit pending-map nonempty refusal in DiscoveryStep::Sealed, sets self.failed, and returns before self.seal.",
+    "Public poll does not generally poison arbitrary poll_inner errors, but this actual Sealed refusal explicitly sets self.failed; next poll_inner sees it before cached self.seal or work dispatch. Frozen V8 has no such guard; these controls must not be claimed validated on V8."
+  ],
+  "controls": [
+    {
+      "name": "actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+      "oracle": "Actual stock emitter yields pending receipt with genuine impl/declaration jobs unfinished, actual provider producer present, no boundary/seal. Ordinary discovery completes jobs; same_record boundary installed, producer absent, expansion count stable, repeated finalizer false. Runs four official editions; no main/body execution."
+    },
+    {
+      "name": "actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+      "oracle": "Actual receipt fails exact source/cfg/epoch diagnostic on changed epoch, independent same-selection publication, changed source and changed cfg. Pending preserved, no completed boundary/seal, next poll same error."
+    },
+    {
+      "name": "wrong_typed_prerequisite_cannot_hide_pending_boundary_behind_a_worklist_seal",
+      "oracle": "Use actual unfinished JobTicket identity with deliberately wrong typed kind, reconstruct receipt from actual record/call/source, never fake-complete work. Real jobs execute; guard must return exact pending-boundary seal error and poison state. Actual original job completed, wrong typed job not complete."
+    }
+  ],
+  "api_review": [
+    "Includes exact same pinned AST inner-AnyAttr/doc adapter as stock runtime harness; only crate attributes relocate, every remaining original byte retained. No runtime wrapper/body synthesis.",
+    "Existing original_inert_tests prepare/discovery/seal helpers are reused by child registration, with actual PreparedSourceInputs and actual request.expand/admit. No second source capture framework.",
+    "Use macro_index().producer_kind rather than completed_published_index readiness: from_completed_index only checks source/root context and is not a producer-completion oracle.",
+    "Diagnostic error code is actual source_discovery::fault LRR-E-CATALOG-INCOMPLETE; guard/source error messages inspected exactly. Use err().expect on SourceDiscoveryStep result, avoiding assumed Debug bound.",
+    "Seal::key returns owned SealKey, job identity/kind/order clone comes from actual work.poll ticket. No skipped job completion or arbitrary source-body replacement."
+  ],
+  "all_eight": {
+    "1": "No evaluator; tests do not enter main. MA001/7/8 runtime debts held.",
+    "2": "Full actual emitted stock output not literal/break execution; MA004/5 held.",
+    "3": "No method/numeric/macro-name behavior; MA003/6 held.",
+    "4": "Actual generated record/source/cfg/scope, legitimate unsupported wrapper not bypassed.",
+    "5": "Cold syntax discovery only, no body/type/pattern execution; MA002 held.",
+    "6": "Real pending receipt and work transitions, no repeated expression plan or parser reconstruction in execution.",
+    "7": "Stored typed work dependencies, no namespace census. Root cold route refresh costs remain explicit.",
+    "8": "Actual source shares and record Arc, no BodyIndex deep copies or wholefile per-node search."
+  },
+  "gaps": [
+    "No Cargo/compiler/tests by worker; tests may expose actual missing infrastructure and are not passing evidence.",
+    "Actual V8 direct stock validation has priority; future controls run once root freezes appropriate successor.",
+    "Wrong-prerequisite test requires post-V8 defensive guard.",
+    "No wrapper, full official fixture, runtime main/cleanup, global catalog/facade or trait applicability acceptance."
+  ]
+}

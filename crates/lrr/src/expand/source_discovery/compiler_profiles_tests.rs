@@ -140,12 +140,20 @@ fn unchanged_cross_crate_2021_root_2018_aux_get_their_actual_owning_facets() {
             c.runtime_prelude_unit(false),
             crate::facade::unit(profile, "core")
         );
-        assert!(
-            c.attribute_catalog()
-                .unwrap()
-                .definitions()
-                .all(|d| d.definition_edition == profile.edition)
-        );
+        // A builtin attribute macro the library defines is the library's own
+        // definition, owned by the library crates' edition (2024); any other
+        // compiler facet keeps the consuming profile's edition.
+        let attributes = c.attribute_catalog().unwrap();
+        let library = c.library().unwrap();
+        for d in attributes.definitions() {
+            let name = attributes.select(d).unwrap().unwrap().name().to_owned();
+            let expected = if library.resolve("core", &name).as_ref() == Some(d) {
+                2024
+            } else {
+                profile.edition
+            };
+            assert_eq!(d.definition_edition, expected, "{name}");
+        }
     }
     assert_ne!(
         ps[0]
@@ -164,7 +172,7 @@ fn unchanged_cross_crate_2021_root_2018_aux_get_their_actual_owning_facets() {
     // No original custom_matches! expansion or whole main is asserted.
 }
 #[test]
-fn unchanged_array_original_mixed_profiles_publish_actual_prefix_proofs() {
+fn unchanged_array_original_mixed_profiles_seal_builtin_inert_prefix_without_proofs() {
     for (root_edition, aux_edition) in [(2015, 2024), (2024, 2015), (2018, 2021), (2021, 2018)] {
         let root = Digest([13; 32]);
         let aux = Digest([14; 32]);
@@ -202,22 +210,9 @@ fn unchanged_array_original_mixed_profiles_publish_actual_prefix_proofs() {
                 else {
                     panic!()
                 };
-                assert_eq!(input.nested_inert_proofs.len(), 2);
-                assert!(
-                    input
-                        .nested_inert_proofs
-                        .iter()
-                        .all(|p| p.attribute_facet().is_some())
-                );
-                for view in &views {
-                    assert!(
-                        input
-                            .nested_inert_proofs
-                            .iter()
-                            .any(|p| p.scan().parse() == &view.selection().outline.parse
-                                && p.scan().path() == &view.selection().path)
-                    );
-                }
+                // `#![allow(dead_code)]` is builtin inert in both owners: no
+                // producer and no attribute proof.
+                assert!(input.nested_inert_proofs.is_empty());
                 assert!(input.records.is_empty());
             }
         }
@@ -469,7 +464,7 @@ fn mixed_owner_prefix_publication_refuses_a_new_epoch_without_source_advance() {
     )
     .unwrap();
     seal(&mut d);
-    assert_eq!(d.nested_inert_proofs.len(), 2);
+    assert!(d.nested_inert_proofs.is_empty());
     let revision = db.source_revision();
     db.begin_expansion_epoch(2).unwrap();
     assert_eq!(db.source_revision(), revision);

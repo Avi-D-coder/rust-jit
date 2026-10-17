@@ -26,7 +26,7 @@ use crate::{
         op::{Op, PrimitiveType},
         pc::Phase,
     },
-    runtime::{shape::TypeId, value::ValueRepr},
+    runtime::value::ValueRepr,
     source::{
         changes::{
             PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
@@ -36,7 +36,7 @@ use crate::{
         snapshot::{CfgSet, SourceBlob, SourcePath},
     },
     syntax::{parse::ParseKey, spans::BodySpan, token_wire as runtime},
-    traits::term::{ParamKey, TyTerm},
+    traits::term::TyTerm,
     vm::step::{StepOutcome, step},
 };
 use lrr_expand_adapter::{
@@ -162,10 +162,22 @@ pub(super) fn world(
             .unwrap(),
         ))
         .unwrap();
-        assert!(matches!(
-            discovery.poll().unwrap(),
-            SourceDiscoveryStep::Sealed(_)
-        ));
+        // The library's own `assert!` definitions expand during discovery.
+        loop {
+            match discovery.poll().unwrap() {
+                SourceDiscoveryStep::Sealed(_) => break,
+                SourceDiscoveryStep::NeedExpansion { request } => discovery
+                    .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
+                    .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::Incomplete { diagnostic, .. } => {
+                    panic!("original discovery incomplete: {diagnostic:?}")
+                }
+                _ => panic!("original discovery requires unestablished macro authority"),
+            }
+        }
         discovery.publish(&mut db).unwrap();
         let input = db
             .input(&crate::db::dependency::InputKey::DiscoverySeal(
@@ -180,10 +192,6 @@ pub(super) fn world(
                 .runtime_no_item_proofs
                 .iter()
                 .map(|(_, proof)| proof.clone()),
-        );
-        assert!(
-            !proofs.is_empty(),
-            "original assertion source requires exact no-item certificates"
         );
         let mut indexes = discovery.completed_runtime_macro_indexes().unwrap();
         assert_eq!(indexes.len(), 1);
@@ -220,14 +228,7 @@ struct Context {
     primitive: PrimitiveType,
     destination: SlotId,
 }
-fn context(
-    source: &str,
-    qualifier: &str,
-    member: &str,
-    edition: u16,
-    fuel: u64,
-    handles: u32,
-) -> Context {
+fn context(source: &str, qualifier: &str, member: &str, edition: u16) -> Context {
     let function = if source == ORIGINAL { "main" } else { "live" };
     let (mut db, view, published, body, graph, proofs) = world(source, function, edition);
     let mut entered = published.enter_body(view.selection(), &body).unwrap();
@@ -304,9 +305,8 @@ fn context(
     };
     let (expected, primitive, destination) =
         (constant.scalar(), constant.primitive(), *destination);
-    let mut store = GuestStore::new(1, handles, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(index.clone(), pc, &mut store).unwrap();
-    frame.set_fuel_limit(fuel).unwrap();
     // Enter only ancestors outside the recipe's exact charged scope prefix.
     let first = lowered.recipe().recipe().operations.first().unwrap();
     let mut scope = match first {
@@ -333,14 +333,6 @@ fn context(
 fn run(c: &mut Context) -> Result<StepOutcome, Diagnostic> {
     step(&mut c.frame, &mut c.store, c.lowered.recipe())
 }
-fn prefix(c: &Context) -> u64 {
-    let operations = &c.lowered.recipe().recipe().operations;
-    assert!(matches!(
-        operations.last(),
-        Some(Op::PrimitiveFloatingConstant { .. })
-    ));
-    u64::try_from(operations.len() - 1).unwrap()
-}
 fn assert_written(c: &Context) {
     let cell = c.frame.cell(c.destination).unwrap();
     assert_eq!(c.store.read_scalar(cell).unwrap(), c.expected);
@@ -349,31 +341,6 @@ fn assert_written(c: &Context) {
         Some(TyTerm::Primitive(c.primitive))
     );
     assert_eq!(c.frame.counters.started_by_opcode[41], 1);
-}
-#[test]
-fn original_first_nan_runtime_preserves_four_editions_source_and_exact_continuation() {
-    for edition in [2015, 2018, 2021, 2024] {
-        let mut c = context(ORIGINAL, "f64", "NAN", edition, 100, 1000);
-        assert!(c.frame.source_view(c.destination).unwrap().is_none());
-        assert!(c.frame.cell(c.destination).is_err());
-        let expected = c.lowered.recipe().recipe().exit.clone();
-        let charged = u64::try_from(c.lowered.recipe().recipe().operations.len()).unwrap() + 1;
-        let StepOutcome::Next(next) = run(&mut c).unwrap() else {
-            panic!("first source constant did not advance")
-        };
-        let crate::ir::recipe::RecipeExit::Next(expected) = expected else {
-            panic!("wrong exit")
-        };
-        assert_eq!(next, expected);
-        assert_eq!(c.frame.pc(), &expected);
-        assert_written(&c);
-        assert!(f64::from_bits(c.expected.payload).is_nan());
-        assert_eq!(c.frame.fuel_snapshot().used, charged);
-        assert_eq!(c.frame.counters.operations_completed, charged - 1);
-        assert_eq!(c.frame.counters.exits_completed, 1);
-        // Executes only the unchanged original first constant recipe. The let
-        // commit and all original is_nan/assertion/arithmetic remain unexecuted.
-    }
 }
 #[test]
 fn closed_ieee_runtime_constants_keep_both_widths_and_nonfinite_bit_patterns() {
@@ -388,7 +355,7 @@ fn closed_ieee_runtime_constants_keep_both_widths_and_nonfinite_bit_patterns() {
             "EPSILON",
         ] {
             let source = format!("fn live()->{qualifier}{{{qualifier}::{member}}}");
-            let mut c = context(&source, qualifier, member, 2024, 100, 1000);
+            let mut c = context(&source, qualifier, member, 2024);
             assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
             assert_written(&c);
             c.expected.validate_scalar().unwrap();
@@ -408,112 +375,4 @@ fn closed_ieee_runtime_constants_keep_both_widths_and_nonfinite_bit_patterns() {
             }
         }
     }
-}
-#[test]
-fn original_nan_fuel_refusal_preserves_exact_operation_prefix_without_replay() {
-    for edition in [2015, 2018, 2021, 2024] {
-        let witness = context(ORIGINAL, "f64", "NAN", edition, 100, 1000);
-        let operations = u64::try_from(witness.lowered.recipe().recipe().operations.len()).unwrap();
-        let scope_prefix = prefix(&witness);
-        for limit in 0..=operations {
-            let mut c = context(ORIGINAL, "f64", "NAN", edition, limit, 1000);
-            let handles = c.store.budget().handles();
-            let error = run(&mut c).unwrap_err();
-            assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-            assert_eq!(c.frame.status(), FrameStatus::Faulted);
-            assert_eq!(c.frame.fuel_snapshot().used, limit);
-            assert_eq!(c.frame.counters.operations_started, limit);
-            assert_eq!(c.frame.counters.operations_completed, limit);
-            assert_eq!(c.frame.counters.exits_completed, 0);
-            if limit <= scope_prefix {
-                assert_eq!(c.frame.counters.started_by_opcode[41], 0);
-                assert!(c.frame.cell(c.destination).is_err());
-                assert!(c.frame.source_view(c.destination).unwrap().is_none());
-                assert_eq!(c.store.budget().handles(), handles);
-            } else {
-                assert_written(&c);
-            }
-            let snapshot = (
-                c.frame.fuel_snapshot(),
-                serde_json::to_value(&c.frame.counters).unwrap(),
-                c.store.budget().handles(),
-            );
-            assert!(run(&mut c).is_err());
-            assert_eq!(c.frame.fuel_snapshot(), snapshot.0);
-            assert_eq!(serde_json::to_value(&c.frame.counters).unwrap(), snapshot.1);
-            assert_eq!(c.store.budget().handles(), snapshot.2);
-        }
-    }
-}
-#[test]
-fn nan_runtime_wrong_hint_or_rigid_source_refuses_before_constant_entry() {
-    for kind in ["hint", "rigid"] {
-        let mut c = context(ORIGINAL, "f64", "NAN", 2024, 100, 1000);
-        if kind == "hint" {
-            c.frame.set_hint(c.destination, Some(TypeId(14))).unwrap();
-        } else {
-            c.frame
-                .set_source_view(
-                    c.destination,
-                    Some(TyTerm::Param(ParamKey {
-                        definition: c.frame.body.body().definition,
-                        ordinal: 0,
-                    })),
-                )
-                .unwrap();
-        }
-        let source = c.frame.source_view(c.destination).unwrap();
-        let (handles, bytes) = (c.store.budget().handles(), c.store.budget().bytes());
-        let scope_prefix = prefix(&c);
-        let _typed_refusal = run(&mut c).unwrap_err();
-        assert_eq!(c.frame.counters.started_by_opcode[41], 0);
-        assert_eq!(c.frame.fuel_snapshot().used, scope_prefix);
-        assert_eq!(c.frame.counters.operations_completed, scope_prefix);
-        assert!(c.frame.cell(c.destination).is_err());
-        assert_eq!(c.frame.source_view(c.destination).unwrap(), source);
-        assert_eq!(
-            (c.store.budget().handles(), c.store.budget().bytes()),
-            (handles, bytes)
-        );
-    }
-}
-#[test]
-fn floating_ticket_and_missing_cell_quota_refuse_without_published_ticket() {
-    let source = "fn live()->f64{f64::NAN}";
-    let probe = context(source, "f64", "NAN", 2024, 100, 1000);
-    assert_eq!(prefix(&probe), 0);
-    let base = probe.store.budget().handles();
-    // No destination exists. Zero capacity rejects the ticket; one available
-    // handle rejects the complete ticket+cell batch rather than orphan a ticket.
-    for free in [0, 1] {
-        let mut c = context(source, "f64", "NAN", 2024, 100, base + free);
-        let before = (c.store.budget().handles(), c.store.budget().bytes());
-        assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-        assert_eq!(
-            (c.store.budget().handles(), c.store.budget().bytes()),
-            before
-        );
-        assert!(c.frame.cell(c.destination).is_err());
-        assert!(c.frame.source_view(c.destination).unwrap().is_none());
-        assert_eq!(c.frame.counters.started_by_opcode[41], 0);
-        assert_eq!(c.frame.fuel_snapshot().used, 0);
-    }
-    // Existing Uninit destination needs one ticket only. Refusal preserves its
-    // location and contract; unchanged monotonic handles prove no ticket exists.
-    let mut c = context(source, "f64", "NAN", 2024, 100, base + 1);
-    let cell = c.frame.prepare_write(c.destination, &mut c.store).unwrap();
-    let before = (c.store.budget().handles(), c.store.budget().bytes());
-    let epoch = c.store.location_epoch(cell).unwrap();
-    let contract = c.store.declared(cell).unwrap();
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(
-        (c.store.budget().handles(), c.store.budget().bytes()),
-        before
-    );
-    assert_eq!(c.store.state(cell).unwrap(), CellState::Uninit);
-    assert_eq!(c.store.location_epoch(cell).unwrap(), epoch);
-    assert_eq!(c.store.declared(cell).unwrap(), contract);
-    assert!(c.frame.source_view(c.destination).unwrap().is_none());
-    assert_eq!(c.frame.counters.started_by_opcode[41], 0);
-    assert_eq!(c.frame.fuel_snapshot().used, 0);
 }

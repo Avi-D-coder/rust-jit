@@ -71,9 +71,9 @@ fn fault(message: &str) -> Diagnostic {
 fn selected_definition(lookup: PathLookup) -> Result<Option<MacroDefinition>, Diagnostic> {
     match lookup {
         PathLookup::Defined(definition) => Ok(Some(definition)),
-        PathLookup::Ambiguous(_) => Err(Diagnostic::new(
+        PathLookup::Ambiguous(candidates) => Err(Diagnostic::new(
             "LRR-E-MACRO-AMBIGUOUS",
-            "original source derive annotation or path is ambiguous".into(),
+            format!("original source derive annotation or path is ambiguous: {candidates:?}"),
         )),
         PathLookup::Inaccessible(_) => Err(Diagnostic::new(
             "LRR-E-MACRO-INACCESSIBLE",
@@ -183,7 +183,15 @@ pub(crate) fn prepare_empty_with_annotations(
             e.digest(proof.fingerprint());
             count += 1;
         }
-        if complete && count == item.header.attributes.len() {
+        if complete
+            && count
+                == item
+                    .header
+                    .attributes
+                    .iter()
+                    .filter(|attribute| crate::syntax::outline::attribute_may_name_macro(attribute))
+                    .count()
+        {
             let original_macro = if item.def_key.item_kind == ItemKind::Macro {
                 let shape = source.macro_definition_shape_at(item.declaration_span)?;
                 e.u8(match shape.dialect() {
@@ -298,7 +306,7 @@ pub(crate) fn prepare_empty_with_annotations(
     )?;
     let facts =
         parsed.derive_item_inputs_at(item.declaration_span, source.captured_macro_cfg()?)?;
-    if !facts.item.enabled || facts.item.attributes.len() > 4096 {
+    if !facts.item.enabled {
         return Err(fault("original derive inactive item or annotation limit"));
     }
     let registry = provider.owned_forest()?;
@@ -413,11 +421,49 @@ type DeclarationReceipts = std::collections::BTreeMap<
         std::sync::Arc<super::derive_receipt::PreparedDeriveDeclaration>,
     ),
 >;
-type SourceRows = Vec<(
-    crate::frontend::generated_derive_exports::DeriveDeclarationRequest,
-    std::sync::Arc<super::derive_receipt::PreparedDeriveDeclaration>,
-    crate::syntax::token_wire::Key,
-)>;
+/// One resolved derive path of a group: a procedural export with its exact
+/// helper declaration receipt, or a library builtin derive whose helper
+/// metadata is the compiler-owned descriptor's.
+enum SourceRowKind {
+    Procedural(
+        crate::frontend::generated_derive_exports::DeriveDeclarationRequest,
+        std::sync::Arc<super::derive_receipt::PreparedDeriveDeclaration>,
+    ),
+    Builtin {
+        definition: MacroDefinition,
+        kind: lrr_expand_adapter::builtin_macros::BuiltinDeriveKind,
+        demand: Digest,
+        receipt: Digest,
+        helpers: &'static [&'static str],
+    },
+}
+struct SourceRow {
+    kind: SourceRowKind,
+    site: crate::syntax::token_wire::Key,
+}
+impl SourceRow {
+    fn demand(&self) -> Digest {
+        match &self.kind {
+            SourceRowKind::Procedural(request, _) => request.demand(),
+            SourceRowKind::Builtin { demand, .. } => *demand,
+        }
+    }
+    fn receipt(&self) -> Digest {
+        match &self.kind {
+            SourceRowKind::Procedural(_, receipt) => receipt.fingerprint(),
+            SourceRowKind::Builtin { receipt, .. } => *receipt,
+        }
+    }
+    fn helpers(&self) -> Vec<&str> {
+        match &self.kind {
+            SourceRowKind::Procedural(_, receipt) => {
+                receipt.helpers().iter().map(String::as_str).collect()
+            }
+            SourceRowKind::Builtin { helpers, .. } => helpers.to_vec(),
+        }
+    }
+}
+type SourceRows = Vec<SourceRow>;
 enum SourceRowsPoll {
     Ready(SourceRows),
     NeedDeclaration(
@@ -432,7 +478,8 @@ struct SourceGroups<'a> {
     facts: &'a crate::syntax::attributes::ItemAttributeInputs,
     forest: &'a TokenForest,
     names: &'a MacroNamespaces,
-    catalog: &'a std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>,
+    catalog: Option<&'a std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>>,
+    compiler: Option<&'a crate::frontend::compile_input_catalog::CompileInputCatalog>,
     resolved: &'a DeclarationReceipts,
 }
 impl SourceGroups<'_> {
@@ -443,7 +490,6 @@ impl SourceGroups<'_> {
         let facts = self.facts;
         let forest = self.forest;
         let names = self.names;
-        let catalog = self.catalog;
         let resolved = self.resolved;
         let source_identity = &forest
             .spans()
@@ -463,12 +509,6 @@ impl SourceGroups<'_> {
         .map_err(|e| Diagnostic::new(e.code, e.message))?;
         let paths = lrr_expand_adapter::derive_paths::parse(&arguments)
             .map_err(|e| Diagnostic::new(e.code, e.message))?;
-        if paths.len() > 4096 {
-            return Err(Diagnostic::new(
-                "LRR-E-DISCOVERY-LIMIT",
-                "source derive path count limit".into(),
-            ));
-        }
         let mut rows = Vec::new();
         rows.try_reserve_exact(paths.len())
             .map_err(|_| fault("source derive receipt allocation"))?;
@@ -499,12 +539,47 @@ impl SourceGroups<'_> {
             e.bytes(&path.last_span.0);
             e.u8(u8::from(path.absolute));
             e.sequence(&path.segments, |e, s| e.string(s));
+            let occurrence = e.finish();
+            let site = crate::syntax::token_wire::Key(path.last_span.0);
+            // A library `#[rustc_builtin_macro]` derive: compiler-owned helper
+            // metadata, expanded in process by the pinned adapter.
+            if let Some(kind) = self
+                .compiler
+                .and_then(|compiler| compiler.builtin_derive(&selected))
+            {
+                let descriptor = lrr_expand_adapter::builtin_derives::descriptor(kind.name())
+                    .map_err(|e| Diagnostic::new(e.code, e.message))?
+                    .ok_or_else(|| fault("builtin derive descriptor absent"))?;
+                let mut demand = StableEncoder::new("lrr/v2/source-builtin-derive-helper-demand");
+                demand.digest(occurrence);
+                demand.digest(selected.identity);
+                demand.digest(selected.defining_unit);
+                let demand = demand.finish();
+                let mut receipt = StableEncoder::new("lrr/v2/builtin-derive-helper-receipt");
+                receipt.digest(demand);
+                receipt.bytes(&descriptor.definition_identity().0);
+                receipt.sequence(descriptor.helpers(), |e, name| e.string(name));
+                rows.push(SourceRow {
+                    kind: SourceRowKind::Builtin {
+                        definition: selected,
+                        kind,
+                        demand,
+                        receipt: receipt.finish(),
+                        helpers: descriptor.helpers(),
+                    },
+                    site,
+                });
+                continue;
+            }
+            let Some(catalog) = self.catalog else {
+                return Ok(SourceRowsPoll::Pending);
+            };
             let Some(request) =
                 crate::frontend::generated_derive_exports::DeriveDeclarationRequest::from_source(
                     source,
                     item,
                     producer,
-                    e.finish(),
+                    occurrence,
                     selected,
                     catalog,
                 )?
@@ -516,11 +591,10 @@ impl SourceGroups<'_> {
                     return Err(fault("source derive receipt context changed"));
                 }
                 receipt.validate_request(&request)?;
-                rows.push((
-                    request,
-                    receipt.clone(),
-                    crate::syntax::token_wire::Key(path.last_span.0),
-                ));
+                rows.push(SourceRow {
+                    kind: SourceRowKind::Procedural(request, receipt.clone()),
+                    site,
+                });
             } else {
                 return Ok(SourceRowsPoll::NeedDeclaration(std::sync::Arc::new(
                     request,
@@ -548,17 +622,14 @@ impl SourceHelperScope {
         forest: &TokenForest,
         edition: u16,
     ) -> Result<(), Diagnostic> {
-        for (request, receipt, site) in rows {
-            if self.receipt_demands.contains(&request.demand()) {
+        for row in rows {
+            let site = &row.site;
+            if self.receipt_demands.contains(&row.demand()) {
                 continue;
-            }
-            if self.receipts.len() >= 4096 {
-                return Err(fault("source derive cumulative receipt limit"));
             }
             self.retained = self
                 .retained
                 .checked_add(256)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("source helper receipt metadata limit"))?;
             let context = forest
                 .spans()
@@ -566,12 +637,11 @@ impl SourceHelperScope {
                 .find(|span| span.key() == *site)
                 .ok_or_else(|| fault("source helper introduction span absent"))?
                 .context;
-            for name in receipt.helpers() {
+            for name in row.helpers() {
                 self.retained = self
                     .retained
                     .checked_add(name.len())
                     .and_then(|n| n.checked_add(256))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("source helper scope metadata limit"))?;
                 self.providers
                     .entry((super::scopes::MacroName::parse(name, edition)?, context))
@@ -581,8 +651,8 @@ impl SourceHelperScope {
             self.receipts
                 .try_reserve_exact(1)
                 .map_err(|_| fault("source helper receipt allocation"))?;
-            self.receipts.push(receipt.fingerprint());
-            self.receipt_demands.insert(request.demand());
+            self.receipts.push(row.receipt());
+            self.receipt_demands.insert(row.demand());
         }
         Ok(())
     }
@@ -604,6 +674,85 @@ impl SourceHelperScope {
             .is_some_and(|positions| positions.iter().any(|index| *index < at))
     }
 }
+/// rustc `has_derive_copy`/`has_derive_ord`: whether any derive annotation
+/// of the item names the builtin `Copy`/`Ord`. `None` while any derive path of
+/// the item is unresolved.
+#[allow(clippy::too_many_arguments)]
+fn container_facts(
+    source: &PreparedSourceView,
+    item: &crate::syntax::outline::ItemOutline,
+    parsed: &ParsedFile,
+    facts: &crate::syntax::attributes::ItemAttributeInputs,
+    forest: &TokenForest,
+    names: &MacroNamespaces,
+    builtin: &crate::frontend::builtin_attributes::BuiltinAttributeCatalog,
+    compiler: Option<&crate::frontend::compile_input_catalog::CompileInputCatalog>,
+) -> Result<Option<lrr_expand_adapter::builtin_macros::DeriveContainerFacts>, Diagnostic> {
+    use lrr_expand_adapter::builtin_macros::{BuiltinDeriveKind, DeriveContainerFacts};
+    let Some(compiler) = compiler else {
+        return Ok(None);
+    };
+    let edition = source.outline().profile.edition;
+    let source_identity = &forest
+        .spans()
+        .first()
+        .ok_or_else(|| fault("source derive span absent"))?
+        .source;
+    let mut container = DeriveContainerFacts::default();
+    for (index, attr) in facts.attributes.iter().enumerate() {
+        if inert(parsed, attr)? {
+            continue;
+        }
+        let path = parsed.attribute_path_at(attr.range)?;
+        let PathLookup::Defined(definition) = names.lookup_invocation_segments(
+            path.segments(),
+            path.absolute(),
+            &item.scope,
+            edition,
+        )?
+        else {
+            continue;
+        };
+        if !builtin.select(&definition)?.is_some_and(|descriptor| {
+            descriptor.action() == super::builtin_attributes::BuiltinAttributeAction::Derive
+        }) {
+            continue;
+        }
+        let Some(arguments) =
+            super::attributes::argument_forest(facts, index, source_identity, forest)?
+        else {
+            continue;
+        };
+        let arguments = lrr_expand_adapter::token_wire::TokenForest::decode(
+            &arguments.encode().map_err(|e| fault(&e.to_string()))?,
+        )
+        .map_err(|e| Diagnostic::new(e.code, e.message))?;
+        for path in lrr_expand_adapter::derive_paths::parse(&arguments)
+            .map_err(|e| Diagnostic::new(e.code, e.message))?
+        {
+            let segments = path
+                .segments
+                .iter()
+                .map(|s| crate::syntax::imports::ImportSegment::Name(s.clone()))
+                .collect::<Vec<_>>();
+            let Some(definition) = selected_definition(names.lookup_invocation_segments(
+                &segments,
+                path.absolute,
+                &item.scope,
+                edition,
+            )?)?
+            else {
+                return Ok(None);
+            };
+            match compiler.builtin_derive(&definition) {
+                Some(BuiltinDeriveKind::Copy) => container.derives_copy = true,
+                Some(BuiltinDeriveKind::Ord) => container.derives_ord = true,
+                _ => {}
+            }
+        }
+    }
+    Ok(Some(container))
+}
 pub(crate) fn prepare_group(
     source: &PreparedSourceView,
     provider: &SourceDeclarative,
@@ -621,15 +770,15 @@ pub(crate) fn prepare_group(
         ),
     >,
 ) -> Result<SourceDerivePoll, Diagnostic> {
-    let (Some(builtin), Some(catalog)) = (
-        provider
-            .compiler
-            .as_ref()
-            .and_then(|c| c.attribute_catalog()),
-        &provider.procedural,
-    ) else {
+    let Some(builtin) = provider
+        .compiler
+        .as_ref()
+        .and_then(|c| c.attribute_catalog())
+    else {
         return Ok(SourceDerivePoll::Pending);
     };
+    // Procedural derives need the run's catalog; builtin derives do not.
+    let catalog = provider.procedural.as_ref();
     let item = source
         .outline()
         .items
@@ -652,7 +801,7 @@ pub(crate) fn prepare_group(
     let inputs =
         parsed.derive_item_inputs_at(item.declaration_span, source.captured_macro_cfg()?)?;
     let facts = &inputs.item;
-    if !facts.enabled || facts.attributes.len() > 4096 {
+    if !facts.enabled {
         return Err(fault("source derive annotation limit or inactive producer"));
     }
     let registry = provider.owned_forest()?;
@@ -675,8 +824,19 @@ pub(crate) fn prepare_group(
         forest: &forest,
         names,
         catalog,
+        compiler: provider.compiler.as_deref(),
         resolved,
     };
+    let container = container_facts(
+        source,
+        item,
+        &parsed,
+        facts,
+        &forest,
+        names,
+        builtin,
+        provider.compiler.as_deref(),
+    )?;
     let mut helpers = SourceHelperScope::default();
     let mut completed_count = 0usize;
     let mut completion = StableEncoder::new("lrr/v2/source-derive-completion");
@@ -726,6 +886,9 @@ pub(crate) fn prepare_group(
             return Ok(SourceDerivePoll::Pending);
         };
         let Some(descriptor) = builtin.select(&definition)? else {
+            let Some(catalog) = catalog else {
+                return Ok(SourceDerivePoll::Pending);
+            };
             if certified.is_empty()
                 || catalog
                     .select(&definition, super::identity::ProceduralKind::Attribute)?
@@ -878,7 +1041,7 @@ pub(crate) fn prepare_group(
                 &inputs,
                 certified.clone(),
             )?;
-            for (ordinal, (request, _, _)) in rows.iter().enumerate() {
+            for (ordinal, row) in rows.iter().enumerate() {
                 let input = item_macro_inputs::derive_occurrence_resolved(
                     item.def_key.fingerprint(),
                     &inputs,
@@ -887,22 +1050,59 @@ pub(crate) fn prepare_group(
                     source_identity,
                     &forest,
                 )?;
-                let selection = crate::service::source_derive_requests::SourceDeriveSelection::new(
-                    source,
-                    item.scope.clone(),
-                    input,
-                    registry.clone(),
-                    request,
-                    catalog.clone(),
-                    helpers.receipts.clone(),
-                )?;
+                let selection = match &row.kind {
+                    SourceRowKind::Procedural(request, _) => {
+                        crate::service::source_derive_requests::SourceDeriveSelection::new(
+                            source,
+                            item.scope.clone(),
+                            input,
+                            (*registry).clone(),
+                            &request.clone(),
+                            catalog
+                                .ok_or_else(|| fault("procedural derive catalog absent"))?
+                                .clone(),
+                            helpers.receipts.clone(),
+                        )?
+                    }
+                    SourceRowKind::Builtin {
+                        definition, kind, ..
+                    } => {
+                        use lrr_expand_adapter::builtin_macros::BuiltinDeriveKind;
+                        // Only `Clone` and `PartialOrd` consult the container's
+                        // other derives (rustc `has_derive_copy`/`has_derive_ord`).
+                        let facts = match kind {
+                            BuiltinDeriveKind::Clone | BuiltinDeriveKind::PartialOrd => {
+                                let Some(facts) = container else {
+                                    return Ok(SourceDerivePoll::Pending);
+                                };
+                                facts
+                            }
+                            _ => Default::default(),
+                        };
+                        crate::service::source_derive_requests::SourceDeriveSelection::builtin(
+                            source,
+                            item.scope.clone(),
+                            input,
+                            (*registry).clone(),
+                            crate::expand::derive_origin::DeriveDeclarationOrigin::Source {
+                                selection: source.selection().clone(),
+                                producer,
+                                item: item.def_key.fingerprint(),
+                                header: item.header.fingerprint(),
+                            },
+                            definition.clone(),
+                            *kind,
+                            facts,
+                            helpers.receipts.clone(),
+                        )?
+                    }
+                };
                 if let Some(old) = completed.get(&selection.input().identity()) {
                     if old.fingerprint() != selection.fingerprint() {
                         return Err(fault("completed original derive selection changed"));
                     }
                     completed_count = completed_count
                         .checked_add(1)
-                        .filter(|n| *n <= 4096)
                         .ok_or_else(|| fault("source completion occurrence limit"))?;
                     completion.digest(selection.fingerprint());
                     continue;

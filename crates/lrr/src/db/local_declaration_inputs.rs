@@ -75,12 +75,6 @@ impl Database {
             {
                 return Err(invalid("selected local declaration owning source differs"));
             }
-            if item.header.estimated_bytes() > 32 * 1024 * 1024 {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "local declaration header limit",
-                ));
-            }
             let syntax = source
                 .parsed()
                 .syntax_at(item.declaration_span, |node| {
@@ -162,15 +156,7 @@ impl Database {
             if staged.is_empty() {
                 return Ok(LocalDeclarationPublication::Published(definition));
             }
-            // Charge all new rows at the peak, before any becomes visible.
-            if account_add(self.cache_usage()?.memo_bytes, bytes)?
-                > self.run_budgets.unwrap_or_default().query_bytes
-            {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "local declaration publication exceeds query metadata cap",
-                ));
-            }
+            let _ = bytes; // E-R5-006: no byte accounting.
             let revision = self.revision.checked_add(1).ok_or_else(|| {
                 fault("LRR-E-ID-EXHAUSTED", "local declaration revision exhausted")
             })?;

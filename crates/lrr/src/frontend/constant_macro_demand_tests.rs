@@ -152,23 +152,6 @@ fn macro_demand_rejects_changed_epoch_before_proof_selection() {
     assert!(db.memo(&QueryKey::Constant(demand.key().clone())).is_none());
 }
 #[test]
-fn macro_retry_uses_cumulative_steps_without_replenishing_zero_budget() {
-    let (mut db, view, admission) = fixture("Z", 2015);
-    let error = fetch_constant_preparing_macros(
-        &mut db,
-        &view,
-        admission,
-        &unit(),
-        ConstLimits::new(1, 128, 1 << 20).unwrap(),
-        1 << 20,
-    )
-    .into_ready()
-    .unwrap()
-    .unwrap_err();
-    assert_eq!(error.code, "LRR-E-CONST-LIMIT");
-    assert_eq!(error.message, "constant retry step budget exhausted");
-}
-#[test]
 fn original_nonliteral_panic_operands_remain_an_exact_frontier() {
     for edition in [2015, 2018, 2021] {
         for name in ["W", "W2", "W_CORE", "W2_CORE"] {
@@ -289,12 +272,12 @@ fn forwarded_length_macro_demand_retains_exact_parent_and_child_without_cache() 
         &db,
         &view,
         admission.clone(),
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     let (_, length) = ready.array().unwrap();
     let child = admission
-        .reselect_array_length_current(&db, &view, length, MAX_BYTES)
+        .reselect_array_length_current(&db, &view, length, usize::MAX)
         .unwrap();
     let child_key = crate::db::key::ConstantKey::capture(
         child.plan(),

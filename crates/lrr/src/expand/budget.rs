@@ -21,7 +21,6 @@ struct Budget {
 struct State {
     epoch: u64,
     frozen: bool,
-    token_limit: usize,
     tokens: usize,
     wire_bytes: usize,
     outputs: BTreeMap<Digest, Digest>,
@@ -51,12 +50,11 @@ impl SharedExpansionBudget {
         request: Digest,
         graph: Digest,
         epoch: u64,
-        token_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        if epoch == 0 || token_limit > 2_000_000 {
+        if epoch == 0 {
             return Err(fault(
                 "LRR-E-DISCOVERY-LIMIT",
-                "expansion budget epoch or token limit is invalid",
+                "expansion budget epoch is invalid",
             ));
         }
         Ok(Self(Arc::new(Budget {
@@ -66,12 +64,11 @@ impl SharedExpansionBudget {
             state: Mutex::new(State {
                 epoch,
                 frozen: false,
-                token_limit,
                 tokens: 0,
                 wire_bytes: 0,
                 outputs: BTreeMap::new(),
-                invocation_timeout: Duration::from_secs(10),
-                cumulative_timeout: Duration::from_secs(60),
+                invocation_timeout: lrr_expand_adapter::NO_TIME_LIMIT,
+                cumulative_timeout: lrr_expand_adapter::NO_TIME_LIMIT,
                 deadline: None,
             }),
         })))
@@ -98,12 +95,7 @@ impl SharedExpansionBudget {
     ) -> Result<Self, Diagnostic> {
         {
             let mut state = self.lock()?;
-            if state.frozen
-                || invocation.is_zero()
-                || cumulative.is_zero()
-                || invocation > Duration::from_secs(10)
-                || cumulative > Duration::from_secs(60)
-            {
+            if state.frozen || invocation.is_zero() || cumulative.is_zero() {
                 return Err(fault(
                     "LRR-E-DISCOVERY-LIMIT",
                     "expansion deadlines are invalid or configured late",
@@ -124,17 +116,6 @@ impl SharedExpansionBudget {
             .checked_add(state.invocation_timeout)
             .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "invocation deadline overflow"))?;
         Ok(individual.min(state.deadline.expect("started expansion deadline")))
-    }
-    pub(crate) fn configure_token_limit(&self, limit: usize) -> Result<(), Diagnostic> {
-        let mut state = self.lock()?;
-        if state.frozen || limit > 2_000_000 {
-            return Err(fault(
-                "LRR-E-DISCOVERY-LIMIT",
-                "generated token limit configuration is invalid or late",
-            ));
-        }
-        state.token_limit = limit;
-        Ok(())
     }
     pub fn totals(&self) -> Result<ExpansionTotals, Diagnostic> {
         Ok(self.lock()?.totals())
@@ -194,16 +175,9 @@ impl State {
         }
         self.check_deadline()
     }
+    /// E-R5-006: rustc imposes no expansion time limit (only its recursion
+    /// limit), so the cumulative deadline is observed but never enforced.
     fn check_deadline(&self) -> Result<(), Diagnostic> {
-        if self
-            .deadline
-            .is_some_and(|deadline| Instant::now() >= deadline)
-        {
-            return Err(fault(
-                "LRR-E-MACRO-TIMEOUT",
-                "cumulative macro expansion deadline expired",
-            ));
-        }
         Ok(())
     }
     fn totals(&self) -> ExpansionTotals {
@@ -216,13 +190,9 @@ impl State {
     fn plan(&self, usage: &BTreeMap<Digest, ExpansionUsage>) -> Result<Charge, Diagnostic> {
         self.check_deadline()?;
         let limit = |message: &str| fault("LRR-E-DISCOVERY-LIMIT", message);
-        if usage.len() > 100_000 {
-            return Err(limit("expansion accounting observation limit"));
-        }
         usage
             .len()
             .checked_mul(std::mem::size_of::<(Digest, Digest)>())
-            .filter(|n| *n <= 16 * 1024 * 1024)
             .ok_or_else(|| limit("expansion accounting metadata limit"))?;
         let mut outputs = Vec::new();
         outputs
@@ -253,15 +223,12 @@ impl State {
                 .len()
                 .checked_add(outputs.len())
                 .and_then(|n| n.checked_add(1))
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| limit("request expansion invocation count limit"))?;
             tokens = tokens
                 .checked_add(observed.tokens)
-                .filter(|n| *n <= self.token_limit)
                 .ok_or_else(|| limit("cumulative generated token limit"))?;
             wire_bytes = wire_bytes
                 .checked_add(observed.wire_bytes)
-                .filter(|n| *n <= 256 * 1024 * 1024)
                 .ok_or_else(|| limit("request cumulative generated wire limit"))?;
             outputs.push((*identity, observed.fingerprint));
         }

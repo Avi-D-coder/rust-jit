@@ -68,9 +68,8 @@ fn context() -> Context {
     let source = *source;
     let scope = *scope;
     assert_ne!(source, owner);
-    let mut store = GuestStore::new(1, 10000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body.clone(), pc, &mut store).unwrap();
-    frame.set_fuel_limit(10000).unwrap();
     let mut ancestry = Vec::new();
     let mut current = Some(scope);
     while let Some(id) = current {
@@ -189,116 +188,4 @@ fn rustc_record_scope_leave_dispatch_preserves_owner_and_charges_opcode_once() {
             .iter()
             .all(|field| c.store.state(*field).unwrap() == CellState::Dropped)
     );
-}
-#[test]
-fn rustc_record_scope_leave_cancellation_preserves_exact_pending_cleanup() {
-    let mut c = context();
-    reach_partial(&mut c);
-    let pc = c.frame.pc.clone();
-    let states: Vec<_> = c
-        .fields
-        .iter()
-        .map(|field| c.store.state(*field).unwrap())
-        .collect();
-    let snapshot = (
-        c.store.budget().handles(),
-        c.store.budget().bytes(),
-        c.frame.counters.operations_started,
-        c.frame.counters.operations_completed,
-        c.frame.counters.cleanup_elements_completed,
-        c.frame.fuel_snapshot().used,
-    );
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.status, FrameStatus::Faulted);
-    assert_eq!(c.frame.pc, pc);
-    assert!(c.frame.has_cleanup_activation());
-    assert_eq!(c.frame.cell(c.owner).unwrap(), c.root);
-    assert_eq!(c.frame.active_scopes.last(), Some(&c.scope));
-    assert_eq!(c.store.state(c.root).unwrap(), CellState::Dropping);
-    assert_eq!(
-        c.fields
-            .iter()
-            .map(|field| c.store.state(*field).unwrap())
-            .collect::<Vec<_>>(),
-        states
-    );
-    assert_eq!(
-        (
-            c.store.budget().handles(),
-            c.store.budget().bytes(),
-            c.frame.counters.operations_started,
-            c.frame.counters.operations_completed,
-            c.frame.counters.cleanup_elements_completed,
-            c.frame.fuel_snapshot().used
-        ),
-        snapshot
-    );
-    // Fatal cancellation is never retried or treated as guest panic success.
-}
-#[test]
-fn rustc_record_scope_leave_fuel_refusal_keeps_unprocessed_fields_live() {
-    let mut c = context();
-    c.frame.set_fuel_limit(3).unwrap();
-    let pc = c.frame.pc.clone();
-    let mut refusal = None;
-    for _ in 0..4096 {
-        match run(&mut c) {
-            Err(error) => {
-                refusal = Some(error);
-                break;
-            }
-            Ok(StepOutcome::Dispatch) => {
-                // A bounded metadata scan can yield before the first owning
-                // field's fuel admission. Resume only the same reached opcode.
-                assert_eq!(c.frame.status, FrameStatus::Running);
-                assert_eq!(c.frame.pc, pc);
-                c.frame
-                    .check_cleanup_activation(1, &Op::ScopeLeave { scope: c.scope })
-                    .unwrap();
-                assert_eq!(c.frame.counters.operations_started, 2);
-                assert_eq!(c.frame.counters.operations_completed, 1);
-                assert_eq!(c.frame.counters.started_by_opcode[5], 1);
-                assert_eq!(c.frame.counters.cleanup_elements_completed, 0);
-                assert!((2..=3).contains(&c.frame.fuel_snapshot().used));
-                assert_eq!(c.frame.cell(c.owner).unwrap(), c.root);
-                assert!(matches!(
-                    c.store.state(c.root).unwrap(),
-                    CellState::Live(_) | CellState::Dropping
-                ));
-                assert!(
-                    c.fields
-                        .iter()
-                        .all(|field| matches!(c.store.state(*field).unwrap(), CellState::Live(_)))
-                );
-                assert_eq!(c.frame.active_scopes.last(), Some(&c.scope));
-            }
-            Ok(_) => panic!("fuel-limited cleanup completed or left its bound operation"),
-        }
-    }
-    assert_eq!(
-        refusal
-            .expect("bounded cleanup never reached owning field fuel admission")
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(c.frame.status, FrameStatus::Faulted);
-    assert_eq!(c.frame.pc, pc);
-    assert_eq!(c.frame.counters.operations_started, 2);
-    assert_eq!(c.frame.counters.operations_completed, 1);
-    assert_eq!(c.frame.counters.cleanup_elements_completed, 0);
-    assert_eq!(c.frame.fuel_snapshot().used, 3);
-    assert_eq!(
-        c.frame.fuel_snapshot().stop,
-        Some(crate::vm::fuel::FuelStop::Exhausted)
-    );
-    assert!(c.frame.has_cleanup_activation());
-    assert_eq!(c.frame.cell(c.owner).unwrap(), c.root);
-    assert_eq!(c.store.state(c.root).unwrap(), CellState::Dropping);
-    assert!(
-        c.fields
-            .iter()
-            .all(|field| matches!(c.store.state(*field).unwrap(), CellState::Live(_)))
-    );
-    assert_eq!(c.frame.active_scopes.last(), Some(&c.scope));
 }

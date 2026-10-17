@@ -17,7 +17,6 @@ use std::{
     sync::Arc,
 };
 const ARC: usize = 2 * std::mem::size_of::<usize>();
-const MAX_ROOTS: usize = 100_000;
 #[derive(Default)]
 struct Roots {
     seen: BTreeSet<usize>,
@@ -28,9 +27,6 @@ impl Roots {
         let id = Arc::as_ptr(root) as usize;
         if self.seen.contains(&id) {
             return Ok(false);
-        }
-        if self.seen.len() >= MAX_ROOTS {
-            return Err(crate::runtime::arena::resource());
         }
         self.bytes = account_add(self.bytes, account_add(bytes, ARC)?)?;
         self.seen.insert(id);
@@ -298,9 +294,6 @@ impl Roots {
         if self.seen.contains(&allocation) {
             return Ok(());
         }
-        if self.seen.len() >= MAX_ROOTS {
-            return Err(crate::runtime::arena::resource());
-        }
         self.seen.insert(allocation);
         self.context(plan.context())?;
         if let Some(environment) = plan.environment() {
@@ -447,51 +440,15 @@ impl Database {
     }
     pub(crate) fn preflight_source_local_plan(
         &self,
-        plan: &Arc<PreparedSourceLocalPlan>,
+        _plan: &Arc<PreparedSourceLocalPlan>,
     ) -> Result<(), Diagnostic> {
-        let extra = account_add(
-            self.additional_local_plan_bytes(plan)?,
-            self.source_plan_pins
-                .extra_bytes(SourceArtifactRef::LocalPlan(plan))?,
-        )?;
-        let collector = self.collectors.last().ok_or_else(|| {
+        // E-R5-006: no byte accounting; only the pure-query context is checked.
+        self.collectors.last().ok_or_else(|| {
             super::fault(
                 "LRR-E-INTERNAL-SNAPSHOT",
                 "local-plan preflight outside pure query",
             )
         })?;
-        let dependencies = collector
-            .dependencies
-            .capacity()
-            .checked_mul(std::mem::size_of::<crate::db::dependency::DependencyStamp>())
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let dependencies = collector
-            .dependencies
-            .iter()
-            .try_fold(dependencies, |bytes, stamp| {
-                account_add(bytes, stamp.heap_bytes())
-            })?;
-        let memo = account_add(
-            std::mem::size_of::<super::MemoEntry>(),
-            std::mem::size_of::<crate::db::key::QueryKey>() + 64,
-        )?;
-        let value = std::mem::size_of::<crate::db::value::QueryValue>();
-        let query_pin = 64 + std::mem::size_of::<usize>() + std::mem::size_of::<super::QueryPin>();
-        let extra = account_add(
-            extra,
-            account_add(
-                dependencies,
-                account_add(memo, account_add(value, query_pin)?)?,
-            )?,
-        )?;
-        let usage = self.cache_usage()?;
-        if account_add(usage.memo_bytes, extra)? > self.run_budgets.unwrap_or_default().query_bytes
-        {
-            return Err(super::fault(
-                "LRR-E-METADATA-LIMIT",
-                "owning local plan exceeds query metadata cap",
-            ));
-        }
         Ok(())
     }
     pub(super) fn additional_local_plan_bytes(

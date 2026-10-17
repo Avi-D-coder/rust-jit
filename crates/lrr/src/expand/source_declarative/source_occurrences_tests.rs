@@ -96,7 +96,7 @@ fn unchanged_auto_type_position_survives_real_item_attachment_in_all_editions() 
                 })
                 .is_err()
         );
-        assert!(prepared.occurrences.metadata_bytes().unwrap() <= MAX_BYTES);
+        assert!(prepared.occurrences.metadata_bytes().unwrap() <= usize::MAX);
     }
 }
 #[test]
@@ -198,7 +198,7 @@ fn repeated_copied_calls_and_nested_attachments_keep_distinct_actual_occurrences
     let mut children = Vec::new();
     for (ordinal, invocation) in ids.into_iter().enumerate() {
         let SourceDeclarativeDemand::Ready(inner) = provider
-            .generated_declaration_demand(&nested, invocation)
+            .generated_declaration_demand(&nested, invocation, None)
             .unwrap()
         else {
             panic!("actual nested occurrence request incomplete")

@@ -17,16 +17,7 @@ impl RunMachine {
             }
             return Ok(());
         }
-        // Conservatively charge shared witness storage at every reached phase,
-        // including the actual owned capacities and map/key overhead.
-        let bytes = call
-            .allocated_bytes()?
-            .checked_add(128)
-            .and_then(|bytes| self.runtime_call_bytes.checked_add(bytes))
-            .filter(|bytes| *bytes <= 4 * 1024 * 1024 && self.runtime_calls.len() < 4096)
-            .ok_or_else(crate::runtime::arena::resource)?;
         self.runtime_calls.insert(key.clone(), call);
-        self.runtime_call_bytes = bytes;
         Ok(())
     }
     pub(super) fn require_runtime_call_start(&self, db: &mut Database) -> QueryPoll<()> {

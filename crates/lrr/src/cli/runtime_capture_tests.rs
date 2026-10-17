@@ -10,8 +10,15 @@ fn fixtures() -> PathBuf {
         })
 }
 fn packet(path: &Path) -> runtime_capture::Packet {
-    let outcome = standalone_edition_with_capture(path, None, 2015, true, None)
-        .expect("capture route must produce a typed packet");
+    let outcome = standalone_edition_with_capture(
+        path,
+        None,
+        2015,
+        &super::crate_graph::ExternCrates::default(),
+        true,
+        None,
+    )
+    .expect("capture route must produce a typed packet");
     let StandaloneOutcome::Captured(packet) = outcome else {
         panic!("capture requested but legacy result returned")
     };
@@ -138,7 +145,7 @@ fn observed_fault_and_missing_producer_never_fabricate_empty_streams() {
     assert_eq!(packet.guest_stderr(), None);
 }
 #[test]
-fn reached_output_without_sink_is_explicitly_incomplete() {
+fn reached_println_output_is_captured_as_complete_guest_stdout() {
     use std::io::Write;
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let path = std::env::temp_dir().join(format!(
@@ -160,17 +167,11 @@ fn reached_output_without_sink_is_explicitly_incomplete() {
     let owned = OwnedSource(path);
     file.write_all(b"fn main() { println!(); }\n").unwrap();
     drop(file);
+    // The library's own `println!` reaches the managed output sink through
+    // the ordinary pipeline; its bytes are captured guest stdout.
     let packet = packet(&owned.0);
-    assert_eq!(packet.exit_code(), 2);
-    assert!(!packet.guest_complete());
-    assert_eq!(packet.guest_stdout(), None);
-    assert_eq!(packet.guest_stderr(), None);
-    let json = serde_json::to_value(packet).unwrap();
-    assert_eq!(json["terminal"]["code"], "LRR-E-UNSUPPORTED");
-    assert!(
-        json["terminal"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("managed output integration")
-    );
+    assert_eq!(packet.exit_code(), 0);
+    assert!(packet.guest_complete());
+    assert_eq!(packet.guest_stdout(), Some(&b"\n"[..]));
+    assert_eq!(packet.guest_stderr(), Some(&b""[..]));
 }

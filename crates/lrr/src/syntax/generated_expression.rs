@@ -76,7 +76,6 @@ pub(crate) fn literal(
             "generated expression roots differ".into(),
         ));
     }
-    let mut depth = 0usize;
     loop {
         match expression {
             ast::Expr::Literal(literal) => {
@@ -108,8 +107,7 @@ pub(crate) fn literal(
                     },
                 });
             }
-            ast::Expr::ParenExpr(paren) if depth < 256 => {
-                depth += 1;
+            ast::Expr::ParenExpr(paren) => {
                 expression = paren.expr().ok_or_else(|| {
                     Diagnostic::new(
                         "LRR-E-MACRO-OUTPUT",

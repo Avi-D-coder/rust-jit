@@ -88,7 +88,6 @@ impl ConstantPathSite {
             if let ImportSegment::Name(name) = segment {
                 bytes = bytes
                     .checked_add(name.capacity())
-                    .filter(|n| *n <= 64 * 1024)
                     .ok_or_else(|| fault("constant path metadata limit"))?;
             }
         }
@@ -164,11 +163,10 @@ impl ParsedFile {
             .tree()
             .syntax()
             .descendants()
-            .take(100_001)
             .filter_map(ast::PathExpr::cast)
             .find(|path| range(path.syntax().text_range()) == selected)
             .ok_or_else(|| fault("selected constant site is not an exact path expression"))?;
-        for ancestor in expression.syntax().ancestors().take(257) {
+        for ancestor in expression.syntax().ancestors() {
             let metas = ancestor
                 .children()
                 .filter_map(ast::Attr::cast)
@@ -203,9 +201,6 @@ impl ParsedFile {
         let mut segments = Vec::new();
         let absolute;
         loop {
-            if segments.len() >= 256 {
-                return Err(fault("constant path depth limit"));
-            }
             let segment = path
                 .segment()
                 .ok_or_else(|| fault("constant path segment absent"))?;
@@ -254,7 +249,11 @@ impl ParsedFile {
             segments,
             absolute,
         };
-        site.member()?;
+        // `self`/`crate`/`super` alone name no constant (`self` is the
+        // receiver parameter).
+        if site.member().is_err() {
+            return Ok(None);
+        }
         site.metadata_bytes()?;
         Ok(Some(ConstantPathRoute { site, prerequisite }))
     }

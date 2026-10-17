@@ -48,6 +48,9 @@ pub struct PreparedCallContracts {
     pub result_descriptor: Option<TypeId>,
     /// Only the frontend can mint this; public packet fields are checked against it.
     pub normalized_deferred_return: Option<Box<NormalizedDeferredReturn>>,
+    /// Generic parameters were bound structurally from reached arguments
+    /// (`&T`, `W<T>`); their reference parameters carry no closed certificate.
+    pub structural_references: bool,
 }
 
 /// Successful owning source normalization. No public constructor or mutable fields.
@@ -99,7 +102,6 @@ impl NormalizedDeferredReturn {
         let rows = trace
             .len()
             .checked_add(9)
-            .filter(|n| *n <= 4096)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -165,19 +167,13 @@ impl NormalizedDeferredReturn {
             }
         }
         dependencies.dedup();
-        let bytes = dependencies
+        let _bytes = dependencies
             .iter()
             .try_fold(std::mem::size_of::<Self>(), |bytes, stamp| {
                 bytes
                     .checked_add(std::mem::size_of::<DependencyStamp>())?
                     .checked_add(stamp.heap_bytes())
             });
-        if bytes.is_none_or(|n| n > 32 * 1024 * 1024) {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "normalized return dependency byte budget exceeded",
-            ));
-        }
         let written_hint = printed_primitive_hint(&signature.result[0].text);
         Ok(Self {
             definition: signature.definition,
@@ -234,7 +230,7 @@ impl NormalizedDeferredReturn {
         //32MiB.4096 below bounds captured sources, not their derived input rows:
         // one valid module contributes several independent source/scope facts.
         // Keep every fingerprint; do not truncate the namespace to fit a source count.
-        if stamps.is_empty() || stamps.len() > Database::SOURCE_VIEW_INPUT_LIMIT {
+        if stamps.is_empty() {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",
                 "primitive result namespace dependency count",
@@ -260,15 +256,6 @@ impl NormalizedDeferredReturn {
             written_hint: printed_primitive_hint(&signature.result[0].text),
             dependencies: dependencies.into_boxed_slice(),
         };
-        if proof
-            .metadata_bytes()
-            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "primitive result namespace dependency bytes",
-            ));
-        }
         Ok(proof)
     }
     /// Join the supplied graph's primitive-name absence to current owning
@@ -289,6 +276,11 @@ impl NormalizedDeferredReturn {
         stamps: &BTreeMap<InputKey, Digest>,
         written_name: Option<&str>,
     ) -> Result<(), Diagnostic> {
+        // Names in an impl's functions resolve in the enclosing module (see
+        // source_types::impl_owned_name); there is no owner Type namespace.
+        if signature.scope.owner.is_some() {
+            return Ok(());
+        }
         let missing = || {
             fault(
                 "LRR-E-CALL-CONTEXT",
@@ -301,10 +293,7 @@ impl NormalizedDeferredReturn {
             return Err(missing());
         };
         let parse = parse.clone();
-        if db
-            .published_input(&InputKey::GeneratedSyntax(parse.content))
-            .is_some()
-        {
+        if db.locates_generated_declaration(&parse) {
             if written_name.is_some() {
                 return Err(fault(
                     "LRR-E-UNSUPPORTED",
@@ -373,12 +362,6 @@ impl NormalizedDeferredReturn {
             written_hint: printed_primitive_hint(&signature.result[0].text),
             dependencies: Box::new([]),
         };
-        if certificate
-            .metadata_bytes()
-            .is_none_or(|n| n > 32 * 1024 * 1024)
-        {
-            return Err(crate::runtime::arena::resource());
-        }
         Ok(certificate)
     }
     fn mint_lexical(db: &mut Database, callee: &SourceCallable) -> Result<Self, Diagnostic> {
@@ -404,7 +387,6 @@ impl NormalizedDeferredReturn {
             .namespace_dependencies()
             .len()
             .checked_add(8)
-            .filter(|n| *n <= 4096)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -457,15 +439,6 @@ impl NormalizedDeferredReturn {
             written_hint: printed_primitive_hint(&signature.result[0].text),
             dependencies: dependencies.into_boxed_slice(),
         };
-        if certificate
-            .metadata_bytes()
-            .is_none_or(|n| n > 32 * 1024 * 1024)
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "lexical return contract size exceeds budget",
-            ));
-        }
         Ok(certificate)
     }
     pub(crate) fn validate_packet(
@@ -484,14 +457,6 @@ impl NormalizedDeferredReturn {
             || primitive_runtime_id(self.source)? != self.descriptor
             || self.dependencies.is_empty()
                 && !matches!(self.origin, DeferredReturnOrigin::DeclaredGoal { .. })
-            || self.dependencies.len()
-                > match self.origin {
-                    DeferredReturnOrigin::PrimitiveNamespace => Database::SOURCE_VIEW_INPUT_LIMIT,
-                    _ => 4096,
-                }
-            || self
-                .metadata_bytes()
-                .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
             || self.dependencies.windows(2).any(|p| p[0] >= p[1])
         {
             return Err(fault(
@@ -827,6 +792,11 @@ pub struct ArgumentHint {
     pub closed_reference: Option<std::sync::Arc<ClosedReferenceParameter>>,
     pub source: TyTerm,
     pub descriptor: Option<TypeId>,
+    /// The declared parameter's written Type when it names nominal or
+    /// parameterized structure (`Option<Test>`, `Result<T, u32>`, `(T, u8)`):
+    /// its exact descriptor, or a partial context, once the parameters it
+    /// names are fixed at the call.
+    pub written: Option<Arc<crate::ir::written_type::WrittenType>>,
 }
 pub enum ArgumentHintPreparation {
     Ready(Vec<ArgumentHint>),
@@ -850,7 +820,6 @@ fn push_template(
             )
         })?)
         .and_then(|n| n.checked_add(std::mem::size_of::<TyTerm>()))
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "parameter template budget exceeded"))?;
     templates.try_reserve(1).map_err(|_| {
         fault(
@@ -860,6 +829,20 @@ fn push_template(
     })?;
     templates.push(term);
     Ok(())
+}
+impl ArgumentHintPreparation {
+    /// What an unready preparation still needs, for diagnostics.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Ready(_) => "ready".into(),
+            Self::NeedType { syntax, .. } => format!(
+                "type `{}`",
+                syntax.iter().map(|t| t.text.as_str()).collect::<String>()
+            ),
+            Self::NeedAlias(alias) => format!("alias {alias:?}"),
+            Self::NeedName(name) => format!("name {name:?}"),
+        }
+    }
 }
 pub fn prepare_argument_hints(
     db: &mut Database,
@@ -882,12 +865,6 @@ pub fn prepare_argument_hint(
     sources: &[&PreparedSourceView],
     index: usize,
 ) -> QueryPoll<ArgumentHintPreparation> {
-    if index >= 100_000 {
-        return QueryPoll::Ready(Err(fault(
-            "LRR-E-METADATA-LIMIT",
-            "argument hint ordinal exceeds its budget",
-        )));
-    }
     match argument_hints(db, callee, graph, sources, Some(index)) {
         Ok(value) => value,
         Err(error) => QueryPoll::Ready(Err(error)),
@@ -916,7 +893,6 @@ fn argument_hints(
             template_bytes = template_bytes
                 .checked_add(proof.allocated_bytes()?)
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "reference hint metadata budget"))?;
             reference_hints.insert(templates.len(), proof.clone());
             push_template(
@@ -972,10 +948,34 @@ fn argument_hints(
             TyTerm::Primitive(p) => Some(primitive_runtime_id(*p)?),
             _ => None,
         };
+        let closed_reference = reference_hints.remove(&ordinal);
+        // Only Types a primitive/structural descriptor cannot already name.
+        // Hint preparation at an argument boundary only; the evaluated
+        // contract compares source terms.
+        let written = if index.is_some()
+            && closed_reference.is_none()
+            && !matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_))
+            && (super::written_terms::contains_nominal(&source)
+                || contains_parameter(&source, signature.definition))
+        {
+            match super::written_terms::written_template(
+                db,
+                sources,
+                &source,
+                signature.definition,
+            ) {
+                QueryPoll::Ready(Ok(written)) => written.map(Arc::new),
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+            }
+        } else {
+            None
+        };
         hints.push(ArgumentHint {
             source,
             descriptor,
-            closed_reference: reference_hints.remove(&ordinal),
+            closed_reference,
+            written,
         });
     }
     Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))))
@@ -998,10 +998,191 @@ pub fn prepare_contracts(
         sources,
         explicit,
         result_hint,
-        EvaluatedArguments::Ordinary(arguments),
+        EvaluatedArguments::Ordinary(arguments, None),
     ) {
         Ok(value) => value,
         Err(error) => QueryPoll::Ready(Err(error)),
+    }
+}
+/// Ordinary arguments whose reached descriptors can bind generic parameters
+/// structurally (`&T`, `(T, U)`, `W<T>`).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_contracts_in_store(
+    db: &mut Database,
+    callee: &SourceCallable,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    explicit: &[(u32, ArgumentType)],
+    result_hint: Option<&ArgumentType>,
+    arguments: &[ArgumentType],
+    store: &crate::runtime::cell::GuestStore,
+) -> QueryPoll<ContractPreparation> {
+    match prepare(
+        db,
+        callee,
+        graph,
+        sources,
+        explicit,
+        result_hint,
+        EvaluatedArguments::Ordinary(arguments, Some(store)),
+    ) {
+        Ok(value) => value,
+        Err(error) => QueryPoll::Ready(Err(error)),
+    }
+}
+/// Bind each generic parameter in `template` to the runtime descriptor at
+/// the same position of the reached argument descriptor.
+/// Const generic array lengths (`[T; N]` of an impl's `const N: usize`)
+/// the reached argument's source type binds; a parameter bound twice must
+/// agree.
+fn bind_const_lengths(
+    template: &TyTerm,
+    actual: &TyTerm,
+    definition: Digest,
+    lengths: &mut BTreeMap<ParamKey, u64>,
+) -> Result<(), Diagnostic> {
+    use crate::traits::term::{ConstTerm, GenericArg};
+    match (template, actual) {
+        (TyTerm::Array(element, length), TyTerm::Array(actual_element, actual_length)) => {
+            if let (ConstTerm::Param(key), ConstTerm::Value(value)) = (length, actual_length)
+                && key.definition == definition
+                && lengths.insert(*key, *value).is_some_and(|prior| prior != *value)
+            {
+                return Err(fault(
+                    "LRR-E-GENERIC-BINDING",
+                    "reached const generic lengths disagree",
+                ));
+            }
+            bind_const_lengths(element, actual_element, definition, lengths)
+        }
+        (TyTerm::Ref(_, _, template), TyTerm::Ref(_, _, actual))
+        | (TyTerm::Slice(template), TyTerm::Slice(actual)) => {
+            bind_const_lengths(template, actual, definition, lengths)
+        }
+        (TyTerm::Tuple(templates), TyTerm::Tuple(actuals)) => {
+            for (template, actual) in templates.iter().zip(actuals) {
+                bind_const_lengths(template, actual, definition, lengths)?;
+            }
+            Ok(())
+        }
+        (TyTerm::Nominal(_, templates), TyTerm::Nominal(_, actuals)) => {
+            for (template, actual) in templates.iter().zip(actuals) {
+                if let (GenericArg::Type(template), GenericArg::Type(actual)) = (template, actual) {
+                    bind_const_lengths(template, actual, definition, lengths)?;
+                }
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+pub(crate) fn bind_runtime_parameters(
+    template: &TyTerm,
+    descriptor: TypeId,
+    store: &crate::runtime::cell::GuestStore,
+    definition: Digest,
+    runtime: &mut BTreeMap<ParamKey, TypeId>,
+) -> Result<(), Diagnostic> {
+    use crate::runtime::shape::TypeKey;
+    match template {
+        TyTerm::Param(key) if key.definition == definition => {
+            if runtime.get(key).is_some_and(|prior| *prior != descriptor) {
+                return Err(fault(
+                    "LRR-E-GENERIC-BINDING",
+                    "reached generic runtime descriptors disagree",
+                ));
+            }
+            runtime.insert(*key, descriptor);
+        }
+        TyTerm::Ref(_, _, target) => {
+            if let TypeKey::Ref { target: actual, .. } = store.type_descriptor(descriptor)?.key.as_ref() {
+                bind_runtime_parameters(target, *actual, store, definition, runtime)?;
+            }
+        }
+        TyTerm::Tuple(fields) => {
+            if let TypeKey::Tuple(actual) = store.type_descriptor(descriptor)?.key.as_ref() {
+                for (field, actual) in fields.iter().zip(actual.iter()) {
+                    bind_runtime_parameters(field, *actual, store, definition, runtime)?;
+                }
+            }
+        }
+        TyTerm::Array(element, _) => {
+            if let TypeKey::Array { element: actual, .. } = store.type_descriptor(descriptor)?.key.as_ref() {
+                bind_runtime_parameters(element, *actual, store, definition, runtime)?;
+            }
+        }
+        TyTerm::Slice(element) => {
+            if let TypeKey::Slice { element: actual } = store.type_descriptor(descriptor)?.key.as_ref() {
+                bind_runtime_parameters(element, *actual, store, definition, runtime)?;
+            }
+        }
+        TyTerm::Nominal(_, args) => {
+            if let TypeKey::Nominal { args: actual, .. } = store.type_descriptor(descriptor)?.key.as_ref() {
+                let types = args.iter().filter_map(|arg| match arg {
+                    crate::traits::term::GenericArg::Type(ty) => Some(ty),
+                    _ => None,
+                });
+                for (ty, actual) in types.zip(actual.iter()) {
+                    bind_runtime_parameters(ty, *actual, store, definition, runtime)?;
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+/// A template with a trait object position (`&dyn Trait`, `Box<dyn Trait>`).
+pub(crate) fn contains_object(term: &TyTerm) -> bool {
+    match term {
+        TyTerm::Dyn(_) => true,
+        TyTerm::Ref(_, _, target) | TyTerm::Array(target, _) | TyTerm::Slice(target) => {
+            contains_object(target)
+        }
+        TyTerm::Tuple(fields) => fields.iter().any(contains_object),
+        TyTerm::Nominal(_, args) => args.iter().any(|arg| {
+            matches!(arg, crate::traits::term::GenericArg::Type(ty) if contains_object(ty))
+        }),
+        _ => false,
+    }
+}
+/// Structural agreement where each `dyn` position accepts any concrete type
+/// (the reached value keeps its own type; dispatch uses it).
+fn object_compatible(template: &TyTerm, actual: &TyTerm) -> bool {
+    match (template, actual) {
+        (TyTerm::Dyn(_), _) => true,
+        (TyTerm::Ref(_, m, t), TyTerm::Ref(_, n, a)) => m == n && object_compatible(t, a),
+        (TyTerm::Tuple(t), TyTerm::Tuple(a)) => {
+            t.len() == a.len() && t.iter().zip(a).all(|(t, a)| object_compatible(t, a))
+        }
+        (TyTerm::Nominal(d, t), TyTerm::Nominal(e, a)) => {
+            d == e
+                && t.len() == a.len()
+                && t.iter().zip(a).all(|(t, a)| match (t, a) {
+                    (crate::traits::term::GenericArg::Type(t), crate::traits::term::GenericArg::Type(a)) => {
+                        object_compatible(t, a)
+                    }
+                    (t, a) => t == a,
+                })
+        }
+        (t, a) => super::signature_subst::erase_regions(t) == super::signature_subst::erase_regions(a),
+    }
+}
+fn contains_parameter(term: &TyTerm, definition: Digest) -> bool {
+    match term {
+        TyTerm::Param(key) => key.definition == definition,
+        TyTerm::Array(_, crate::traits::term::ConstTerm::Param(key))
+            if key.definition == definition =>
+        {
+            true
+        }
+        TyTerm::Ref(_, _, target) | TyTerm::Array(target, _) | TyTerm::Slice(target) => {
+            contains_parameter(target, definition)
+        }
+        TyTerm::Tuple(fields) => fields.iter().any(|field| contains_parameter(field, definition)),
+        TyTerm::Nominal(_, args) => args.iter().any(|arg| {
+            matches!(arg, crate::traits::term::GenericArg::Type(ty) if contains_parameter(ty, definition))
+        }),
+        _ => false,
     }
 }
 pub(crate) fn prepare_contracts_with_references(
@@ -1027,7 +1208,10 @@ pub(crate) fn prepare_contracts_with_references(
     }
 }
 enum EvaluatedArguments<'a> {
-    Ordinary(&'a [ArgumentType]),
+    Ordinary(
+        &'a [ArgumentType],
+        Option<&'a crate::runtime::cell::GuestStore>,
+    ),
     References(ReferenceCallArguments<'a>),
 }
 /// Common cheap validation of fully evaluated call inputs. This performs no
@@ -1047,12 +1231,6 @@ pub(crate) fn preflight_evaluated_call(
             "evaluated argument count differs from the selected signature",
         ));
     }
-    if arguments.len() > 100_000 || explicit.len() > 100_000 {
-        return Err(fault(
-            "LRR-E-METADATA-LIMIT",
-            "call contract argument budget exceeded",
-        ));
-    }
     let mut view_bytes = 0usize;
     for actual in arguments
         .iter()
@@ -1067,7 +1245,6 @@ pub(crate) fn preflight_evaluated_call(
                 )
             })?)
             .and_then(|n| n.checked_add(std::mem::size_of::<TyTerm>()))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "call source-view budget exceeded"))?;
         if contains_transaction_term(&actual.source) {
             return Err(fault(
@@ -1102,7 +1279,7 @@ fn prepare(
     evaluated: EvaluatedArguments<'_>,
 ) -> Result<QueryPoll<ContractPreparation>, Diagnostic> {
     let arguments = match &evaluated {
-        EvaluatedArguments::Ordinary(arguments) => *arguments,
+        EvaluatedArguments::Ordinary(arguments, _) => *arguments,
         EvaluatedArguments::References(reference) => reference.arguments,
     };
     callee.revalidate(db)?;
@@ -1136,7 +1313,7 @@ fn prepare(
             arguments,
             reference.references,
         )?,
-        EvaluatedArguments::Ordinary(_) => {
+        EvaluatedArguments::Ordinary(..) => {
             if let Some(ordinal) = hints
                 .iter()
                 .position(|hint| hint.closed_reference.is_some())
@@ -1187,6 +1364,18 @@ fn prepare(
             ));
         }
         match observation.goal() {
+            // A written structural or nominal result (`Opt<u8>`, `(T, P)`):
+            // closed now, or once its parameters bind, as for a module
+            // declaration's written result.
+            super::source_return_goals::ReturnTypeGoal::Ready(proof)
+                if !matches!(proof.source(), TyTerm::Primitive(_))
+                    && (closed_term(proof.source())
+                        || contains_parameter(proof.source(), definition)
+                        || contains_object(proof.source())) =>
+            {
+                plan.guard().require_current(db)?;
+                instantiated.result_symbolic = Some(proof.source().clone());
+            }
             super::source_return_goals::ReturnTypeGoal::Ready(proof) => {
                 let TyTerm::Primitive(source) = proof.source() else {
                     return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
@@ -1220,6 +1409,24 @@ fn prepare(
         let proof = NormalizedDeferredReturn::mint_lexical(db, callee)?;
         instantiated.result_symbolic = Some(TyTerm::Primitive(proof.source));
         normalized_deferred_return = Some(Box::new(proof));
+    } else if instantiated.result_symbolic.is_none()
+        && (signature.result.len() > 1
+            || signature.result.first().is_some_and(|token| token.text == "Self"))
+    {
+        // A written composite result (tuple/array of resolved names).
+        match super::source_types::resolve_written_type(db, graph, sources, signature, &signature.result) {
+            // Closed now, or closed once its generic parameters bind.
+            QueryPoll::Ready(Ok(Some(term)))
+                if closed_term(&term)
+                    || contains_parameter(&term, definition)
+                    || contains_object(&term) =>
+            {
+                instantiated.result_symbolic = Some(term);
+            }
+            QueryPoll::Ready(Ok(_)) => {}
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+        }
     } else if instantiated.result_symbolic.is_none() && signature.result.len() == 1 {
         let resolved = match super::source_types::resolve_named(
             db,
@@ -1246,6 +1453,31 @@ fn prepare(
                     )?));
                     instantiated.result_symbolic = Some(TyTerm::Primitive(primitive));
                 }
+                QueryPoll::Ready(Ok((AliasTarget::Nominal(nominal), _))) => {
+                    instantiated.result_symbolic = Some(TyTerm::Nominal(nominal, Vec::new()));
+                }
+                // A compound alias target (`type Result = core::result::
+                // Result<(), Error>`), walked in the alias's own context.
+                QueryPoll::Ready(Ok((
+                    alias @ AliasTarget::Deferred {
+                        definition: alias_definition,
+                        ..
+                    },
+                    _,
+                ))) => match super::source_types::deferred_alias_type(
+                    db,
+                    graph,
+                    sources,
+                    alias_definition,
+                    &[],
+                ) {
+                    QueryPoll::Ready(Ok(Some(term))) => instantiated.result_symbolic = Some(term),
+                    QueryPoll::Ready(Ok(None)) => {
+                        return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedAlias(alias))));
+                    }
+                    QueryPoll::Ready(Err(error)) => return Err(error),
+                    QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+                },
                 QueryPoll::Ready(Ok((alias, _))) => {
                     return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedAlias(alias))));
                 }
@@ -1280,6 +1512,15 @@ fn prepare(
         symbolic.bind_type_parameter(key.ordinal, &hint.source)?;
         bind(&mut runtime, &mut source_bindings, *key, hint)?;
     }
+    let store = match &evaluated {
+        EvaluatedArguments::Ordinary(_, store) => *store,
+        EvaluatedArguments::References(reference) => Some(reference.store),
+    };
+    let mut structural_generic = false;
+    // Const generic lengths (`[T; N]`) the reached arrays bind.
+    let mut const_lengths = BTreeMap::new();
+    // Callee views of trait-object parameters: the reached concrete types.
+    let mut object_actuals = BTreeMap::new();
     let mut descriptors = Vec::new();
     for (index, (template, actual)) in templates.iter().zip(arguments).enumerate() {
         if actual.source.heap_bytes().is_none() {
@@ -1315,6 +1556,125 @@ fn prepare(
                 symbolic.constrain_argument(index, &actual.source)?;
                 descriptors.push(actual.descriptor);
             }
+            // An associated-type position (`T::V`) is the reached argument's
+            // own type (normalized at the hint when its generics were bound);
+            // the callee views the concrete type, as for trait objects.
+            template if super::associated_types::contains_projection(template) => {
+                structural_generic = true;
+                object_actuals.insert(index, actual.source.clone());
+                descriptors.push(actual.descriptor);
+            }
+            // A closed nominal/tuple parameter accepts exactly the same
+            // reached source type; its runtime descriptor is the argument's.
+            // Generic structure (`&T`, `(T, U)`, `W<T>`): unify the source
+            // shapes and bind each parameter's descriptor from the argument.
+            template
+                if store.is_some()
+                    && contains_parameter(template, definition)
+                    && closed_references
+                        .as_ref()
+                        .is_none_or(|proof| !proof.admits(index)) =>
+            {
+                let store = store.expect("checked store");
+                // `&[T; N]` at a generic `&[U]` coercion site unsizes first:
+                // the parameter binds from the coerced `&[T]` view.
+                let coerced = unsizing_view(template, &actual.source)
+                    .map(|source| {
+                        unsized_reference_descriptor(store, actual.descriptor, template)
+                            .map(|descriptor| (source, descriptor))
+                    })
+                    .transpose()?;
+                let (source, descriptor) = match &coerced {
+                    Some((source, descriptor)) => (source, *descriptor),
+                    None => (&actual.source, actual.descriptor),
+                };
+                symbolic.constrain_argument_erased(index, source)?;
+                bind_runtime_parameters(template, descriptor, store, definition, &mut runtime)?;
+                bind_const_lengths(template, source, definition, &mut const_lengths)?;
+                structural_generic = true;
+                descriptors.push(descriptor);
+            }
+            // A trait-object position accepts the reached concrete value.
+            template if contains_object(template) && !contains_parameter(template, definition) => {
+                if !object_compatible(template, &actual.source) {
+                    return Err(fault(
+                        "LRR-E-CALL-ARG-TYPE",
+                        "argument source type differs from the trait-object parameter type",
+                    ));
+                }
+                structural_generic = true;
+                object_actuals.insert(index, actual.source.clone());
+                descriptors.push(actual.descriptor);
+            }
+            // A closed reference/slice parameter without a location
+            // certificate (`&str`, `&[u8]`): the same type up to regions.
+            TyTerm::Ref(..) | TyTerm::Slice(..)
+                if closed_term(template)
+                    && closed_references
+                        .as_ref()
+                        .is_none_or(|proof| !proof.admits(index)) =>
+            {
+                if super::signature_subst::erase_regions(template)
+                    == super::signature_subst::erase_regions(&actual.source)
+                {
+                    structural_generic = true;
+                    descriptors.push(actual.descriptor);
+                } else if unsizes_to(&actual.source, template) {
+                    // A call argument is a coercion site: the sealed packet
+                    // applies the shared runtime unsizing to this descriptor.
+                    let store = store.ok_or_else(|| {
+                        fault(
+                            "LRR-E-CALL-ARG-TYPE",
+                            "unsizing argument coercion requires its reached store",
+                        )
+                    })?;
+                    descriptors.push(unsized_reference_descriptor(
+                        store,
+                        actual.descriptor,
+                        template,
+                    )?);
+                    structural_generic = true;
+                } else {
+                    return Err(fault(
+                        "LRR-E-CALL-ARG-TYPE",
+                        "argument source type differs from the reference parameter type",
+                    ));
+                }
+            }
+            TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)
+                if closed_term(template) =>
+            {
+                if &actual.source != template {
+                    return Err(fault(
+                        "LRR-E-CALL-ARG-TYPE",
+                        "argument source type differs from the closed parameter type",
+                    ));
+                }
+                // A spelled source term grants no by-value admission: the
+                // reached descriptor itself must be that closed Type.
+                let Some(store) = store else {
+                    return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
+                        definition,
+                        syntax: signature.parameters[index].ty.clone(),
+                    })));
+                };
+                // (A descriptor recording no closed source term, such as a
+                // const-generic nominal, is left to the source comparison.)
+                if store
+                    .descriptor_source_term(actual.descriptor)
+                    .is_some_and(|term| {
+                        super::signature_subst::erase_regions(&term)
+                            != super::signature_subst::erase_regions(template)
+                    })
+                {
+                    return Err(fault(
+                        "LRR-E-CALL-ARG-TYPE",
+                        "argument descriptor differs from the closed parameter type",
+                    ));
+                }
+                symbolic.constrain_argument(index, &actual.source)?;
+                descriptors.push(actual.descriptor);
+            }
             _ => {
                 return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
                     definition,
@@ -1335,6 +1695,89 @@ fn prepare(
     if let (Some(TyTerm::Primitive(_)), Some(hint)) = (&instantiated.result_symbolic, result_hint) {
         symbolic.constrain_result(&hint.source)?;
     }
+    // Structurally bound parameters: publish their source identities beside
+    // their descriptors, and give the callee closed parameter views.
+    let templates = if structural_generic {
+        let mut substitution = crate::traits::subst::Substitution::default();
+        for (key, descriptor) in &runtime {
+            let Some(bound) = symbolic.binding(key.ordinal) else {
+                continue;
+            };
+            if contains_transaction_term(bound) {
+                continue;
+            }
+            source_bindings.entry(*key).or_insert_with(|| bound.clone());
+            let _ = descriptor;
+            substitution.insert(*key, crate::traits::term::GenericArg::Type(bound.clone()))?;
+        }
+        for (key, length) in &const_lengths {
+            substitution.insert(
+                *key,
+                crate::traits::term::GenericArg::Const(crate::traits::term::ConstTerm::Value(
+                    *length,
+                )),
+            )?;
+        }
+        if let Some(result) = &instantiated.result_symbolic
+            && !matches!(result, TyTerm::Param(_))
+            && contains_parameter(result, definition)
+        {
+            let applied = substitution.apply(result)?;
+            if closed_term(&applied) {
+                instantiated.result_symbolic = Some(applied);
+            }
+        }
+        templates
+            .iter()
+            .enumerate()
+            .map(|(index, template)| match object_actuals.remove(&index) {
+                Some(actual) => Ok(actual),
+                None => substitution.apply(template),
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        templates
+    };
+    // A declared result naming generics (`-> Self` of `impl<T> W<T>`,
+    // `-> Option<T>`): the parameters the arguments left unbound bind from
+    // the reached result context (`let v: Vec<i32> = Vec::new()`), and the
+    // bindings close the result.
+    if signature.result_symbolic.is_none()
+        && let Some(result) = instantiated.result_symbolic.clone()
+        && !matches!(result, TyTerm::Param(_))
+        && contains_parameter(&result, definition)
+    {
+        if let (Some(hint), Some(store)) = (result_hint, store)
+            && closed_term(&hint.source)
+            && symbolic.constrain_result(&hint.source).is_ok()
+        {
+            let mut reached = runtime.clone();
+            bind_runtime_parameters(&result, hint.descriptor, store, definition, &mut reached)?;
+            for (key, descriptor) in reached {
+                if runtime.contains_key(&key) {
+                    continue;
+                }
+                let Some(bound) = symbolic.binding(key.ordinal) else {
+                    continue;
+                };
+                if contains_transaction_term(bound) || !closed_term(bound) {
+                    continue;
+                }
+                source_bindings.insert(key, bound.clone());
+                runtime.insert(key, descriptor);
+            }
+        }
+        let mut substitution = crate::traits::subst::Substitution::default();
+        for (key, bound) in &source_bindings {
+            if key.definition == definition && !contains_transaction_term(bound) {
+                substitution.insert(*key, crate::traits::term::GenericArg::Type(bound.clone()))?;
+            }
+        }
+        let applied = substitution.apply(&result)?;
+        if closed_term(&applied) {
+            instantiated.result_symbolic = Some(applied);
+        }
+    }
     let result_descriptor = match instantiated.result_symbolic.as_ref() {
         Some(TyTerm::Param(key)) => runtime.get(key).copied(),
         Some(TyTerm::Primitive(p)) => Some(primitive_runtime_id(*p)?),
@@ -1353,6 +1796,7 @@ fn prepare(
             source_result: instantiated.result_symbolic.clone(),
             result_descriptor,
             normalized_deferred_return,
+            structural_references: structural_generic,
         },
     ))))
 }
@@ -1385,6 +1829,97 @@ fn bind(
     Ok(())
 }
 
+/// rustc's built-in reference unsizing (`CoerceUnsized` for `&`/`&mut`) at a
+/// coercion site: `&[T; N]` / `&mut [T; N]` reach `&[T]`, and `&mut [T; N]`
+/// reaches `&mut [T]`. Regions are not compared (borrow checking is
+/// `cargo check`'s); the element Types must be identical.
+pub(crate) fn unsizes_to(actual: &TyTerm, expected: &TyTerm) -> bool {
+    let (TyTerm::Ref(_, from_mutable, from), TyTerm::Ref(_, to_mutable, to)) = (actual, expected)
+    else {
+        return false;
+    };
+    let (TyTerm::Array(from_element, _), TyTerm::Slice(to_element)) = (from.as_ref(), to.as_ref())
+    else {
+        return false;
+    };
+    (*from_mutable || !*to_mutable)
+        && super::signature_subst::erase_regions(from_element)
+            == super::signature_subst::erase_regions(to_element)
+}
+/// The `&[T]`/`&mut [T]` source view an array reference takes at a slice
+/// reference coercion site whose element may still be generic (`&[U]`).
+pub(crate) fn unsizing_view(template: &TyTerm, actual: &TyTerm) -> Option<TyTerm> {
+    let (TyTerm::Ref(_, to_mutable, to), TyTerm::Ref(region, from_mutable, from)) =
+        (template, actual)
+    else {
+        return None;
+    };
+    let (TyTerm::Slice(_), TyTerm::Array(element, _)) = (to.as_ref(), from.as_ref()) else {
+        return None;
+    };
+    (*from_mutable || !*to_mutable).then(|| {
+        TyTerm::Ref(
+            region.clone(),
+            *to_mutable,
+            Box::new(TyTerm::Slice(element.clone())),
+        )
+    })
+}
+/// The reached descriptor of the `&[T]`/`&mut [T]` an array reference unsizes
+/// to. Every interned array Type carries its slice reference views.
+pub(crate) fn unsized_reference_descriptor(
+    store: &crate::runtime::cell::GuestStore,
+    actual: TypeId,
+    expected: &TyTerm,
+) -> Result<TypeId, Diagnostic> {
+    use crate::runtime::shape::TypeKey;
+    let TyTerm::Ref(_, mutable, _) = expected else {
+        return Err(fault(
+            "LRR-E-CALL-ARG-TYPE",
+            "unsizing coercion requires a reference target",
+        ));
+    };
+    let element = match store.type_descriptor(actual)?.key.as_ref() {
+        TypeKey::Ref { target, .. } => match store.type_descriptor(*target)?.key.as_ref() {
+            TypeKey::Array { element, .. } => Some(*element),
+            _ => None,
+        },
+        _ => None,
+    };
+    element
+        .and_then(|element| store.find_type(&TypeKey::Slice { element }))
+        .and_then(|slice| {
+            store.find_type(&TypeKey::Ref {
+                mutable: *mutable,
+                target: slice,
+            })
+        })
+        .ok_or_else(|| {
+            fault(
+                "LRR-E-CALL-ARG-TYPE",
+                "unsizing argument descriptor differs from its array reference",
+            )
+        })
+}
+/// A source type with no generic parameters, inference or projection: its
+/// identity alone determines the runtime value family.
+pub(crate) fn closed_term(term: &TyTerm) -> bool {
+    match term {
+        TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Never => true,
+        TyTerm::Ref(region, _, target) => {
+            !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && closed_term(target)
+        }
+        TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
+            crate::traits::term::GenericArg::Type(ty) => closed_term(ty),
+            _ => false,
+        }),
+        TyTerm::Tuple(fields) => fields.iter().all(closed_term),
+        TyTerm::Array(element, crate::traits::term::ConstTerm::Value(_)) | TyTerm::Slice(element) => {
+            closed_term(element)
+        }
+        _ => false,
+    }
+}
 pub(crate) fn contains_transaction_term(term: &TyTerm) -> bool {
     let mut stack = vec![term];
     while let Some(term) = stack.pop() {

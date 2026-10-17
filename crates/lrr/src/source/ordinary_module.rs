@@ -75,7 +75,6 @@ impl OrdinaryModuleSourceView {
             .checked_add(outline.estimated_bytes())
             .and_then(|n| n.checked_add(declaration.metadata_bytes()))
             .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("ordinary module projection metadata limit"))?;
         Ok(Self {
             capture,
@@ -122,7 +121,6 @@ impl OrdinaryModuleSyntaxInput {
                 .checked_add(key.heap_bytes())
                 .and_then(|n| n.checked_add(value.estimated_bytes().ok()?))
                 .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("ordinary module syntax metadata limit"))?;
         }
         let mut e = StableEncoder::new("lrr/v2/ordinary-module-syntax-projection");

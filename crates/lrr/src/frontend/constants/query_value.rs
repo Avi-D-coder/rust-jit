@@ -29,9 +29,7 @@ impl ConstantQueryValue {
         }
         key.metadata_bytes()?
             .checked_add(payload.metadata_bytes()?)
-            .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 128))
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(|| {
+            .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 128))            .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
                     "constant query result metadata limit".into(),
@@ -51,9 +49,7 @@ impl ConstantQueryValue {
     pub fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         std::mem::size_of::<Self>()
             .checked_add(self.key.heap_bytes()?)
-            .and_then(|n| n.checked_add(self.payload.metadata_bytes().ok()?))
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(|| {
+            .and_then(|n| n.checked_add(self.payload.metadata_bytes().ok()?))            .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
                     "constant query result metadata limit".into(),

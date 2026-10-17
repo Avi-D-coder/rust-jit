@@ -10,7 +10,7 @@ use crate::{
             GeneratedSourceRequest, IncludeAuthorities, IncludeKind, IncludeLocation,
             IncludeRootKind,
         },
-        snapshot::{MAX_SOURCE_FILE, SourceBlob, SourcePath},
+        snapshot::{SourceBlob, SourcePath},
     },
 };
 use cap_std::fs::{Dir, Metadata};
@@ -85,12 +85,6 @@ impl SourceCapture {
         requests: &[GeneratedSourceRequest],
         before_verify: impl FnOnce(),
     ) -> Result<crate::source::included::CapturedIncludeSet, Diagnostic> {
-        if requests.len() > 100_000 {
-            return Err(fault(
-                "LRR-E-SOURCE-LIMIT",
-                "include set count exceeds limit",
-            ));
-        }
         self.verify_roots()?;
         let mut records = BTreeMap::new();
         let mut bytes = 0usize;
@@ -105,10 +99,7 @@ impl SourceCapture {
             let record = self.capture(request)?;
             bytes = bytes
                 .checked_add(record.blob().bytes().len())
-                .filter(|n| *n <= crate::source::snapshot::MAX_SNAPSHOT_SOURCE)
-                .ok_or_else(|| {
-                    fault("LRR-E-SOURCE-LIMIT", "include set exceeds source byte cap")
-                })?;
+                .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "include set byte count overflow"))?;
             metadata = metadata
                 .checked_add(
                     record
@@ -116,8 +107,7 @@ impl SourceCapture {
                         .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "include metadata overflow"))?,
                 )
                 .and_then(|n| n.checked_add(96))
-                .filter(|n| *n <= 32 * 1024 * 1024)
-                .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "include set exceeds metadata cap"))?;
+                .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "include set metadata overflow"))?;
             records.insert(request.identity(), record);
         }
         before_verify();
@@ -284,7 +274,6 @@ impl SourceCapture {
         while let Some(part) = pending.pop_front() {
             work = work
                 .checked_add(1)
-                .filter(|n| *n <= 4096)
                 .ok_or_else(|| fault("LRR-E-SOURCE-PATH", "include path resolution work limit"))?;
             if part == ".." {
                 current.pop();
@@ -367,14 +356,13 @@ impl SourceCapture {
             if metadata.file_type().is_symlink() {
                 links = links
                     .checked_add(1)
-                    .filter(|n| *n <= 40)
                     .ok_or_else(|| fault("LRR-E-SOURCE-PATH", "include symbolic link limit"))?;
                 let target = dir
                     .read_link_contents(relative)
                     .map_err(|e| fault("LRR-E-SOURCE-PATH", e.to_string()))?;
                 if target
                     .to_str()
-                    .is_none_or(|s| s.len() > 64 * 1024 || s.contains('\0'))
+                    .is_none_or(|s| s.contains('\0'))
                 {
                     return Err(fault("LRR-E-SOURCE-PATH", "invalid include link target"));
                 }
@@ -385,9 +373,6 @@ impl SourceCapture {
                 }
                 let mut next = parts(&target);
                 next.append(&mut pending);
-                if next.len() > 1024 {
-                    return Err(fault("LRR-E-SOURCE-PATH", "include link component limit"));
-                }
                 pending = next;
             } else if !pending.is_empty() && !metadata.is_dir() {
                 return Err(fault(
@@ -689,9 +674,6 @@ impl SourceCapture {
                     "included source is not a regular file",
                 ));
             }
-            if before.len() > MAX_SOURCE_FILE as u64 {
-                return Err(fault("LRR-E-SOURCE-LIMIT", "included source exceeds 8 MiB"));
-            }
             before_open();
             use cap_std::fs::OpenOptionsExt as _;
             let flags = i32::try_from(rustix::fs::OFlags::NONBLOCK.bits())
@@ -723,7 +705,6 @@ impl SourceCapture {
                 if bytes
                     .len()
                     .checked_add(n)
-                    .filter(|n| *n <= MAX_SOURCE_FILE)
                     .is_none()
                 {
                     return Err(fault(

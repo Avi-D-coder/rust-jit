@@ -60,12 +60,6 @@ impl BuiltinAttributeDescriptor {
 }
 /// Compiler-facet discovery never establishes the identity of a user attribute.
 pub fn descriptor(name: &str) -> Result<Option<BuiltinAttributeDescriptor>, AdapterError> {
-    if name.len() > 64 * 1024 {
-        return Err(AdapterError {
-            code: "LRR-E-MACRO-SCOPE",
-            message: "builtin attribute name limit".into(),
-        });
-    }
     let Some(attribute) = find_builtin_attr(&Name::new_root(name)) else {
         return Ok(None);
     };
@@ -96,17 +90,21 @@ pub struct InertAttributeDescriptor {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CompilerAttributeRequirement {
     DiagnosticMetadata,
+    /// rustc lowers the annotated code to control flow observably identical to
+    /// the unannotated code, so execution needs no handler.
+    ExecutionInert,
     SemanticHandler,
 }
+/// `#[loop_match]` and `#[const_continue]`: rustc_mir_build
+/// (`builder/expr/into.rs`, `ExprKind::LoopMatch` / `ExprKind::ConstContinue`)
+/// lowers a `#[const_continue] break 'blk value` to the store of `value` into
+/// the loop's state place plus a direct jump to the arm that state selects:
+/// the same observable behavior as the plain `break` and the next `loop`
+/// iteration's `match` on the state.
+const EXECUTION_INERT_NAMES: &[&str] = &["const_continue", "loop_match"];
 pub fn compiler_attribute_requirement(
     name: &str,
 ) -> Result<Option<CompilerAttributeRequirement>, AdapterError> {
-    if name.len() > 64 * 1024 {
-        return Err(AdapterError {
-            code: "LRR-E-MACRO-SCOPE",
-            message: "compiler attribute name limit".into(),
-        });
-    }
     if compiler_inventory::NAMES.binary_search(&name).is_err() {
         return Ok(None);
     }
@@ -116,6 +114,8 @@ pub fn compiler_attribute_requirement(
             .is_ok()
         {
             CompilerAttributeRequirement::DiagnosticMetadata
+        } else if EXECUTION_INERT_NAMES.binary_search(&name).is_ok() {
+            CompilerAttributeRequirement::ExecutionInert
         } else {
             CompilerAttributeRequirement::SemanticHandler
         },
@@ -148,9 +148,6 @@ fn inert_descriptor_for_phase(
         code: "LRR-E-MACRO-SCOPE",
         message: message.into(),
     };
-    if name.len() > 64 * 1024 {
-        return Err(fault("inert attribute name limit"));
-    }
     let upstream = hir_expand::inert_attr_macro::INERT_ATTRIBUTES
         .iter()
         .find(|attribute| attribute.name == name);
@@ -162,9 +159,13 @@ fn inert_descriptor_for_phase(
         Some(attribute) => (attribute.name, false),
         None => match compiler_inventory::NAMES.binary_search(&name) {
             Ok(index) => {
-                if compiler_attribute_requirement(name)?
-                    != Some(CompilerAttributeRequirement::DiagnosticMetadata)
-                {
+                if !matches!(
+                    compiler_attribute_requirement(name)?,
+                    Some(
+                        CompilerAttributeRequirement::DiagnosticMetadata
+                            | CompilerAttributeRequirement::ExecutionInert
+                    )
+                ) {
                     if !final_selection {
                         return Ok(None);
                     }
@@ -217,6 +218,18 @@ mod inventory_tests {
         ast::{self, HasModuleItem, HasName},
     };
 
+    #[test]
+    fn execution_inert_attributes_are_pinned_compiler_names() {
+        assert!(EXECUTION_INERT_NAMES.windows(2).all(|pair| pair[0] < pair[1]));
+        for name in EXECUTION_INERT_NAMES {
+            assert!(compiler_inventory::NAMES.binary_search(name).is_ok());
+            assert_eq!(
+                compiler_attribute_requirement(name).unwrap(),
+                Some(CompilerAttributeRequirement::ExecutionInert)
+            );
+            assert_eq!(inert_descriptor(name).unwrap().unwrap().name(), *name);
+        }
+    }
     #[test]
     fn preparation_never_turns_a_semantic_handler_into_an_inert_descriptor() {
         let mut prepared = 0usize;
@@ -323,9 +336,13 @@ mod inventory_tests {
                     descriptor.definition_identity(),
                     Key(*hash.finalize().as_bytes())
                 );
-            } else if compiler_attribute_requirement(name).unwrap()
-                == Some(CompilerAttributeRequirement::DiagnosticMetadata)
-            {
+            } else if matches!(
+                compiler_attribute_requirement(name).unwrap(),
+                Some(
+                    CompilerAttributeRequirement::DiagnosticMetadata
+                        | CompilerAttributeRequirement::ExecutionInert
+                )
+            ) {
                 assert_eq!(
                     inert_descriptor(name).unwrap().unwrap().name(),
                     name.as_str()

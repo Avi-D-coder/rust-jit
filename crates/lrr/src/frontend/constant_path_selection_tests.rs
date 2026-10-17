@@ -82,7 +82,7 @@ fn unchanged_module_constant_qualified_path_selects_exact_bits_all_editions() {
         let (body, range) = site(&view, definition, MODULE, "u8::BITS");
         let before = db.trace.events.len();
         let ConstantPathOutcome::Selected(selected) =
-            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
                 .unwrap()
         else {
             panic!("module constant was not selected")
@@ -176,7 +176,7 @@ fn supplemental_renamed_original_member_has_a_current_sealed_request() {
         publish_target(&mut db, &view, "A");
         let (body, range) = site(&view, definition, text, "exported::B");
         let ConstantPathOutcome::Selected(selected) =
-            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
                 .unwrap()
         else {
             panic!("renamed declaration missing")
@@ -213,7 +213,7 @@ fn explicit_local_and_parameter_bindings_never_fall_through_to_module_constant()
             range.end -= 1;
         }
         assert!(matches!(
-            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
                 .unwrap(),
             ConstantPathOutcome::LocalBinding(_)
         ));
@@ -226,7 +226,7 @@ fn local_constant_without_owned_publication_remains_precise_lexical_prerequisite
     let (body, mut range) = site(&view, definition, text, "value=C");
     range.start += 6;
     assert!(matches!(
-        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
             .unwrap(),
         ConstantPathOutcome::RequiredLexicalConstant(_)
     ));
@@ -240,7 +240,7 @@ fn missing_and_associated_paths_never_become_absent_or_guessed_members() {
         let (db, view, definition) = world(text, "main", 2024, true);
         let (body, range) = site(&view, definition, text, needle);
         assert!(matches!(
-            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+            ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
                 .unwrap(),
             ConstantPathOutcome::RequiredNamespace(_)
         ));
@@ -252,7 +252,7 @@ fn copied_source_and_derived_epoch_invalidate_exact_selection() {
     publish_target(&mut db, &view, "BITS");
     let (body, range) = site(&view, definition, MODULE, "u8::BITS");
     let ConstantPathOutcome::Selected(selected) =
-        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
             .unwrap()
     else {
         panic!()
@@ -276,7 +276,7 @@ fn current_path_source_range_and_quota_refuse_before_request_attachment() {
         end: range.end,
     };
     assert!(
-        ConstantPathSelection::capture_current(&db, &view, &body, wrong, &[&view], MAX_BYTES)
+        ConstantPathSelection::capture_current(&db, &view, &body, wrong, &[&view], usize::MAX)
             .is_err()
     );
     assert_eq!(db.trace.events.len(), before);
@@ -312,7 +312,7 @@ fn original_pattern_binding_is_not_a_path_expression_authority() {
     let (body, mut range) = site(&view, definition, SHADOW_PATTERN, "mut C");
     range.start += 4;
     assert!(
-        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
             .is_err()
     );
 }
@@ -324,7 +324,7 @@ fn generic_const_parameter_cannot_be_replaced_by_equal_named_constant() {
     range.start += 1;
     range.end -= 1;
     assert!(
-        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
             .is_err()
     );
 }
@@ -336,7 +336,7 @@ fn cfg_disabled_site_and_replaced_body_fact_cannot_select_a_request() {
     let (body, mut range) = site(&view, definition, text, "value=C");
     range.start += 6;
     assert!(
-        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], MAX_BYTES)
+        ConstantPathSelection::capture_current(&db, &view, &body, range, &[&view], usize::MAX)
             .is_err()
     );
     let (mut db, view, definition) = world(MODULE, "NUM", 2024, true);
@@ -367,7 +367,7 @@ fn cfg_disabled_site_and_replaced_body_fact_cannot_select_a_request() {
                 .clone(),
             range,
             &[&view],
-            MAX_BYTES
+            usize::MAX
         )
         .is_err()
     );

@@ -54,26 +54,13 @@ pub fn procedural_engine_version() -> Digest {
     encoder.finish()
 }
 fn raw_hash(path: &Path, expected: Digest) -> Result<String, Diagnostic> {
-    const LIMIT: u64 = 512 * 1024 * 1024;
     let mut file =
         File::open(path).map_err(|e| fault("LRR-E-TOOL-PREPARE-STALE", e.to_string()))?;
-    if file
-        .metadata()
-        .map_err(|e| fault("LRR-E-TOOL-PREPARE-STALE", e.to_string()))?
-        .len()
-        > LIMIT
-    {
-        return Err(fault(
-            "LRR-E-MACRO-OUTPUT",
-            "prepared tool file exceeds 512 MiB",
-        ));
-    }
     let mut bytes = Vec::new();
     file.by_ref()
-        .take(LIMIT + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| fault("LRR-E-TOOL-PREPARE-STALE", e.to_string()))?;
-    if bytes.len() as u64 > LIMIT || Digest::of_bytes(&bytes) != expected {
+    if Digest::of_bytes(&bytes) != expected {
         return Err(fault(
             "LRR-E-TOOL-PREPARE-STALE",
             "prepared tool content changed",
@@ -174,7 +161,7 @@ impl MacroSession {
             manifest,
             allow_macro_execution,
             directory,
-            Duration::from_secs(10),
+            lrr_expand_adapter::NO_TIME_LIMIT,
             output_limit,
             Some(deadline),
         )
@@ -288,7 +275,7 @@ impl MacroSession {
             environment: env,
             directory,
             timeout,
-            wire_limit: 256 * 1024 * 1024,
+            wire_limit: usize::MAX,
             output_limit,
         };
         let session = match deadline {
@@ -380,12 +367,6 @@ impl MacroSession {
             return Err(fault(
                 "LRR-E-MACRO-SCOPE",
                 "catalog consumer differs from frozen session",
-            ));
-        }
-        if self.loaded_exports.len() > 4096 {
-            return Err(fault(
-                "LRR-E-MACRO-SCOPE",
-                "prepared procedural export count limit",
             ));
         }
         Ok(self.catalog.clone())
@@ -589,12 +570,6 @@ impl MacroSession {
             }
             return Ok(identity);
         }
-        if self.source_derives.len() >= 4096 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "source derive declaration count limit",
-            ));
-        }
         let mut bytes = 0usize;
         for d in self
             .source_derives
@@ -610,12 +585,6 @@ impl MacroSession {
                 .ok_or_else(|| {
                     fault("LRR-E-METADATA-LIMIT", "source derive accounting overflow")
                 })?;
-        }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "source derive metadata byte limit",
-            ));
         }
         self.retain_definition_site(manifest, producer, blob)?;
         self.source_derives.insert(entry, (identity, declaration));
@@ -941,18 +910,11 @@ impl MacroSession {
             .checked_add(path.len())
             .and_then(|n| n.checked_add(512))
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "definition source storage overflow"))?;
-        let retained = self
+        let _retained = self
             .definition_sites
             .values()
             .try_fold(bytes, |n, s| n.checked_add(s.bytes))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "definition source storage limit"))?;
-        if self.definition_sites.len() >= 4096 || retained > 32 * 1024 * 1024 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "definition source count limit",
-            ));
-        }
         let edition = match unit.key.edition {
             2015 => Edition::E2015,
             2018 => Edition::E2018,
@@ -1019,19 +981,12 @@ impl MacroSession {
             diagnostic_bytes = diagnostic_bytes
                 .checked_add(128)
                 .and_then(|n| n.checked_add(export.len()))
-                .filter(|n| *n <= 64 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
                         "procedural definition origin storage limit",
                     )
                 })?;
-            if diagnostic_count == 4096 {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "procedural definition origin count limit",
-                ));
-            }
             let mut name = String::new();
             name.try_reserve_exact(export.len()).map_err(|_| {
                 fault(
@@ -1048,7 +1003,6 @@ impl MacroSession {
             if !diagnostic_definitions.contains_key(&kind) {
                 diagnostic_bytes = diagnostic_bytes
                     .checked_add(128)
-                    .filter(|n| *n <= 64 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-METADATA-LIMIT",
@@ -1119,7 +1073,6 @@ impl MacroSession {
         self.definition_sites
             .values()
             .try_fold(bytes, |n, site| n.checked_add(site.bytes))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "definition site storage limit"))?;
         self.definition_sites.insert(
             artifact,
@@ -1217,34 +1170,21 @@ impl MacroSession {
                 }
                 continue;
             }
-            if candidate.len() >= 4096 {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "generated helper declaration count limit",
-                ));
-            }
             let mut e = StableEncoder::new("lrr/v2/generated-macro-host-declaration");
             e.digest(artifact_id);
             e.digest(proof.origin);
             e.record(&declaration);
             candidate.insert(key, (e.finish(), declaration));
         }
-        let bytes = candidate.values().try_fold(0usize, |n, (_, d)| {
+        let _bytes = candidate.values().try_fold(0usize, |n, (_, d)| {
             n.checked_add(d.names().allocated_bytes()?)
                 .and_then(|n| n.checked_add(512))
                 .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "generated helper storage overflow"))
         })?;
-        if bytes > 32 * 1024 * 1024 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "generated helper storage limit",
-            ));
-        }
         self.retain_definition_site(manifest, proof.producer, &proof.definition_blob)?;
         let count = self
             .host_declaration_expansions
             .checked_add(proof.expansions)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",

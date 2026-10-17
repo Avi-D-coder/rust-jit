@@ -119,13 +119,9 @@ impl SourceDiscovery {
                 return Err(fault("macro-export role source scope/outline differs"));
             }
             observation.require_source(source, self.key.unit_graph)?;
-            if roles.len() >= 256 {
-                return Err(fault("macro-export source role count limit"));
-            }
             role_bytes = role_bytes
                 .checked_add(observation.metadata_bytes())
                 .and_then(|bytes| bytes.checked_add(128 + 2 * std::mem::size_of::<usize>()))
-                .filter(|bytes| *bytes <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("macro-export source role metadata limit"))?;
             for stamp in observation.dependencies() {
                 let DependencyStamp::Input { key, fingerprint } = stamp else {
@@ -142,14 +138,6 @@ impl SourceDiscovery {
                     return Err(fault("macro-export source preparation changed"));
                 }
                 if !self.compiler_inputs.contains_key(key) && !additions.contains_key(key) {
-                    if self
-                        .compiler_inputs
-                        .len()
-                        .checked_add(additions.len())
-                        .is_none_or(|count| count >= 100_000)
-                    {
-                        return Err(fault("macro-export selected input count limit"));
-                    }
                     additions.insert(key.clone(), *fingerprint);
                 }
             }
@@ -181,14 +169,12 @@ impl SourceDiscovery {
         self.retained_record_bytes
             .checked_add(input_bytes)
             .and_then(|bytes| bytes.checked_add(role_bytes))
-            .filter(|bytes| *bytes <= 320 * 1024 * 1024)
             .ok_or_else(|| fault("macro-export selected input transient metadata limit"))?;
         let retained = self
             .retained_record_bytes
             .checked_sub(self.macro_export_source_bytes)
             .and_then(|bytes| bytes.checked_add(role_bytes))
             .and_then(|bytes| bytes.checked_add(input_bytes))
-            .filter(|bytes| *bytes <= 320 * 1024 * 1024)
             .ok_or_else(|| fault("macro-export selected input metadata limit"))?;
         self.compiler_inputs.extend(additions);
         self.macro_export_sources = roles;
@@ -279,7 +265,6 @@ impl SourceDiscovery {
                 std::mem::size_of::<SealedMacroExportView<'_>>(),
                 |bytes, stamp| bytes.checked_add(stamp.heap_bytes()),
             )
-            .filter(|bytes| *bytes <= 1024 * 1024)
         else {
             return QueryPoll::Ready(Err(fault(
                 "macro-export borrowed dependency metadata limit",

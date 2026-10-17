@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "component": "common-completed-source-environment-retirement-v1",
+  "status": "source-only-uncompiled-unexecuted",
+  "source_fingerprint": "36b1f898b4d48fa20f431bb5e8f566414744e3c88f0225b23a4dabf15c0876b5",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "sha256": "16ab43637487ff1afb9b066bd1b339c4c57ca097c80922826bb20d56ec190555",
+      "bytes": 20562
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs_tests.rs",
+      "sha256": "30b50ffe8cb51a4a972ae8d7e802aef127b0be4e505c3d6d6a50cc9449fe7e93",
+      "bytes": 16309
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "0bd7261233eb4a0d5bfee5b907cf97482da62be4d5cb0b8274c0dda2aa37b574",
+      "contract": "root-owned evict_between_runs extends actual external_artifacts with completed_environment_input_roots()? before retain_external; full leaf hash observation, do not overlay unrelated pending code"
+    },
+    "frozen common-completed-source-environment-v1 source19"
+  ],
+  "handoff": {
+    "path": "worktracks/03-control-flow-patterns/completed-source-environment-retirement-handoff.md",
+    "sha256": "5fa5c78762aa6c14762d13f42dff1f9891456ed3e0840b17bae4877b93453fa6"
+  },
+  "new_test_bodies": 1,
+  "tests": "none executed"
+}

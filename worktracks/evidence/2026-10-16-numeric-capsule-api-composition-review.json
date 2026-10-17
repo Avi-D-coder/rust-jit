@@ -1,0 +1,338 @@
+{
+  "schema": 1,
+  "scope": "read-only exact component checksums/merge ordering and small API hook checks; no Cargo or Rust semantic acceptance",
+  "order": [
+    {
+      "name": "qualified11",
+      "manifest": "/private/tmp/lrr-qualified-type-read-footprint-v1/COMPONENT.json",
+      "manifest_sha256": "b7e3eefb43d62e71f274ec24387bb7debe4c1d9e58c5b5578b8ff65e5d3655a6",
+      "payload": "/private/tmp/lrr-qualified-type-read-footprint-v1/overlay",
+      "files": 11,
+      "bad": [],
+      "overlaps": []
+    },
+    {
+      "name": "value11",
+      "manifest": "/private/tmp/lrr-entered-value-source-goals-v1/COMPONENT.json",
+      "manifest_sha256": "869db97ac3fef6ccf9fc1937d694ffdb10b6fa85baf7d3569b791ae9d30fd60b",
+      "payload": "/private/tmp/lrr-entered-value-source-goals-v1/overlay",
+      "files": 11,
+      "bad": [],
+      "overlaps": [
+        {
+          "path": "crates/lrr/src/frontend/namespace_reads.rs",
+          "replaces": "qualified11"
+        },
+        {
+          "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+          "replaces": "qualified11"
+        },
+        {
+          "path": "crates/lrr/src/frontend/source_local_plan.rs",
+          "replaces": "qualified11"
+        },
+        {
+          "path": "crates/lrr/src/frontend/source_locals.rs",
+          "replaces": "qualified11"
+        }
+      ]
+    },
+    {
+      "name": "guard5",
+      "manifest": "/private/tmp/lrr-recipe-prepared-input-guard-v1/COMPONENT.json",
+      "manifest_sha256": "3b1b2e6e13860e71fee98c18256e722ceb01e6027cd567b88b4ae824a6d0c377",
+      "payload": "/private/tmp/lrr-recipe-prepared-input-guard-v1/overlay",
+      "files": 5,
+      "bad": [],
+      "overlaps": []
+    },
+    {
+      "name": "root18",
+      "manifest": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-numeric-binding-pipeline-v1/COMPONENT.json",
+      "manifest_sha256": "0cc076a0a7640eb85c3edeb192f2f80106cc151be6b60f0131d3429deb569f2c",
+      "payload": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-numeric-binding-pipeline-v1/source",
+      "files": 18,
+      "bad": [],
+      "overlaps": [
+        {
+          "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+          "replaces": "value11"
+        }
+      ]
+    }
+  ],
+  "selected_files": [
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/cli/mod.rs",
+      "bytes": 82583,
+      "sha256": "201c2e378cf1893263b0b93cc2523838f451068bcc4e56d8cb5db10f877b17f2"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "bytes": 21393,
+      "sha256": "be70cb6c86f4b55286b312ff8c7b4b5400f1e19d46466aabb6a90da8b9e7a2c7"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/binding_constraint_thunk.rs",
+      "bytes": 3284,
+      "sha256": "e48a98512942edc5979dc241f3e2d1b9b46a072e9266b8348cfdc2d4414d4b00"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/key.rs",
+      "bytes": 11386,
+      "sha256": "8a7d90b749fb86bc1285d12494dc522e11d7e1509dbab22a284a928b1b7a899d"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/memo.rs",
+      "bytes": 139350,
+      "sha256": "41ae97cde4e201bf56aeeb5176ee664ef73f425cbe9f4ee29b6c32c8e8cea4f8"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/mod.rs",
+      "bytes": 505,
+      "sha256": "ef55e3de636eaa0752d5d5f12648364e3ebdb1721be9de04bd6d1fa6928e23b1"
+    },
+    {
+      "packet": "guard5",
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "920c02fadac32cb34ba6492865d9c87ca44a47577c79a18b29b6a999ad88ad79",
+      "bytes": 27814
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "bytes": 16553,
+      "sha256": "0b2fab22c2f44b2935f1b5d5f719271e47e96cb7af26504d6baf64c2795b14e2"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/provider.rs",
+      "bytes": 56416,
+      "sha256": "8793156b8ca7e624c4c548102ad75c6fb9f52ade2bf90c1c1e0f27a5dc0f6b22"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/source_constraint_tests.rs",
+      "bytes": 6586,
+      "sha256": "8dfb2817cef72721c3d9ba0e074214669fa18f57725952f868fa0722cf6382ec"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/db/value.rs",
+      "bytes": 19661,
+      "sha256": "beaf61cf777f96075b4c9ebf48d6caafb40dec0652100d06fcf15c1662edc0b2"
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/facade/value_binding_prelude.rs",
+      "sha256": "5686c883d5b296d569f6a55d56d761f86cef003385e0a9a39c7d5b90dc31c685",
+      "bytes": 5523
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/frontend/binding_constraint_tests.rs",
+      "bytes": 8419,
+      "sha256": "536bbfa158605798f5fd18d79a20f71371defe6d658794599cd53b7ef57abe1d"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/frontend/binding_constraints.rs",
+      "bytes": 12850,
+      "sha256": "69136e3b2cd885beca9b27ccca4d5e4d83ed02e7ee6132eb865af06555fecf33"
+    },
+    {
+      "packet": "qualified11",
+      "path": "crates/lrr/src/frontend/body_type_declaration_tests.rs",
+      "sha256": "feb2b5397452a324ce1454121e736951790e164fa2b5ee579ef4c49c61863f0f",
+      "bytes": 21202
+    },
+    {
+      "packet": "qualified11",
+      "path": "crates/lrr/src/frontend/body_type_declarations.rs",
+      "sha256": "68c533d0168d9435805073d9a900639cb568f03fad10b94ce9a359f7735d96ea",
+      "bytes": 25773
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "bytes": 10950,
+      "sha256": "7bb627bbb7cdd202ead3a200936cc394c39cec32c02a5d04e13473330efbc6ec"
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "20b61d93aa99d910dd5caa8c995dd189a0cabd4ef24199db5a2de7440d9631bd",
+      "bytes": 30476
+    },
+    {
+      "packet": "qualified11",
+      "path": "crates/lrr/src/frontend/glob_lookup.rs",
+      "sha256": "cc0fee6f4d6198c35def8ee96e16fef7efc283b3ff6886100571b37ae08da183",
+      "bytes": 21226
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/local_type_modules.rs",
+      "sha256": "a420cb36608557061d2afd7f9243d8fb7a9460747b744d7314bada3044ee29a3",
+      "bytes": 11642
+    },
+    {
+      "packet": "qualified11",
+      "path": "crates/lrr/src/frontend/macro_names.rs",
+      "sha256": "c5a9c0a99d83a46ad1624e24ea69a976d19e9b70865bcd046bc98811fc375e1d",
+      "bytes": 106849
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "bytes": 1895,
+      "sha256": "90bafef89a52e890e73dd3613a28b0f180e1f3085d39c571b41faee589ca3b67"
+    },
+    {
+      "packet": "qualified11",
+      "path": "crates/lrr/src/frontend/module_paths.rs",
+      "sha256": "085c3d33d540e35b85c2ba4fe25346bcbd224c7e43ee1f055fc64e39323964ba",
+      "bytes": 27758
+    },
+    {
+      "packet": "qualified11",
+      "path": "crates/lrr/src/frontend/names.rs",
+      "sha256": "36afe6f7e3bd53df76e3e3d8ff23d06b01e0ecfe68677581b6536b128d775bd8",
+      "bytes": 114448
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/namespace_reads.rs",
+      "sha256": "4497dde247fc653ea9577aad769ec72e7bfb25ea031e04d24abb6ac31d94a772",
+      "bytes": 17372
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/pattern_binding_occurrences.rs",
+      "sha256": "e74fa2bc3e7327a8075405f2b4ec8272fdb278ea1fcfc997aa299f8dcf304caf",
+      "bytes": 34482
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/frontend/prepared_binding_plan.rs",
+      "bytes": 3330,
+      "sha256": "b8bb4095f9e05b0cbcc8732a721017fd176541d1e59460e5aa25142c5154d351"
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "sha256": "a664e8a2dd9dc54824d777d34ff3edad6721d8ca1d737a3308705420d0865135",
+      "bytes": 14681
+    },
+    {
+      "packet": "qualified11",
+      "path": "crates/lrr/src/frontend/qualified_type_names_tests.rs",
+      "sha256": "7bea3fbdb4e42d0d28ba06c11a297fe07c1264770c117ad1d509a39ef30fc93a",
+      "bytes": 7727
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "5c1d9076f1b7b56ff1a590a975da7ff159911fcf260f4dd843d32e4dc906fa14",
+      "bytes": 33954
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "050017c60d973d6a1694bdca32ff02f0d58d8c1bed9726280f2ef12c47214f3b",
+      "bytes": 94301
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/source_value_goal_tests.rs",
+      "sha256": "6cb01ad28ee21f4af4834a9a2edc3aaa4e1f8410352d2f33aa8681d1e4a9dd47",
+      "bytes": 9281
+    },
+    {
+      "packet": "value11",
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "3ee491a13751127b7a5633f36088a2cdce8223fd85a4f1a9b897d38b0e6aa479",
+      "bytes": 29639
+    },
+    {
+      "packet": "guard5",
+      "path": "crates/lrr/src/ir/prepared_input_recipe_tests.rs",
+      "sha256": "3c804d307dbdf2485a63672c0aae68a351c6ed5255ade815eece216cee35ccdb",
+      "bytes": 10022
+    },
+    {
+      "packet": "guard5",
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "91f425a4de402725a9ed2d0a1da5fa287790ecdf214aa033412b2cc784281095",
+      "bytes": 29707
+    },
+    {
+      "packet": "guard5",
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "f447ac8d3658abe1564b655175dc133be72417c5a40bc0c22c48b9237b5ea05b",
+      "bytes": 83193
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/service/expansion.rs",
+      "bytes": 22678,
+      "sha256": "eff8b75630067adc7e41ff1e3d6a0b5a86e9f5a5df3e336fb781cf210ee18fc1"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/syntax/source_constraints.rs",
+      "bytes": 17124,
+      "sha256": "a821db59f8c5a57fd7f3e67e7ab4159d44283cd089b3eadfb7d3654267eab331"
+    },
+    {
+      "packet": "root18",
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "bytes": 187656,
+      "sha256": "301c9ef6b4263347e2008063d1d32f155a1bc585cc815d5d5e304a6c4f9e9b2d"
+    }
+  ],
+  "checks": {
+    "crates/lrr/src/db/value.rs": [
+      "value.prepared_inputs_fingerprint()",
+      "Self::DeclaredParameterGoal",
+      "Self::EnteredValue",
+      "Self::BindingConstraints",
+      "Self::PreparedBindingPlan",
+      "value.retained_plan()"
+    ],
+    "crates/lrr/src/db/key.rs": [
+      "e.u32(38)",
+      "e.u32(39)",
+      "e.u32(40)",
+      "e.u32(41)",
+      "Self::DeclaredParameterGoal { .. }"
+    ],
+    "crates/lrr/src/db/provider.rs": [
+      "source_parameter_goals::prepare_local_query",
+      "source_value_goals::prepare",
+      "prepared_binding_plan::prepare",
+      "binding_constraint_thunk::thunk",
+      "sealed_name_provider::execute"
+    ],
+    "crates/lrr/src/service/expansion.rs": [
+      "QueryKey::DeclaredParameterGoal",
+      "QueryKey::EnteredValue",
+      "QueryKey::BindingConstraints",
+      "QueryKey::PreparedBindingPlan"
+    ],
+    "crates/lrr/src/cli/preentry_loader.rs": [
+      "QueryKey::DeclaredParameterGoal",
+      "QueryKey::EnteredValue",
+      "QueryKey::BindingConstraints",
+      "QueryKey::PreparedBindingPlan"
+    ]
+  },
+  "guard_value_policy": "omit old guard5 db/value file; use root18 final db/value containing Thunk optionaldigest and all query35..41 hooks",
+  "excluded": "moving declaration_field_types ordinal-index successor; all live files excluded"
+}

@@ -39,8 +39,8 @@ pub struct ConditionLimits {
 impl Default for ConditionLimits {
     fn default() -> Self {
         Self {
-            clauses: 10_000,
-            metadata_bytes: 32 * 1024 * 1024,
+            clauses: usize::MAX,
+            metadata_bytes: usize::MAX,
         }
     }
 }
@@ -164,7 +164,6 @@ fn misplaced_let(root: SyntaxNode, bytes: &mut usize, max: usize) -> Result<bool
     while let Some(node) = stack.pop() {
         visited = visited
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(limit)?;
         if ast::LetExpr::can_cast(node.kind()) {
             return Ok(true);
@@ -221,11 +220,7 @@ impl ParsedFile {
         conditional: NodeId,
         limits: ConditionLimits,
     ) -> Result<ConditionPlan, Diagnostic> {
-        if limits.clauses == 0
-            || limits.clauses > 10_000
-            || limits.metadata_bytes == 0
-            || limits.metadata_bytes > 32 * 1024 * 1024
-        {
+        if limits.clauses == 0 || limits.metadata_bytes == 0 {
             return Err(limit());
         }
         if body.key() != *index.body() || self.profile != *index.profile() {

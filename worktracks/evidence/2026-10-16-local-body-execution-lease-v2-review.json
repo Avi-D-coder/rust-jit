@@ -1,0 +1,15 @@
+{
+  "status": "source-only narrow independent overlay; no Cargo/runtime",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "67a851663ea57525ed878d2c15d9bbf111c7aa20cf990f9ad2ecae4fcdc79164",
+      "bytes": 12616,
+      "before_sha256": "e9a71c16c312d655e78bee141039e12b20808462dfb12e21124c387222610335"
+    }
+  ],
+  "delta": "Consume exact child environment.macros().require_current AFTER one source.require_execution_readiness, matching BodyEnvironmentInput currentness without duplicate source recursion. Parent macros alone cannot stand in for child envelope.",
+  "review": "Exact published BodyEnvironment(child)/body/key checks unchanged; source readiness and local owner chain unchanged; only existing genuine child macro seal currentness added, no new parser/planner/namespace scan or frame authority. No extra retained handles/metadata. All8 prior source review remains applicable with this mode6/7 currentness refinement; runtime query is existing DiscoverySeal memo currentness, no provider reconstruction.",
+  "historical_component": "/private/tmp/lrr-local-body-execution-lease-v1/COMPONENT.json",
+  "unchanged_tests_sha256": "fb2c0b41e2fa56e2ac6b0d591bb3a1c99ae882628e4cd664bdfe5b94bc38da10"
+}

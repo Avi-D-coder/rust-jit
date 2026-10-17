@@ -1,6 +1,8 @@
 //! Physical frame state. Syntax and query providers never mutate it.
 #[path = "frame_aggregate_copy.rs"]
 mod aggregate_copy_frame;
+#[path = "frame_boxes.rs"]
+mod boxes_frame;
 #[cfg(test)]
 #[path = "frame_call_scope_tests.rs"]
 mod call_scope_tests;
@@ -8,9 +10,26 @@ mod call_scope_tests;
 mod constant_array_frame;
 #[path = "frame_source_constant.rs"]
 mod source_constant_frame;
+#[path = "frame_nominal_values.rs"]
+pub(crate) mod nominal_values_frame;
+#[path = "frame_repeat.rs"]
+mod repeat_frame;
+#[path = "frame_item_values.rs"]
+pub(crate) mod item_values_frame;
+#[path = "frame_callables.rs"]
+mod callables_frame;
+#[path = "frame_closures.rs"]
+pub(crate) mod closures_frame;
+#[path = "frame_slices.rs"]
+mod slices_frame;
+#[path = "frame_coercions.rs"]
+mod coercions_frame;
 #[path = "frame_string_literals.rs"]
 mod string_literal_frame;
-pub(crate) use string_literal_frame::StringLiteralPublication;
+#[path = "frame_partial_hints.rs"]
+mod partial_hints_frame;
+pub(crate) use partial_hints_frame::PartialArguments;
+pub(crate) use string_literal_frame::{StringLiteralPublication, format_value};
 #[path = "frame_source_storage.rs"]
 mod source_storage_frame;
 #[path = "frame_source_types.rs"]
@@ -21,15 +40,16 @@ pub(crate) use constant_array_frame::{ConstantPublicationActivation, ConstantPub
 #[cfg(test)]
 #[path = "integer_literal_decode_tests.rs"]
 mod integer_literal_decode_tests;
-#[path = "frame_pattern_decision.rs"]
-mod pattern_decision_frame;
 #[path = "frame_pattern.rs"]
 mod pattern_frame;
-#[cfg(test)]
-#[path = "frame_pattern_tests.rs"]
-mod pattern_tests;
+#[path = "frame_pattern_engine.rs"]
+mod pattern_engine_frame;
 #[path = "frame_scope_cleanup.rs"]
 mod scope_cleanup_frame;
+#[path = "frame_operator_calls.rs"]
+pub(crate) mod operator_calls_frame;
+#[path = "frame_format_calls.rs"]
+pub(crate) mod format_calls_frame;
 #[path = "frame_temporary_scopes.rs"]
 mod temporary_scope_frame;
 use crate::core::digest::StableEncode;
@@ -63,6 +83,7 @@ pub enum FrameStatus {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct OpcodeCounters {
+    /// Run-wide executed-step observation (E-R5-006: unlimited; name kept for callers).
     pub fuel_used: u64,
     pub cleanup_elements_completed: u64,
     pub operations_started: u64,
@@ -146,6 +167,9 @@ struct ActiveConstruction {
 enum ConstructionResult {
     Bound(TypeId),
     Observed(crate::runtime::object::StructuralConstructionKind),
+    /// A generic nominal whose completed parameter-typed fields determine its
+    /// type arguments at finish.
+    PendingNominal,
 }
 #[derive(Clone)]
 enum ConstructionMapping {
@@ -204,8 +228,8 @@ struct PreparedConstructor {
     hints: Vec<(SlotId, TypeId)>,
     source_operands: Option<Arc<[SlotId]>>,
 }
-/// Per-operation preparation owns only checked guest identities. It is discarded
-/// on a fuel refusal and committed immediately after this exact operation starts.
+/// Per-operation preparation owns only checked guest identities. It is committed
+/// immediately after this exact operation starts.
 struct PreparedSourceField {
     pc: PcKey,
     base: SlotId,
@@ -225,16 +249,74 @@ impl PreparedProjection {
         &self.place
     }
 }
+/// How a selected method's `self` parameter is formed from the receiver.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ReceiverMode {
+    /// `self` / `mut self`: move or copy the (autoderef'd) receiver.
+    Value,
+    /// `&self`: shared autoref.
+    Shared,
+    /// `&mut self`: mutable autoref.
+    Mutable,
+}
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct ReceiverAdjustment {
+    pub(crate) derefs: u32,
+    pub(crate) mode: ReceiverMode,
+    /// The autoref'd receiver is unsized from `[T; N]` to `[T]`.
+    pub(crate) unsize: bool,
+}
+/// A trait-path call (`Trait::name(..)`) whose impl its reached self
+/// argument selects: the trait, the function name, the ordinal of the
+/// parameter written as `Self` (or a receiver), and whether that parameter
+/// is a reference to `Self`.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct DeferredTraitCall {
+    pub(crate) trait_key: crate::core::digest::Digest,
+    pub(crate) name: String,
+    pub(crate) self_ordinal: u32,
+    pub(crate) self_reference: bool,
+    /// The call's written argument slots.
+    pub(crate) arguments: Vec<crate::ir::pc::SlotId>,
+}
 pub struct Frame {
     pub(crate) body: Arc<BodyIndex>,
     pub(crate) pc: PcKey,
     pub(crate) status: FrameStatus,
     pub(crate) counters: OpcodeCounters,
-    pub(crate) fuel: super::fuel::RunFuel,
+    /// Unlimited run-wide step observation (E-R5-006: no fuel budget; field name kept for callers).
+    pub(crate) fuel: super::steps::RunSteps,
     pub(crate) actions: super::action::RunActions,
     pub(crate) call_ready: bool,
     /// Exact verified Call exit retained until its one successful resumption.
     pub(crate) call_continuation: Option<(PcKey, SlotId)>,
+    /// Calls in this activation selected as closed library facade functions
+    /// (Section 17), keyed like the dispatcher's selected source calls.
+    pub(crate) facade_calls: std::collections::BTreeMap<
+        super::call::CallIdentity,
+        (crate::facade::functions::LibraryFunction, crate::core::digest::Digest),
+    >,
+    /// The sealed facade call awaiting its Call exit.
+    pub(crate) facade_sealed: Option<(crate::facade::functions::LibraryFunction, u32)>,
+    /// Dispatcher-selected method receiver adjustments by call site.
+    pub(crate) method_receivers:
+        std::collections::BTreeMap<super::call::CallIdentity, ReceiverAdjustment>,
+    /// Trait-path calls awaiting their self argument, by call site.
+    pub(crate) trait_calls:
+        std::collections::BTreeMap<super::call::CallIdentity, DeferredTraitCall>,
+    /// Selected nominal constructor values and calls (unit/tuple structs and
+    /// enum variants); see `frame_nominal_values.rs`.
+    nominal: nominal_values_frame::NominalFacts,
+    /// Value-namespace item values selected per `ValuePath` PC.
+    item_values: item_values_frame::ItemValueFacts,
+    /// Partially written Type context per slot (`frame_partial_hints.rs`).
+    partial_hints: partial_hints_frame::PartialHints,
+    /// A closure call frame's captured bindings, bound to cells the closure
+    /// value captured (owned by the creating frame or the closure value).
+    captured: Vec<NodeId>,
+    /// A closure call frame's captured parameters of its creating frame,
+    /// after its own arguments: parameter `parameters.len() + index`.
+    captured_parameters: Vec<Option<CellId>>,
     pub(crate) call_start: Option<super::call::CallStartFacts>,
     pub(crate) runtime_call:
         Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>,
@@ -246,7 +328,14 @@ pub struct Frame {
     constant_activation: Option<source_constant_frame::BoundSourceConstant>,
     copy_activation: Option<aggregate_copy_frame::OpActivation>,
     cleanup_activation: Option<scope_cleanup_frame::Activation>,
-    patterns: super::pattern::Transactions,
+    /// An operator operation suspended for its trait method.
+    operator_activation: Option<operator_calls_frame::OperatorActivation>,
+    /// A `FormatArguments` operation suspended for a trait-method `fmt`.
+    format_activation: Option<format_calls_frame::FormatActivation>,
+    /// Comparison operand slots holding an autoref (`&operand`).
+    autoref_operands: Vec<SlotId>,
+    open_patterns: super::pattern::matcher::OpenPatterns,
+    pattern_names: Option<(PcKey, Arc<[super::pattern::matcher::PatternTarget]>)>,
     call_progress: Vec<(super::call::CallIdentity, (u32, u32))>,
     ordinary_calls: Box<[Option<crate::core::digest::Digest>]>,
     pub(crate) call_cells: Vec<CellId>,
@@ -321,8 +410,7 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::runtime::cell::StoreSession>()))
-            .and_then(|bytes| super::pattern::Transactions::metadata_bytes(body.nodes().len(), body.slot_count() as usize)
-                .and_then(|patterns| bytes.checked_add(patterns)))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<super::pattern::matcher::OpenPatterns>()))
     }
     pub fn new(
         body: impl Into<Arc<BodyIndex>>,
@@ -337,9 +425,6 @@ impl Frame {
             crate::ir::pc::NodeId(entry.node),
             crate::ir::pc::Phase::from_code(entry.phase),
         )?;
-        if Self::metadata_bytes(&body, 0).is_none_or(|bytes| bytes > 32 * 1024 * 1024) {
-            return Err(crate::runtime::arena::resource());
-        }
         let mut slots = Vec::new();
         slots
             .try_reserve_exact(body.slot_count() as usize)
@@ -383,6 +468,7 @@ impl Frame {
                         crate::syntax::body_index::ExpressionKind::Block
                             | crate::syntax::body_index::ExpressionKind::While
                             | crate::syntax::body_index::ExpressionKind::Loop
+                            | crate::syntax::body_index::ExpressionKind::For
                     )
                 ) {
                     body.scopes()[node.scope.0 as usize]
@@ -392,12 +478,21 @@ impl Frame {
                     node.scope
                 };
             }
-            for id in node.runtime_temporaries.into_iter().flatten() {
+            for (ordinal, id) in node.runtime_temporaries.into_iter().enumerate() {
+                let Some(id) = id else { continue };
                 // An initialized ref pattern moves this short-lived reference
                 // result into its block-owned binding. Its referent independently
                 // follows the indexed extending-pattern annotation above.
                 let scope = if node.role == crate::syntax::body_index::NodeRole::Statement {
                     node.statement_scope.unwrap_or(node.scope)
+                } else if node.role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::For,
+                    )
+                    && ordinal == 1
+                {
+                    // A `for` iteration's `next` result lives for one iteration.
+                    node.condition_scope.unwrap_or(node.scope)
                 } else {
                     node.scope
                 };
@@ -411,8 +506,10 @@ impl Frame {
                 }
                 slots[place.0 as usize].scope = scope;
             }
+            // A closure's parameter staging slots belong to its own frame.
+            let scalar_scope = node.closure_scope.unwrap_or(node.scope);
             for id in &node.runtime_scalar_slots {
-                slots[id.0 as usize].scope = node.scope;
+                slots[id.0 as usize].scope = scalar_scope;
                 let place = SlotId(
                     id.0.checked_add(1)
                         .ok_or_else(|| invalid("runtime scalar place slot overflow"))?,
@@ -420,7 +517,7 @@ impl Frame {
                 if body.slot_kind(place)? != SlotKind::Place {
                     return Err(invalid("runtime scalar lacks its reserved place pair"));
                 }
-                slots[place.0 as usize].scope = node.scope;
+                slots[place.0 as usize].scope = scalar_scope;
             }
             if let Some(id) = node.constructor_guard {
                 slots[id.0 as usize].scope = node.scope;
@@ -444,18 +541,25 @@ impl Frame {
             .map_err(|_| crate::runtime::arena::resource())?;
         ordinary_calls.resize(body.nodes().len(), None);
         let ordinary_calls = ordinary_calls.into_boxed_slice();
-        let patterns =
-            super::pattern::Transactions::new(body.nodes().len(), body.slot_count() as usize)?;
         let anchor = store.new_frame_anchor()?;
         Ok(Self {
             body,
             pc: entry,
             status: FrameStatus::Running,
             counters: OpcodeCounters::default(),
-            fuel: super::fuel::RunFuel::new(super::fuel::DEFAULT_FUEL)?,
+            fuel: super::steps::RunSteps::default(),
             actions: super::action::RunActions::new(),
             call_ready: false,
             call_continuation: None,
+            facade_calls: std::collections::BTreeMap::new(),
+            facade_sealed: None,
+            method_receivers: std::collections::BTreeMap::new(),
+            trait_calls: std::collections::BTreeMap::new(),
+            nominal: nominal_values_frame::NominalFacts::default(),
+            item_values: item_values_frame::ItemValueFacts::default(),
+            partial_hints: partial_hints_frame::PartialHints::default(),
+            captured: Vec::new(),
+            captured_parameters: Vec::new(),
             call_start: None,
             runtime_call: None,
             constructor_start: None,
@@ -466,7 +570,11 @@ impl Frame {
             constant_activation: None,
             copy_activation: None,
             cleanup_activation: None,
-            patterns,
+            operator_activation: None,
+            format_activation: None,
+            autoref_operands: Vec::new(),
+            open_patterns: Default::default(),
+            pattern_names: None,
             call_progress: Default::default(),
             ordinary_calls,
             call_cells: vec![],
@@ -485,7 +593,7 @@ impl Frame {
             bindings,
         })
     }
-    /// Create a callee in the same run without replenishing fuel or interruption state.
+    /// Create a callee in the same run, sharing the caller's step observation.
     /// The dispatcher must supply the caller's GuestStore and accept the call first.
     pub fn new_in_run(
         body: impl Into<Arc<BodyIndex>>,
@@ -501,11 +609,25 @@ impl Frame {
             return Err(invalid("callee creation requires a running caller"));
         }
         caller.require_store(store)?;
-        caller.fuel.require_credit()?;
         let mut frame = Self::new(body, entry, store)?;
         frame.fuel = caller.fuel.share();
         frame.actions = caller.actions.share();
         Ok(frame)
+    }
+    /// A closed facade call diverged in place: the suspended call site
+    /// becomes the panicking operation, never a resumed continuation.
+    pub(crate) fn panic_in_suspended_call(&mut self) -> Result<(), Diagnostic> {
+        if self.status != FrameStatus::Suspended
+            || !self.call_ready
+            || self.call_arguments.is_some()
+            || self.call_continuation.is_none()
+        {
+            return Err(invalid("facade panic requires a suspended consumed call"));
+        }
+        self.call_ready = false;
+        self.call_continuation = None;
+        self.status = FrameStatus::Panicked;
+        Ok(())
     }
     pub(crate) fn resume_call(
         &mut self,
@@ -587,9 +709,6 @@ impl Frame {
                 "parameter initialization requires a fresh callee frame",
             ));
         }
-        if contracts.len() > 100_000 {
-            return Err(crate::runtime::arena::resource());
-        }
         if !self.parameter_sources.is_empty() && self.parameter_sources.len() != contracts.len() {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-ARITY",
@@ -605,7 +724,6 @@ impl Frame {
                 store,
             )?;
         }
-        self.fuel.require_credit()?;
         let base = self
             .body
             .slot_count()
@@ -617,16 +735,6 @@ impl Frame {
         self.parameters
             .try_reserve_exact(contracts.len())
             .map_err(|_| crate::runtime::arena::resource())?;
-        if Self::metadata_bytes(
-            &self.body,
-            self.parameters
-                .capacity()
-                .max(self.parameter_sources.capacity()),
-        )
-        .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(crate::runtime::arena::resource());
-        }
         let cells = store.new_parameter_cells(self.anchor, base, contracts)?;
         packet.deliver(store, &cells)?;
         self.parameters.extend(cells.into_iter().map(Some));
@@ -643,8 +751,22 @@ impl Frame {
         Ok(())
     }
     fn parameter(&self, ordinal: u32) -> Result<CellId, Diagnostic> {
-        if !self.parameters_initialized || !self.active_scopes.contains(&ScopeId(0)) {
+        // A closure frame's outermost scope is its closure scope.
+        let entered = self.active_scopes.contains(&ScopeId(0))
+            || self.active_scopes.first().is_some_and(|scope| {
+                self.body.scopes().get(scope.0 as usize).is_some_and(|scope| {
+                    scope.kind == crate::syntax::body_index::ScopeKind::Closure
+                })
+            });
+        if !self.parameters_initialized || !entered {
             return Err(invalid("parameter read outside its entered function scope"));
+        }
+        if let Some(captured) = (ordinal as usize).checked_sub(self.parameters.len()) {
+            return self
+                .captured_parameters
+                .get(captured)
+                .and_then(|c| *c)
+                .ok_or_else(|| invalid("parameter cell absent or retired"));
         }
         self.parameters
             .get(ordinal as usize)
@@ -702,6 +824,17 @@ impl Frame {
             // Rigid parameters retain their identities under the existing
             // prepared definition environment; no incidental method is selected.
             Some(TyTerm::Param(_)) | None => Ok(()),
+            Some(source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)))
+                if crate::frontend::call_contracts::closed_term(source) =>
+            {
+                if store.descriptor_source_term(ty).as_ref() != Some(source) {
+                    return Err(Diagnostic::new(
+                        "LRR-E-OWNERSHIP",
+                        "parameter descriptor differs from its closed source type".into(),
+                    ));
+                }
+                Ok(())
+            }
             _ => Err(invalid("unsupported retained parameter source view")),
         }
     }
@@ -715,7 +848,7 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         use crate::{runtime::place::Place, traits::term::TyTerm};
         self.require_store(store)?;
-        if self.status != FrameStatus::Running || ordinal >= 100_000 {
+        if self.status != FrameStatus::Running {
             return Err(invalid(
                 "parameter place requires a running admitted ordinal",
             ));
@@ -739,26 +872,44 @@ impl Frame {
             )
             .and_then(|base| base.checked_add(ordinal))
             .ok_or_else(crate::runtime::arena::resource)?;
-        if store.owner(cell)?
-            != (CellOwner::FrameSlot {
-                frame: self.anchor,
-                slot: owner_slot,
-            })
+        // A captured parameter is the creating frame's location.
+        let captured = ordinal as usize >= self.parameters.len();
+        if !captured
+            && store.owner(cell)?
+                != (CellOwner::FrameSlot {
+                    frame: self.anchor,
+                    slot: owner_slot,
+                })
         {
             return Err(invalid(
                 "parameter place differs from its owning entry cell",
             ));
         }
         store.location_epoch(cell)?;
-        let source = self
+        let captured_source = if captured {
+            store.descriptor_source_term(store.live_place_type_id(&Place::cell(cell)).map_err(
+                |error| match error {
+                    crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                    crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                        invalid("captured parameter location reported a bounds panic")
+                    }
+                },
+            )?)
+        } else {
+            None
+        };
+        let declared = self
             .parameter_sources
             .get(ordinal as usize)
+            .or(captured_source.as_ref())
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
                     "parameter place requires its retained source identity".into(),
                 )
             })?;
+        let substituted = self.bound_parameter_source(declared);
+        let source = substituted.as_ref().unwrap_or(declared);
         if !Self::supported_source(source) || matches!(source, TyTerm::Param(_)) {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
@@ -784,7 +935,7 @@ impl Frame {
             }
             // These are already understood by source-aware place checks. The
             // parameter entry producer still decides which such tables exist.
-            TyTerm::Nominal(..) | TyTerm::Array(..) => {
+            TyTerm::Nominal(..) | TyTerm::Array(..) | TyTerm::Tuple(..) => {
                 Self::require_borrow_source_target(Some(source), ty, store)?;
             }
             _ => return Err(invalid("unsupported retained parameter place source")),
@@ -795,17 +946,22 @@ impl Frame {
             store.reference_from_cell(cell)?;
         }
         self.preflight_source_view(destination, Some(source))?;
-        // Slot/source storage (including supported boxed source nodes) was
-        // reserved by metadata_bytes. Recheck the complete live frame budget
-        // before cloning that source into the already allocated place slot.
-        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
-            .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
-            .and_then(|bytes| bytes.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
-            .ok_or_else(crate::runtime::arena::resource)?;
         Ok(())
+    }
+    /// A generic parameter's source is the closed source Type its call bound
+    /// it to (the frame's definition environment), e.g. a closure argument.
+    fn bound_parameter_source(
+        &self,
+        declared: &crate::traits::term::TyTerm,
+    ) -> Option<crate::traits::term::TyTerm> {
+        let crate::traits::term::TyTerm::Param(key) = declared else {
+            return None;
+        };
+        self.context
+            .as_ref()?
+            .symbolic_binding(*key)
+            .filter(|bound| crate::frontend::call_contracts::closed_term(bound))
+            .cloned()
     }
     pub(crate) fn parameter_place(
         &mut self,
@@ -815,7 +971,19 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         self.preflight_parameter_place(ordinal, destination, store)?;
         let cell = self.parameter(ordinal)?;
-        let source = self.clone_source(self.parameter_sources.get(ordinal as usize))?;
+        let source = match self
+            .parameter_sources
+            .get(ordinal as usize)
+            .and_then(|declared| self.bound_parameter_source(declared))
+        {
+            Some(bound) => Some(bound),
+            // A captured parameter's view is its reached closed Type.
+            None if ordinal as usize >= self.parameters.len() => store
+                .live_place_type_id(&crate::runtime::place::Place::cell(cell))
+                .ok()
+                .and_then(|ty| store.descriptor_source_term(ty)),
+            None => self.clone_source(self.parameter_sources.get(ordinal as usize))?,
+        };
         self.set_source_view(destination, source)?;
         self.slots[destination.0 as usize].place = Some(crate::runtime::place::Place::cell(cell));
         Ok(())
@@ -836,6 +1004,16 @@ impl Frame {
             )
         })?;
         self.preflight_parameter_source(ordinal, ty, store)?;
+        // A `&mut` parameter at a reference coercion site is reborrowed.
+        if let Some(access) = self.reborrow_access(destination, value, store)? {
+            return self.preflight_reborrow(
+                cell,
+                destination,
+                access,
+                self.parameter_sources.get(ordinal as usize),
+                store,
+            );
+        }
         self.preflight_source_view(destination, self.parameter_sources.get(ordinal as usize))?;
         self.preflight_write_value(destination, value, store)
     }
@@ -848,6 +1026,9 @@ impl Frame {
         self.preflight_parameter(ordinal, destination, store)?;
         let cell = self.parameter(ordinal)?;
         let source = self.clone_source(self.parameter_sources.get(ordinal as usize))?;
+        if let Some(access) = self.reborrow_access(destination, store.admit_move(cell)?, store)? {
+            return self.reborrow_read(None, cell, destination, access, source, store);
+        }
         store.reserve_owning_read_result(self.slot(destination)?.cell.is_none(), false)?;
         self.prepare_write(destination, store)?;
         let ticket = store.read_owning(cell)?;
@@ -866,6 +1047,7 @@ impl Frame {
             site: ready,
             hints,
             ordinary,
+            partial,
         }) = &self.call_start
         else {
             return Err(invalid("call start lacks selected identity"));
@@ -873,6 +1055,7 @@ impl Frame {
         if *ready != site
             || self.pc.node != site
             || hints.len() != arguments.len()
+            || partial.iter().any(|(slot, ..)| !arguments.contains(slot))
             || self
                 .call_progress
                 .iter()
@@ -892,14 +1075,23 @@ impl Frame {
                     "macro call argument slots differ from source witness",
                 ));
             }
-        } else if self.pc.phase != crate::ir::pc::Phase::Entry.code()?
-            || self.body.nodes().get(site as usize).is_none_or(|node| {
-                node.role
-                    != crate::syntax::body_index::NodeRole::Expression(
-                        crate::syntax::body_index::ExpressionKind::Call,
+        } else if !self.body.nodes().get(site as usize).is_some_and(|node| {
+            // An ordinary call starts at its Entry; a method call after its
+            // receiver place is published (its Commit phase).
+            // A value call starts once its callee operand executed.
+            (node.role
+                == crate::syntax::body_index::NodeRole::Expression(
+                    crate::syntax::body_index::ExpressionKind::Call,
+                )
+                && (self.pc.phase == crate::ir::pc::Phase::Entry.code().unwrap_or(u16::MAX)
+                    || self.pc.phase
+                        == crate::ir::pc::Phase::Commit.code().unwrap_or(u16::MAX)))
+                || (node.role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::MethodCall,
                     )
-            })
-        {
+                    && self.pc.phase == crate::ir::pc::Phase::Commit.code().unwrap_or(u16::MAX))
+        }) {
             return Err(invalid(
                 "ordinary call scope witness requires an indexed call",
             ));
@@ -933,7 +1125,10 @@ impl Frame {
             .map_err(|_| crate::runtime::arena::resource())?;
         self.source_storage_limit(self.source_extra_bytes, 0)?;
         let super::call::CallStartFacts {
-            hints, ordinary, ..
+            hints,
+            ordinary,
+            partial,
+            ..
         } = self
             .call_start
             .take()
@@ -948,6 +1143,9 @@ impl Frame {
             self.set_source_view(slot, source)?;
             self.set_hint(slot, hint)?;
             self.slots[slot.0 as usize].strict_hint = false;
+        }
+        for (slot, written, fixed) in partial {
+            self.set_partial_hint_with(slot, written, Some(fixed))?;
         }
         self.call_progress.push((
             identity,
@@ -1078,7 +1276,15 @@ impl Frame {
                 node.value == Some(value)
                     && node.role == NodeRole::Expression(ExpressionKind::Literal)
             });
-            if !closed_literal {
+            // A concrete primitive value whose descriptor is exactly the
+            // declared primitive (descriptors and primitives correspond
+            // one-to-one) needs no further source witness.
+            let concrete = store
+                .preview_scalar(self.cell(value)?, None)
+                .is_ok_and(|scalar| {
+                    scalar.kind != 11 && scalar.kind != 12 && scalar.type_id == descriptor.0
+                });
+            if !closed_literal && !concrete {
                 return Err(Diagnostic::new(
                     "LRR-E-CALL-CONTEXT",
                     "certified return cannot invent a missing caller or variable source".into(),
@@ -1178,7 +1384,6 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         if self.parameters_initialized
             || !self.parameter_sources.is_empty()
-            || sources.len() > 100_000
             || sources.iter().any(|source| {
                 !Self::supported_source(source)
                     || (!matches!(
@@ -1187,7 +1392,14 @@ impl Frame {
                             | crate::traits::term::TyTerm::Param(_)
                     ) && !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
                     if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))
-                        || matches!(target.as_ref(), crate::traits::term::TyTerm::Nominal(_, args) if args.is_empty())))
+                        || matches!(target.as_ref(), crate::traits::term::TyTerm::Nominal(_, args) if args.is_empty()))
+                        && !(matches!(
+                            source,
+                            crate::traits::term::TyTerm::Nominal(..)
+                                | crate::traits::term::TyTerm::Tuple(..)
+                                | crate::traits::term::TyTerm::Array(..)
+                                | crate::traits::term::TyTerm::Ref(..)
+                        ) && crate::frontend::call_contracts::closed_term(source)))
             })
         {
             return Err(invalid(
@@ -1205,6 +1417,10 @@ impl Frame {
                     })
                     .and_then(|context| context.reference_parameter_source(ordinal))
                     != Some(source)
+                && !self
+                    .context
+                    .as_ref()
+                    .is_some_and(|context| context.structural_references())
             {
                 return Err(invalid(
                     "nominal reference parameter lacks its admitted source certificate",
@@ -1213,7 +1429,7 @@ impl Frame {
         }
         if sources.iter().any(|source| {
             matches!(source, crate::traits::term::TyTerm::Param(key)
-            if key.definition != self.body.body().definition || key.ordinal >= 100_000)
+            if key.definition != self.body.body().definition)
         }) {
             return Err(invalid("parameter source identity mismatch"));
         }
@@ -1222,16 +1438,6 @@ impl Frame {
                 .checked_add(Self::source_excess(Some(source))?)
                 .ok_or_else(crate::runtime::arena::resource)
         })?;
-        if Self::metadata_bytes(&self.body, sources.capacity())
-            .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
-            .and_then(|bytes| bytes.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|bytes| bytes.checked_add(added_source))
-            .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
-            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(crate::runtime::arena::resource());
-        }
         self.source_extra_bytes = self
             .source_extra_bytes
             .checked_add(added_source)
@@ -1282,11 +1488,50 @@ impl Frame {
             || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str)
                 || (matches!(target.as_ref(), TyTerm::Tuple(_)) && Self::supported_structural_source(target))
                 || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
+                || Self::closed_nominal_source(target)
                 || matches!(target.as_ref(), TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
-                    if matches!(element.as_ref(), TyTerm::Primitive(_)) && u32::try_from(*len).is_ok())))
+                    if Self::supported_element(element) && u32::try_from(*len).is_ok())
+                || matches!(target.as_ref(), TyTerm::Slice(element) if Self::supported_element(element))
+                // A reference to an admitted reference (`&&str`, the
+                // autoref of a `&str` comparison operand).
+                || (matches!(target.as_ref(), TyTerm::Ref(..)) && Self::supported_source(target))))
             || matches!(source, TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
-                if matches!(element.as_ref(), TyTerm::Primitive(_)) && u32::try_from(*len).is_ok())
+                if Self::supported_element(element) && u32::try_from(*len).is_ok())
             || matches!(source, TyTerm::Nominal(_, args) if args.is_empty())
+            || Self::closed_nominal_source(source)
+            // An unsized `[T]` place (`*s`, `a[1..3]`) or unsized-rvalue
+            // expectation (`&[1, 2]` at `&[T]`).
+            || matches!(source, TyTerm::Slice(element) if Self::supported_element(element))
+            // An unsized `str` place (`*s` of a `&str`).
+            || matches!(source, TyTerm::Str)
+    }
+    /// An array or slice element view: any closed admitted value Type.
+    fn supported_element(element: &crate::traits::term::TyTerm) -> bool {
+        !matches!(element, crate::traits::term::TyTerm::Param(_))
+            && crate::frontend::call_contracts::closed_term(element)
+            && Self::supported_source(element)
+    }
+    /// An instantiated generic nominal (`W<i32>`, `Opt<(u8, P)>`) whose type
+    /// arguments are themselves closed admitted views.
+    fn closed_nominal_source(source: &crate::traits::term::TyTerm) -> bool {
+        use crate::traits::term::{GenericArg, TyTerm};
+        match source {
+            TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
+                GenericArg::Type(ty) => {
+                    matches!(ty, TyTerm::Primitive(_))
+                        || (matches!(ty, TyTerm::Tuple(_))
+                            && Self::supported_structural_source(ty))
+                        // An array or slice argument (`Box<[i32; 3]>`,
+                        // `Box<[i32]>`, `W<[u8; 2]>`).
+                        || matches!(ty, TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
+                            if Self::supported_element(element) && u32::try_from(*len).is_ok())
+                        || matches!(ty, TyTerm::Slice(element) if Self::supported_element(element))
+                        || Self::closed_nominal_source(ty)
+                }
+                _ => false,
+            }),
+            _ => false,
+        }
     }
     /// Scalar-match admission precedes the owning parameter read. A genuine
     /// source primitive supplies its descriptor; layout never supplies identity.
@@ -1299,7 +1544,6 @@ impl Frame {
             .as_ref()
             .ok_or_else(|| invalid("scalar parameter context absent"))?;
         if env.definition().definition != self.body.body().definition
-            || ordinal >= 100_000
             || !self.parameters_initialized
         {
             return Err(invalid("scalar parameter context owner or ordinal differs"));
@@ -1347,7 +1591,7 @@ impl Frame {
             .map(|(primitive, _)| TyTerm::Primitive(primitive));
         let mut source = match context {
             DefinitionNumericContext::Parameter(ordinal) => {
-                if ordinal >= 100_000 || !self.parameters_initialized {
+                if !self.parameters_initialized {
                     return Err(missing());
                 }
                 Some(
@@ -1438,6 +1682,11 @@ impl Frame {
                 "reference result hint belongs to another definition/root entry",
             ));
         }
+        if context.closed_reference_contracts().is_none_or(|proof| !proof.has_result())
+            && let Some(structural) = context.structural_result()
+        {
+            return Ok(structural.clone());
+        }
         let source = context.reference_result_source()?;
         if !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
             if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))
@@ -1454,22 +1703,60 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<Option<TypeId>, Diagnostic> {
         self.require_store(store)?;
-        self.definition_result_source()?;
-        self.context
+        let source = self.definition_result_source()?;
+        let context = self
+            .context
             .as_ref()
-            .ok_or_else(|| invalid("reference result environment absent"))?
-            .reference_result_descriptor(store)
+            .ok_or_else(|| invalid("reference result environment absent"))?;
+        if context.structural_result() == Some(&source) {
+            // A structural result with nominal members (`-> (W<u8>, i32)`)
+            // is interned from its written Type.
+            if let Some(written) = context.written_result() {
+                return written.find_in(store, &[]);
+            }
+            return Ok(store.find_structural_term(&source));
+        }
+        context.reference_result_descriptor(store)
+    }
+    /// The definition's declared nominal result as its written Type, when
+    /// the call contract closed it. Root Entry of the owning definition only.
+    pub(crate) fn definition_written_result(
+        &self,
+    ) -> Result<Option<&crate::ir::written_type::WrittenType>, Diagnostic> {
+        let Some(context) = self.context.as_ref() else {
+            return Ok(None);
+        };
+        if self.pc.node != 0
+            || self.pc.phase != crate::ir::pc::Phase::Entry.code()?
+            || context.definition().definition != self.body.body().definition
+        {
+            return Err(invalid(
+                "written result hint belongs to another definition/root entry",
+            ));
+        }
+        Ok(context.written_result())
     }
     pub(crate) fn materialize_definition_result_descriptor(
         &self,
         store: &mut GuestStore,
     ) -> Result<TypeId, Diagnostic> {
         self.require_store(store)?;
-        self.definition_result_source()?;
-        self.context
+        let source = self.definition_result_source()?;
+        let context = self
+            .context
             .as_ref()
-            .ok_or_else(|| invalid("reference result environment absent"))?
-            .materialize_reference_result_descriptor(store)
+            .ok_or_else(|| invalid("reference result environment absent"))?;
+        if context.structural_result() == Some(&source) {
+            if let Some(written) = context.written_result() {
+                return written
+                    .materialize_in(store, &[])?
+                    .ok_or_else(|| invalid("structural result descriptor is not closed"));
+            }
+            return store
+                .intern_structural_term(&source)?
+                .ok_or_else(|| invalid("structural result descriptor is not closed"));
+        }
+        context.materialize_reference_result_descriptor(store)
     }
     pub(crate) fn resolved_annotation_source(
         &self,
@@ -1477,6 +1764,12 @@ impl Frame {
     ) -> Result<Option<crate::traits::term::TyTerm>, Diagnostic> {
         if matches!(hint, crate::ir::op::HintRecipe::DefinitionResult) {
             return self.definition_result_source().map(Some);
+        }
+        if matches!(hint, crate::ir::op::HintRecipe::DefinitionWrittenResult) {
+            return Ok(self
+                .definition_written_result()?
+                .and_then(|written| written.source())
+                .filter(|source| Self::supported_source(source)));
         }
         if let crate::ir::op::HintRecipe::DefinitionParameter(ordinal) = hint {
             return Ok(Some(crate::traits::term::TyTerm::Primitive(
@@ -1500,7 +1793,8 @@ impl Frame {
             HintRecipe::BorrowTarget { .. }
             | HintRecipe::DefinitionNumeric(_)
             | HintRecipe::DefinitionParameter(_)
-            | HintRecipe::DefinitionResult => None,
+            | HintRecipe::DefinitionResult
+            | HintRecipe::DefinitionWrittenResult => None,
             HintRecipe::ArrayPrimitive { element, len } => Some(TyTerm::Array(
                 Box::new(TyTerm::Primitive(*element)),
                 crate::traits::term::ConstTerm::Value(u64::from(*len)),
@@ -1517,6 +1811,11 @@ impl Frame {
                 *mutable,
                 Box::new(TyTerm::Primitive(*target)),
             )),
+            // A written composite whose frame view is not yet admitted keeps
+            // only its descriptor; its members carry their own source views.
+            HintRecipe::Written(written) => {
+                written.source().filter(|source| Self::supported_source(source))
+            }
         }
     }
     pub(crate) fn set_source_view(
@@ -1566,6 +1865,56 @@ impl Frame {
         }
         Ok(())
     }
+    /// A source view naming this frame's own generic parameters, with each
+    /// bound parameter replaced by its reached binding. The frame's body
+    /// keeps its rigid parameters; a callee the dispatcher selected for the
+    /// reached types (a method, trait-path or operator impl) receives this
+    /// monomorphic view at the call boundary.
+    pub(crate) fn bound_view(
+        &self,
+        term: &crate::traits::term::TyTerm,
+        store: &GuestStore,
+    ) -> crate::traits::term::TyTerm {
+        use crate::traits::term::{GenericArg, TyTerm};
+        let definition = self.body.body().definition;
+        match term {
+            TyTerm::Param(key) if key.definition == definition => self
+                .context
+                .as_ref()
+                .and_then(|context| {
+                    context
+                        .symbolic_binding(*key)
+                        .filter(|bound| !matches!(bound, TyTerm::Param(inner) if inner.definition == definition))
+                        .cloned()
+                        .or_else(|| {
+                            context
+                                .runtime_binding(*key)
+                                .and_then(|ty| store.descriptor_source_term(ty))
+                        })
+                })
+                .unwrap_or_else(|| term.clone()),
+            TyTerm::Ref(region, mutable, inner) => {
+                TyTerm::Ref(region.clone(), *mutable, Box::new(self.bound_view(inner, store)))
+            }
+            TyTerm::Slice(inner) => TyTerm::Slice(Box::new(self.bound_view(inner, store))),
+            TyTerm::Array(inner, length) => {
+                TyTerm::Array(Box::new(self.bound_view(inner, store)), length.clone())
+            }
+            TyTerm::Tuple(items) => {
+                TyTerm::Tuple(items.iter().map(|item| self.bound_view(item, store)).collect())
+            }
+            TyTerm::Nominal(identity, args) => TyTerm::Nominal(
+                *identity,
+                args.iter()
+                    .map(|arg| match arg {
+                        GenericArg::Type(ty) => GenericArg::Type(self.bound_view(ty, store)),
+                        other => other.clone(),
+                    })
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
     pub(crate) fn parameter_hint(
         &self,
         key: crate::traits::term::ParamKey,
@@ -1578,26 +1927,20 @@ impl Frame {
             .as_ref()
             .and_then(|context| context.runtime_binding(key)))
     }
-    pub fn set_fuel_limit(&mut self, limit: u64) -> Result<(), Diagnostic> {
-        if self.status != FrameStatus::Running
-            || self.fuel.is_shared()
-            || self.fuel.snapshot().used != 0
-            || self.fuel.snapshot().stop.is_some()
-            || self.counters.operations_started != 0
-            || self.counters.exits_completed != 0
-        {
-            return Err(invalid("cannot reset fuel after execution"));
-        }
-        self.fuel = super::fuel::RunFuel::new(limit)?;
+    // E-R5-006: ignored, remove at callers
+    pub fn set_fuel_limit(&mut self, _limit: u64) -> Result<(), Diagnostic> {
         Ok(())
     }
-    pub fn fuel_snapshot(&self) -> super::fuel::FuelSnapshot {
+    pub fn fuel_snapshot(&self) -> super::steps::StepSnapshot {
         self.fuel.snapshot()
     }
-    pub(crate) fn charge_fuel(&mut self) -> Result<(), Diagnostic> {
-        self.fuel.charge()?;
-        self.counters.fuel_used = self.fuel.snapshot().used;
-        Ok(())
+    /// Record one executed step in the unlimited run-wide observation.
+    pub(crate) fn count_step(&mut self) {
+        Self::count_step_in(&mut self.fuel, &mut self.counters);
+    }
+    fn count_step_in(steps: &mut super::steps::RunSteps, counters: &mut OpcodeCounters) {
+        steps.charge();
+        counters.fuel_used = steps.snapshot().used;
     }
     pub fn pc(&self) -> &PcKey {
         &self.pc
@@ -1691,6 +2034,12 @@ impl Frame {
         {
             return Err(invalid("temporary place destination already prepared"));
         }
+        // A static path addresses its run-global cell, not a temporary copy.
+        if let Some((cell, view)) = self.static_place_for(source) {
+            self.preflight_source_view(destination, view)?;
+            store.state(cell)?;
+            return Ok(());
+        }
         if self.slot(source)?.source.as_ref().is_some_and(|source| {
             !Self::supported_source(source)
                 || matches!(source, crate::traits::term::TyTerm::Param(_))
@@ -1720,6 +2069,12 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_value_place(source, destination, store)?;
+        if let Some((cell, view)) = self.take_static_place(source) {
+            self.set_source_view(destination, view)?;
+            self.slots[destination.0 as usize].place =
+                Some(crate::runtime::place::Place::cell(cell));
+            return Ok(());
+        }
         let cell = self.cell(source)?;
         self.set_source_view(destination, self.source_view(source)?)?;
         self.slots[destination.0 as usize].place = Some(crate::runtime::place::Place::cell(cell));
@@ -1810,7 +2165,7 @@ impl Frame {
                     .capacity()
                     .checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())?,
             )
-            .and_then(|bytes| bytes.checked_add(self.patterns.dynamic_metadata_bytes()))
+
     }
     pub(crate) fn nominal_place_source(
         &self,
@@ -1818,13 +2173,16 @@ impl Frame {
     ) -> Result<crate::core::digest::Digest, Diagnostic> {
         self.executed_place(base)?;
         match self.place_slot(base)?.source.as_ref() {
-            Some(crate::traits::term::TyTerm::Nominal(definition, args)) if args.is_empty() => {
+            Some(source @ crate::traits::term::TyTerm::Nominal(definition, args))
+                if args.is_empty() || Self::closed_nominal_source(source) =>
+            {
                 Ok(*definition)
             }
+
             Some(crate::traits::term::TyTerm::Ref(_, _, target)) => match target.as_ref() {
-                crate::traits::term::TyTerm::Nominal(definition, args) if args.is_empty() => {
-                    Ok(*definition)
-                }
+                // `self.f` through `&Self` of a generic impl: the referent's
+                // declaration; its field types bind against the reached value.
+                crate::traits::term::TyTerm::Nominal(definition, _) => Ok(*definition),
                 _ => Err(Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
                     "named field requires its retained nominal reference binding".into(),
@@ -1855,7 +2213,6 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .and_then(|bytes| bytes.checked_add(binding.estimated_bytes()?))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<PreparedSourceField>()))
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         self.source_field = Some(PreparedSourceField {
             pc: self.pc.clone(),
@@ -1901,9 +2258,15 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
             .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .and_then(|bytes| bytes.checked_add(added))
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
-        let member = if matches!(op, Op::ProjectField { .. }) {
+        // A positional field of a tuple struct (`t.0`) is a nominal member:
+        // the dispatcher binds it like a named field, so its projection takes
+        // the same source-member route as ProjectField.
+        let positional_member = matches!(op, Op::ProjectTuple { .. })
+            && self.source_field.as_ref().is_some_and(|facts| {
+                facts.pc == self.pc && facts.base == base && facts.destination == destination
+            });
+        let member = if matches!(op, Op::ProjectField { .. }) || positional_member {
             let facts = self
                 .source_field
                 .as_ref()
@@ -1918,10 +2281,98 @@ impl Frame {
         } else {
             None
         };
+        // Positional and index projections auto-deref a reference base
+        // (`r.0`, `r[i]`) exactly as named members do: the projection applies
+        // to the referent place, whose source is the reference's pointee.
+        let mut deref_place: Option<crate::runtime::place::Place> = None;
         let source = if let Some(member) = member {
-            self.clone_source(Some(member.source_type().source()))?
+            // A generic member's Type is instantiated by the base value's own
+            // nominal descriptor args (through a peeked reference receiver).
+            let mut base_type = store.place_type_id(base_place)?;
+            if let crate::runtime::shape::TypeKey::Ref { target, .. } =
+                store.type_descriptor(base_type)?.key.as_ref()
+            {
+                base_type = *target;
+            }
+            let args: Vec<TypeId> = match store.type_descriptor(base_type)?.key.as_ref() {
+                crate::runtime::shape::TypeKey::Nominal { args, .. } => args.to_vec(),
+                _ => Vec::new(),
+            };
+            let source = member.field_type().source(store, &args).ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "generic member Type requires a closed runtime argument".into(),
+                )
+            })?;
+            self.clone_source(Some(&source))?
         } else {
-            match (op, self.place_slot(base)?.source.as_ref()) {
+            let mut peeled = self.place_slot(base)?.source.as_ref();
+            loop {
+                let current = deref_place.as_ref().unwrap_or(base_place);
+                match peeled {
+                    Some(crate::traits::term::TyTerm::Ref(_, _, inner)) => {
+                        deref_place = Some(store.dereference_place(current)?);
+                        peeled = Some(inner.as_ref());
+                    }
+                    // No retained view: the reached reference descriptor itself
+                    // selects the same auto-deref.
+                    None if matches!(
+                        store.type_descriptor(store.place_type_id(current)?)?.key.as_ref(),
+                        crate::runtime::shape::TypeKey::Ref { .. }
+                    ) =>
+                    {
+                        deref_place = Some(store.dereference_place(current)?);
+                    }
+                    // A box base (`b[i]`) auto-derefs through its heap cell.
+                    Some(source) if Self::box_contents_source(source, store).is_some() => {
+                        deref_place = Some(store.dereference_place(current)?);
+                        peeled = Self::box_contents_source(source, store);
+                    }
+                    None if store
+                        .box_contents_type(store.place_type_id(current)?)?
+                        .is_some() =>
+                    {
+                        deref_place = Some(store.dereference_place(current)?);
+                    }
+                    _ => break,
+                }
+            }
+            let base_place = deref_place.as_ref().unwrap_or(base_place);
+            match (op, peeled) {
+                // No retained view: an element of a reached array/slice whose
+                // closed element descriptor records its Type exactly (as an
+                // unviewed borrow does) carries that element view.
+                (Op::ProjectIndex { index, .. }, None)
+                    if self.range_index(*index, store)?.is_none() =>
+                {
+                    match store
+                        .type_descriptor(store.place_type_id(base_place)?)?
+                        .key
+                        .as_ref()
+                    {
+                        crate::runtime::shape::TypeKey::Array { element, .. }
+                        | crate::runtime::shape::TypeKey::Slice { element } => store
+                            .descriptor_source_term(*element)
+                            .filter(crate::frontend::call_contracts::closed_term)
+                            .filter(Self::supported_element),
+                        _ => None,
+                    }
+                }
+                // Likewise a member of a reached tuple whose closed member
+                // descriptor records its Type exactly (`(t.1).x` with
+                // `t = &(1, P { x: 2 })`).
+                (Op::ProjectTuple { field, .. }, None) => match store
+                    .type_descriptor(store.place_type_id(base_place)?)?
+                    .key
+                    .as_ref()
+                {
+                    crate::runtime::shape::TypeKey::Tuple(members) => members
+                        .get(*field as usize)
+                        .and_then(|member| store.descriptor_source_term(*member))
+                        .filter(crate::frontend::call_contracts::closed_term)
+                        .filter(Self::supported_element),
+                    _ => None,
+                },
                 (_, None) => None,
                 (
                     Op::ProjectTuple { field, .. },
@@ -1941,32 +2392,36 @@ impl Frame {
                     self.clone_source(Some(member))?
                 }
                 (
-                    Op::ProjectIndex { .. },
-                    Some(crate::traits::term::TyTerm::Array(
-                        element,
-                        crate::traits::term::ConstTerm::Value(len),
-                    )),
+                    Op::ProjectIndex { index, .. },
+                    Some(
+                        view @ (crate::traits::term::TyTerm::Array(
+                            element,
+                            crate::traits::term::ConstTerm::Value(_),
+                        )
+                        | crate::traits::term::TyTerm::Slice(element)),
+                    ),
                 ) => {
-                    let crate::traits::term::TyTerm::Primitive(primitive) = element.as_ref() else {
-                        return Err(Diagnostic::new(
-                            "LRR-E-UNSUPPORTED",
-                            "array projection requires symbolic element binding".into(),
-                        )
-                        .into());
-                    };
-                    let expected =
-                        crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id();
+                    // The retained `[T; N]`/`[T]` view must be the reached
+                    // place's own descriptor; its element view types the
+                    // element place. A range index keeps the `[T]` view.
                     let actual = store.place_type_id(base_place)?;
-                    if !matches!(store.type_descriptor(actual)?.key.as_ref(), crate::runtime::shape::TypeKey::Array { element, len: actual_len }
-                    if *element == expected && u64::from(*actual_len) == *len)
-                    {
-                        return Err(Diagnostic::new(
-                            "LRR-E-OWNERSHIP",
-                            "array source view differs from its descriptor".into(),
-                        )
-                        .into());
+                    Self::require_borrow_source_target(Some(view), actual, store).map_err(
+                        |error| {
+                            if error.code == "LRR-E-OWNERSHIP" {
+                                Diagnostic::new(
+                                    "LRR-E-OWNERSHIP",
+                                    "array source view differs from its descriptor".into(),
+                                )
+                            } else {
+                                error
+                            }
+                        },
+                    )?;
+                    if self.range_index(*index, store)?.is_some() {
+                        Some(crate::traits::term::TyTerm::Slice(element.clone()))
+                    } else {
+                        self.clone_source(Some(element.as_ref()))?
                     }
-                    Some(crate::traits::term::TyTerm::Primitive(*primitive))
                 }
                 _ => {
                     return Err(Diagnostic::new(
@@ -1978,24 +2433,15 @@ impl Frame {
             }
         };
         let place = match op {
-            Op::ProjectField { .. } => {
+            Op::ProjectField { .. } | Op::ProjectTuple { .. } if member.is_some() => {
                 let member = member.ok_or_else(|| invalid("prepared source member absent"))?;
                 if let Some(crate::traits::term::TyTerm::Ref(_, mutable, _)) =
                     self.place_slot(base)?.source.as_ref()
                 {
-                    // A reference local is peeked, not copied or moved. Nested
-                    // or projected reference receivers need their full source
-                    // permission chain before this boundary can admit them.
-                    if !matches!(base_place.root, crate::runtime::place::PlaceRoot::Cell(_))
-                        || !base_place.projections.is_empty()
-                    {
-                        return Err(Diagnostic::new(
-                            "LRR-E-UNSUPPORTED",
-                            "projected reference receiver requires its source permission chain"
-                                .into(),
-                        )
-                        .into());
-                    }
+                    // A reference receiver (a local or a projected field,
+                    // `d.f.n`) is peeked, not copied or moved; the referent's
+                    // access is the reference's own. Static permission of the
+                    // path through it is rustc's borrow check, not ours.
                     let receiver = store.place_type_id(base_place)?;
                     if !matches!(store.type_descriptor(receiver)?.key.as_ref(),
                         crate::runtime::shape::TypeKey::Ref { mutable: actual, .. } if actual == mutable)
@@ -2012,24 +2458,40 @@ impl Frame {
                     store.project_source_field(base_place, member)?
                 }
             }
-            Op::ProjectTuple { field, .. } => store.project_tuple(base_place, *field)?,
+            Op::ProjectTuple { field, .. } => {
+                store.project_tuple(deref_place.as_ref().unwrap_or(base_place), *field)?
+            }
             Op::ProjectIndex { index, .. } => {
-                if self.slot(*index)?.source.as_ref().is_some_and(|source| {
-                    !matches!(
-                        source,
-                        crate::traits::term::TyTerm::Primitive(crate::ir::op::PrimitiveType::Usize)
-                    )
-                }) {
-                    return Err(Diagnostic::new(
-                        "LRR-E-INDEX-TYPE",
-                        "index source view requires usize".into(),
-                    )
-                    .into());
+                let base = deref_place.as_ref().unwrap_or(base_place);
+                // `Index<Range*<usize>>` for arrays and slices: the explicitly
+                // specified runtime element-window intrinsic.
+                if let Some(range) = self.range_index(*index, store)? {
+                    store.project_range(base, range)?
+                } else {
+                    if self.slot(*index)?.source.as_ref().is_some_and(|source| {
+                        !matches!(
+                            source,
+                            crate::traits::term::TyTerm::Primitive(
+                                crate::ir::op::PrimitiveType::Usize
+                            )
+                        )
+                    }) {
+                        return Err(Diagnostic::new(
+                            "LRR-E-INDEX-TYPE",
+                            "index source view requires usize".into(),
+                        )
+                        .into());
+                    }
+                    let evaluated = store.preview_scalar(self.cell(*index)?, None)?;
+                    store.project_index(base, evaluated)?
                 }
-                let evaluated = store.preview_scalar(self.cell(*index)?, None)?;
-                store.project_index(base_place, evaluated)?
             }
             _ => return Err(invalid("projection preflight discriminator changed").into()),
+        };
+        let added = if deref_place.is_some() {
+            place.projection_bytes()?
+        } else {
+            added
         };
         self.preflight_source_view(destination, source.as_ref())?;
         let source_excess = self.preflight_source_replacement(
@@ -2084,6 +2546,9 @@ impl Frame {
         }
         store.dereference_place(self.executed_place(reference)?)?;
         let actual = store.place_type_id(self.executed_place(reference)?)?;
+        if let Some(contents) = store.box_contents_type(actual)? {
+            return self.preflight_box_deref(reference, destination, contents, store);
+        }
         let crate::runtime::shape::TypeKey::Ref { mutable, target } =
             store.type_descriptor(actual)?.key.as_ref()
         else {
@@ -2125,6 +2590,117 @@ impl Frame {
         }
         Ok(())
     }
+    /// `Op::CompoundAssignPlace`: read the projected primitive, apply the
+    /// checked operator with the right operand (an unbound literal takes the
+    /// place's type; a shift amount keeps its own, i32 by fallback), write it
+    /// back in place and produce unit.
+    pub(crate) fn compound_assign_place(
+        &mut self,
+        operator: crate::ir::op::NumericBinary,
+        place: SlotId,
+        right: SlotId,
+        destination: SlotId,
+        store: &mut GuestStore,
+    ) -> Result<(), super::numeric::NumericFailure> {
+        use crate::runtime::place::PlaceFailure;
+        let fault = |failure: PlaceFailure| match failure {
+            PlaceFailure::RuntimeFault(error) => super::numeric::NumericFailure::RuntimeFault(error),
+            PlaceFailure::GuestPanic(_) => super::numeric::NumericFailure::GuestPanic(
+                super::numeric::PanicKind::IndexOutOfBounds,
+            ),
+        };
+        let target = self.executed_place(place)?.clone();
+        let current = store.read_place(&target).map_err(fault)?;
+        let shift = matches!(
+            operator,
+            crate::ir::op::NumericBinary::Shl | crate::ir::op::NumericBinary::Shr
+        );
+        let expected = if shift { TypeId(6) } else { TypeId(current.type_id) };
+        let right = self.operand(right, Some(expected), store)?;
+        let result = super::numeric::binary(operator, current, right)?;
+        let ticket = store.ticket(result)?;
+        let old = store.replace_place(&target, ticket).map_err(fault)?;
+        store.discard(old)?;
+        let unit = store.ticket(ValueRepr::unit())?;
+        self.write(destination, unit, store)?;
+        self.clear_place(place)?;
+        Ok(())
+    }
+    /// The reached type at an executed place slot.
+    pub(crate) fn place_type(
+        &self,
+        place: SlotId,
+        store: &GuestStore,
+    ) -> Result<crate::runtime::shape::TypeId, Diagnostic> {
+        store
+            .place_type_id(self.executed_place(place)?)
+            .map_err(|failure| match failure {
+                crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                    invalid("receiver place type inspection panicked")
+                }
+            })
+    }
+    /// `Op::MethodReceiver`: autoderef the receiver place `derefs` times
+    /// (alternating with the scratch place), then autoref or read by value.
+    pub(crate) fn method_receiver(
+        &mut self,
+        site: u32,
+        place: SlotId,
+        scratch: SlotId,
+        destination: SlotId,
+        store: &mut GuestStore,
+    ) -> Result<(), crate::runtime::place::PlaceFailure> {
+        let adjustment = self
+            .method_receivers
+            .remove(&self.call_identity(site))
+            .ok_or_else(|| invalid("method receiver adjustment was not selected"))?;
+        let (mut current, mut other) = (place, scratch);
+        for _ in 0..adjustment.derefs {
+            self.deref_place(current, other, store)?;
+            std::mem::swap(&mut current, &mut other);
+        }
+        let access = match adjustment.mode {
+            ReceiverMode::Value => return self.read_place(current, destination, store),
+            ReceiverMode::Shared => crate::ir::op::BorrowAccess::Shared,
+            ReceiverMode::Mutable => crate::ir::op::BorrowAccess::Mutable,
+        };
+        let slice_reference = if adjustment.unsize {
+            Some(self.receiver_slice_reference(current, access, store)?)
+        } else {
+            None
+        };
+        self.borrow(current, access, destination, store)?;
+        if let Some(expected) = slice_reference {
+            let cell = self
+                .slot(destination)?
+                .cell
+                .ok_or_else(|| invalid("unsized method receiver was not written"))?;
+            store.coerce_unsized_cell(cell, expected)?;
+            self.set_source_view(destination, None)?;
+        }
+        Ok(())
+    }
+    /// The `&[T]`/`&mut [T]` Type of an autoref'd array receiver's element
+    /// window (rustc's final unsizing probe step).
+    fn receiver_slice_reference(
+        &self,
+        place: SlotId,
+        access: crate::ir::op::BorrowAccess,
+        store: &mut GuestStore,
+    ) -> Result<crate::runtime::shape::TypeId, Diagnostic> {
+        let ty = self.place_type(place, store)?;
+        let crate::runtime::shape::TypeKey::Array { element, .. } =
+            store.type_descriptor(ty)?.key.as_ref().clone()
+        else {
+            return Err(invalid("unsized method receiver is not an array place"));
+        };
+        let slice = store.intern_type(crate::runtime::shape::TypeKey::Slice { element })?;
+        store.intern_type(crate::runtime::shape::TypeKey::Ref {
+            mutable: access == crate::ir::op::BorrowAccess::Mutable,
+            target: slice,
+        })
+    }
     pub(crate) fn deref_place(
         &mut self,
         reference: SlotId,
@@ -2137,8 +2713,15 @@ impl Frame {
             Some(crate::traits::term::TyTerm::Ref(_, _, pointee)) => {
                 self.clone_source(Some(pointee.as_ref()))?
             }
+            // `*b`: the box view's contents `T`.
+            Some(source) => self.clone_source(Self::box_contents_source(source, store))?,
             _ => None,
         };
+        // A box dereference extends its base place's projections.
+        self.projection_bytes = self
+            .projection_bytes
+            .checked_add(place.projection_bytes()?)
+            .ok_or_else(crate::runtime::arena::resource)?;
         self.set_source_view(destination, source)?;
         self.slots[destination.0 as usize].place = Some(place);
         self.clear_place(reference)?;
@@ -2150,36 +2733,12 @@ impl Frame {
         destination: SlotId,
         store: &GuestStore,
     ) -> Result<(), crate::runtime::place::PlaceFailure> {
-        // The scalar pattern lane must preserve the scrutinee for the next
-        // arm when a guard fails. A descriptor alone cannot supply a source
-        // identity or authorize copying an aggregate or a reference.
-        let pattern = self
-            .body
-            .nodes()
-            .get(self.pc.node as usize)
-            .is_some_and(|node| node.role == crate::syntax::body_index::NodeRole::Pattern);
+        // A `&mut` place at a reference coercion site is reborrowed.
+        if self.preflight_place_reborrow(place, destination, store)? {
+            return Ok(());
+        }
         let retained = self.place_slot(place)?.source.as_ref();
-        if pattern {
-            self.preflight_decision_read_place(place, destination, store)?;
-        }
-        if pattern && !matches!(retained, Some(crate::traits::term::TyTerm::Primitive(_))) {
-            return Err(Diagnostic::new(
-                "LRR-E-UNSUPPORTED",
-                "scalar pattern binding requires an admitted primitive source".into(),
-            )
-            .into());
-        }
-        let (_, value, mode) = store.admit_owning_place_read(self.executed_place(place)?)?;
-        if pattern {
-            if mode != crate::runtime::cell::IntrinsicRead::CopyScalar {
-                return Err(Diagnostic::new(
-                    "LRR-E-UNSUPPORTED",
-                    "scalar pattern binding requires an intrinsic scalar copy".into(),
-                )
-                .into());
-            }
-            Self::require_borrow_source_target(retained, TypeId(value.type_id), store)?;
-        }
+        let (_, value, _) = store.admit_owning_place_read(self.executed_place(place)?)?;
         self.preflight_source_view(destination, retained)?;
         self.preflight_write_value(destination, value, store)?;
         Ok(())
@@ -2190,6 +2749,9 @@ impl Frame {
         destination: SlotId,
         store: &mut GuestStore,
     ) -> Result<(), crate::runtime::place::PlaceFailure> {
+        if self.place_reborrow_read(place, destination, store)? {
+            return Ok(());
+        }
         self.preflight_read_place(place, destination, store)?;
         let source = self.clone_source(self.place_slot(place)?.source.as_ref())?;
         store.reserve_place_read_result()?;
@@ -2229,6 +2791,12 @@ impl Frame {
         self.preflight_assign_place(place, source, destination, store)?;
         let plan = store
             .preview_intrinsic_place_assignment(self.executed_place(place)?, self.cell(source)?)?;
+        if matches!(
+            plan,
+            crate::runtime::cell::IntrinsicAssignment::ReplaceOwned { .. }
+        ) {
+            return Err(invalid("owned replacement bypassed its cleanup activation").into());
+        }
         let materializes = matches!(store.admit_move(self.cell(source)?)?.kind, 11 | 12);
         store.reserve_intrinsic_place_assignment(
             self.slot(destination)?.cell.is_none(),
@@ -2252,6 +2820,9 @@ impl Frame {
             crate::runtime::cell::IntrinsicAssignment::Replace { .. } => {
                 let old = store.replace_place(self.executed_place(place)?, ticket)?;
                 store.discard(old)?;
+            }
+            crate::runtime::cell::IntrinsicAssignment::ReplaceOwned { .. } => {
+                return Err(invalid("owned replacement bypassed its cleanup activation").into());
             }
         }
         let result = store.ticket(ValueRepr::unit())?;
@@ -2325,10 +2896,16 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         use crate::{runtime::shape::TypeKey, traits::term::TyTerm};
         let matches = match source {
-            None => matches!(
-                store.type_descriptor(target)?.key.as_ref(),
-                TypeKey::Primitive(_)
-            ),
+            // Without a retained source view, a closed runtime descriptor is the
+            // reached concrete type of the borrowed place.
+            None => {
+                matches!(
+                    store.type_descriptor(target)?.key.as_ref(),
+                    TypeKey::Primitive(_)
+                ) || store
+                    .descriptor_source_term(target)
+                    .is_some_and(|term| crate::frontend::call_contracts::closed_term(&term))
+            }
             Some(TyTerm::Primitive(primitive)) => {
                 crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id() == target
             }
@@ -2339,19 +2916,37 @@ impl Frame {
                 matches!(store.type_descriptor(target)?.key.as_ref(),
                     TypeKey::Nominal { identity: actual, args, const_args, .. }
                     if actual == definition && args.is_empty() && const_args.is_empty())
+                    || matches!(store.type_descriptor(target)?.key.as_ref(),
+                        TypeKey::Callable { identity: actual, .. } if actual == definition)
             }
             Some(TyTerm::Array(element, crate::traits::term::ConstTerm::Value(length))) => {
-                let TyTerm::Primitive(primitive) = element.as_ref() else {
-                    return Err(Diagnostic::new(
-                        "LRR-E-UNSUPPORTED",
-                        "borrowed array requires its retained primitive element binding".into(),
-                    ));
-                };
-                let expected =
-                    crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id();
-                matches!(store.type_descriptor(target)?.key.as_ref(),
-                    TypeKey::Array { element, len } if *element == expected && u64::from(*len) == *length)
+                match store.type_descriptor(target)?.key.as_ref() {
+                    TypeKey::Array {
+                        element: actual,
+                        len,
+                    } if u64::from(*len) == *length => {
+                        Self::require_borrow_source_target(Some(element), *actual, store)?;
+                        true
+                    }
+                    _ => false,
+                }
             }
+            // `[T]`: an element window's Type is its element's `[T]` view.
+            Some(TyTerm::Slice(element)) => match store.type_descriptor(target)?.key.as_ref() {
+                TypeKey::Slice { element: actual } => {
+                    Self::require_borrow_source_target(Some(element), *actual, store)?;
+                    true
+                }
+                _ => false,
+            },
+            // Any other closed source type: its descriptor records it exactly,
+            // up to regions (a reached reference descriptor is `'static`).
+            Some(source) if crate::frontend::call_contracts::closed_term(source) => store
+                .descriptor_source_term(target)
+                .is_some_and(|actual| {
+                    crate::frontend::signature_subst::erase_regions(&actual)
+                        == crate::frontend::signature_subst::erase_regions(source)
+                }),
             _ => {
                 return Err(Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
@@ -2400,6 +2995,7 @@ impl Frame {
         if !self.active_scopes.contains(&result.scope) {
             return Err(invalid("borrow result scope inactive").into());
         }
+        let unsize = self.borrow_unsizing(destination, target, access == Access::Mutable, store)?;
         if let Some(source) = result.source.as_ref() {
             use crate::traits::term::TyTerm;
             let TyTerm::Ref(_, mutable, pointee) = source else {
@@ -2409,7 +3005,9 @@ impl Frame {
                 )
                 .into());
             };
-            Self::require_borrow_source_target(Some(pointee), target, store)?;
+            if unsize.is_none() {
+                Self::require_borrow_source_target(Some(pointee), target, store)?;
+            }
             if *mutable != (access == Access::Mutable) {
                 return Err(Diagnostic::new(
                     "LRR-E-OWNERSHIP",
@@ -2435,6 +3033,7 @@ impl Frame {
             None
         };
         if let Some(expected) = expected
+            && Some(expected) != unsize
             && !matches!(store.type_descriptor(expected)?.key.as_ref(), TypeKey::Ref { mutable, target: expected_target } if *mutable == (access == Access::Mutable) && *expected_target == target)
         {
             return Err(Diagnostic::new(
@@ -2461,6 +3060,7 @@ impl Frame {
                     source @ (crate::traits::term::TyTerm::Primitive(_)
                     | crate::traits::term::TyTerm::Nominal(_, _)
                     | crate::traits::term::TyTerm::Array(_, _)
+                    | crate::traits::term::TyTerm::Slice(_)
                     | crate::traits::term::TyTerm::Tuple(_)),
                 ) => {
                     // Preflight has already matched this written source target
@@ -2488,12 +3088,37 @@ impl Frame {
             crate::ir::op::BorrowAccess::Shared => Access::Shared,
             crate::ir::op::BorrowAccess::Mutable => Access::Mutable,
         };
-        store.reserve_place_borrow_result(
-            self.executed_place(place)?,
-            self.slot(destination)?.cell.is_none(),
-        )?;
+        // An unsizing expectation borrows the array's complete element window.
+        let target = store.admit_place_borrow(self.executed_place(place)?, access)?;
+        let window = match self.borrow_unsizing(
+            destination,
+            target,
+            access == Access::Mutable,
+            store,
+        )? {
+            Some(_) => Some(store.project_range(
+                self.executed_place(place)?,
+                crate::runtime::place::SliceRange {
+                    start: 0,
+                    end: None,
+                    inclusive: false,
+                },
+            )?),
+            None => None,
+        };
+        let borrowed = match window {
+            Some(window) => window,
+            None => {
+                let executed = self.executed_place(place)?;
+                crate::runtime::place::Place {
+                    root: executed.root,
+                    projections: executed.projections.clone(),
+                }
+            }
+        };
+        store.reserve_place_borrow_result(&borrowed, self.slot(destination)?.cell.is_none())?;
         self.prepare_write(destination, store)?;
-        let ticket = store.borrow_ticket(self.executed_place(place)?, access)?;
+        let ticket = store.borrow_ticket(&borrowed, access)?;
         self.write(destination, ticket, store)?;
         self.set_source_view(destination, written_source)?;
         self.clear_place(place)?;
@@ -2591,11 +3216,7 @@ impl Frame {
             _ => {}
         }
         let source_operands = self.prepare_tuple_source_operands(plan)?;
-        self.admit_constructor_hints(
-            &hints,
-            Self::tuple_operand_bytes(source_operands.as_deref())
-                .ok_or_else(crate::runtime::arena::resource)?,
-        )?;
+        self.admit_constructor_hints(&hints)?;
         self.constructor_start = Some(PreparedConstructor {
             pc: self.pc.clone(),
             guard,
@@ -2608,6 +3229,15 @@ impl Frame {
     pub(crate) fn prepare_observed_structural_constructor(
         &mut self,
         plan: &crate::syntax::constructors::ConstructorPlan,
+    ) -> Result<(), Diagnostic> {
+        self.prepare_observed_structural_constructor_with(plan, Vec::new())
+    }
+    /// An observed constructor whose members with an exactly known Type
+    /// (from a partial written context) carry their hints.
+    pub(crate) fn prepare_observed_structural_constructor_with(
+        &mut self,
+        plan: &crate::syntax::constructors::ConstructorPlan,
+        hints: Vec<(SlotId, TypeId)>,
     ) -> Result<(), Diagnostic> {
         use crate::{
             runtime::object::StructuralConstructionKind as S,
@@ -2640,16 +3270,8 @@ impl Frame {
                 ));
             }
         };
-        if fields > crate::runtime::object::MAX_CONSTRUCTION_FIELDS {
-            return Err(crate::runtime::arena::resource());
-        }
-        let hints = Vec::new();
         let source_operands = self.prepare_tuple_source_operands(plan)?;
-        self.admit_constructor_hints(
-            &hints,
-            Self::tuple_operand_bytes(source_operands.as_deref())
-                .ok_or_else(crate::runtime::arena::resource)?,
-        )?;
+        self.admit_constructor_hints(&hints)?;
         self.constructor_start = Some(PreparedConstructor {
             pc: self.pc.clone(),
             guard,
@@ -2672,9 +3294,7 @@ impl Frame {
             .ok_or_else(|| invalid("nominal constructor result absent"))?;
         let admitted = match self.source_view(result)? {
             None => infer,
-            Some(crate::traits::term::TyTerm::Nominal(source, args)) => {
-                source == definition && args.is_empty()
-            }
+            Some(crate::traits::term::TyTerm::Nominal(source, _)) => source == definition,
             _ => false,
         };
         if !admitted {
@@ -2706,24 +3326,10 @@ impl Frame {
         bound: crate::frontend::types::BoundNominalConstructor,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
-        let binding_bytes = bound
-            .estimated_bytes()
-            .and_then(|bytes| {
-                bytes.checked_add(
-                    bound
-                        .mapping()
-                        .written_to_declaration()
-                        .len()
-                        .checked_mul(std::mem::size_of::<u32>())?
-                        .checked_add(3 * std::mem::size_of::<usize>())?,
-                )
-            })
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let (guard, hints) = self.prepare_nominal_hints(
+        let (guard, hints, partial) = self.prepare_nominal_hints(
             plan,
             crate::core::digest::StableEncode::fingerprint(plan),
             &bound,
-            binding_bytes,
             store,
         )?;
         self.constructor_start = Some(PreparedConstructor {
@@ -2733,6 +3339,9 @@ impl Frame {
             hints,
             source_operands: None,
         });
+        for (slot, written) in partial {
+            self.set_partial_hint(slot, written, Some(guard))?;
+        }
         Ok(())
     }
     pub(crate) fn prepare_installed_nominal_constructor(
@@ -2744,11 +3353,10 @@ impl Frame {
         if prepared.key() != &self.pc {
             return Err(invalid("installed constructor source PC differs"));
         }
-        let (guard, hints) = self.prepare_nominal_hints(
+        let (guard, hints, partial) = self.prepare_nominal_hints(
             prepared.plan(),
             prepared.plan_identity(),
             prepared.bound(),
-            0,
             store,
         )?;
         self.constructor_start = Some(PreparedConstructor {
@@ -2758,6 +3366,9 @@ impl Frame {
             hints,
             source_operands: None,
         });
+        for (slot, written) in partial {
+            self.set_partial_hint(slot, written, Some(guard))?;
+        }
         Ok(())
     }
     /// Source binding is immutable. Only runtime hints/materialized descriptors
@@ -2767,9 +3378,15 @@ impl Frame {
         plan: &crate::syntax::constructors::ConstructorPlan,
         plan_identity: crate::core::digest::Digest,
         bound: &crate::frontend::types::BoundNominalConstructor,
-        binding_bytes: usize,
         store: &mut GuestStore,
-    ) -> Result<(SlotId, Vec<(SlotId, TypeId)>), Diagnostic> {
+    ) -> Result<
+        (
+            SlotId,
+            Vec<(SlotId, TypeId)>,
+            Vec<(SlotId, Arc<crate::ir::written_type::WrittenType>)>,
+        ),
+        Diagnostic,
+    > {
         let guard = self.admit_constructor_plan(plan)?;
         if bound.mapping().constructor() != plan_identity
             || !matches!(plan.kind(), crate::syntax::constructors::ConstructorKind::Record { fields, rest: None, .. } if fields.len() == bound.variant().fields().len())
@@ -2791,45 +3408,44 @@ impl Frame {
                 .fields()
                 .get(*ordinal as usize)
                 .ok_or_else(|| invalid("constructor field map outside variant"))?;
-            // Validate the complete mapping and frame budget before the store
-            // interns any selected nominal descriptor. Zero is a temporary
-            // accounting placeholder, never an installed operand constraint.
+            // Validate the complete mapping before the store interns any
+            // selected nominal descriptor. Zero is a temporary placeholder,
+            // never an installed operand constraint.
             hints.push((field.operand.value, TypeId(0)));
         }
-        self.admit_constructor_hints(&hints, binding_bytes)?;
+        self.admit_constructor_hints(&hints)?;
+        // A generic constructor without type context hints only its concrete
+        // fields; its parameter-typed fields determine their arguments.
+        let args = self.nominal_context_args(guard, bound.variant(), store)?;
+        let mut typed = Vec::new();
+        typed
+            .try_reserve_exact(hints.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        let mut partial = Vec::new();
         for (hint, ordinal) in hints
-            .iter_mut()
+            .iter()
             .zip(bound.mapping().written_to_declaration())
         {
-            hint.1 = bound.variant().fields()[*ordinal as usize].materialize(store)?;
+            let field = &bound.variant().fields()[*ordinal as usize];
+            match (&args, field) {
+                (Some(args), field) => typed.push((hint.0, field.materialize(store, args)?)),
+                // A compound field naming an open parameter (`(T, u8)`) is
+                // a partial context, filled by the arguments the completed
+                // fields fix (`frame_partial_hints.rs`).
+                (None, crate::frontend::types::NominalFieldType::Compound(written))
+                    if field.generic() =>
+                {
+                    partial.push((hint.0, Arc::clone(written)))
+                }
+                (None, field) if field.generic() => {}
+                (None, field) => typed.push((hint.0, field.materialize(store, &[])?)),
+            }
         }
-        Ok((guard, hints))
+        Ok((guard, typed, partial))
     }
-    fn admit_constructor_hints(
-        &self,
-        hints: &Vec<(SlotId, TypeId)>,
-        extra: usize,
-    ) -> Result<(), Diagnostic> {
+    fn admit_constructor_hints(&self, hints: &[(SlotId, TypeId)]) -> Result<(), Diagnostic> {
         for (slot, _) in hints {
             self.preflight_hint(*slot)?;
-        }
-        if hints
-            .capacity()
-            .checked_mul(std::mem::size_of::<(SlotId, TypeId)>())
-            .and_then(|n| n.checked_add(extra))
-            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
-            .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
-            .and_then(|n| {
-                n.checked_add(Self::metadata_bytes(
-                    &self.body,
-                    self.parameter_metadata_count(),
-                )?)
-            })
-            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(crate::runtime::arena::resource());
         }
         Ok(())
     }
@@ -2870,11 +3486,7 @@ impl Frame {
                 ));
             }
         }
-        self.admit_constructor_hints(
-            &facts.hints,
-            Self::tuple_operand_bytes(facts.source_operands.as_deref())
-                .ok_or_else(crate::runtime::arena::resource)?,
-        )?;
+        self.admit_constructor_hints(&facts.hints)?;
         Ok(())
     }
     pub(crate) fn start_prepared_constructor(
@@ -2947,9 +3559,6 @@ impl Frame {
             crate::runtime::shape::TypeKey::Tuple(fields) => store.begin_construction(fields)?,
             crate::runtime::shape::TypeKey::Array { element, len } => {
                 let len = usize::try_from(*len).map_err(|_| crate::runtime::arena::resource())?;
-                if len > crate::runtime::object::MAX_CONSTRUCTION_FIELDS {
-                    return Err(crate::runtime::arena::resource());
-                }
                 let mut fields = Vec::new();
                 fields
                     .try_reserve_exact(len)
@@ -3028,20 +3637,9 @@ impl Frame {
     ) -> Result<usize, Diagnostic> {
         self.preflight_constructor_start(id)?;
         self.require_nominal_result_source(id, bound.variant().identity(), true)?;
-        let total = self
-            .constructor_mapping_bytes
+        self.constructor_mapping_bytes
             .checked_add(bytes)
-            .ok_or_else(crate::runtime::arena::resource)?;
-        if Self::metadata_bytes(&self.body, self.parameter_metadata_count())
-            .and_then(|base| base.checked_add(total))
-            .and_then(|base| base.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|base| base.checked_add(self.auxiliary_metadata_bytes()?))
-            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(crate::runtime::arena::resource());
-        }
-        Ok(total)
+            .ok_or_else(crate::runtime::arena::resource)
     }
     fn begin_nominal_with_mapping(
         &mut self,
@@ -3051,6 +3649,39 @@ impl Frame {
         total: usize,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
+        if bound.variant().type_parameters() != 0 {
+            let (result, guard) = match self.nominal_context_args(id, bound.variant(), store)? {
+                Some(args) => {
+                    let (ty, guard) =
+                        store.begin_nominal_construction_with(bound.variant(), &args)?;
+                    // A context descriptor without a source view (a field's
+                    // declared `W<i32>`) publishes the closed instantiation.
+                    let result = self
+                        .body
+                        .constructor_node(id)?
+                        .value
+                        .ok_or_else(|| invalid("nominal constructor result absent"))?;
+                    if self.source_view(result)?.is_none() {
+                        let source = self.constructed_source(ty, store);
+                        self.set_source_view(result, source)?;
+                    }
+                    (ConstructionResult::Bound(ty), guard)
+                }
+                None => (
+                    ConstructionResult::PendingNominal,
+                    store.begin_pending_nominal_construction(bound.variant())?,
+                ),
+            };
+            self.slots[id.0 as usize].construction = Some(ActiveConstruction {
+                guard,
+                result,
+                cleaning: false,
+                mapping: Some(mapping),
+                source_operands: None,
+            });
+            self.constructor_mapping_bytes = total;
+            return Ok(());
+        }
         let (ty, guard) = store.begin_nominal_construction(bound.variant())?;
         self.slots[id.0 as usize].construction = Some(ActiveConstruction {
             guard,
@@ -3061,6 +3692,21 @@ impl Frame {
         });
         self.constructor_mapping_bytes = total;
         self.publish_nominal_source(id, bound.variant().identity())
+    }
+    /// The type arguments a generic nominal constructor's result context
+    /// (its reached descriptor hint) already fixes, if any.
+    fn nominal_context_args(
+        &self,
+        guard: SlotId,
+        bound: &crate::frontend::types::BoundNominalVariant,
+        store: &GuestStore,
+    ) -> Result<Option<Vec<TypeId>>, Diagnostic> {
+        let result = self
+            .body
+            .constructor_node(guard)?
+            .value
+            .ok_or_else(|| invalid("nominal constructor result absent"))?;
+        self.nominal_hint_args(result, bound, store)
     }
     pub fn constructor_field(
         &mut self,
@@ -3102,10 +3748,18 @@ impl Frame {
             .clone()
             .filter(|active| !active.cleaning)
             .ok_or_else(|| invalid("building construction guard absent"))?;
-        if self
-            .source_view(source)?
-            .is_some_and(|source| matches!(source, crate::traits::term::TyTerm::Param(_)))
-        {
+        // A field whose source is this frame's own generic parameter is the
+        // parameter's reached binding (the value's own type); an unbound
+        // rigid parameter has none.
+        if self.source_view(source)?.is_some_and(|source| {
+            matches!(source, crate::traits::term::TyTerm::Param(key)
+                if key.definition != self.body.body().definition
+                    || self
+                        .context
+                        .as_ref()
+                        .and_then(|context| context.runtime_binding(key))
+                        .is_none())
+        }) {
             return Err(Diagnostic::new(
                 "LRR-E-GENERIC-BINDING",
                 "rigid field source requires a matching constructor binding".into(),
@@ -3153,6 +3807,7 @@ impl Frame {
             ConstructionResult::Observed(_) => {
                 store.intern_type(store.observed_construction_key(active.guard)?)?
             }
+            ConstructionResult::PendingNominal => store.intern_pending_nominal(active.guard)?,
         };
         self.preflight_write_type(destination, ty, store)?;
         let cell = self.prepare_write(destination, store)?;
@@ -3163,6 +3818,15 @@ impl Frame {
         self.constructor_mapping_bytes = remaining_mapping_bytes;
         if let Some(source) = source {
             self.set_source_view(destination, Some(source))?;
+        }
+        // An instantiated generic nominal's source Type is its closed
+        // descriptor's term (`W<i32>`), not the bare declaration.
+        if matches!(store.type_descriptor(ty)?.key.as_ref(),
+            crate::runtime::shape::TypeKey::Nominal { args, .. } if !args.is_empty())
+            && let Some(term) = store.descriptor_source_term(ty)
+            && Self::supported_source(&term)
+        {
+            self.set_source_view(destination, Some(term))?;
         }
         // The admitted source view remains attached to the completed constructor.
         // Descriptor commitment cannot erase its written array element/length.
@@ -3196,6 +3860,19 @@ impl Frame {
                 self.preflight_write_type(destination, ty, store)?;
                 if let Some(cell) = self.slot(destination)?.cell {
                     store.validate_constructor_destination(cell, ty)?;
+                }
+            }
+            ConstructionResult::PendingNominal => {
+                self.preflight_temporary_slot(destination)?;
+                let slot = self.slot(destination)?;
+                if !self.active_scopes.contains(&slot.scope) {
+                    return Err(invalid("generic constructor result scope inactive"));
+                }
+                if slot.strict_hint && slot.hint.is_some() {
+                    return Err(Diagnostic::new(
+                        "LRR-E-OWNERSHIP",
+                        "generic constructor conflicts with destination descriptor".into(),
+                    ));
                 }
             }
             ConstructionResult::Observed(kind) => {
@@ -3288,6 +3965,7 @@ impl Frame {
     pub(crate) fn set_hint(&mut self, id: SlotId, hint: Option<TypeId>) -> Result<(), Diagnostic> {
         self.preflight_hint(id)?;
         self.slots[id.0 as usize].hint = hint;
+        self.clear_partial_hint(id);
         Ok(())
     }
     pub(crate) fn declared_hint(
@@ -3335,12 +4013,45 @@ impl Frame {
         } else {
             None
         };
+        // An overloaded operator's operand types its trait method's
+        // arguments, not the other operand: an autoref'd comparison operand
+        // or a nominal left operand constrains no right operand here.
+        let left_type = match (left, left_type) {
+            (Some(left), _) if self.autoref_operands.contains(&left) => None,
+            (_, Some(ty))
+                if matches!(
+                    store.type_descriptor(ty)?.key.as_ref(),
+                    crate::runtime::shape::TypeKey::Nominal { .. }
+                ) =>
+            {
+                None
+            }
+            (_, ty) => ty,
+        };
         let comparison = matches!(
             operator,
             Some(B::Eq | B::Ne | B::Lt | B::Le | B::Gt | B::Ge)
         );
         let shift = matches!(operator, Some(B::Shl | B::Shr));
-        let parent_type = self.hint(parent)?.filter(|ty| (2..=15).contains(&ty.0));
+        // A pure value forward (a block's tail, a parenthesized operand)
+        // also carries a nominal or composite context
+        // (`-> Option<u32> { None }`, `-> (W<u8>, i32) { (W { x: 1 }, 2) }`).
+        let parent_type = match self.hint(parent)? {
+            Some(ty) if (2..=15).contains(&ty.0) => Some(ty),
+            Some(ty)
+                if operator.is_none()
+                    && left.is_none()
+                    && matches!(
+                        store.type_descriptor(ty)?.key.as_ref(),
+                        crate::runtime::shape::TypeKey::Nominal { .. }
+                            | crate::runtime::shape::TypeKey::Tuple(_)
+                            | crate::runtime::shape::TypeKey::Array { .. }
+                    ) =>
+            {
+                Some(ty)
+            }
+            _ => None,
+        };
         let hint = if shift && left.is_some() {
             // Shift result/left width never constrains the independent RHS.
             // Source lowering selects fallback only for closed numeric syntax.
@@ -3539,8 +4250,7 @@ impl Frame {
         // Unlike decoding an unresolved literal, this closed proof applies no
         // new hint. Existing Uninit/Moved storage is admissible; live storage
         // remains refused by the ordinary write preflight.
-        self.preflight_write_type(destination, descriptor, store)?;
-        store.preflight_owning_read_result(self.slot(destination)?.cell.is_none(), false)
+        self.preflight_write_type(destination, descriptor, store)
     }
     pub(crate) fn write_primitive_floating_constant(
         &mut self,
@@ -3588,9 +4298,20 @@ impl Frame {
         Ok(())
     }
     fn preflight_result_type(&self, id: SlotId, actual: Option<TypeId>) -> Result<(), Diagnostic> {
+        self.preflight_result_type_coercing(id, actual, None)
+    }
+    /// A returned `&[T; N]` meets a declared `&[T]` result by unsizing.
+    fn preflight_result_type_coercing(
+        &self,
+        id: SlotId,
+        actual: Option<TypeId>,
+        value: Option<(ValueRepr, &GuestStore)>,
+    ) -> Result<(), Diagnostic> {
         if Some(id) == self.body.nodes()[0].value
             && let (Some(expected), Some(actual)) = (self.hint(id)?, actual)
             && expected != actual
+            && !matches!(value, Some((value, store))
+                if store.unsizing_coercion(value, expected)?.is_some())
         {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-RETURN-TYPE",
@@ -3660,13 +4381,6 @@ impl Frame {
         // at Frame creation. Source publication needs no new allocation.
         Ok(())
     }
-    pub(crate) fn preflight_primitive_operator_capacity(
-        &self,
-        destination: SlotId,
-        store: &GuestStore,
-    ) -> Result<(), Diagnostic> {
-        store.preflight_owning_read_result(self.slot(destination)?.cell.is_none(), false)
-    }
     pub(crate) fn reserve_primitive_operator_result(
         &self,
         destination: SlotId,
@@ -3716,6 +4430,9 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         let cell = self.prepare_write(id, store)?;
+        if let Some(expected) = self.write_unsizing(id, store.peek_ticket(ticket)?, store)? {
+            store.coerce_unsized_ticket(ticket, expected)?;
+        }
         store.initialize(cell, ticket)?;
         self.set_source_view(id, None)
     }
@@ -3759,11 +4476,19 @@ impl Frame {
         value: ValueRepr,
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
-        self.preflight_result_type(id, store.effective_type(value)?)?;
+        self.preflight_result_type_coercing(
+            id,
+            store.effective_type(value)?,
+            Some((value, store)),
+        )?;
         self.preflight_temporary_slot(id)?;
         let slot = self.slot(id)?;
         if !self.active_scopes.contains(&slot.scope) {
             return Err(invalid("result scope inactive"));
+        }
+        // A coercion-site destination admits the coerced slice reference.
+        if self.write_unsizing(id, value, store)?.is_some() {
+            return Ok(());
         }
         if let Some(cell) = slot.cell {
             store.validate_initialization_value(cell, value)?;
@@ -3906,7 +4631,13 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         let cell = self.binding(binding)?;
+        // A moved local reports its use after move before any coercion.
         store.admit_owning_read(cell)?;
+        // A `&mut` local at a reference coercion site is reborrowed.
+        if let Some(access) = self.reborrow_access(destination, store.admit_move(cell)?, store)? {
+            let source = self.local_read_source(binding, destination, store)?;
+            return self.preflight_reborrow(cell, destination, access, source.as_ref(), store);
+        }
         let source = self.local_read_source(binding, destination, store)?;
         self.preflight_source_view(destination, source.as_ref())?;
         if self.binding_sources[binding.0 as usize].is_none() {
@@ -3944,7 +4675,8 @@ impl Frame {
                 .checked_add(binding.0)
                 .ok_or_else(|| invalid("replacement binding slot overflow"))?,
         };
-        if store.owner(target)? != owner {
+        // A captured binding is the captured variable's own location.
+        if store.owner(target)? != owner && !self.captured.contains(&binding) {
             return Err(invalid(
                 "replacement local location belongs to another frame slot",
             ));
@@ -4000,11 +4732,15 @@ impl Frame {
         let CellState::Live(value) = store.state(cell)? else {
             return Ok(false);
         };
+        // Nominal owners use the same machine: drop glue walks their fields,
+        // and a user Drop impl still demands its selected witness there.
         Ok(value.kind == 8
             && matches!(
                 store.type_descriptor(TypeId(value.type_id))?.key.as_ref(),
                 crate::runtime::shape::TypeKey::Tuple(_)
                     | crate::runtime::shape::TypeKey::Array { .. }
+                    | crate::runtime::shape::TypeKey::Nominal { .. }
+                    | crate::runtime::shape::TypeKey::Callable { .. }
             ))
     }
     pub(crate) fn bind(
@@ -4240,6 +4976,9 @@ impl Frame {
             .and_then(|cell| *cell)
             .ok_or_else(|| invalid("local read precedes executed binding"))?;
         let value = store.admit_move(cell)?;
+        if let Some(access) = self.reborrow_access(destination, value, store)? {
+            return self.reborrow_read(Some(binding), cell, destination, access, source, store);
+        }
         let materializes_literal = matches!(value.kind, 11 | 12)
             && store
                 .effective_type(value)?
@@ -4341,7 +5080,6 @@ impl Frame {
             }
             let id = SlotId(u32::try_from(ordinal).map_err(|_| invalid("guard slot overflow"))?);
             while let Some(active) = self.slots[ordinal].construction.as_ref() {
-                self.fuel.poll()?;
                 if !store.admit_scalar_construction_cleanup(active.guard)? {
                     if self.constructor_cleanup_next(id, store)?.is_some() {
                         return Err(invalid("empty constructor cleanup yielded a field"));
@@ -4353,7 +5091,7 @@ impl Frame {
                     .cleanup_elements_completed
                     .checked_add(1)
                     .ok_or_else(|| invalid("constructor cleanup element counter overflow"))?;
-                self.charge_fuel()?;
+                self.count_step();
                 let ticket = self
                     .constructor_cleanup_next(id, store)?
                     .ok_or_else(|| invalid("admitted constructor cleanup field absent"))?;
@@ -4437,61 +5175,17 @@ impl Frame {
         }
         Ok(())
     }
-    pub(crate) fn control_transfer(
-        &mut self,
-        target: crate::syntax::body_index::LabelId,
-        value: Option<SlotId>,
-        continuing: bool,
-        store: &mut GuestStore,
-    ) -> Result<(), Diagnostic> {
-        self.preflight_control(target, value, continuing, store)?;
-        let target = self
-            .body
-            .labels()
-            .get(target.0 as usize)
-            .cloned()
-            .ok_or_else(|| invalid("control target absent"))?;
-        if !self.active_scopes.contains(&target.scope) || continuing && !target.is_loop {
-            return Err(invalid("control target inactive or not a loop"));
-        }
-        let destination = self.body.nodes()[target.node.0 as usize]
-            .value
-            .ok_or_else(|| invalid("control target result absent"))?;
-        let source_view = value
-            .map(|slot| self.source_view(slot))
-            .transpose()?
-            .flatten();
-        let ticket = if continuing {
-            None
-        } else if let Some(source) = value {
-            Some(store.move_from(self.cell(source)?)?)
-        } else {
-            Some(store.ticket(ValueRepr::unit())?)
-        };
-        loop {
-            let scope = self
-                .active_scopes
-                .last()
-                .copied()
-                .ok_or_else(|| invalid("control cleanup lost target"))?;
-            self.leave(scope, store)?;
-            if scope == target.scope {
-                break;
-            }
-        }
-        if let Some(ticket) = ticket {
-            self.write(destination, ticket, store)?;
-            self.set_source_view(destination, source_view)?;
-        }
-        Ok(())
-    }
     pub(crate) fn preflight_enter(&self, scope: ScopeId) -> Result<(), Diagnostic> {
         let descriptor = self
             .body
             .scopes()
             .get(scope.0 as usize)
             .ok_or_else(|| invalid("VM scope absent"))?;
-        if descriptor.parent != self.active_scopes.last().copied()
+        // A closure scope is its own call frame's outermost scope: the frame
+        // that creates the closure value never enters it.
+        let closure_root = descriptor.kind == crate::syntax::body_index::ScopeKind::Closure
+            && self.active_scopes.is_empty();
+        if (descriptor.parent != self.active_scopes.last().copied() && !closure_root)
             || self.active_scopes.contains(&scope)
         {
             return Err(invalid("VM scope entry violates lexical ancestry"));
@@ -4558,8 +5252,7 @@ impl Frame {
                     .cleanup_elements_completed
                     .checked_add(1)
                     .ok_or_else(|| invalid("cleanup element counter overflow"))?;
-                self.fuel.charge()?;
-                self.counters.fuel_used = self.fuel.snapshot().used;
+                Self::count_step_in(&mut self.fuel, &mut self.counters);
                 if matches!(store.state(id)?, CellState::Live(_)) {
                     let ticket = store.begin_drop(id)?;
                     store.discard(ticket)?;
@@ -4597,7 +5290,6 @@ impl Frame {
         if bindings_first {
             self.retire_bindings(scope, store)?;
         }
-        self.fuel.poll()?;
         // Only the initial scalar/storage inventory is admitted by this VM task.
         // General user Drop dispatch is assigned to the later cleanup tasks.
         for slot in self.slots.iter_mut().rev().filter(|s| s.scope == scope) {
@@ -4608,8 +5300,7 @@ impl Frame {
                     .cleanup_elements_completed
                     .checked_add(1)
                     .ok_or_else(|| invalid("cleanup element counter overflow"))?;
-                self.fuel.charge()?;
-                self.counters.fuel_used = self.fuel.snapshot().used;
+                Self::count_step_in(&mut self.fuel, &mut self.counters);
                 if matches!(store.state(cell)?, CellState::Live(_)) {
                     let ticket = store.begin_drop(cell)?;
                     store.discard(ticket)?;
@@ -4638,7 +5329,7 @@ impl Frame {
         if !bindings_first {
             self.retire_bindings(scope, store)?;
         }
-        if scope == ScopeId(0) {
+        if scope == self.root_scope() {
             self.clear_parameter_source_views()?;
             for cell in self.parameters.iter_mut().rev() {
                 if let Some(id) = *cell {
@@ -4648,8 +5339,7 @@ impl Frame {
                         .cleanup_elements_completed
                         .checked_add(1)
                         .ok_or_else(|| invalid("parameter cleanup counter overflow"))?;
-                    self.fuel.charge()?;
-                    self.counters.fuel_used = self.fuel.snapshot().used;
+                    Self::count_step_in(&mut self.fuel, &mut self.counters);
                     if matches!(store.state(id)?, CellState::Live(_)) {
                         let ticket = store.begin_drop(id)?;
                         store.discard(ticket)?;
@@ -4660,7 +5350,7 @@ impl Frame {
                 }
             }
         }
-        self.patterns.retire_scope(scope);
+        self.open_patterns.retire_scope(scope);
         self.active_scopes.pop();
         Ok(())
     }
@@ -4834,37 +5524,6 @@ mod tests {
         store.reset(2).unwrap();
     }
     #[test]
-    fn rustc_original_tuple_reference_move_fuel_refusal_retains_projected_source() {
-        let (mut frame, mut store, recipe, field, sibling, place, destination) =
-            original_tuple_field_move_frame();
-        // The projection may finish; the owning read has its own guarded fuel.
-        frame.set_fuel_limit(1).unwrap();
-        let before = (
-            store.state(field).unwrap(),
-            store.state(sibling).unwrap(),
-            store.location_epoch(field).unwrap(),
-            store.budget().handles(),
-        );
-        assert_eq!(
-            crate::vm::step::step(&mut frame, &mut store, &recipe)
-                .unwrap_err()
-                .code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            before,
-            (
-                store.state(field).unwrap(),
-                store.state(sibling).unwrap(),
-                store.location_epoch(field).unwrap(),
-                store.budget().handles()
-            )
-        );
-        assert!(frame.slots[place.0 as usize].place.is_some());
-        assert!(frame.slots[destination.0 as usize].cell.is_none());
-        assert_eq!(frame.counters.operations_completed, 1);
-    }
-    #[test]
     fn rustc_original_tuple_reference_move_result_mismatch_preserves_the_field_owner() {
         let (mut frame, mut store, recipe, field, sibling, place, destination) =
             original_tuple_field_move_frame();
@@ -4894,9 +5553,7 @@ mod tests {
         assert!(frame.slots[destination.0 as usize].cell.is_none());
         assert_eq!(frame.counters.operations_completed, 1);
     }
-    fn original_string_read_frame(
-        max_handles: u32,
-    ) -> (
+    fn original_string_read_frame() -> (
         Frame,
         GuestStore,
         crate::ir::recipe::VerifiedRecipe,
@@ -4958,7 +5615,7 @@ mod tests {
         };
         assert_eq!(*binding, pattern);
         let destination = *destination;
-        let mut store = GuestStore::new(1, max_handles, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         let mut scopes = Vec::new();
         let mut scope = Some(read.scope);
@@ -5038,9 +5695,8 @@ mod tests {
                 panic!("original return-local read recipe absent")
             };
             let (binding, destination) = (*binding, *destination);
-            let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+            let mut store = GuestStore::for_epoch(1).unwrap();
             let mut frame = Frame::new(body, entry, &mut store).unwrap();
-            frame.set_fuel_limit(100).unwrap();
             let mut scopes = Vec::new();
             let mut scope = Some(read.scope);
             while let Some(id) = scope {
@@ -5126,7 +5782,7 @@ mod tests {
     #[test]
     fn rustc_original_string_local_read_executes_checked_move_once() {
         let (mut frame, mut store, recipe, binding, destination, text) =
-            original_string_read_frame(1000);
+            original_string_read_frame();
         let source = frame.binding(binding).unwrap();
         let before = store.state(source).unwrap();
         let epoch = store.location_epoch(source).unwrap();
@@ -5154,71 +5810,8 @@ mod tests {
         store.reset(2).unwrap();
     }
     #[test]
-    fn rustc_original_string_local_read_reserves_destination_before_consuming_source() {
-        let (mut frame, mut store, recipe, binding, destination, _) = original_string_read_frame(5);
-        let source = frame.binding(binding).unwrap();
-        assert_eq!(store.budget().handles(), 4);
-        let before = (
-            store.state(source).unwrap(),
-            store.location_epoch(source).unwrap(),
-            store.budget().handles(),
-            store.budget().bytes(),
-        );
-        assert_eq!(
-            crate::vm::step::step(&mut frame, &mut store, &recipe)
-                .unwrap_err()
-                .code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            (
-                store.state(source).unwrap(),
-                store.location_epoch(source).unwrap(),
-                store.budget().handles(),
-                store.budget().bytes()
-            ),
-            before
-        );
-        assert!(frame.slots[destination.0 as usize].cell.is_none());
-        assert_eq!(frame.counters.operations_completed, 0);
-        store.reset(2).unwrap();
-    }
-    #[test]
-    fn rustc_original_string_local_read_fuel_refusal_keeps_one_original_owner() {
-        let (mut frame, mut store, recipe, binding, destination, _) =
-            original_string_read_frame(1000);
-        let source = frame.binding(binding).unwrap();
-        frame.set_fuel_limit(0).unwrap();
-        let before = (
-            store.state(source).unwrap(),
-            store.location_epoch(source).unwrap(),
-            store.budget().handles(),
-            store.budget().bytes(),
-        );
-        assert_eq!(
-            crate::vm::step::step(&mut frame, &mut store, &recipe)
-                .unwrap_err()
-                .code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            (
-                store.state(source).unwrap(),
-                store.location_epoch(source).unwrap(),
-                store.budget().handles(),
-                store.budget().bytes()
-            ),
-            before
-        );
-        assert!(frame.slots[destination.0 as usize].cell.is_none());
-        assert_eq!(frame.counters.started_by_opcode[8], 0);
-        assert_eq!(frame.fuel_snapshot().used, 0);
-        store.reset(2).unwrap();
-    }
-    #[test]
     fn rustc_original_string_local_read_destination_mismatch_refuses_before_move_fuel() {
-        let (mut frame, mut store, recipe, binding, destination, _) =
-            original_string_read_frame(1000);
+        let (mut frame, mut store, recipe, binding, destination, _) = original_string_read_frame();
         let source = frame.binding(binding).unwrap();
         frame.slots[destination.0 as usize].hint = Some(TypeId(6));
         frame.slots[destination.0 as usize].strict_hint = true;
@@ -5306,7 +5899,7 @@ mod tests {
         };
         assert_eq!(*ordinal, 0);
         let destination = *destination;
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         let target = store
             .new_cell(
@@ -5465,6 +6058,7 @@ mod tests {
             source_result,
             result_descriptor,
             normalized_deferred_return: None,
+            structural_references: false,
         };
         let before = (
             store.owner_inventory_for_test(),
@@ -5541,39 +6135,6 @@ mod tests {
         store.reset(2).unwrap();
         // Direct replacement checks the original next assignment value, not
         // full execution of t1 binding, that assignment or p.use_ref.
-    }
-    #[test]
-    fn rustc_original_mutable_parameter_fuel_refusal_preserves_lease_owner() {
-        let (mut frame, mut store, recipe, target, shared, destination) =
-            original_mutable_parameter_read();
-        let source = frame.parameter(0).unwrap();
-        frame.set_fuel_limit(0).unwrap();
-        let before = (
-            store.state(source).unwrap(),
-            store.location_epoch(source).unwrap(),
-            store.location_epoch(target).unwrap(),
-            store.budget().handles(),
-        );
-        assert_eq!(
-            crate::vm::step::step(&mut frame, &mut store, &recipe)
-                .unwrap_err()
-                .code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            (
-                store.state(source).unwrap(),
-                store.location_epoch(source).unwrap(),
-                store.location_epoch(target).unwrap(),
-                store.budget().handles()
-            ),
-            before
-        );
-        store.reference_from_cell(source).unwrap();
-        assert_eq!(store.read_reference(shared).unwrap().payload, 0);
-        assert!(frame.slots[destination.0 as usize].cell.is_none());
-        assert_eq!(frame.counters.started_by_opcode[21], 0);
-        store.reset(2).unwrap();
     }
     #[test]
     fn rustc_mutable_parameter_source_installer_accounts_for_owned_target_box() {
@@ -5722,7 +6283,7 @@ mod tests {
             .clone();
         let destination = macro_node.runtime_scalar_slots[0];
         let entry = body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         // Direct parameter-read adaptation uses the original assert_eq operand
         // inventory. Original macro expansion/call/main execution is unclaimed.
@@ -5877,7 +6438,7 @@ mod tests {
         let body = parsed.index_body(handle, Default::default()).unwrap();
         let destination = body.nodes()[0].value.unwrap();
         let entry = body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap();
-        let mut store = GuestStore::new(1, 1_000, 32 * 1024 * 1024).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         let stable = TyTerm::Ref(RegionTerm::Static, mutable, target.clone());
         frame
@@ -5968,7 +6529,7 @@ mod tests {
             .unwrap();
         let body = parsed.index_body(handle, Default::default()).unwrap();
         let entry = body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap();
-        let mut store = GuestStore::new(1, 100_000, 32 * 1024 * 1024).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         let view = TyTerm::Ref(
             RegionTerm::Static,
@@ -6103,7 +6664,7 @@ mod tests {
         let node = &body.nodes()[plan.node().0 as usize];
         let guard = node.constructor_guard.unwrap();
         let destination = node.value.unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let key = TypeKey::Tuple(Box::new([TypeId(3)]));
         assert!(store.find_type(&key).is_none());
         let mut frame = Frame::new(
@@ -6250,7 +6811,7 @@ mod tests {
         (parsed, handle, body, plan)
     }
     #[test]
-    fn rustc_unhinted_bool_array_observes_original_fields_and_reserves_guard_before_transfer() {
+    fn rustc_unhinted_bool_array_observes_original_fields() {
         use crate::{
             ir::pc::Phase, runtime::shape::TypeKey, syntax::constructors::ConstructorKind,
         };
@@ -6264,44 +6825,7 @@ mod tests {
         let node = &body.nodes()[plan.node().0 as usize];
         let guard = node.constructor_guard.unwrap();
         let destination = node.value.unwrap();
-        // The frame anchor consumes the only allowed handle. Guard reservation
-        // refuses before any field entry, type publication, fuel or owner change.
-        let mut limited = GuestStore::new(1, 1, 1_000_000).unwrap();
-        let mut refused = Frame::new(
-            body.clone(),
-            body.pc(plan.node(), Phase::Entry).unwrap(),
-            &mut limited,
-        )
-        .unwrap();
-        enter_constructor_scope(&mut refused, guard);
-        refused
-            .prepare_observed_structural_constructor(&plan)
-            .unwrap();
-        let before = (
-            limited.budget().handles(),
-            limited.type_metadata_bytes(),
-            refused.fuel.snapshot().used,
-        );
-        assert_eq!(
-            refused
-                .start_prepared_constructor(guard, &mut limited)
-                .unwrap_err()
-                .code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            (
-                limited.budget().handles(),
-                limited.type_metadata_bytes(),
-                refused.fuel.snapshot().used
-            ),
-            before
-        );
-        assert!(refused.slots[guard.0 as usize].construction.is_none());
-        assert!(refused.slots[destination.0 as usize].cell.is_none());
-        assert_eq!(refused.counters.operations_started, 0);
-
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(plan.node(), Phase::Entry).unwrap(),
@@ -6402,7 +6926,7 @@ mod tests {
         let node = &body.nodes()[plan.node().0 as usize];
         let guard = node.constructor_guard.unwrap();
         let destination = node.value.unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(plan.node(), Phase::Entry).unwrap(),
@@ -6479,7 +7003,7 @@ mod tests {
         let node = &body.nodes()[plan.node().0 as usize];
         let guard = node.constructor_guard.unwrap();
         let destination = node.value.unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(plan.node(), Phase::Entry).unwrap(),
@@ -6600,7 +7124,7 @@ mod tests {
             .unwrap();
         let entry = body.pc(fields[0].node, Phase::Entry).unwrap();
         let literal = parsed.initial_thunk(&handle, &body, &entry).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let tuple = store
             .intern_type(TypeKey::Tuple(Box::new([TypeId(3)])))
             .unwrap();
@@ -6652,7 +7176,7 @@ mod tests {
             .constructor_guard
             .unwrap();
         let entry = body.pc(plan.node(), Phase::Entry).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let tuple = store
             .intern_type(TypeKey::Tuple(Box::new([TypeId(3)])))
             .unwrap();
@@ -6704,7 +7228,7 @@ mod tests {
         };
         let after = after.clone();
         let literal = parsed.initial_thunk(&handle, &body, &child).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let tuple = store
             .intern_type(TypeKey::Tuple(Box::new([TypeId(3)])))
             .unwrap();
@@ -6814,7 +7338,7 @@ mod tests {
             next,
         )
         .unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         enter_constructor_scope(&mut frame, guard);
         let handles = store.budget().handles();
@@ -6844,7 +7368,7 @@ mod tests {
         assert_eq!(body.slot_kind(destination).unwrap(), SlotKind::Value);
         let entry = body.pc(fields[0].node, Phase::Entry).unwrap();
         let literal = parsed.initial_thunk(&handle, &body, &entry).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let tuple = store
             .intern_type(TypeKey::Tuple(Box::new([TypeId(3)])))
             .unwrap();
@@ -6914,7 +7438,7 @@ mod tests {
         let destination = node.value.unwrap();
         let entry = body.pc(fields[0].node, Phase::Entry).unwrap();
         let literal = parsed.initial_thunk(&handle, &body, &entry).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let wrong = store
             .intern_type(TypeKey::Tuple(Box::new([TypeId(7)])))
             .unwrap();
@@ -7028,7 +7552,7 @@ mod tests {
             ordinal: 1,
         };
         let entry = body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1024 * 1024).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let statement = body.nodes().iter().find_map(|n| n.statement_scope).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         frame.enter(ScopeId(0)).unwrap();
@@ -7091,7 +7615,7 @@ mod tests {
     }
 
     #[test]
-    fn parameter_cleanup_is_reverse_order_and_preserves_unprocessed_owned_values() {
+    fn parameter_cleanup_retires_every_owned_parameter() {
         let blob = SourceBlob::new(b"fn live(a:String,b:String){}".to_vec()).unwrap();
         let parsed = ParsedFile::parse(&blob, ProfileIdentity::current()).unwrap();
         let outline = parsed
@@ -7100,14 +7624,13 @@ mod tests {
         let body = parsed
             .index_body(outline.items[0].body.as_ref().unwrap(), Default::default())
             .unwrap();
-        let mut store = GuestStore::new(1, 1000, 1024 * 1024).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap(),
             &mut store,
         )
         .unwrap();
-        frame.set_fuel_limit(1).unwrap();
         let mut arguments = Vec::new();
         let mut types = Vec::new();
         for ordinal in 0..2 {
@@ -7139,137 +7662,18 @@ mod tests {
         let first = frame.parameters[0].unwrap();
         let last = frame.parameters[1].unwrap();
         frame.enter(ScopeId(0)).unwrap();
-        assert_eq!(
-            frame.leave(ScopeId(0), &mut store).unwrap_err().code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert!(matches!(store.state(first).unwrap(), CellState::Live(_)));
-        assert_eq!(
-            store.location_epoch(last).unwrap_err().code,
-            "LRR-E-STALE-HANDLE"
-        );
-        assert_eq!(frame.parameters, vec![Some(first), None]);
-        assert_eq!(frame.counters.cleanup_elements_completed, 1);
-        assert_eq!(frame.active_scopes, vec![ScopeId(0)]);
-    }
-    #[test]
-    fn callee_cleanup_consumes_shared_fuel_and_interrupted_entry_allocates_nothing() {
-        let blob = SourceBlob::new(b"fn live(){1;}".to_vec()).unwrap();
-        let parsed = ParsedFile::parse(&blob, ProfileIdentity::current()).unwrap();
-        let outline = parsed
-            .outline(Digest([82; 32]), vec![], &CfgSet::guest_default())
-            .unwrap();
-        let body = parsed
-            .index_body(outline.items[0].body.as_ref().unwrap(), Default::default())
-            .unwrap();
-        let entry = body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap();
-        let value = body
-            .nodes()
-            .iter()
-            .find(|node| node.role == NodeRole::Expression(ExpressionKind::Literal))
-            .unwrap()
-            .value
-            .unwrap();
-        let root = body.scopes()[0].id;
-        let statement = body.nodes().iter().find_map(|n| n.statement_scope).unwrap();
-        let mut store = GuestStore::new(1, 1000, 1024 * 1024).unwrap();
-        let mut caller = Frame::new(body.clone(), entry.clone(), &mut store).unwrap();
-        caller.set_fuel_limit(2).unwrap();
-        caller.charge_fuel().unwrap();
-        let mut callee =
-            Frame::new_in_run(body.clone(), entry.clone(), &mut store, &mut caller).unwrap();
-        callee.enter(root).unwrap();
-        callee.enter(statement).unwrap();
-        let ticket = store.string("callee-owned value").unwrap();
-        callee.write(value, ticket, &mut store).unwrap();
-        callee.leave(statement, &mut store).unwrap();
-        callee.leave(root, &mut store).unwrap();
-        assert_eq!(callee.counters.cleanup_elements_completed, 1);
-        assert_eq!(caller.fuel_snapshot().used, 2);
-        assert_eq!(
-            caller.charge_fuel().unwrap_err().code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(caller.fuel_snapshot(), callee.fuel_snapshot());
-        let handles = store.budget().handles();
-        assert!(Frame::new_in_run(body.clone(), entry.clone(), &mut store, &mut caller).is_err());
-        assert_eq!(store.budget().handles(), handles);
-        for deadline in [false, true] {
-            let mut store = GuestStore::new(1, 1000, 1024 * 1024).unwrap();
-            let mut caller = Frame::new(body.clone(), entry.clone(), &mut store).unwrap();
-            if deadline {
-                caller.fuel.set_deadline(std::time::Instant::now());
-            } else {
-                caller.fuel.cancellation().cancel();
-            }
-            let handles = store.budget().handles();
-            assert!(
-                Frame::new_in_run(body.clone(), entry.clone(), &mut store, &mut caller).is_err()
-            );
-            assert_eq!(store.budget().handles(), handles);
-            assert_eq!(caller.fuel_snapshot().used, 0);
-        }
-    }
-    #[test]
-    fn scope_cleanup_charges_before_each_cell_and_preserves_unprocessed_ownership() {
-        let blob = SourceBlob::new(b"fn live(){let _=(1,2);}".to_vec()).unwrap();
-        let parsed = ParsedFile::parse(&blob, ProfileIdentity::current()).unwrap();
-        let outline = parsed
-            .outline(Digest([81; 32]), vec![], &CfgSet::guest_default())
-            .unwrap();
-        let body = parsed
-            .index_body(outline.items[0].body.as_ref().unwrap(), Default::default())
-            .unwrap();
-        let root = body.nodes().iter().find_map(|n| n.statement_scope).unwrap();
-        let values: Vec<_> = body
-            .nodes()
-            .iter()
-            .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Literal))
-            .map(|node| node.value.unwrap())
-            .collect();
-        assert_eq!(values.len(), 2);
-        for cancelled in [false, true] {
-            let mut store = GuestStore::new(1, 1000, 1024 * 1024).unwrap();
-            let entry = body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap();
-            let mut frame = Frame::new(body.clone(), entry, &mut store).unwrap();
-            frame.set_fuel_limit(1).unwrap();
-            frame.enter(ScopeId(0)).unwrap();
-            frame.enter(root).unwrap();
-            for value in &values {
-                let ticket = store.string("owned cleanup value").unwrap();
-                frame.write(*value, ticket, &mut store).unwrap();
-            }
-            let first = frame.cell(values[0]).unwrap();
-            let last = frame.cell(values[1]).unwrap();
-            let CellState::Live(first_value) = store.state(first).unwrap() else {
-                panic!("expected live owned string")
-            };
-            if cancelled {
-                frame.fuel.cancellation().cancel();
-            }
+        // E-R5-006: the former fuel-interrupted prefix observation of reverse
+        // parameter order is gone; complete cleanup must retire both owners.
+        frame.leave(ScopeId(0), &mut store).unwrap();
+        for cell in [first, last] {
             assert_eq!(
-                frame.leave(root, &mut store).unwrap_err().code,
-                "LRR-E-RUNTIME-RESOURCE"
+                store.location_epoch(cell).unwrap_err().code,
+                "LRR-E-STALE-HANDLE"
             );
-            assert_eq!(frame.active_scopes, vec![ScopeId(0), root]);
-            assert!(
-                matches!(store.state(first).unwrap(), CellState::Live(value) if value == first_value)
-            );
-            assert_eq!(frame.cell(values[0]).unwrap(), first);
-            if cancelled {
-                assert!(matches!(store.state(last).unwrap(), CellState::Live(_)));
-                assert_eq!(frame.fuel_snapshot().used, 0);
-                assert_eq!(frame.counters.cleanup_elements_completed, 0);
-            } else {
-                assert_eq!(
-                    store.location_epoch(last).unwrap_err().code,
-                    "LRR-E-STALE-HANDLE"
-                );
-                assert!(frame.slots[values[1].0 as usize].cell.is_none());
-                assert_eq!(frame.fuel_snapshot().used, 1);
-                assert_eq!(frame.counters.cleanup_elements_completed, 1);
-            }
         }
+        assert_eq!(frame.parameters, vec![None, None]);
+        assert_eq!(frame.counters.cleanup_elements_completed, 2);
+        assert!(frame.active_scopes.is_empty());
     }
 
     #[test]
@@ -7300,7 +7704,7 @@ mod tests {
             .value
             .unwrap();
         let entry = body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap();
-        let mut store = GuestStore::new(1, 100_000, 2 * 1024 * 1024).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(body, entry, &mut store).unwrap();
         frame.enter(root).unwrap();
         frame.enter(tail).unwrap();
@@ -7335,83 +7739,6 @@ mod tests {
         assert!(frame.active_scopes.is_empty());
     }
     #[test]
-    fn condition_prefix_cleanup_retires_last_binding_before_temporaries_and_preserves_fault_state()
-    {
-        let blob =
-            SourceBlob::new(b"fn live(){if let x=1_i64 && let y=2_i64 {}}".to_vec()).unwrap();
-        let parsed = ParsedFile::parse(&blob, ProfileIdentity::current()).unwrap();
-        let outline = parsed
-            .outline(Digest([82; 32]), vec![], &CfgSet::guest_default())
-            .unwrap();
-        let body = parsed
-            .index_body(outline.items[0].body.as_ref().unwrap(), Default::default())
-            .unwrap();
-        let conditional = body.nodes().iter().find_map(|n| n.condition_scope).unwrap();
-        let clauses = body
-            .nodes()
-            .iter()
-            .filter(|n| n.clause_scope.is_some())
-            .collect::<Vec<_>>();
-        assert_eq!(clauses.len(), 2);
-        for cancelled in [false, true] {
-            let mut store = GuestStore::new(1, 1000, 1_048_576).unwrap();
-            let mut frame = Frame::new(
-                body.clone(),
-                body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap(),
-                &mut store,
-            )
-            .unwrap();
-            frame.set_fuel_limit(1).unwrap();
-            frame.enter(ScopeId(0)).unwrap();
-            frame.enter(body.nodes()[0].tail_scope.unwrap()).unwrap();
-            frame.enter(conditional).unwrap();
-            let mut cells = Vec::new();
-            for clause in &clauses {
-                frame.enter(clause.clause_scope.unwrap()).unwrap();
-                let binding = body
-                    .nodes()
-                    .iter()
-                    .find(|n| n.parent == Some(clause.id) && n.role == NodeRole::Pattern)
-                    .unwrap()
-                    .id;
-                let source = body.nodes()[clause.operands[0].0 as usize].value.unwrap();
-                let ticket = store.string("owned clause binding").unwrap();
-                frame.write(source, ticket, &mut store).unwrap();
-                let original = frame.cell(source).unwrap();
-                frame
-                    .bind(binding, source, None, false, &mut store)
-                    .unwrap();
-                cells.push((frame.binding(binding).unwrap(), original));
-            }
-            if cancelled {
-                frame.fuel.cancellation().cancel();
-            }
-            assert_eq!(
-                frame.leave(conditional, &mut store).unwrap_err().code,
-                "LRR-E-RUNTIME-RESOURCE"
-            );
-            assert!(matches!(
-                store.state(cells[0].0).unwrap(),
-                CellState::Live(_)
-            ));
-            assert_eq!(store.state(cells[1].1).unwrap(), CellState::Moved);
-            assert_eq!(
-                frame.active_scopes().last(),
-                Some(&clauses[1].clause_scope.unwrap())
-            );
-            if cancelled {
-                assert!(matches!(
-                    store.state(cells[1].0).unwrap(),
-                    CellState::Live(_)
-                ));
-                assert_eq!(frame.counters.cleanup_elements_completed, 0);
-            } else {
-                assert_eq!(store.state(cells[1].0).unwrap(), CellState::Dropped);
-                assert_eq!(frame.counters.cleanup_elements_completed, 1);
-            }
-        }
-    }
-    #[test]
     fn conditional_leave_refuses_to_cross_a_live_consequent_block() {
         let blob = SourceBlob::new(b"fn live(){if let x=1_i64 {}}".to_vec()).unwrap();
         let parsed = ParsedFile::parse(&blob, ProfileIdentity::current()).unwrap();
@@ -7429,7 +7756,7 @@ mod tests {
         let conditional = owner.condition_scope.unwrap();
         let clause = body.nodes().iter().find_map(|n| n.clause_scope).unwrap();
         let consequent = body.nodes()[owner.operands[1].0 as usize].scope;
-        let mut store = GuestStore::new(1, 1000, 1_048_576).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap(),
@@ -7483,7 +7810,7 @@ mod tests {
             next = body.scopes()[scope.0 as usize].parent;
         }
         scopes.reverse();
-        let mut store = GuestStore::new(1, 1000, 1_048_576).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap(),
@@ -7540,7 +7867,7 @@ mod tests {
             next = body.scopes()[scope.0 as usize].parent;
         }
         scopes.reverse();
-        let mut store = GuestStore::new(1, 1000, 1_048_576).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap(),
@@ -7594,7 +7921,7 @@ mod tests {
             .filter_map(|n| n.statement_scope)
             .collect::<Vec<_>>();
         assert_eq!(statements.len(), 2);
-        let mut store = GuestStore::new(1, 1000, 1_048_576).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap(),
@@ -7663,7 +7990,7 @@ mod tests {
             next = body.scopes()[scope.0 as usize].parent;
         }
         scopes.reverse();
-        let mut store = GuestStore::new(1, 1000, 1_048_576).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             body.clone(),
             body.pc(NodeId(0), crate::ir::pc::Phase::Entry).unwrap(),

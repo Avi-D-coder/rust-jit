@@ -3,3 +3,6 @@ pub mod term;
 pub mod unify;
 
 pub mod subst;
+
+pub mod header;
+pub mod index;

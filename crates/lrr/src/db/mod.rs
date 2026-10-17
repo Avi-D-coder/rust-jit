@@ -21,4 +21,5 @@ mod source_plan_provider;
 
 mod entered_call_thunk;
 mod entered_type_thunk;
+pub(crate) mod let_annotation_thunk;
 mod source_syntax_provider;

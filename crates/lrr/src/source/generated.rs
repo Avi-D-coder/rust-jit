@@ -14,10 +14,6 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
-const MAX_FILES: usize = 100_000;
-const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
-const MAX_TREE_BYTES: usize = 128 * 1024 * 1024;
-const MAX_DEPTH: usize = 256;
 fn fault(message: impl Into<String>) -> Diagnostic {
     Diagnostic::new("LRR-E-GENERATED-SOURCE", message.into())
 }
@@ -97,21 +93,13 @@ impl GeneratedTree {
     }
     pub fn validate(&self) -> Result<(), Diagnostic> {
         let root = Path::new(&self.out_dir);
-        if !root.is_absolute()
-            || self.out_dir.contains('\0')
-            || self
-                .files
-                .len()
-                .checked_add(self.directories.len())
-                .is_none_or(|n| n > MAX_FILES)
-        {
+        if !root.is_absolute() || self.out_dir.contains('\0') {
             return Err(fault("invalid generated output root/membership"));
         }
         let mut total = 0usize;
         for (path, blob) in &self.files {
             if path != &blob.path
                 || blob.producer != self.producer
-                || blob.bytes.len() > MAX_FILE_BYTES
                 || blob.content != Digest::of_bytes(&blob.bytes)
                 || Path::new(&blob.original_path) != root.join(path.as_str())
                 || self.directories.contains(path)
@@ -122,13 +110,7 @@ impl GeneratedTree {
                 .checked_add(blob.bytes.len())
                 .ok_or_else(|| fault("generated size overflow"))?;
         }
-        if total > MAX_TREE_BYTES {
-            return Err(fault("generated tree exceeds 128 MiB"));
-        }
         for path in self.files.keys().chain(&self.directories) {
-            if Path::new(path.as_str()).components().count() > MAX_DEPTH {
-                return Err(fault("generated path depth exceeded"));
-            }
             let mut parent = Path::new(path.as_str()).parent();
             while let Some(p) = parent.filter(|p| !p.as_os_str().is_empty()) {
                 if !self.directories.contains(&SourcePath::new(p)?) {
@@ -239,9 +221,6 @@ impl GeneratedRoot {
         let mut pending = VecDeque::from([(PathBuf::from("."), Vec::<PathBuf>::new())]);
         let mut total = 0usize;
         while let Some((path, ancestors)) = pending.pop_front() {
-            if stamps.len() >= MAX_FILES || ancestors.len() >= MAX_DEPTH {
-                return Err(fault("generated membership/depth limit"));
-            }
             let canonical = self
                 .directory
                 .canonicalize(&path)
@@ -268,22 +247,11 @@ impl GeneratedRoot {
                         return Err(fault("generated filename must be UTF-8"));
                     }
                     names.insert(name);
-                    if names
-                        .len()
-                        .checked_add(pending.len())
-                        .and_then(|n| n.checked_add(stamps.len()))
-                        .is_none_or(|n| n > MAX_FILES)
-                    {
-                        return Err(fault("generated membership limit"));
-                    }
                 }
                 for name in names {
                     pending.push_back((path.join(name), parents.clone()));
                 }
             } else if metadata.is_file() {
-                if metadata.len() > MAX_FILE_BYTES as u64 {
-                    return Err(fault("generated file exceeds 8 MiB"));
-                }
                 let mut file = self.directory.open(&path).map_err(|_| race())?;
                 if Stamp::of(&file.metadata().map_err(|_| race())?) != Stamp::of(&metadata) {
                     return Err(race());
@@ -295,13 +263,6 @@ impl GeneratedRoot {
                     if count == 0 {
                         break;
                     }
-                    if bytes
-                        .len()
-                        .checked_add(count)
-                        .is_none_or(|n| n > MAX_FILE_BYTES)
-                    {
-                        return Err(fault("generated file exceeds 8 MiB"));
-                    }
                     bytes.extend_from_slice(&buffer[..count]);
                 }
                 if Stamp::of(&file.metadata().map_err(|_| race())?) != Stamp::of(&metadata) {
@@ -310,9 +271,6 @@ impl GeneratedRoot {
                 total = total
                     .checked_add(bytes.len())
                     .ok_or_else(|| fault("generated size overflow"))?;
-                if total > MAX_TREE_BYTES {
-                    return Err(fault("generated tree exceeds 128 MiB"));
-                }
                 let relative = SourcePath::new(&path)?;
                 tree.files.insert(
                     relative.clone(),

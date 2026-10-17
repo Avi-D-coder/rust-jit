@@ -18,7 +18,7 @@ fn unchanged_array_type_children_own_exact_current_source_header_all_editions() 
             let before = db.trace.counts.clone();
             let child = parent
                 .admission()
-                .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+                .reselect_array_length_current(&db, &view, demand, usize::MAX)
                 .unwrap();
             assert_eq!(child.plan().owner_definition(), definition);
             assert_eq!(child.plan().owner_context(), demand.context());
@@ -30,7 +30,7 @@ fn unchanged_array_type_children_own_exact_current_source_header_all_editions() 
             );
             child.revalidate(&db, &view).unwrap();
             let child_type =
-                CurrentConstantResultType::capture_current(&db, &view, child, MAX_BYTES).unwrap();
+                CurrentConstantResultType::capture_current(&db, &view, child, usize::MAX).unwrap();
             assert_eq!(
                 child_type.scalar().unwrap().primitive(),
                 PrimitiveType::Usize
@@ -58,7 +58,7 @@ fn actual_admitted_initializer_macro_proof_is_retained_in_header_length_child() 
             &base,
             &handle.key(),
             invocation.range,
-            MAX_BYTES,
+            usize::MAX,
         )
         .unwrap();
         let admitted = ConstantSourceAdmission::capture_current_with_macro_proofs(
@@ -66,17 +66,17 @@ fn actual_admitted_initializer_macro_proof_is_retained_in_header_length_child() 
             &view,
             definition,
             ConstantRequest::Constant,
-            MAX_BYTES,
+            usize::MAX,
             std::slice::from_ref(&proof),
         )
         .unwrap();
         let parent =
-            CurrentConstantResultType::capture_current(&db, &view, admitted, MAX_BYTES).unwrap();
+            CurrentConstantResultType::capture_current(&db, &view, admitted, usize::MAX).unwrap();
         let (_, demand) = parent.array().unwrap();
         let before = db.trace.counts.clone();
         let child = parent
             .admission()
-            .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+            .reselect_array_length_current(&db, &view, demand, usize::MAX)
             .unwrap();
         let initializer = child.plan().source().named_constant("X").unwrap();
         let Node::AdmittedPanic(retained) = child.plan().source().node(&initializer.body).unwrap()
@@ -186,17 +186,17 @@ fn actual_multisource_world_cannot_be_reselected_as_an_empty_singleton() {
         &views[0],
         definition,
         ConstantRequest::Constant,
-        MAX_BYTES,
+        usize::MAX,
         &views.iter().collect::<Vec<_>>(),
     )
     .unwrap();
     let parent =
-        CurrentConstantResultType::capture_current(&db, &views[0], parent, MAX_BYTES).unwrap();
+        CurrentConstantResultType::capture_current(&db, &views[0], parent, usize::MAX).unwrap();
     let (_, demand) = parent.array().unwrap();
     assert!(source_admit(&db, &views[0], definition, demand.request()).is_err());
     let child = parent
         .admission()
-        .reselect_array_length_current(&db, &views[0], demand, MAX_BYTES)
+        .reselect_array_length_current(&db, &views[0], demand, usize::MAX)
         .unwrap();
     assert_eq!(child.plan().range(), demand.range());
     child.revalidate(&db, &views[0]).unwrap();
@@ -220,7 +220,7 @@ fn demand_from_another_declaration_or_scalar_parent_is_not_reselection_authority
         let parent = source_admit(&db, &view, other, ConstantRequest::Constant).unwrap();
         assert!(
             parent
-                .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+                .reselect_array_length_current(&db, &view, demand, usize::MAX)
                 .is_err()
         );
     }
@@ -236,7 +236,7 @@ fn forged_range_and_changed_argument_parent_plan_refuse_before_any_child() {
     assert!(
         parent
             .admission
-            .reselect_array_length_current(&db, &view, length, MAX_BYTES)
+            .reselect_array_length_current(&db, &view, length, usize::MAX)
             .is_err()
     );
     let source = "const fn f(x:u32)->[u8;2]{[1,2]}fn main(){}";
@@ -259,7 +259,7 @@ fn forged_range_and_changed_argument_parent_plan_refuse_before_any_child() {
     assert!(demand.validate_parent(b.admission()).is_err());
     assert!(
         b.admission()
-            .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+            .reselect_array_length_current(&db, &view, demand, usize::MAX)
             .is_err()
     );
 }
@@ -274,7 +274,7 @@ fn changed_epoch_refuses_child_but_identical_discovery_republication_reuses_pare
     assert!(
         parent
             .admission()
-            .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+            .reselect_array_length_current(&db, &view, demand, usize::MAX)
             .is_err()
     );
     let (mut db, view, definition) = world(ARRAY_MISMATCH, "NUMBERS", 2024);
@@ -322,13 +322,13 @@ fn changed_epoch_refuses_child_but_identical_discovery_republication_reuses_pare
     parent.admission().revalidate(&db, &view).unwrap();
     let reused = parent
         .admission()
-        .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+        .reselect_array_length_current(&db, &view, demand, usize::MAX)
         .unwrap();
     let fresh = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
     let (_, fresh_demand) = fresh.array().unwrap();
     let fresh_child = fresh
         .admission()
-        .reselect_array_length_current(&db, &view, fresh_demand, MAX_BYTES)
+        .reselect_array_length_current(&db, &view, fresh_demand, usize::MAX)
         .unwrap();
     assert_eq!(reused.plan().identity(), fresh_child.plan().identity());
 }
@@ -341,7 +341,7 @@ fn source_copy_and_metadata_residual_cannot_invent_child_evidence() {
     assert!(
         parent
             .admission()
-            .reselect_array_length_current(&db, &copy, demand, MAX_BYTES)
+            .reselect_array_length_current(&db, &copy, demand, usize::MAX)
             .is_err()
     );
     let before = db.trace.counts.clone();
@@ -365,12 +365,12 @@ fn source_independent_fn_header_length_reselects_from_actual_parent_evidence() {
     let (_, demand) = parent.array().unwrap();
     let child = parent
         .admission()
-        .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+        .reselect_array_length_current(&db, &view, demand, usize::MAX)
         .unwrap();
     child.revalidate(&db, &view).unwrap();
     assert_eq!(child.plan().owner_definition(), definition);
     assert_eq!(child.plan().range(), demand.range());
-    let result = CurrentConstantResultType::capture_current(&db, &view, child, MAX_BYTES).unwrap();
+    let result = CurrentConstantResultType::capture_current(&db, &view, child, usize::MAX).unwrap();
     assert_eq!(result.scalar().unwrap().primitive(), PrimitiveType::Usize);
     assert!(db.trace.counts.is_empty());
 }

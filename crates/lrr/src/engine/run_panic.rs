@@ -15,7 +15,14 @@ impl RunMachine {
         &mut self,
         panic: crate::vm::step::GuestPanic,
     ) -> Result<(), Diagnostic> {
-        if self.unwinding.is_some() {
+        // A `Drop::drop` witness entered by unwinding cleanup suspends that
+        // unwinding with its caller; a panic below it is still a second panic.
+        if self.unwinding.is_some()
+            || self.calls.iter().any(|call| {
+                matches!(&call.continuation, CallContinuation::DropWitness(resume)
+                    if resume.unwinding.is_some())
+            })
+        {
             return Err(Diagnostic::new(
                 "LRR-E-DOUBLE-PANIC",
                 "a second guest panic occurred during unwinding".into(),
@@ -27,27 +34,11 @@ impl RunMachine {
         {
             return Err(panic_fault("panic continuation requires a panicked frame"));
         }
-        let heap = panic
-            .origin
-            .expansion_ancestry
-            .capacity()
-            .checked_mul(std::mem::size_of::<crate::core::digest::Digest>())
-            .and_then(|n| n.checked_add(panic.message.as_ref().map_or(0, String::capacity)))
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let retained = self
-            .call_bytes
-            .checked_add(self.pending_bytes)
-            .and_then(|n| n.checked_add(std::mem::size_of::<PanicContinuation>()))
-            .and_then(|n| n.checked_add(heap))
-            .ok_or_else(crate::runtime::arena::resource)?;
-        if retained > self.call_limits.max_metadata_bytes {
-            return Err(crate::runtime::arena::resource());
-        }
         self.unwinding = Some(PanicContinuation {
             panic,
             pc: self.frame.pc().fingerprint(),
             depth: self.calls.len(),
-            action: self.calls.last().map(|call| call.action),
+            action: self.calls.last().and_then(SuspendedCall::action),
         });
         Ok(())
     }
@@ -59,7 +50,7 @@ impl RunMachine {
             .ok_or_else(|| panic_fault("panic continuation absent"))?;
         if active.pc != self.frame.pc().fingerprint()
             || active.depth != self.calls.len()
-            || active.action != self.calls.last().map(|call| call.action)
+            || active.action != self.calls.last().and_then(SuspendedCall::action)
         {
             return Err(panic_fault("panic continuation changed during cleanup"));
         }
@@ -81,14 +72,34 @@ impl RunMachine {
             self.frame = suspended.caller;
             self.body_lease = suspended.body_lease;
             self.pending = suspended.pending;
-            self.frame.status = crate::vm::frame::FrameStatus::Panicked;
+            match suspended.continuation {
+                // `Drop::drop` unwound: the dropped value's fields and the
+                // dropping frame's remaining owners continue as panic cleanup.
+                CallContinuation::DropWitness(resume) => {
+                    self.frame.unwind_drop_witness(&mut self.store)?;
+                    if let Some(returning) = resume.returning {
+                        self.abandon_return(returning)?;
+                    }
+                }
+                CallContinuation::Site { .. } => {
+                    self.frame.status = crate::vm::frame::FrameStatus::Panicked;
+                }
+                // The operator's own operation becomes the panicking one.
+                CallContinuation::Operator => {
+                    self.frame.unwind_operator_call(&mut self.store)?;
+                }
+                // The formatting operation becomes the panicking one.
+                CallContinuation::Format { sink } => {
+                    self.unwind_format_call(sink)?;
+                }
+            }
             let active = self
                 .unwinding
                 .as_mut()
                 .ok_or_else(|| panic_fault("panic continuation disappeared"))?;
             active.pc = self.frame.pc().fingerprint();
             active.depth = self.calls.len();
-            active.action = self.calls.last().map(|call| call.action);
+            active.action = self.calls.last().and_then(SuspendedCall::action);
             return Ok(None);
         }
         let counters = self.all_counters()?;
@@ -110,6 +121,7 @@ impl RunMachine {
             status: "guest_panic",
             panic: active.panic,
             opcode_counters: counters,
+            output: std::mem::take(&mut self.output),
         }))
     }
 }

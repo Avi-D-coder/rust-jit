@@ -54,16 +54,6 @@ pub enum RecipeExit {
     Fault(DiagnosticTemplate),
     /// Reached exhaustion of a match: not compile-time exhaustiveness checking.
     MatchNoArm,
-    /// Roll back the selected pattern alternative and enter its retained retry
-    /// continuation. The source slot stays live and is never evaluated again.
-    PatternRetry {
-        owner: super::pc::NodeId,
-    },
-    /// The checked ordinary transaction selected this continuation from its
-    /// retained source graph. No runtime syntax or type planning occurs here.
-    PatternNext {
-        owner: super::pc::NodeId,
-    },
 }
 impl RecipeExit {
     pub fn requires_dispatch_boundary(&self) -> bool {
@@ -169,7 +159,6 @@ impl VerifiedRecipe {
         self.metadata_bytes = self
             .metadata_bytes
             .checked_add(plan.metadata_bytes())
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         self.source_call = Some(plan.clone());
         Ok(self)
@@ -178,22 +167,21 @@ impl VerifiedRecipe {
         self.metadata_bytes
     }
     /// Conservative metadata owned by this recipe allocation. Inline operation
-    /// Arc handles remain included; shared Product payload/control allocations
-    /// are charged once through product_roots by the query/memo owner instead.
+    /// Arc handles remain included; shared pattern-tree payloads are charged
+    /// once through pattern_roots by the query/memo owner instead.
     /// metadata_bytes retains the aggregate verifier/install admission bound.
     pub(crate) fn exclusive_metadata_bytes(&self) -> usize {
         self.metadata_bytes - self.shared_product_admission_bytes
     }
     /// Each actual immutable handle owned by the flat recipe operations. Memo
     /// ownership counts handles; allocation deduplication belongs to its caller.
-    pub(crate) fn product_roots(
+    pub(crate) fn pattern_roots(
         &self,
-    ) -> impl Iterator<Item = &std::sync::Arc<crate::syntax::pattern_product::PatternProductPlan>>
-    {
+    ) -> impl Iterator<Item = &std::sync::Arc<crate::syntax::pattern_tree::PatternTree>> {
         self.recipe.operations.iter().filter_map(|op| match op {
             Op::Pattern {
-                operation: super::op::PatternOperation::Decision { plan, .. },
-            } => Some(plan),
+                operation: super::op::PatternOperation::Test { tree, .. },
+            } => Some(tree),
             _ => None,
         })
     }
@@ -230,7 +218,6 @@ impl VerifiedRecipe {
         let bytes = self
             .metadata_bytes
             .checked_add(witness.metadata_bytes())
-            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
             .ok_or_else(|| {
                 crate::core::diagnostic::Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
@@ -266,7 +253,6 @@ impl VerifiedRecipe {
             .metadata_bytes
             .checked_add(inputs.metadata_bytes())
             .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| {
                 crate::core::diagnostic::Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
@@ -369,6 +355,11 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
             e.bool(*mutable);
             e.u32(target.tag());
         }
+        HintRecipe::Written(written) => {
+            e.u32(9);
+            e.record(written.as_ref());
+        }
+        HintRecipe::DefinitionWrittenResult => e.u32(10),
     }
 }
 impl StableEncode for Recipe {
@@ -382,94 +373,37 @@ impl StableEncode for Recipe {
                 use super::op::PatternOperation;
                 e.u32(45);
                 match operation {
-                    PatternOperation::Decision {
-                        owner,
-                        plan,
-                        transition,
-                    } => {
-                        use super::op::PatternDecision;
-                        e.u32(5);
+                    PatternOperation::Open { owner, source } => {
+                        e.u32(10);
                         e.u32(owner.0);
-                        e.digest(plan.identity());
-                        match transition {
-                            PatternDecision::Begin {
-                                source,
-                                matched,
-                                unmatched,
-                                unmatched_inactive,
-                            } => {
-                                e.u32(0);
-                                e.u32(source.0);
-                                e.record(matched);
-                                e.record(unmatched);
-                                e.record(unmatched_inactive);
-                            }
-                            PatternDecision::Observe => e.u32(1),
-                            PatternDecision::Enter => e.u32(2),
-                            PatternDecision::Success => e.u32(3),
-                            PatternDecision::Fail { node } => {
-                                e.u32(4);
-                                e.option(node, |e, node| e.u32(node.0));
-                            }
-                            PatternDecision::Cleanup => e.u32(5),
-                            PatternDecision::CheckTuple { place, arity } => {
-                                e.u32(6);
-                                e.u32(place.0);
-                                e.u32(*arity);
-                            }
-                            PatternDecision::StartSource => e.u32(7),
-                            PatternDecision::SourceStep => e.u32(8),
-                            PatternDecision::EnterAttempt { scope } => {
-                                e.u32(9);
-                                e.u32(scope.0);
-                            }
-                            PatternDecision::Test {
-                                result,
-                                first,
-                                upper_pending,
-                            } => {
-                                e.u32(10);
-                                e.u32(result.0);
-                                e.bool(*first);
-                                e.bool(*upper_pending);
-                            }
-                        }
+                        e.u32(source.0);
                     }
-                    PatternOperation::Begin {
+                    PatternOperation::Test {
                         owner,
-                        alternative,
-                        source,
+                        tree,
+                        result,
                         retry,
                     } => {
-                        e.u32(0);
+                        e.u32(11);
                         e.u32(owner.0);
-                        e.u32(alternative.0);
-                        e.u32(source.0);
-                        e.record(retry);
+                        e.digest(tree.identity());
+                        e.u32(result.0);
+                        e.bool(*retry);
                     }
-                    PatternOperation::StageBinding {
-                        owner,
-                        binding,
-                        source,
-                        writable,
-                    } => {
-                        e.u32(1);
-                        e.u32(owner.0);
-                        e.u32(binding.0);
-                        e.u32(source.0);
-                        e.bool(*writable);
-                    }
-                    PatternOperation::Preview { owner } => {
-                        e.u32(2);
+                    PatternOperation::Expose { owner } => {
+                        e.u32(12);
                         e.u32(owner.0);
                     }
-                    PatternOperation::Finish { owner, matched } => {
-                        e.u32(3);
+                    PatternOperation::Conceal { owner } => {
+                        e.u32(13);
                         e.u32(owner.0);
-                        e.option(matched, |e, slot| e.u32(slot.0));
                     }
-                    PatternOperation::Rollback { owner } => {
-                        e.u32(4);
+                    PatternOperation::Commit { owner } => {
+                        e.u32(14);
+                        e.u32(owner.0);
+                    }
+                    PatternOperation::Close { owner } => {
+                        e.u32(15);
                         e.u32(owner.0);
                     }
                 }
@@ -594,6 +528,41 @@ impl StableEncode for Recipe {
                 e.u32(guard.0);
                 e.u32(destination.0);
             }
+            Op::ValuePath { path, destination } => {
+                e.u32(u32::from(super::op::VALUE_PATH_OPCODE));
+                e.string(path);
+                e.u32(destination.0);
+            }
+            Op::MakeClosure {
+                captures,
+                parameters,
+                destination,
+            } => {
+                e.u32(u32::from(super::op::MAKE_CLOSURE_OPCODE));
+                e.sequence(captures, |e, capture| {
+                    match capture.source {
+                        super::op::CaptureSource::Binding(binding) => {
+                            e.u8(0);
+                            e.u32(binding.0);
+                        }
+                        super::op::CaptureSource::Parameter(ordinal) => {
+                            e.u8(1);
+                            e.u32(ordinal);
+                        }
+                    }
+                    e.u32(match capture.mode {
+                        super::op::CaptureMode::Shared => 0,
+                        super::op::CaptureMode::Mutable => 1,
+                        super::op::CaptureMode::Value => 2,
+                        super::op::CaptureMode::Consumed => 3,
+                    });
+                });
+                e.sequence(parameters, |e, parameter| {
+                    e.bool(parameter.mutable);
+                    e.option(&parameter.hint, |e, hint| e.u32(*hint as u32));
+                });
+                e.u32(destination.0);
+            }
             Op::PrimitiveFloatingConstant {
                 constant,
                 destination,
@@ -696,6 +665,80 @@ impl StableEncode for Recipe {
                 e.string(name);
                 e.sequence(explicit, |e, ty| e.string(ty));
                 e.sequence(arguments, |e, slot| e.u32(slot.0));
+            }
+            Op::IteratorCall {
+                call,
+                source,
+                destination,
+            } => {
+                e.u32(65);
+                e.u32(call.tag());
+                e.u32(source.0);
+                e.u32(destination.0);
+            }
+            Op::ArrayRepeat {
+                source,
+                count,
+                destination,
+            } => {
+                e.u32(63);
+                e.u32(source.0);
+                e.u32(count.0);
+                e.u32(destination.0);
+            }
+            Op::CompoundAssignPlace {
+                operator,
+                place,
+                right,
+                destination,
+            } => {
+                e.u32(62);
+                e.u32(*operator as u32);
+                e.u32(place.0);
+                e.u32(right.0);
+                e.u32(destination.0);
+            }
+            Op::ComparisonOperand {
+                place,
+                read,
+                destination,
+            } => {
+                e.u32(64);
+                e.u32(place.0);
+                match read {
+                    crate::ir::op::OperandRead::Local(binding) => {
+                        e.u32(0);
+                        e.u32(binding.0);
+                    }
+                    crate::ir::op::OperandRead::Parameter(ordinal) => {
+                        e.u32(1);
+                        e.u32(*ordinal);
+                    }
+                    crate::ir::op::OperandRead::Place => e.u32(2),
+                }
+                e.u32(destination.0);
+            }
+            Op::MethodReceiver {
+                site,
+                place,
+                scratch,
+                destination,
+            } => {
+                e.u32(61);
+                e.u32(site.0);
+                e.u32(place.0);
+                e.u32(scratch.0);
+                e.u32(destination.0);
+            }
+            Op::FormatArguments {
+                template,
+                arguments,
+                destination,
+            } => {
+                e.u32(60);
+                template.encode(e);
+                e.sequence(arguments, |e, slot| e.u32(slot.0));
+                e.u32(destination.0);
             }
             Op::Assert {
                 condition,
@@ -933,14 +976,6 @@ impl StableEncode for Recipe {
                 e.string(&d.message);
             }
             RecipeExit::MatchNoArm => e.u32(7),
-            RecipeExit::PatternRetry { owner } => {
-                e.u32(8);
-                e.u32(owner.0);
-            }
-            RecipeExit::PatternNext { owner } => {
-                e.u32(9);
-                e.u32(owner.0);
-            }
         }
         e.sequence(&self.dependencies, |e, d| e.record(d));
     }
@@ -949,9 +984,6 @@ impl StableEncode for Recipe {
 #[cfg(test)]
 #[path = "definition_numeric_wire_tests.rs"]
 mod definition_numeric_wire_tests;
-#[cfg(test)]
-#[path = "pattern_wire_tests.rs"]
-mod pattern_wire_tests;
 
 #[cfg(test)]
 #[path = "prepared_input_recipe_tests.rs"]

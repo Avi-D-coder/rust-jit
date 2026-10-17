@@ -3,9 +3,6 @@ use super::*;
 use crate::core::digest::StableEncoder;
 impl Database {
     pub(crate) fn constant_input_universe(&self) -> Result<Digest, Diagnostic> {
-        if self.inputs.len() > 100_000 {
-            return Err(fault("LRR-E-METADATA-LIMIT", "constant input count limit"));
-        }
         let mut bytes = 0usize;
         let mut e = StableEncoder::new("lrr/v1/constant-current-input-universe");
         e.u64(
@@ -17,12 +14,6 @@ impl Database {
                 account_add(bytes, std::mem::size_of::<(InputKey, Digest)>() + 128)?,
                 key.heap_bytes(),
             )?;
-            if bytes > 32 << 20 {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "constant input membership byte limit",
-                ));
-            }
             e.record(key);
             e.digest(row.fingerprint);
         }

@@ -1,0 +1,25 @@
+{
+  "schema": "lrr/diagnosis/generated-item-impl-frontier/v1",
+  "status": "source diagnosis plus unexecuted retained-helper component; root bridge separate",
+  "doc": "worktracks/05-trait-goal-engine/generated-item-impl-frontier-prerequisite.md",
+  "doc_sha256": "6ec361754773ef698fd4e03868001b360a36448551a70e72cfec674034822bb8",
+  "frozen_observed_source": "703b82c8d7fe02461608eee5eeebad306f27cdaceb0be51190b155c03bafa091",
+  "observed_terminal": "fb0f5b/1",
+  "observed": "actual lookup Defined, no attribute input, emit invocation selfdependency before entry",
+  "source_inferred": "ordinary missing registered impl completion job; do not claim unprinted actual record/header/job IDs",
+  "frozen_source_hashes": {
+    "crates/lrr/src/expand/source_discovery.rs": "9aa35f871688578e9375fa900e52e89cbb66cca92af07363d3335aacd893fc36",
+    "crates/lrr/src/frontend/generated_headers.rs": "73e6318e2ec2017ee9e9a79c8e1900ee38f31ddd3a4caefe1ce14f3ba38cd94b",
+    "crates/lrr/src/expand/generated_declarations.rs": "acbb98694b7b40b193e1102a0cdd9015d7c0a676b6f6d9cc270c2ede874d49a9"
+  },
+  "helper_packet": "/private/tmp/lrr-generated-impl-retained-scan-v1/COMPONENT.json",
+  "helper_manifest_sha256": "2fb9e5201d97a50b16fcf11bd88b1411a61059966a5fda233e0eec57bc17789d",
+  "holds": [
+    "wrapper genuine child declaration closure",
+    "mixed invocation blockers",
+    "generated body boundary/provider completion hypothesis",
+    "configured world/facade catalog completeness",
+    "runtime/fixture/architecture acceptance"
+  ],
+  "execution": "No Cargo/compiler/tests by worker"
+}

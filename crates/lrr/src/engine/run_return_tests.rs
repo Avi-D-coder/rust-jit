@@ -152,7 +152,6 @@ fn frontier() -> Frontier {
     // Prepare only reached storage, then execute the unchanged original Return
     // recipe. Source entry and constructor/call evaluation are not claimed.
     run.frame.pc = pc;
-    run.frame.set_fuel_limit(10000).unwrap();
     let mut ancestry = Vec::new();
     let mut current = Some(scope);
     while let Some(scope) = current {
@@ -255,46 +254,6 @@ fn rustc_nested_return_dispatcher_publishes_root_only_after_bounded_cleanup() {
     );
     f.db.finish_run().unwrap();
 }
-#[test]
-fn rustc_nested_return_dispatcher_cancel_preserves_pending_ticket_without_publication() {
-    let mut f = frontier();
-    f.run.begin_return_cleanup(&mut f.db, f.ticket).unwrap();
-    assert!(f.run.advance_return_cleanup().unwrap().is_none());
-    let value = f.run.store.peek_ticket(f.ticket).unwrap();
-    let scopes = f.run.frame.active_scopes().to_vec();
-    let states: Vec<_> = f
-        .fields
-        .iter()
-        .map(|field| f.run.store.state(*field).unwrap())
-        .collect();
-    let used = f.run.frame.fuel_snapshot().used;
-    f.run.frame.fuel.cancellation().cancel();
-    assert!(
-        matches!(f.run.poll(&mut f.db), RunPoll::Fault(error) if error.code == "LRR-E-RUNTIME-RESOURCE")
-    );
-    assert!(f.run.terminal);
-    assert_eq!(f.run.frame.status, FrameStatus::Faulted);
-    assert!(f.run.returning.is_some());
-    assert!(f.run.frame.has_cleanup_activation());
-    assert_eq!(f.run.store.peek_ticket(f.ticket).unwrap(), value);
-    assert_eq!(f.run.frame.active_scopes(), scopes.as_slice());
-    assert_eq!(f.run.frame.fuel_snapshot().used, used);
-    assert_eq!(f.run.frame.cell(f.owner).unwrap(), f.root);
-    assert_eq!(
-        f.fields
-            .iter()
-            .map(|field| f.run.store.state(*field).unwrap())
-            .collect::<Vec<_>>(),
-        states
-    );
-    assert!(matches!(
-        f.run.terminal_facts().unwrap().outcome,
-        TerminalExecution::Fault {
-            code: "LRR-E-RUNTIME-RESOURCE"
-        }
-    ));
-    f.db.finish_run().unwrap();
-}
 
 /// Prepared frontier of the unchanged original main -> f call. Both selected
 /// source contracts and the once-consumed CallAction come from normal machinery.
@@ -347,6 +306,7 @@ pub(super) fn original_caller_return_frontier() -> (Database, RunMachine, Ticket
                         ordinary,
                         site: site.0,
                         hints: vec![],
+                        partial: Vec::new(),
                     });
                 }
                 Op::CallSeal {
@@ -408,12 +368,14 @@ pub(super) fn original_caller_return_frontier() -> (Database, RunMachine, Ticket
                 run.call_bytes = call.retained_bytes;
                 run.peak_guest_frames = 2;
                 run.calls.push(SuspendedCall {
-                    action: consumed.id,
-                    origin: consumed.origin,
+                    continuation: CallContinuation::Site {
+                        action: consumed.id,
+                        origin: consumed.origin,
+                        resume: consumed.resume,
+                        result: consumed.result,
+                    },
                     caller,
                     body_lease,
-                    resume: consumed.resume,
-                    result: consumed.result,
                     call,
                     pending: Default::default(),
                 });
@@ -444,12 +406,15 @@ fn rustc_original_caller_return_destination_refuses_before_cleanup_or_owner_cons
     let suspended = run.calls.last_mut().unwrap();
     suspended
         .caller
-        .declared_hint(suspended.result, Some(TypeId(2)))
+        .declared_hint(suspended.result(), Some(TypeId(2)))
         .unwrap();
-    assert!(suspended.caller.cell(suspended.result).is_err());
+    assert!(suspended.caller.cell(suspended.result()).is_err());
+    // The forged Bool destination already disagrees with the returned unit
+    // descriptor, so the return refuses at its result-type check, before any
+    // destination reservation, cleanup or owner consumption.
     assert_eq!(
         run.begin_return_cleanup(&mut db, ticket).unwrap_err().code,
-        "LRR-E-OWNERSHIP"
+        "LRR-E-CALL-RETURN-TYPE"
     );
     assert!(run.returning.is_none());
     assert!(!run.frame.has_cleanup_activation());
@@ -469,7 +434,7 @@ fn rustc_original_caller_return_destination_refuses_before_cleanup_or_owner_cons
     assert!(!run.terminal);
     let suspended = run.calls.last().unwrap();
     assert_eq!(suspended.caller.status, FrameStatus::Suspended);
-    assert!(suspended.caller.cell(suspended.result).is_err());
+    assert!(suspended.caller.cell(suspended.result()).is_err());
     db.finish_run().unwrap();
     // Pure admission refusal is inspected directly; no rejected run is resumed
     // or counted as a stock success. Full compiletest acceptance stays separate.
@@ -480,7 +445,7 @@ fn rustc_original_caller_return_reserves_destination_before_cleanup_and_resumes_
     let value = run.store.peek_ticket(ticket).unwrap();
     let before = run.store.budget().handles();
     let suspended = run.calls.last().unwrap();
-    let (destination, resume) = (suspended.result, suspended.resume.clone());
+    let (destination, resume) = (suspended.result(), suspended.resume());
     assert!(suspended.caller.cell(destination).is_err());
     run.begin_return_cleanup(&mut db, ticket).unwrap();
     let caller = &run.calls.last().unwrap().caller;
@@ -517,8 +482,8 @@ fn rustc_original_caller_return_reserves_destination_before_cleanup_and_resumes_
 fn rustc_original_caller_return_rejects_other_canonical_resume_and_result_before_effects() {
     let (mut db, mut run, ticket) = original_caller_return_frontier();
     let suspended = run.calls.last_mut().unwrap();
-    let resume = suspended.resume.clone();
-    let result = suspended.result;
+    let resume = suspended.resume();
+    let result = suspended.result();
     let other_resume = suspended.caller.body.pc(NodeId(0), Phase::Entry).unwrap();
     assert_ne!(other_resume, resume);
     let other_result = suspended
@@ -591,7 +556,7 @@ fn rustc_original_concrete_return_rejects_rigid_source_before_cleanup_or_publica
         ordinal: 0,
     }));
     let caller = run.calls.last().unwrap();
-    let destination = caller.result;
+    let destination = caller.result();
     let caller_source = caller.caller.source_view(destination).unwrap();
     assert_eq!(
         run.begin_return_cleanup(&mut db, ticket).unwrap_err().code,
@@ -1058,44 +1023,3 @@ fn original_alias_return_contracts_preserve_source_identity_at_equal_descriptor(
     }
 }
 
-#[test]
-fn original_alias_return_baz_body_reports_symbolic_hint_frontier() {
-    const SOURCE: &str = include_str!(
-        "../../../../fixtures/upstream/rustc-checkout/tests/ui/lint/use-redundant/use-redundant.rs"
-    );
-    for edition in [2015, 2018, 2021, 2024] {
-        let (mut db, mut run) = alias_return_stock(SOURCE, "baz", edition);
-        let selected = run
-            .prepare_source_call(&mut db, "baz", None, &[], None, &[])
-            .into_ready()
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            selected.contracts.source_result,
-            Some(crate::traits::term::TyTerm::Primitive(
-                crate::ir::op::PrimitiveType::I32
-            ))
-        );
-        let literal_nodes: std::collections::BTreeSet<_> = run
-            .frame
-            .body
-            .nodes()
-            .iter()
-            .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Literal))
-            .map(|node| node.id.0)
-            .collect();
-        assert!(!literal_nodes.is_empty());
-        let RunPoll::Fault(error) = run.poll(&mut db) else {
-            panic!("original alias body did not expose its recorded hint frontier")
-        };
-        assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-        assert_eq!(error.message, "return type requires symbolic resolution");
-        assert!(db.trace.events.iter().all(|event| !matches!(&event.key,
-            QueryKey::Thunk(pc) if pc.body == run.root_body && literal_nodes.contains(&pc.node))));
-        assert!(run.calls.is_empty() && run.returning.is_none());
-        db.finish_run().unwrap();
-    }
-    // Actual unchanged body-entry attempts are unsupported in all four
-    // editions, before its literal executes. This typed frontier regression
-    // is not a body/fixture success and does not exercise original main.
-}

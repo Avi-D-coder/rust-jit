@@ -1,0 +1,58 @@
+{
+  "schema": "lrr/source-review/pending-item-boundaries/v1",
+  "status": "source-only; no compile/runtime/fixture acceptance",
+  "owned": {
+    "path": "crates/lrr/src/expand/source_discovery/item_boundaries.rs",
+    "sha256": "09379f72a5e17b3f755082b0db3641cdadb5e996b938a035ff2ebd7076e3a58c",
+    "bytes": 9425
+  },
+  "root_wiring_observed": {
+    "path": "crates/lrr/src/expand/source_discovery.rs",
+    "sha256": "028fe0b54ccc2d0134ec368aba62d7b065d427fa55ec781136b810f6423ea07b",
+    "not_owned": "parent is editing/freezing root; conclusions about hooks need recheck if it changes"
+  },
+  "api": [
+    "pending_item_boundaries: BTreeMap<Digest,PendingItemBoundary> in parent",
+    "PendingItemBoundary::prepare(actual CompletedEmptyBoundary,&PreparedSourceView,epoch,&actual_update.jobs)",
+    "metadata_bytes()->Result<usize,Diagnostic> charged to existing retained_record_bytes before admission mutation",
+    "SourceDiscovery::complete_ready_item_boundaries()->Result<bool,Diagnostic> cold before work.poll"
+  ],
+  "authority": [
+    "Caller already proves actual no-macro-catalog plan; helper does not derive macro absence from item/call counts. Actual CompletedEmptyBoundary stays private and only moves to completed map after jobs finish.",
+    "Actual source outline invocation or attribute producer must exactly equal retained call; actual record invocation and Items grammar/epoch/cfg checked. Retain exact shared immutable captured publication, not detached digest source.",
+    "Every typed DiscoveryJob from actual admission update is copied, sorted and checked for conflicting kind/identity source order. Completion looks up actual worklist state for every kind/id; declaration_job and impl job must both finish. Unsupported jobs remain pending.",
+    "Each poll compares source publication Arc identity + exact selection + captured cfg + epoch; exact record.same_record and generated owner ordinal/scope must still match. No query-provider planning, adapter execution or lease replay.",
+    "Preflight ready map conflicts/counts/provider existence, then complete_without_macro_bindings and consume receipt/install exact boundary. Existing route installation and namespace_changed are cold only. Any failure poisons SourceDiscovery before partial work can seal.",
+    "Removal from pending map gives successful completion exactly once. Repeated cold poll has no receipt to complete; existing completed map conflict refuses duplicate publication."
+  ],
+  "boundaries": [
+    "Does not attest configured live/facade membership, impl catalog completeness, Type/trait/Drop applicability or guest execution.",
+    "Wrapper child declaration closure remains missing. Root direct impl frontier must distinguish mixed unsupported blockers.",
+    "Current source is exact captured immutable owner in SourceDiscovery; later runtime lease/currentness continues existing generated boundary/discovery input guards."
+  ],
+  "costs": {
+    "prepare": "O(source outline item calls + J log J) cold; J<=100000. Checked source exclusive metadata and J*size before share/vector allocation, actual capacity and source key bytes checked after. One Arc source publication share; no parser/body/index copy. Record payload remains existing records owner.",
+    "poll": "O(P + sum J log W) per cold poll hook, bounded pending P<=100000; source key/cfg comparisons, no fresh source scan. ready digest temporary <=P*32 bytes. Existing route preparation once per nonempty completion batch can inspect captured providers; not runtime dispatch, no measured scaling claim.",
+    "storage": "Pending fixed fields, actual call scope heap, actual shared-source exclusive key heap, vector capacity, conservative BTree node allowance; parent also counts existing CompletedEmptyBoundary conservatively. No new stable/persistent schema."
+  },
+  "all_eight": {
+    "1": "No expression/assertion evaluator; MA001/7/8 existing production debt unchanged.",
+    "2": "Actual output boundary only, no literal/break route; MA004/5 unchanged.",
+    "3": "No numeric/method selection or token-name classification; MA003/6 unchanged.",
+    "4": "Retains actual generated output source authority, no generated exclusion; wrapper missing stays held.",
+    "5": "Waits actual declaration recursion, no executable/pattern-arm type work; MA002 unchanged.",
+    "6": "Uses retained actual receipt and completed_job state; no reparse/output/plan reconstruction.",
+    "7": "Only stored actual jobs; no namespace world census or runtime global invalidation. Existing cold route refresh explicit.",
+    "8": "Source share + small keys/jobs, no BodyIndex/parser clone or complete-file node search."
+  },
+  "required_controls_unexecuted": [
+    "Pending until final actual declaration and impl typed jobs both complete",
+    "Wrong source/publication/cfg/epoch/record/scope refuses before provider completion",
+    "Unsupported sibling blocker holds receipt",
+    "Provider and boundary completion happen once, duplicate map conflicts refuse",
+    "Boundary usable by generated_body_macro_boundary after delayed completion",
+    "Exact original stock main normal call/cleanup/cold impl across editions",
+    "Source update/root retirement/metadata limits and partial route failure fail-stop"
+  ],
+  "execution": "No Cargo/compiler/tests by worker; validator owns actual controls. Helper alone is not an acceptance gate."
+}

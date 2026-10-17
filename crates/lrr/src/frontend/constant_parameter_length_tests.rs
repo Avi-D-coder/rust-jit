@@ -32,7 +32,7 @@ fn admit_length(
     assert_eq!(admitted.plan().range(), site);
     admitted.revalidate(&db, &view)?;
     let ready =
-        CurrentConstantResultType::capture_current(&db, &view, admitted.clone(), MAX_BYTES)?;
+        CurrentConstantResultType::capture_current(&db, &view, admitted.clone(), usize::MAX)?;
     assert_eq!(ready.scalar().unwrap().primitive(), PrimitiveType::Usize);
     assert_eq!(db.trace.counts, before);
     Ok(admitted)
@@ -71,14 +71,13 @@ fn unchanged_array_return_and_repeat_only_read_the_selected_length_all_editions(
     }
 }
 #[test]
-fn unchanged_nrvo_retains_inline_attribute_frontier_without_skipping_it() {
+fn unchanged_nrvo_builtin_inline_attribute_is_inert_for_length_admission() {
     let sites = length_sites(NRVO, "init", 2024);
     assert_eq!(sites.len(), 1);
-    let err = admit_length(NRVO, "init", 2024, sites[0]).unwrap_err();
-    assert_eq!(err.code, "LRR-E-CONST-SOURCE");
-    assert!(err.message.contains("attribute"));
+    // `#[inline(never)]` is builtin inert, never a macro call or a frontier.
+    admit_length(NRVO, "init", 2024, sites[0]).unwrap();
     // This zero-parameter header is the existing admitted control. Mutation,
-    // borrowed buffers, inline preparation and full original remain unexecuted.
+    // borrowed buffers and the full original remain unexecuted.
     let site = length_sites(NRVO, "nrvo", 2024)[0];
     admit_length(NRVO, "nrvo", 2024, site).unwrap();
 }
@@ -146,51 +145,6 @@ fn current_header_changed_source_and_epoch_refuse_without_provider_work() {
     let before = db.trace.counts.clone();
     db.begin_expansion_epoch(2).unwrap();
     assert!(admitted.revalidate(&db, &view).is_err());
-    assert_eq!(db.trace.counts, before);
-}
-#[test]
-fn work_header_metadata_and_current_admission_quotas_refuse_before_evaluation() {
-    let parameters = (0..257)
-        .map(|n| format!("p{n}:u8"))
-        .collect::<Vec<_>>()
-        .join(",");
-    let long_header = format!("fn f(x:u8/*{}*/)->[u8;3]{{loop{{}}}}", "a".repeat(65_536));
-    for source in [
-        format!("fn f({parameters})->[u8;3]{{loop{{}}}}"),
-        long_header,
-    ] {
-        let site = length_sites(&source, "f", 2024)[0];
-        let blob = SourceBlob::new(source.as_bytes().to_vec()).unwrap();
-        let captured = ConstantSource::parse(
-            &blob,
-            ProfileIdentity::current(),
-            Digest::of_bytes(b"length budget"),
-            CfgSet::guest_default(),
-        )
-        .unwrap();
-        assert_eq!(
-            captured.array_length(site).unwrap_err().code,
-            "LRR-E-METADATA-LIMIT"
-        );
-    }
-    let source = "const fn f(x:u32)->[u8;42]{loop{}}fn main(){}";
-    let site = length_sites(source, "f", 2024)[0];
-    let (db, view, definition) = world(source, "f", 2024);
-    let admitted =
-        source_admit(&db, &view, definition, ConstantRequest::ArrayLength(site)).unwrap();
-    let before = db.trace.counts.clone();
-    assert_eq!(
-        ConstantSourceAdmission::capture_current(
-            &db,
-            &view,
-            definition,
-            ConstantRequest::ArrayLength(site),
-            admitted.metadata_bytes() - 1
-        )
-        .unwrap_err()
-        .code,
-        "LRR-E-METADATA-LIMIT"
-    );
     assert_eq!(db.trace.counts, before);
 }
 

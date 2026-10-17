@@ -1,0 +1,23 @@
+{
+  "kind": "common-immutable-run-source-graph",
+  "status": "uncompiled-unexecuted; pending genuine completed source environment dependency",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "bytes": 112048,
+      "sha256": "9014f21229963c3545a5ef9664164cffcd6d603f6495997517041587e9b33d46"
+    },
+    {
+      "path": "crates/lrr/src/engine/test_catalog.rs",
+      "bytes": 19899,
+      "sha256": "54c6d5f5c549a04e135a3af28a0dbbc9f542ed96005d3372f0483558bc0af318"
+    }
+  ],
+  "source_fingerprint": "7670e8bd82dc598421cb62199dddf829703a2fdb9f1e8af1a9514d42bfaaffef",
+  "holds": [
+    "Actual shared SourceDiscovery graph/env/accounting peer successor not yet captured",
+    "Runtime context compiler facets must already match genuine completed discovery; relevant regressions unexecuted",
+    "Installed constructor binding query/payload not yet migrated; original repeated preparation held",
+    "Legacy owned graph contribution path retained until common replacement covers its required contexts"
+  ]
+}

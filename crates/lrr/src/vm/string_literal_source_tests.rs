@@ -23,9 +23,6 @@ fn official_string_literals_enter_normal_vm_with_static_source_all_editions() {
                 original,
                 edition,
                 LiteralKind::String,
-                100,
-                1000,
-                1_000_000,
                 if original == MATCH_STR {
                     "compare"
                 } else {
@@ -95,28 +92,12 @@ fn official_string_literals_enter_normal_vm_with_static_source_all_editions() {
 #[test]
 fn string_literal_source_and_descriptor_refuse_before_owning_publication() {
     for edition in [2015, 2018, 2021, 2024] {
-        let mut c = literal_context_in(
-            MATCH_STR,
-            edition,
-            LiteralKind::String,
-            100,
-            1000,
-            1_000_000,
-            "compare",
-        );
+        let mut c = literal_context_in(MATCH_STR, edition, LiteralKind::String, "compare");
         c.frame.set_hint(c.destination, Some(TypeId(9))).unwrap();
         let before = footprint(&c);
         assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-TYPE-CONTEXT");
         assert_untouched(&c, before, None);
-        let mut c = literal_context_in(
-            MATCH_STR,
-            edition,
-            LiteralKind::String,
-            100,
-            1000,
-            1_000_000,
-            "compare",
-        );
+        let mut c = literal_context_in(MATCH_STR, edition, LiteralKind::String, "compare");
         c.frame
             .set_source_view(c.destination, Some(TyTerm::Primitive(PrimitiveType::Bool)))
             .unwrap();
@@ -129,16 +110,8 @@ fn string_literal_source_and_descriptor_refuse_before_owning_publication() {
 }
 #[test]
 fn source_receipt_cannot_be_relabelled_as_another_literal_slot_or_payload() {
-    let c = literal_context_in(
-        MATCH_STR,
-        2015,
-        LiteralKind::String,
-        100,
-        1000,
-        1_000_000,
-        "compare",
-    );
-    let other = literal_context(NUL_STR, 2015, LiteralKind::String, 100, 1000, 1_000_000);
+    let c = literal_context_in(MATCH_STR, 2015, LiteralKind::String, "compare");
+    let other = literal_context(NUL_STR, 2015, LiteralKind::String);
     let other_proof = other.recipe.string_literal_roots().next().unwrap().clone();
     for change in 0..6 {
         let recipe = c.recipe.recipe();
@@ -171,57 +144,5 @@ fn source_receipt_cannot_be_relabelled_as_another_literal_slot_or_payload() {
             _ => unreachable!(),
         }
         assert!(verify(draft, &c.frame.body).is_err());
-    }
-}
-#[test]
-fn fuel_and_combined_string_backing_lease_ticket_cell_quota_are_atomic() {
-    for edition in [2015, 2018, 2021, 2024] {
-        let probe = literal_context_in(
-            MATCH_STR,
-            edition,
-            LiteralKind::String,
-            100,
-            1000,
-            1_000_000,
-            "compare",
-        );
-        for fuel in [0, 1] {
-            let mut c = literal_context_in(
-                MATCH_STR,
-                edition,
-                LiteralKind::String,
-                fuel,
-                1000,
-                1_000_000,
-                "compare",
-            );
-            // Account the actual ordinary ScopeEnter prefix where present.
-            assert_eq!(prefix(&c), 0);
-            let before = footprint(&c);
-            assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-            assert_eq!(c.frame.fuel_snapshot().used, fuel);
-            if fuel == 0 {
-                assert_untouched(&c, before, None);
-            } else {
-                assert_eq!(
-                    c.frame.source_view(c.destination).unwrap(),
-                    Some(static_source())
-                );
-            }
-        }
-        for free in 0..4 {
-            let mut c = literal_context_in(
-                MATCH_STR,
-                edition,
-                LiteralKind::String,
-                100,
-                probe.store.budget().handles() + free,
-                1_000_000,
-                "compare",
-            );
-            let before = footprint(&c);
-            assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-            assert_untouched(&c, before, None);
-        }
     }
 }

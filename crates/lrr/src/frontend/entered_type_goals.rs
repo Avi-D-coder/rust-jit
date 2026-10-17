@@ -141,6 +141,33 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredTypeGo
     let node = crate::ir::pc::NodeId(key.node);
     let occurrence = ready!(plan.context().body_type_occurrence(db, node));
     let Some(occurrence) = occurrence else {
+        // `(T)` is the same Type as `T`: the goal of its inner written Type's
+        // own indexed occurrence, used at the parenthesized node's range.
+        if let Some(inner) = ready!(parenthesized_inner(plan, node)) {
+            let selected = ready!(db.fetch(&SyntaxProvider, QueryKey::EnteredType(inner)));
+            let QueryValue::EnteredType(inner) = selected.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault("entered Type inner goal variant differs")));
+            };
+            let source = plan.context().source();
+            let Some(indexed) = source.index().nodes().get(key.node as usize) else {
+                return QueryPoll::Ready(Err(fault("entered Type indexed node absent")));
+            };
+            let start = source.body().range.start;
+            let range = match (
+                start.checked_add(indexed.range.start),
+                start.checked_add(indexed.range.end),
+            ) {
+                (Some(begin), Some(end)) => SourceRange { start: begin, end },
+                _ => return QueryPoll::Ready(Err(crate::runtime::arena::resource())),
+            };
+            return QueryPoll::Ready(Ok(EnteredTypeGoal {
+                key: key.clone(),
+                plan: Arc::clone(plan),
+                range,
+                structure: source.index().semantic_identity(),
+                source: inner.source.clone(),
+            }));
+        }
         return QueryPoll::Ready(Err(fault("entered Type actual indexed occurrence absent")));
     };
     let range = occurrence.path_range();
@@ -169,10 +196,62 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredTypeGo
         structure: plan.context().source().index().semantic_identity(),
         source,
     };
-    if goal.metadata_bytes() > 32 * 1024 * 1024 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     QueryPoll::Ready(Ok(goal))
+}
+/// The canonical indexed Syntax node of the Type a parenthesized Type node
+/// (`(usize)`) encloses, if `node` is one.
+fn parenthesized_inner(
+    plan: &Arc<PreparedSourceLocalPlan>,
+    node: NodeId,
+) -> QueryPoll<Option<PcKey>> {
+    use ra_ap_syntax::{AstNode, ast};
+    let source = plan.context().source();
+    let Some(indexed) = source
+        .index()
+        .nodes()
+        .get(node.0 as usize)
+        .filter(|indexed| indexed.id == node && indexed.role == NodeRole::Syntax)
+    else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let start = source.body().range.start;
+    let (Some(begin), Some(end)) = (
+        start.checked_add(indexed.range.start),
+        start.checked_add(indexed.range.end),
+    ) else {
+        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+    };
+    let range = SourceRange { start: begin, end };
+    let paren = match source
+        .parsed()
+        .syntax_at(range, |syntax| ast::ParenType::can_cast(syntax.kind()))
+    {
+        Ok(found) => found.and_then(ast::ParenType::cast),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let Some(inner) = paren.and_then(|paren| paren.ty()) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let actual = crate::syntax::ast_adapter::range(inner.syntax().text_range());
+    let (Some(relative_start), Some(relative_end)) = (
+        actual.start.checked_sub(start),
+        actual.end.checked_sub(start),
+    ) else {
+        return QueryPoll::Ready(Err(fault("parenthesized Type escapes its body")));
+    };
+    let relative = SourceRange {
+        start: relative_start,
+        end: relative_end,
+    };
+    QueryPoll::Ready(Ok(source
+        .index()
+        .nodes_at_range(relative)
+        .find(|candidate| candidate.role == NodeRole::Syntax)
+        .map(|candidate| PcKey {
+            body: plan.context().source().body().key(),
+            node: candidate.id.0,
+            phase: 0,
+        })))
 }
 /// One actual Type goal and input closure, retained across all use phases.
 #[derive(Clone, Debug)]
@@ -230,8 +309,5 @@ pub(crate) fn prepare_plan(db: &mut Database, key: &PcKey) -> QueryPoll<Prepared
         guard_fingerprint: guard.fingerprint(),
         guard,
     };
-    if result.metadata_bytes() > 64 * 1024 * 1024 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     QueryPoll::Ready(Ok(result))
 }

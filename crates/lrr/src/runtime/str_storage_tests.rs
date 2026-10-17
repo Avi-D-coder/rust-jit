@@ -25,13 +25,15 @@ fn lease(store: &GuestStore, ticket: TicketId) -> (RefId, BufferLease) {
     let id = RefId::from_bits(store.peek_ticket(ticket).unwrap().payload);
     match &store.references.get(id).unwrap().lease {
         ReferenceLease::Buffer(buffer) => (id, *buffer),
-        ReferenceLease::Location(_) => panic!("expected actual buffer lease"),
+        ReferenceLease::Location(_) | ReferenceLease::Elements(_) => {
+            panic!("expected actual buffer lease")
+        }
     }
 }
 #[test]
 fn original_literal_bytes_have_unsized_shared_backing_and_deduplicate() {
     let text = first_string(ORIGINAL);
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let first = store.immutable_str_ticket(text.as_bytes()).unwrap();
     let before_handles = store.budget().handles();
     let again = store.immutable_str_ticket(text.as_bytes()).unwrap();
@@ -76,7 +78,7 @@ fn original_literal_bytes_have_unsized_shared_backing_and_deduplicate() {
 #[test]
 fn original_nul_contents_and_multibyte_boundaries_are_checked_without_loss() {
     let text = first_string(NULS);
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let empty_backing = store.immutable_str_ticket(b"").unwrap();
     assert_eq!(store.str_reference_contents(empty_backing).unwrap(), "");
     let nuls = store.immutable_str_ticket(text.as_bytes()).unwrap();
@@ -130,7 +132,7 @@ fn original_nul_contents_and_multibyte_boundaries_are_checked_without_loss() {
 #[test]
 fn shared_copy_outlives_its_original_frame_cell_without_owning_str() {
     let text = first_string(ORIGINAL);
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let ticket = store.immutable_str_ticket(text.as_bytes()).unwrap();
     let ty = TypeId(store.peek_ticket(ticket).unwrap().type_id);
@@ -179,61 +181,12 @@ fn shared_copy_outlives_its_original_frame_cell_without_owning_str() {
     );
 }
 #[test]
-fn quota_refusal_publishes_no_backing_reference_or_ticket_prefix() {
-    let text = first_string(ORIGINAL);
-    for (handles, bytes) in [(2, 1_000_000), (1000, 0)] {
-        let mut store = GuestStore::new(1, handles, bytes).unwrap();
-        assert_eq!(
-            store
-                .immutable_str_ticket(text.as_bytes())
-                .unwrap_err()
-                .code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(store.budget().handles(), 0);
-        assert!(store.strings.rows.is_empty());
-        assert!(
-            store
-                .strings
-                .backings
-                .get(Handle::from_bits((1u64 << 32) | 1))
-                .is_err()
-        );
-        assert!(
-            store
-                .references
-                .get(Handle::from_bits((1u64 << 32) | 1))
-                .is_err()
-        );
-        assert!(
-            store
-                .tickets
-                .get(Handle::from_bits((1u64 << 32) | 1))
-                .is_err()
-        );
-    }
-    let mut store = GuestStore::new(1, 5, 1_000_000).unwrap();
-    let first = store.immutable_str_ticket(text.as_bytes()).unwrap();
-    let copy = store.immutable_str_ticket(text.as_bytes()).unwrap();
-    let before = (store.budget().handles(), store.strings.rows.len());
-    assert_eq!(
-        store
-            .immutable_str_ticket(b"different bytes")
-            .unwrap_err()
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!((store.budget().handles(), store.strings.rows.len()), before);
-    assert_eq!(store.str_reference_contents(first).unwrap(), text);
-    assert_eq!(store.str_reference_contents(copy).unwrap(), text);
-}
-#[test]
 fn backing_and_reference_generations_and_store_session_are_not_forgeable() {
     let text = first_string(ORIGINAL);
-    let mut first = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut first = GuestStore::for_epoch(1).unwrap();
     let ticket = first.immutable_str_ticket(text.as_bytes()).unwrap();
     let (id, buffer) = lease(&first, ticket);
-    let mut reset = GuestStore::new(2, 1000, 1_000_000).unwrap();
+    let mut reset = GuestStore::for_epoch(2).unwrap();
     reset.immutable_str_ticket(text.as_bytes()).unwrap();
     assert_eq!(
         reset.strings.resolve(buffer).unwrap_err().code,
@@ -243,7 +196,7 @@ fn backing_and_reference_generations_and_store_session_are_not_forgeable() {
         reset.reference_ticket(id).unwrap_err().code,
         "LRR-E-STALE-HANDLE"
     );
-    let mut same_epoch = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut same_epoch = GuestStore::for_epoch(1).unwrap();
     let second = same_epoch.immutable_str_ticket(text.as_bytes()).unwrap();
     let (_, second_buffer) = lease(&same_epoch, second);
     assert_eq!(
@@ -266,7 +219,7 @@ fn backing_and_reference_generations_and_store_session_are_not_forgeable() {
 }
 #[test]
 fn forged_mutability_target_or_range_does_not_grant_buffer_access() {
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let ticket = store.immutable_str_ticket("é".as_bytes()).unwrap();
     let (id, buffer) = lease(&store, ticket);
     store.references.get_mut(id).unwrap().access = Access::Mutable;
@@ -294,46 +247,4 @@ fn forged_mutability_target_or_range_does_not_grant_buffer_access() {
     let owned = store.string("é").unwrap();
     assert!(store.str_reference_contents(owned).is_err());
     assert!(store.string_contents(ticket).is_err());
-}
-
-#[test]
-fn lazy_atomic_arena_capacity_refusal_keeps_every_existing_record_and_charge() {
-    let mut arena = GuestArena::<u64>::new_lazy(7).unwrap();
-    let mut empty_budget = RunBudget::new(7, 10, 0).unwrap();
-    let initial = arena.atomic_reservation_bytes(1).unwrap();
-    assert!(initial > 0); // Both sentinel buffers are part of the first demand.
-    assert_eq!(
-        arena.reserve_atomic(1, &mut empty_budget).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(arena.atomic_reservation_bytes(1).unwrap(), initial);
-    assert_eq!((empty_budget.handles(), empty_budget.bytes()), (0, 0));
-    let mut budget = RunBudget::new(7, 10, 1000).unwrap();
-    arena.reserve_atomic(1, &mut budget).unwrap();
-    assert!(budget.bytes() >= initial);
-    assert_eq!(arena.atomic_reservation_bytes(1).unwrap(), 0);
-    let id = arena.allocate(99, 0, &mut budget).unwrap();
-    let before = (
-        budget.handles(),
-        budget.bytes(),
-        arena.atomic_reservation_bytes(1).unwrap(),
-    );
-    for count in [1000, usize::MAX] {
-        assert_eq!(
-            arena.reserve_atomic(count, &mut budget).unwrap_err().code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        assert_eq!(
-            (
-                budget.handles(),
-                budget.bytes(),
-                arena.atomic_reservation_bytes(1).unwrap()
-            ),
-            before
-        );
-        assert_eq!(*arena.get(id).unwrap(), 99);
-    }
-    let store = GuestStore::new(1, 0, 0).unwrap();
-    assert_eq!((store.budget().handles(), store.budget().bytes()), (0, 0));
-    assert!(store.strings.rows.is_empty());
 }

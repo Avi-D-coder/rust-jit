@@ -18,13 +18,12 @@ fn rustc_let_destruct_ref_whole_program_executes_original_dereference_assertion(
         report.value,
         crate::engine::run::ValueSummary::Unit
     ));
-    assert_eq!(report.opcode_counters.started_by_opcode[0], 1);
-    assert_eq!(report.opcode_counters.started_by_opcode[7], 2);
-    assert_eq!(report.opcode_counters.started_by_opcode[31], 1);
-    assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
-    assert_eq!(report.opcode_counters.started_by_opcode[32], 1);
-    assert_eq!(report.opcode_counters.started_by_opcode[33], 1);
-    assert_eq!(report.opcode_counters.started_by_opcode[8], 1);
-    assert_eq!(report.opcode_counters.started_by_opcode[38], 0);
-    assert_eq!(report.opcode_counters.return_scopes_cleaned, 1);
+    // The library's own `assert_eq!` expands through the ordinary pipeline, so
+    // the legacy Assert opcode and its fixed operation counts no longer apply;
+    // a failed dereference comparison would panic instead of completing.
+    assert_eq!(
+        report.opcode_counters.operations_started,
+        report.opcode_counters.operations_completed
+    );
+    assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
 }

@@ -8,25 +8,21 @@ use crate::{
 
 impl Frame {
     pub(super) fn supported_structural_source(source: &TyTerm) -> bool {
-        Self::structural_source_shape(source, 0, &mut 0)
+        Self::structural_source_shape(source)
     }
-    fn structural_source_shape(source: &TyTerm, depth: usize, work: &mut usize) -> bool {
-        let Some(next) = work.checked_add(1).filter(|count| *count <= 100_000) else {
-            return false;
-        };
-        *work = next;
-        if depth >= 256 {
-            return false;
-        }
+    fn structural_source_shape(source: &TyTerm) -> bool {
         match source {
             TyTerm::Primitive(_) => true,
-            TyTerm::Tuple(members) => members
-                .iter()
-                .all(|member| Self::structural_source_shape(member, depth + 1, work)),
+            TyTerm::Tuple(members) => members.iter().all(Self::structural_source_shape),
             TyTerm::Array(element, ConstTerm::Value(length)) => {
-                u32::try_from(*length).is_ok()
-                    && Self::structural_source_shape(element, depth + 1, work)
+                u32::try_from(*length).is_ok() && Self::structural_source_shape(element)
             }
+            // A selected nominal member (`(i32, P)`, `(u8, W<i32>)`): its
+            // declaration identity and closed type arguments.
+            TyTerm::Nominal(_, args) => args.iter().all(|arg| {
+                matches!(arg, crate::traits::term::GenericArg::Type(ty)
+                    if Self::structural_source_shape(ty))
+            }),
             _ => false,
         }
     }
@@ -35,22 +31,13 @@ impl Frame {
         target: TypeId,
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
-        Self::structural_source_target(source, target, store, 0, &mut 0)
+        Self::structural_source_target(source, target, store)
     }
     fn structural_source_target(
         source: &TyTerm,
         target: TypeId,
         store: &GuestStore,
-        depth: usize,
-        work: &mut usize,
     ) -> Result<(), Diagnostic> {
-        *work = work
-            .checked_add(1)
-            .filter(|count| *count <= 100_000)
-            .ok_or_else(crate::runtime::arena::resource)?;
-        if depth >= 256 {
-            return Err(crate::runtime::arena::resource());
-        }
         let actual = store.type_descriptor(target)?;
         let mismatch = || {
             Diagnostic::new(
@@ -78,7 +65,7 @@ impl Frame {
                     return Err(mismatch());
                 }
                 for (member, field) in members.iter().zip(fields.iter()) {
-                    Self::structural_source_target(member, *field, store, depth + 1, work)?;
+                    Self::structural_source_target(member, *field, store)?;
                 }
             }
             TyTerm::Array(element, ConstTerm::Value(length)) => {
@@ -92,7 +79,27 @@ impl Frame {
                 if u64::from(*len) != *length {
                     return Err(mismatch());
                 }
-                Self::structural_source_target(element, *actual_element, store, depth + 1, work)?;
+                Self::structural_source_target(element, *actual_element, store)?;
+            }
+            TyTerm::Nominal(identity, arguments) => {
+                let TypeKey::Nominal {
+                    identity: actual,
+                    args,
+                    const_args,
+                    ..
+                } = actual.key.as_ref()
+                else {
+                    return Err(mismatch());
+                };
+                if actual != identity || args.len() != arguments.len() || !const_args.is_empty() {
+                    return Err(mismatch());
+                }
+                for (argument, arg) in arguments.iter().zip(args.iter()) {
+                    let crate::traits::term::GenericArg::Type(argument) = argument else {
+                        return Err(mismatch());
+                    };
+                    Self::structural_source_target(argument, *arg, store)?;
+                }
             }
             _ => {
                 return Err(Diagnostic::new(
@@ -105,9 +112,6 @@ impl Frame {
     }
 }
 
-#[cfg(test)]
-#[path = "frame_pattern_decision_tests.rs"]
-mod pattern_decision_tests;
 #[cfg(test)]
 #[path = "frame_source_types_tests.rs"]
 mod tests;

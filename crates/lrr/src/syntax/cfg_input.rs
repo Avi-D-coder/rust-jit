@@ -8,9 +8,6 @@ fn fault() -> Diagnostic {
     )
 }
 pub fn add(cfg: &mut CfgSet, input: &str) -> Result<(), Diagnostic> {
-    if input.len() > 64 * 1024 {
-        return Err(fault());
-    }
     let attribute = format!("#[cfg({input})]");
     let parsed = ast::SourceFile::parse(
         &format!("{attribute} fn __lrr_cfg_capture() {{}}"),

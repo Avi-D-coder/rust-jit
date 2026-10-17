@@ -25,7 +25,8 @@ fn root(
     mut key: Key,
     item: Option<bool>,
 ) -> Result<Key, Diagnostic> {
-    for _ in 0..=256 {
+    // A supplied parent chain can only be as long as the table; a longer walk is a cycle.
+    for _ in 0..=contexts.len() {
         let record = contexts
             .get(&key)
             .ok_or_else(|| error("normalization ancestor is missing"))?;
@@ -49,9 +50,6 @@ impl HygieneFacts {
     /// Cold encoding of pinned supplied facts, not an alternate normalization.
     pub(crate) fn semantic_fingerprint(&self) -> Result<crate::core::digest::Digest, Diagnostic> {
         use crate::core::digest::{Digest, StableEncoder};
-        if self.metadata_bytes()? > 64 * 1024 * 1024 {
-            return Err(error("hygiene environment encoding budget"));
-        }
         let mut e = StableEncoder::new("lrr/v1/pinned-hygiene-environment");
         e.u64(self.contexts.len() as u64);
         for (key, record) in &self.contexts {
@@ -105,7 +103,6 @@ impl HygieneFacts {
             }
             old.len()
                 .checked_add(new.keys().filter(|key| !old.contains_key(*key)).count())
-                .filter(|n| *n <= 2_000_000)
                 .ok_or_else(|| error("joined hygiene fact count limit"))
         }
         let contexts = count(&self.contexts, &other.contexts)?;
@@ -115,7 +112,6 @@ impl HygieneFacts {
             .checked_mul(256)
             .and_then(|n| normalized.checked_mul(128).and_then(|s| n.checked_add(s)))
             .and_then(|n| names.checked_mul(128).and_then(|s| n.checked_add(s)))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| error("joined hygiene metadata limit"))?;
         self.contexts
             .extend(other.contexts.iter().map(|(k, v)| (*k, v.clone())));
@@ -129,9 +125,6 @@ impl HygieneFacts {
         contexts: Vec<ContextRecord>,
         rows: Vec<ResolutionContext>,
     ) -> Result<Self, Diagnostic> {
-        if rows.len() > 2_000_000 {
-            return Err(error("resolution context table limit exceeded"));
-        }
         let forest = TokenForest::new(vec![], contexts, vec![]).map_err(|e| error(&e.message))?;
         forest.encoded_len().map_err(|e| error(&e.message))?;
         let contexts: BTreeMap<_, _> = forest
@@ -170,9 +163,6 @@ impl HygieneFacts {
         mut self,
         rows: Vec<NameResolutionContext>,
     ) -> Result<Self, Diagnostic> {
-        if rows.len() > 2_000_000 {
-            return Err(error("name comparison table limit exceeded"));
-        }
         let mut names = BTreeMap::new();
         for row in rows {
             if !self.contexts.contains_key(&row.original) {
@@ -226,14 +216,10 @@ impl HygieneFacts {
         let Some((name, modules)) = components.split_last() else {
             return Err(error("empty dollar-crate item path"));
         };
-        if components.len() > 256 {
-            return Err(error("dollar-crate path depth exceeded"));
-        }
         let mut bytes = 0usize;
         for component in components {
             bytes = bytes
                 .checked_add(component.as_str().len())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("dollar-crate path text limit exceeded"))?;
         }
         Ok(crate::db::key::BucketKey {

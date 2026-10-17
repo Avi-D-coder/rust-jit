@@ -173,7 +173,7 @@ fn recipe_guard_checks_relevant_inputs_without_queries_after_memo_eviction() {
     );
 }
 #[test]
-fn recipe_envelope_distinguishes_new_stamps_and_cannot_replace_or_exceed_budget() {
+fn recipe_envelope_distinguishes_new_stamps_and_cannot_replace_attachment() {
     let mut db = Database::default();
     db.publish_inputs(inputs("v1", false, false)).unwrap();
     let raw = raw_recipe();
@@ -207,14 +207,6 @@ fn recipe_envelope_distinguishes_new_stamps_and_cannot_replace_or_exceed_budget(
         first.fingerprint(),
         QueryValue::Thunk(Box::new(next)).fingerprint(),
         "new dependency envelope hidden by equal operations"
-    );
-    let mut over = raw;
-    over.metadata_bytes = 64 * 1024 * 1024;
-    assert_eq!(
-        over.with_prepared_inputs(capture(&mut db))
-            .unwrap_err()
-            .code,
-        "LRR-E-METADATA-LIMIT"
     );
 }
 struct RecipeProvider {

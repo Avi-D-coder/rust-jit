@@ -53,12 +53,6 @@ impl CompileInputDescriptor {
     }
 }
 pub fn descriptor(name: &str) -> Result<Option<CompileInputDescriptor>, AdapterError> {
-    if name.len() > 64 * 1024 {
-        return Err(AdapterError {
-            code: "LRR-E-COMPILE-INPUT",
-            message: "compile-input builtin name limit".into(),
-        });
-    }
     let Some(expander) = find_builtin_macro(&Name::new_root(name)).and_then(|e| e.right()) else {
         return Ok(None);
     };

@@ -1,0 +1,66 @@
+{
+  "schema": "lrr/source-review/ordinary-local-publication/v1",
+  "status": "source-only; unregistered/uncompiled/unexecuted; normal engine integration held",
+  "head": "403710ae34d074468ea01df7a337dd16e2e6df62",
+  "source_fingerprint": "083f27639e50fa62e043f8d31b04bcf5f6144e0dc1f5ef9dc7a1fe1768bc6a80",
+  "frozen_payload": "/private/tmp/lrr-ordinary-local-publication-v1",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs.rs",
+      "sha256": "bd0a3f80a39220c9042804eab892f2196bff69aa3a4ba8a2db8200b53ac98395",
+      "bytes": 6966
+    },
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs_tests.rs",
+      "sha256": "a6b05bdce6b478e6a6ebe5d8b2ac626a9d16b4f83c98faba8b5f5c0015879a93",
+      "bytes": 10998
+    },
+    {
+      "path": "worktracks/04-calls-source-views/common-ordinary-local-publication-handoff.md",
+      "sha256": "d826b03bd76525047741feb72d6ad18ba9373436c41e9031d673ae3c117a4069",
+      "bytes": 7788
+    }
+  ],
+  "base_contract": "Two new DB source leaves; requires frozen ordinary entered callable proof853f3152 component and actual shared source/Value39 prerequisites. Root adds memo child hook; no db/memo/provider/engine/Type/provenance source in this packet. Overlay only exact new leaves over selected frozen complete baseline.",
+  "architecture_record": "worktracks/04-calls-source-views/common-ordinary-local-publication-handoff.md",
+  "api": "Database.publish_ordinary_local_function(&OrdinaryLocalAdmission)->Result<(),Diagnostic>; root matches actual reached frame first, publisher validates fixed current source rows and inserts only missing exact DefinitionBody, proof.callable(db) afterward returns SAME SourceCallable.",
+  "hook_required": "#[path = \"ordinary_local_inputs.rs\"] mod ordinary_local_inputs; in db/memo.rs (root-owned, deliberately not edited)",
+  "authority": [
+    "coordinator outside pure queries",
+    "active run + exact query revision + private actual query39 input guard",
+    "exact current parent source/header/context/body and opaque environment",
+    "exact actualLocalDeclarationOwner and pre-existing childsource/header/context values+stamps",
+    "checked row/cachequota/revision preflight before mutation"
+  ],
+  "held": [
+    "runtime actual frame/site gate belongs root engine caller",
+    "normal call contracts, body entry, continuation, suspension, cleanup not implemented by publication",
+    "legacy lexical numeric/original publisher and globalnamespace census not removed",
+    "source proof/parent roots retained by existing SourceCallable API; final runtime accounting integration pending"
+  ],
+  "commands": [
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/db/ordinary_local_inputs.rs",
+      "exit_code": 1,
+      "scope": "initial construction attempt: declared new tests leaf was not yet present; not a Rust/compiler/test execution"
+    },
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/db/ordinary_local_inputs.rs crates/lrr/src/db/ordinary_local_inputs_tests.rs",
+      "exit_code": 0,
+      "scope": "formatting only, after adding exact test leaf"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "scope": "whitespace only"
+    }
+  ],
+  "not_run": [
+    "Cargo",
+    "native compilation",
+    "source controls",
+    "guest runtime",
+    "strict/milestone",
+    "architecture matrix"
+  ]
+}

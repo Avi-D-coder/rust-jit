@@ -92,7 +92,7 @@ impl SyntaxRequestReceipt {
                         definition_edition: key.definition_edition,
                     })
                 }
-                MacroIdentity::Procedural { .. } => None,
+                MacroIdentity::Procedural { .. } | MacroIdentity::BuiltinDerive { .. } => None,
             },
             input,
         })
@@ -131,7 +131,6 @@ impl SyntaxRequestReceipt {
                 MacroIdentity::Procedural { export, .. } => export.capacity(),
                 _ => 0,
             })
-            .filter(|n| *n <= 128 * 1024)
             .ok_or_else(|| fault("issued syntax receipt byte budget"))
     }
 }
@@ -141,9 +140,6 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
     let mut e = StableEncoder::new("lrr/v1/issued-syntax-token-roots");
     e.u64(u64::try_from(roots.len()).map_err(|_| fault("syntax root count overflow"))?);
     let mut pending = Vec::new();
-    if roots.len() > 2_000_000 {
-        return Err(fault("syntax root count budget"));
-    }
     pending
         .try_reserve_exact(roots.len())
         .map_err(|_| fault("syntax root work allocation"))?;
@@ -152,7 +148,6 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
     while let Some(token) = pending.pop() {
         work = work
             .checked_add(1)
-            .filter(|n| *n <= 2_000_000)
             .ok_or_else(|| fault("syntax root work budget"))?;
         match token {
             TokenTree::Group {
@@ -177,7 +172,6 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
                 pending
                     .len()
                     .checked_add(children.len())
-                    .filter(|n| *n <= 2_000_000)
                     .ok_or_else(|| fault("syntax pending work budget"))?;
                 pending
                     .try_reserve_exact(children.len())

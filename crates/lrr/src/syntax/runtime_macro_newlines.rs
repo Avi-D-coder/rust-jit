@@ -3,7 +3,6 @@
 use crate::core::diagnostic::Diagnostic;
 use std::borrow::Cow;
 
-const MAX_INPUT_BYTES: usize = 131_072;
 
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-RUNTIME-MACRO-ARGUMENTS", message.into())
@@ -19,9 +18,6 @@ pub(super) struct NormalizedArguments<'a> {
 
 impl<'a> NormalizedArguments<'a> {
     pub(super) fn new(original: &'a str) -> Result<Self, Diagnostic> {
-        if original.len() > MAX_INPUT_BYTES {
-            return Err(invalid("runtime macro normalized argument size limit"));
-        }
         let count = original
             .as_bytes()
             .windows(2)

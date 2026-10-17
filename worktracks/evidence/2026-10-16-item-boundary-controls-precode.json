@@ -1,0 +1,43 @@
+{
+  "schema": "lrr/precode/item-boundary-controls/v1",
+  "owned": [
+    "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs"
+  ],
+  "registration": "root adds child module in original_inert_tests.rs; no worker parent edits",
+  "witness": "Unchanged official type-param-local-var-shadowing.rs, whole-emitter adapter extracts actual pinned AST inner attributes at crate scope, all remaining fixture bytes unchanged and in order. Existing original_inert_tests prepare/discovery/seal captures real source and actual adapter expansions.",
+  "invariant": "Actual pending boundary must wait every genuine typed job, refuse stale source/publication/cfg/epoch, finalize provider/receipt once; no pending receipt may be hidden by a sealed worklist.",
+  "authority": "Tests mutate actual captured coordinator state only for negative LRR authority controls. They never install synthetic output/callee/header/body or complete work without its real producer scan. Wrong typed prerequisite control deliberately corrupts an actual admission receipt and requires fail-stop at seal.",
+  "entrypoints": [
+    "PendingItemBoundary::prepare",
+    "SourceDiscovery::complete_ready_item_boundaries",
+    "SourceDiscovery::poll_inner before work.poll and Sealed arm",
+    "Discovery::completed_job",
+    "SourceDeclarative::completed_published_index"
+  ],
+  "cost": "Source-only tests; production cold hook review records O(sum jobs log work) perpoll, bounded metadata and actual shared source handles; no world scan/peroperation work introduced by leaf.",
+  "all_eight": [
+    "1 no evaluator",
+    "2 actual full output not scalar executor",
+    "3 no macro-specific numeric/method logic",
+    "4 generated source owner proof shared",
+    "5 no executable body/pattern queries",
+    "6 existing retained preparation only",
+    "7 exact typed work dependencies no world census",
+    "8 actual source share no BodyIndex clone"
+  ],
+  "execution": "No Cargo/compiler/tests; controls future only after stock direct witness.",
+  "source": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "17b1ef6d68a7c9fcf71d2c8eedef15cb11702eef2d4dd1e3cb41dc4035348dc6"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundaries.rs",
+      "sha256": "09379f72a5e17b3f755082b0db3641cdadb5e996b938a035ff2ebd7076e3a58c"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "sha256": "771344b4ae0ed59a3601d1f5a440bd1eed8bfdb87446846b1646610b5d5af82a"
+    }
+  ]
+}

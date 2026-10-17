@@ -58,9 +58,12 @@ fn unchanged_mixed_loop_uses_owned_result_for_literal_and_compound_all_editions(
     );
     for edition in [2015, 2018, 2021, 2024] {
         let (parsed, body, index) = entered(ORIGINAL, edition, "label_break_mixed");
+        // The written `u32` result is a strong same-family proof: the
+        // module's builtin inert `#![allow]`/`#[allow]` attributes cannot
+        // introduce a type name, so the exact Result relation is selected.
         assert_eq!(
             selected(&parsed, &body, &index, 0),
-            Some(DefinitionNumericContext::ResultOrDefault { floating: false })
+            Some(DefinitionNumericContext::Result)
         );
         let root = parsed.entered_body_root(&body).unwrap();
         let statement = root.descendants().find_map(ast::LetStmt::cast).unwrap();
@@ -71,9 +74,7 @@ fn unchanged_mixed_loop_uses_owned_result_for_literal_and_compound_all_editions(
         assert!(recipe.recipe().operations.iter().any(|op| matches!(
             op,
             Op::SetHint {
-                hint: HintRecipe::DefinitionNumeric(DefinitionNumericContext::ResultOrDefault {
-                    floating: false
-                }),
+                hint: HintRecipe::DefinitionNumeric(DefinitionNumericContext::Result),
                 ..
             }
         )));
@@ -91,7 +92,7 @@ fn unchanged_mixed_loop_uses_owned_result_for_literal_and_compound_all_editions(
                 op,
                 Op::CompoundHint {
                     kind: AssignKind::DefinitionNumeric {
-                        context: DefinitionNumericContext::ResultOrDefault { floating: false },
+                        context: DefinitionNumericContext::Result,
                         right: None
                     },
                     ..
@@ -302,7 +303,9 @@ fn incompatible_cold_result_does_not_override_compatible_parameter() {
 fn conditional_family_requires_exact_owning_result_binding() {
     for edition in [2015, 2018, 2021, 2024] {
         let (parsed, body, index) = entered(
-            "fn chosen()->f32{let n=0.0;n}#[allow(dead_code)]fn cold(){}",
+            // An unexpanded item macro may introduce `f32`; only the conditional
+            // owning-result relation remains (a builtin inert attribute cannot).
+            "fn chosen()->f32{let n=0.0;n}m!{}",
             edition,
             "chosen",
         );
@@ -427,6 +430,12 @@ fn unchanged_borrowed_compound_original_uses_written_binding_and_reference_sourc
 
 #[test]
 fn borrowed_compound_does_not_invent_source_for_unknown_or_nested_reference_operands() {
+    // A local without a primitive or exact definition-numeric proof for both
+    // operands is the updated place itself: no source is invented before
+    // operands; the reached operand types select the builtin compound
+    // operation or `AddAssign::add_assign(&mut x, rhs)`. Programs rustc
+    // rejects (`x += &&2i8` has no `AddAssign<&&i8>` impl) are not checked
+    // statically; they fault at run time when the operator selects no method.
     for source in [
         "fn main(){let mut x=missing();x+=&1i8;}",
         "fn main(){let mut x=1i8;x+=&&2i8;}",
@@ -443,9 +452,15 @@ fn borrowed_compound_does_not_invent_source_for_unknown_or_nested_reference_oper
             .find(|binary| binary.op_token().is_some_and(|token| token.text() == "+="))
             .unwrap();
         let node = id_for(&index, &body, binary.syntax()).unwrap();
-        let error = parsed
+        let recipe = parsed
             .initial_thunk(&body, &index, &index.pc(node, Phase::Entry).unwrap())
-            .unwrap_err();
-        assert_eq!(error.code, "LRR-E-TYPE-CONTEXT", "{source}: {error:?}");
+            .unwrap_or_else(|error| panic!("{source}: {error:?}"));
+        assert!(recipe.recipe().operations.is_empty(), "{source}");
+        let rhs = id_for(&index, &body, binary.rhs().unwrap().syntax()).unwrap();
+        assert_eq!(
+            recipe.recipe().exit,
+            crate::ir::recipe::RecipeExit::Next(index.pc(rhs, Phase::Entry).unwrap()),
+            "{source}"
+        );
     }
 }

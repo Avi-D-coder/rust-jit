@@ -27,7 +27,6 @@ use crate::{
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-PATH-SOURCE", message.into())
 }
@@ -129,18 +128,10 @@ fn validate_scope(
         .ok_or_else(|| fault("constant path scope certificate absent"))?;
     let key = input.seal.key();
     key.validate()?;
-    if certified.scope != *scope
-        || certified.namespace != Namespace::Value
-        || certified.edition != view.selection().outline.parse.profile.edition
-        || !matches!(input.seal.domain(),SealDomain::Scope{id,namespace} if *id==scope.fingerprint() && *namespace==Namespace::Value)
-        || !input.sources.contains(view.selection())
-        || input.sources.len() > 256
-        || input.seal.unresolved_frontiers() != 0
-        || input
+    if certified.scope != *scope || certified.namespace != Namespace::Value || certified.edition != view.selection().outline.parse.profile.edition || !matches!(input.seal.domain(),SealDomain::Scope{id,namespace} if *id==scope.fingerprint() && *namespace==Namespace::Value) || !input.sources.contains(view.selection()) || input.seal.unresolved_frontiers() != 0 || input
             .sources
             .iter()
-            .any(|source| !views.iter().any(|view| view.selection() == source))
-    {
+            .any(|source| !views.iter().any(|view| view.selection() == source)) {
         return Err(fault(
             "constant path actual source set/scope/world/edition is incomplete or differs",
         ));
@@ -149,9 +140,6 @@ fn validate_scope(
         || !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
     {
         return Err(fault("constant path epoch/source graph differs"));
-    }
-    if input.compiler_inputs.len() > 100_000 {
-        return Err(limit());
     }
     for (key, fingerprint) in &input.compiler_inputs {
         if db
@@ -212,12 +200,8 @@ impl ConstantPathSelection {
         views: &[&PreparedSourceView],
         byte_limit: usize,
     ) -> Result<ConstantPathOutcome, Diagnostic> {
-        if views.is_empty()
-            || views.len() > 256
-            || byte_limit
-                < std::mem::size_of::<Self>() + std::mem::size_of::<ConstantPathOutcome>() + 256
-            || byte_limit > MAX_BYTES
-        {
+        if views.is_empty() || byte_limit
+                < std::mem::size_of::<Self>() + std::mem::size_of::<ConstantPathOutcome>() + 256 {
             return Err(limit());
         }
         if !views
@@ -279,9 +263,7 @@ impl ConstantPathSelection {
         for key in stamps.keys() {
             if let InputKey::CapturedSource(location) = key {
                 captured_count = captured_count
-                    .checked_add(1)
-                    .filter(|n| *n <= 256)
-                    .ok_or_else(limit)?;
+                    .checked_add(1)                    .ok_or_else(limit)?;
                 let Some((InputValue::CapturedSource(selection), _)) = db.published_input(key)
                 else {
                     return Err(fault("constant path captured source input variant differs"));
@@ -380,7 +362,6 @@ impl ConstantPathSelection {
                 for row in &route.extern_aliases {
                     alias_count = alias_count
                         .checked_add(1)
-                        .filter(|n| *n <= 100_000)
                         .ok_or_else(limit)?;
                     graph.extern_alias(row, route.edition)?;
                 }
@@ -399,12 +380,12 @@ impl ConstantPathSelection {
             Namespace::Value,
             caller.selection().outline.parse.profile.edition,
         )?;
-        if replay.fingerprint()
+        if replay.module_fingerprint()
             != caller_input
                 .scope
                 .as_ref()
                 .ok_or_else(|| fault("constant path caller names absent"))?
-                .fingerprint()
+                .module_fingerprint()
         {
             return Err(fault(
                 "constant path original namespace replay differs from current seal",
@@ -509,7 +490,7 @@ impl ConstantPathSelection {
             .scope
             .as_ref()
             .ok_or_else(|| fault("constant target certified names absent"))?;
-        if certified.fingerprint() != target_replay.fingerprint() {
+        if certified.module_fingerprint() != target_replay.module_fingerprint() {
             return Err(fault("constant target namespace replay differs"));
         }
         let bucket = BucketKey {

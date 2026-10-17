@@ -30,9 +30,6 @@ pub struct CompilerArtifactMessage {
 }
 impl CompilerArtifactMessage {
     pub fn decode(bytes: &[u8]) -> Result<Self, Diagnostic> {
-        if bytes.len() > 1024 * 1024 {
-            return Err(fault("Cargo artifact record exceeds 1 MiB"));
-        }
         let mut decoder = serde_json::Deserializer::from_slice(bytes);
         CheckedJson::deserialize(&mut decoder).map_err(|e| fault(e.to_string()))?;
         decoder.end().map_err(|e| fault(e.to_string()))?;
@@ -87,7 +84,7 @@ pub fn capture_compiler_artifacts(
     profiles: &ArtifactProfiles,
     messages: Vec<CompilerArtifactMessage>,
 ) -> Result<BTreeMap<Digest, ToolArtifact>, Diagnostic> {
-    if graph.schema != 1 || graph.units.len() > 100_000 || messages.len() > 100_000 {
+    if graph.schema != 1 {
         return Err(fault("artifact graph bounds"));
     }
     let mut index: BTreeMap<_, Vec<Digest>> = BTreeMap::new();
@@ -206,9 +203,6 @@ pub fn capture_compiler_artifacts(
         for path in &message.filenames {
             if !all_paths.insert(path.clone()) {
                 return Err(fault("different artifact records share a file"));
-            }
-            if all_paths.len() > 100_000 {
-                return Err(fault("artifact filename limit"));
             }
         }
         if selected

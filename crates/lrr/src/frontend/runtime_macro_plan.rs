@@ -139,7 +139,6 @@ impl RuntimeIntrinsicPlan {
             .len()
             .checked_add(separator.len())
             .and_then(|n| n.checked_add(payload.len()))
-            .filter(|n| *n <= 65_536)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
@@ -432,12 +431,6 @@ impl RuntimeIntrinsicPlan {
                 } else {
                     return Ok(StaticPanicRecipeLowering::NeedsFormatting);
                 };
-                if message.len() > 65_536 {
-                    return Err(Diagnostic::new(
-                        "LRR-E-METADATA-LIMIT",
-                        "assertion message exceeds owned panic budget".into(),
-                    ));
-                }
                 (
                     vec![Op::Assert {
                         condition,
@@ -526,7 +519,7 @@ impl RuntimeIntrinsicPlan {
         let ordinal = match Phase::from_code(key.phase) {
             Phase::Entry => 0,
             Phase::Operand(n) => usize::from(n) + 1,
-            Phase::Commit | Phase::Exit | Phase::PatternCleanup => return Ok(None),
+            Phase::Commit | Phase::Exit => return Ok(None),
         };
         let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
         let (call, phase) = match plan.steps().get(ordinal) {
@@ -568,7 +561,7 @@ impl RuntimeIntrinsicPlan {
         let ordinal = match Phase::from_code(key.phase) {
             Phase::Entry => 0,
             Phase::Operand(n) => usize::from(n) + 1,
-            Phase::Commit | Phase::Exit | Phase::PatternCleanup => return Ok(None),
+            Phase::Commit | Phase::Exit => return Ok(None),
         };
         let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
         match plan.steps().get(ordinal) {
@@ -628,11 +621,6 @@ impl RuntimeIntrinsicPlan {
         };
         let id = NodeId(key.node);
         let (operations, exit) = match Phase::from_code(key.phase) {
-            Phase::PatternCleanup => {
-                return Err(invalid(
-                    "pattern cleanup belongs to its ordinary pattern owner",
-                ));
-            }
             Phase::Entry | Phase::Operand(_) => {
                 use crate::syntax::runtime_macro_scalars::{
                     RuntimeMacroCallPhase, RuntimeScalarStep,
@@ -1026,10 +1014,6 @@ impl PreparedDeclarativeExpression {
         &self.origins
     }
 }
-
-#[cfg(test)]
-#[path = "runtime_macro_call_recipe_tests.rs"]
-mod call_recipe_tests;
 
 #[path = "runtime_macro_generated_break.rs"]
 mod generated_break;

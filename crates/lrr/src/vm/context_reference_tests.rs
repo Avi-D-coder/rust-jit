@@ -130,14 +130,13 @@ fn world(edition: u16) -> World {
     let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
         panic!()
     };
-    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(
         index.as_ref().clone(),
         index.pc(NodeId(0), Phase::Entry).unwrap(),
         &mut store,
     )
     .unwrap();
-    frame.set_fuel_limit(100_000).unwrap();
     let mut reached = None;
     for _ in 0..128 {
         let fetched = db

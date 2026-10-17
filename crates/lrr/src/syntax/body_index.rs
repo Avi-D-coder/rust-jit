@@ -27,9 +27,9 @@ pub struct BodyIndexLimits {
 impl Default for BodyIndexLimits {
     fn default() -> Self {
         Self {
-            nodes: 100_000,
-            slots: 200_000,
-            metadata_bytes: 32 * 1024 * 1024,
+            nodes: u32::MAX,
+            slots: u32::MAX,
+            metadata_bytes: usize::MAX,
         }
     }
 }
@@ -116,6 +116,9 @@ pub enum ScopeKind {
     MatchGuard,
     /// Exact non-block constant/static initializer, without constant evaluation.
     Initializer,
+    /// A closure's parameters and body. Only the closure's own call frame
+    /// enters it; the creating frame never does.
+    Closure,
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StructuralNode {
@@ -136,8 +139,6 @@ pub struct StructuralNode {
     /// Indexing does not parse or resolve the token-tree expressions.
     pub runtime_scalar_slots: Vec<SlotId>,
     pub runtime_scalar_phases: u16,
-    /// Structural range-pattern continuation only; indexing never prepares bounds.
-    pub scalar_range_phase: bool,
     /// Exact syntactic unary minus over a (possibly grouped) integer token.
     /// No magnitude, suffix type, name or value is prepared while indexing.
     pub negative_integer_literal: bool,
@@ -150,8 +151,28 @@ pub struct StructuralNode {
     pub boolean_scope: Option<ScopeId>,
     pub statement_scope: Option<ScopeId>,
     pub guard_scope: Option<ScopeId>,
+    /// A closure expression's own scope: its parameters, body and their
+    /// temporaries belong to the closure's call frame, never to the frame
+    /// that creates the closure value (which keeps the node's `scope`).
+    pub closure_scope: Option<ScopeId>,
     pub extended_to: Option<super::temporary_extensions::ExtendedTo>,
     pub opaque: bool,
+    /// A `let` statement whose pattern runs through the shared pattern
+    /// transaction (destructuring, `@` bindings or `let`-`else`). Its first
+    /// runtime temporary is the reserved Bool test result.
+    pub pattern_statement: bool,
+}
+/// `let` forms that need the shared pattern transaction. A plain identifier
+/// or wildcard declaration binds directly; every other pattern is matched.
+pub(crate) fn pattern_statement(statement: &ast::LetStmt) -> bool {
+    if statement.let_else().is_some() {
+        return true;
+    }
+    match statement.pat() {
+        None | Some(ast::Pat::WildcardPat(_)) => false,
+        Some(ast::Pat::IdentPat(binding)) => binding.pat().is_some(),
+        Some(_) => true,
+    }
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LexicalScope {
@@ -304,29 +325,11 @@ impl BodyIndex {
         if node.role == NodeRole::InitializerReturn && phase != Phase::Entry {
             return Err(fault("initializer return requires its entry phase"));
         }
-        if phase == Phase::PatternCleanup
-            && !matches!(node.role, NodeRole::Pattern | NodeRole::MatchArm)
-            && !(node.role == NodeRole::Expression(ExpressionKind::Other)
-                && node.clause_scope.is_some())
-        {
-            return Err(fault("pattern cleanup requires its indexed pattern owner"));
-        }
-        if let Phase::Operand(n) = phase
-            && node.role == NodeRole::Pattern
-            && n > 2
-        {
-            return Err(fault("pattern continuation operand phase absent"));
-        }
         if let Phase::Operand(n) = phase
             && usize::from(n) >= node.operands.len()
             && !(node.role == NodeRole::Expression(ExpressionKind::Macro)
                 && (n == 0 || n < node.runtime_scalar_phases)
                 && node.runtime_temporaries[0].is_some())
-            // A retained product walks one projection component per charged
-            // ordinary operation. Reserving its phases grants no source,
-            // binding or executable authority; the verifier checks the plan.
-            && !(node.role == NodeRole::Pattern && n <= 2)
-            && !(node.role == NodeRole::MatchArm && node.guard_scope.is_some() && n == 0)
         {
             return Err(fault("structural operand phase absent"));
         }
@@ -382,7 +385,6 @@ impl StableEncode for BodyIndex {
             }
             e.sequence(&n.runtime_scalar_slots, |e, slot| e.u32(slot.0));
             e.u32(u32::from(n.runtime_scalar_phases));
-            e.bool(n.scalar_range_phase);
             e.bool(n.negative_integer_literal);
             e.option(&n.constructor_guard, |e, slot| e.u32(slot.0));
             e.option(&n.tail_scope, |e, scope| e.u32(scope.0));
@@ -391,11 +393,13 @@ impl StableEncode for BodyIndex {
             e.option(&n.boolean_scope, |e, scope| e.u32(scope.0));
             e.option(&n.statement_scope, |e, scope| e.u32(scope.0));
             e.option(&n.guard_scope, |e, scope| e.u32(scope.0));
+            e.option(&n.closure_scope, |e, scope| e.u32(scope.0));
             e.option(&n.extended_to, |e, target| {
                 e.u32(target.scope.0);
                 e.sequence(&target.constructors, |e, node| e.u32(node.0));
             });
             e.bool(n.opaque);
+            e.bool(n.pattern_statement);
         });
         e.sequence(&self.scopes, |e, s| {
             e.u32(s.id.0);
@@ -415,6 +419,7 @@ impl StableEncode for BodyIndex {
                 ScopeKind::Statement => 7,
                 ScopeKind::MatchGuard => 8,
                 ScopeKind::Initializer => 9,
+                ScopeKind::Closure => 10,
             });
             e.u32(s.range.start);
             e.u32(s.range.end);
@@ -511,7 +516,6 @@ impl ParsedFile {
         // SyntaxElement ancestry includes its actual LiteralExpr boundary.
         let root = covered
             .ancestors()
-            .take(257)
             .find(|node| range(node.text_range()) == body.range && ast::Expr::can_cast(node.kind()))
             .ok_or_else(|| fault("body expression syntax boundary absent"))?;
         if range(root.text_range()) != body.range
@@ -547,12 +551,6 @@ impl ParsedFile {
         limits: BodyIndexLimits,
     ) -> Result<BodyIndex, Diagnostic> {
         body.require_entry()?;
-        if limits.nodes > 100_000
-            || limits.slots > 200_000
-            || limits.metadata_bytes > 32 * 1024 * 1024
-        {
-            return Err(limit("called body fixed budget ceiling"));
-        }
         let root = self.entered_body_root(body)?;
         let cfg_bytes = cfg.metadata_bytes()?;
         if cfg_bytes > limits.metadata_bytes {
@@ -677,8 +675,7 @@ impl ParsedFile {
                 || matches!(
                     kind,
                     Some(
-                        ExpressionKind::Closure
-                            | ExpressionKind::Async
+                        ExpressionKind::Async
                             | ExpressionKind::Const
                             | ExpressionKind::Gen
                             | ExpressionKind::Macro
@@ -804,6 +801,39 @@ impl ParsedFile {
                     .map(|condition| (condition, x.loop_body().map(ast::Expr::BlockExpr))),
                 _ => None,
             };
+            // `for PAT in HEAD BODY` (rustc's lowering: `match
+            // IntoIterator::into_iter(HEAD) { mut iter => loop { match
+            // Iterator::next(&mut iter) { None => break, Some(PAT) => BODY } } }`):
+            // the node's own Loop scope owns the iterator for the whole loop;
+            // this child scope is one iteration (the `next` result, PAT's
+            // bindings and BODY) and is the target of `break`/`continue`.
+            let for_iteration = if let Some(ast::Expr::ForExpr(for_expr)) = &expr {
+                charge(&mut index.estimated_bytes, 128, limits.metadata_bytes)?;
+                let iteration = ScopeId(
+                    u32::try_from(index.scopes.len())
+                        .map_err(|_| limit("for iteration scope ordinal overflow"))?,
+                );
+                index
+                    .scopes
+                    .try_reserve(1)
+                    .map_err(|_| limit("for iteration scope allocation"))?;
+                index.scopes.push(LexicalScope {
+                    id: iteration,
+                    parent: Some(scope),
+                    node: id,
+                    kind: ScopeKind::Loop,
+                    range: relative,
+                });
+                if let Some(body) = for_expr.loop_body() {
+                    let r = range(body.syntax().text_range());
+                    if scope_roots.insert((r.start, r.end), iteration).is_some() {
+                        return Err(fault("duplicate for body root"));
+                    }
+                }
+                Some(iteration)
+            } else {
+                None
+            };
             let condition_scope = if let Some((condition, consequent)) = condition_parts {
                 charge(&mut index.estimated_bytes, 192, limits.metadata_bytes)?;
                 let r = range(condition.syntax().text_range());
@@ -920,7 +950,7 @@ impl ParsedFile {
                 }
                 Some(condition_scope)
             } else {
-                None
+                for_iteration
             };
             if let Some(ast::Expr::BinExpr(binary)) = &expr
                 && binary
@@ -1006,6 +1036,27 @@ impl ParsedFile {
             } else {
                 None
             };
+            let closure_scope = if kind == Some(ExpressionKind::Closure) {
+                charge(&mut index.estimated_bytes, 64, limits.metadata_bytes)?;
+                let closure_scope = ScopeId(
+                    u32::try_from(index.scopes.len())
+                        .map_err(|_| limit("closure scope ordinal overflow"))?,
+                );
+                index
+                    .scopes
+                    .try_reserve(1)
+                    .map_err(|_| limit("closure scope allocation"))?;
+                index.scopes.push(LexicalScope {
+                    id: closure_scope,
+                    parent: Some(scope),
+                    node: id,
+                    kind: ScopeKind::Closure,
+                    range: relative,
+                });
+                Some(closure_scope)
+            } else {
+                None
+            };
             let label = match &expr {
                 Some(ast::Expr::LoopExpr(x)) => x.label(),
                 Some(ast::Expr::WhileExpr(x)) => x.label(),
@@ -1037,7 +1088,9 @@ impl ParsedFile {
                     id: target,
                     parent: frame.target,
                     node: id,
-                    scope,
+                    // `break`/`continue` of a `for` leave one iteration; the
+                    // loop's own scope (its iterator) is left by its exit.
+                    scope: for_iteration.unwrap_or(scope),
                     is_loop,
                     spelling,
                 });
@@ -1068,7 +1121,17 @@ impl ParsedFile {
             } else {
                 (None, None)
             };
-            let runtime_temporaries = if kind == Some(ExpressionKind::Match) {
+            let runtime_temporaries = if kind == Some(ExpressionKind::For) {
+                // The iterator (loop-owned) and each iteration's `next` result.
+                let next = index
+                    .slots
+                    .checked_add(4)
+                    .filter(|n| *n <= limits.slots)
+                    .ok_or_else(|| limit("for temporary slot budget"))?;
+                let slots = [Some(SlotId(index.slots)), Some(SlotId(index.slots + 2))];
+                index.slots = next;
+                slots
+            } else if kind == Some(ExpressionKind::Match) {
                 let next = index
                     .slots
                     .checked_add(4)
@@ -1120,27 +1183,30 @@ impl ParsedFile {
                 let slots = [Some(SlotId(index.slots)), None];
                 index.slots = next;
                 slots
-            } else if expr
-                .as_ref()
-                .is_some_and(|expr| matches!(expr, ast::Expr::LetExpr(_)))
-            {
+            } else if kind == Some(ExpressionKind::MethodCall) {
+                // The adjusted receiver argument (autoref/autoderef result),
+                // distinct from the receiver expression's own value/place.
                 let next = index
                     .slots
                     .checked_add(2)
                     .filter(|n| *n <= limits.slots)
-                    .ok_or_else(|| limit("condition pattern temporary slot budget"))?;
+                    .ok_or_else(|| limit("method receiver slot budget"))?;
+                // Receiver argument value slot; its reserved place pair is the
+                // autoderef scratch place.
                 let slots = [Some(SlotId(index.slots)), None];
                 index.slots = next;
                 slots
-            } else if role == NodeRole::Pattern {
-                // A reached product leaf can borrow/project/test independently
-                // of the owner's expected/test values. Only frame metadata is
-                // reserved here; source admission and leaf execution stay lazy.
+            } else if frame.syntax.kind() == ra_ap_syntax::SyntaxKind::LET_STMT
+                && ast::LetStmt::cast(frame.syntax.clone())
+                    .is_some_and(|statement| pattern_statement(&statement))
+            {
+                // The shared pattern transaction's Bool test result, owned by
+                // the statement scope like the initializer's temporaries.
                 let next = index
                     .slots
                     .checked_add(2)
-                    .filter(|slots| *slots <= limits.slots)
-                    .ok_or_else(|| limit("pattern projection temporary slot budget"))?;
+                    .filter(|n| *n <= limits.slots)
+                    .ok_or_else(|| limit("pattern statement temporary slot budget"))?;
                 let slots = [Some(SlotId(index.slots)), None];
                 index.slots = next;
                 slots
@@ -1185,6 +1251,21 @@ impl ParsedFile {
                     }
                     index.slots = next;
                     (slots, phases as u16)
+                } else if let Some(closure) = ast::ClosureExpr::cast(frame.syntax.clone()) {
+                    // One parameter staging value slot (with its place pair)
+                    // per closure parameter, owned by the closure frame.
+                    let count = u32::try_from(
+                        closure.param_list().map_or(0, |list| list.params().count()),
+                    )
+                    .map_err(|_| limit("closure parameter count overflow"))?;
+                    let next = count
+                        .checked_mul(2)
+                        .and_then(|n| index.slots.checked_add(n))
+                        .filter(|n| *n <= limits.slots)
+                        .ok_or_else(|| limit("closure parameter slot budget"))?;
+                    let slots = (0..count).map(|offset| SlotId(index.slots + offset * 2)).collect();
+                    index.slots = next;
+                    (slots, 0)
                 } else {
                     (Vec::new(), 0)
                 };
@@ -1192,7 +1273,8 @@ impl ParsedFile {
                 matches!(
                     expr,
                     ast::Expr::TupleExpr(_) | ast::Expr::ArrayExpr(_) | ast::Expr::RecordExpr(_)
-                )
+                ) || matches!(expr, ast::Expr::RangeExpr(range)
+                    if super::constructors::LangRecord::of(range).is_some())
             }) {
                 // Keep the established value/place parity for every other slot.
                 let next = index
@@ -1233,8 +1315,6 @@ impl ParsedFile {
                 runtime_temporaries,
                 runtime_scalar_slots,
                 runtime_scalar_phases,
-                scalar_range_phase: role == NodeRole::Pattern
-                    && ast::RangePat::can_cast(frame.syntax.kind()),
                 negative_integer_literal: expr.as_ref().is_some_and(negative_integer_literal),
                 constructor_guard,
                 tail_scope,
@@ -1243,8 +1323,12 @@ impl ParsedFile {
                 boolean_scope,
                 statement_scope,
                 guard_scope,
+                closure_scope,
                 extended_to: None,
                 opaque,
+                pattern_statement: frame.syntax.kind() == ra_ap_syntax::SyntaxKind::LET_STMT
+                    && ast::LetStmt::cast(frame.syntax.clone())
+                        .is_some_and(|statement| pattern_statement(&statement)),
             });
             if opaque {
                 continue;
@@ -1264,7 +1348,13 @@ impl ParsedFile {
                 children
                     .try_reserve(1)
                     .map_err(|_| limit("body traversal allocation"))?;
-                let child_scope = if ast::Expr::can_cast(syntax.kind()) {
+                let child_scope = if let Some(closure) = closure_scope {
+                    closure
+                } else if let Some(iteration) = for_iteration
+                    && ast::Pat::can_cast(syntax.kind())
+                {
+                    iteration
+                } else if ast::Expr::can_cast(syntax.kind()) {
                     statement_scope.unwrap_or(scope)
                 } else {
                     scope
@@ -1283,7 +1373,8 @@ impl ParsedFile {
                     parent: Some(id),
                     expression: child_expression,
                     scope: Some(child_scope),
-                    target,
+                    // Loop labels never cross a closure body.
+                    target: if closure_scope.is_some() { None } else { target },
                 });
             }
             stack
@@ -1356,7 +1447,6 @@ impl ParsedFile {
                 runtime_temporaries: [Some(unit), None],
                 runtime_scalar_slots: Vec::new(),
                 runtime_scalar_phases: 0,
-                scalar_range_phase: false,
                 negative_integer_literal: false,
                 constructor_guard: None,
                 tail_scope: None,
@@ -1365,8 +1455,10 @@ impl ParsedFile {
                 boolean_scope: None,
                 statement_scope: None,
                 guard_scope: None,
+                closure_scope: None,
                 extended_to: None,
                 opaque: true,
+                pattern_statement: false,
             });
             index.slots = next_slots;
         }
@@ -1531,82 +1623,6 @@ mod tests {
         let mut bytes = usize::MAX;
         assert!(charge(&mut bytes, 1, usize::MAX).is_err());
         assert_eq!(bytes, usize::MAX);
-    }
-    #[test]
-    fn range_marker_is_encoded_and_pattern_continuation_phases_are_bounded() {
-        use crate::source::snapshot::{CfgSet, SourceBlob};
-        const SOURCE: &str = "const RET:u8=1;fn chosen(c:u8){match c{0..=4=>(),_=>()}}";
-        for edition in [2015, 2018, 2021, 2024] {
-            let parsed = ParsedFile::parse(
-                &SourceBlob::new(SOURCE.as_bytes().to_vec()).unwrap(),
-                ProfileIdentity {
-                    edition,
-                    ..ProfileIdentity::current()
-                },
-            )
-            .unwrap();
-            let outline = parsed
-                .outline(Digest([237; 32]), vec![], &CfgSet::guest_default())
-                .unwrap();
-            let body = outline
-                .items
-                .iter()
-                .find(|item| item.def_key.declared_name == "chosen")
-                .unwrap()
-                .body
-                .as_ref()
-                .unwrap();
-            let index = parsed.index_body(body, Default::default()).unwrap();
-            assert_eq!(
-                <BodyIndex as StableEncode>::DOMAIN,
-                "lrr/v5/original-body-structure"
-            );
-            let ranges: Vec<_> = index
-                .nodes()
-                .iter()
-                .filter(|node| node.scalar_range_phase)
-                .collect();
-            assert_eq!(ranges.len(), 1);
-            let range = ranges[0];
-            assert_eq!(range.role, NodeRole::Pattern);
-            assert_eq!(
-                &SOURCE[(body.range.start + range.range.start) as usize
-                    ..(body.range.start + range.range.end) as usize],
-                "0..=4"
-            );
-            assert!(range.operands.is_empty());
-            assert_eq!(index.pc(range.id, Phase::Operand(0)).unwrap().phase, 3);
-            assert!(index.pc(range.id, Phase::Operand(1)).is_ok());
-            assert!(index.pc(range.id, Phase::Operand(2)).is_ok());
-            assert!(index.pc(range.id, Phase::Operand(3)).is_err());
-            for node in index.pattern_locations().filter(|node| node.id != range.id) {
-                assert!(!node.scalar_range_phase);
-                for phase in 0..=2 {
-                    assert!(index.pc(node.id, Phase::Operand(phase)).is_ok());
-                }
-                assert!(index.pc(node.id, Phase::Operand(3)).is_err());
-            }
-            let mut without_marker = index.clone();
-            without_marker.nodes[range.id.0 as usize].scalar_range_phase = false;
-            assert_ne!(index.fingerprint(), without_marker.fingerprint());
-            assert!(without_marker.pc(range.id, Phase::Operand(0)).is_ok());
-            let initializer = outline
-                .items
-                .iter()
-                .find(|item| item.def_key.declared_name == "RET")
-                .unwrap()
-                .body
-                .as_ref()
-                .unwrap();
-            let constant = parsed.index_body(initializer, Default::default()).unwrap();
-            assert!(constant.nodes().iter().all(|node| !node.scalar_range_phase));
-            let return_node = constant
-                .nodes()
-                .iter()
-                .find(|node| node.role == NodeRole::InitializerReturn)
-                .unwrap();
-            assert!(constant.pc(return_node.id, Phase::Operand(0)).is_err());
-        }
     }
     #[test]
     fn official_signed_radix_prefix_marker_is_exact_structural_and_encoded_all_editions() {

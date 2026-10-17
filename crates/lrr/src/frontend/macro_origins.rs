@@ -37,12 +37,12 @@ pub struct ExpansionAncestry {
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
+/// rustc's default crate `recursion_limit` (`#![recursion_limit]` overrides
+/// are not yet read).
+const RECURSION_LIMIT: usize = 128;
 impl ExpansionAncestry {
     /// Cold immutable producer-parent encoding; derived depths are not authority.
     pub(crate) fn semantic_fingerprint(&self) -> Result<Digest, Diagnostic> {
-        if self.metadata_bytes()? > 64 * 1024 * 1024 {
-            return Err(error("expansion ancestry encoding budget"));
-        }
         let mut e = StableEncoder::new("lrr/v1/expansion-ancestry-environment");
         e.u64(self.parents.len() as u64);
         for (key, parent) in &self.parents {
@@ -76,9 +76,6 @@ impl ExpansionAncestry {
             .map_err(|_| error("expansion ancestry allocation"))?;
         let mut cursor = Some(origin);
         while let Some(key) = cursor {
-            if chain.len() >= 256 {
-                return Err(error("expansion ancestry depth limit"));
-            }
             chain.push(Digest(key.0));
             cursor = *self
                 .parents
@@ -107,8 +104,16 @@ impl ExpansionAncestry {
                 .checked_add(1)
                 .ok_or_else(|| error("expansion-order depth overflow"))?,
         };
-        if depth > 256 || self.parents.len() >= 1_000_000 {
-            return Err(error("expansion-order table limit exceeded"));
+        // rustc's macro expansion recursion limit: the crate `recursion_limit`
+        // (default 128; compiler/rustc_expand/src/expand.rs, the
+        // `recursion_limit.value_within_limit(depth)` check).
+        if depth > RECURSION_LIMIT {
+            return Err(Diagnostic::new(
+                "LRR-E-RECURSION-LIMIT",
+                format!(
+                    "recursion limit reached while expanding a macro (depth {depth} > {RECURSION_LIMIT})"
+                ),
+            ));
         }
         self.parents.insert(key, parent);
         self.depths.insert(key, depth);
@@ -143,7 +148,7 @@ impl ExpansionAncestry {
     ) -> Result<bool, Diagnostic> {
         self.validate(descendant)?;
         self.validate(ancestor)?;
-        for _ in 0..=256 {
+        for _ in 0..=self.parents.len() {
             if descendant == ancestor {
                 return Ok(true);
             }
@@ -175,9 +180,6 @@ impl ExpansionAncestry {
         reference: Option<Key>,
         candidates: &[MacroCandidate],
     ) -> Result<MacroSelection, Diagnostic> {
-        if candidates.len() > 1_000_000 {
-            return Err(error("macro candidate limit exceeded"));
-        }
         self.validate(reference)?;
         // Reject malformed inputs even if a nearer binding could hide them.
         let mut seen = BTreeMap::new();

@@ -46,7 +46,7 @@ pub struct ExpansionOutputCache {
 }
 impl ExpansionOutputCache {
     pub fn new(limit: usize) -> Result<Self, Diagnostic> {
-        if limit == 0 || limit > 256 * 1024 * 1024 {
+        if limit == 0 {
             return Err(fault("invalid expansion output cache limit"));
         }
         Ok(Self {
@@ -95,9 +95,6 @@ impl ExpansionOutputCache {
                 .checked_add(charged)
                 .filter(|n| *n <= self.limit)
                 .ok_or_else(|| fault("output cache storage limit"))?;
-            if self.outputs.len() >= 100_000 {
-                return Err(fault("output cache count limit"));
-            }
             let tokens = Arc::new(parsed);
             self.outputs.insert(semantic, Arc::clone(&tokens));
             self.bytes = next;

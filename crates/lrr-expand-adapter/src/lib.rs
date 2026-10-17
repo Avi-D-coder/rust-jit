@@ -2,6 +2,7 @@
 use serde::Serialize;
 pub mod builtin_attributes;
 pub mod builtin_derives;
+pub mod builtin_macros;
 pub mod compile_inputs;
 pub mod concat;
 pub mod declarative;
@@ -16,6 +17,11 @@ use span::{
 };
 
 pub const UPSTREAM_COMMIT: &str = "bcf0514497034e1156f3cc2bb72b99cc9634a949";
+
+/// E-R5-006: rustc imposes no time limit on expansion or procedural macros, so
+/// every wait is bounded only by this unreachable (~136 year) duration, which
+/// keeps `Instant` arithmetic well defined without counting time.
+pub const NO_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(u32::MAX as u64);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BootstrapProbe {

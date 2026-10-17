@@ -13,10 +13,7 @@ use super::{
 pub(super) fn execute(db: &mut Database, key: &SealedNameKey) -> QueryPoll<Provided> {
     // Domain-to-bucket equality is checked on the actual primary/contained
     // certificate below. A Scope parent alone cannot certify an arbitrary bucket.
-    if !matches!(key.seal.domain, SealDomain::Scope { .. })
-        || key.bucket.name.len() > 64 * 1024
-        || key.bucket.scope.owner.is_some()
-    {
+    if !matches!(key.seal.domain, SealDomain::Scope { .. }) || key.bucket.scope.owner.is_some() {
         return Provided::error(
             "LRR-E-QUERY-REQUEST",
             "sealed name query domain/owner differs",

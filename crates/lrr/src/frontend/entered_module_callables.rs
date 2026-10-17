@@ -29,7 +29,6 @@ use crate::{
 };
 use std::sync::Arc;
 
-const LIMIT: usize = 32 * 1024 * 1024;
 const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
 macro_rules! ready {
     ($v:expr) => {
@@ -50,7 +49,6 @@ macro_rules! checked {
 }
 fn add(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_add(b)
-        .filter(|n| *n <= LIMIT)
         .ok_or_else(crate::runtime::arena::resource)
 }
 fn definition_bytes(definition: &DefKey) -> Result<usize, Diagnostic> {

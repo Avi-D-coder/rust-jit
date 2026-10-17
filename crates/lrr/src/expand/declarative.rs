@@ -15,30 +15,24 @@ impl Default for ExpansionLimits {
     fn default() -> Self {
         Self {
             frames: 256,
-            invocations: 100_000,
-            generated_tokens: 2_000_000,
-            single_output_bytes: 32 * 1024 * 1024,
-            cumulative_output_bytes: 256 * 1024 * 1024,
+            invocations: u64::MAX,
+            generated_tokens: u64::MAX,
+            single_output_bytes: u64::MAX,
+            cumulative_output_bytes: u64::MAX,
         }
     }
 }
 impl ExpansionLimits {
     pub fn validate(self) -> Result<Self, Diagnostic> {
-        let max = Self::default();
         if self.frames == 0
-            || self.frames > max.frames
             || self.invocations == 0
-            || self.invocations > max.invocations
             || self.generated_tokens == 0
-            || self.generated_tokens > max.generated_tokens
             || self.single_output_bytes == 0
-            || self.single_output_bytes > max.single_output_bytes
             || self.cumulative_output_bytes == 0
-            || self.cumulative_output_bytes > max.cumulative_output_bytes
         {
             Err(fault(
                 "LRR-E-MACRO-OUTPUT",
-                "expansion limits must be positive reductions of the fixed defaults",
+                "expansion limits must be positive",
             ))
         } else {
             Ok(self)

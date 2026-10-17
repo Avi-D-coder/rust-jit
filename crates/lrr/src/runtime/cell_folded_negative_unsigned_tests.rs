@@ -24,7 +24,7 @@ fn folded_negative_zero_refuses_every_unsigned_target_before_reservation() {
 
 #[test]
 fn failed_folded_zero_binding_preserves_shared_record_owner_and_allocation_budget() {
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let frame = store.new_frame_anchor().unwrap();
     let cell = store
         .new_cell(

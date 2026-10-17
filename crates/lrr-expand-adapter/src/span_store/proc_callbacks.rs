@@ -16,7 +16,7 @@ impl SpanStore {
         } else {
             file
         };
-        if slot >= 2_000_000 || ast.is_some_and(|id| id != ROOT_ERASED_FILE_AST_ID.into_raw()) {
+        if ast.is_some_and(|id| id != ROOT_ERASED_FILE_AST_ID.into_raw()) {
             return Err(fault("unregistered procedural span anchor"));
         }
         for edition in span::Edition::iter() {

@@ -39,7 +39,7 @@ fn actual_type_fixed_point_proves_absence_without_preparing_executable_bodies() 
         prepared.publish(&mut db).unwrap();
         db.begin_expansion_epoch(1).unwrap();
         db.trace.detailed = true;
-        let discovery = prepare(&compiler, &mut db, &view, &sources, &mut snapshot).unwrap();
+        let discovery = prepare(&compiler, &mut db, &view, &sources, &mut snapshot, None).unwrap();
         assert_eq!(
             discovery.key().domain,
             SealDomain::Scope {
@@ -100,7 +100,7 @@ fn type_preparation_rejects_run_and_query_before_cold_capture() {
     db.begin_expansion_epoch(1).unwrap();
     let revision = db.revision();
     db.begin_run().unwrap();
-    match prepare(&compiler, &mut db, &view, &sources, &mut snapshot) {
+    match prepare(&compiler, &mut db, &view, &sources, &mut snapshot, None) {
         Err(error) => assert_eq!(error.code, "LRR-E-INTERNAL-SNAPSHOT"),
         Ok(_) => panic!("active run acquired Type preparation"),
     }
@@ -115,7 +115,7 @@ fn type_preparation_rejects_run_and_query_before_cold_capture() {
     impl Provider for DuringQuery<'_> {
         fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
             let mut snapshot = Arc::clone(&self.snapshot);
-            match prepare(self.compiler, db, self.root, self.sources, &mut snapshot) {
+            match prepare(self.compiler, db, self.root, self.sources, &mut snapshot, None) {
                 Err(error) => QueryPoll::Ready(Err(error)),
                 Ok(_) => panic!("query acquired Type preparation"),
             }

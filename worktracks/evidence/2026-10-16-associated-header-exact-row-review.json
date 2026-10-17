@@ -1,0 +1,33 @@
+{
+  "schema": "lrr/source-review/associated-header-exact-row/v1",
+  "status": "separate held source-only overlay; live consumer unchanged; no Cargo/tests",
+  "baseline": {
+    "path": "crates/lrr/src/traits/header.rs",
+    "sha256": "801c0554253f1018078d35784781bf8c4aebaa3384591e4f4481c2f48af56c17"
+  },
+  "candidate": {
+    "path": "crates/lrr/src/traits/header.rs",
+    "sha256": "af1a01e9c33d6a0f01085ed597b92a2424b659160dc3c6d6181687f7f2c84cad"
+  },
+  "scanner_dependency": "/private/tmp/lrr-common-trait-header-capture-v1/COMPONENT.json",
+  "invariant": "Existing independently retained source-owner join must not ignore newly captured associated owner/name/context/binder/bodyrange/attribute/producer facts. Entire row equality strictly strengthens previous range/header checks. No new selector/catalog/completeness authority.",
+  "actual_owner_join": [
+    "PreparedScopeImplHeaders::prepare fetches exact ScopeDeclarationInventory SealKey through actual pure query",
+    "from_current_inventory uses real ImplHeaderIndex scan_handles; bounded ordered unique active source-entry IDs; binary source row join; rejects duplicate/missing owners",
+    "SourceImplHeader::joined is private checked transport; scope inventory still not ImplCatalog or applicability",
+    "require_current replays actual query/fingerprint for preparation only; not installed-operation guard"
+  ],
+  "cost": "Eq traverses already bounded actual associated row buffers/names/tokens; replaces existing range/header loop. O(actual associated metadata), cold preparation only. No new allocation/index/world scan or runtime source planning.",
+  "all_eight": {
+    "1": "No evaluator changed",
+    "2": "Same actual original/generated scan facts",
+    "3": "No selector/numeric policy added",
+    "4": "Explicit missing context remains exact fact, not admission",
+    "5": "Body range equality only, no executable preparation",
+    "6": "Existing cold source-row join only; no reparse",
+    "7": "Existing relevant inventory query unchanged; no world census",
+    "8": "Borrowed row comparison, no BodyIndex/source-tree copy"
+  },
+  "evidence": "Independent source review; strict equality derived by new AssociatedDeclarationHeader Eq. Existing scanner controls authored but unexecuted. No new tests mirror standard derived equality. Existing inventory range mutation control remains unchanged.",
+  "remaining": "Root decides whether to adopt overlay into separately held trait transport; no integration or M019 completion claim."
+}

@@ -68,12 +68,10 @@ impl ActiveImplProjection {
                 scope_bytes(scope)
                     .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "active impl scope budget"))?,
             )
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "active impl projection budget"))?;
         let scope = scope.clone();
         let metadata_bytes = scope_bytes(&scope)
             .and_then(|n| fixed_bytes.checked_add(n))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "active impl scope budget"))?;
         Ok(Self {
             descriptor: items.record().descriptor().fingerprint(),

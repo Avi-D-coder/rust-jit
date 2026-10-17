@@ -52,9 +52,6 @@ fn push(
     capture: &DefinitionCapture,
     range: SourceRange,
 ) -> Result<(), Diagnostic> {
-    if anchors.len() >= MAX_CALLS {
-        return Err(fault("macro definition anchor count limit"));
-    }
     definition.validate()?;
     if capture.edition != definition.definition_edition {
         return Err(fault("macro definition anchor owning edition differs"));

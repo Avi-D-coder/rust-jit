@@ -1,0 +1,140 @@
+{
+  "status": "SOURCE-ONLY separate review; unhooked prerequisite, no Cargo/runtime validation",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "28a237edb99ac30eac55c23b2b051f69b60fa67cbcfa6c1f1a649fb4d84ed9cb",
+      "bytes": 19107,
+      "before_sha256": "b6886e49baae39af4ad9fa6fb55750dd0b7bca511172ca7c74b67ae40010faf1"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/body_macro_environment.rs",
+      "sha256": "19e73dd17c8f3fbef4d3461a4500b85b58eaffb39647e4f7f91162f9c2197591",
+      "bytes": 8016,
+      "before_sha256": "17ffb56d258d8a00d565b3adf942e0e8a0e6307a1378476e6914ec4c378fb442"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_module_source_preparation.rs",
+      "sha256": "5591b7eedc355fc7c7acd856010a042122606daf0c7c94aa9f56f6dd2a3e8990",
+      "bytes": 8387,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs.rs",
+      "sha256": "dfa2ed4b1216da8c00c98d7b21eefdae0471b1572327a4cb4362320e629d6ed8",
+      "bytes": 17170,
+      "before_sha256": "f4f837e20183d00f2b3b443df2d94b5e60aa0d51deb5c0b0a14f6778d45ee962"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "sha256": "08c6b5c658c02fc77bc7caf4780aa4cf46005833e434150c64ef9834a21970c6",
+      "bytes": 21494,
+      "before_sha256": "169593789e20bc98791f425a502cfc8dcf9e9e112d450d77e92a4f52dcfed44d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_module_macro_environment_tests.rs",
+      "sha256": "cc9e255e39366f6c69d55a1d8ae8261dd13a6f96267e71915ff93e57b81cbd33",
+      "bytes": 4604,
+      "before_sha256": null
+    }
+  ],
+  "witnesses": [
+    {
+      "path": "rustc/rust/tests/ui/numbers-arithmetic/shift.rs",
+      "sha256": "d6457a9cb5e412016ddc8de0687e0267654fdb577410958cf2fa48bd45e64cf4",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "status": "reference-only; not imported or executed"
+    },
+    {
+      "path": "rustc/rust/tests/ui/resolve/resolve-pseudo-shadowing.rs",
+      "sha256": "9b5d169f67d09735ef555900cc8313cafc2d6b5ca976b13dc2525a442d2956c6",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "status": "reference-only; not imported or executed"
+    }
+  ],
+  "correction": "Empty static_assert_exists full main had already completed in V5; post-run SourceLocalPlan observer was unjustified. This component is not that stock runtime fix; root V6 observer repair separate.",
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "RunMachine::prepare_reached_module_source",
+        "Database::prepare_reached_body_plan"
+      ],
+      "finding": "Only ordinary reached source-context admission and same checked publisher/header loop. No expression/assertion evaluator."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "source_body_context::capture",
+        "ReachedModuleBody::require_current"
+      ],
+      "finding": "Exact actual canonical selected module body/header/source/context and actual caller CallExpr; no rendered text body, output executor or synthetic lexical parent."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "CompletedBodyMacroFacts::prepare",
+        "CompletedSourceEnvironment::sealed_body_macro_environment"
+      ],
+      "finding": "Actual completed runtime provider/index/inherited context and owning compiler profile. No method/name/numeric whitelist, no caller-module macro substitution."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "RunMachine::prepare_reached_module_source"
+      ],
+      "finding": "No new generated-only source gate. Existing source.module_source requires actual generated boundary; export missing remains explicit held prerequisite and prevents full module completion. Original/retained source uses same actual capture service."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "SourceDiscovery::prepare_completed_source_environment",
+        "RunMachine::prepare_reached_module_source"
+      ],
+      "finding": "Completion retains required macro declaration/provider facts for all runtime sources, no function/body executable preparation. Callee BodyIndex/capture only supplied at actual reached call. No pattern changes."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "CompletedBodyMacroFacts",
+        "SourceDiscovery::sealed_body_macro_environment",
+        "Database::prepare_reached_body_plan"
+      ],
+      "finding": "Actual per-source PublishedMacroIndex and semantic identity prepared once at completion; both factories share SAME index Arc, no active-run provider reconstruction. Current BodyEnvironment skips recapture. Explicit remaining hold: shared reached DB core still fetches SourceLocalPlan/header loop on each entry as existing Local route; eviction may replan, so prepare-once entry acceptance requires real retention/control before integration."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "CompletedSourceEnvironment::{body_macro_fact,source_for_macro_fact}",
+        "Roots::completed_environment"
+      ],
+      "finding": "Cold bounded deterministic Outline->source ordinal map; runtime direct lookup verifies exact SourceSelection/index publication plus genuine seal. No namespace world scan added at dispatch. Completed macro roots charged through existing published traversal, not a new registry."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "CompletedBodyMacroFacts",
+        "ReachedModuleBody",
+        "Roots::published"
+      ],
+      "finding": "Immutable index/body/source handles shared via Arc; no BodyIndex deep copy or node whole-file scan added. Completed facts own no completed root/envelope, avoiding cycle; envelope owns completed Arc. First reached capture uses existing cold source inventory/root authority. New map/index allocations bounded/accounted, actual source reference-vector capacity checked."
+    }
+  ],
+  "authority": "Private ReachedModuleBody requires actual ordinary_module_contract, current canonical source/header/context/body and exact caller body/index Call node, absence of LocalDeclarationOwner, no local_parent, actual source.module_source and macros.index.require_publication. DB retains coordinator+active-run checks, same checked publication/currentness/quota/retention/header loop. Runtime hook must precede revision-bound call contracts and recheck Q47 after publication.",
+  "costs": "Completion O(S log S + sum actual per-source provider snapshot/identity costs) and existing inherited-context work; map transient+owned checked 32MiB, macro snapshot aggregate 64MiB, source inventory 100k, envelope <=1MiB. Factory O(log S + genuine seal memo currentness) with index Arc sharing. No measured performance claim.",
+  "controls": {
+    "authored_unexecuted": [
+      "actual_completed_module_fact_factory_shares_index_in_active_run_all_editions",
+      "actual_module_envelope_retains_charged_completed_root_without_arc_cycle"
+    ],
+    "coverage": "unchanged official macro-nested_stmt source declaration metadata all4; index Arc identity, no body/Thunk preparation, active factory no provider run/revision mutation, wrong path/cfg/crate, stale epoch, charged completed root lifetime and no cycle.",
+    "missing": [
+      "actual module inner call/cast runtime route all4 and macro wrappers",
+      "reached receipt malformed source/header/scope/body authority cases",
+      "source local plan eviction/repeated entry retention",
+      "generated boundary export authority",
+      "suspension/cleanup and full architecture matrix"
+    ]
+  },
+  "integration": "UNHOOKED; root run.rs module declaration required to compile DB opaque receipt reference; no runtime call hook accepted yet. Root V5/V6 frozen untouched."
+}

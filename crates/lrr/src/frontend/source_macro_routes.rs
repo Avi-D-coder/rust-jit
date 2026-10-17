@@ -108,9 +108,6 @@ pub(crate) fn module_names(names: &[String], edition: u16) -> Result<Vec<MacroNa
 }
 impl SourceMacroRoutes {
     pub(crate) fn owned_copy(&self) -> Result<Self, Diagnostic> {
-        if self.metadata_bytes()? > 64 * 1024 * 1024 {
-            return Err(error("owned macro route metadata limit"));
-        }
         Ok(Self {
             binding_origin: self.binding_origin,
             definitions: self.definitions.clone(),
@@ -140,13 +137,9 @@ impl SourceMacroRoutes {
                     .checked_mul(96)
                     .ok_or_else(|| error("pending body owner metadata overflow"))?,
             )
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| error("pending body owner metadata limit"))?;
         for route in &self.definitions {
             if route.definition.defining_unit == unit {
-                if self.body_owner_pending.len() >= 100_000 {
-                    return Err(error("pending macro body owner count limit"));
-                }
                 self.body_owner_pending
                     .insert(route.definition.identity, producer);
             }
@@ -305,7 +298,7 @@ impl SourceMacroRoutes {
                     item.header.visibility.clone()
                 },
             };
-            if self.definitions.contains(&route) || self.definitions.len() >= 100_000 {
+            if self.definitions.contains(&route) {
                 return Err(error("restored original macro route conflict/count"));
             }
             let route_bytes = route
@@ -323,7 +316,6 @@ impl SourceMacroRoutes {
                 .ok_or_else(|| error("restored original macro route metadata overflow"))?;
             bytes = bytes
                 .checked_add(route_bytes)
-                .filter(|bytes| *bytes <= 64 * 1024 * 1024)
                 .ok_or_else(|| error("restored original macro route metadata limit"))?;
             self.definitions
                 .try_reserve(1)
@@ -381,30 +373,21 @@ impl SourceMacroRoutes {
         if let Some(prepared) = preparation {
             prepared.require_outline(outline)?;
         }
-        if disabled.len() > 100_000
-            || disabled
-                .iter()
-                .try_fold(0usize, |total, scope| {
-                    total
-                        .checked_add(scope.heap_bytes())
-                        .and_then(|n| n.checked_add(64))
-                        .filter(|n| *n <= 32 * 1024 * 1024)
-                })
-                .is_none()
+        if disabled
+            .iter()
+            .try_fold(0usize, |total, scope| {
+                total
+                    .checked_add(scope.heap_bytes())
+                    .and_then(|n| n.checked_add(64))
+            })
+            .is_none()
         {
             return Err(error("disabled import scope metadata budget"));
-        }
-        if dependencies.len() > 100_000 || available.len() > 100_000 {
-            return Err(error("dependency route limit exceeded"));
-        }
-        if outline.imports.len() > 100_000 {
-            return Err(error("source route count exceeded"));
         }
         let mut bytes = 0usize;
         let mut charge = |amount: usize| -> Result<(), Diagnostic> {
             bytes = bytes
                 .checked_add(amount)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("source route metadata budget exceeded"))?;
             Ok(())
         };
@@ -455,9 +438,6 @@ impl SourceMacroRoutes {
                 charge(source_name.len())?;
                 charge(std::mem::size_of::<DefinitionRoute>())?;
             }
-        }
-        if outline.scopes.len() > 100_000 {
-            return Err(error("source module count exceeded"));
         }
         for scope in outline.scopes.keys() {
             charge(scope.heap_bytes())?;
@@ -552,6 +532,14 @@ impl SourceMacroRoutes {
             {
                 return Err(error("duplicate explicit extern crate alias"));
             }
+            // rustc: an `extern crate` item in the crate root (renamed or not)
+            // adds its name to the extern prelude of that crate.
+            if let Some(alias) = &alias
+                && row.scope.module_path.is_empty()
+                && row.scope.owner.is_none()
+            {
+                result.dependencies.entry(alias.clone()).or_insert(provider);
+            }
             result
                 .extern_aliases
                 .try_reserve(1)
@@ -643,6 +631,28 @@ impl SourceMacroRoutes {
                     &item.scope,
                     edition,
                 )?;
+                if result
+                    .module_access
+                    .insert((item.scope.crate_key, path), visibility)
+                    .is_some()
+                {
+                    return Err(error("duplicate module visibility header"));
+                }
+            }
+            // An enum is a module-like namespace of its variants. It is fully
+            // known from its own declaration and binds no macros, so a glob or
+            // path through it never waits for module source preparation.
+            if item.def_key.item_kind == crate::source::manifest::ItemKind::Enum
+                && item.scope.owner.is_none()
+            {
+                let mut path = module_names(&item.scope.module_path, edition)?;
+                path.push(semantic(&item.def_key.declared_name, edition)?);
+                let visibility = crate::syntax::visibility::VisibilityScope::for_declaration(
+                    &item.header.visibility,
+                    &item.scope,
+                    edition,
+                )?;
+                result.modules.insert((item.scope.crate_key, path.clone()));
                 if result
                     .module_access
                     .insert((item.scope.crate_key, path), visibility)
@@ -900,6 +910,28 @@ impl SourceMacroRoutes {
     pub fn definitions(&self) -> &[DefinitionRoute] {
         &self.definitions
     }
+    /// Whether two route catalogues carry exactly the same facts.
+    pub(crate) fn same_routes(&self, other: &Self) -> bool {
+        self.binding_origin == other.binding_origin
+            && self.definitions == other.definitions
+            && self.imports == other.imports
+            && self.deferred == other.deferred
+            && self.module_access == other.module_access
+            && self.edition == other.edition
+            && self.extern_aliases.len() == other.extern_aliases.len()
+            && self
+                .extern_aliases
+                .iter()
+                .zip(&other.extern_aliases)
+                .all(|(a, b)| a.fingerprint() == b.fingerprint())
+            && self.export_pending == other.export_pending
+            && self.body_owner_pending == other.body_owner_pending
+            && self.modules == other.modules
+            && self.dependencies == other.dependencies
+            && self.source_imports == other.source_imports
+            && self.textual_import_definitions == other.textual_import_definitions
+            && self.implicit_disabled == other.implicit_disabled
+    }
     pub fn imports(&self) -> &[ImportRoute] {
         &self.imports
     }
@@ -933,7 +965,6 @@ impl SourceMacroRoutes {
         let mut charge = |bytes: Option<usize>| -> Result<(), Diagnostic> {
             n = n
                 .checked_add(bytes.ok_or_else(|| error("macro route metadata overflow"))?)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| error("macro route metadata budget exceeded"))?;
             Ok(())
         };
@@ -998,10 +1029,50 @@ impl SourceMacroRoutes {
         Ok(n)
     }
     /// Resolve this exact import facet, rather than any definition sharing its alias.
+    /// Each source import's first import route, by import identity.
+    pub(crate) fn import_route_index(
+        &self,
+    ) -> std::collections::HashMap<Digest, &ImportRoute, std::hash::BuildHasherDefault<super::names::DigestHasher>>
+    {
+        let mut index = std::collections::HashMap::default();
+        for route in &self.imports {
+            index
+                .entry(super::names::NameNamespaces::import_identity(&route.source))
+                .or_insert(route);
+        }
+        index
+    }
+    /// `import_definition` with a prebuilt `import_route_index`.
+    pub(crate) fn import_definition_in(
+        &self,
+        import: &SourceImport,
+        names: &MacroNamespaces,
+        index: &std::collections::HashMap<
+            Digest,
+            &ImportRoute,
+            std::hash::BuildHasherDefault<super::names::DigestHasher>,
+        >,
+    ) -> Result<Option<MacroDefinition>, Diagnostic> {
+        let route = index
+            .get(&super::names::NameNamespaces::import_identity(import))
+            .copied()
+            .filter(|route| route.source == *import)
+            .or_else(|| self.imports.iter().find(|route| route.source == *import));
+        self.import_definition_with(import, names, route)
+    }
     pub(crate) fn import_definition(
         &self,
         import: &SourceImport,
         names: &MacroNamespaces,
+    ) -> Result<Option<MacroDefinition>, Diagnostic> {
+        let route = self.imports.iter().find(|route| route.source == *import);
+        self.import_definition_with(import, names, route)
+    }
+    fn import_definition_with(
+        &self,
+        import: &SourceImport,
+        names: &MacroNamespaces,
+        route: Option<&ImportRoute>,
     ) -> Result<Option<MacroDefinition>, Diagnostic> {
         use super::macro_names::PathLookup;
         let id = super::names::NameNamespaces::import_identity(import);
@@ -1023,7 +1094,7 @@ impl SourceMacroRoutes {
                 _ => None,
             });
         }
-        let Some(route) = self.imports.iter().find(|route| route.source == *import) else {
+        let Some(route) = route else {
             return Ok(None);
         };
         let mut reference_scope = import.scope.clone();
@@ -1062,9 +1133,6 @@ impl SourceMacroRoutes {
         catalogs: &[std::sync::Arc<Self>],
         imports: &[super::compile_input_catalog::CompilerInjectedImport],
     ) -> Result<ModuleGraphPreparation, Diagnostic> {
-        if catalogs.len() > 100_000 {
-            return Err(error("source catalog count exceeded"));
-        }
         let mut borrowed = Vec::new();
         borrowed
             .try_reserve_exact(catalogs.len())
@@ -1076,9 +1144,6 @@ impl SourceMacroRoutes {
     pub(crate) fn discovery_graph(
         catalogs: &[std::sync::Arc<Self>],
     ) -> Result<MacroNamespaces, Diagnostic> {
-        if catalogs.len() > 100_000 {
-            return Err(error("source catalog count exceeded"));
-        }
         let mut borrowed = Vec::new();
         borrowed
             .try_reserve_exact(catalogs.len())
@@ -1152,9 +1217,6 @@ fn target_path(
             }
             ImportSegment::Name(name) => {
                 named = true;
-                if names.len() >= 256 {
-                    return Err(error("macro route depth exceeded"));
-                }
                 names
                     .try_reserve(1)
                     .map_err(|_| error("macro route allocation failed"))?;

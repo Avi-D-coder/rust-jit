@@ -103,7 +103,6 @@ impl MacroExportModuleRequest {
                     .request
                     .depth
                     .checked_add(1)
-                    .filter(|depth| *depth <= 256)
                     .ok_or_else(|| fault("macro-export module ancestry depth limit"))?,
                 chain.capture.record().directory(),
             )
@@ -124,9 +123,10 @@ impl MacroExportModuleRequest {
             .root(authorities.unique_source_root()?)
             .ok_or_else(|| fault("macro-export module source authority is absent"))?;
         if authorities.unit() != parent.unit()
-            || root.path != parent.package_root()
+            || root.path != parent.source_root()
             || root.kind != IncludeRootKind::Source
             || parent.package_root() != child.package_root()
+            || parent.source_root() != child.source_root()
         {
             return Err(fault(
                 "macro-export module authority differs from configured source root",
@@ -161,7 +161,6 @@ impl MacroExportModuleRequest {
             .checked_add(2 * std::mem::size_of::<usize>())
             .and_then(|n| n.checked_add(declaration.retained_metadata_bytes().ok()?))
             .and_then(|n| n.checked_add(request.metadata_bytes().ok()?))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("macro-export module request metadata limit"))?;
         let admission_bytes = bytes
             .checked_add(parent.metadata_bytes())
@@ -176,7 +175,6 @@ impl MacroExportModuleRequest {
                         .map_or(0, |chain| chain.admission_bytes),
                 )
             })
-            .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(|| fault("macro-export module ancestry retained admission limit"))?;
         let mut e = StableEncoder::new("lrr/v1/macro-export-module-source-request");
         e.digest(parent.identity());
@@ -326,13 +324,11 @@ impl MacroExportModuleRequest {
                     )
                 })
                 .and_then(|n| n.checked_add(capture.input_root().estimated_bytes().ok()?))
-                .filter(|n| *n <= 320 * 1024 * 1024)
                 .ok_or_else(|| fault("macro-export adopted module retained admission limit"))?;
             for blob in capture.input_root().source_blobs() {
                 admission_bytes = admission_bytes
                     .checked_add(blob.bytes().len())
                     .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
-                    .filter(|n| *n <= 320 * 1024 * 1024)
                     .ok_or_else(|| fault("macro-export adopted source buffer admission limit"))?;
             }
             Ok(Arc::new(MacroExportModuleAdoption {
@@ -408,7 +404,6 @@ impl MacroExportModuleAdoption {
         while let Some(module) = current {
             depth = depth
                 .checked_add(1)
-                .filter(|depth| *depth <= 256)
                 .ok_or_else(|| fault("macro-export discovery ancestry depth limit"))?;
             for (facet, role) in [
                 (&module.request.parent, &module.request.parent_role),

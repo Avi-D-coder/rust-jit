@@ -60,7 +60,6 @@ impl CapturedModuleSourceView {
             .and_then(|n| n.checked_add(caller.selection().metadata_bytes().ok()?))
             .and_then(|n| n.checked_add(invocation_base.source.path.capacity()))
             .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(fail)?;
         Ok(Self {
             capture,

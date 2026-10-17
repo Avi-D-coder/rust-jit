@@ -113,19 +113,14 @@ fn count_tokens(
             "expansion token count or depth limit".into(),
         )
     };
-    if depth > 256 {
-        return Err(limit());
-    }
     let mut count = 0usize;
     for node in nodes {
         count = count
             .checked_add(1)
-            .filter(|n| *n <= 2_000_000)
             .ok_or_else(limit)?;
         if let crate::syntax::token_wire::TokenTree::Group { children, .. } = node {
             count = count
                 .checked_add(count_tokens(children, depth + 1)?)
-                .filter(|n| *n <= 2_000_000)
                 .ok_or_else(limit)?;
         }
     }

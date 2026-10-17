@@ -64,7 +64,6 @@ impl ModuleCaptureRequest {
         {
             bytes = bytes
                 .checked_add(part.capacity())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "module declaration metadata limit"))?;
         }
         for candidate in &self.candidates {
@@ -72,7 +71,6 @@ impl ModuleCaptureRequest {
                 .checked_add(candidate.metadata_bytes().ok_or_else(|| {
                     fault("LRR-E-SOURCE-LIMIT", "module candidate metadata overflow")
                 })?)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "module request metadata limit"))?;
         }
         Ok(bytes)
@@ -121,22 +119,6 @@ impl IncludeAuthorities {
         origin: Key,
         layout: &crate::syntax::modules::InlineModuleLayout,
     ) -> Result<ModuleCaptureRequest, Diagnostic> {
-        if directory.as_os_str().len() > 64 * 1024
-            || module
-                .path_override
-                .as_ref()
-                .is_some_and(|p| p.len() > 64 * 1024)
-            || module.module_path.len() > 256
-            || module.directory.len() > 256
-            || module.name.len() > 64 * 1024
-            || module
-                .module_path
-                .iter()
-                .chain(&module.directory)
-                .any(|s| s.len() > 64 * 1024)
-        {
-            return Err(fault("LRR-E-SOURCE-LIMIT", "module request metadata limit"));
-        }
         let root = self
             .root(from.root)
             .ok_or_else(|| fault("LRR-E-SOURCE-PATH", "module source authority absent"))?;
@@ -145,9 +127,7 @@ impl IncludeAuthorities {
             let count = layout
                 .directory
                 .len()
-                .checked_add(effective.directory.len())
-                .filter(|n| *n <= 256)
-                .ok_or_else(|| {
+                .checked_add(effective.directory.len())                .ok_or_else(|| {
                     fault(
                         "LRR-E-SOURCE-LIMIT",
                         "combined inline module directory depth limit",
@@ -160,7 +140,6 @@ impl IncludeAuthorities {
                 .try_fold(0usize, |n, part| {
                     n.checked_add(part.len()).and_then(|n| n.checked_add(64))
                 })
-                .filter(|n| *n <= 64 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-SOURCE-LIMIT",
@@ -306,7 +285,6 @@ impl CapturedModule {
                     .checked_add(record.metadata_bytes().ok_or_else(|| {
                         fault("LRR-E-SOURCE-LIMIT", "module source metadata overflow")
                     })?)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "captured module metadata limit"))?;
             }
         }

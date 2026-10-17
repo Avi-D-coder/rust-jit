@@ -120,17 +120,6 @@ impl Database {
         let Some((key, value)) = staged else {
             return Ok(());
         };
-        let extra = input_metadata_bytes(&key, &value)?;
-        let usage = self.cache_usage()?;
-        let budgets = self.run_budgets.unwrap_or_default();
-        if account_add(usage.memo_bytes, extra)? > budgets.query_bytes
-            || usage.source_input_bytes > budgets.source_input_bytes
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "ordinary local body publication exceeds cache cap",
-            ));
-        }
         let revision = self.revision.checked_add(1).ok_or_else(|| {
             fault(
                 "LRR-E-ID-EXHAUSTED",

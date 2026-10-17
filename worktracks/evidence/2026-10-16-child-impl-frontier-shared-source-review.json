@@ -1,0 +1,73 @@
+{
+  "schema": "lrr/source-review/child-impl-frontier/v2",
+  "status": "source-only/uncompiled/unexecuted candidate, shared completion prerequisite required",
+  "owned": {
+    "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+    "sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242",
+    "bytes": 8043
+  },
+  "historical_hold": {
+    "packet": "/private/tmp/lrr-child-impl-frontier-v1/COMPONENT.json",
+    "source": "09486c90c720533046cc653132dc980fd435ea59f0ec22ca40a5485c46b86816",
+    "reason": "Parent held repeated per-waiter syntax_outputs/index reconstruction from integration; no tests or acceptance. Preserve historical source, never overlay it after V2."
+  },
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "sha256": "d5b059acb26d9141682abbb7ec1d55b97a25760876f4714ce99c0cd84ef57746"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_projection.rs",
+      "sha256": "c416dd7857fcdd690cab01f3aa5a79f2a90ad2146ce3b6b9603207fe65f96a56"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "b37f4ee3da322ab4bfdcfc8fa01e6a59093adc4ef1978f1e43d59dc1b9e67241"
+    }
+  ],
+  "api": "prepare(ancestor_job,childItemsArc,parentItemsArc,projectionArc,scope,cfg,epoch); ancestor_job/scope/cfg_fingerprint/fingerprint/metadata_bytes; resolve(&AncestorImplCompletion,epoch)->Vec<canonical headers>",
+  "shared_preparation_repair": [
+    "AncestorImplCompletion constructed once from actual completedArc/job/epoch/cfg by root cache. Root must compare cached completedArc to actual nested_completed Arc on every use.",
+    "Child resolves borrowed completion.require_owner constant tuple; outputs/scans/root_index/unique_output/contains_header use once-prepared immutable indexes. No recursive syntax_outputs/reindex/rootjob/source/inventory replay per child.",
+    "Shared cache constructor owns root source/producer/Items/epoch/cfg and exact existing item-declaration-job validation. Child authority remains exact output+actual parent chain, never mere membership."
+  ],
+  "authority": [
+    "Prepare actual child/parent GeneratedItems epoch and Items admission; actual nonempty ActiveImplProjection binds child record/cfg/scope/epoch. Parent Arc is actual root callback parent catalog input, not inferred from completed listing.",
+    "Cached stable waiter fingerprint uses lrr/v1/generated-child-impl-frontier over ancestorjob, actual child descriptor, actual parent descriptor, projection fingerprint, actual scope, cfg fingerprint and epoch. Getter returns retained Digest, no perresolve projection reencoding.",
+    "Resolve current epoch + completion.require_owner, exact unique same_record child selected by prepared record index, child cannot be actual root, actual child scope/cfg/epoch match.",
+    "Walk immutable scan index up to256. First edge MUST match actual retained parentItems record.same_record and epoch. Each parent_inventory matches unique actual scan and parent_invocation matches actual producer identity/grammar/scope; every intermediate cfg/epoch matches; terminate at real prepared root.",
+    "ONE item_impl_headers_from_projection joins real active rawitem spans to existing admitted canonical header IDs. Nonempty result and every header must occur in prepared actual completed inventory. Only then return IDs for root to release frontier.",
+    "No fake SourceSelection, namespace/completeness seal, predicate engine, body/type query, parser replay or source currentness grant. Root actual output/current source discovery guards remain required."
+  ],
+  "retention_and_costs": {
+    "storage": "Self includes child/parent/projection Arc handles and cached digests; bounded cfg+scope+projection metadata charged conservatively. Root must retain once-charged actual child/parent Items payload through waiter lifetime even if catalogs teardown. No deep body/index/parser clones.",
+    "prepare": "Actual bounded owner checks, cached cfg/fingerprint encoding once; projection Arc/metadata immutable. Stable encoding explicit, field order named above.",
+    "shared_ancestor": "One actual completed-subtree listing, source validation, output/scan/record/header index construction in peer helper. Account Arc cache and actual index vector capacities before parent publication; perancestor cache keyed exact decljob with actual Completed Arc pointer guard.",
+    "per_child": "O(log record index + same-record candidatebucket + D log scans + parent producer scans + common active impl join + H log inventory) plus unique record/cfg owner comparison. D<=256. No fullsubtree listing/sort/headerinventory traversal. No performance measurement or speed claim.",
+    "temporary": "Bounded visited256 + checked canonical vector bytes<=64MiB; shared canonical pairvector existing checked metadata. No global namespace scan."
+  },
+  "all_eight": {
+    "1": "No assertion/expression evaluator; MA001/7/8 runtime debt held.",
+    "2": "Real ordinary generated syntax, no scalar/break executor; MA004/5 held.",
+    "3": "No method/numeric/token-name policy; MA003/6 held.",
+    "4": "Actual child+selected parent+root source chain; missing real proof refuses, not original-source substitution.",
+    "5": "Only completed declaration headers; no executable/pattern/typecheck work, MA002 unchanged.",
+    "6": "Specific V1 repeated subtree/index defect removed by shared retained completion prepared once per actual ancestor; child canonical kernel called once.",
+    "7": "Exact captured actual subtree+workjob, no fullworld census or runtime unrelated invalidation.",
+    "8": "Borrowed immutable indexes/Arc handles, no BodyIndex/tree deep copy or repeated wholefile node search."
+  },
+  "source_controls_reviewed_unexecuted": [
+    "Wrong epoch/cfg/actual child/selected parent/scope/projection refuses",
+    "Wrong ancestorjob/completed Arc must refuse via shared constructor/root cache guard",
+    "Missing/ambiguous/cyclic/mismatched parent producer chain refuses",
+    "Empty or inventory-absent active canonical headers refuse",
+    "Sibling waiters share ONE prepared ancestor index (root cache integration required)",
+    "Actual stock wrapper runtime4editions/cold Foo body/exactonce counters remain validator work"
+  ],
+  "independent_review": "Initial V1 authority read found no concrete defect but repeated preparation was held. V2 plus explicit parent binding rereview requested from validator/peer; final evidence must pin V2 exact source.",
+  "execution": "rustfmt only. No Cargo/compiler/tests/guest/native by worker. No wrapper/fullfixture/catalog/milestone acceptance."
+}

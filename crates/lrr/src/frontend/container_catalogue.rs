@@ -70,7 +70,6 @@ impl<'a> ContainerCatalogue<'a> {
                 bytes = bytes
                     .checked_add(token.text.len())
                     .and_then(|n| n.checked_add(std::mem::size_of_val(token)))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("container context metadata exceeded"))?;
                 context
                     .try_reserve(1)

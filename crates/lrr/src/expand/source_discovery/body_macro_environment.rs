@@ -119,7 +119,6 @@ impl CompletedBodyMacroFacts {
                         .checked_sub(std::mem::size_of::<PreparedSourceView>())?,
                 )
             })
-            .filter(|n| *n <= 1024 * 1024)
             .ok_or_else(|| fault("body environment receipt metadata limit"))?;
         Ok(Self {
             index: Arc::new(index),
@@ -170,7 +169,6 @@ impl CompletedSourceEnvironment {
             let bytes = fact
                 .receipt_bytes
                 .checked_add(self.dependency().heap_bytes())
-                .filter(|n| *n <= 1024 * 1024)
                 .ok_or_else(|| fault("body environment receipt metadata limit"))?;
             Ok(Arc::new(SealedBodyMacroEnvironment {
                 source: source.share(),

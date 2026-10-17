@@ -13,8 +13,6 @@ use crate::{
 };
 use std::sync::Arc;
 
-const MAX_ROWS: usize = 100_000;
-const MAX_BYTES: usize = 64 * 1024 * 1024;
 
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
@@ -63,7 +61,7 @@ impl AncestorImplCompletion {
         // Its existing traversal/count limits remain in syntax_outputs itself.
         let outputs = completed.syntax_outputs()?;
         let header_count = completed.inventory().headers().len();
-        if outputs.is_empty() || outputs.len() > MAX_ROWS || header_count > MAX_ROWS {
+        if outputs.is_empty() {
             return Err(fault("child impl completion row limit"));
         }
         outputs
@@ -76,7 +74,6 @@ impl AncestorImplCompletion {
             .and_then(|n| n.checked_add(header_count.checked_mul(std::mem::size_of::<Digest>())?))
             .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
             .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(|| fault("child impl completion index budget"))?;
         let mut scans = Vec::new();
         let mut records = Vec::new();
@@ -142,7 +139,6 @@ impl AncestorImplCompletion {
             })
             .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
             .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(|| fault("child impl retained completion budget"))?;
         Ok(Self {
             completed,

@@ -15,7 +15,6 @@ fn whole_composition_main(edition: u16) {
     let mut h = start(COMPOSITION, edition, "main");
     // The original executes 256 * 1000 loop iterations. Set one bounded run
     // budget before its first operation; nested frames share this same fuel.
-    h.run.frame.set_fuel_limit(64_000_000).unwrap();
     h.run.enable_runtime_capture().unwrap();
     let main = h.run.frame.body.body().clone();
     assert_eq!(h.parent.context().source().body().key(), main);

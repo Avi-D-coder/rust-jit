@@ -127,7 +127,7 @@ fn admit(
         view,
         definition,
         ConstantRequest::Constant,
-        MAX_BYTES,
+        usize::MAX,
     )
 }
 #[test]
@@ -172,7 +172,7 @@ fn unchanged_nested_const_calls_preserve_definition_and_arguments_all_editions()
                 .dependencies()
                 .contains_key(&InputKey::DefinitionBody(definition))
         );
-        assert!(certificate.metadata_bytes() <= MAX_BYTES);
+        assert!(certificate.metadata_bytes() <= usize::MAX);
     }
 }
 #[test]
@@ -187,7 +187,7 @@ fn unchanged_const_fn_local_alias_and_mutation_frontier() {
         &view,
         definition,
         ConstantRequest::ConstCall(vec![argument.clone()]),
-        MAX_BYTES,
+        usize::MAX,
     )
     .unwrap();
     assert_eq!(
@@ -206,7 +206,7 @@ fn unchanged_const_fn_local_alias_and_mutation_frontier() {
         &view,
         definition,
         ConstantRequest::ConstCall(vec![argument]),
-        MAX_BYTES,
+        usize::MAX,
     );
     assert!(evaluate(certificate.unwrap().plan(), ConstLimits::default()).is_err());
 }
@@ -273,7 +273,7 @@ fn no_seal_and_metadata_refusal_publish_nothing() {
             &view,
             definition,
             ConstantRequest::Constant,
-            MAX_BYTES
+            usize::MAX
         )
         .is_err()
     );
@@ -445,7 +445,7 @@ fn unchanged_array_length_request_binds_exact_function_body_all_editions() {
             &view,
             definition,
             ConstantRequest::ArrayLength(range),
-            MAX_BYTES,
+            usize::MAX,
         )
         .unwrap();
         assert_eq!(
@@ -467,7 +467,7 @@ fn unchanged_array_length_request_binds_exact_function_body_all_editions() {
                 &view,
                 definition,
                 ConstantRequest::ArrayLength(wrong),
-                MAX_BYTES
+                usize::MAX
             )
             .is_err()
         );

@@ -1,0 +1,64 @@
+{
+  "kind": "common-entered-local-body-source",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "47ab15c7d91644b383fa7c232882a3b06a829413dc7ec3fb15a4b03534f4bddc",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "bytes": 49059,
+      "sha256": "b79bd262f6993c5136c756b71c4673f6dfcfecabd9a4e6ab6ecaa36fcae31735"
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_body_context.rs",
+      "bytes": 8085,
+      "sha256": "1968e7d7a3c6b5d1818d2dbc361391626656b9f6392e2b74387f2cfe62d1a518"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "bytes": 32009,
+      "sha256": "488fde3d693bd0c8ddfd5f3340e5c498931831c95d4afb86f2fbf9e160e176b4"
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_type_modules.rs",
+      "bytes": 11400,
+      "sha256": "365d808e89fec1925e1cb298f7a2a8acb6afa2a804030144adce779cada313f9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "bytes": 113821,
+      "sha256": "039d2830c66722e691d308bf7efa470328df187491f22338ee6637368524192c"
+    },
+    {
+      "path": "crates/lrr/src/db/lexical_inputs_tests.rs",
+      "bytes": 19403,
+      "sha256": "4d37390fdff166097c8bfa3a0ce18c00b4e20699086be2ccd05bb2c80feb9e39"
+    }
+  ],
+  "dependencies": [
+    {
+      "component": "common-lexical-header-admission-v1",
+      "manifest_sha256": "898212dc1ea749f77882fd58e0900ae6937673ead7cbc935047828de103cd069"
+    },
+    {
+      "component": "common-local-declaration-owner-v1",
+      "manifest_sha256": "854bf5b0f9122cf6096920a17731204262f64702f6405e1459d7f7a195cbf20b"
+    }
+  ],
+  "required_root_joins": [
+    "Actual private reached no-I/O BodyEnvironment publication/call entry before contracts revision capture",
+    "Existing accounting admitted(local_parent) traversal and actual memo-owner counts",
+    "BodyEnvironment metadata exclusion from legacy lexical census (root-owned, live)"
+  ],
+  "controls": [
+    "entered_local_function_source_uses_actual_parent_plan_and_shared_nested_scope_all_editions",
+    "entered_local_source_rejects_wrong_entry_owner_and_revoked_parent_without_publication"
+  ],
+  "handoff": "worktracks/04-calls-source-views/common-entered-local-body-handoff.md",
+  "holds": [
+    "All new Rust controls uncompiled/unexecuted",
+    "No child interpreter operation/full fixture pass claimed",
+    "Retained/generated/wrapper selected-local authority unavailable until ordinary lexical resolver joins",
+    "Nested signature Type authority and recursive local caller outline gate remain",
+    "Root/peer retention and engine boundary not in this source component"
+  ]
+}

@@ -189,7 +189,6 @@ impl ParsedFile {
         while let Some((node, mut scope, mut depth)) = stack.pop() {
             visited = visited
                 .checked_add(1)
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("entered macro syntax limit exceeded"))?;
             let conditional = if let Some(expression) = ast::IfExpr::cast(node.clone()) {
                 expression.condition().zip(expression.then_branch())
@@ -210,9 +209,7 @@ impl ParsedFile {
                     .any(|clause| matches!(clause, ast::Expr::LetExpr(_)))
                 {
                     let nested_depth = depth
-                        .checked_add(1)
-                        .filter(|depth| *depth <= 256)
-                        .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                        .checked_add(1)                        .ok_or_else(|| error("body macro scope depth exceeded"))?;
                     let ordinal = u32::try_from(facts.scopes.len())
                         .map_err(|_| error("body macro scope ordinal overflow"))?;
                     let range = SourceRange::checked(
@@ -290,9 +287,7 @@ impl ParsedFile {
                     return Err(error("match pattern/body boundary missing"));
                 }
                 depth = depth
-                    .checked_add(1)
-                    .filter(|n| *n <= 256)
-                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                    .checked_add(1)                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
                 let ordinal = u32::try_from(facts.scopes.len())
                     .map_err(|_| error("body macro scope ordinal overflow"))?;
                 facts
@@ -323,9 +318,38 @@ impl ParsedFile {
                     visible_from,
                 )?;
             }
-            if ast::ClosureExpr::can_cast(node.kind()) {
-                opaque(&mut facts, range(node.text_range()))?;
-                continue;
+            // A closure's parameters are bindings visible in its body, which
+            // its own call frame executes as ordinary body syntax.
+            if let Some(closure) = ast::ClosureExpr::cast(node.clone()) {
+                depth = depth
+                    .checked_add(1)                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                let ordinal = u32::try_from(facts.scopes.len())
+                    .map_err(|_| error("body macro scope ordinal overflow"))?;
+                facts
+                    .scopes
+                    .try_reserve(1)
+                    .map_err(|_| error("body macro scope allocation failed"))?;
+                facts.scopes.push(BodyMacroScope {
+                    ordinal,
+                    parent: Some(scope),
+                    range: range(node.text_range()),
+                });
+                scope = ordinal;
+                if let Some(parameters) = closure.param_list() {
+                    let visible_from = u64::from(range(parameters.syntax().text_range()).end);
+                    for parameter in parameters.params() {
+                        if let Some(pattern) = parameter.pat() {
+                            binding_budget.collect(
+                                &pattern,
+                                body,
+                                scope,
+                                visible_from,
+                                super::local_bindings::BindingForm::Let,
+                                &mut facts.bindings,
+                            )?;
+                        }
+                    }
+                }
             }
             if let Some(expression) = ast::MacroExpr::cast(node.clone()) {
                 let call = expression
@@ -449,9 +473,6 @@ impl ParsedFile {
                             },
                         });
                     }
-                    if facts.items.len() >= 100_000 {
-                        return Err(error("body item header count exceeded"));
-                    }
                     facts
                         .items
                         .try_reserve(1)
@@ -478,7 +499,6 @@ impl ParsedFile {
                         .imports
                         .len()
                         .checked_add(rows.len())
-                        .filter(|n| *n <= 100_000)
                         .ok_or_else(|| error("body import leaf limit exceeded"))?;
                     facts
                         .imports
@@ -515,9 +535,7 @@ impl ParsedFile {
             }
             if ast::BlockExpr::can_cast(node.kind()) {
                 depth = depth
-                    .checked_add(1)
-                    .filter(|n| *n <= 256)
-                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                    .checked_add(1)                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
                 let ordinal = u32::try_from(facts.scopes.len())
                     .map_err(|_| error("body macro scope ordinal overflow"))?;
                 facts
@@ -570,7 +588,6 @@ impl ParsedFile {
             stack
                 .len()
                 .checked_add(children.len())
-                .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("body macro traversal frontier limit exceeded"))?;
             stack
                 .try_reserve(children.len())
@@ -594,7 +611,6 @@ fn pattern_producers(
     while let Some(pattern_node) = pattern_nodes.pop() {
         visited_patterns = visited_patterns
             .checked_add(1)
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| error("binding pattern producer scan limit exceeded"))?;
         if ast::Expr::can_cast(pattern_node.kind())
             || ast::Item::can_cast(pattern_node.kind())
@@ -625,7 +641,6 @@ fn pattern_producers(
         pattern_nodes
             .len()
             .checked_add(rows.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| error("binding pattern producer frontier exceeded"))?;
         pattern_nodes
             .try_reserve(rows.len())
@@ -687,9 +702,6 @@ fn children(
 ) -> Result<Vec<(SyntaxNode, u32, usize)>, Diagnostic> {
     let mut children = Vec::new();
     for node in node.children() {
-        if children.len() >= 1_000_000 {
-            return Err(error("body macro child limit exceeded"));
-        }
         children
             .try_reserve(1)
             .map_err(|_| error("body macro child allocation failed"))?;
@@ -713,9 +725,6 @@ fn add_invocation(
     node: &SyntaxNode,
     attribute_input: Option<Digest>,
 ) -> Result<(), Diagnostic> {
-    if facts.invocations.len() >= 100_000 {
-        return Err(error("entered macro invocation count exceeded"));
-    }
     facts
         .invocations
         .try_reserve(1)
@@ -778,7 +787,6 @@ impl EnteredMacroFacts {
         fn add(bytes: &mut usize, value: usize) -> Result<(), Diagnostic> {
             *bytes = bytes
                 .checked_add(value)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("entered lexical plan metadata limit"))?;
             Ok(())
         }

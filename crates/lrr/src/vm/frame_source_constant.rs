@@ -67,7 +67,7 @@ impl Frame {
             self.prepare_constant_publication(proof, constant.value(), constant.wire(), store)?;
         let publication = self.begin_constant_publication_chunks(prepared, store, |frame| {
             // The same entry/counter sequence as normal VM dispatch, once only.
-            frame.charge_fuel()?;
+            frame.count_step();
             frame.counters.operations_started = frame
                 .counters
                 .operations_started

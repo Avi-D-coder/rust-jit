@@ -167,26 +167,15 @@ fn lookup_name_inner(
             "primitive result requires its exact current generated Type namespace",
         )
     };
-    let Some((InputValue::GeneratedSyntax(unit), _)) =
-        db.published_input(&InputKey::GeneratedSyntax(parse.content))
-    else {
-        return Err(missing());
-    };
+    let rows = GeneratedRows::current(db, signature.definition, parse)?.ok_or_else(missing)?;
+    let unit = rows.unit();
+    let parse = rows.unit_parse();
     let Some(definition) = unit.definitions.get(&signature.definition) else {
         return Err(missing());
     };
-    let Some((InputValue::DeclarationContext(context), _)) =
-        db.published_input(&InputKey::DeclarationContext(signature.definition))
-    else {
-        return Err(missing());
-    };
-    let Some((InputValue::DefinitionBody(body), _)) =
-        db.published_input(&InputKey::DefinitionBody(signature.definition))
-    else {
-        return Err(missing());
-    };
+    let context = rows.context();
+    let body = rows.body().ok_or_else(missing)?;
     if unit.key != *parse
-        || !matches!(db.published_input(&InputKey::DefinitionSource(signature.definition)), Some((InputValue::DefinitionSource(current), _)) if current == parse)
         || signature.header.profile != unit.key.profile
         || context.scope != signature.scope
         || signature.scope.owner.is_some()
@@ -197,7 +186,7 @@ fn lookup_name_inner(
             .scope
             .module_path
             .starts_with(&unit.scope.module_path)
-        || !matches!(db.published_input(&InputKey::DefinitionHeader(signature.definition)), Some((InputValue::DefinitionHeader(header), _)) if header == &signature.header)
+        || !rows.header_matches(&signature.header)
         || !unit.items.items().iter().any(|header| {
             header.key.fingerprint() == signature.definition
                 && header.start == context.range.start
@@ -224,11 +213,7 @@ fn lookup_name_inner(
                     .checked_mul(128)
                     .and_then(|m| n.checked_add(m))
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
-        if unit.metadata_bytes()? > 32 * 1024 * 1024 {
-            return Err(crate::runtime::arena::resource());
-        }
         let parsed = crate::syntax::parse::ParsedFile::from_generated_items(&unit.items)?;
         if parsed.estimated_bytes() > transient {
             return Err(crate::runtime::arena::resource());
@@ -245,6 +230,10 @@ fn lookup_name_inner(
         }
         drop(parsed);
     }
+    let selected = match reference.map(ClosedReferenceTypeSyntax::target_range) {
+        Some(range) => Some(rows.unit_range(range).ok_or_else(missing)?),
+        None => None,
+    };
     lookup_declaration_inner(
         db,
         super::super::type_name_namespace::SourceTypeOwner {
@@ -252,10 +241,109 @@ fn lookup_name_inner(
             scope: &signature.scope,
             header: &signature.header,
         },
-        parse,
+        rows.current_parse(),
         written_name,
-        reference.map(ClosedReferenceTypeSyntax::target_range),
+        selected,
     )
+}
+
+/// The generated declaration rows Type admission reads: the unit's own
+/// published rows, or — when a retained admission of that unit is the current
+/// locator (a body-only edit) — the unit rows proven by the common bridge.
+enum GeneratedRows<'a> {
+    Unit {
+        unit: &'a Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>,
+        header: &'a crate::syntax::outline::HeaderRecipe,
+        context: &'a crate::syntax::outline::DeclarationContext,
+        body: Option<&'a crate::syntax::outline::BodyHandle>,
+    },
+    Retained(crate::db::memo::GeneratedDeclarationBridge),
+}
+impl<'a> GeneratedRows<'a> {
+    fn current(
+        db: &'a Database,
+        definition: Digest,
+        parse: &ParseKey,
+    ) -> Result<Option<Self>, Diagnostic> {
+        if !matches!(db.published_input(&InputKey::DefinitionSource(definition)),
+            Some((InputValue::DefinitionSource(current), _)) if current == parse)
+        {
+            return Ok(None);
+        }
+        if let Some(bridge) = db.generated_declaration_bridge(definition)? {
+            return Ok((bridge.retained == *parse).then_some(Self::Retained(bridge)));
+        }
+        let (
+            Some((InputValue::GeneratedSyntax(unit), _)),
+            Some((InputValue::DefinitionHeader(header), _)),
+            Some((InputValue::DeclarationContext(context), _)),
+        ) = (
+            db.published_input(&InputKey::GeneratedSyntax(parse.content)),
+            db.published_input(&InputKey::DefinitionHeader(definition)),
+            db.published_input(&InputKey::DeclarationContext(definition)),
+        )
+        else {
+            return Ok(None);
+        };
+        let body = match db.published_input(&InputKey::DefinitionBody(definition)) {
+            Some((InputValue::DefinitionBody(body), _)) => Some(body),
+            _ => None,
+        };
+        Ok(Some(Self::Unit {
+            unit,
+            header,
+            context,
+            body,
+        }))
+    }
+    fn unit(&self) -> &crate::expand::generated_syntax::GeneratedSyntaxInput {
+        match self {
+            Self::Unit { unit, .. } => unit,
+            Self::Retained(bridge) => &bridge.unit,
+        }
+    }
+    /// The unit's own parse, in whose coordinates the rows below are given.
+    fn unit_parse(&self) -> &ParseKey {
+        &self.unit().key
+    }
+    /// The definition's current locator (the unit or its retained admission).
+    fn current_parse(&self) -> &ParseKey {
+        match self {
+            Self::Unit { unit, .. } => &unit.key,
+            Self::Retained(bridge) => &bridge.retained,
+        }
+    }
+    fn context(&self) -> &crate::syntax::outline::DeclarationContext {
+        match self {
+            Self::Unit { context, .. } => context,
+            Self::Retained(bridge) => &bridge.context,
+        }
+    }
+    fn body(&self) -> Option<&crate::syntax::outline::BodyHandle> {
+        match self {
+            Self::Unit { body, .. } => *body,
+            Self::Retained(bridge) => Some(&bridge.body),
+        }
+    }
+    /// The caller's current header is this declaration's current header row.
+    fn header_matches(&self, header: &crate::syntax::outline::HeaderRecipe) -> bool {
+        match self {
+            Self::Unit {
+                header: current, ..
+            } => *current == header,
+            Self::Retained(bridge) => bridge.header.same_semantics(header),
+        }
+    }
+    /// A selected range of the current header, in unit coordinates.
+    fn unit_range(
+        &self,
+        range: crate::syntax::spans::SourceRange,
+    ) -> Option<crate::syntax::spans::SourceRange> {
+        match self {
+            Self::Unit { .. } => Some(range),
+            Self::Retained(bridge) => bridge.unit_range(range),
+        }
+    }
 }
 
 /// Nonfunction declarations use the actual memo-owned nominal/alias recipe;
@@ -343,21 +431,14 @@ fn lookup_declaration_inner(
             "primitive result requires its exact current generated Type namespace",
         )
     };
-    let Some((InputValue::GeneratedSyntax(unit), _)) =
-        db.published_input(&InputKey::GeneratedSyntax(parse.content))
-    else {
-        return Err(missing());
-    };
+    let rows = GeneratedRows::current(db, declaration.definition, parse)?.ok_or_else(missing)?;
+    let unit = rows.unit();
+    let parse = rows.unit_parse();
     let Some(definition) = unit.definitions.get(&declaration.definition) else {
         return Err(missing());
     };
-    let Some((InputValue::DeclarationContext(context), _)) =
-        db.published_input(&InputKey::DeclarationContext(declaration.definition))
-    else {
-        return Err(missing());
-    };
+    let context = rows.context();
     if unit.key != *parse
-        || !matches!(db.published_input(&InputKey::DefinitionSource(declaration.definition)), Some((InputValue::DefinitionSource(current), _)) if current == parse)
         || declaration.header.profile != unit.key.profile
         || &context.scope != declaration.scope
         || declaration.scope.owner.is_some()
@@ -368,7 +449,7 @@ fn lookup_declaration_inner(
             .scope
             .module_path
             .starts_with(&unit.scope.module_path)
-        || !matches!(db.published_input(&InputKey::DefinitionHeader(declaration.definition)), Some((InputValue::DefinitionHeader(header), _)) if header == declaration.header)
+        || !rows.header_matches(declaration.header)
         || !unit.items.items().iter().any(|header| {
             header.key.fingerprint() == declaration.definition
                 && header.start == context.range.start
@@ -535,7 +616,6 @@ fn require_original_origins(
             let scan = view.declaration_inventory(DeclarationScanLimits::default())?;
             work = work
                 .checked_add(scan.retained_bytes())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(crate::runtime::arena::resource)?;
             // Ordinary source item discovery selects its published DefKey;
             // cold declaration discovery selects the scan identity. These

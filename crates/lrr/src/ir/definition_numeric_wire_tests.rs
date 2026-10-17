@@ -122,17 +122,14 @@ fn definition_numeric_compound_kind_preserves_context_and_rhs_option() {
     assert_eq!(actual.finish(), expected.finish());
 }
 #[test]
-fn definition_numeric_annotations_have_bounded_structural_ordinals() {
+fn definition_numeric_annotations_accept_any_structural_ordinal() {
     let body = body();
-    let binding = body
-        .nodes()
-        .iter()
-        .find(|node| node.role == NodeRole::Pattern)
-        .unwrap()
-        .id;
     for context in [
         DefinitionNumericContext::Parameter(0),
         DefinitionNumericContext::Parameter(99_999),
+        // E-R5-006: no structural ordinal ceiling.
+        DefinitionNumericContext::Parameter(100_000),
+        DefinitionNumericContext::Parameter(u32::MAX),
         DefinitionNumericContext::Result,
     ] {
         let recipe = verify(
@@ -147,43 +144,6 @@ fn definition_numeric_annotations_have_bounded_structural_ordinals() {
         )
         .unwrap();
         assert_eq!(recipe.recipe().operations.len(), 1);
-    }
-    for ordinal in [100_000, u32::MAX] {
-        let hint = HintRecipe::DefinitionNumeric(DefinitionNumericContext::Parameter(ordinal));
-        for operation in [
-            Op::SetHint {
-                child: SlotId(0),
-                hint: hint.clone(),
-            },
-            Op::DeclareLocal {
-                binding,
-                hint: hint.clone(),
-                writable: true,
-            },
-            Op::BindLocal {
-                binding,
-                source: SlotId(0),
-                hint: hint.clone(),
-                writable: true,
-            },
-            Op::Literal {
-                literal: LiteralRecipe {
-                    kind: LiteralKind::Bool,
-                    spelling: "true".into(),
-                    decoded: None,
-                    source: body.span(NodeId(0)).unwrap(),
-                },
-                hint,
-                destination: SlotId(0),
-            },
-        ] {
-            assert_eq!(
-                verify(draft(&body, vec![operation]), &body)
-                    .unwrap_err()
-                    .code,
-                "LRR-E-INTERNAL-IR"
-            );
-        }
     }
 }
 #[test]
@@ -242,12 +202,6 @@ fn definition_numeric_compound_keeps_indexed_rhs_and_entry_checks() {
         ] {
             assert!(verify(make(context, Some(right)), &body).is_err());
         }
-    }
-    for context in [
-        DefinitionNumericContext::Parameter(100_000),
-        DefinitionNumericContext::Parameter(u32::MAX),
-    ] {
-        assert!(verify(make(context, None), &body).is_err());
     }
     for right in [
         PrimitiveType::Unit,
@@ -455,7 +409,7 @@ fn definition_parameter_hint_retains_exact_ordinal_and_distinct_tag() {
 }
 
 #[test]
-fn definition_parameter_ordinal_is_checked_at_every_annotation_site() {
+fn definition_parameter_ordinal_is_accepted_at_every_annotation_site() {
     let body = body();
     let binding = body
         .nodes()
@@ -492,12 +446,9 @@ fn definition_parameter_ordinal_is_checked_at_every_annotation_site() {
                 destination: SlotId(0),
             },
         ] {
+            // E-R5-006: no structural ordinal ceiling at any annotation site.
             let result = verify(draft(&body, vec![operation]), &body);
-            if ordinal < 100_000 {
-                assert_eq!(result.unwrap().recipe().operations.len(), 1);
-            } else {
-                assert_eq!(result.unwrap_err().code, "LRR-E-INTERNAL-IR");
-            }
+            assert_eq!(result.unwrap().recipe().operations.len(), 1);
         }
     }
 }

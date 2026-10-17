@@ -34,11 +34,7 @@ impl PreparedSourceCompilerFacets {
         supplied: Arc<CompileInputCatalog>,
         byte_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        if providers.is_empty()
-            || providers.len() > 100_000
-            || byte_limit > 64 * 1024 * 1024
-            || byte_limit < std::mem::size_of::<Self>() + 256
-        {
+        if providers.is_empty() || byte_limit < std::mem::size_of::<Self>() + 256 {
             return Err(limit());
         }
         let canonical = providers.iter().try_fold(false, |matched, p| {
@@ -75,9 +71,6 @@ impl PreparedSourceCompilerFacets {
                 if let Some(catalog) = profiles.get(profile) {
                     catalog.clone()
                 } else {
-                    if profiles.len() >= 256 {
-                        return Err(limit());
-                    }
                     let catalog = if supplied.canonical_standalone_member(profile)?.is_some() {
                         supplied.clone()
                     } else {

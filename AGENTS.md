@@ -2,6 +2,15 @@
 
 Specification: [LRR revision 5](lrr_rust2024_macros_traits_implementation_spec.md).
 
+## Simple interpreter scope (October 16, 2026) — overrides conflicting text below and in the spec
+
+Explicit user direction, recorded as [E-R5-006](docs/errata/revision5-no-resource-accounting.md):
+
+- **Only rustc's limits.** A limit is allowed only if it reproduces one the pinned rustc enforces, cited by compiler source location (for example `recursion_limit`, default 128, honoring `#![recursion_limit]`). No memory accounting, no fuel or time counting, no byte budgets, no count caps. The OS bounds resources. When an existing cap blocks a correct program, delete it instead of raising it.
+- **No sandbox for now.** The permission broker, IO grants and capability/authority checks on source or runtime access are out of scope. Do not extend them or let them block language work; source reads follow what rustc reads.
+- **Goal.** A simple, correct interpreter tested against unchanged upstream rustc tests, then the JIT. The one-pipeline rules (E-R5-005) still apply.
+- **Workflow.** Edit and build directly in this checkout (`cargo +1.99.0 test --offline --locked -p lrr --lib --no-run`); no worktrees or frozen copies.
+
 ## Architecture statement of work and implementation gates (October 15, 2026)
 
 The required deliverable is one compositional Rust interpreter, followed by the specified JIT tiers after their gates pass. A feature must retain its semantics when moved between ordinary source, a user macro expansion, a macro wrapper and a standard-library macro expansion. Passing selected examples through a second, context-specific implementation is architectural failure, even when the values match. This section incorporates the user's architectural review of `fab75fe`; its eight findings below remain repair obligations until current source and actual evidence establish their removal.

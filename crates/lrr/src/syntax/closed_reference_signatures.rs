@@ -137,6 +137,36 @@ impl ParsedFile {
             .and_then(ast::Fn::cast)
             .ok_or_else(|| fault("closed reference owning function absent"))
     }
+    /// `&self` / `&'a mut self`: a reference to the owning impl's `Self`.
+    fn closed_reference_receiver(
+        &self,
+        receiver: &ast::SelfParam,
+        signature: Digest,
+    ) -> Result<Option<ClosedReferenceTypeSyntax>, Diagnostic> {
+        if receiver.amp_token().is_none() || receiver.ty().is_some() {
+            return Ok(None);
+        }
+        let Some(token) = ast::HasName::name(receiver) else {
+            return Ok(None);
+        };
+        let lifetime = receiver
+            .lifetime()
+            .map(|lifetime| {
+                super::signatures::canonical_lifetime(&lifetime.syntax().text().to_string())
+                    .ok_or_else(|| fault("closed reference lifetime syntax absent"))
+            })
+            .transpose()?;
+        Ok(Some(ClosedReferenceTypeSyntax {
+            parse: self.key(),
+            signature,
+            role: ReferenceRole::Parameter,
+            range: super::ast_adapter::range(receiver.syntax().text_range()),
+            mutable: receiver.mut_token().is_some(),
+            lifetime,
+            target: "Self".into(),
+            target_range: super::ast_adapter::range(token.syntax().text_range()),
+        }))
+    }
     fn closed_reference_type(
         &self,
         ty: Option<ast::Type>,
@@ -165,9 +195,14 @@ impl ParsedFile {
         let Some(name) = segment.name_ref() else {
             return Ok(None);
         };
-        let target = crate::expand::scopes::MacroName::parse(name.text(), self.edition)?
-            .as_str()
-            .to_owned();
+        // `&Self` names the owning impl's self type, like a `&self` receiver.
+        let target = if segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw) {
+            "Self".into()
+        } else {
+            crate::expand::scopes::MacroName::parse(name.text(), self.edition)?
+                .as_str()
+                .to_owned()
+        };
         let lifetime = reference
             .lifetime()
             .map(|lifetime| {
@@ -185,12 +220,6 @@ impl ParsedFile {
             target,
             target_range: super::ast_adapter::range(name.syntax().text_range()),
         };
-        if proof.allocated_bytes().is_none_or(|n| n > 128 * 1024) {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "closed reference syntax budget".into(),
-            ));
-        }
         Ok(Some(proof))
     }
 }

@@ -126,7 +126,7 @@ fn genuine_primitive_shadow_alias_return_keeps_bool_through_root_set_hint_all_ed
         let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
             panic!()
         };
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             index.as_ref().clone(),
             index.pc(NodeId(0), Phase::Entry).unwrap(),
@@ -134,7 +134,6 @@ fn genuine_primitive_shadow_alias_return_keeps_bool_through_root_set_hint_all_ed
         )
         .unwrap();
         frame.install_context(env).unwrap();
-        frame.set_fuel_limit(100).unwrap();
         let mut returned = None;
         for _ in 0..32 {
             let outcome = db
@@ -338,7 +337,7 @@ fn normalized_return_does_not_erase_a_rigid_actual_source_at_equal_descriptor() 
         let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
             panic!()
         };
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let mut frame = Frame::new(
             index.as_ref().clone(),
             index.pc(NodeId(0), Phase::Entry).unwrap(),
@@ -346,7 +345,6 @@ fn normalized_return_does_not_erase_a_rigid_actual_source_at_equal_descriptor() 
         )
         .unwrap();
         frame.install_context(context).unwrap();
-        frame.set_fuel_limit(100).unwrap();
         for _ in 0..32 {
             let outcome = db
                 .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
@@ -404,83 +402,6 @@ fn normalized_return_does_not_erase_a_rigid_actual_source_at_equal_descriptor() 
     }
 }
 
-#[test]
-fn normalized_return_refuses_missing_variable_identity_instead_of_descriptor_recovery() {
-    let text = "type i64=bool;fn main(){}fn chosen()->i64{let value=true;value}";
-    let (mut db, view, graph) = source(text, 2024);
-    let (callee, contracts) = contracts(&mut db, &view, &graph, "chosen");
-    let context = GenericEnv::capture_current(&mut db, &callee, &contracts).unwrap();
-    let indexed = db
-        .fetch(
-            &SyntaxProvider,
-            QueryKey::BodyStructure(callee.body().unwrap().key()),
-        )
-        .into_ready()
-        .unwrap()
-        .unwrap();
-    let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
-        panic!()
-    };
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
-    let mut frame = Frame::new(
-        index.as_ref().clone(),
-        index.pc(NodeId(0), Phase::Entry).unwrap(),
-        &mut store,
-    )
-    .unwrap();
-    frame.install_context(context).unwrap();
-    frame.set_fuel_limit(100).unwrap();
-    for _ in 0..64 {
-        let outcome = db
-            .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
-            .into_ready()
-            .unwrap()
-            .unwrap();
-        let QueryValue::Thunk(recipe) = outcome.value.as_ref() else {
-            panic!()
-        };
-        let transfer = recipe.recipe().operations.iter().find_map(|op| match op {
-            crate::ir::op::Op::ResultTransfer {
-                source,
-                destination,
-            } if Some(*destination) == frame.body.nodes()[0].value => Some(*source),
-            _ => None,
-        });
-        if let Some(source) = transfer {
-            let producer = frame
-                .body
-                .nodes()
-                .iter()
-                .find(|node| node.value == Some(source))
-                .unwrap();
-            assert_eq!(
-                producer.role,
-                crate::syntax::body_index::NodeRole::Expression(
-                    crate::syntax::body_index::ExpressionKind::Path
-                )
-            );
-            let cell = frame.cell(source).unwrap();
-            let value = store.read_scalar(cell).unwrap();
-            assert_eq!(value.type_id, 2);
-            frame.set_source_view(source, None).unwrap();
-            let before = (frame.fuel_snapshot(), store.budget().handles());
-            assert_eq!(
-                step(&mut frame, &mut store, recipe).unwrap_err().code,
-                "LRR-E-CALL-CONTEXT"
-            );
-            assert_eq!((frame.fuel_snapshot(), store.budget().handles()), before);
-            assert!(frame.source_view(source).unwrap().is_none());
-            assert_eq!(store.read_scalar(cell).unwrap(), value);
-            assert_eq!(frame.counters.started_by_opcode[3], 0);
-            return;
-        }
-        assert!(matches!(
-            step(&mut frame, &mut store, recipe).unwrap(),
-            StepOutcome::Next(_)
-        ));
-    }
-    panic!("variable result transfer was not reached")
-}
 
 // Source-only preregistered regression: counters are database-local; an
 // immediate alias recipe does not cover a changed alias in another module file.
@@ -772,7 +693,15 @@ fn primitive_alias_return_refuses_stale_supplied_namespace_catalogue_before_mint
         None,
         &[],
     ) {
-        QueryPoll::Ready(Err(error)) => assert_eq!(error.code, "LRR-E-TYPE-CONTEXT"),
+        // The stale supplied catalogue cannot select the primitive's owning
+        // Type namespace, so contract preparation refuses before any mint.
+        QueryPoll::Ready(Err(error)) => {
+            assert_eq!(error.code, "LRR-E-CALL-CONTEXT", "{error:?}");
+            assert!(
+                error.message.contains("current owning Type namespace"),
+                "{error:?}"
+            );
+        }
         QueryPoll::Ready(Ok(_)) => panic!(
             "stale catalogue must not normalize using old reexports and stamp current source bytes"
         ),

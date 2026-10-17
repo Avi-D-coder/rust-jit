@@ -175,9 +175,11 @@ fn parameter_goal_rejects_wrong_ordinal_header_and_revoked_parent() {
 fn header_goal_uses_own_generic_identity_and_keeps_nested_type_occurrences_pending() {
     // LRR authority control appended outside the unchanged fixture. It does
     // not replace the official runtime main or assert language acceptance.
+    // A compound Type's leaf names are its own retained header occurrences
+    // (`&T`); syntax with no such leaf structure (`fn(T)`) stays pending.
     let end = SUFFIX.rfind('}').unwrap();
     let text = format!(
-        "{}fn own<T>(n:T) {{}} fn nested<T>(n:&T) {{}}{}",
+        "{}fn own<T>(n:T) {{}} fn nested<T>(n:&T) {{}} fn pointer<T>(n:fn(T)) {{}}{}",
         &SUFFIX[..end],
         &SUFFIX[end..]
     );
@@ -214,10 +216,39 @@ fn header_goal_uses_own_generic_identity_and_keeps_nested_type_occurrences_pendi
             ordinal: 0
         })
     );
-    let pending = ready(db.fetch(
+    let compound = ready(db.fetch(
         &SyntaxProvider,
         QueryKey::DeclaredParameterGoal {
             definition: nested,
+            ordinal: 0,
+        },
+    ));
+    let ParameterTypeGoal::Ready(source) = goal(compound.value.as_ref()).goal() else {
+        panic!(
+            "compound generic leaf occurrence pending: {:?}",
+            goal(compound.value.as_ref()).goal()
+        )
+    };
+    assert_eq!(
+        source.source(),
+        &TyTerm::Ref(
+            crate::traits::term::RegionTerm::Static,
+            false,
+            Box::new(TyTerm::Param(ParamKey {
+                definition: nested,
+                ordinal: 0
+            }))
+        )
+    );
+    let pointer = declarations
+        .iter()
+        .find(|(name, _)| name == "pointer")
+        .unwrap()
+        .1;
+    let pending = ready(db.fetch(
+        &SyntaxProvider,
+        QueryKey::DeclaredParameterGoal {
+            definition: pointer,
             ordinal: 0,
         },
     ));
@@ -230,4 +261,57 @@ fn header_goal_uses_own_generic_identity_and_keeps_nested_type_occurrences_pendi
         goal(pending.value.as_ref()).goal()
     );
     no_child_code(&db, start);
+}
+
+#[test]
+fn retained_parameter_ordinals_select_the_actual_nonuniform_header_types_without_child_code() {
+    // LRR source-authority control beside the complete unchanged official
+    // witness. This adds a declaration only and does not execute another suite.
+    let end = SUFFIX.rfind('}').unwrap();
+    let text = format!(
+        "{}fn ordinals(a:i8,b:u16,c:i64){{}}{}",
+        &SUFFIX[..end],
+        &SUFFIX[end..]
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, plan) = world(&text, edition, false);
+        let definition = declarations(&plan)
+            .into_iter()
+            .find(|(name, _)| name == "ordinals")
+            .unwrap()
+            .1;
+        let start = db.trace.events.len();
+        for (ordinal, primitive) in [
+            (2, PrimitiveType::I64),
+            (0, PrimitiveType::I8),
+            (1, PrimitiveType::U16),
+        ] {
+            let key = QueryKey::DeclaredParameterGoal {
+                definition,
+                ordinal,
+            };
+            let first = ready(db.fetch(&SyntaxProvider, key.clone()));
+            let ParameterTypeGoal::Ready(source) = goal(first.value.as_ref()).goal() else {
+                panic!(
+                    "actual parameter ordinal Type is pending: {:?}",
+                    goal(first.value.as_ref()).goal()
+                )
+            };
+            assert_eq!(source.source(), &TyTerm::Primitive(primitive));
+            assert_eq!(source.ordinal(), ordinal);
+            let second = ready(db.fetch(&SyntaxProvider, key));
+            assert!(Arc::ptr_eq(&first.value, &second.value));
+        }
+        match db.fetch(
+            &SyntaxProvider,
+            QueryKey::DeclaredParameterGoal {
+                definition,
+                ordinal: 3,
+            },
+        ) {
+            QueryPoll::Ready(Err(error)) => assert_eq!(error.code, "LRR-E-TYPE-CONTEXT"),
+            other => panic!("out-of-list parameter ordinal accepted: {other:?}"),
+        }
+        no_child_code(&db, start);
+    }
 }

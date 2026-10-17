@@ -119,11 +119,7 @@ impl PreparedBodySyntaxKey {
                 "body syntax key is not canonical or bounded".into(),
             )
         };
-        if self.epoch == 0
-            || self.path.len() > 64 * 1024
-            || self.source.module_path.len() > 256
-            || self.heap_bytes() > 32 * 1024 * 1024
-        {
+        if self.epoch == 0 {
             return Err(invalid());
         }
         self.source.parse.profile.validate_source()?;

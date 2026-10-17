@@ -1,0 +1,26 @@
+{
+  "kind": "reached-local-test-startup-order-correction",
+  "status": "source-only-uncompiled-unexecuted",
+  "source_fingerprint": "2256dbefe2dd3b8918cdc9d18a1e4f7b27400cf000a545ab03ecc5b30a93beca",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation_tests.rs",
+      "bytes": 15144,
+      "sha256": "2256dbefe2dd3b8918cdc9d18a1e4f7b27400cf000a545ab03ecc5b30a93beca"
+    }
+  ],
+  "predecessor": {
+    "manifest": "worktracks/evidence/2026-10-16-reached-local-runtime-controls.json",
+    "sha256": "c0dfc30dbc2a64b716a073a6b687d5ec1752982ddbeaba0bdca7543ab3be9876",
+    "leaf_sha256": "b653d8b7f9296e0bdd0ad263612f945b6b463294f4fc5e80cee4a897e2412478",
+    "actual_compile": "7b20ea/0",
+    "actual_failed_main_first": "845c57/1",
+    "failure_scope": "test setup before RunMachine created/guest entry; cold completed-source-environment registration forbidden after helper began active run",
+    "production_order_source_review": "validator78fd41/0; actual CLI standalone startup precedes begin_run"
+  },
+  "change": "Only move db.begin_run after successful actual RunMachine::start_with_discovery, matching production CLI cold-admission order. Existing genuine preparation guard preserved.",
+  "invariant": "Startup performs authorized cold environment registration before active guest run; reached local source preparation remains separately guarded at actual calls.",
+  "production_guard": "Use original product_retention.rs9400c76ea1a0da30cc3513cf2717d0a8a6af389502768a302abde8f4403f95db; parent transient reuse bypass reverted and not a dependency.",
+  "planned_validation": "Sole validator reruns exact unchanged suffix main-first all4editions only; remaining2controls held until meaningful next packet.",
+  "review_all8": "Test-only ordering fix introduces no parser/evaluator/type rule/generated refusal/pattern check/source reconstruction/worldscan/body copy. Actual source/VM assertions and full upstream bytes unchanged; failed predecessor remains failed evidence. No execution claim."
+}

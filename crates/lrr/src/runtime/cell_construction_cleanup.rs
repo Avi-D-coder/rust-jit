@@ -27,7 +27,6 @@ impl GuestStore {
         let value = record.fields[field as usize].ok_or_else(ownership)?;
         self.validate_value(value)?;
         self.object_owner(value, ValueOwner::Construction { guard, field })?;
-        self.budget.check(2, 0)?;
         self.tickets.reserve(1, &mut self.budget)?;
         self.cells.reserve(1, &mut self.budget)?;
         Ok(true)
@@ -140,11 +139,11 @@ mod tests {
     const ORIGINAL: &str = include_str!(
         "../../../../fixtures/upstream/rustc-checkout/tests/ui/drop/nested-return-drop-order.rs"
     );
-    fn partial(max_handles: u32) -> (GuestStore, ConstructionId, u32, String) {
+    fn partial() -> (GuestStore, ConstructionId, u32, String) {
         let facts = crate::syntax::scope_fixture_facts::original_nested_return(ORIGINAL);
         let (members, completed) =
             crate::syntax::scope_fixture_facts::original_nested_constructor_fields(ORIGINAL);
-        let mut store = GuestStore::new(1, max_handles, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         // Completed Bar is adapted to intrinsic String tagged by its written x;
         // original Foo/Bar construction and Bar::drop assertions are unexecuted.
         let expected = facts.field_tag.to_string();
@@ -158,7 +157,7 @@ mod tests {
     }
     #[test]
     fn rustc_nested_constructor_cleanup_keeps_guard_until_exact_child_completion() {
-        let (mut store, guard, completed, expected) = partial(1000);
+        let (mut store, guard, completed, expected) = partial();
         let ConstructionCleanupTransfer::Field { ordinal, ticket } =
             store.construction_cleanup_transfer(guard).unwrap()
         else {
@@ -256,30 +255,5 @@ mod tests {
             store.constructions.get(guard).err().unwrap().code,
             "LRR-E-STALE-HANDLE"
         );
-    }
-    #[test]
-    fn rustc_nested_constructor_cleanup_reservation_refusal_preserves_guarded_field() {
-        let (mut store, guard, completed, _) = partial(3);
-        let value = store.constructions.get(guard).unwrap().fields[completed as usize].unwrap();
-        let handles = store.budget().handles();
-        assert_eq!(
-            store.construction_cleanup_transfer(guard).unwrap_err().code,
-            "LRR-E-RUNTIME-RESOURCE"
-        );
-        let record = store.constructions.get(guard).unwrap();
-        assert_eq!(record.state, ConstructionState::Building);
-        assert_eq!(record.pending_cleanup, None);
-        assert_eq!(record.completed, [completed]);
-        assert_eq!(record.fields[completed as usize], Some(value));
-        assert_eq!(store.budget().handles(), handles);
-        store
-            .object_owner(
-                value,
-                ValueOwner::Construction {
-                    guard,
-                    field: completed,
-                },
-            )
-            .unwrap();
     }
 }

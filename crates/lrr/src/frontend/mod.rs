@@ -1,8 +1,12 @@
 pub mod builtin_attributes;
+pub(crate) mod written_terms;
 pub mod compile_input_catalog;
 mod glob_lookup;
 pub mod hygiene;
 pub mod item_attributes;
+pub(crate) mod library_macros;
+pub mod member_index;
+pub(crate) mod associated_types;
 pub mod local_scopes;
 pub(crate) mod macro_boundary;
 pub(crate) mod macro_definition_modules;
@@ -64,6 +68,7 @@ pub mod generated_derive_helpers;
 pub mod constructors;
 pub mod declaration_imports;
 pub(crate) mod prepared_constructors;
+pub(crate) mod nominal_constructors;
 
 pub mod source_view;
 
@@ -82,7 +87,8 @@ pub(crate) mod constant_construction;
 #[cfg(test)]
 mod constant_foreign_path_tests;
 
-pub(crate) mod scalar_pattern_binding;
+pub(crate) mod pattern_binding_occurrences;
+pub(crate) mod pattern_names;
 
 pub(crate) mod runtime_macro_numeric;
 

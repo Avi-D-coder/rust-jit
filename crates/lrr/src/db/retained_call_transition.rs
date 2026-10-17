@@ -10,7 +10,6 @@ use crate::{
     syntax::{body_index::BodyIndex, outline::BodyHandle},
 };
 
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 fn invalid(message: &str) -> Diagnostic {
     fault("LRR-E-INTERNAL-SNAPSHOT", message)
 }
@@ -242,7 +241,6 @@ impl Database {
                 .checked_add(selected.guard().metadata_bytes())
                 .and_then(|bytes| bytes.checked_add(prepared_source.metadata_bytes()))
                 .and_then(|bytes| bytes.checked_add(4 * std::mem::size_of::<usize>()))
-                .filter(|bytes| *bytes <= MAX_BYTES)
                 .ok_or_else(crate::runtime::arena::resource)
         );
         let body = match self.publish_retained_body(input, definition) {

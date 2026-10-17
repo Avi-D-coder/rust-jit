@@ -51,7 +51,7 @@ fn facts(
         },
         cfg,
     )?;
-    if !facts.item.enabled || facts.item.attributes.len() > 4096 {
+    if !facts.item.enabled {
         return Err(fault(
             "LRR-E-EXPANSION-INPUT",
             "generated derive item is inactive or attribute count exceeds limit",
@@ -99,13 +99,9 @@ impl GeneratedDeriveAnnotations {
         let facts = facts(items, index, cfg)?;
         let mut identities = BTreeMap::new();
         for (at, descriptor) in resolved {
-            if identities.len() >= 4096
-                || at >= facts.item.attributes.len()
-                || descriptor.action() != BuiltinAttributeAction::Derive
-                || identities
+            if at >= facts.item.attributes.len() || descriptor.action() != BuiltinAttributeAction::Derive || identities
                     .insert(at, descriptor.definition_identity())
-                    .is_some()
-            {
+                    .is_some() {
                 return Err(fault(
                     "LRR-E-EXPANSION-INPUT",
                     "invalid generated derive annotation proof",
@@ -224,7 +220,6 @@ impl GeneratedDerivePlan {
                     >())
                     .and_then(|size| n.checked_add(size))
             })
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -246,7 +241,6 @@ impl GeneratedDerivePlan {
                 .map_err(|e| fault(e.code, &e.message))?;
             path_count = path_count
                 .checked_add(selected.len())
-                .filter(|n| *n <= 4096)
                 .ok_or_else(|| {
                     fault("LRR-E-DISCOVERY-LIMIT", "generated derive path count limit")
                 })?;
@@ -256,7 +250,6 @@ impl GeneratedDerivePlan {
                         .allocated_bytes()
                         .map_err(|e| fault(e.code, &e.message))?,
                 )
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-DISCOVERY-LIMIT",
@@ -269,7 +262,6 @@ impl GeneratedDerivePlan {
                 .len()
                 .checked_mul(std::mem::size_of::<GeneratedDerivePath>())
                 .and_then(|size| bytes.checked_add(size))
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-DISCOVERY-LIMIT",
@@ -287,7 +279,6 @@ impl GeneratedDerivePlan {
                             .allocated_bytes()
                             .map_err(|e| fault(e.code, &e.message))?,
                     )
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-DISCOVERY-LIMIT",
@@ -307,7 +298,6 @@ impl GeneratedDerivePlan {
                     .try_fold(bytes, |n, s| {
                         n.checked_add(s.capacity()).and_then(|n| n.checked_add(64))
                     })
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-DISCOVERY-LIMIT",
@@ -443,12 +433,6 @@ impl GeneratedDerivePlan {
             Vec<lrr_expand_adapter::generated_attribute::AttributeRange>,
             Diagnostic,
         > {
-            if attributes.len() > 4096 {
-                return Err(fault(
-                    "LRR-E-DISCOVERY-LIMIT",
-                    "generated derive effective attribute count limit",
-                ));
-            }
             let mut ranges = Vec::new();
             ranges.try_reserve_exact(attributes.len()).map_err(|_| {
                 fault(

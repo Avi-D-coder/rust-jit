@@ -49,8 +49,8 @@ fn materialized(rules: &str, argument: &str) -> GeneratedItems {
                 defining_unit: Key([1; 32]),
                 definition_edition: Edition::E2021,
             },
-            2_000_000,
-            32 * 1024 * 1024,
+            usize::MAX,
+            usize::MAX,
         )
         .unwrap();
     let result = result.unwrap();

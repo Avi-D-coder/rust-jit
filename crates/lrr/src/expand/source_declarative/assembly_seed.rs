@@ -11,6 +11,7 @@ pub(crate) struct SourceAssemblySeed {
     calls: Arc<[CallBinding]>,
     originals: Arc<[OriginalDeclarationAnchor]>,
     macros: Arc<[MacroDefinitionAnchor]>,
+    scan: Arc<DeclarationScan>,
     retained_bytes: usize,
     bytes: usize,
     identity: Digest,
@@ -28,8 +29,16 @@ impl SourceAssemblySeed {
         scan: &Arc<DeclarationScan>,
         epoch: u64,
     ) -> Result<Arc<Self>, Diagnostic> {
+        Self::from_forest(&provider.owned_forest_handle(), scan, epoch)
+    }
+    pub(crate) fn from_forest(
+        forest: &crate::expand::source_declarative::OwnedForestHandle,
+        scan: &Arc<DeclarationScan>,
+        epoch: u64,
+    ) -> Result<Arc<Self>, Diagnostic> {
         // Exactly the existing checked original forest/scan/capture route.
-        let initial = SourceSyntaxAssembly::from_scan(provider, scan, epoch)?;
+        let initial =
+            SourceSyntaxAssembly::from_source(forest.source(), &*forest.get()?, scan, epoch)?;
         let SourceSyntaxAssembly {
             source,
             epoch,
@@ -77,6 +86,7 @@ impl SourceAssemblySeed {
             calls: Arc::from(calls.into_boxed_slice()),
             originals: Arc::from(originals.into_boxed_slice()),
             macros: Arc::from(macro_definitions.into_boxed_slice()),
+            scan: Arc::clone(scan),
             retained_bytes,
             bytes,
             identity: identity.finish(),
@@ -154,4 +164,53 @@ fn copy_rows<T: Clone>(rows: &[T]) -> Result<Vec<T>, Diagnostic> {
     )?;
     owned.extend_from_slice(rows);
     Ok(owned)
+}
+
+/// The initial assembly of one captured source, built on first demand. Its
+/// inputs (provider source, owned forest, declaration scan, epoch) are fixed
+/// at discovery completion; sources never entered are never assembled.
+pub(crate) struct LazySourceAssemblySeed {
+    forest: crate::expand::source_declarative::OwnedForestHandle,
+    scan: Arc<DeclarationScan>,
+    epoch: u64,
+    seed: std::sync::OnceLock<Arc<SourceAssemblySeed>>,
+}
+impl LazySourceAssemblySeed {
+    pub(crate) fn new(provider: &SourceDeclarative, scan: &Arc<DeclarationScan>, epoch: u64) -> Self {
+        Self {
+            forest: provider.owned_forest_handle(),
+            scan: Arc::clone(scan),
+            epoch,
+            seed: std::sync::OnceLock::new(),
+        }
+    }
+    pub(crate) fn ready(seed: Arc<SourceAssemblySeed>) -> Result<Self, Diagnostic> {
+        let lazy = Self {
+            forest: crate::expand::source_declarative::OwnedForestHandle::detached(seed.source.share()),
+            scan: Arc::clone(&seed.scan),
+            epoch: seed.epoch,
+            seed: std::sync::OnceLock::new(),
+        };
+        let _ = lazy.seed.set(seed);
+        Ok(lazy)
+    }
+    pub(crate) fn source(&self) -> &SourceSelection {
+        self.forest.source().selection()
+    }
+    pub(crate) fn source_view(&self) -> &PreparedSourceView {
+        self.forest.source()
+    }
+    pub(crate) fn epoch(&self) -> u64 {
+        self.epoch
+    }
+    pub(crate) fn scan(&self) -> &Arc<DeclarationScan> {
+        &self.scan
+    }
+    pub(crate) fn get(&self) -> Result<&Arc<SourceAssemblySeed>, Diagnostic> {
+        if let Some(seed) = self.seed.get() {
+            return Ok(seed);
+        }
+        let seed = SourceAssemblySeed::from_forest(&self.forest, &self.scan, self.epoch)?;
+        Ok(self.seed.get_or_init(|| seed))
+    }
 }

@@ -25,6 +25,12 @@ pub struct GenericEnv {
     bytes: usize,
     normalized_return: Option<Box<NormalizedDeferredReturn>>,
     closed_references: Option<Box<ClosedReferenceContracts>>,
+    /// A closed structural (tuple/array) declared result.
+    structural_result: Option<TyTerm>,
+    structural_references: bool,
+    /// A closed declared result naming a nominal Type (`-> Option<u32>`),
+    /// as the written Type its declarations select.
+    written_result: Option<std::sync::Arc<crate::ir::written_type::WrittenType>>,
 }
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CALL-CONTEXT", message.into())
@@ -72,6 +78,41 @@ impl GenericEnv {
                                     |proof| proof.validate_packet(signature, contracts).is_ok(),
                                 )
                         }
+                        // A written name resolved to a closed nominal/tuple
+                        // declaration; the return boundary checks the value.
+                        // An opaque (`impl Trait`) or trait-object result keeps
+                        // the returned value's own type.
+                        (Some(source), None)
+                            if crate::frontend::call_contracts::contains_object(source) =>
+                        {
+                            true
+                        }
+                        (
+                            Some(source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..))),
+                            None,
+                        ) => {
+                            crate::frontend::call_contracts::closed_term(source)
+                        }
+                        // A closed `&[T]`/`&mut [T]` result: a slice reference
+                        // carries its own element window; the return boundary
+                        // checks the returned value against the source Type.
+                        (Some(source @ TyTerm::Ref(_, _, pointee)), None)
+                            if matches!(pointee.as_ref(), TyTerm::Slice(_) | TyTerm::Str) =>
+                        {
+                            crate::frontend::call_contracts::closed_term(source)
+                        }
+                        // A closed `&'static T` result names no parameter
+                        // region, so no closed-reference proof relates it to
+                        // an argument; the return boundary checks the value.
+                        (Some(source @ TyTerm::Ref(crate::traits::term::RegionTerm::Static, _, _)), None) => {
+                            crate::frontend::call_contracts::closed_term(source)
+                        }
+                        // A normalized associated-type result; the return
+                        // boundary checks the returned value against it.
+                        (Some(TyTerm::Primitive(_)), None) => {
+                            signature.result.len() > 1
+                                && contracts.normalized_deferred_return.is_none()
+                        }
                         _ => false,
                     },
                 }
@@ -84,8 +125,6 @@ impl GenericEnv {
                 .iter()
                 .any(|descriptor| descriptor.0 == 0)
             || !result_matches
-            || signature.generics.len() > 100_000
-            || contracts.runtime_substitution.len() > 100_000
             || contracts.source_substitution.len() != contracts.runtime_substitution.len()
         {
             return Err(invalid(
@@ -97,10 +136,11 @@ impl GenericEnv {
         }
         if let Some(proof) = &contracts.closed_references {
             proof.validate_packet(signature, contracts)?;
-        } else if contracts
-            .source_parameters
-            .iter()
-            .any(|source| matches!(source, TyTerm::Ref(..)))
+        } else if !contracts.structural_references
+            && contracts
+                .source_parameters
+                .iter()
+                .any(|source| matches!(source, TyTerm::Ref(..)))
         {
             return Err(invalid(
                 "closed reference parameter requires its current source certificate",
@@ -128,9 +168,7 @@ impl GenericEnv {
         }
         let mut ordinals = BTreeMap::new();
         for parameter in &signature.generics {
-            if parameter.ordinal >= 100_000
-                || ordinals.insert(parameter.ordinal, parameter.kind).is_some()
-            {
+            if ordinals.insert(parameter.ordinal, parameter.kind).is_some() {
                 return Err(invalid("definition environment parameter ordinal mismatch"));
             }
         }
@@ -205,9 +243,6 @@ impl GenericEnv {
                 .checked_add(proof.allocated_bytes()?)
                 .ok_or_else(|| invalid("closed reference retained size overflow"))?;
         }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(crate::runtime::arena::resource());
-        }
         Ok(bytes)
     }
     pub fn capture(
@@ -255,7 +290,34 @@ impl GenericEnv {
             bytes,
             normalized_return: contracts.normalized_deferred_return.clone(),
             closed_references: contracts.closed_references.clone(),
+            structural_result: contracts
+                .source_result
+                .clone()
+                .filter(|term| {
+                    (matches!(term, TyTerm::Tuple(_) | TyTerm::Array(..))
+                        || matches!(term, TyTerm::Ref(_, _, pointee)
+                            if matches!(pointee.as_ref(), TyTerm::Slice(_) | TyTerm::Str))
+                        || matches!(
+                            term,
+                            TyTerm::Ref(crate::traits::term::RegionTerm::Static, _, _)
+                        ))
+                        && crate::frontend::call_contracts::closed_term(term)
+                }),
+            structural_references: contracts.structural_references,
+            written_result: None,
         })
+    }
+    /// Attach the written Type the caller selected for this definition's
+    /// closed nominal result.
+    pub(crate) fn with_written_result(
+        mut self,
+        written: Option<std::sync::Arc<crate::ir::written_type::WrittenType>>,
+    ) -> Self {
+        self.written_result = written;
+        self
+    }
+    pub(crate) fn written_result(&self) -> Option<&crate::ir::written_type::WrittenType> {
+        self.written_result.as_deref()
     }
     pub fn definition(&self) -> &FunctionSignature {
         &self.definition
@@ -304,6 +366,14 @@ impl GenericEnv {
             .and_then(|proof| proof.result_source())
             .ok_or_else(|| invalid("reference result requires its admitted source certificate"))
     }
+    /// Parameters bound structurally from reached arguments.
+    pub(crate) fn structural_references(&self) -> bool {
+        self.structural_references
+    }
+    /// The closed tuple/array declared result, when there is one.
+    pub(crate) fn structural_result(&self) -> Option<&TyTerm> {
+        self.structural_result.as_ref()
+    }
     pub(crate) fn reference_parameter_source(&self, ordinal: usize) -> Option<&TyTerm> {
         self.closed_references
             .as_ref()
@@ -315,6 +385,18 @@ impl GenericEnv {
         store: &crate::runtime::cell::GuestStore,
         descriptor: TypeId,
     ) -> Result<(), Diagnostic> {
+        // Structurally bound parameters were matched against the reached
+        // argument descriptor when the contracts were prepared.
+        if self.structural_references
+            && self
+                .closed_references
+                .as_ref()
+                .and_then(|proof| proof.parameter_source(ordinal))
+                .is_none()
+        {
+            let _ = (store, descriptor);
+            return Ok(());
+        }
         self.closed_references
             .as_ref()
             .ok_or_else(|| invalid("reference parameter source certificate absent"))?

@@ -12,7 +12,7 @@ use lrr_expand_adapter::{
 };
 
 #[test]
-fn generated_module_inert_attribute_replay_preserves_retained_scope_kind() {
+fn generated_module_builtin_inert_attribute_keeps_retained_scope_kind_without_producer() {
     let cfg = CfgSet::guest_default();
     let parent = ParsedFile::parse_declarations(
         &SourceBlob::new(b"make!();".to_vec()).unwrap(),
@@ -73,21 +73,7 @@ fn generated_module_inert_attribute_replay_preserves_retained_scope_kind() {
         generated.scan().lexical_scopes()[0].kind,
         crate::syntax::declaration_scan::DeclarationScopeKind::Module
     );
-    let attribute = &generated.scan().producers()[0];
-    assert_eq!(attribute.unqualified_attribute.as_deref(), Some("allow"));
-    assert!(
-        generated
-            .inert_attribute_definition(attribute.identity, &cfg)
-            .unwrap()
-            .is_some()
-    );
-    let mut changed = cfg.clone();
-    changed.atoms.insert("changed_cfg".into());
-    assert_eq!(
-        generated
-            .inert_attribute_definition(attribute.identity, &changed)
-            .unwrap_err()
-            .code,
-        "LRR-E-INTERNAL-SNAPSHOT"
-    );
+    // A generated builtin inert attribute is never a macro call: the replayed
+    // scan records no producer (and so no inert-definition replay) for it.
+    assert!(generated.scan().producers().is_empty());
 }

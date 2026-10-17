@@ -7,9 +7,25 @@ impl Database {
     /// Exact Definition* rows and admitted parsing-only retained syntax do not
     /// alter the namespace universe. Their consumers check their own leases;
     /// source, epoch, records and discovery certificates remain in this census.
+    /// The published namespace-membership census, shared per input revision:
+    /// inputs change only with a revision increase, so callers at the same
+    /// revision share one map (and compare it by identity first).
     pub(crate) fn lexical_namespace_stamps(
         &self,
-    ) -> Result<BTreeMap<InputKey, Digest>, Diagnostic> {
+    ) -> Result<Arc<BTreeMap<InputKey, Digest>>, Diagnostic> {
+        if let Ok(cached) = self.lexical_stamps.lock()
+            && let Some((revision, stamps)) = cached.as_ref()
+            && *revision == self.revision
+        {
+            return Ok(Arc::clone(stamps));
+        }
+        let stamps = Arc::new(self.census_lexical_namespace_stamps()?);
+        if let Ok(mut cached) = self.lexical_stamps.lock() {
+            *cached = Some((self.revision, Arc::clone(&stamps)));
+        }
+        Ok(stamps)
+    }
+    fn census_lexical_namespace_stamps(&self) -> Result<BTreeMap<InputKey, Digest>, Diagnostic> {
         let mut stamps = BTreeMap::new();
         let mut bytes = 0usize;
         for (key, row) in &self.inputs {
@@ -26,12 +42,6 @@ impl Database {
             ) {
                 continue;
             }
-            if stamps.len() >= 100_000 {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "lexical namespace stamp count limit",
-                ));
-            }
             bytes = account_add(
                 account_add(
                     account_add(bytes, std::mem::size_of::<(InputKey, Digest)>())?,
@@ -39,12 +49,6 @@ impl Database {
                 )?,
                 key.heap_bytes(),
             )?;
-            if bytes > 32 * 1024 * 1024 {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "lexical namespace stamp size limit",
-                ));
-            }
             stamps.insert(key.clone(), row.fingerprint);
         }
         Ok(stamps)
@@ -147,7 +151,19 @@ impl Database {
         scope: &crate::syntax::outline::ScopeKey,
         namespace: crate::source::manifest::Namespace,
     ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
-        let mut selected = None;
+        // A scope/namespace may be certified by its own (primary) seal and,
+        // for Type scopes, derivatively by another seal's path-resolution
+        // proofs (a Value seal certifies the Type scopes its paths traverse).
+        // The primary certificate is authoritative; derived certificates
+        // select only when every candidate certifies identical names.
+        let mut primary: Option<Arc<InputValue>> = None;
+        let mut derived: Option<(Arc<InputValue>, bool)> = None;
+        let ambiguous = || {
+            fault(
+                "LRR-E-CALL-CONTEXT",
+                "lexical namespace seal selection is ambiguous",
+            )
+        };
         for key in self.scope_certificates.candidates(source, scope, namespace) {
             let row = self
                 .inputs
@@ -164,11 +180,15 @@ impl Database {
                     "indexed scope certificate variant differs",
                 ));
             };
-            if input
-                .scope_certificate(scope, namespace, &source.outline.parse.profile)?
-                .is_none()
-                || !input.sources.contains(source)
-            {
+            let Some(certificate) =
+                input.scope_certificate(scope, namespace, &source.outline.parse.profile)?
+            else {
+                return Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "indexed scope certificate source/owner differs",
+                ));
+            };
+            if !input.sources.contains(source) {
                 return Err(fault(
                     "LRR-E-INTERNAL-SNAPSHOT",
                     "indexed scope certificate source/owner differs",
@@ -177,15 +197,41 @@ impl Database {
             if self.inputs.get(&InputKey::ExpansionEpoch).is_some_and(|epoch| !matches!(epoch.value.as_ref(), InputValue::ExpansionEpoch(current) if *current == input.seal.key().epoch)) {
                 continue; // old immutable seals remain cached across epochs
             }
-            if selected.is_some() {
-                return Err(fault(
-                    "LRR-E-CALL-CONTEXT",
-                    "lexical namespace seal selection is ambiguous",
-                ));
+            let is_primary = input
+                .scope
+                .as_ref()
+                .is_some_and(|own| std::ptr::eq(own, certificate));
+            if is_primary {
+                if primary.is_some() {
+                    return Err(ambiguous());
+                }
+                primary = Some(row.value.clone());
+                continue;
             }
-            selected = Some(row.value.clone());
+            match &mut derived {
+                None => derived = Some((row.value.clone(), true)),
+                Some((first, identical)) => {
+                    let InputValue::DiscoverySeal(first) = first.as_ref() else {
+                        return Err(ambiguous());
+                    };
+                    let same = first
+                        .scope_certificate(scope, namespace, &source.outline.parse.profile)?
+                        .is_some_and(|other| {
+                            other.scope == certificate.scope
+                                && other.namespace == certificate.namespace
+                                && other.edition == certificate.edition
+                                && other.names == certificate.names
+                        });
+                    *identical &= same;
+                }
+            }
         }
-        Ok(selected)
+        match (primary, derived) {
+            (Some(primary), _) => Ok(Some(primary)),
+            (None, Some((_, false))) => Err(ambiguous()),
+            (None, Some((derived, true))) => Ok(Some(derived)),
+            (None, None) => Ok(None),
+        }
     }
     /// The only accepted argument is a privately minted exact source proof.
     /// No run reset, base-source publication or provider mutation is possible.
@@ -280,16 +326,7 @@ impl Database {
         if staged.is_empty() {
             return Ok(());
         }
-        let usage = self.cache_usage()?;
-        let budgets = self.run_budgets.unwrap_or_default();
-        if account_add(usage.memo_bytes, extra)? > budgets.query_bytes
-            || usage.source_input_bytes > budgets.source_input_bytes
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "lexical definition publication exceeds cache cap",
-            ));
-        }
+        let _ = extra; // E-R5-006: no byte accounting.
         let revision = self.revision.checked_add(1).ok_or_else(|| {
             fault(
                 "LRR-E-ID-EXHAUSTED",

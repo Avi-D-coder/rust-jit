@@ -1,0 +1,52 @@
+{
+  "schema": "lrr/source-review/child-impl-fingerprint-removal/v3",
+  "status": "source-only uncompiled/unexecuted cleanup for root V10 candidate",
+  "production": {
+    "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+    "sha256": "2d9ff06f9176d604cfac2b5906386cb31ba05cdd1e9c1f780071e70c21b2c504",
+    "bytes": 7463
+  },
+  "test": {
+    "path": "crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs",
+    "sha256": "7a481964bbc6926033780dcd41b3d27a485ee4623950dbbc52a4e44179b117c7",
+    "bytes": 7078
+  },
+  "root_observed": {
+    "path": "crates/lrr/src/expand/source_discovery.rs",
+    "sha256": "11418ee96a0283b773218d8698a86b36868c0ef52f8fa379bd1c6b7406f2d0f9"
+  },
+  "historical_preserved": [
+    "/private/tmp/lrr-child-impl-frontier-v2/COMPONENT.json source4198f4ef unchanged",
+    "/private/tmp/lrr-child-impl-authority-controls-v1/COMPONENT.json leaf862de931 unchanged"
+  ],
+  "exact_change": [
+    "Remove ONLY cached ChildImplFrontier fingerprint field, creation StableEncoder block/getter, and no-longer-needed StableEncoder import. Self size remains actual metadata basis.",
+    "Remove ONLY two source-only test fingerprint-inequality assertions; positive nonempty canonicalheaders, exact wrongparent/epoch/ancestor diagnostics, and independent Completed Arc guard control remain.",
+    "Root now publishes same actual completed fragment (record.key.invocation, output.fingerprint) dependency used direct handler. Derived waiter is not an external input. Worker did not edit root, database schema/reconstruction/guards or any admission/resolve authority field.",
+    "No remaining waiter.fingerprint/generated-child-impl-frontier references under crates/lrr/src. ActiveImplProjection stable fingerprint API itself is peer-owned and retained; no computation by cleaned waiter."
+  ],
+  "authority_preserved": [
+    "Actual selected child and parentItems Arc/epoch",
+    "Genuine nonempty retained activeprojection scope/cfg/output/epoch",
+    "Shared once-prepared ancestor index constant owner tuple + root actual Completed Arc guard",
+    "Unique same_record child output and firstedge actualparent record/epoch",
+    "Indexed bounded generated parentinventory/producer identity/grammar/scope chain to actual source-attached root",
+    "ONE common canonical header kernel and membership in actual completed inventory before release"
+  ],
+  "all_eight": {
+    "1": "No evaluator; MA001/7/8 remain separate debt.",
+    "2": "Actual full ordinary generated output, no scalar/break executor; MA004/5 remain.",
+    "3": "No macro-name method/numeric policy; MA003/6 remain.",
+    "4": "Same genuine child/parent/source proof; no generated exclusion/substitution.",
+    "5": "No body/type/pattern execution preparation; MA002 remains.",
+    "6": "Shared completed index remains prepared once; removal reduces prepare work.",
+    "7": "No fake external input waiter dependency, namespace/world census or relaxed guard. Actual dependency pair remains strict.",
+    "8": "Same retained Arc handles/index, no deep body/tree copies or wholefile search."
+  },
+  "gaps": [
+    "V9 actual wrapper publication failed per parent; V10 exact dependency correction requires real validation.",
+    "New negatives are source-only unexecuted; no tests attempted by worker.",
+    "No wrapper/fullfixture/catalog/milestone acceptance claimed."
+  ],
+  "commands": "rg source references + rustfmt only; no Cargo/compiler/tests"
+}

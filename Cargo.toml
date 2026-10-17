@@ -35,6 +35,60 @@ panic = "abort"
 
 [profile.dev]
 panic = "abort"
+# Line tables keep file:line backtraces; full debug info made each lrr rlib
+# ~450 MB and exhausted the disk with several concurrent target directories.
+debug = "line-tables-only"
+
+# Interpreter development runs spend most preparation time in these pure
+# dependency crates (hashing, token trees, macro matching); optimize them in
+# dev builds. Workspace crates keep the ordinary dev profile.
+[profile.dev.package.blake3]
+opt-level = 3
+
+[profile.dev.package.mbe]
+opt-level = 3
+
+[profile.dev.package.parser]
+opt-level = 3
+
+[profile.dev.package.syntax]
+opt-level = 3
+
+[profile.dev.package."syntax-bridge"]
+opt-level = 3
+
+[profile.dev.package.span]
+opt-level = 3
+
+[profile.dev.package.tt]
+opt-level = 3
+
+[profile.dev.package.rowan]
+opt-level = 3
+
+[profile.dev.package.ra_ap_parser]
+opt-level = 3
+
+[profile.dev.package.ra_ap_syntax]
+opt-level = 3
+
+[profile.dev.package.serde_json]
+opt-level = 3
+
+[profile.dev.package.hashbrown]
+opt-level = 3
+
+[profile.dev.package."text-size"]
+opt-level = 3
+
+[profile.dev.package.smol_str]
+opt-level = 3
+
+[profile.dev.package.intern]
+opt-level = 3
+
+[profile.dev.package."rustc-hash"]
+opt-level = 3
 
 [patch.crates-io]
 cranelift-jit = { path = "vendor/cranelift-jit" }

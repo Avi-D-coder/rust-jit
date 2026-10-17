@@ -56,9 +56,6 @@ impl SourceModuleDeclaration {
             let mut scope = item.scope.clone();
             scope.module_path.push(request.name.clone());
             scope.owner = None;
-            if scope.module_path.len() > 256 {
-                return Err(fault("ordinary module scope depth limit"));
-            }
             let mut encoder = StableEncoder::new("lrr/v2/source-module-input");
             encoder.digest(item.def_key.fingerprint());
             let producer = encoder.finish();
@@ -83,7 +80,6 @@ impl SourceModuleDeclaration {
                 .ok_or_else(|| fault("source module fact size overflow"))?;
             total = total
                 .checked_add(bytes)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("source module fact metadata limit"))?;
             result.push(Self {
                 source: source.share(),
@@ -190,7 +186,6 @@ impl SourceModuleDeclaration {
             bytes = parts
                 .iter()
                 .try_fold(bytes, |n, part| n.checked_add(part.capacity()))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("source module retained metadata limit"))?;
         }
         Ok(bytes)

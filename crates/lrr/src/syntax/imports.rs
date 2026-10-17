@@ -70,7 +70,7 @@ pub(crate) fn macro_use_recipe(
         let mut expect_name = true;
         for token in &tokens[2..tokens.len() - 1] {
             if expect_name {
-                if names.len() >= 100_000 || token.kind != ra_ap_syntax::SyntaxKind::IDENT as u16 {
+                if token.kind != ra_ap_syntax::SyntaxKind::IDENT as u16 {
                     return Err(error("macro-use selector must be an identifier"));
                 }
                 names
@@ -163,7 +163,6 @@ impl StableEncode for SourceImport {
         e.record(&self.visibility);
     }
 }
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 #[derive(Default)]
 pub(crate) struct ImportBudget {
     bytes: usize,
@@ -174,7 +173,6 @@ impl ImportBudget {
         self.bytes = self
             .bytes
             .checked_add(bytes)
-            .filter(|n| *n <= MAX_BYTES)
             .ok_or_else(|| error("source import metadata budget exceeded"))?;
         Ok(())
     }
@@ -215,14 +213,10 @@ pub(crate) fn collect(
     while let Some((tree, mut prefix, mut absolute, depth)) = stack.pop() {
         visited = visited
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| error("source import tree limit exceeded"))?;
         if let Some(mut path) = tree.path() {
             let mut suffix = Vec::new();
             loop {
-                if suffix.len() >= 256 {
-                    return Err(error("source import path depth exceeded"));
-                }
                 let segment = path
                     .segment()
                     .and_then(|s| s.kind())
@@ -253,23 +247,15 @@ pub(crate) fn collect(
             }
             prefix
                 .len()
-                .checked_add(suffix.len())
-                .filter(|n| *n <= 256)
-                .ok_or_else(|| error("source import combined path limit exceeded"))?;
+                .checked_add(suffix.len())                .ok_or_else(|| error("source import combined path limit exceeded"))?;
             prefix
                 .try_reserve(suffix.len())
                 .map_err(|_| error("combined import path allocation failed"))?;
             prefix.extend(suffix.into_iter().rev());
         }
         if let Some(list) = tree.use_tree_list() {
-            if depth >= 256 {
-                return Err(error("source import grouping depth exceeded"));
-            }
             let mut children = Vec::new();
             for child in list.use_trees() {
-                if children.len() >= 100_000 {
-                    return Err(error("source import child limit exceeded"));
-                }
                 children
                     .try_reserve(1)
                     .map_err(|_| error("import child allocation failed"))?;
@@ -278,7 +264,6 @@ pub(crate) fn collect(
             stack
                 .len()
                 .checked_add(children.len())
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(|| error("source import frontier limit exceeded"))?;
             stack
                 .try_reserve(children.len())
@@ -296,7 +281,7 @@ pub(crate) fn collect(
             }
             continue;
         }
-        budget.charge(usize::from(tree.syntax().text_range().len()).min(MAX_BYTES + 1))?;
+        budget.charge(usize::from(tree.syntax().text_range().len()))?;
         let kind = if tree.star_token().is_some() {
             ImportKind::Glob
         } else if let Some(rename) = tree.rename() {
@@ -323,7 +308,6 @@ pub(crate) fn collect(
         budget.leaves = budget
             .leaves
             .checked_add(1)
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| error("source import leaf limit exceeded"))?;
         budget.charge(
             std::mem::size_of::<SourceImport>() + scope.heap_bytes() + visibility_bytes(visibility),

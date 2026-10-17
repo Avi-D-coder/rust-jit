@@ -119,6 +119,18 @@ pub enum TypeKey {
         params: Box<[TypeId]>,
         result: TypeId,
     },
+    /// A function item or closure value: its callee identity (the source
+    /// function definition, or the closure expression's body/node identity)
+    /// and its captured fields in capture order (none for a function item).
+    /// Its fields are structural like a tuple's, so copy, move, projection
+    /// and drop glue follow the captured field types. `borrowed[i]` marks a
+    /// by-reference capture: its field is the borrow and the closure body
+    /// names the referent (a by-value capture of a reference is unmarked).
+    Callable {
+        identity: Digest,
+        captures: Box<[TypeId]>,
+        borrowed: Box<[bool]>,
+    },
     Facade {
         family: FacadeType,
         args: Box<[TypeId]>,
@@ -160,20 +172,19 @@ pub struct TypeDescriptor {
     /// A missing cached witness does not prove the absence of a user destructor.
     pub destructor: Option<Digest>,
     pub representation_version: u32,
+    /// Nominal enums only: the source-bound declaration-order discriminant
+    /// table, attached by the first source-checked variant construction.
+    pub discriminants: Option<Arc<[Option<i128>]>>,
 }
+/// Worker type table. E-R5-006: no descriptor count or metadata budget; the
+/// byte figure is an observation only.
+#[derive(Default)]
 pub struct TypeRegistry {
     descriptors: Vec<TypeDescriptor>,
     by_key: BTreeMap<Arc<TypeKey>, TypeId>,
     /// Owned keys and index nodes; vector allocation is measured separately.
     owned_bytes: usize,
-    max_metadata_bytes: usize,
 }
-impl Default for TypeRegistry {
-    fn default() -> Self {
-        Self::with_metadata_limit(MAX_TYPE_METADATA_BYTES)
-    }
-}
-const MAX_TYPE_METADATA_BYTES: usize = 32 * 1024 * 1024;
 /// Reserved primitive descriptors have no source or worker-dependent state.
 fn primitive_descriptors() -> &'static [TypeDescriptor; 16] {
     static DESCRIPTORS: OnceLock<[TypeDescriptor; 16]> = OnceLock::new();
@@ -195,25 +206,14 @@ fn primitive_descriptors() -> &'static [TypeDescriptor; 16] {
                 },
                 destructor: None,
                 representation_version: 1,
+                discriminants: None,
             }
         })
     })
 }
-const MAX_TYPES: usize = 100_000;
-const MAX_TYPE_MEMBERS: usize = 100_000;
 /// Deterministic metadata estimate, including ordered-index node overhead.
 const TYPE_ENTRY_OVERHEAD: usize = 128;
 impl TypeRegistry {
-    /// This budget belongs to the worker table, independently of guest epochs.
-    /// Exhaustion requires retiring the worker between runs; IDs are never reused.
-    pub fn with_metadata_limit(max_metadata_bytes: usize) -> Self {
-        Self {
-            descriptors: Vec::new(),
-            by_key: BTreeMap::new(),
-            owned_bytes: 0,
-            max_metadata_bytes: max_metadata_bytes.min(MAX_TYPE_METADATA_BYTES),
-        }
-    }
     pub fn metadata_bytes(&self) -> usize {
         self.descriptors
             .capacity()
@@ -284,9 +284,6 @@ impl TypeRegistry {
             return Ok(*id);
         }
         let resource = super::arena::resource;
-        if self.descriptors.len() >= MAX_TYPES {
-            return Err(resource());
-        }
         let (shape, fields, copy) = match &key {
             TypeKey::Primitive(_) => return Err(super::value::invalid()),
             TypeKey::Ref { mutable, target } => {
@@ -313,14 +310,21 @@ impl TypeRegistry {
                     self.copy_status(*element)?,
                 )
             }
-            TypeKey::Tuple(members) => {
-                if members.len() > MAX_TYPE_MEMBERS {
-                    return Err(resource());
+            TypeKey::Tuple(members) => (
+                ShapeCategory::Tuple,
+                Some(DeferredFieldRecipe::Structural),
+                self.structural_copy(members)?,
+            ),
+            TypeKey::Callable {
+                captures, borrowed, ..
+            } => {
+                if captures.len() != borrowed.len() {
+                    return Err(super::value::invalid());
                 }
                 (
                     ShapeCategory::Tuple,
                     Some(DeferredFieldRecipe::Structural),
-                    self.structural_copy(members)?,
+                    self.structural_copy(captures)?,
                 )
             }
             TypeKey::Nominal {
@@ -332,11 +336,7 @@ impl TypeRegistry {
             } => {
                 if definition.namespace != Namespace::Type
                     || !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum)
-                    || args
-                        .len()
-                        .checked_add(const_args.len())
-                        .is_none_or(|n| n > MAX_TYPE_MEMBERS)
-                    || definition.module_path.len() > 256
+                    || args.len().checked_add(const_args.len()).is_none()
                 {
                     return Err(super::value::invalid());
                 }
@@ -353,9 +353,6 @@ impl TypeRegistry {
                 )
             }
             TypeKey::Function { params, result } => {
-                if params.len() > MAX_TYPE_MEMBERS {
-                    return Err(resource());
-                }
                 for parameter in params {
                     self.require(*parameter)?;
                 }
@@ -394,31 +391,7 @@ impl TypeRegistry {
                 n.checked_add(std::mem::size_of::<(Arc<TypeKey>, TypeId)>() + TYPE_ENTRY_OVERHEAD)
             })
             .ok_or_else(resource)?;
-        let prospective = self
-            .metadata_bytes()
-            .checked_add(bytes)
-            .and_then(|n| {
-                n.checked_add(if self.descriptors.len() == self.descriptors.capacity() {
-                    std::mem::size_of::<TypeDescriptor>()
-                } else {
-                    0
-                })
-            })
-            .ok_or_else(resource)?;
-        if prospective > self.max_metadata_bytes {
-            return Err(metadata_limit());
-        }
-        self.descriptors
-            .try_reserve_exact(1)
-            .map_err(|_| resource())?;
-        // Include any allocator capacity slack even if a reservation is rejected.
-        if self
-            .metadata_bytes()
-            .checked_add(bytes)
-            .is_none_or(|n| n > self.max_metadata_bytes)
-        {
-            return Err(metadata_limit());
-        }
+        self.descriptors.try_reserve(1).map_err(|_| resource())?;
         let id = TypeId(
             u32::try_from(self.descriptors.len())
                 .ok()
@@ -428,6 +401,10 @@ impl TypeRegistry {
         self.owned_bytes = self.owned_bytes.checked_add(bytes).ok_or_else(resource)?;
         let key = Arc::new(key);
         self.by_key.insert(key.clone(), id);
+        let array_element = match key.as_ref() {
+            TypeKey::Array { element, .. } => Some(*element),
+            _ => None,
+        };
         self.descriptors.push(TypeDescriptor {
             key,
             shape,
@@ -435,8 +412,46 @@ impl TypeRegistry {
             copy,
             destructor: None,
             representation_version: 1,
+            discriminants: None,
         });
+        // Every array Type has its unsized `[T]` element-window view and the
+        // reference Types an unsizing coercion produces, so read-only place
+        // resolution and call contracts can name them without interning.
+        if let Some(element) = array_element {
+            let slice = self.intern(TypeKey::Slice { element })?;
+            for mutable in [false, true] {
+                self.intern(TypeKey::Ref {
+                    mutable,
+                    target: slice,
+                })?;
+            }
+        }
         Ok(id)
+    }
+    /// Attach a nominal enum's source-bound discriminant table. The table is a
+    /// property of the declaration schema, so a second attachment must agree.
+    pub(crate) fn attach_discriminants(
+        &mut self,
+        id: TypeId,
+        table: &Arc<[Option<i128>]>,
+    ) -> Result<(), Diagnostic> {
+        let index = id.0.checked_sub(17).ok_or_else(super::value::invalid)?;
+        let descriptor = self
+            .descriptors
+            .get_mut(index as usize)
+            .ok_or_else(super::value::invalid)?;
+        if !matches!(descriptor.key.as_ref(), TypeKey::Nominal { definition, .. } if definition.item_kind == ItemKind::Enum)
+        {
+            return Err(super::value::invalid());
+        }
+        match &descriptor.discriminants {
+            Some(existing) if existing != table => Err(super::value::invalid()),
+            Some(_) => Ok(()),
+            None => {
+                descriptor.discriminants = Some(table.clone());
+                Ok(())
+            }
+        }
     }
     pub fn intern_string(&mut self) -> Result<TypeId, Diagnostic> {
         self.intern(TypeKey::Facade {
@@ -448,12 +463,6 @@ impl TypeRegistry {
         self.descriptor(id).is_ok_and(|descriptor| matches!(descriptor.key.as_ref(), TypeKey::Facade { family: FacadeType::String, args } if args.is_empty()))
     }
 }
-fn metadata_limit() -> Diagnostic {
-    Diagnostic::new(
-        "LRR-E-METADATA-LIMIT",
-        "worker type descriptors exceed their metadata budget".into(),
-    )
-}
 impl TypeKey {
     fn heap_bytes(&self) -> Option<usize> {
         let ids = |members: &[TypeId]| members.len().checked_mul(std::mem::size_of::<TypeId>());
@@ -462,6 +471,9 @@ impl TypeKey {
                 Some(0)
             }
             Self::Tuple(members) => ids(members),
+            Self::Callable {
+                captures, borrowed, ..
+            } => ids(captures)?.checked_add(borrowed.len()),
             Self::Function { params, .. } | Self::Facade { args: params, .. } => ids(params),
             Self::Nominal {
                 definition,
@@ -547,6 +559,16 @@ impl StableEncode for TypeKey {
                 });
                 e.sequence(args, |e, id| e.u32(id.0));
             }
+            Self::Callable {
+                identity,
+                captures,
+                borrowed,
+            } => {
+                e.u32(8);
+                e.digest(*identity);
+                e.sequence(captures, |e, id| e.u32(id.0));
+                e.sequence(borrowed, |e, flag| e.bool(*flag));
+            }
         }
     }
 }
@@ -555,7 +577,7 @@ impl StableEncode for TypeKey {
 mod tests {
     use super::*;
     #[test]
-    fn descriptor_admission_checks_all_members_and_preserves_ids_on_exhaustion() {
+    fn descriptor_admission_checks_all_members_and_reserves_primitive_ids() {
         let mut types = TypeRegistry::default();
         let invalid = TypeKey::Tuple(Box::new([TypeId(16), TypeId(u32::MAX)]));
         assert_eq!(types.intern(invalid).unwrap_err().code, "LRR-E-VALUE-REPR");
@@ -568,18 +590,10 @@ mod tests {
             .unwrap();
         assert_eq!(first, TypeId(17));
         assert_eq!(types.descriptor(first).unwrap().copy, CopyStatus::Copy);
-        let mut limited = TypeRegistry::with_metadata_limit(0);
+        let mut fresh = TypeRegistry::default();
+        assert!(!fresh.contains(TypeId(17)));
         assert_eq!(
-            limited
-                .intern(TypeKey::Tuple(Box::new([TypeId(2)])))
-                .unwrap_err()
-                .code,
-            "LRR-E-METADATA-LIMIT"
-        );
-        assert!(!limited.contains(TypeId(17)));
-        assert_eq!(limited.metadata_bytes(), 0);
-        assert_eq!(
-            limited
+            fresh
                 .intern(TypeKey::Primitive(
                     PrimitiveIdentity::new(TypeId(8)).unwrap()
                 ))

@@ -1,0 +1,28 @@
+{
+  "schema": "lrr/precode/child-impl-fingerprint-removal/v3",
+  "owned": [
+    "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+    "crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs"
+  ],
+  "root_owned": "crates/lrr/src/expand/source_discovery.rs",
+  "invariant": "Derived coordinator waiter proof is not an external input dependency. Retain genuine actual completed fragment invocation/output fingerprint publication and every actual child/parent/epoch/scope/projection/source authority check.",
+  "witness": "Parent reports V9 wrapper publication cert-dependency failure; root corrected dependency to same actual CompletedDeclarationFragment pair as direct impl handler, without schema/DB/guard relaxation. No new execution by worker.",
+  "route": "Root child completion wait/resolve remains; remove unused waiter cached fingerprint/encoder/getter after confirming root no longer calls it. Existing source-only tests remove ONLY two fingerprint-inequality assertions, preserve exact wrongparent/epoch/ancestor refusal and actualArcowner test.",
+  "cost": "Remove digest field/once-preparation encoding; checked Self size accounts smaller actual handle. No added planning/source/lookup work.",
+  "all_eight": "All8 prior child authority retained. No evaluator, scalar method numeric logic, generated rejection, executable work, repeated aggregate preparation, worldcensus or BodyIndexclone; superseded invalid dependency route removed.",
+  "acceptance": "Keep V2 helper and tests V1 immutable historical packets; V3 sourceonly for parent V10; no Cargo/compiler/tests.",
+  "baseline": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs",
+      "sha256": "862de931e86105defa9af27f8e2c1b779ddb3b862532c2f41bdf565b6d84d5b0"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "11418ee96a0283b773218d8698a86b36868c0ef52f8fa379bd1c6b7406f2d0f9"
+    }
+  ]
+}

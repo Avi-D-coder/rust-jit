@@ -3,8 +3,6 @@
 use crate::core::diagnostic::Diagnostic;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
-const MAX_TEXT: usize = 1_048_576;
-const MAX_METADATA: usize = 32 * 1024 * 1024;
 fn fault(message: impl Into<String>) -> Diagnostic {
     Diagnostic::new("LRR-E-FIXTURE", message.into())
 }
@@ -59,19 +57,18 @@ pub struct FixtureForce {
     #[serde(default)]
     pub minimum_native_scalar_ops: u64,
 }
-fn bounded(value: &str, max: usize, nonempty: bool) -> Result<(), Diagnostic> {
-    if value.len() > max || value.contains('\0') || (nonempty && value.is_empty()) {
-        return Err(fault("fixture text is empty, oversized or contains NUL"));
+/// E-R5-006: fixture text has no size ceiling; only NUL and required
+/// non-empty fields are refused.
+fn checked_text(value: &str, nonempty: bool) -> Result<(), Diagnostic> {
+    if value.contains('\0') || (nonempty && value.is_empty()) {
+        return Err(fault("fixture text is empty or contains NUL"));
     }
     Ok(())
 }
 fn unique_names(names: &[String]) -> Result<(), Diagnostic> {
-    if names.len() > 10_000 {
-        return Err(fault("fixture name count limit"));
-    }
     let mut seen = BTreeSet::new();
     for name in names {
-        bounded(name, 4096, true)?;
+        checked_text(name, true)?;
         if !seen.insert(name) {
             return Err(fault("duplicate fixture observation name"));
         }
@@ -80,15 +77,8 @@ fn unique_names(names: &[String]) -> Result<(), Diagnostic> {
 }
 impl FixtureManifest {
     pub fn parse(text: &str) -> Result<Self, Diagnostic> {
-        if text.len() > MAX_TEXT {
-            return Err(fault("fixture manifest byte limit"));
-        }
-        let manifest: Self = toml::from_str(text).map_err(|error| {
-            fault(format!(
-                "invalid fixture manifest: {}",
-                bounded_error(error.to_string())
-            ))
-        })?;
+        let manifest: Self = toml::from_str(text)
+            .map_err(|error| fault(format!("invalid fixture manifest: {error}")))?;
         manifest.validate()?;
         Ok(manifest)
     }
@@ -96,8 +86,8 @@ impl FixtureManifest {
         if self.schema_version != 1 {
             return Err(fault("unsupported fixture schema"));
         }
-        bounded(&self.id, 128, true)?;
-        bounded(&self.category, 128, true)?;
+        checked_text(&self.id, true)?;
+        checked_text(&self.category, true)?;
         if !self
             .id
             .bytes()
@@ -105,7 +95,7 @@ impl FixtureManifest {
         {
             return Err(fault("invalid stable fixture ID"));
         }
-        bounded(&self.source, 4096, true)?;
+        checked_text(&self.source, true)?;
         if self.source.starts_with('/')
             || self.source.contains('\\')
             || self
@@ -115,7 +105,7 @@ impl FixtureManifest {
         {
             return Err(fault("fixture source must stay inside its directory"));
         }
-        bounded(&self.entry, 4096, true)?;
+        checked_text(&self.entry, true)?;
         for part in self.entry.split("::") {
             crate::expand::scopes::MacroName::parse(part, 2024)
                 .map_err(|_| fault("invalid fixture entry path"))?;
@@ -134,17 +124,17 @@ impl FixtureManifest {
         {
             return Err(fault("fixture modes must be nonempty and unique"));
         }
-        bounded(&self.expect.status, 64, true)?;
-        bounded(&self.expect.stdout, MAX_TEXT, false)?;
-        bounded(&self.expect.stderr, MAX_TEXT, false)?;
+        checked_text(&self.expect.status, true)?;
+        checked_text(&self.expect.stdout, false)?;
+        checked_text(&self.expect.stderr, false)?;
         for value in [&self.expect.diagnostic_code, &self.expect.phase]
             .into_iter()
             .flatten()
         {
-            bounded(value, 4096, true)?;
+            checked_text(value, true)?;
         }
         if let Some(value) = &self.expect.panic_contains {
-            bounded(value, 65_536, false)?;
+            checked_text(value, false)?;
         }
         if self.expect.panic_contains.is_some() && self.expect.diagnostic_code.is_some() {
             return Err(fault(
@@ -152,61 +142,13 @@ impl FixtureManifest {
             ));
         }
         if let Some(log) = &self.expect.expected_drop_log {
-            if log.len() > 10_000 {
-                return Err(fault("fixture drop log count limit"));
-            }
             for event in log {
-                bounded(event, 4096, false)?;
+                checked_text(event, false)?;
             }
         }
         unique_names(&self.laziness.no_body_preparation)?;
         unique_names(&self.laziness.no_marker_preparation)?;
-        self.owned_bytes()?;
         Ok(())
-    }
-    fn owned_bytes(&self) -> Result<usize, Diagnostic> {
-        let mut bytes = std::mem::size_of::<Self>();
-        for value in [
-            &self.id,
-            &self.category,
-            &self.source,
-            &self.entry,
-            &self.expect.status,
-            &self.expect.stdout,
-            &self.expect.stderr,
-        ]
-        .into_iter()
-        .chain(self.expect.diagnostic_code.iter())
-        .chain(self.expect.phase.iter())
-        .chain(self.expect.panic_contains.iter())
-        .chain(self.expect.expected_drop_log.iter().flatten())
-        .chain(self.laziness.no_body_preparation.iter())
-        .chain(self.laziness.no_marker_preparation.iter())
-        {
-            charge(&mut bytes, value.capacity())?;
-        }
-        for list in [
-            &self.laziness.no_body_preparation,
-            &self.laziness.no_marker_preparation,
-        ]
-        .into_iter()
-        .chain(self.expect.expected_drop_log.iter())
-        {
-            charge(
-                &mut bytes,
-                list.capacity()
-                    .checked_mul(std::mem::size_of::<String>())
-                    .ok_or_else(|| fault("fixture list size overflow"))?,
-            )?;
-        }
-        charge(
-            &mut bytes,
-            self.modes
-                .capacity()
-                .checked_mul(std::mem::size_of::<FixtureMode>())
-                .ok_or_else(|| fault("fixture mode size overflow"))?,
-        )?;
-        Ok(bytes)
     }
     /// Checks explicit observations for one requested mode. This is not execution.
     pub fn check(
@@ -360,23 +302,6 @@ pub struct MarkerObservation {
     pub native_operations: Option<u64>,
 }
 
-fn charge(bytes: &mut usize, amount: usize) -> Result<(), Diagnostic> {
-    *bytes = bytes
-        .checked_add(amount)
-        .filter(|n| *n <= MAX_METADATA)
-        .ok_or_else(|| fault("fixture metadata budget exceeded"))?;
-    Ok(())
-}
-fn bounded_error(mut text: String) -> String {
-    if text.len() > 4096 {
-        let mut end = 4096;
-        while !text.is_char_boundary(end) {
-            end -= 1;
-        }
-        text.truncate(end);
-    }
-    text
-}
 /// Deterministic IDs across a complete supplied fixture batch. This owns contracts,
 /// not passed results, captured source or execution authority.
 pub struct FixtureCatalog {
@@ -384,22 +309,9 @@ pub struct FixtureCatalog {
 }
 impl FixtureCatalog {
     pub fn new(manifests: Vec<FixtureManifest>) -> Result<Self, Diagnostic> {
-        if manifests.len() > 10_000 {
-            return Err(fault("fixture catalog count limit"));
-        }
         let mut index = BTreeMap::new();
-        let mut bytes = 0usize;
         for manifest in manifests {
             manifest.validate()?;
-            charge(&mut bytes, manifest.owned_bytes()?)?;
-            charge(
-                &mut bytes,
-                manifest
-                    .id
-                    .len()
-                    .checked_add(256)
-                    .ok_or_else(|| fault("fixture index size overflow"))?,
-            )?;
             if index.contains_key(&manifest.id) {
                 return Err(fault(format!("duplicate fixture ID: {}", manifest.id)));
             }

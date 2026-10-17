@@ -112,12 +112,11 @@ fn require_chain(
 ) -> Result<(), Diagnostic> {
     let record = unit.items.record();
     let identity = record.key().fingerprint();
-    if seen.len() == 16 || seen.contains(&identity) {
+    if seen.contains(&identity) {
         return Err(missing());
     }
     *bytes = bytes
         .checked_add(unit.metadata_bytes()?)
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(crate::runtime::arena::resource)?;
     seen.push(identity);
     current_record(db, unit, publication)?;
@@ -239,7 +238,6 @@ fn require_chain(
         bytes
             .checked_add(parent.metadata_bytes()?)
             .and_then(|n| n.checked_add(transient))
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let parsed = crate::syntax::parse::ParsedFile::from_generated_items(&parent.items)?;
         if parsed.estimated_bytes() > transient {
@@ -247,7 +245,6 @@ fn require_chain(
         }
         *bytes = bytes
             .checked_add(parsed.estimated_bytes())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         if parsed.key() != *parse {
             return Err(missing());
@@ -259,7 +256,6 @@ fn require_chain(
         )?;
         *bytes = bytes
             .checked_add(outline.estimated_bytes())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         if !outline.items.iter().any(|item| {
             &item.def_key == selected
@@ -342,7 +338,6 @@ fn require_chain(
                 let scan = view.declaration_inventory(DeclarationScanLimits::default())?;
                 *bytes = bytes
                     .checked_add(scan.retained_bytes())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(crate::runtime::arena::resource)?;
                 let original = view.outline().items.iter().find(|item| {
                     item.def_key.fingerprint() == definition

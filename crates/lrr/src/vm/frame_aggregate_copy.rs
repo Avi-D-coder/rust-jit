@@ -19,7 +19,6 @@ pub(super) struct OpActivation {
     source: CellId,
     destination: SlotId,
     source_view: Option<crate::traits::term::TyTerm>,
-    source_reservation: usize,
 }
 fn place_error(error: PlaceFailure) -> Diagnostic {
     match error {
@@ -42,6 +41,8 @@ impl Frame {
                     .as_ref()
                     .and_then(|activation| activation.operation_index())
             })
+            .or_else(|| self.operator_operation_index())
+            .or_else(|| self.format_operation_index())
             .unwrap_or(0)
     }
     pub(crate) fn has_copy_activation(&self) -> bool {
@@ -63,18 +64,6 @@ impl Frame {
         }
         Ok(())
     }
-    fn copy_metadata_limit(&self, source_reservation: usize) -> Result<usize, Diagnostic> {
-        let base = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
-            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
-            .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
-            .and_then(|n| n.checked_add(source_reservation))
-            .ok_or_else(crate::runtime::arena::resource)?;
-        (32_usize * 1024 * 1024)
-            .checked_sub(base)
-            .ok_or_else(crate::runtime::arena::resource)
-    }
     /// Called once after ordinary preflight and the opcode entry charge.
     pub(crate) fn begin_aggregate_copy(
         &mut self,
@@ -93,7 +82,23 @@ impl Frame {
                 let cell = self.binding(*binding)?;
                 (cell, *destination, store.admit_owning_read(cell)?)
             }
+            // A Copy aggregate parameter (`fn f(a: [i32; 3]) { g(a) }`).
+            Op::ReadParameter {
+                ordinal,
+                destination,
+            } => {
+                let cell = self.parameter(*ordinal)?;
+                (cell, *destination, store.admit_owning_read(cell)?)
+            }
             Op::ReadPlace { place, destination } => {
+                // A reborrowed `&mut` place is borrowed, not read.
+                if self
+                    .place_reborrow(*place, *destination, store)
+                    .map_err(place_error)?
+                    .is_some()
+                {
+                    return Ok(false);
+                }
                 let (cell, _, mode) = store
                     .admit_owning_place_read(self.executed_place(*place)?)
                     .map_err(place_error)?;
@@ -109,22 +114,18 @@ impl Frame {
             Op::ReadLocal { binding, .. } => {
                 self.clone_source(self.binding_sources[binding.0 as usize].as_ref())?
             }
+            Op::ReadParameter { ordinal, .. } => {
+                self.clone_source(self.parameter_sources.get(*ordinal as usize))?
+            }
             Op::ReadPlace { place, .. } => {
                 self.clone_source(self.place_slot(*place)?.source.as_ref())?
             }
             _ => return Err(invalid("aggregate Copy holds a non-read operation")),
         };
         self.preflight_source_view(destination, source_view.as_ref())?;
-        let source_reservation = Self::source_heap(source_view.as_ref())?
-            .checked_add(
-                Self::source_excess(source_view.as_ref())?
-                    .saturating_sub(Self::source_excess(self.source_view_ref(destination)?)?),
-            )
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let limit = self.copy_metadata_limit(source_reservation)?;
         store.reserve_owning_read_result(self.slot(destination)?.cell.is_none(), false)?;
         self.prepare_write(destination, store)?;
-        let copy = AggregateCopy::begin(store, source, limit)?;
+        let copy = AggregateCopy::begin(store, source)?;
         self.copy_activation = Some(OpActivation {
             pc: self.pc.fingerprint(),
             operation_index: index,
@@ -133,7 +134,6 @@ impl Frame {
             source,
             destination,
             source_view,
-            source_reservation,
         });
         Ok(true)
     }
@@ -143,20 +143,14 @@ impl Frame {
         &mut self,
         store: &mut GuestStore,
     ) -> Result<bool, Diagnostic> {
-        let source_reservation = self
-            .copy_activation
-            .as_ref()
-            .ok_or_else(|| invalid("copy activation absent"))?
-            .source_reservation;
-        let limit = self.copy_metadata_limit(source_reservation)?;
         for _ in 0..256 {
-            self.fuel.poll()?;
             let activation = self
                 .copy_activation
                 .as_ref()
                 .ok_or_else(|| invalid("copy activation absent"))?;
             let source = match &activation.expected {
                 Op::ReadLocal { binding, .. } => self.binding(*binding)?,
+                Op::ReadParameter { ordinal, .. } => self.parameter(*ordinal)?,
                 Op::ReadPlace { place, .. } => {
                     store
                         .admit_owning_place_read(self.executed_place(*place)?)
@@ -170,24 +164,22 @@ impl Frame {
             }
             let current_source = match &activation.expected {
                 Op::ReadLocal { binding, .. } => self.binding_sources[binding.0 as usize].as_ref(),
+                Op::ReadParameter { ordinal, .. } => self.parameter_sources.get(*ordinal as usize),
                 Op::ReadPlace { place, .. } => self.place_slot(*place)?.source.as_ref(),
                 _ => return Err(invalid("copy activation holds a non-read operation")),
             };
             if current_source != activation.source_view.as_ref() {
                 return Err(invalid("copy activation source annotation changed"));
             }
-            if activation.copy.retained_bytes().is_none_or(|n| n > limit) {
-                return Err(crate::runtime::arena::resource());
-            }
             if matches!(activation.copy.next(store)?, CopyWork::Field(_)) {
-                self.charge_fuel()?;
+                self.count_step();
             }
             let progress = self
                 .copy_activation
                 .as_mut()
                 .ok_or_else(|| invalid("copy activation absent"))?
                 .copy
-                .advance(store, limit)?;
+                .advance(store)?;
             if let CopyProgress::Complete(ticket) = progress {
                 let activation = self
                     .copy_activation

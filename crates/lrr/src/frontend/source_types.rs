@@ -68,7 +68,7 @@ impl SourceType {
     /// Called only after the ordinary owning Type service selects builtin str
     /// or an alias genuinely normalized to it. Descriptor16 is already unsized
     /// and NotCopy; this proof does not publish a standalone owning value.
-    fn selected_str() -> Result<Self, Diagnostic> {
+    pub(super) fn selected_str() -> Result<Self, Diagnostic> {
         Ok(Self {
             source: TyTerm::Str,
             key: TypeKey::Primitive(PrimitiveIdentity::new(TypeId(16))?),
@@ -132,12 +132,6 @@ impl SourceType {
                         .ok_or_else(|| metadata("source nominal Type size overflow"))
                 },
             )?;
-        }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "source Type metadata budget".into(),
-            ));
         }
         Ok(bytes)
     }
@@ -217,6 +211,50 @@ fn resolve_named_at(
     if let Err(error) = AliasNormalizer::new(graph, sources) {
         return QueryPoll::Ready(Err(error));
     }
+    // An impl introduces no Type namespace: written names in its associated
+    // functions resolve in the enclosing module, and `Self` names the impl's
+    // self type.
+    if let Some(owner) = signature.scope.owner {
+        let generic = signature.generics.iter().any(|parameter| {
+            parameter.kind == crate::syntax::signatures::GenericKind::Type && parameter.name == name
+        });
+        if !generic {
+            // A macro-generated impl's `Self` names the self type written in
+            // its own generated unit's header.
+            let in_sources = sources.iter().any(|source| {
+                source.outline().items.iter().any(|item| {
+                    item.def_key.item_kind == ItemKind::Impl
+                        && item.def_key.enclosing_impl == Some(owner)
+                })
+            });
+            let generated = if name == "Self" && !in_sources {
+                let parse = match db
+                    .input(&InputKey::DefinitionSource(signature.definition))
+                    .as_deref()
+                {
+                    Some(InputValue::DefinitionSource(parse)) => Some(parse.clone()),
+                    _ => None,
+                };
+                match parse.and_then(|parse| db.generated_declaration_unit(&parse)) {
+                    Some(unit) => match unit.outline() {
+                        Ok(outline) => Some(outline),
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    },
+                    None => None,
+                }
+            } else {
+                None
+            };
+            return QueryPoll::Ready(impl_owned_name(
+                graph,
+                sources,
+                generated.as_deref(),
+                signature,
+                owner,
+                name,
+            ));
+        }
+    }
     let names = match SignatureNames::from_database(db, graph, signature) {
         Ok(names) => names,
         Err(error) => return QueryPoll::Ready(Err(error)),
@@ -235,10 +273,7 @@ fn resolve_named_at(
     if reference.is_some_and(|reference| reference.parse() != parse) {
         return QueryPoll::Ready(Err(fault("named Type source occurrence is not current")));
     }
-    let lookup = if db
-        .published_input(&InputKey::GeneratedSyntax(parse.content))
-        .is_some()
-    {
+    let lookup = if db.locates_generated_declaration(parse) {
         if let Some(reference) = reference {
             super::call_contracts::generated_result_namespace::lookup_name(
                 db,
@@ -277,6 +312,708 @@ fn resolve_named_at(
         Err(error) => QueryPoll::Ready(Err(error)),
     }
 }
+/// A written composite type (tuple, array, parenthesized, never) whose leaves
+/// are single names resolved by the same declaration-context Type service.
+/// `None` when some part needs a further source integration.
+pub(crate) fn resolve_written_type(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    signature: &FunctionSignature,
+    tokens: &[crate::syntax::ast_adapter::TokenRecipe],
+) -> QueryPoll<Option<TyTerm>> {
+    use ra_ap_syntax::ast::{self, HasModuleItem};
+    let text = crate::syntax::ast_adapter::token_text(tokens);
+    let parser = match signature.header.profile.edition {
+        2015 => ra_ap_syntax::Edition::Edition2015,
+        2018 => ra_ap_syntax::Edition::Edition2018,
+        2021 => ra_ap_syntax::Edition::Edition2021,
+        _ => ra_ap_syntax::Edition::Edition2024,
+    };
+    let parsed = ast::SourceFile::parse(&format!("type LrrWritten = {text};"), parser);
+    if !parsed.errors().is_empty() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let Some(ast::Item::TypeAlias(alias)) = parsed.tree().items().next() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let Some(ty) = alias.ty() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    fn walk(
+        db: &mut Database,
+        graph: &NameNamespaces,
+        sources: &[&PreparedSourceView],
+        signature: &FunctionSignature,
+        ty: &ra_ap_syntax::ast::Type,
+    ) -> QueryPoll<Option<TyTerm>> {
+        use ra_ap_syntax::{AstNode, ast};
+        match ty {
+            ast::Type::TupleType(tuple) => {
+                let mut fields = Vec::new();
+                for field in tuple.fields() {
+                    match walk(db, graph, sources, signature, &field) {
+                        QueryPoll::Ready(Ok(Some(term))) => fields.push(term),
+                        other => return other,
+                    }
+                }
+                // `()` is the unit primitive, as in symbolic signature
+                // lowering and every runtime descriptor's source term.
+                if fields.is_empty() {
+                    return QueryPoll::Ready(Ok(Some(TyTerm::Primitive(
+                        crate::ir::op::PrimitiveType::Unit,
+                    ))));
+                }
+                QueryPoll::Ready(Ok(Some(TyTerm::Tuple(fields))))
+            }
+            ast::Type::ParenType(paren) => match paren.ty() {
+                Some(inner) => walk(db, graph, sources, signature, &inner),
+                None => QueryPoll::Ready(Ok(None)),
+            },
+            ast::Type::NeverType(_) => QueryPoll::Ready(Ok(Some(TyTerm::Never))),
+            // `dyn Trait` (and 2015's bare trait object): the object schema is
+            // the principal trait's identity; values keep their concrete
+            // runtime type and methods dispatch on it.
+            // `impl Trait` in argument position is an anonymous generic
+            // parameter: like a trait object it accepts the reached concrete
+            // value, which keeps its own type.
+            ast::Type::ImplTraitType(_) | ast::Type::DynTraitType(_) => {
+                let bounds = match ty {
+                    ast::Type::ImplTraitType(object) => object.type_bound_list(),
+                    ast::Type::DynTraitType(object) => object.type_bound_list(),
+                    _ => None,
+                };
+                let principal = bounds.and_then(|bounds| {
+                    bounds.bounds().find_map(|bound| match bound.ty() {
+                        Some(ast::Type::PathType(path)) => path.path(),
+                        _ => None,
+                    })
+                });
+                let Some((segments, absolute)) =
+                    principal.and_then(super::member_index::path_segments)
+                else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let scope = crate::syntax::outline::ScopeKey {
+                    owner: None,
+                    ..signature.scope.clone()
+                };
+                match graph.lookup_source_path(
+                    Namespace::Type,
+                    &segments,
+                    absolute,
+                    &scope,
+                    signature.header.profile.edition,
+                ) {
+                    Ok(crate::frontend::names::NameLookup::Defined(definition)) => QueryPoll::Ready(Ok(
+                        Some(TyTerm::Dyn(crate::traits::term::DynSchemaKey(definition.identity))),
+                    )),
+                    // The closure traits are language items of the prelude;
+                    // without a source declaration their object schema is
+                    // the builtin trait's own identity. A closure or function
+                    // item value keeps its concrete callable type.
+                    Ok(crate::frontend::names::NameLookup::Absent)
+                        if !absolute
+                            && matches!(segments.as_slice(),
+                                [crate::syntax::imports::ImportSegment::Name(name)]
+                                    if matches!(name.as_str(), "Fn" | "FnMut" | "FnOnce")) =>
+                    {
+                        let crate::syntax::imports::ImportSegment::Name(name) = &segments[0] else {
+                            return QueryPoll::Ready(Ok(None));
+                        };
+                        QueryPoll::Ready(Ok(Some(TyTerm::Dyn(crate::traits::term::DynSchemaKey(
+                            crate::core::digest::Digest::of_bytes(
+                                format!("lrr/v1/builtin-closure-trait/{name}").as_bytes(),
+                            ),
+                        )))))
+                    }
+                    Ok(_) => QueryPoll::Ready(Ok(None)),
+                    Err(error) => QueryPoll::Ready(Err(error)),
+                }
+            }
+            // Regions are not runtime data; the interpreter binds through
+            // erased regions after rustc's own borrow checking.
+            ast::Type::RefType(reference) => match reference.ty() {
+                Some(target) => match walk(db, graph, sources, signature, &target) {
+                    QueryPoll::Ready(Ok(Some(target))) => QueryPoll::Ready(Ok(Some(TyTerm::Ref(
+                        crate::traits::term::RegionTerm::Static,
+                        reference.mut_token().is_some(),
+                        Box::new(target),
+                    )))),
+                    other => other,
+                },
+                None => QueryPoll::Ready(Ok(None)),
+            },
+            ast::Type::SliceType(slice) => match slice.ty() {
+                Some(element) => match walk(db, graph, sources, signature, &element) {
+                    QueryPoll::Ready(Ok(Some(element))) => {
+                        QueryPoll::Ready(Ok(Some(TyTerm::Slice(Box::new(element)))))
+                    }
+                    other => other,
+                },
+                None => QueryPoll::Ready(Ok(None)),
+            },
+            ast::Type::ArrayType(array) => {
+                let Some(element) = array.ty() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let length = match array.const_arg().and_then(|arg| arg.expr()) {
+                    Some(ast::Expr::Literal(length)) => length,
+                    // `[T; N]` with `N` a const parameter of the signature
+                    // (an impl's `const N: usize`): its length is that
+                    // parameter, bound from the reached array at a call.
+                    Some(ast::Expr::PathExpr(path)) => {
+                        let parameter = path
+                            .path()
+                            .filter(|path| path.qualifier().is_none())
+                            .and_then(|path| path.segment())
+                            .and_then(|segment| segment.name_ref())
+                            .and_then(|name| {
+                                signature.generics.iter().find(|parameter| {
+                                    parameter.kind == crate::syntax::signatures::GenericKind::Const
+                                        && parameter.name == name.text()
+                                })
+                            });
+                        let Some(parameter) = parameter else {
+                            return QueryPoll::Ready(Ok(None));
+                        };
+                        let length = crate::traits::term::ConstTerm::Param(
+                            crate::traits::term::ParamKey {
+                                definition: signature.definition,
+                                ordinal: parameter.ordinal,
+                            },
+                        );
+                        return match walk(db, graph, sources, signature, &element) {
+                            QueryPoll::Ready(Ok(Some(element))) => QueryPoll::Ready(Ok(Some(
+                                TyTerm::Array(Box::new(element), length),
+                            ))),
+                            other => other,
+                        };
+                    }
+                    _ => return QueryPoll::Ready(Ok(None)),
+                };
+                let digits: String = length
+                    .syntax()
+                    .text()
+                    .to_string()
+                    .trim_end_matches("usize")
+                    .chars()
+                    .filter(|c| *c != '_')
+                    .collect();
+                let Ok(len) = digits.parse::<u64>() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                match walk(db, graph, sources, signature, &element) {
+                    QueryPoll::Ready(Ok(Some(element))) => QueryPoll::Ready(Ok(Some(TyTerm::Array(
+                        Box::new(element),
+                        crate::traits::term::ConstTerm::Value(len),
+                    )))),
+                    other => other,
+                }
+            }
+            ast::Type::PathType(path) => {
+                let Some(path) = path.path() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                if let Some(qualifier) = path.qualifier() {
+                    // A module-qualified nominal (`m::W<T>`, `crate::ops::Range<A>`)
+                    // names a Type item through its whole path; otherwise the
+                    // qualifier is a type (`T::Item`, `Self::Item`).
+                    match module_path_type(db, graph, sources, signature, &path) {
+                        QueryPoll::Ready(Ok(Some(term))) => return QueryPoll::Ready(Ok(Some(term))),
+                        QueryPoll::Ready(Ok(None)) => {}
+                        other => return other,
+                    }
+                    return shorthand_projection(db, graph, sources, signature, &qualifier, &path);
+                }
+                let Some(segment) = path.segment() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                // Written generic arguments of a nominal (`W<T>`); lifetime
+                // arguments are regions and carry no runtime type.
+                let mut arguments = Vec::new();
+                let generic = ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&segment);
+                if let Some(list) = &generic {
+                    for argument in list.generic_args() {
+                        match argument {
+                            ast::GenericArg::TypeArg(argument) => {
+                                let Some(ty) = argument.ty() else {
+                                    return QueryPoll::Ready(Ok(None));
+                                };
+                                match walk(db, graph, sources, signature, &ty) {
+                                    QueryPoll::Ready(Ok(Some(term))) => arguments
+                                        .push(crate::traits::term::GenericArg::Type(term)),
+                                    other => return other,
+                                }
+                            }
+                            ast::GenericArg::LifetimeArg(_) => {}
+                            _ => return QueryPoll::Ready(Ok(None)),
+                        }
+                    }
+                }
+                // `Self` of an impl: its written self type, whose generic
+                // names are the function's inherited impl parameters.
+                if segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw) {
+                    if signature
+                        .generics
+                        .iter()
+                        .any(|p| p.kind == crate::syntax::signatures::GenericKind::Type && p.name == "Self")
+                    {
+                        return match resolve_named(db, graph, sources, signature, "Self") {
+                            QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => {
+                                QueryPoll::Ready(Ok(Some(TyTerm::Param(key))))
+                            }
+                            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+                            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                        };
+                    }
+                    let Some(owner) = signature.scope.owner else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    let Some(self_ty) = impl_self_type(sources, owner, signature.header.profile.edition)
+                        .or_else(|| {
+                            generated_impl_self_type(
+                                db,
+                                signature.definition,
+                                owner,
+                                signature.header.profile.edition,
+                            )
+                        })
+                    else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    return walk(db, graph, sources, signature, &self_ty);
+                }
+                let Some(name_ref) = segment.name_ref() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let name = name_ref.text().to_string();
+                let selected = match resolve_named(db, graph, sources, signature, &name) {
+                    QueryPoll::Ready(Ok(selected)) => selected,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                QueryPoll::Ready(Ok(match selected {
+                    SignatureName::Primitive(primitive) => Some(TyTerm::Primitive(primitive)),
+                    SignatureName::Str => Some(TyTerm::Str),
+                    SignatureName::Parameter(key) => Some(TyTerm::Param(key)),
+                    SignatureName::Source(found) => {
+                        let normalizer = match AliasNormalizer::new(graph, sources) {
+                            Ok(normalizer) => normalizer,
+                            Err(error) => return QueryPoll::Ready(Err(error)),
+                        };
+                        match normalizer.normalize(db, found.identity) {
+                            QueryPoll::Ready(Ok(AliasTarget::Type(term))) => Some(term),
+                            QueryPoll::Ready(Ok(AliasTarget::Str)) => Some(TyTerm::Str),
+                            QueryPoll::Ready(Ok(AliasTarget::Nominal(nominal))) => {
+                                Some(TyTerm::Nominal(nominal, std::mem::take(&mut arguments)))
+                            }
+                            QueryPoll::Ready(Ok(AliasTarget::Deferred { definition, .. })) => {
+                                return deferred_alias_type(
+                                    db, graph, sources, definition, &arguments,
+                                );
+                            }
+                            QueryPoll::Ready(Ok(_)) => None,
+                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                        }
+                    }
+                    _ => None,
+                }))
+            }
+            _ => QueryPoll::Ready(Ok(None)),
+        }
+    }
+    /// A multi-segment path that resolves, as written, to a Type item of the
+    /// signature's module scope: its nominal term with the last segment's
+    /// written generic arguments. `None` when the path names no such item.
+    fn module_path_type(
+        db: &mut Database,
+        graph: &NameNamespaces,
+        sources: &[&PreparedSourceView],
+        signature: &FunctionSignature,
+        path: &ra_ap_syntax::ast::Path,
+    ) -> QueryPoll<Option<TyTerm>> {
+        use ra_ap_syntax::ast;
+        let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let scope = crate::syntax::outline::ScopeKey {
+            owner: None,
+            ..signature.scope.clone()
+        };
+        let found = match graph.lookup_source_path(
+            Namespace::Type,
+            &segments,
+            absolute,
+            &scope,
+            signature.header.profile.edition,
+        ) {
+            Ok(crate::frontend::names::NameLookup::Defined(found)) => found,
+            Ok(_) => return QueryPoll::Ready(Ok(None)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut arguments = Vec::new();
+        if let Some(list) = path
+            .segment()
+            .and_then(|segment| ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&segment))
+        {
+            for argument in list.generic_args() {
+                match argument {
+                    ast::GenericArg::TypeArg(argument) => {
+                        let Some(ty) = argument.ty() else {
+                            return QueryPoll::Ready(Ok(None));
+                        };
+                        match walk(db, graph, sources, signature, &ty) {
+                            QueryPoll::Ready(Ok(Some(term))) => {
+                                arguments.push(crate::traits::term::GenericArg::Type(term))
+                            }
+                            other => return other,
+                        }
+                    }
+                    ast::GenericArg::LifetimeArg(_) => {}
+                    _ => return QueryPoll::Ready(Ok(None)),
+                }
+            }
+        }
+        let normalizer = match AliasNormalizer::new(graph, sources) {
+            Ok(normalizer) => normalizer,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        match normalizer.normalize(db, found.identity) {
+            QueryPoll::Ready(Ok(AliasTarget::Type(term))) => QueryPoll::Ready(Ok(Some(term))),
+            QueryPoll::Ready(Ok(AliasTarget::Nominal(nominal))) => {
+                QueryPoll::Ready(Ok(Some(TyTerm::Nominal(nominal, arguments))))
+            }
+            QueryPoll::Ready(Ok(AliasTarget::Deferred { definition, .. })) => {
+                deferred_alias_type(db, graph, sources, definition, &arguments)
+            }
+            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    /// `P::Name` / `Self::Name`: a shorthand associated-type projection whose
+    /// self type is the generic parameter (or impl self type) and whose trait
+    /// is selected from that type's impls when it is known.
+    fn shorthand_projection(
+        db: &mut Database,
+        graph: &NameNamespaces,
+        sources: &[&PreparedSourceView],
+        signature: &FunctionSignature,
+        qualifier: &ra_ap_syntax::ast::Path,
+        path: &ra_ap_syntax::ast::Path,
+    ) -> QueryPoll<Option<TyTerm>> {
+        use ra_ap_syntax::ast;
+        let Some(segment) = path.segment() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&segment).is_some()
+            || qualifier.qualifier().is_some()
+        {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let Some(name) = segment.name_ref().map(|name| name.text().to_string()) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(base) = qualifier.segment() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let projection = |self_ty: TyTerm, trait_key: crate::core::digest::Digest| {
+            TyTerm::Projection(Box::new(crate::traits::term::ProjectionKey {
+                trait_ref: crate::traits::term::TraitRef {
+                    trait_key,
+                    self_ty,
+                    args: Vec::new(),
+                },
+                item: crate::frontend::member_index::associated_name_key(&name),
+                item_args: Vec::new(),
+            }))
+        };
+        // `<Ty as Trait>::Name` (and `<Ty>::Name`): the written self type is
+        // any Type this service resolves; the written trait, resolved in the
+        // declaration's module like any trait path, selects among that
+        // type's impls. Trait Type arguments are not yet part of the key.
+        if let Some(ast::PathSegmentKind::Type { type_ref, trait_ref }) = base.kind() {
+            let Some(type_ref) = type_ref else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            let trait_key = match trait_ref.and_then(|written| written.path()) {
+                None => crate::core::digest::Digest([0; 32]),
+                Some(written) => {
+                    let typed_arguments = written.segments().any(|segment| {
+                        ast::HasGenericArgs::generic_arg_list(&segment).is_some_and(|list| {
+                            list.generic_args()
+                                .any(|argument| !matches!(argument, ast::GenericArg::LifetimeArg(_)))
+                        })
+                    });
+                    let Some((segments, absolute)) = (!typed_arguments)
+                        .then(|| super::member_index::path_segments(written))
+                        .flatten()
+                    else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    let scope = crate::syntax::outline::ScopeKey {
+                        owner: None,
+                        ..signature.scope.clone()
+                    };
+                    match graph.lookup_source_path(
+                        Namespace::Type,
+                        &segments,
+                        absolute,
+                        &scope,
+                        signature.header.profile.edition,
+                    ) {
+                        Ok(crate::frontend::names::NameLookup::Defined(definition)) => {
+                            definition.identity
+                        }
+                        // A trait outside the source world (no facade) names
+                        // no impl here; selection falls back to the name.
+                        Ok(_) => crate::core::digest::Digest([0; 32]),
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                }
+            };
+            return match walk(db, graph, sources, signature, &type_ref) {
+                QueryPoll::Ready(Ok(Some(self_ty))) => {
+                    QueryPoll::Ready(Ok(Some(projection(self_ty, trait_key))))
+                }
+                other => other,
+            };
+        }
+        if ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&base).is_some() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let base_name = if base.kind() == Some(ast::PathSegmentKind::SelfTypeKw) {
+            "Self".to_string()
+        } else {
+            match base.name_ref() {
+                Some(name) => name.text().to_string(),
+                None => return QueryPoll::Ready(Ok(None)),
+            }
+        };
+        let self_ty = match resolve_named(db, graph, sources, signature, &base_name) {
+            QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => TyTerm::Param(key),
+            QueryPoll::Ready(Ok(_)) if base_name == "Self" => {
+                let Some(owner) = signature.scope.owner else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let Some(written) =
+                    impl_self_type(sources, owner, signature.header.profile.edition).or_else(
+                        || {
+                            generated_impl_self_type(
+                                db,
+                                signature.definition,
+                                owner,
+                                signature.header.profile.edition,
+                            )
+                        },
+                    )
+                else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                match walk(db, graph, sources, signature, &written) {
+                    QueryPoll::Ready(Ok(Some(term))) => term,
+                    other => return other,
+                }
+            }
+            QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Ok(Some(projection(
+            self_ty,
+            crate::core::digest::Digest([0; 32]),
+        ))))
+    }
+    walk(db, graph, sources, signature, &ty)
+}
+/// The written self type of impl `owner`.
+pub(crate) fn impl_self_type(
+    sources: &[&PreparedSourceView],
+    owner: crate::core::digest::Digest,
+    edition: u16,
+) -> Option<ra_ap_syntax::ast::Type> {
+    use ra_ap_syntax::ast::{self, HasModuleItem};
+    let item = sources.iter().find_map(|source| {
+        source.outline().items.iter().find(|item| {
+            item.def_key.item_kind == ItemKind::Impl && item.def_key.enclosing_impl == Some(owner)
+        })
+    })?;
+    let header = super::member_index::impl_header_text(&item.header.tokens);
+    let parser = match edition {
+        2015 => ra_ap_syntax::Edition::Edition2015,
+        2018 => ra_ap_syntax::Edition::Edition2018,
+        2021 => ra_ap_syntax::Edition::Edition2021,
+        _ => ra_ap_syntax::Edition::Edition2024,
+    };
+    let parsed = ast::SourceFile::parse(&format!("{header} {{}}"), parser);
+    let Some(ast::Item::Impl(implementation)) = parsed.tree().items().next() else {
+        return None;
+    };
+    implementation.self_ty()
+}
+/// The written self type of a macro-generated impl `owner`, found through
+/// the declaring function's own generated unit (no unit scan).
+pub(crate) fn generated_impl_self_type(
+    db: &mut Database,
+    declaration: crate::core::digest::Digest,
+    owner: crate::core::digest::Digest,
+    edition: u16,
+) -> Option<ra_ap_syntax::ast::Type> {
+    use ra_ap_syntax::ast::{self, HasModuleItem};
+    let source = db.input(&InputKey::DefinitionSource(declaration))?;
+    let InputValue::DefinitionSource(parse) = source.as_ref() else {
+        return None;
+    };
+    let unit = db.generated_declaration_unit(parse)?;
+    let outline = unit.outline().ok()?;
+    let item = outline.items.iter().find(|item| {
+        item.def_key.item_kind == ItemKind::Impl && item.def_key.enclosing_impl == Some(owner)
+    })?;
+    let header = super::member_index::impl_header_text(&item.header.tokens);
+    let parser = match edition {
+        2015 => ra_ap_syntax::Edition::Edition2015,
+        2018 => ra_ap_syntax::Edition::Edition2018,
+        2021 => ra_ap_syntax::Edition::Edition2021,
+        _ => ra_ap_syntax::Edition::Edition2024,
+    };
+    let parsed = ast::SourceFile::parse(&format!("{header} {{}}"), parser);
+    let Some(ast::Item::Impl(implementation)) = parsed.tree().items().next() else {
+        return None;
+    };
+    implementation.self_ty()
+}
+/// A written type name in a function owned by impl `owner`.
+fn impl_owned_name(
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    generated: Option<&crate::syntax::outline::Outline>,
+    signature: &FunctionSignature,
+    owner: crate::core::digest::Digest,
+    name: &str,
+) -> Result<SignatureName, Diagnostic> {
+    use ra_ap_syntax::ast::{self, HasGenericParams, HasModuleItem};
+    let edition = signature.header.profile.edition;
+    let module = crate::syntax::outline::ScopeKey {
+        owner: None,
+        ..signature.scope.clone()
+    };
+    let lookup = |segments: &[crate::syntax::imports::ImportSegment], absolute: bool| {
+        graph.lookup_source_path(Namespace::Type, segments, absolute, &module, edition)
+    };
+    if name != "Self" {
+        let found = lookup(
+            &[crate::syntax::imports::ImportSegment::Name(name.to_owned())],
+            false,
+        )?;
+        return super::signature_names::classify_completed_type_lookup(name, edition, found);
+    }
+    let owned = |item: &&crate::syntax::outline::ItemOutline| {
+        item.def_key.item_kind == ItemKind::Impl && item.def_key.enclosing_impl == Some(owner)
+    };
+    let Some(item) = sources
+        .iter()
+        .find_map(|source| source.outline().items.iter().find(owned))
+        .or_else(|| generated.and_then(|outline| outline.items.iter().find(owned)))
+    else {
+        return Ok(SignatureName::NeedOwnerContext(signature.scope.clone()));
+    };
+    let header = super::member_index::impl_header_text(&item.header.tokens);
+    let parser = match edition {
+        2015 => ra_ap_syntax::Edition::Edition2015,
+        2018 => ra_ap_syntax::Edition::Edition2018,
+        2021 => ra_ap_syntax::Edition::Edition2021,
+        _ => ra_ap_syntax::Edition::Edition2024,
+    };
+    let parsed = ast::SourceFile::parse(&format!("{header} {{}}"), parser);
+    let Some(ast::Item::Impl(implementation)) = parsed.tree().items().next() else {
+        return Ok(SignatureName::NeedOwnerContext(signature.scope.clone()));
+    };
+    // A generic self type (`impl<T> W<T>`) needs its owner's parameters.
+    if implementation.generic_param_list().is_some() {
+        return Ok(SignatureName::NeedOwnerContext(signature.scope.clone()));
+    }
+    let Some(ast::Type::PathType(path)) = implementation.self_ty() else {
+        return Ok(SignatureName::NeedOwnerContext(signature.scope.clone()));
+    };
+    let Some((segments, absolute)) = path.path().and_then(super::member_index::path_segments)
+    else {
+        return Ok(SignatureName::NeedOwnerContext(signature.scope.clone()));
+    };
+    let last = match segments.last() {
+        Some(crate::syntax::imports::ImportSegment::Name(last)) => last.clone(),
+        _ => return Ok(SignatureName::NeedOwnerContext(signature.scope.clone())),
+    };
+    let found = lookup(&segments, absolute)?;
+    super::signature_names::classify_completed_type_lookup(&last, edition, found)
+}
+/// A type alias whose target is a written compound type (`type Foo =
+/// GenericFoo<u32>`, `type Pair<T> = (T, T)`): the target resolved by the same
+/// written-Type walk in the alias's own declaration context, its Type
+/// parameters replaced by the use site's written arguments in order. `None`
+/// when the target or the argument list is outside that walk.
+pub(super) fn deferred_alias_type(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    definition: crate::core::digest::Digest,
+    arguments: &[crate::traits::term::GenericArg],
+) -> QueryPoll<Option<TyTerm>> {
+    let outcome = match db.fetch(&SyntaxProvider, QueryKey::TypeAlias(definition)) {
+        QueryPoll::Ready(Ok(outcome)) => outcome,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+    };
+    let QueryValue::TypeAlias(alias) = outcome.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("alias query result mismatch")));
+    };
+    if alias.scope.owner.is_some() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    // The alias declaration is its own Type owner: its generics, scope and
+    // edition, with the target as the only written Type.
+    let signature = FunctionSignature {
+        definition,
+        scope: alias.scope.clone(),
+        header: alias.header.clone(),
+        generics: alias.generics.clone(),
+        parameters: Vec::new(),
+        result: alias.target.clone(),
+        result_symbolic: None,
+        predicates: Vec::new(),
+    };
+    let term = match resolve_written_type(db, graph, sources, &signature, &alias.target) {
+        QueryPoll::Ready(Ok(Some(term))) => term,
+        other => return other,
+    };
+    let mut supplied = arguments.iter().filter_map(|argument| match argument {
+        crate::traits::term::GenericArg::Type(ty) => Some(ty),
+        _ => None,
+    });
+    let mut map = std::collections::BTreeMap::new();
+    for parameter in alias
+        .generics
+        .iter()
+        .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
+    {
+        let key = match resolve_named(db, graph, sources, &signature, &parameter.name) {
+            QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => key,
+            QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+        };
+        let Some(argument) = supplied.next() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        map.insert(key, argument.clone());
+    }
+    if supplied.next().is_some() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    QueryPoll::Ready(Ok(Some(super::associated_types::substitute(&term, &map))))
+}
 /// Resolve the selected result of the owning source Type lookup above. This
 /// internal helper cannot serve as an alternate public namespace admission.
 pub(super) fn prepare_selected(
@@ -314,6 +1051,18 @@ pub(super) fn prepare_selected(
                     );
                 }
                 AliasTarget::Nominal(identity) => identity,
+                AliasTarget::Deferred { definition, target } => {
+                    return match deferred_alias_type(db, graph, sources, definition, &[]) {
+                        QueryPoll::Ready(Ok(Some(term))) => {
+                            QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Type(term))))
+                        }
+                        QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(
+                            NamedTypePreparation::Alias(AliasTarget::Deferred { definition, target }),
+                        )),
+                        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),
+                    };
+                }
                 other => return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(other))),
             };
             let definition = match nominal_definition(db, sources, identity) {
@@ -356,7 +1105,13 @@ fn prepare_nominal(
             "selected nominal source/schema publication differs",
         )));
     }
-    if !schema.generics.is_empty() {
+    // Only Type/const parameters need arguments: regions are not runtime
+    // data, so a lifetime-only declaration (`Formatter<'a>`) is closed.
+    if schema
+        .generics
+        .iter()
+        .any(|parameter| parameter.kind != crate::syntax::signatures::GenericKind::Lifetime)
+    {
         return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Nominal(
             identity,
         ))));

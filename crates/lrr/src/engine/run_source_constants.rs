@@ -2,32 +2,42 @@
 use super::*;
 use crate::{
     db::{
-        dependency::{DependencyStamp, InputKey, InputValue},
+        dependency::{InputKey, InputValue},
         memo::Outcome,
         seals::SealDomain,
     },
     frontend::{
         constant_construction::CurrentConstantConstruction,
-        constant_path_selection::{ConstantPathOutcome, ConstantPathSelection},
+        constant_path_selection::ConstantPathSelection,
         constant_result_type::CurrentConstantResultType,
         constant_source_admission::ConstantSourceAdmission,
         constants::{
             ConstLimits, query::fetch_constant_preparing_macros, query_value::ConstantQueryValue,
-            wire::ConstantWireType,
         },
+    },
+    ir::recipe::VerifiedRecipe,
+    source::manifest::{ItemKind, Namespace},
+};
+// Only the superseded `SourceConstant` preparation (regression models) uses these.
+#[cfg(test)]
+use crate::{
+    db::dependency::DependencyStamp,
+    frontend::{
+        constant_path_selection::ConstantPathOutcome, constants::wire::ConstantWireType,
         names::NameLookup,
     },
     ir::{
-        recipe::{Origin, RecipeDraft, RecipeExit, VerifiedRecipe},
+        recipe::{Origin, RecipeDraft, RecipeExit},
         source_constant::SourceConstantInstruction,
     },
-    source::manifest::{ItemKind, Namespace},
     syntax::{
         body_index::{ExpressionKind, NodeRole},
         spans::SourceRange,
     },
 };
-const LIMIT: usize = 32 << 20;
+// E-R5-006: only satisfies byte-budget parameters still required by the
+// frontend constant APIs; remove with those parameters. No run-local cap.
+const LIMIT: usize = usize::MAX;
 pub(super) struct SourceConstantPlan {
     caller: usize,
     target: usize,
@@ -36,7 +46,6 @@ pub(super) struct SourceConstantPlan {
     child: Option<(ConstantSourceAdmission, Outcome)>,
     outcome: Outcome,
     recipe: VerifiedRecipe,
-    bytes: usize,
 }
 fn current_value(outcome: &Outcome) -> Result<&ConstantQueryValue, Diagnostic> {
     match outcome.value.as_ref() {
@@ -130,11 +139,18 @@ impl RunMachine {
     }
     /// Demand a Type seal only from the exact actual Value seal's selected world.
     /// Never synthesize a world identity or execute preparation inside a provider.
+    #[cfg(test)]
     fn required_constant_type(
         db: &Database,
         target: &PreparedSourceView,
         path: &ConstantPathSelection,
     ) -> Result<Option<InputRequest>, Diagnostic> {
+        if db
+            .source_view_type_scope_certificate(target.selection(), &path.context().scope)?
+            .is_some()
+        {
+            return Ok(None);
+        }
         let input = db.source_view_scope_certificate(target.selection(), &path.context().scope)?;
         let InputValue::DiscoverySeal(value) = input.as_ref() else {
             return Err(call_fault(
@@ -151,6 +167,10 @@ impl RunMachine {
             .is_none()
             .then_some(InputRequest::Discover { key }))
     }
+    /// Superseded legacy route, retained only for its historical regression
+    /// models: production dispatch reads every constant path as an ordinary
+    /// `ValuePath` (`constant_item_data`), whatever body it is written in.
+    #[cfg(test)]
     pub(super) fn prepare_source_constant_recipe(
         &mut self,
         db: &mut Database,
@@ -219,11 +239,6 @@ impl RunMachine {
             {
                 return Ok(None);
             }
-            // The constant preparation bound belongs to this reached candidate,
-            // not to unrelated execution in a large captured source world.
-            if self.sources.len() > 256 {
-                return Err(call_fault("constant source set exceeds bounded profile"));
-            }
             let views = self.sources.iter().collect::<Vec<_>>();
             match ConstantPathSelection::capture_current(db, source, body, range, &views, LIMIT)? {
                 ConstantPathOutcome::Selected(path) => Ok(Some(*path)),
@@ -284,7 +299,7 @@ impl RunMachine {
                 proof,
                 &demand.expected_wire(),
                 ConstLimits::default(),
-                1 << 20,
+                usize::MAX,
             ) {
                 QueryPoll::Ready(Ok(outcome)) => outcome,
                 QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
@@ -318,7 +333,7 @@ impl RunMachine {
             result.into_admission(),
             &wire,
             ConstLimits::default(),
-            1 << 20,
+            usize::MAX,
         ) {
             QueryPoll::Ready(Ok(o)) => o,
             QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
@@ -357,7 +372,6 @@ impl RunMachine {
                 .len()
                 .checked_add(path.dependencies().len())
                 .and_then(|n| n.checked_add(1))
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(crate::runtime::arena::resource)?;
             let mut dependencies = Vec::new();
             dependencies
@@ -414,20 +428,6 @@ impl RunMachine {
                 },
                 &self.frame.body,
             )?;
-            let bytes = path
-                .metadata_bytes()
-                .checked_add(result.metadata_bytes())
-                .and_then(|n| n.checked_add(parent.metadata_bytes().ok()?))
-                .and_then(|n| n.checked_add(recipe.metadata_bytes()))
-                .and_then(|n| {
-                    n.checked_add(child.as_ref().map_or(Some(0), |(p, o)| {
-                        p.metadata_bytes()
-                            .checked_add(current_value(o).ok()?.metadata_bytes().ok()?)
-                    })?)
-                })
-                .and_then(|n| n.checked_add(std::mem::size_of::<SourceConstantPlan>() + 256))
-                .filter(|n| *n <= LIMIT)
-                .ok_or_else(crate::runtime::arena::resource)?;
             drop(joined);
             Ok(SourceConstantPlan {
                 caller,
@@ -437,24 +437,247 @@ impl RunMachine {
                 child,
                 outcome,
                 recipe,
-                bytes,
             })
         };
         let plan = match finish() {
             Ok(plan) => plan,
             Err(e) => return QueryPoll::Ready(Err(e)),
         };
-        let bytes = match self
-            .constant_plan_bytes
-            .checked_add(plan.bytes)
-            .filter(|n| *n <= LIMIT && self.constant_plans.len() < 4096)
-        {
-            Some(b) => b,
-            None => return QueryPoll::Ready(Err(crate::runtime::arena::resource())),
-        };
         let recipe = plan.recipe.clone();
         self.constant_plans.insert(pc, plan);
-        self.constant_plan_bytes = bytes;
         QueryPoll::Ready(Ok(Some(recipe)))
+    }
+}
+
+impl RunMachine {
+    /// The evaluated scalar value of a constant item named by a pattern
+    /// (constant patterns compare scalars only).
+    pub(super) fn constant_item_value(
+        &mut self,
+        db: &mut Database,
+        definition: crate::core::digest::Digest,
+    ) -> QueryPoll<crate::runtime::value::ValueRepr> {
+        match self.constant_item_data(db, definition) {
+            QueryPoll::Ready(Ok((value, _))) => QueryPoll::Ready(value.scalar().ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "non-scalar constant pattern requires structural constant integration".into(),
+                )
+            })),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    /// The evaluated value of a constant (or a static's initializer) and its
+    /// selected wire layout, through the one pure constant admission and
+    /// evaluation route. Value paths, statics and patterns share it; the
+    /// dispatcher prepares it once per PC (statics once per run).
+    pub(super) fn constant_item_data(
+        &mut self,
+        db: &mut Database,
+        definition: crate::core::digest::Digest,
+    ) -> QueryPoll<(
+        crate::ir::constant_data::ConstValue,
+        crate::ir::constant_data::wire::ConstantWireType,
+    )> {
+        let unsupported = |message: &str| {
+            QueryPoll::Ready(Err(Diagnostic::new("LRR-E-UNSUPPORTED", message.into())))
+        };
+        // A module item of a catalogued source, or a body-local item whose
+        // owning body the coordinator published with its reached plan.
+        let mut local = None;
+        let target = match self.sources.iter().position(|view| {
+            view.outline().items.iter().any(|item| {
+                item.def_key.fingerprint() == definition
+                    && matches!(item.def_key.item_kind, ItemKind::Constant | ItemKind::Static)
+            })
+        }) {
+            Some(target) => target,
+            None => {
+                let owner = match db
+                    .input(&InputKey::LocalDeclarationOwner(definition))
+                    .as_deref()
+                {
+                    Some(InputValue::LocalDeclarationOwner(owner)) => owner.clone(),
+                    _ => {
+                        return unsupported(
+                            "constant item target is outside the source catalogue",
+                        );
+                    }
+                };
+                let parse = match db.input(&InputKey::DefinitionSource(definition)).as_deref() {
+                    Some(InputValue::DefinitionSource(parse)) => parse.clone(),
+                    _ => return QueryPoll::Ready(Err(call_fault("local constant source absent"))),
+                };
+                let plan = match db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(owner.clone()))
+                {
+                    QueryPoll::Ready(Ok(plan)) => plan,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let QueryValue::SourceLocalPlan(plan) = plan.value.as_ref() else {
+                    return QueryPoll::Ready(Err(call_fault("local constant owner plan differs")));
+                };
+                let plan = Arc::clone(plan);
+                match plan.require_current(db) {
+                    QueryPoll::Ready(Ok(())) => {}
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+                let owning = plan.context().source();
+                if owning.index().body() != &owner || owning.parsed().key() != parse {
+                    return QueryPoll::Ready(Err(call_fault("local constant owner plan differs")));
+                }
+                // The original source the owning body (or its retained
+                // assembly) belongs to: its seals certify module names.
+                let Some(module_source) = plan.context().module_source() else {
+                    return unsupported("local constant owning module source is absent");
+                };
+                let Some(target) = self
+                    .sources
+                    .iter()
+                    .position(|view| view.selection() == module_source.selection())
+                else {
+                    return unsupported("local constant owning source is outside the catalogue");
+                };
+                local = Some(crate::frontend::constant_source_admission::LocalConstantScope::new(
+                    owner,
+                    Arc::clone(owning.parsed()),
+                    Arc::clone(plan.context().facts()),
+                ));
+                target
+            }
+        };
+        let scope = match db
+            .input(&InputKey::DeclarationContext(definition))
+            .as_deref()
+        {
+            // A block item's names beyond its blocks are its module's.
+            Some(InputValue::DeclarationContext(context)) => crate::syntax::outline::ScopeKey {
+                crate_key: context.scope.crate_key,
+                module_path: context.scope.module_path.clone(),
+                owner: None,
+            },
+            _ => return QueryPoll::Ready(Err(call_fault("constant pattern context absent"))),
+        };
+        let required = (|| -> Result<Option<InputRequest>, Diagnostic> {
+            // A current primary or contained Type certificate of the owning
+            // scope (a nested module's facet of the same fixed point).
+            if db
+                .source_view_type_scope_certificate(self.sources[target].selection(), &scope)?
+                .is_some()
+            {
+                return Ok(None);
+            }
+            let input =
+                db.source_view_scope_certificate(self.sources[target].selection(), &scope)?;
+            let InputValue::DiscoverySeal(value) = input.as_ref() else {
+                return Err(call_fault(
+                    "constant target Value certificate variant differs",
+                ));
+            };
+            let mut key = value.seal.key().clone();
+            key.domain = SealDomain::Scope {
+                id: scope.fingerprint(),
+                namespace: Namespace::Type,
+            };
+            Ok(db
+                .published_input(&InputKey::DiscoverySeal(key.clone()))
+                .is_none()
+                .then_some(InputRequest::Discover { key }))
+        })();
+        match required {
+            Ok(Some(input)) => return QueryPoll::NeedInput(input),
+            Ok(None) => {}
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        }
+        let views = self.sources.iter().collect::<Vec<_>>();
+        let request = crate::frontend::constant_source_admission::ConstantRequest::Constant;
+        let admission = match local {
+            Some(local) => ConstantSourceAdmission::capture_current_local_in_sources(
+                db,
+                &self.sources[target],
+                definition,
+                request,
+                LIMIT,
+                &views,
+                local,
+            ),
+            None => ConstantSourceAdmission::capture_current_in_sources(
+                db,
+                &self.sources[target],
+                definition,
+                request,
+                LIMIT,
+                &views,
+            ),
+        };
+        let result = match admission.and_then(|admission| {
+            CurrentConstantResultType::capture_current(db, &self.sources[target], admission, LIMIT)
+        }) {
+            Ok(result) => result,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let wire = if let Some(scalar) = result.scalar() {
+            scalar.wire_type()
+        } else if let Some((element, demand)) = result.array() {
+            // The array length is its own pure constant demand, selected
+            // from the declaration's written type.
+            let proof = match result.admission().reselect_array_length_current(
+                db,
+                &self.sources[target],
+                demand,
+                LIMIT,
+            ) {
+                Ok(proof) => proof,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let (_, outcome) = match fetch_constant_preparing_macros(
+                db,
+                &self.sources[target],
+                proof,
+                &demand.expected_wire(),
+                ConstLimits::default(),
+                usize::MAX,
+            ) {
+                QueryPoll::Ready(Ok(outcome)) => outcome,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let length = match current_value(&outcome)
+                .and_then(|value| value.payload().decode_value())
+                .and_then(|value| {
+                    value
+                        .scalar()
+                        .ok_or_else(|| call_fault("constant array length is not scalar"))
+                }) {
+                Ok(value) if value.kind == 5 && value.type_id == 13 => value.payload,
+                Ok(_) => return QueryPoll::Ready(Err(call_fault("constant array length is not usize"))),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            crate::ir::constant_data::wire::ConstantWireType::Array {
+                element: Box::new(element.wire_type()),
+                length,
+            }
+        } else {
+            return unsupported("constant result type requires structural constant integration");
+        };
+        let (_, outcome) = match fetch_constant_preparing_macros(
+            db,
+            &self.sources[target],
+            result.into_admission(),
+            &wire,
+            ConstLimits::default(),
+            usize::MAX,
+        ) {
+            QueryPoll::Ready(Ok(outcome)) => outcome,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(
+            current_value(&outcome)
+                .and_then(|value| value.payload().decode_value())
+                .map(|value| (value, wire)),
+        )
     }
 }

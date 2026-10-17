@@ -99,7 +99,6 @@ pub(super) fn intersection(a: &VisibilityScope, b: &VisibilityScope) -> Option<V
 fn checked_add(bytes: &mut usize, amount: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(amount)
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(|| error("glob lookup metadata limit exceeded"))?;
     Ok(())
 }
@@ -150,9 +149,6 @@ fn intern(
 ) -> Result<usize, Diagnostic> {
     if let Some(id) = ids.get(&key) {
         return Ok(*id);
-    }
-    if nodes.len() >= 1_000_000 {
-        return Err(error("glob lookup goal limit exceeded"));
     }
     checked_add(bytes, std::mem::size_of::<Node>())?;
     for name in key.0.components() {
@@ -557,7 +553,6 @@ pub(super) fn lookup_in_class_observed(
             for &id in component {
                 updates = updates
                     .checked_add(1)
-                    .filter(|n| *n <= 1_000_000 * 257)
                     .ok_or_else(|| error("glob candidate update limit exceeded"))?;
                 state_bytes(&states[id])?;
                 let state = evaluate(&nodes[id], &states)?;

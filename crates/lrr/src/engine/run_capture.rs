@@ -92,7 +92,15 @@ impl RunCapture {
                 | Op::ConstructStart { .. }
                 | Op::ConstructField { .. }
                 | Op::ConstructFinish { .. }
+                | Op::ValuePath { .. }
+                | Op::MakeClosure { .. }
                 | Op::Assert { .. }
+                | Op::FormatArguments { .. }
+                | Op::MethodReceiver { .. }
+                | Op::ComparisonOperand { .. }
+                | Op::IteratorCall { .. }
+                | Op::CompoundAssignPlace { .. }
+                | Op::ArrayRepeat { .. }
                 | Op::Panic { .. }
                 | Op::Declaration
                 | Op::CallPrepare { .. }
@@ -131,8 +139,6 @@ impl RunCapture {
             RecipeExit::Backedge(_)
             | RecipeExit::Call { .. }
             | RecipeExit::Next(_)
-            | RecipeExit::PatternRetry { .. }
-            | RecipeExit::PatternNext { .. }
             | RecipeExit::Branch { .. } => {}
             RecipeExit::Control(control) => match control {
                 ControlRecipe::Return { .. }
@@ -194,7 +200,7 @@ impl RunCapture {
                     self.facts.observed_fault = true;
                     return Ok(());
                 };
-                if message != report.panic.description() || message.len() > 65_536 {
+                if message != report.panic.description() {
                     self.facts.observed_fault = true;
                     return Ok(());
                 }
@@ -296,6 +302,7 @@ mod tests {
             opcode_counters: Default::default(),
             installed_recipes: 1,
             installed_lrir_bytes: 1,
+            output: Default::default(),
         })
     }
     #[test]

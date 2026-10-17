@@ -14,9 +14,6 @@ fn unsupported() -> Diagnostic {
     )
 }
 pub(crate) fn capture(source: &str, function: &str) -> Result<Facts, Diagnostic> {
-    if source.len() > 1024 * 1024 {
-        return Err(unsupported());
-    }
     let parsed = ra_ap_syntax::SourceFile::parse(source, ra_ap_syntax::Edition::Edition2024);
     if !parsed.errors().is_empty() {
         return Err(unsupported());
@@ -30,10 +27,7 @@ pub(crate) fn capture(source: &str, function: &str) -> Result<Facts, Diagnostic>
         .ok_or_else(unsupported)?;
     let mut source_values = Vec::new();
     let mut expected_binary = 0usize;
-    for (index, node) in body.syntax().descendants().enumerate() {
-        if index >= 100_000 {
-            return Err(unsupported());
-        }
+    for node in body.syntax().descendants() {
         if let Some(literal) = ast::Literal::cast(node.clone()) {
             source_values.try_reserve(1).map_err(|_| unsupported())?;
             source_values.push(literal.token().text().parse().map_err(|_| unsupported())?);

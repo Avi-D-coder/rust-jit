@@ -1,0 +1,21 @@
+{
+  "kind": "common-local-plan-context-owner-roots",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "b00e4663e76742164e02778d74ce61354cfa8cbc1ea0ca9359fd64bd04633940",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "bytes": 32343,
+      "sha256": "7ba375006ada51ac087512847f5b725ec87603db46cae5de6a6915fbb404653b"
+    }
+  ],
+  "predecessor": "common-entered-local-body-source-v1",
+  "changes": [
+    "Readonly actual context_roots iterator exposes plan context and entered optional body_context physical Arc edges for existing owner accounting; no fixed count or semantic pointer authority"
+  ],
+  "required_join": "root product_retention count/has_external_owners iterates actual context_roots and dedups source traversal by physical context allocation",
+  "holds": [
+    "Actual retirement control uncompiled/unexecuted",
+    "No source semantic/lookup change"
+  ]
+}

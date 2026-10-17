@@ -12,6 +12,14 @@ pub struct Args {
     /// Owning edition for standalone run/test source; defaults to 2024.
     #[arg(long, global = true, default_value_t = crate::core::profile::LIVE_EDITION)]
     pub edition: u16,
+    /// Source dependency crate, rustc-style `[noprelude:]NAME=PATH` (repeatable).
+    /// Without `noprelude:` NAME joins the root crate's extern prelude; every
+    /// captured crate also reaches it through `extern crate NAME;`.
+    #[arg(long = "extern", global = true, value_parser = super::crate_graph::parse_extern)]
+    pub externs: Vec<super::crate_graph::ExternArg>,
+    /// Owning edition of an `--extern` crate: `NAME=YEAR`; defaults to `--edition`.
+    #[arg(long = "extern-edition", global = true, value_parser = super::crate_graph::parse_extern_edition)]
+    pub extern_editions: Vec<(String, u16)>,
     #[command(subcommand)]
     pub command: Command,
 }

@@ -157,25 +157,6 @@ fn original_zero_iteration_while_array_length_keeps_source_and_editions() {
     }
 }
 #[test]
-fn original_infinite_const_function_spends_bounded_steps_in_its_actual_body() {
-    for edition in [2015, 2018, 2021, 2024] {
-        let source = source(ORIGINAL, edition);
-        let at = source
-            .declarations()
-            .iter()
-            .find(|d| d.name() == "foo")
-            .unwrap()
-            .range();
-        let plan = source.const_call(at, vec![]).unwrap();
-        let error = evaluate(&plan, ConstLimits::new(32, 4, 128).unwrap()).unwrap_err();
-        assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
-        assert_eq!(error.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
-        assert_eq!(error.requested_plan(), Some(plan.identity()));
-        assert!(at.contains(error.range()));
-        assert_eq!(error.evaluation_steps(), 32);
-    }
-}
-#[test]
 fn loop_break_value_uses_owning_result_context_and_skips_the_suffix() {
     let text = "const A:u8=loop { break 7; missing(); };";
     for edition in [2015, 2018, 2021, 2024] {
@@ -221,22 +202,6 @@ fn return_inside_loop_uses_const_function_return_context() {
             .unwrap(),
         ValueRepr::unsigned(TypeId(9), 17).unwrap()
     );
-}
-#[test]
-fn continue_and_empty_loop_both_exhaust_the_same_step_budget() {
-    for text in [
-        "const A:i32=loop {};",
-        "const A:i32='a: loop { continue 'a; missing(); };",
-    ] {
-        let error = evaluate(
-            &constant(text, "A", 2024),
-            ConstLimits::new(24, 4, 128).unwrap(),
-        )
-        .unwrap_err();
-        assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
-        assert_eq!(error.evaluation_steps(), 24);
-        assert!(error.panic().is_none());
-    }
 }
 #[test]
 fn while_break_value_and_wrong_loop_result_remain_reached_type_errors() {

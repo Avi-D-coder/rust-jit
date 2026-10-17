@@ -1,0 +1,45 @@
+{
+  "kind": "common-prepared-constructor-query-retention-control",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "f75105889af9ff1d0b01b8afaf07daa59921c235fbac46882f6b29f5028882db",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/prepared_constructor_tests.rs",
+      "bytes": 4741,
+      "sha256": "5ad7e6d4b08676d6f8de14e0463b43d5fc1bcbe7a090eb79d35d2a0589945589"
+    },
+    {
+      "path": "crates/lrr/src/frontend/prepared_constructor_retention_tests.rs",
+      "bytes": 4033,
+      "sha256": "b46e2aa5a58390695eac9ce5635ed43c5c736901ccecc798ddc18072a2e8f306"
+    }
+  ],
+  "review": {
+    "path": "worktracks/evidence/2026-10-16-installed-constructor-source-review.json",
+    "sha256": "cd5cb75417ef7cae39e5dd1dfea74f4528cc0822b6f6459bfaf6397601c4272b",
+    "baseline_component_sha256": "ea9ac48e69b0641a2edbc38a6ac9b8340359f95df6e24c196d69fc1922800442"
+  },
+  "dependencies": [
+    "frozen constructor16 common-installed-record-binding-v1",
+    "corrected engine/install.rs getter4e39a57ec198a85f217510a675035e4823731687b439969962158876e9bc6ec8",
+    "corrected db/prepared_inputs.rs testsb81f6eaa653e036a91e883158028272303705a4ecc2e764464893a1324bb0742",
+    "existing root/context/retention prerequisites as frozen constructor16; no new registry/authority hook"
+  ],
+  "test_selector": "frontend::types::declaration_field_type_tests::prepared_constructor_tests::retention_tests::retained_prepared_query_handle_is_charged_after_real_memo_replacement_until_release",
+  "witness": "Full unchanged tests/ui/borrowck/borrowck-assign-to-subfield.rs; existing genuine Value/Type/header world, Rust2024. Source authority/lifetime control only; no actual main/frame run.",
+  "proof_points": [
+    "query+installed handle share actual Arc<QueryValue> allocation",
+    "all outer Outcome/InstalledRecipes/sourceplan handles dropped before revocation",
+    "public whole-input-universe revocation then same genuine BoundRecordConstructor query reaches NAME-MISSING definition header not found; memo replaced by Error",
+    "raw immutable prepared data remains readable with no execution authority",
+    "actual query-pin/cache usage >=checked payload metadata after original successful memo gone",
+    "zero cap rejects while retained; after final handle release exact memo/parse/source_input usage zero"
+  ],
+  "holds": [
+    "No Cargo/native execution",
+    "Existing actual Frame materialization/cleanup and NeedInput/resume controls unexecuted",
+    "Prepared branch immutable mapping copy rootrepair underway, not included in this test-only successor",
+    "Pending constructor aggregate API metadata accounting remains source-only unverified hold; no demonstrated production interleaving",
+    "Old source component failures and unrelated upstream runtime gaps preserved"
+  ]
+}

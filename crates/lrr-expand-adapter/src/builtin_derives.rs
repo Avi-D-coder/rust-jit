@@ -43,12 +43,6 @@ fn identity(domain: &[u8], fields: &[&str]) -> Key {
 /// Used to build compiler-owned facets. A user macro of this spelling is never
 /// resolved through this API: the resolver must retain the exact descriptor identity.
 pub fn descriptor(name: &str) -> Result<Option<BuiltinDeriveDescriptor>, AdapterError> {
-    if name.len() > 64 * 1024 {
-        return Err(AdapterError {
-            code: "LRR-E-MACRO-SCOPE",
-            message: "builtin derive name limit".into(),
-        });
-    }
     let Some(derive) = find_builtin_derive(&Name::new_root(name)) else {
         return Ok(None);
     };

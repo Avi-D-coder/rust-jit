@@ -20,9 +20,6 @@ impl SourceDeclarative {
         pending.try_reserve_exact(1).map_err(|_| limit())?;
         pending.push(self);
         while let Some(provider) = pending.pop() {
-            if seen.len() >= 100_000 {
-                return Err(limit());
-            }
             if !seen.insert(provider as *const Self as usize) {
                 continue;
             }
@@ -63,7 +60,6 @@ impl SourceDeclarative {
             pending
                 .len()
                 .checked_add(children)
-                .filter(|n| *n <= 100_000)
                 .ok_or_else(limit)?;
             // Only one set row is retained per visited provider. Scratch is a
             // simultaneous peak bound, not repeatedly charged as owned graph.
@@ -74,7 +70,6 @@ impl SourceDeclarative {
                         .checked_add(pending.len())
                         .and_then(|n| n.checked_add(children))
                         .and_then(|n| n.checked_mul(160))
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(limit)?,
                 )
                 .filter(|n| *n <= maximum)

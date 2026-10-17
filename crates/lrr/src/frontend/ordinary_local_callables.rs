@@ -225,9 +225,54 @@ pub(crate) fn prepare_entered_local_function(
             ValueGoalDemand::PathAdjustment,
         )));
     }
+    let path = path.id;
+    admit_entered_local(db, parent, site, path)
+}
+
+/// A function item value (`let f = local_fn;`): the same entered Value
+/// selection and canonical admission as a direct call of that path, at the
+/// value path's own site. Calling the value later consumes this proof
+/// exactly as a direct call consumes its call-site proof.
+pub(crate) fn prepare_entered_local_function_value(
+    db: &mut Database,
+    site: &PcKey,
+) -> QueryPoll<EnteredLocalCall> {
+    let value = polled!(db.fetch(
+        &SyntaxProvider,
+        QueryKey::SourceLocalPlan(site.body.clone())
+    ));
+    let QueryValue::SourceLocalPlan(parent) = value.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("ordinary local callable owning plan differs")));
+    };
+    let parent = Arc::clone(parent);
+    polled!(parent.require_current(db));
+    let index = parent.context().source().index();
+    let Some(path) = index.nodes().get(site.node as usize) else {
+        return QueryPoll::Ready(Err(fault("ordinary local value path node absent")));
+    };
+    if site.phase != checked!(Phase::Entry.code())
+        || index.body() != &site.body
+        || path.id != NodeId(site.node)
+        || path.role != NodeRole::Expression(ExpressionKind::Path)
+    {
+        return QueryPoll::Ready(Err(fault(
+            "ordinary local function value requires its exact path entry",
+        )));
+    }
+    let path = path.id;
+    admit_entered_local(db, parent, site, path)
+}
+
+fn admit_entered_local(
+    db: &mut Database,
+    parent: Arc<PreparedSourceLocalPlan>,
+    site: &PcKey,
+    path: NodeId,
+) -> QueryPoll<EnteredLocalCall> {
+    let source = parent.context().source();
     let demand = QueryKey::EnteredValue(PcKey {
         body: site.body.clone(),
-        node: path.id.0,
+        node: path.0,
         phase: 0,
     });
     let selected = polled!(db.fetch(&SyntaxProvider, demand.clone()));
@@ -235,7 +280,7 @@ pub(crate) fn prepare_entered_local_function(
         return QueryPoll::Ready(Err(fault("ordinary callable Value goal differs")));
     };
     if goal.body() != &site.body
-        || goal.node() != path.id
+        || goal.node() != path
         || !parent.same_environment(goal.retained_plan())
     {
         return QueryPoll::Ready(Err(fault(
@@ -244,6 +289,14 @@ pub(crate) fn prepare_entered_local_function(
     }
     if let Some(pending) = goal.pending() {
         return QueryPoll::Ready(Ok(EnteredLocalCall::Pending(pending)));
+    }
+    // A qualified callee (a module path, a `Type::item` associated function
+    // or a closed library facade function) keeps the dispatcher's own
+    // written-path route, which selects the same definition.
+    if goal.qualified() {
+        return QueryPoll::Ready(Ok(EnteredLocalCall::Pending(
+            ValueGoalDemand::PathAdjustment,
+        )));
     }
     if let Some(binding) = goal.local_binding() {
         return QueryPoll::Ready(Ok(EnteredLocalCall::Binding(binding)));
@@ -321,7 +374,6 @@ pub(crate) fn prepare_entered_local_function(
             .and_then(|bytes| bytes.checked_add(guard.metadata_bytes()))
             .and_then(|bytes| bytes.checked_add(2 * std::mem::size_of::<usize>()))
             .and_then(|bytes| bytes.checked_add(source.parsed().key().profile.semantics.capacity()))
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)
     );
     let source = source.parsed().key();

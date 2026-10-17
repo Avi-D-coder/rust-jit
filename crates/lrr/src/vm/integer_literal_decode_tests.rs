@@ -159,10 +159,9 @@ fn literal(p: &Prepared) -> &crate::ir::op::LiteralRecipe {
         })
         .unwrap()
 }
-fn frame(p: &Prepared, store: &mut GuestStore, fuel: u64) -> Frame {
+fn frame(p: &Prepared, store: &mut GuestStore) -> Frame {
     let pc = p.recipe.recipe().key.clone();
     let mut frame = Frame::new(p.index.clone(), pc.clone(), store).unwrap();
-    frame.set_fuel_limit(fuel).unwrap();
     let node = &p.index.nodes()[pc.node as usize];
     let mut scope = match p.recipe.recipe().operations.first() {
         Some(Op::ScopeEnter { scope }) => p.index.scopes()[scope.0 as usize].parent,
@@ -193,10 +192,10 @@ fn draft(p: &Prepared) -> RecipeDraft {
 fn store_session_normal_dispatch_refuses_same_bit_foreign_store_before_opcode_entry() {
     for edition in [2015, 2018, 2021, 2024] {
         let p = prepare(RADIX, edition, "let a = 0xBEEF_isize;", "0xBEEF_isize");
-        let mut sa = GuestStore::new(1, 10000, 4 << 20).unwrap();
-        let mut sb = GuestStore::new(1, 10000, 4 << 20).unwrap();
-        let mut a = frame(&p, &mut sa, 100);
-        let b = frame(&p, &mut sb, 100);
+        let mut sa = GuestStore::for_epoch(1).unwrap();
+        let mut sb = GuestStore::for_epoch(1).unwrap();
+        let mut a = frame(&p, &mut sa);
+        let b = frame(&p, &mut sb);
         assert_eq!(a.constant_frame_anchor(), b.constant_frame_anchor());
         let pc = a.pc().clone();
         let before = (sb.budget().handles(), sb.budget().bytes());
@@ -338,9 +337,9 @@ fn same_prepared_stock_recipe_memo_and_vm_repetition_do_no_repeated_lexical_deco
             };
             assert_eq!(reused.recipe(), p.recipe.recipe());
         }
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         for _ in 0..16 {
-            let mut f = frame(&p, &mut store, 100);
+            let mut f = frame(&p, &mut store);
             assert!(matches!(
                 step(&mut f, &mut store, &p.recipe).unwrap(),
                 StepOutcome::Next(_)
@@ -364,9 +363,9 @@ fn same_prepared_stock_recipe_memo_and_vm_repetition_do_no_repeated_lexical_deco
 fn repeated_unsuffixed_stock_recipe_owns_fresh_binding_per_evaluation_but_copies_share() {
     let (_, counts) = observe_integer_decoding(|| {
         let p = prepare(SUFFIX, 2024, "let j = -128;", "-128");
-        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
-        let mut a = frame(&p, &mut store, 100);
-        let mut b = frame(&p, &mut store, 100);
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let mut a = frame(&p, &mut store);
+        let mut b = frame(&p, &mut store);
         assert!(matches!(
             step(&mut a, &mut store, &p.recipe).unwrap(),
             StepOutcome::Next(_)
@@ -443,8 +442,8 @@ fn missing_legacy_integer_metadata_and_wrong_sign_are_structurally_refused() {
 fn original_i128_minimum_lexical_payload_does_not_admit_guest_i128_execution() {
     let spelling = "-0x8000_0000_0000_0000_0000_0000_0000_0000i128";
     let p = prepare(WIDE, 2024, spelling, spelling);
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
-    let mut f = frame(&p, &mut store, 100);
+    let mut store = GuestStore::for_epoch(1).unwrap();
+    let mut f = frame(&p, &mut store);
     let handles = store.budget().handles();
     let error = step(&mut f, &mut store, &p.recipe).unwrap_err();
     assert_eq!(error.code, "LRR-E-UNSUPPORTED");
@@ -473,8 +472,8 @@ fn unchanged_oversized_literal_fault_is_retained_at_exact_reached_source_boundar
     ));
     let expected_source = literal(&p).source.clone();
     assert_eq!(expected_source, p.recipe.recipe().origin.span);
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
-    let mut f = frame(&p, &mut store, 100);
+    let mut store = GuestStore::for_epoch(1).unwrap();
+    let mut f = frame(&p, &mut store);
     let before = (store.budget().handles(), store.budget().bytes());
     let error = step(&mut f, &mut store, &p.recipe).unwrap_err();
     assert_eq!(error.code, "LRR-E-INTERNAL-IR");
@@ -526,8 +525,8 @@ fn unchanged_invalid_numeric_suffix_is_a_cached_reached_fault_without_type_ident
             reason: crate::ir::op::IntegerLexicalError::InvalidSuffix,
         })
     ));
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
-    let mut f = frame(&p, &mut store, 100);
+    let mut store = GuestStore::for_epoch(1).unwrap();
+    let mut f = frame(&p, &mut store);
     let before = (store.budget().handles(), store.budget().bytes());
     let error = step(&mut f, &mut store, &p.recipe).unwrap_err();
     assert_eq!(error.code, "LRR-E-INTERNAL-IR");

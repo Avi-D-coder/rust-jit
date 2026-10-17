@@ -1,0 +1,38 @@
+{
+  "schema": "lrr/precode/child-impl-frontier/v1",
+  "owned": [
+    "crates/lrr/src/expand/source_discovery/item_impl_children.rs"
+  ],
+  "task": "M018 recursive generated declaration closure, M019 header prerequisite",
+  "invariant": "A generated child impl frontier releases only after its actual ancestor declaration job recursively completed, actual child output and source/producer chain attach to that root, and actual canonical impl headers appear in its completed inventory.",
+  "witness": "Unchanged official type-param-local-var-shadowing direct whole-user output passed all4 editions per parent V8. Wrapper actual fails further declaration discovery; no wrapper acceptance claimed.",
+  "shared_route": "GeneratedMacroCatalog child_for_discovery -> actual GeneratedHeaderPlan retained ActiveImplProjection -> ChildImplFrontier -> existing CompletedDeclarationFragment::syntax_outputs/source_scan/inventory -> ONE GeneratedDeclarations::item_impl_headers_from_projection. Parent owns maps/queue/release.",
+  "alternates": "No synthetic source, child parser, body/type query or fake no-item/catalog closure. Existing explicit wrapper refusal remains until root integrates genuine child completion.",
+  "authority": "Actual record.same_record/key/descriptor/epoch; actual retained projection binds cfg/scope/output/epoch. Walk child parent_inventory/parent_invocation through real scans to actual completed root and actual source producer, not merely record membership. Stable ancestorjob uses existing item-declaration-job domain and root output fp.",
+  "cost": "Prepare shared immutable Arc handles + bounded scope/cfg/projection metadata. Resolve cold bounded syntax_outputs and parent lookup (O(outputs*depth + activeimpljoin + inventoryrows*headers)); max100000 outputs,256 ancestry. No runtime/peroperation/world census.",
+  "acceptance": "Independent source review and frozen wrapper runtime required; no Cargo/compiler/tests by worker. Complete global catalog/facade/trait semantics held.",
+  "all_eight": [
+    "1 no evaluator MA001/7/8 debt remains",
+    "2 ordinary actual generated syntax no scalar/break executor MA004/5 remain",
+    "3 no method/numeric/name whitelist MA003/6 remain",
+    "4 real original/generated parent-chain join; missing typedrefusal not spoofedsource",
+    "5 declarationheaders only no executable/pattern checks MA002 remains",
+    "6 retained projection+completed scan no reparse",
+    "7 actual bounded subtree no global namespacecensus",
+    "8 Arc handles no immutable BodyIndex/tree clones/wholefile node searches"
+  ],
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "efdb05c89ade07fb95f66ead7906cbc8952bca8d1baeb7893433219636057d56"
+    }
+  ]
+}

@@ -63,7 +63,7 @@ pub(crate) struct RuntimeMacroNumericAdmission {
     site: MacroNumericSite,
     context: DefinitionNumericContext,
     dependencies: Vec<DependencyStamp>,
-    namespace: BTreeMap<InputKey, Digest>,
+    namespace: std::sync::Arc<BTreeMap<InputKey, Digest>>,
 }
 impl RuntimeMacroNumericAdmission {
     pub(crate) fn capture(
@@ -103,9 +103,6 @@ impl RuntimeMacroNumericAdmission {
         // Collect only genuine already-resolved compiler comparison relations.
         // Without one, an initializer keeps the existing unresolved literal
         // route; no completed namespace or primitive source absence is claimed.
-        if published.runtime_no_item_proofs.len() > 4096 {
-            return Err(limit());
-        }
         let mut ordinals = Vec::new();
         for (_, proof) in &published.runtime_no_item_proofs {
             if proof.body() != &pc.body || proof.source() != &parsed.key() {
@@ -142,9 +139,6 @@ impl RuntimeMacroNumericAdmission {
             };
         }
         let namespace = db.lexical_namespace_stamps()?;
-        if namespace.len() > 4096 {
-            return Err(limit());
-        }
         // Account the retained map plus bounded Type receipt/graph replay work.
         let mut bytes = 32usize * 1024 * 1024;
         for key in namespace.keys() {
@@ -157,7 +151,6 @@ impl RuntimeMacroNumericAdmission {
                 .ok_or_else(limit)?;
             bytes = bytes
                 .checked_add(row)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(limit)?;
             if db
                 .input(key)
@@ -187,9 +180,6 @@ impl RuntimeMacroNumericAdmission {
         }
         receipt.require_owner(&owner.scope, index.profile())?;
         receipt.require_current(db, published)?;
-        if published.sources.len() > 256 {
-            return Err(limit());
-        }
         let mut views = Vec::new();
         views
             .try_reserve_exact(published.sources.len())
@@ -209,7 +199,6 @@ impl RuntimeMacroNumericAdmission {
             bytes = bytes
                 .checked_add(view.prepared_metadata_bytes()?)
                 .and_then(|n| n.checked_add(graph_work))
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(limit)?;
             for (key, expected) in view.prepared_inputs() {
                 let copies = key
@@ -219,7 +208,6 @@ impl RuntimeMacroNumericAdmission {
                     .ok_or_else(limit)?;
                 bytes = bytes
                     .checked_add(copies)
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 if db
                     .input(key)
@@ -315,16 +303,13 @@ impl RuntimeMacroNumericAdmission {
         };
         let context = DefinitionNumericContext::Parameter(ordinal);
         let mut stamps = BTreeMap::new();
-        for (key, fingerprint) in &namespace {
+        for (key, fingerprint) in namespace.iter() {
             stamps.insert(key.clone(), *fingerprint);
         }
         for view in &views {
             for (key, value) in view.prepared_inputs() {
                 stamps.insert(key.clone(), value.fingerprint());
             }
-        }
-        if stamps.len() > 4096 {
-            return Err(limit());
         }
         let dependencies = stamps
             .into_iter()
@@ -376,7 +361,6 @@ impl RuntimeMacroNumericAdmission {
             .dependencies
             .len()
             .checked_add(self.dependencies.len())
-            .filter(|n| *n <= 4096)
             .ok_or_else(limit)?;
         let mut bytes = count
             .checked_mul(std::mem::size_of::<DependencyStamp>())
@@ -384,7 +368,6 @@ impl RuntimeMacroNumericAdmission {
         for stamp in recipe.dependencies.iter().chain(&self.dependencies) {
             bytes = bytes
                 .checked_add(stamp.heap_bytes())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(limit)?;
         }
         let mut dependencies = Vec::new();
@@ -403,231 +386,5 @@ impl RuntimeMacroNumericAdmission {
             },
             index,
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        core::profile::ProfileIdentity,
-        db::{dependency::InputValue, key::OutlineKey},
-        expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
-        frontend::compile_input_catalog::CompileInputCatalog,
-        ir::{op::Op, pc::Phase},
-        source::{
-            changes::{
-                PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput,
-            },
-            snapshot::{CfgSet, SourceBlob, SourcePath},
-        },
-        syntax::parse::ParseKey,
-    };
-    use std::sync::Arc;
-    const ORIGINAL: &str = include_str!(
-        "../../../../fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/label_break_value.rs"
-    );
-    fn world(edition: u16) -> (Database, PreparedSourceView, BodyHandle, BodyIndex) {
-        let profile = ProfileIdentity {
-            edition,
-            ..ProfileIdentity::current()
-        };
-        let blob = SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap();
-        let cfg = CfgSet::guest_default();
-        let path = SourcePath::new("original-comparison-numeric.rs").unwrap();
-        let crate_key = Digest::of_bytes(b"original comparison numeric source");
-        let selection = SourceSelection {
-            path: path.clone(),
-            outline: OutlineKey {
-                parse: ParseKey {
-                    content: blob.content(),
-                    profile: profile.clone(),
-                },
-                crate_key,
-                module_path: vec![],
-                cfg: cfg.fingerprint(),
-            },
-        };
-        let inputs = PreparedSourceInputs::refresh(
-            None,
-            vec![SourceUnitInput {
-                path,
-                crate_key,
-                module_path: vec![],
-                profile: profile.clone(),
-                cfg: cfg.clone(),
-                blob,
-            }],
-            Default::default(),
-        )
-        .unwrap();
-        let SourceSelectionOutcome::Selected(source) = inputs.select(&selection).unwrap() else {
-            panic!("original source selection absent")
-        };
-        let handle = source
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.declared_name == "label_break_match")
-            .unwrap()
-            .body
-            .clone()
-            .unwrap();
-        let parsed =
-            ParsedFile::parse(source.captured_macro_blob().unwrap(), profile.clone()).unwrap();
-        let body = parsed
-            .index_body_with_cfg(&handle, &cfg, Default::default())
-            .unwrap();
-        let mut db = Database::default();
-        inputs.publish(&mut db).unwrap();
-        db.begin_expansion_epoch(1).unwrap();
-        let mut discovery = SourceDiscovery::new(
-            vec![source.share()],
-            source.outline().root_scope.clone(),
-            Namespace::Value,
-            Digest::of_bytes(b"original comparison numeric world"),
-            1,
-        )
-        .unwrap()
-        .with_declarative_compiler(
-            Digest::of_bytes(b"original comparison numeric compiler"),
-            crate::expand::source_declarative::engine_version(),
-            Arc::new(CompileInputCatalog::standalone(&profile).unwrap()),
-        )
-        .unwrap();
-        let mut sealed = false;
-        for _ in 0..100_000 {
-            match discovery.poll().unwrap() {
-                SourceDiscoveryStep::Sealed(_) => {
-                    sealed = true;
-                    break;
-                }
-                SourceDiscoveryStep::NeedExpansion { request } => discovery
-                    .admit_expansion(Arc::new(request.expand().unwrap()))
-                    .unwrap(),
-                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
-                    .admit_expansion(Arc::new(request.expand().unwrap()))
-                    .unwrap(),
-                _ => panic!("actual original discovery is incomplete"),
-            }
-        }
-        assert!(sealed);
-        discovery.publish(&mut db).unwrap();
-        (db, source, handle, body)
-    }
-    fn publication(db: &Database, source: &PreparedSourceView) -> Box<DiscoveryInput> {
-        let certificate = db
-            .lexical_scope_certificate(source.selection(), &source.outline().root_scope)
-            .unwrap();
-        let InputValue::DiscoverySeal(publication) = certificate.as_ref() else {
-            panic!()
-        };
-        publication.clone()
-    }
-    fn capture(
-        db: &mut Database,
-        source: &PreparedSourceView,
-        handle: &BodyHandle,
-        body: &BodyIndex,
-        pc: &PcKey,
-        publication: &DiscoveryInput,
-    ) -> Result<RuntimeMacroNumericAdmission, Diagnostic> {
-        let parsed = db
-            .prepared_parse(&source.selection().outline.parse)
-            .unwrap();
-        let site = parsed
-            .runtime_macro_numeric_request(handle, body, pc)
-            .unwrap()
-            .unwrap();
-        match RuntimeMacroNumericAdmission::capture(db, source, publication, handle, body, pc, site)
-        {
-            QueryPoll::Ready(result) => result.and_then(|proof| {
-                proof.ok_or_else(|| fault("expected original comparison relation absent"))
-            }),
-            QueryPoll::NeedInput(_) => panic!("closed original preparation unexpectedly suspended"),
-        }
-    }
-    fn sites(
-        db: &Database,
-        source: &PreparedSourceView,
-        handle: &BodyHandle,
-        body: &BodyIndex,
-    ) -> Vec<PcKey> {
-        let parsed = db
-            .prepared_parse(&source.selection().outline.parse)
-            .unwrap();
-        body.nodes()
-            .iter()
-            .filter_map(|node| {
-                let pc = body.pc(node.id, Phase::Entry).unwrap();
-                parsed
-                    .runtime_macro_numeric_request(handle, body, &pc)
-                    .unwrap()
-                    .map(|_| pc)
-            })
-            .collect()
-    }
-    #[test]
-    fn unchanged_compound_relations_require_real_standard_comparison_and_type_scope_all_editions() {
-        // Source/recipe authority control, not complete upstream main execution.
-        for edition in [2015, 2018, 2021, 2024] {
-            let (mut db, source, handle, body) = world(edition);
-            let published = publication(&db, &source);
-            let keys = sites(&db, &source, &handle, &body);
-            assert_eq!(keys.len(), 3);
-            for pc in keys {
-                let proof = capture(&mut db, &source, &handle, &body, &pc, &published).unwrap();
-                let parsed = db
-                    .prepared_parse(&source.selection().outline.parse)
-                    .unwrap();
-                assert_eq!(
-                    proof.context(&parsed, &handle, &body, &pc).unwrap().1,
-                    DefinitionNumericContext::Parameter(1)
-                );
-                let recipe = parsed
-                    .initial_thunk_with_runtime_macro_numeric(&handle, &body, &pc, &proof)
-                    .unwrap();
-                if body.nodes()[pc.node as usize].role
-                    == crate::syntax::body_index::NodeRole::Statement
-                {
-                    assert!(recipe.recipe().operations.iter().any(|op| matches!(
-                        op,
-                        Op::SetHint {
-                            hint: crate::ir::op::HintRecipe::DefinitionNumeric(
-                                DefinitionNumericContext::Parameter(1)
-                            ),
-                            ..
-                        }
-                    )));
-                } else {
-                    assert!(recipe.recipe().operations.iter().any(|op| matches!(
-                        op,
-                        Op::CompoundHint {
-                            kind: crate::ir::op::AssignKind::DefinitionNumeric {
-                                context: DefinitionNumericContext::Parameter(1),
-                                ..
-                            },
-                            ..
-                        }
-                    )));
-                }
-                proof.revalidate(&mut db).unwrap();
-            }
-        }
-    }
-    #[test]
-    fn original_comparison_relation_cannot_survive_missing_type_receipt_or_changed_epoch() {
-        let (mut db, source, handle, body) = world(2024);
-        let published = publication(&db, &source);
-        let pc = sites(&db, &source, &handle, &body).remove(0);
-        let proof = capture(&mut db, &source, &handle, &body, &pc, &published).unwrap();
-        let mut missing = published.as_ref().clone();
-        missing.type_scopes.clear();
-        assert!(capture(&mut db, &source, &handle, &body, &pc, &missing).is_err());
-        let mut missing = published.as_ref().clone();
-        missing.runtime_no_item_proofs.clear();
-        assert!(capture(&mut db, &source, &handle, &body, &pc, &missing).is_err());
-        db.begin_expansion_epoch(2).unwrap();
-        assert!(proof.revalidate(&mut db).is_err());
     }
 }

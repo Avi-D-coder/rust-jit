@@ -294,9 +294,6 @@ impl SelectedMacroDefinitionModule {
                 .checked_add(dependency.heap_bytes())
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
-        if bytes > 32 * 1024 * 1024 {
-            return Err(crate::runtime::arena::resource());
-        }
         Ok(bytes)
     }
     /// Cold source-proof validation only. Final pinned scope adjustment and

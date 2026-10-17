@@ -1,0 +1,298 @@
+{
+ "provenance": "Conditions authored for LRR; expected messages observed from `rustc +nightly-2026-10-01 --edition 2021 -Zunpretty=expanded` (the `::core::panicking::panic` literal) and cross-checked with rustc 1.99.0 at runtime where the program type-checks.",
+ "edition": "2021",
+ "cases": [
+  {
+   "condition": "x.iter().map(|v: &i32| -> i32 { *v + 1 }).sum::<i32>() == 7",
+   "message": "assertion failed: x.iter().map(|v: &i32| -> i32 { *v + 1 }).sum::<i32>() == 7"
+  },
+  {
+   "condition": "v.iter().filter(|&&x| x > 2).count() == 9",
+   "message": "assertion failed: v.iter().filter(|&&x| x > 2).count() == 9"
+  },
+  {
+   "condition": "matches!(o, Some(ref y) if *y > 3)",
+   "message": "assertion failed: matches!(o, Some(ref y) if *y > 3)"
+  },
+  {
+   "condition": "if let Some(y) = o { y == 9 } else { false }",
+   "message": "assertion failed: if let Some(y) = o { y == 9 } else { false }"
+  },
+  {
+   "condition": "o.map_or(false, |y| y > 100)",
+   "message": "assertion failed: o.map_or(false, |y| y > 100)"
+  },
+  {
+   "condition": "s.len() >= 10 || s.starts_with(\"zz\")",
+   "message": "assertion failed: s.len() >= 10 || s.starts_with(\"zz\")"
+  },
+  {
+   "condition": "(1..=3).contains(&9)",
+   "message": "assertion failed: (1..=3).contains(&9)"
+  },
+  {
+   "condition": "(..3).contains(&9)",
+   "message": "assertion failed: (..3).contains(&9)"
+  },
+  {
+   "condition": "a as u64 as i64 == -1",
+   "message": "assertion failed: a as u64 as i64 == -1"
+  },
+  {
+   "condition": "a < 0 && b > 0 || a == b",
+   "message": "assertion failed: a < 0 && b > 0 || a == b"
+  },
+  {
+   "condition": "!v.is_empty() && v[v.len() - 1] == 99",
+   "message": "assertion failed: !v.is_empty() && v[v.len() - 1] == 99"
+  },
+  {
+   "condition": "{ let mut t = 0; for i in 0..3 { t += i; } t } == 100",
+   "message": "assertion failed: { let mut t = 0; for i in 0..3 { t += i; } t } == 100"
+  },
+  {
+   "condition": "'outer: loop { break 'outer false }",
+   "message": "assertion failed: 'outer: loop { break 'outer false }"
+  },
+  {
+   "condition": "loop { break false }",
+   "message": "assertion failed: loop { break false }"
+  },
+  {
+   "condition": "match o { Some(1 | 2) => true, Some(n @ 3..=5) => n == 0, None | Some(_) => false }",
+   "message": "assertion failed: match o {\n    Some(1 | 2) => true,\n    Some(n @ 3..=5) => n == 0,\n    None | Some(_) => false,\n}"
+  },
+  {
+   "condition": "std::convert::identity::<bool>(false)",
+   "message": "assertion failed: std::convert::identity::<bool>(false)"
+  },
+  {
+   "condition": "<Vec<i32> as Default>::default().len() == 1",
+   "message": "assertion failed: <Vec<i32> as Default>::default().len() == 1"
+  },
+  {
+   "condition": "f(&[1, 2, 3][..]) == 0",
+   "message": "assertion failed: f(&[1, 2, 3][..]) == 0"
+  },
+  {
+   "condition": "(a, b).0 == 7",
+   "message": "assertion failed: (a, b).0 == 7"
+  },
+  {
+   "condition": "t.0.1 == 9",
+   "message": "assertion failed: t.0.1 == 9"
+  },
+  {
+   "condition": "x.iter().any(|&(p, q)| p == q)",
+   "message": "assertion failed: x.iter().any(|&(p, q)| p == q)"
+  },
+  {
+   "condition": "x.iter().all(|&x| { x > 0 })",
+   "message": "assertion failed: x.iter().all(|&x| { x > 0 })"
+  },
+  {
+   "condition": "r#true()",
+   "message": "assertion failed: r#true()"
+  },
+  {
+   "condition": "a.checked_add(b).is_none()",
+   "message": "assertion failed: a.checked_add(b).is_none()"
+  },
+  {
+   "condition": "(a + b) * (a - b) == 1",
+   "message": "assertion failed: (a + b) * (a - b) == 1"
+  },
+  {
+   "condition": "a + (b * a) == 1",
+   "message": "assertion failed: a + (b * a) == 1"
+  },
+  {
+   "condition": "a - (b - a) == 1",
+   "message": "assertion failed: a - (b - a) == 1"
+  },
+  {
+   "condition": "-(a + b) == 1",
+   "message": "assertion failed: -(a + b) == 1"
+  },
+  {
+   "condition": "!!flag",
+   "message": "assertion failed: !!flag"
+  },
+  {
+   "condition": "*&&a == 9",
+   "message": "assertion failed: *&&a == 9"
+  },
+  {
+   "condition": "&mut 3 == &mut 4",
+   "message": "assertion failed: &mut 3 == &mut 4"
+  },
+  {
+   "condition": "x.clone() == vec![1; 4]",
+   "message": "assertion failed: x.clone() == vec![1; 4]"
+  },
+  {
+   "condition": "[1, 2, 3].iter().copied().max() == Some(9)",
+   "message": "assertion failed: [1, 2, 3].iter().copied().max() == Some(9)"
+  },
+  {
+   "condition": "\"abc\" == \"x\\\"y\"",
+   "message": "assertion failed: \"abc\" == \"x\\\"y\""
+  },
+  {
+   "condition": "'c' == '\\n'",
+   "message": "assertion failed: 'c' == '\\n'"
+  },
+  {
+   "condition": "b'a' == 1u8",
+   "message": "assertion failed: b'a' == 1u8"
+  },
+  {
+   "condition": "1_000.0_f64 < 3e2",
+   "message": "assertion failed: 1_000.0_f64 < 3e2"
+  },
+  {
+   "condition": "0x10 == 0o7 + 0b1",
+   "message": "assertion failed: 0x10 == 0o7 + 0b1"
+  },
+  {
+   "condition": "async_fn_ptr.is_some()",
+   "message": "assertion failed: async_fn_ptr.is_some()"
+  },
+  {
+   "condition": "unsafe { *p } == 3",
+   "message": "assertion failed: unsafe { *p } == 3"
+  },
+  {
+   "condition": "S::<i32> { x: 1 }.x == 2",
+   "message": "assertion failed: S::<i32> { x: 1 }.x == 2"
+  },
+  {
+   "condition": "Some(S { x: 1, ..d }).is_none()",
+   "message": "assertion failed: Some(S { x: 1, ..d }).is_none()"
+  },
+  {
+   "condition": "x.into_iter().rev().collect::<Vec<_>>() == []",
+   "message": "assertion failed: x.into_iter().rev().collect::<Vec<_>>() == []"
+  },
+  {
+   "condition": "(|| false)()",
+   "message": "assertion failed: (|| false)()"
+  },
+  {
+   "condition": "!(|| true)()",
+   "message": "assertion failed: !(|| true)()"
+  },
+  {
+   "condition": "{ a } == 3",
+   "message": "assertion failed: { a } == 3"
+  },
+  {
+   "condition": "f(if a > 0 { 1 } else { 2 }) == 0",
+   "message": "assertion failed: f(if a > 0 { 1 } else { 2 }) == 0"
+  },
+  {
+   "condition": "format!(\"{}-{:?}\", a, b) == \"x\"",
+   "message": "assertion failed: format!(\"{}-{:?}\", a, b) == \"x\""
+  },
+  {
+   "condition": "vec![a; 3].len() == 4",
+   "message": "assertion failed: vec![a; 3].len() == 4"
+  },
+  {
+   "condition": "a.pow(2u32) == 5",
+   "message": "assertion failed: a.pow(2u32) == 5"
+  },
+  {
+   "condition": "std::mem::size_of::<(u8, u16)>() == 3",
+   "message": "assertion failed: std::mem::size_of::<(u8, u16)>() == 3"
+  },
+  {
+   "condition": "std::any::type_name::<Option<&'static str>>() == \"\"",
+   "message": "assertion failed: std::any::type_name::<Option<&'static str>>() == \"\""
+  },
+  {
+   "condition": "i32::MAX == 0",
+   "message": "assertion failed: i32::MAX == 0"
+  },
+  {
+   "condition": "<i32>::MAX == 0",
+   "message": "assertion failed: <i32>::MAX == 0"
+  },
+  {
+   "condition": "x as *const i32 as usize == 0",
+   "message": "assertion failed: x as *const i32 as usize == 0"
+  },
+  {
+   "condition": "&x as &dyn std::fmt::Debug as *const _ as *const u8 == std::ptr::null()",
+   "message": "assertion failed: &x as &dyn std::fmt::Debug as *const _ as *const u8 == std::ptr::null()"
+  },
+  {
+   "condition": "f::<fn(i32) -> i32>(None)",
+   "message": "assertion failed: f::<fn(i32) -> i32>(None)"
+  },
+  {
+   "condition": "f2::<impl Fn() + Send>(None)",
+   "message": "assertion failed: f2::<impl Fn() + Send>(None)"
+  },
+  {
+   "condition": "z == (-1i32).abs() - 1",
+   "message": "assertion failed: z == (-1i32).abs() - 1"
+  },
+  {
+   "condition": "a >> 1 << 2 == 3 & 1 | 4 ^ 2",
+   "message": "assertion failed: a >> 1 << 2 == 3 & 1 | 4 ^ 2"
+  },
+  {
+   "condition": "some_long_function_name(argument_number_one, argument_number_two, argument_number_three, four)",
+   "message": "assertion failed: some_long_function_name(argument_number_one, argument_number_two,\n    argument_number_three, four)"
+  },
+  {
+   "condition": "receiver.first_method_call().second_method_call(with_argument).third_method_call().fourth_one() == 1",
+   "message": "assertion failed: receiver.first_method_call().second_method_call(with_argument).third_method_call().fourth_one()\n    == 1"
+  },
+  {
+   "condition": "items.iter().filter(|item| item.is_valid() && item.value() > threshold).map(|item| item.value()).sum::<u64>() == 0",
+   "message": "assertion failed: items.iter().filter(|item|\n                    item.is_valid() &&\n                        item.value() >\n                            threshold).map(|item| item.value()).sum::<u64>() == 0"
+  },
+  {
+   "condition": "match value { Some(inner) if inner > 100 => inner * 2 + offset, Some(other) => other - 1, None => default_value } == 3",
+   "message": "assertion failed: match value {\n        Some(inner) if inner > 100 => inner * 2 + offset,\n        Some(other) => other - 1,\n        None => default_value,\n    } == 3"
+  },
+  {
+   "condition": "StructName { field_one: value_one, field_two: value_two, field_three: value_three, field_four: 4 }.ok()",
+   "message": "assertion failed: StructName {\n        field_one: value_one,\n        field_two: value_two,\n        field_three: value_three,\n        field_four: 4,\n    }.ok()"
+  },
+  {
+   "condition": "if condition_one && condition_two { first_branch_value_with_long_name } else { second_branch_value_long } == 1",
+   "message": "assertion failed: if condition_one && condition_two {\n        first_branch_value_with_long_name\n    } else { second_branch_value_long } == 1"
+  },
+  {
+   "condition": "{ let first_binding = compute_first(); let second_binding = compute_second(first_binding); second_binding == 9 }",
+   "message": "assertion failed: {\n    let first_binding = compute_first();\n    let second_binding = compute_second(first_binding);\n    second_binding == 9\n}"
+  },
+  {
+   "condition": "[element_one, element_two, element_three, element_four, element_five, element_six, element_7] == x",
+   "message": "assertion failed: [element_one, element_two, element_three, element_four, element_five,\n            element_six, element_7] == x"
+  },
+  {
+   "condition": "(tuple_element_one, tuple_element_two, tuple_element_three, tuple_element_four, five) == y",
+   "message": "assertion failed: (tuple_element_one, tuple_element_two, tuple_element_three,\n        tuple_element_four, five) == y"
+  },
+  {
+   "condition": "|argument_one: u32, argument_two: u32| -> bool { argument_one + argument_two > a_long_threshold_value }(1, 2)",
+   "message": "assertion failed: |argument_one: u32, argument_two: u32| -> bool\n        { argument_one + argument_two > a_long_threshold_value }(1, 2)"
+  },
+  {
+   "condition": "vec![first_vector_element, second_vector_element, third_vector_element, fourth_element] == z",
+   "message": "assertion failed: vec![first_vector_element, second_vector_element, third_vector_element,\n        fourth_element] == z"
+  },
+  {
+   "condition": "x == y && { let unused_but_long_binding_name = 12345678; unused_but_long_binding_name > 0 } && w",
+   "message": "assertion failed: x == y &&\n        {\n            let unused_but_long_binding_name = 12345678;\n            unused_but_long_binding_name > 0\n        } && w"
+  },
+  {
+   "condition": "a_really_long_variable_name_number_one + a_really_long_variable_name_number_two * a_really_long_variable_name_number_three == 0",
+   "message": "assertion failed: a_really_long_variable_name_number_one +\n        a_really_long_variable_name_number_two *\n            a_really_long_variable_name_number_three == 0"
+  }
+ ]
+}

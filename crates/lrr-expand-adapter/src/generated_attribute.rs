@@ -31,7 +31,6 @@ fn fault(message: &str) -> AdapterError {
 fn charge(current: usize, amount: usize) -> Result<usize, AdapterError> {
     current
         .checked_add(amount)
-        .filter(|n| *n <= 64 * 1024 * 1024)
         .ok_or_else(|| fault("generated attribute token retention limit"))
 }
 fn roots(forest: &TokenForest) -> &[TokenTree] {
@@ -114,10 +113,7 @@ pub fn path_forest_at_meta_for_grammar(
     meta_end: u32,
     grammar: DeclarationGrammar,
 ) -> Result<TokenForest, AdapterError> {
-    if meta_start >= meta_end
-        || input.encoded_len()? > 32 * 1024 * 1024
-        || input.allocated_bytes()? > 64 * 1024 * 1024
-    {
+    if meta_start >= meta_end {
         return Err(fault("generated attribute path range or byte limit"));
     }
     let mut store = SpanStore::default();
@@ -130,10 +126,7 @@ pub fn path_forest_at_meta_for_grammar(
         return Err(fault("generated attribute path syntax invalid"));
     }
     let mut selected = None;
-    for (visited, node) in parsed.syntax_node().descendants().enumerate() {
-        if visited >= 1_000_000 {
-            return Err(fault("generated attribute path traversal limit"));
-        }
+    for node in parsed.syntax_node().descendants() {
         let Some(meta) = ast::Meta::cast(node) else {
             continue;
         };
@@ -157,9 +150,6 @@ pub fn path_forest_at_meta_for_grammar(
         map.span_at(node.text_range().start()),
         syntax_bridge::DocCommentDesugarMode::Mbe,
     ))?;
-    if result.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("generated attribute path retention limit"));
-    }
     Ok(result)
 }
 
@@ -178,10 +168,7 @@ pub fn import_binding_forest_for_grammar(
     end: u32,
     grammar: DeclarationGrammar,
 ) -> Result<TokenForest, AdapterError> {
-    if start >= end
-        || input.encoded_len()? > 32 * 1024 * 1024
-        || input.allocated_bytes()? > 64 * 1024 * 1024
-    {
+    if start >= end {
         return Err(fault("generated import input range or byte limit"));
     }
     let mut store = SpanStore::default();
@@ -194,10 +181,7 @@ pub fn import_binding_forest_for_grammar(
         return Err(fault("generated import syntax invalid"));
     }
     let mut selected = None;
-    for (index, node) in parsed.syntax_node().descendants().enumerate() {
-        if index >= 1_000_000 {
-            return Err(fault("generated import syntax traversal limit"));
-        }
+    for node in parsed.syntax_node().descendants() {
         if let Some(leaf) = ast::UseTree::cast(node) {
             let range = leaf.syntax().text_range();
             if u32::from(range.start()) == start && u32::from(range.end()) == end {
@@ -224,9 +208,6 @@ pub fn import_binding_forest_for_grammar(
         map.span_at(name.text_range().start()),
         syntax_bridge::DocCommentDesugarMode::Mbe,
     ))?;
-    if result.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("generated import binding retention limit"));
-    }
     Ok(result)
 }
 /// Original target paths, including grouped-use prefixes. No resolution or execution.
@@ -243,10 +224,7 @@ pub fn import_path_forests_for_grammar(
     end: u32,
     grammar: DeclarationGrammar,
 ) -> Result<Vec<TokenForest>, AdapterError> {
-    if start >= end
-        || input.encoded_len()? > 32 * 1024 * 1024
-        || input.allocated_bytes()? > 64 * 1024 * 1024
-    {
+    if start >= end {
         return Err(fault("generated import input range or byte limit"));
     }
     let mut store = SpanStore::default();
@@ -259,10 +237,7 @@ pub fn import_path_forests_for_grammar(
         return Err(fault("generated import syntax invalid"));
     }
     let mut selected = None;
-    for (index, node) in parsed.syntax_node().descendants().enumerate() {
-        if index >= 1_000_000 {
-            return Err(fault("generated import syntax traversal limit"));
-        }
+    for node in parsed.syntax_node().descendants() {
         if let Some(leaf) = ast::UseTree::cast(node) {
             let range = leaf.syntax().text_range();
             if u32::from(range.start()) == start && u32::from(range.end()) == end {
@@ -274,10 +249,7 @@ pub fn import_path_forests_for_grammar(
     let leaf = selected.ok_or_else(|| fault("generated import leaf absent"))?;
     let mut output = Vec::new();
     let mut retained = 0usize;
-    for (depth, node) in leaf.syntax().ancestors().enumerate() {
-        if depth >= 256 {
-            return Err(fault("generated import path ancestry limit"));
-        }
+    for node in leaf.syntax().ancestors() {
         let Some(tree) = ast::UseTree::cast(node) else {
             continue;
         };
@@ -315,8 +287,6 @@ fn meta_forest(
         || meta_start >= meta_end
         || meta_start < item_start
         || meta_end > item_end
-        || input.encoded_len()? > 32 * 1024 * 1024
-        || input.allocated_bytes()? > 64 * 1024 * 1024
     {
         return Err(fault("generated meta argument input limit or range"));
     }
@@ -374,9 +344,6 @@ fn meta_forest(
         map.span_at(node.text_range().start()),
         syntax_bridge::DocCommentDesugarMode::Mbe,
     ))?;
-    if tokens.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("generated meta token retention limit"));
-    }
     if path {
         return Ok(tokens);
     }
@@ -394,9 +361,6 @@ fn meta_forest(
         tokens.contexts().to_vec(),
         tokens.spans().to_vec(),
     )?;
-    if result.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("generated meta argument retention limit"));
-    }
     Ok(result)
 }
 pub fn materialize(
@@ -423,12 +387,7 @@ pub fn materialize_for_grammar(
     effective: &[AttributeRange],
     grammar: DeclarationGrammar,
 ) -> Result<AttributeInput, AdapterError> {
-    if effective.len() > 4096
-        || applied >= effective.len()
-        || item_start >= item_end
-        || input.encoded_len()? > 32 * 1024 * 1024
-        || input.allocated_bytes()? > 64 * 1024 * 1024
-    {
+    if applied >= effective.len() || item_start >= item_end {
         return Err(fault("generated attribute input limit or selection"));
     }
     let mut store = SpanStore::default();
@@ -475,9 +434,6 @@ pub fn materialize_for_grammar(
         )
         .map_err(|_| fault("generated attribute part allocation"))?;
     let count = item.attrs().count();
-    if count > 4096 {
-        return Err(fault("generated original attribute count limit"));
-    }
     let mut original = Vec::new();
     original
         .try_reserve_exact(count)
@@ -593,18 +549,12 @@ pub fn materialize_for_grammar(
             if contexts.get(&key).is_some_and(|old| old != context) {
                 return Err(fault("generated attribute context conflict"));
             }
-            if !contexts.contains_key(&key) && contexts.len() >= 2_000_000 {
-                return Err(fault("generated attribute context count limit"));
-            }
             contexts.insert(key, context.clone());
         }
         for span in forest.spans() {
             let key = span.key();
             if spans.get(&key).is_some_and(|old| old != span) {
                 return Err(fault("generated attribute span conflict"));
-            }
-            if !spans.contains_key(&key) && spans.len() >= 2_000_000 {
-                return Err(fault("generated attribute span count limit"));
             }
             spans.insert(key, span.clone());
         }
@@ -619,9 +569,6 @@ pub fn materialize_for_grammar(
         contexts.into_values().collect(),
         spans.into_values().collect(),
     )?;
-    if item.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("generated materialized attribute limit"));
-    }
     Ok(AttributeInput {
         item,
         arguments,
@@ -648,12 +595,6 @@ pub fn module_binding_forests_for_grammar(
     ranges: &[(u32, u32)],
     grammar: DeclarationGrammar,
 ) -> Result<Vec<TokenForest>, AdapterError> {
-    if ranges.len() > 100_000
-        || input.encoded_len()? > 32 * 1024 * 1024
-        || input.allocated_bytes()? > 64 * 1024 * 1024
-    {
-        return Err(fault("generated module input count or byte limit"));
-    }
     let mut requested = std::collections::BTreeMap::new();
     for (index, &(start, end)) in ranges.iter().enumerate() {
         if start >= end {
@@ -681,10 +622,7 @@ pub fn module_binding_forests_for_grammar(
         return Err(fault("generated module syntax invalid"));
     }
     let mut retained = 0usize;
-    for (visited, node) in parsed.syntax_node().descendants().enumerate() {
-        if visited >= 1_000_000 {
-            return Err(fault("generated module syntax traversal limit"));
-        }
+    for node in parsed.syntax_node().descendants() {
         let Some(module) = ast::Module::cast(node) else {
             continue;
         };
@@ -704,7 +642,6 @@ pub fn module_binding_forests_for_grammar(
         ))?;
         retained = retained
             .checked_add(original.allocated_bytes()?)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("generated module binding aggregate retention limit"))?;
         result[index] = Some(original);
         if requested.is_empty() {

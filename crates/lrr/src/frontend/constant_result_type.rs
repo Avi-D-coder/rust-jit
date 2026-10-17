@@ -18,7 +18,6 @@ use crate::{
         spans::SourceRange,
     },
 };
-const MAX_BYTES: usize = 32 << 20;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-RESULT-TYPE-SOURCE", message.into())
 }
@@ -238,7 +237,7 @@ impl CurrentConstantResultType {
         admission: ConstantSourceAdmission,
         byte_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        if byte_limit == 0 || byte_limit > MAX_BYTES {
+        if byte_limit == 0 {
             return Err(limit());
         }
         let plan = admission.plan();

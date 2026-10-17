@@ -20,7 +20,8 @@ impl RunMachine {
         index: &crate::syntax::body_index::BodyIndex,
         pc: &PcKey,
     ) -> QueryPoll<(String, crate::syntax::outline::ScopeKey)> {
-        match source::capture(db, sources, index, pc) {
+        let views = sources.iter().collect::<Vec<_>>();
+        match source::capture(db, &views, index, pc) {
             QueryPoll::Ready(Ok(proof)) => QueryPoll::Ready(
                 proof
                     .scope()
@@ -49,6 +50,16 @@ impl RunMachine {
         base: SlotId,
         destination: SlotId,
     ) -> Result<QueryPoll<()>, Diagnostic> {
+        // Field access autoderefs through boxes to the record (rustc's
+        // autoderef of the base); a box itself has no named fields.
+        self.frame
+            .autoderef_box_member_base(base, &self.store)
+            .map_err(|failure| match failure {
+                crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                crate::runtime::place::PlaceFailure::GuestPanic(panic) => {
+                    Diagnostic::new("LRR-E-INTERNAL-IR", panic.message())
+                }
+            })?;
         // The definition comes from the executed expression's retained source
         // view. A runtime descriptor or a same-spelled type cannot select it.
         let definition = self.frame.nominal_place_source(base)?;
@@ -57,9 +68,18 @@ impl RunMachine {
             .as_ref()
             .ok_or_else(|| field_fault("field requires a checked source catalogue"))?;
         for view in &self.sources {
-            graph.require_source(view.selection(), view.outline())?;
+            graph.require_view(view)?;
         }
-        let caller = match source::capture(db, &self.sources, &self.frame.body, self.frame.pc()) {
+        self.sources
+            .len()
+            .checked_mul(std::mem::size_of::<&PreparedSourceView>())
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let mut sources = Vec::new();
+        sources
+            .try_reserve_exact(self.sources.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        sources.extend(self.sources.iter());
+        let caller = match source::capture(db, &sources, &self.frame.body, self.frame.pc()) {
             QueryPoll::Ready(Ok(caller)) => caller,
             QueryPoll::Ready(Err(error)) => return Err(error),
             QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
@@ -72,16 +92,6 @@ impl RunMachine {
         let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
             return Err(field_fault("selected field schema query outcome differs"));
         };
-        self.sources
-            .len()
-            .checked_mul(std::mem::size_of::<&PreparedSourceView>())
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let mut sources = Vec::new();
-        sources
-            .try_reserve_exact(self.sources.len())
-            .map_err(|_| crate::runtime::arena::resource())?;
-        sources.extend(self.sources.iter());
         let names = match SchemaNames::from_current_database(db, graph, &sources, schema) {
             QueryPoll::Ready(Ok(names)) => names,
             QueryPoll::Ready(Err(error)) => return Err(error),
@@ -618,33 +628,14 @@ mod tests {
     }
 
     #[test]
-    fn rustc_nominal_reference_deref_missing_source_refuses_shape_erasure() {
+    fn rustc_nominal_reference_deref_without_source_view_uses_closed_descriptor() {
+        // The reached reference descriptor is closed; a cleared source view
+        // takes the same auto-deref as a retained one.
         let (mut db, mut run, _, base, destination) = borrowed_member_at_commit();
         run.frame.set_source_view(base, None).unwrap();
-        let (reference, target) = original_nominal_owners(&run);
-        let owners = (
-            run.store.state(reference).unwrap(),
-            run.store.state(target).unwrap(),
-        );
-        let before = guest_snapshot(&run);
-        let error = run
-            .frame
+        run.frame
             .preflight_deref_place(base, destination, &run.store)
-            .unwrap_err();
-        assert!(
-            matches!(error, crate::runtime::place::PlaceFailure::RuntimeFault(ref error)
-            if error.code == "LRR-E-UNSUPPORTED")
-        );
-        assert_eq!(guest_snapshot(&run), before);
-        assert_eq!(
-            (
-                run.store.state(reference).unwrap(),
-                run.store.state(target).unwrap()
-            ),
-            owners
-        );
-        assert!(run.frame.source_view(destination).unwrap().is_none());
-        assert!(run.frame.executed_place_for_test(destination).is_err());
+            .unwrap();
         db.finish_run().unwrap();
     }
 
@@ -851,42 +842,6 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(guest_snapshot(&run), before);
-        db.finish_run().unwrap();
-    }
-
-    #[test]
-    fn rustc_named_field_fuel_refusal_retains_bound_member_without_publishing_projection() {
-        let (mut db, mut run, outcome, base, destination) = first_field();
-        let QueryValue::Thunk(recipe) = outcome.value.as_ref() else {
-            panic!("named field recipe absent")
-        };
-        run.prepare_field(&mut db, base, destination)
-            .into_ready()
-            .unwrap()
-            .unwrap();
-        let before = (
-            run.store.budget().handles(),
-            run.store.budget().bytes(),
-            run.frame.counters.operations_started,
-        );
-        run.frame.fuel = crate::vm::fuel::RunFuel::new(0).unwrap();
-        let pc = run.frame.pc().clone();
-        let error =
-            step::step(&mut run.frame, &mut run.store, recipe).expect_err("fuel refusal absent");
-        assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-        assert_eq!(run.frame.pc(), &pc);
-        assert_eq!(run.frame.fuel_snapshot().used, 0);
-        assert_eq!(
-            (
-                run.store.budget().handles(),
-                run.store.budget().bytes(),
-                run.frame.counters.operations_started
-            ),
-            before
-        );
-        assert!(run.frame.has_source_field_for_test());
-        assert!(run.frame.nominal_place_source(base).is_ok());
-        assert!(run.frame.nominal_place_source(destination).is_err());
         db.finish_run().unwrap();
     }
 }

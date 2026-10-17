@@ -183,7 +183,6 @@ impl SyntaxAttachment {
             let old_len = u32::from(prepared.root.text_range().len());
             let final_len = old_len
                 .checked_add(u32::from(semi.text_range().len()))
-                .filter(|n| *n <= MAX_TEXT)
                 .ok_or_else(|| error("statement semicolon text budget"))?;
             let mut origin = SpanMap::empty();
             origin.push(

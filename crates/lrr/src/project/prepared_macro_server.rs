@@ -171,9 +171,6 @@ impl PreparedMacroServer {
         absolute(&self.compiler_dev_manifest)?;
         absolute(&self.preparation_receipt)?;
         absolute(&self.compatibility_artifact)?;
-        if self.sources.len() > 32 {
-            return Err(fault("too many prepared-server source records"));
-        }
         for path in self.sources.keys() {
             absolute(path)?
         }
@@ -248,19 +245,11 @@ pub struct CapturedPreparedServer {
     pub capability: EchoProbeReport,
 }
 fn read(path: &Path) -> Result<Vec<u8>, Diagnostic> {
-    const LIMIT: u64 = 64 * 1024 * 1024;
     let mut file = File::open(path).map_err(|e| fault(e.to_string()))?;
-    if file.metadata().map_err(|e| fault(e.to_string()))?.len() > LIMIT {
-        return Err(fault("prepared server input exceeds 64MiB"));
-    }
     let mut bytes = Vec::new();
     file.by_ref()
-        .take(LIMIT + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| fault(e.to_string()))?;
-    if bytes.len() as u64 > LIMIT {
-        return Err(fault("prepared server input grew past 64MiB"));
-    }
     Ok(bytes)
 }
 /// Explicitly build only the registered external repair and capture its provenance.
@@ -328,7 +317,6 @@ pub fn capture(
         }
         retained = retained
             .checked_add(captured.len())
-            .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(|| fault("prepared server source retention exceeds 128MiB"))?;
         bytes.insert(path.clone(), captured);
     }

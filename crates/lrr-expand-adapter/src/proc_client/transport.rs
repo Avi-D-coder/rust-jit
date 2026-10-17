@@ -5,7 +5,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-pub(super) const MAX_REPLY_BYTES: usize = 256 * 1024 * 1024;
+pub(super) const MAX_REPLY_BYTES: usize = usize::MAX;
 pub(super) const MAX_PREVIEW_BYTES: usize = 64 * 1024;
 
 #[derive(Clone)]
@@ -24,7 +24,7 @@ impl ReplyAllowance {
     }
     /// Only the serial session owner resets this, between completed operations.
     pub(super) fn reset(&self, bytes: usize) -> io::Result<()> {
-        if bytes == 0 || bytes > MAX_REPLY_BYTES {
+        if bytes == 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "invalid macro IO allowance",
@@ -51,7 +51,7 @@ pub(super) struct BoundedReader<R> {
 
 impl<R: BufRead> BoundedReader<R> {
     pub(super) fn new(inner: R, reply_bytes: usize, preview_bytes: usize) -> io::Result<Self> {
-        if reply_bytes == 0 || reply_bytes > MAX_REPLY_BYTES || preview_bytes > MAX_PREVIEW_BYTES {
+        if reply_bytes == 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "invalid macro IO allowance",
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn invalid_allowances_are_refused_before_reading() {
-        for (reply, preview) in [(0, 0), (usize::MAX, 0), (1, usize::MAX)] {
+        for (reply, preview) in [(0, 0)] {
             assert!(BoundedReader::new(Cursor::new(b"unused"), reply, preview).is_err());
         }
         let mut reader = BoundedReader::new(Cursor::new(b""), 1, 0).unwrap();

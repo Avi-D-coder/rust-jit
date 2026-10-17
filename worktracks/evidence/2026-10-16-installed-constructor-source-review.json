@@ -1,0 +1,56 @@
+{
+  "kind": "read-only-installed-constructor-source-review",
+  "component_sha256": "ea9ac48e69b0641a2edbc38a6ac9b8340359f95df6e24c196d69fc1922800442",
+  "source_fingerprint": "88a8bc57503b075613817df0ffca1349dd24e3558e6267838ea807614dcfc54b",
+  "live_corrective_successor": [
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "4e39a57ec198a85f217510a675035e4823731687b439969962158876e9bc6ec8",
+      "bytes": 11041
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "b81f6eaa653e036a91e883158028272303705a4ecc2e764464893a1324bb0742",
+      "bytes": 9342
+    }
+  ],
+  "execution": "No Cargo/native tests; no runtime pass claim",
+  "concrete_predecessor_defects": [
+    "Frozen InstalledRecipes::prepared_constructor calls get_current, repeating namespace revalidation already owned by normal dispatch; live4e39a57e replaces with exact source revision +prepared-input guards only",
+    "Frozen PreparedInputGuard test replaces whole input universe and removes its positive input while expecting unrelated reuse; liveb81f6eaa preserves true positive and unrelated rows on both updates"
+  ],
+  "new_fatal_defects": [],
+  "shared_frame_review": {
+    "route": "prepare_installed_nominal_constructor -> prepare_nominal_hints -> pending PreparedNominal -> preflight_prepared_constructor -> start_prepared_constructor -> begin_bound_nominal_constructor",
+    "authority": "actual bound query key/plan_identity +mapping and entered frame body/profile/node/resultsource; engine actual installed input closure guards remain current; handle is immutable data, not execution authority",
+    "ownership": "typed handle retains original Arc<QueryValue>; QueryPin.value +retired_values generic path accounts payload after memo removal; InstalledRecipe adds PreparedInputGuard exclusive bytes and fixed handle storage",
+    "atomicity": "all genuine query NeedInput occurs before install_ready publishes entry/id/bytes and before Frame prep. Sole entry recipe is [ConstructStart], so no initializer/fuel/guest guard before successful binding. VM preflight then fuel then guard/start uses shared path",
+    "budget_hold": "pending ConstructorStart dynamic hints not enumerated by auxiliary_metadata_bytes, but initial preparation preflights simultaneous hints+futuremap+binding and exact recipe has no shown intervening metadata growth; API aggregate accounting hardening unverified, not a fatal production finding",
+    "copy_hold": "begin_bound_nominal_constructor clones written-to-storage map into Vec then Arc each reached construction (O(F)); immutable query handle avoids full Bound/ConstructorPlan clone but does not eliminate this remaining map copy",
+    "failure_hold": "runtime descriptor materialization can intern field types during dispatcher preparation before operation fuel; inherited common path, actual fuel/resource failure behavior and cleanup unexecuted"
+  },
+  "test_setup": {
+    "source": "complete unchanged borrowck-assign-to-subfield.rs; macro/wrapper surround unchanged original, retained path genuine RetainedSyntaxInput",
+    "authority": "world uses actual sealed Value discovery/entry source, optional retained syntax publication, genuine bodyenvironment plan, separate genuine Type discovery, real source-owned local header publication. No Value-as-Type seal or runtime descriptor authority. Setup is not CLI runtime acceptance",
+    "limits": "all constructors expected exactly2 A/B; new tests bind/install/reuse but do not Frame-enter, evaluate fields, run cleanup or NeedInput/resume. Existing sibling field controls are separately validated historical evidence only; source16 tests unexecuted"
+  },
+  "eight_modes": {
+    "1": "No evaluator added, ordinary source binding/verified thunk remains; legacy assertion/runtime macro paths outside scope held",
+    "2": "BoundRecord query returns immutable source facts, not literal/break executor; full source indexed. Actual macro matrix runtime unexecuted",
+    "3": "SchemaNames/source Type shared ordinary binder preserves privacy, field mapping and Type authority; no macro identity/name whitelist",
+    "4": "Same original/user/wrapper/retained world uses body source proof; generated prerequisite refusals not bypassed, whole applicable std runtime still held",
+    "5": "Only current selected record shape/fields prepared, no initializer execution or coldbranch lowering; no pattern machinery changed",
+    "6": "BoundRecord constructor memo removes repeated source rebinding at installed entry; flattened dependency capture cold O(V+E), hot guard O(D log I). Runtime F hints/maps still produced; mapcopy held",
+    "7": "new guard compares actual positive/negative transitive Input stamps, survives memo loss and does not query hot. Inherited fullseal/coarse namespace/world source deps and global source_revision remain mode7 hold; getter extra census removed live",
+    "8": "Arc<QueryValue> source payload genuinely shared and retired generic pin accounted; one ConstructorPlan clone at cold query construction, no BodyIndex clone. Existing ordinary constructor thunk AST lookup still wholefile descendants scan; repeated mapping copy remains"
+  },
+  "next_control_design": {
+    "leaf": "frontend/prepared_constructor_retention_tests.rs",
+    "hook": "existing prepared_constructor_tests nested cfg(test) retention_tests; root to approve/add tiny hook",
+    "witness": "existing actual upstream world, Rust2024, one boundconstructor",
+    "invariant": "retaining only actual installed query payload after outer memo replacement keeps checked payload bytes charged until final handle drop; no new registry or test-only authority",
+    "procedure": "query+install same allocation; drop installed/outcome/plan, publish genuine empty input universe, fetch actual same BoundRecord key -> exact missing DefinitionHeader error and outer memo becomes Error, old immutable data remains; zero budget must refuse while payload retained, final release must reclaim exact0",
+    "cost": "one cold fixture setup/query/installation and quiescent real invalidation+eviction; no guest semantics or perdispatch work",
+    "holds": "sourceonly until solevalidator; no fullmain/suspension/materialization claim"
+  }
+}

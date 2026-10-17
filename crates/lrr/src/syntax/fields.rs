@@ -55,9 +55,6 @@ impl ParsedFile {
         // Resolve raw identifier validity in its actual token edition. The
         // selected nominal member service still chooses the semantic field.
         crate::frontend::names::owned_name(text, self.token_edition(selected)?)?;
-        if text.len() > 64 * 1024 {
-            return Err(crate::frontend::types::schema_limit());
-        }
         let root_context = self.item_name_context(selected)?;
         if let Some(context) = root_context {
             let facts = self

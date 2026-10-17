@@ -89,14 +89,13 @@ fn reached_call(text: &str, edition: u16) -> Caller {
     let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
         panic!()
     };
-    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(
         index.as_ref().clone(),
         index.pc(NodeId(0), Phase::Entry).unwrap(),
         &mut store,
     )
     .unwrap();
-    frame.set_fuel_limit(100_000).unwrap();
     for _ in 0..128 {
         let fetched = db
             .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
@@ -157,6 +156,7 @@ fn borrow_argument(c: &mut Caller) -> Option<TyTerm> {
         ordinary,
         site: site.0,
         hints: vec![(c.slot, descriptor, source)],
+        partial: Vec::new(),
     });
     assert!(matches!(
         step(&mut c.frame, &mut c.store, &c.recipe).unwrap(),

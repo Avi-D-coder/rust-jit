@@ -59,7 +59,7 @@ impl ParsedFile {
         }) {
             return Err(error("macro declaration contains syntax diagnostics"));
         }
-        for node in node.ancestors().take(257) {
+        for node in node.ancestors() {
             if range(node.text_range()) != selected {
                 continue;
             }

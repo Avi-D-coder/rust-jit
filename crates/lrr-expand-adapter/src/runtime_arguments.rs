@@ -16,9 +16,6 @@ fn fault(message: &str) -> AdapterError {
     }
 }
 pub fn expressions(input: &TokenForest) -> Result<Vec<TokenForest>, AdapterError> {
-    if input.encoded_len()? > 32 * 1024 * 1024 || input.allocated_bytes()? > 64 * 1024 * 1024 {
-        return Err(fault("runtime argument token budget"));
-    }
     let mut store = SpanStore::default();
     let tree = store.import(input)?;
     let delimiter = tree.top_subtree().delimiter;
@@ -50,9 +47,6 @@ pub fn expressions(input: &TokenForest) -> Result<Vec<TokenForest>, AdapterError
     let mut result = Vec::new();
     let mut bytes = 0usize;
     for arg in args.args() {
-        if result.len() >= 10_000 {
-            return Err(fault("runtime argument count limit"));
-        }
         let span = map.span_at(arg.syntax().text_range().start());
         let capture = store.export(&syntax_bridge::syntax_node_to_token_tree(
             arg.syntax(),
@@ -102,7 +96,6 @@ pub fn expressions(input: &TokenForest) -> Result<Vec<TokenForest>, AdapterError
         };
         bytes = bytes
             .checked_add(capture.allocated_bytes()?)
-            .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(|| fault("runtime argument capture metadata limit"))?;
         result
             .try_reserve(1)

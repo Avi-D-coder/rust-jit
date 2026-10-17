@@ -6,12 +6,9 @@ use super::*;
 use crate::{
     ir::constant_data::{ConstValue, wire::ConstantWireType},
     runtime::shape::PrimitiveIdentity,
-    vm::fuel::RunFuel,
+    vm::steps::RunSteps,
 };
 pub(crate) use pending::chunks::{ConstantChunkActivation, ConstantChunkPoll};
-const MAX_NODES: usize = 100_000;
-const MAX_DEPTH: usize = 128;
-const MAX_METADATA: usize = 32 << 20;
 fn mismatch() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-CONST-INSTANTIATION",
@@ -65,32 +62,11 @@ struct Totals {
     nodes: usize,
     arrays: usize,
     fields: usize,
-    payload: usize,
-    metadata: usize,
 }
 impl Totals {
     fn node(&mut self) -> Result<(), Diagnostic> {
-        self.nodes = self
-            .nodes
-            .checked_add(1)
-            .filter(|n| *n <= MAX_NODES)
-            .ok_or_else(resource)?;
+        self.nodes = self.nodes.checked_add(1).ok_or_else(resource)?;
         Ok(())
-    }
-    fn bytes(&mut self, bytes: usize) -> Result<(), Diagnostic> {
-        self.metadata = self
-            .metadata
-            .checked_add(bytes)
-            .filter(|n| *n <= MAX_METADATA)
-            .ok_or_else(resource)?;
-        Ok(())
-    }
-    fn handles(&self) -> Result<u32, Diagnostic> {
-        self.nodes
-            .checked_add(self.arrays.checked_mul(2).ok_or_else(resource)?)
-            .and_then(|n| n.checked_add(self.fields))
-            .and_then(|n| u32::try_from(n).ok())
-            .ok_or_else(resource)
     }
 }
 /// Single-use, epoch-bound physical plan. Its fields cannot be forged, serialized
@@ -101,21 +77,8 @@ pub struct PreparedConstantInstantiation {
     node: Node,
     totals: Totals,
 }
-impl PreparedConstantInstantiation {
-    pub(crate) fn metadata_bytes(&self) -> usize {
-        self.totals.metadata
-    }
-}
 impl GuestStore {
-    fn constant_shape(
-        &self,
-        wire: &ConstantWireType,
-        ty: TypeId,
-        depth: usize,
-    ) -> Result<(), Diagnostic> {
-        if depth >= MAX_DEPTH {
-            return Err(resource());
-        }
+    fn constant_shape(&self, wire: &ConstantWireType, ty: TypeId) -> Result<(), Diagnostic> {
         match (wire, self.types.descriptor(ty)?.key.as_ref()) {
             (ConstantWireType::Scalar(p), TypeKey::Primitive(identity))
                 if *identity == PrimitiveIdentity::from_recipe(*p)? =>
@@ -128,9 +91,7 @@ impl GuestStore {
                     length,
                 },
                 TypeKey::Array { element, len },
-            ) if *length == u64::from(*len) && (*len as usize) <= MAX_NODES => {
-                self.constant_shape(wire, *element, depth + 1)
-            }
+            ) if *length == u64::from(*len) => self.constant_shape(wire, *element),
             _ => Err(mismatch()),
         }
     }
@@ -163,14 +124,6 @@ impl GuestStore {
                 if values.len() != *len as usize || *length != u64::from(*len) {
                     return Err(mismatch());
                 }
-                // Bound the entire expanded tree before allocating this child vector.
-                if totals
-                    .nodes
-                    .checked_add(values.len())
-                    .is_none_or(|n| n > MAX_NODES)
-                {
-                    return Err(resource());
-                }
                 totals.arrays = totals.arrays.checked_add(1).ok_or_else(resource)?;
                 totals.fields = totals
                     .fields
@@ -180,12 +133,6 @@ impl GuestStore {
                 children
                     .try_reserve_exact(values.len())
                     .map_err(|_| resource())?;
-                totals.bytes(
-                    children
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<Node>())
-                        .ok_or_else(resource)?,
-                )?;
                 let mut expected = Vec::new();
                 expected
                     .try_reserve_exact(values.len())
@@ -193,32 +140,11 @@ impl GuestStore {
                 expected.resize(values.len(), *element);
                 let guard = ConstructionRecord::new(&expected)?;
                 let storage = ReservedArrayStorage::new(values.len())?;
-                let payload = guard
-                    .owned_bytes()
-                    .and_then(|n| n.checked_add(storage.owned_bytes().ok()?))
-                    .ok_or_else(resource)?;
-                totals.payload = totals.payload.checked_add(payload).ok_or_else(resource)?;
-                totals.bytes(
-                    payload
-                        .checked_add(
-                            expected
-                                .capacity()
-                                .checked_mul(std::mem::size_of::<TypeId>())
-                                .ok_or_else(resource)?,
-                        )
-                        .ok_or_else(resource)?,
-                )?;
                 for value in values {
                     children.push(self.constant_node(value, wire, *element, totals)?);
                 }
                 let mut records = Vec::new();
                 records.try_reserve_exact(1).map_err(|_| resource())?;
-                totals.bytes(
-                    records
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<ConstructionRecord>())
-                        .ok_or_else(resource)?,
-                )?;
                 records.push(guard);
                 Ok(Node::Array {
                     ty,
@@ -238,9 +164,8 @@ impl GuestStore {
         ty: TypeId,
     ) -> Result<PreparedConstantInstantiation, Diagnostic> {
         wire.fingerprint_checked()?;
-        self.constant_shape(wire, ty, 0)?;
+        self.constant_shape(wire, ty)?;
         let mut totals = Totals::default();
-        totals.bytes(std::mem::size_of::<PreparedConstantInstantiation>())?;
         let node = self.constant_node(value, wire, ty, &mut totals)?;
         Ok(PreparedConstantInstantiation {
             session: self.pattern_binding_session(),
@@ -261,64 +186,59 @@ impl GuestStore {
             .fields
             .checked_add(destination_cells)
             .ok_or_else(resource)?;
-        let handles = totals
-            .handles()?
-            .checked_add(u32::try_from(destination_cells).map_err(|_| resource())?)
-            .ok_or_else(resource)?;
-        let capacities = self
-            .constructions
-            .reservation_bytes(totals.arrays)?
-            .checked_add(self.objects.reservation_bytes(totals.arrays)?)
-            .and_then(|n| n.checked_add(self.cells.reservation_bytes(cells).ok()?))
-            .and_then(|n| n.checked_add(self.tickets.reservation_bytes(totals.nodes).ok()?))
-            .ok_or_else(resource)?;
-        self.budget.check(
-            handles,
-            capacities
-                .checked_add(totals.payload)
-                .ok_or_else(resource)?,
-        )?;
+        // Reserve arena capacity before any value ownership is published.
         self.constructions
             .reserve(totals.arrays, &mut self.budget)?;
         self.objects.reserve(totals.arrays, &mut self.budget)?;
         self.cells.reserve(cells, &mut self.budget)?;
-        self.tickets.reserve(totals.nodes, &mut self.budget)?;
-        // Replay using actual capacities; no value ownership has been published.
-        self.budget.check(handles, totals.payload)
+        self.tickets.reserve(totals.nodes, &mut self.budget)
     }
     /// Physical scalar/array kernel, not a guest source admission path. Charges
     /// one operation plus each processed array field, even zero-sized Unit.
     pub fn instantiate_constant(
         &mut self,
         plan: PreparedConstantInstantiation,
-        fuel: &mut RunFuel,
+        steps: &mut RunSteps,
     ) -> Result<TicketId, Diagnostic> {
         if plan.session != self.pattern_binding_session() || plan.epoch != self.budget.epoch() {
             return Err(stale());
         }
-        fuel.charge()?;
-        self.instantiate_constant_admitted(plan, fuel)
+        steps.charge();
+        self.instantiate_constant_admitted(plan, steps)
+    }
+    /// One ordinary `ValuePath` read of a constant item (or a static's
+    /// initial contents): the whole value in its reached operation, charging
+    /// each processed node like any aggregate construction.
+    pub(crate) fn instantiate_constant_value(
+        &mut self,
+        plan: PreparedConstantInstantiation,
+        steps: &mut RunSteps,
+    ) -> Result<TicketId, Diagnostic> {
+        if plan.session != self.pattern_binding_session() || plan.epoch != self.budget.epoch() {
+            return Err(stale());
+        }
+        self.reserve_constant_instantiation(&plan.totals)?;
+        self.instantiate_constant_node(plan.node, steps)
     }
     /// For an interpreter opcode whose normal dispatch already charged the op.
     pub(crate) fn instantiate_constant_admitted(
         &mut self,
         plan: PreparedConstantInstantiation,
-        fuel: &mut RunFuel,
+        steps: &mut RunSteps,
     ) -> Result<TicketId, Diagnostic> {
         if plan.session != self.pattern_binding_session() || plan.epoch != self.budget.epoch() {
             return Err(stale());
         }
-        fuel.poll()?;
         // Legacy physical kernel callers are bounded small controls only. Large
         // arrays must retain an owned chunk activation; never loop it to finish
-        // inside a single interpreter dispatch.
+        // inside a single interpreter dispatch. (A cooperative-scheduling contract,
+        // not a resource limit.)
         if plan
             .totals
             .nodes
             .checked_add(plan.totals.fields.checked_mul(4).ok_or_else(resource)?)
             .and_then(|n| n.checked_add(plan.totals.arrays.checked_mul(4)?))
             .is_none_or(|n| n > 256)
-            || plan.totals.metadata > 64 << 10
         {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
@@ -326,18 +246,15 @@ impl GuestStore {
             ));
         }
         self.reserve_constant_instantiation(&plan.totals)?;
-        self.instantiate_constant_node(plan.node, fuel)
+        self.instantiate_constant_node(plan.node, steps)
     }
     fn instantiate_constant_node(
         &mut self,
         node: Node,
-        fuel: &mut RunFuel,
+        steps: &mut RunSteps,
     ) -> Result<TicketId, Diagnostic> {
         match node {
-            Node::Scalar(value) => {
-                fuel.poll()?;
-                self.ticket(value)
-            }
+            Node::Scalar(value) => self.ticket(value),
             Node::Array {
                 ty,
                 guard: mut records,
@@ -353,8 +270,8 @@ impl GuestStore {
                 )?);
                 let result = (|| {
                     for (i, child) in children.into_iter().enumerate() {
-                        fuel.charge()?;
-                        let ticket = self.instantiate_constant_node(child, fuel)?;
+                        steps.charge();
+                        let ticket = self.instantiate_constant_node(child, steps)?;
                         if let Err(error) = self.construction_push(
                             guard,
                             u32::try_from(i).map_err(|_| resource())?,
@@ -364,7 +281,6 @@ impl GuestStore {
                             return Err(error);
                         }
                     }
-                    fuel.poll()?;
                     self.commit_construction_with_storage(guard, ty, Some(storage))
                 })();
                 if result.is_err() {
@@ -376,7 +292,7 @@ impl GuestStore {
     }
     // Only privately constructed, unpublished copies reach these rollback paths.
     // They contain no reference/nominal/Drop obligations, callbacks or external
-    // owners. Rollback is physical, not a new guest cleanup after stopped fuel.
+    // owners. Rollback is physical, not a new guest cleanup.
     fn abort_constant_guard(&mut self, guard: ConstructionId) -> Result<(), Diagnostic> {
         let record = self.constructions.take(guard, &mut self.budget)?;
         for i in record.completed.into_iter().rev() {
@@ -444,52 +360,8 @@ mod tests {
         (wire::decode(&bytes, &wire, 1 << 20).unwrap(), wire)
     }
     #[test]
-    fn private_constant_rollback_retires_completed_nested_objects_and_all_partial_owners() {
-        for credit in 1..7 {
-            let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
-            let child = s
-                .intern_type(TypeKey::Array {
-                    element: TypeId(1),
-                    len: 2,
-                })
-                .unwrap();
-            let ty = s
-                .intern_type(TypeKey::Array {
-                    element: child,
-                    len: 2,
-                })
-                .unwrap();
-            let (value, wire) = nested_fixture();
-            let plan = s.prepare_constant_instantiation(&value, &wire, ty).unwrap();
-            let mut fuel = RunFuel::new(credit).unwrap();
-            assert!(s.instantiate_constant(plan, &mut fuel).is_err());
-            assert_eq!(fuel.snapshot().used, credit);
-            // Handle indexes are append-only; no retired private destination can
-            // remain reachable even when a completed child had already committed.
-            for index in 1..=s.budget.handles() {
-                let bits = (1u64 << 32) | u64::from(index);
-                assert!(
-                    s.constructions
-                        .get(Handle::<ConstructionRecord>::from_bits(bits))
-                        .is_err()
-                );
-                assert!(
-                    s.objects
-                        .get(Handle::<ObjectRecord>::from_bits(bits))
-                        .is_err()
-                );
-                assert!(s.cells.get(Handle::<Cell>::from_bits(bits)).is_err());
-                assert!(
-                    s.tickets
-                        .get(Handle::<TransferTicket>::from_bits(bits))
-                        .is_err()
-                );
-            }
-        }
-    }
-    #[test]
     fn private_constant_admitted_join_charges_only_fields_after_dispatch() {
-        let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
+        let mut s = GuestStore::for_epoch(1).unwrap();
         let child = s
             .intern_type(TypeKey::Array {
                 element: TypeId(1),
@@ -504,8 +376,8 @@ mod tests {
             .unwrap();
         let (value, wire) = nested_fixture();
         let plan = s.prepare_constant_instantiation(&value, &wire, ty).unwrap();
-        let mut fuel = RunFuel::new(7).unwrap();
-        fuel.charge().unwrap();
+        let mut fuel = RunSteps::default();
+        fuel.charge();
         let ticket = s.instantiate_constant_admitted(plan, &mut fuel).unwrap();
         assert_eq!(fuel.snapshot().used, 7);
         assert_eq!(s.peek_ticket(ticket).unwrap().type_id, ty.0);

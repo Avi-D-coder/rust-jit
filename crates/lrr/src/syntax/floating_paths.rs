@@ -35,7 +35,6 @@ fn path_expression(
     Ok(root
         .covering_element(range)
         .ancestors()
-        .take(257)
         .find_map(|node| {
             (node.text_range() == range)
                 .then(|| ast::PathExpr::cast(node))
@@ -72,7 +71,7 @@ pub(crate) fn written_two_segment_path(
         return Ok(None);
     };
     let (member, qualifier) = (member.text(), qualifier.text());
-    if member.len() > 64 || qualifier.len() > 256 {
+    if member.len() > 64 {
         return Err(Diagnostic::new(
             "LRR-E-METADATA-LIMIT",
             "floating dispatch name budget".into(),

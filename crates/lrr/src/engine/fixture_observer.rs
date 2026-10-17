@@ -54,9 +54,6 @@ impl FixturePreparationObserver {
             return Err(fault("fixture requires complete detailed query tracing"));
         }
         markers.require_source(&target.selection().outline.parse)?;
-        if sources.len() > 10_000 {
-            return Err(fault("fixture source count limit"));
-        }
         let mut bodies = BTreeMap::new();
         let mut named: BTreeMap<String, Vec<Digest>> = BTreeMap::new();
         let mut target_present = false;
@@ -67,7 +64,6 @@ impl FixturePreparationObserver {
         let mut bytes = retained_sources
             .capacity()
             .checked_mul(std::mem::size_of::<PreparedSourceView>())
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("fixture source atlas metadata limit"))?;
         for source in sources {
             let selection = source.selection();
@@ -84,7 +80,6 @@ impl FixturePreparationObserver {
                 .and_then(|bytes| {
                     bytes.checked_add(selection.outline.parse.profile.semantics.len())
                 })
-                .filter(|bytes| *bytes <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("fixture source selection metadata limit"))?;
             retained_sources.push(source.share());
             let selected = source.selection() == target.selection();
@@ -95,7 +90,6 @@ impl FixturePreparationObserver {
                 let identity = key.fingerprint();
                 bytes = bytes
                     .checked_add(512)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("fixture body atlas metadata limit"))?;
                 if bodies
                     .insert(
@@ -125,7 +119,6 @@ impl FixturePreparationObserver {
                                 .checked_add(128)
                                 .ok_or_else(|| fault("fixture name size overflow"))?,
                         )
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| fault("fixture name atlas metadata limit"))?;
                     named.entry(name).or_default().push(identity);
                 }
@@ -243,14 +236,12 @@ impl FixturePreparationObserver {
             expression_bytes = expression_bytes
                 .checked_add(expression.metadata_bytes())
                 .and_then(|bytes| bytes.checked_add(256))
-                .filter(|bytes| *bytes <= 64 * 1024 * 1024)
                 .ok_or_else(|| fault("fixture expression proof metadata limit"))?;
-            if expressions_by_pc.len() >= 4096
-                || expressions_by_pc
-                    .insert(expression.recipe().recipe().key.clone(), expression)
-                    .is_some()
+            if expressions_by_pc
+                .insert(expression.recipe().recipe().key.clone(), expression)
+                .is_some()
             {
-                return Err(fault("fixture expression proofs duplicate or excessive"));
+                return Err(fault("fixture expression proofs duplicate"));
             }
         }
         if run.root_body() != &self.entry || run.query_trace_start() < self.trace_start {
@@ -467,9 +458,6 @@ pub fn observe_declarative_literal(
             origin::{DefinitionOrigin, GeneratedOperationOrigin, SourceOrigin},
         },
     };
-    if sources.len() > 10_000 {
-        return Err(fault("expression origin source count limit"));
-    }
     let recipe = plan.recipe().recipe();
     if body.body() != &recipe.key.body
         || recipe.key.phase != Phase::Entry.code()?
@@ -577,7 +565,7 @@ pub fn observe_declarative_literal(
         .ok_or_else(|| fault("expression origin caller producer absent"))?;
     let original = SourceDeclarative::new(caller.share())?;
     let call_input = group(
-        &original.owned_forest()?,
+        &*original.owned_forest()?,
         caller.macro_token_group(range, false)?,
     )?;
     if record.key().invocation != producer.identity
@@ -666,7 +654,6 @@ pub fn observe_declarative_literal(
         .spans()
         .len()
         .checked_mul(96)
-        .filter(|bytes| *bytes <= 64 * 1024 * 1024)
         .ok_or_else(|| fault("expression origin span lookup metadata limit"))?;
     let spans = tokens
         .spans()
@@ -717,7 +704,6 @@ pub fn observe_declarative_literal(
         bytes = bytes
             .checked_add(std::mem::size_of::<crate::syntax::token_wire::SpanRecord>())
             .and_then(|bytes| bytes.checked_add(span.source.path.len()))
-            .filter(|bytes| *bytes <= 64 * 1024)
             .ok_or_else(|| fault("expression diagnostic origin retention limit"))?;
         selected
             .try_reserve_exact(1)
@@ -733,7 +719,6 @@ pub fn observe_declarative_literal(
         .checked_add(caller.selection().path.as_str().len())
         .and_then(|bytes| bytes.checked_add(owner.selection().path.as_str().len()))
         .and_then(|bytes| bytes.checked_add(definition_name.len()))
-        .filter(|bytes| *bytes <= 64 * 1024)
         .ok_or_else(|| fault("expression diagnostic labels metadata limit"))?;
     let origin = GeneratedOperationOrigin {
         body: recipe.origin.span.clone(),
@@ -756,7 +741,6 @@ pub fn observe_declarative_literal(
     };
     origin
         .heap_bytes()
-        .filter(|bytes| *bytes <= 64 * 1024)
         .ok_or_else(|| fault("expression diagnostic origin metadata limit"))?;
     Ok(origin)
 }

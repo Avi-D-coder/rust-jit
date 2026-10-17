@@ -58,7 +58,48 @@ pub struct Expansion {
     pub tokens: TokenForest,
     pub matched_arm: u32,
 }
+thread_local! {
+    // Parsed definitions are immutable functions of their definition forests.
+    // Equal forests share one parse; the forests themselves are the keys.
+    static PARSED: std::cell::RefCell<
+        std::collections::HashMap<u64, Vec<(Option<Option<TokenForest>>, TokenForest, std::rc::Rc<DeclarativeMacro>)>>,
+    > = Default::default();
+}
 impl DeclarativeMacro {
+    /// Shared parse of a `macro_rules` (`macro2: None`) or macro 2.0
+    /// (`macro2: Some(arguments)`) definition.
+    pub fn shared(
+        macro2: Option<&Option<TokenForest>>,
+        definition: &TokenForest,
+    ) -> Result<std::rc::Rc<Self>, AdapterError> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        macro2.hash(&mut hasher);
+        definition.hash(&mut hasher);
+        let hash = hasher.finish();
+        let found = PARSED.with(|cache| {
+            cache.borrow().get(&hash).and_then(|rows| {
+                rows.iter()
+                    .find(|(arguments, body, _)| arguments.as_ref() == macro2 && body == definition)
+                    .map(|(_, _, parsed)| parsed.clone())
+            })
+        });
+        if let Some(parsed) = found {
+            return Ok(parsed);
+        }
+        let parsed = std::rc::Rc::new(match macro2 {
+            None => Self::new(definition.clone())?,
+            Some(arguments) => Self::new_macro2(arguments.clone(), definition.clone())?,
+        });
+        PARSED.with(|cache| {
+            cache.borrow_mut().entry(hash).or_default().push((
+                macro2.cloned(),
+                definition.clone(),
+                parsed.clone(),
+            ))
+        });
+        Ok(parsed)
+    }
     pub fn new(definition: TokenForest) -> Result<Self, AdapterError> {
         definition.validate()?;
         let mut spans = SpanStore::default();
@@ -95,7 +136,6 @@ impl DeclarativeMacro {
             .unwrap_or(0);
         body_bytes
             .checked_add(argument_bytes)
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| AdapterError {
                 code: "LRR-E-MACRO-OUTPUT",
                 message: "macro2 definition groups exceed metadata limit".into(),
@@ -134,7 +174,7 @@ impl DeclarativeMacro {
         input: &TokenForest,
         call_site: Key,
     ) -> Result<Result<Expansion, MacroFailure>, AdapterError> {
-        self.expand_with_token_limit(input, call_site, 2_000_000)
+        self.expand_with_token_limit(input, call_site, usize::MAX)
             .map(|(result, _)| result)
     }
     /// Count the same pinned transcription before creating its output token buffer.
@@ -144,7 +184,7 @@ impl DeclarativeMacro {
         call_site: Key,
         token_limit: usize,
     ) -> Result<(Result<Expansion, MacroFailure>, TranscriptionStats), AdapterError> {
-        self.expand_with_limits(input, call_site, token_limit, 32 * 1024 * 1024)
+        self.expand_with_limits(input, call_site, token_limit, usize::MAX)
     }
     /// Exact schema2 byte and token admission before output materialization.
     pub fn expand_with_limits(
@@ -177,11 +217,7 @@ impl DeclarativeMacro {
         token_limit: usize,
         byte_limit: usize,
     ) -> Result<(Result<Expansion, MacroFailure>, TranscriptionStats), AdapterError> {
-        if token_limit == 0
-            || token_limit > 2_000_000
-            || byte_limit == 0
-            || byte_limit > 32 * 1024 * 1024
-        {
+        if token_limit == 0 || byte_limit == 0 {
             return Err(AdapterError {
                 code: "LRR-E-MACRO-OUTPUT",
                 message: "output limits must be positive reductions of the fixed defaults".into(),

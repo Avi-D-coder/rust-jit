@@ -1,0 +1,75 @@
+{
+  "schema": "lrr/source-review/child-impl-frontier/v1",
+  "status": "source-only/uncompiled/unexecuted helper; root bridge independent",
+  "source": {
+    "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+    "sha256": "09486c90c720533046cc653132dc980fd435ea59f0ec22ca40a5485c46b86816",
+    "bytes": 8983
+  },
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_projection.rs",
+      "sha256": "c416dd7857fcdd690cab01f3aa5a79f2a90ad2146ce3b6b9603207fe65f96a56"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "efdb05c89ade07fb95f66ead7906cbc8952bca8d1baeb7893433219636057d56"
+    }
+  ],
+  "root_api": "prepare(ancestor_job,Arc<GeneratedItems>,Arc<ActiveImplProjection>,actual ScopeKey,CfgSet,epoch)->Result<Self>; ancestor_job/scope/metadata_bytes getters; resolve(&CompletedDeclarationFragment,epoch)->Result<Vec<Digest>>",
+  "authority": [
+    "Prepare checks actual Items grammar/epoch and genuine retained ActiveImplProjection owner including output descriptor,cfg,scope,epoch. Requires actual nonempty active impl projection, never count-infers macro absence.",
+    "Resolve recomputes existing lrr/v2/item-declaration-job from actual root output fingerprint and requires matching ancestor_job. Root must fetch completed fragment by same real job from nested_completed map.",
+    "Actual completed root must be Items at same epoch/cfg and attach to completed.source_scan by parent_inventory fingerprint and actual producer identity/grammar/scope. No fabricated original SourceSelection/SourceBlob.",
+    "syntax_outputs supplies actual immutable admitted outputs only. Select exactly one child by record.same_record, identify actual root by Arc pointer equality, refuse absent/duplicate attachments. Child exact scope/cfg/epoch must match retained receipt.",
+    "Build bounded temporary sorted scan identity index. Walk child.parent_inventory to actual admitted parent scan and child.parent_invocation to actual producer with same grammar/scope; all intermediate epochs/cfg match. Must terminate at actual root within256; missing/ambiguous/cycle/depth refuses. Merely appearing in output record list is insufficient.",
+    "Call ONE common GeneratedDeclarations::item_impl_headers_from_projection. It validates text/origins/activecfg/rawitem span->actual retained canonical header. Require nonempty result and each exact canonical header identity in completed fragment inventory before returning IDs for root release.",
+    "No namespace/impl catalog seal, trait/Drop selection, body execution or currentness grant. Root discovery current epoch/source input guards and exact output admission remain in force."
+  ],
+  "retention_and_costs": {
+    "owned": "Self includes Arc handles, cfg snapshot and scope keys; metadata adds cfg metadata, scope heap, retained ActiveImplProjection metadata conservatively and map allowance. Actual GeneratedItems payload shares existing child catalog/record owners and must remain charged once by parent even after catalog teardown while waiter survives.",
+    "prepare": "No source parser/scan, Arc+actual bounded metadata only. Scope/cfg were already admitted before caller clones.",
+    "resolve": "Cold O(N log N + D log N + parent producer scans + H*inventory) plus actual completed scan fingerprint encoding costs. Each waiter calls bounded syntax_outputs (N<=100000) and rebuilds a sorted temporary scan index; D<=256. No speed/scaling claim. Once-per-ancestor shared index is an explicit future optimization, not implemented.",
+    "allocations": "Bounded outputs helper existing limits; checked N*size_of<(Digest,usize)> <=64MiB before reservation, visited vector256, canonical results checked <=64MiB before reservation. No BodyIndex/parser/tree clone or permanent global registry.",
+    "hot": "No runtime operation/source planning/query provider callback added."
+  },
+  "all_eight": {
+    "1": "No expression/assertion evaluator; MA001/7/8 runtime debt remains.",
+    "2": "Full actual admitted output metadata, no scalar/break executor; MA004/5 held.",
+    "3": "No numeric/method/macro-name classification; MA003/6 held.",
+    "4": "Actual generated child and source/producer attachment reused; refusals preserve missing proof rather than invent original source.",
+    "5": "Completed cold declarations/header facts only, no executable/pattern/typecheck work; MA002 unchanged.",
+    "6": "Borrow retained projection/scan, no parse replay; repeated temporary completed-subtree indexing per child recorded explicitly.",
+    "7": "Actual completed subtree only, no global namespace census or unrelated runtime invalidation.",
+    "8": "Arc output handles and bounded index, no BodyIndex/tree clone or repeated wholefile AST node search."
+  },
+  "independent_source_reviews": [
+    {
+      "reviewer": "runtime_validation_next",
+      "result": "No concrete authority/parent-chain defect in source; exact shared projection API and parent retained payload charge remain prerequisites; rebuilding per-waiter index costs noted.",
+      "executed": false
+    },
+    {
+      "reviewer": "ordinary_call_join_next",
+      "result": "Initial helper authority appears sound; proposed once-per-ancestor retained index optimization; final own review artifact may follow.",
+      "executed": false
+    }
+  ],
+  "remaining_gaps": [
+    "Root maps/hooks/child admission/release/retention and cfg-active factor must be frozen and independently validated together",
+    "Actual wrapper stock fixture all editions/runtime exactonce/cold-body remains unexecuted here",
+    "Mutation/epoch/source/cfg/wrong parent/projection/inventory authority controls not executed",
+    "Root direct emitter V8 all4 pass is parent-reported distinct evidence, not wrapper/helper acceptance",
+    "Expression/statement intrinsic-argument parent topology not generalized here; actual missing chain refuses",
+    "Global live/facade impl catalog and trait applicability remain separately missing"
+  ],
+  "execution": "rustfmt only; no Cargo/compiler/tests/guest execution by worker"
+}

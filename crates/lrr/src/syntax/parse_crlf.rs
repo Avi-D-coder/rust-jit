@@ -80,7 +80,7 @@ fn error_token(root: &SyntaxNode, error_range: TextRange, message: &str) -> Opti
 fn normalized_literal(token: &SyntaxToken, edition: Edition) -> bool {
     let original = token.text();
     let kind = token.kind();
-    if original.len() > 1024 * 1024 || !original.contains("\r\n") {
+    if !original.contains("\r\n") {
         return false;
     }
     // The wrapper is a lexical/grammar probe only. Retained ASTs always contain

@@ -102,11 +102,8 @@ impl ResolvedDeriveAnnotations {
         >,
     ) -> Result<Self, Diagnostic> {
         let mut identities = std::collections::BTreeMap::new();
-        let mut count = 0usize;
         for (index, descriptor) in resolved {
-            count += 1;
-            if count > 4096
-                || index >= inputs.item.attributes.len()
+            if index >= inputs.item.attributes.len()
                 || descriptor.action()
                     != crate::expand::builtin_attributes::BuiltinAttributeAction::Derive
                 || identities
@@ -128,24 +125,16 @@ impl ResolvedDeriveAnnotations {
 }
 /// Bind the complete preprocessing facts, not only their source/cfg labels.
 pub(crate) fn derive_facts_fingerprint(inputs: &DeriveItemInputs) -> Result<Digest, Diagnostic> {
-    const LIMIT: usize = 32 * 1024 * 1024;
-    if inputs.members.len() > 100_000 {
-        return Err(fault("derive fact member count limit"));
-    }
     let mut bytes = 0usize;
     let mut charge = |amount: usize| -> Result<(), Diagnostic> {
         bytes = bytes
             .checked_add(amount)
-            .filter(|n| *n <= LIMIT)
             .ok_or_else(|| fault("derive fact metadata limit"))?;
         Ok(())
     };
     let mut e = StableEncoder::new("lrr/v2/complete-derive-input-facts");
     e.u64(u64::try_from(inputs.members.len()).map_err(|_| fault("derive member count overflow"))?);
     for item in std::iter::once(&inputs.item).chain(&inputs.members) {
-        if item.attributes.len() > 100_000 || item.original_attribute_ranges.len() > 100_000 {
-            return Err(fault("derive attribute fact count limit"));
-        }
         charge(std::mem::size_of::<ItemAttributeInputs>())?;
         e.record(&item.parse);
         e.digest(item.cfg);
@@ -180,9 +169,6 @@ pub(crate) fn derive_facts_fingerprint(inputs: &DeriveItemInputs) -> Result<Dige
                 e.u32(r.start);
                 e.u32(r.end);
             });
-            if attribute.tokens.len() > 2_000_000 {
-                return Err(fault("derive fact token count limit"));
-            }
             charge(
                 attribute
                     .tokens
@@ -437,9 +423,6 @@ pub fn derive_occurrence_resolved(
                 .ok_or_else(|| fault("derive occurrence retention overflow"))?;
         }
     }
-    if retained_bytes > 64 * 1024 * 1024 {
-        return Err(fault("derive occurrence retention limit"));
-    }
     Ok(DeriveOccurrenceInput {
         input,
         ordinal,
@@ -463,9 +446,6 @@ fn prepare_derive(
     .map_err(|e| fault(e.to_string()))?;
     let paths = lrr_expand_adapter::derive_paths::parse(&adapter)
         .map_err(|e| Diagnostic::new(e.code, e.message))?;
-    if paths.len() > 4096 {
-        return Err(fault("derive selection count limit"));
-    }
     let mut selections = Vec::new();
     selections
         .try_reserve_exact(paths.len())

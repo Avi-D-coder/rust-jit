@@ -178,13 +178,13 @@ fn prepare(
     locals: &SourceLocalIndex<'_>,
     site: FloatingConstantSite<'_>,
 ) -> Result<QueryPoll<FloatingConstantOutcome>, Diagnostic> {
-    if site.qualifier.len() > 256 || site.member.len() > 64 {
+    if site.member.len() > 64 {
         return Err(Diagnostic::new(
             "LRR-E-METADATA-LIMIT",
             "primitive constant name budget exceeded".into(),
         ));
     }
-    graph.require_source(site.source.selection(), site.source.outline())?;
+    graph.require_view(site.source)?;
     let owner = site
         .source
         .outline()

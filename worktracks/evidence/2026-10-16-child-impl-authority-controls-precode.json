@@ -1,0 +1,37 @@
+{
+  "schema": "lrr/precode/child-impl-authority-controls/v1",
+  "owned": [
+    "crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs"
+  ],
+  "registration": "root hook child of item_boundary_tests; no existing file edit",
+  "invariant": "Real selected child+parent/epoch/ancestor tuple and exact completed Arc required before frontier release; no output listing or equalmetadata substitution.",
+  "witness": "Unchanged official type-param-local-var-shadowing wrapper through existing item_boundary_tests emitted AST adapter and original_inert_tests source/discovery helpers. No new miniature language or synthetic sourcebody.",
+  "route": "Actual source request.expand/admit; stop after actual child admission for negative cache control; actual normal declaration completion/cached ancestor index, real completed root+child selection catalogs for pure helper controls.",
+  "controls": [
+    "Positive nonempty canonical IDs in actual completed inventory",
+    "Actual childItems supplied as wrong parent refuses exact parent edge error",
+    "Wrong epoch and ancestor refuse exact diagnostics",
+    "Same source bytes/keys but independent actual completed Arc injected in fresh run cache refuses at root handler before release"
+  ],
+  "cost": "Tests only. Source review exact root maps/admission/handler/cache/metadata and shared helper APIs; no source parser/plan work added to production.",
+  "all_eight": "All8 source review required; no evaluator/scalar/numeric/method/pattern alternate, no executable bodies, exact generated authority, cached subtree once, no worldcensus/BodyIndexclone.",
+  "execution": "No Cargo/compiler/tests; future controls do not block primary V9 wrapper.",
+  "source": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "1ff5651b4ad0be25292c06795e2e3bebcd10be752993b1c95f9700330801306a"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "sha256": "d5b059acb26d9141682abbb7ec1d55b97a25760876f4714ce99c0cd84ef57746"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "sha256": "4b0056db1c09f4ed603dfb356d3a7b96911b86edeb75b57bfe95696dfe1911a5"
+    }
+  ]
+}

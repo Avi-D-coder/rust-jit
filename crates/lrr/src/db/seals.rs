@@ -65,16 +65,29 @@ pub struct CertifiedScope {
     pub(crate) namespace: Namespace,
     pub(crate) edition: u16,
     pub(crate) names: std::collections::BTreeMap<String, crate::frontend::names::NameLookup>,
+    /// The spellings in `names` whose answer comes from the crate's standard
+    /// prelude (no module item, import or extern-prelude crate supplied one).
+    pub(crate) prelude_names: std::collections::BTreeSet<String>,
 }
 impl CertifiedScope {
+    /// The fingerprint of the module-only answers. A replay graph without the
+    /// compiler-injected standard prelude reproduces exactly this part.
+    pub(crate) fn module_fingerprint(&self) -> crate::core::digest::Digest {
+        if self.prelude_names.is_empty() {
+            return self.fingerprint();
+        }
+        let mut module = self.clone();
+        module
+            .names
+            .retain(|name, _| !self.prelude_names.contains(name));
+        module.prelude_names.clear();
+        module.fingerprint()
+    }
     pub(crate) fn lookup(
         &self,
         bucket: &crate::db::key::BucketKey,
     ) -> Result<crate::frontend::names::NameLookup, crate::core::diagnostic::Diagnostic> {
-        if bucket.scope != self.scope
-            || bucket.namespace != self.namespace
-            || bucket.name.len() > 64 * 1024
-        {
+        if bucket.scope != self.scope || bucket.namespace != self.namespace {
             return Err(crate::core::diagnostic::Diagnostic::new(
                 "LRR-E-QUERY-REQUEST",
                 "certified namespace bucket owner/name differs".into(),
@@ -104,6 +117,12 @@ impl CertifiedScope {
                 .and_then(|n| lookup.metadata_bytes().ok().and_then(|m| n.checked_add(m)))
                 .ok_or_else(fail)?;
         }
+        for name in &self.prelude_names {
+            bytes = bytes
+                .checked_add(64)
+                .and_then(|n| n.checked_add(name.capacity()))
+                .ok_or_else(fail)?;
+        }
         Ok(bytes)
     }
 }
@@ -118,11 +137,21 @@ impl StableEncode for CertifiedScope {
             e.string(name);
             e.record(lookup);
         }
+        // Absent for prelude-free scopes, keeping their encoding unchanged.
+        if !self.prelude_names.is_empty() {
+            e.sequence(
+                &self.prelude_names.iter().collect::<Vec<_>>(),
+                |e, name| e.string(name),
+            );
+        }
     }
 }
 #[derive(Debug, Clone)]
 pub struct DiscoveryInput {
     pub(crate) type_scopes: Vec<crate::expand::source_discovery::TypeScopeReceipt>,
+    /// Value facets of the other module scopes a Value fixed point completed,
+    /// ordered like `type_scopes`; contained in this seal, never another seal.
+    pub(crate) value_scopes: Vec<crate::expand::source_discovery::TypeScopeReceipt>,
     pub(crate) value_binding_preludes:
         Vec<crate::facade::value_binding_prelude::ValueBindingPrelude>,
     pub(crate) seal: Seal,
@@ -175,19 +204,36 @@ impl DiscoveryInput {
         {
             return Ok(Some(primary));
         }
-        if namespace != Namespace::Type {
-            return Ok(None);
-        }
+        let receipts = match namespace {
+            Namespace::Type => &self.type_scopes,
+            Namespace::Value => &self.value_scopes,
+            _ => return Ok(None),
+        };
         let key = (scope, profile);
-        let Ok(index) = self
-            .type_scopes
-            .binary_search_by(|proof| proof.owner_profile().cmp(&key))
-        else {
+        let Ok(index) = receipts.binary_search_by(|proof| proof.owner_profile().cmp(&key)) else {
             return Ok(None);
         };
-        let proof = &self.type_scopes[index];
+        let proof = &receipts[index];
         proof.require_owner(scope, profile)?;
         Ok(Some(proof.scope()))
+    }
+    /// The contained facet (never the primary scope) certifying `scope`.
+    pub(crate) fn scope_receipt(
+        &self,
+        scope: &crate::syntax::outline::ScopeKey,
+        namespace: Namespace,
+        profile: &ProfileIdentity,
+    ) -> Option<&crate::expand::source_discovery::TypeScopeReceipt> {
+        let receipts = match namespace {
+            Namespace::Type => &self.type_scopes,
+            Namespace::Value => &self.value_scopes,
+            _ => return None,
+        };
+        let key = (scope, profile);
+        receipts
+            .binary_search_by(|proof| proof.owner_profile().cmp(&key))
+            .ok()
+            .map(|index| &receipts[index])
     }
     /// SealedName predates profile-specific facets. Select only an unambiguous
     /// owning edition; callers cannot project one profile through another key.
@@ -199,11 +245,14 @@ impl DiscoveryInput {
             .scope
             .as_ref()
             .filter(|scope| scope.scope == bucket.scope && scope.namespace == bucket.namespace);
-        if bucket.namespace == Namespace::Type {
-            let start = self
-                .type_scopes
-                .partition_point(|proof| proof.scope().scope < bucket.scope);
-            for proof in self.type_scopes[start..]
+        if matches!(bucket.namespace, Namespace::Type | Namespace::Value) {
+            let receipts = if bucket.namespace == Namespace::Type {
+                &self.type_scopes
+            } else {
+                &self.value_scopes
+            };
+            let start = receipts.partition_point(|proof| proof.scope().scope < bucket.scope);
+            for proof in receipts[start..]
                 .iter()
                 .take_while(|proof| proof.scope().scope == bucket.scope)
             {
@@ -223,10 +272,10 @@ impl DiscoveryInput {
     pub(crate) fn require_scope_certificate_layout(
         &self,
     ) -> Result<(), crate::core::diagnostic::Diagnostic> {
-        let fail = || {
+        let fail = |detail: &str| {
             crate::core::diagnostic::Diagnostic::new(
                 "LRR-E-CALL-CONTEXT",
-                "discovery scope facet parent/order differs".into(),
+                format!("discovery scope facet parent/order differs: {detail}"),
             )
         };
         if let Some(scope) = &self.scope
@@ -234,30 +283,42 @@ impl DiscoveryInput {
                 if *id == scope.scope.fingerprint() && *namespace == scope.namespace)
                 || scope.scope.owner.is_some())
         {
-            return Err(fail());
+            return Err(fail("primary scope differs from its seal domain"));
         }
-        if self.type_scopes.len() > 4096
-            || (!self.type_scopes.is_empty()
-                && !matches!(self.seal.domain(), SealDomain::Scope { .. }))
+        if (!self.type_scopes.is_empty() || !self.value_scopes.is_empty())
+            && !matches!(self.seal.domain(), SealDomain::Scope { .. })
         {
-            return Err(fail());
+            return Err(fail("contained type scopes outside a scope seal"));
+        }
+        if !self.value_scopes.is_empty()
+            && !matches!(self.seal.domain(), SealDomain::Scope { namespace: Namespace::Value, .. })
+        {
+            return Err(fail("contained value scopes outside a Value seal"));
         }
         let parent = self.seal.fingerprint();
-        let mut previous = None;
-        for proof in &self.type_scopes {
-            proof.require_publication(parent)?;
-            let key = proof.owner_profile();
-            if previous.is_some_and(|old| old >= key) {
-                return Err(fail());
-            }
-            previous = Some(key);
-            if let Some(primary) = &self.scope
-                && primary.scope == proof.scope().scope
-                && primary.namespace == Namespace::Type
-                && primary.edition == proof.scope().edition
-                && primary.fingerprint() != proof.scope().fingerprint()
-            {
-                return Err(fail());
+        for (namespace, receipts) in [
+            (Namespace::Type, &self.type_scopes),
+            (Namespace::Value, &self.value_scopes),
+        ] {
+            let mut previous = None;
+            for proof in receipts {
+                proof.require_publication(parent)?;
+                if proof.scope().namespace != namespace {
+                    return Err(fail("contained scope namespace differs from its facet list"));
+                }
+                let key = proof.owner_profile();
+                if previous.is_some_and(|old| old >= key) {
+                    return Err(fail("contained type scopes are not strictly ordered"));
+                }
+                previous = Some(key);
+                if let Some(primary) = &self.scope
+                    && primary.scope == proof.scope().scope
+                    && primary.namespace == namespace
+                    && primary.edition == proof.scope().edition
+                    && primary.fingerprint() != proof.scope().fingerprint()
+                {
+                    return Err(fail("contained type scope differs from primary"));
+                }
             }
         }
         Ok(())
@@ -266,6 +327,7 @@ impl DiscoveryInput {
         self.scope
             .iter()
             .chain(self.type_scopes.iter().map(|proof| proof.scope()))
+            .chain(self.value_scopes.iter().map(|proof| proof.scope()))
     }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, crate::core::diagnostic::Diagnostic> {
         let fail = || {
@@ -470,7 +532,17 @@ impl DiscoveryInput {
                     .ok_or_else(fail)?,
             )
             .ok_or_else(fail)?;
-        for proof in &self.type_scopes {
+        bytes = bytes
+            .checked_add(
+                self.value_scopes
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<
+                        crate::expand::source_discovery::TypeScopeReceipt,
+                    >())
+                    .ok_or_else(fail)?,
+            )
+            .ok_or_else(fail)?;
+        for proof in self.type_scopes.iter().chain(&self.value_scopes) {
             bytes = bytes
                 .checked_add(proof.metadata_bytes()?)
                 .ok_or_else(fail)?;
@@ -494,6 +566,7 @@ impl StableEncode for DiscoveryInput {
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.seal);
         e.sequence(&self.type_scopes, |e, proof| e.record(proof));
+        e.sequence(&self.value_scopes, |e, proof| e.record(proof));
         e.sequence(&self.value_binding_preludes, |e, proof| e.record(proof));
         e.digest(self.source_dependencies);
         e.u64(u64::try_from(self.compiler_inputs.len()).expect("bounded compiler input count"));

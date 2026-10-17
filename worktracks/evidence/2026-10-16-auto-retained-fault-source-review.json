@@ -1,0 +1,264 @@
+{
+  "schema": "lrr/source-review/retained-auto-fault/v1",
+  "status": "actual CLI failure plus source-only exact retained-node reconstruction; no new execution",
+  "task": "Read-only diagnosis of actual unchanged auto-is-contextual.rs failure; distinguish cast graph edge from earlier binding-classification demand",
+  "actual_evidence": {
+    "capture": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-numeric-auto-contextual-cli-validation-v1/runtime-report/0/transport.stdout",
+    "capture_sha256": "724fdbe987c364e9df4f3a00f07dadf9bc957684256a9a8b5d8e9e2e4565641e",
+    "outcome": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-numeric-auto-contextual-cli-validation-v1/EXACT-OUTCOME.json",
+    "terminal": "da1343/1",
+    "source_member": "7406d479ceb29e9a8c41cd39ef75290b206722bb3685e0d52d269336146b4384",
+    "vm_dispatches": 6,
+    "source_call_boundaries": 1,
+    "full_fixture_pass": false
+  },
+  "frozen_root": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-numeric-binding-pipeline-validation-v3/source",
+  "inspected_source_sha256": {
+    "crates/lrr/src/syntax/parse_retained.rs": "5c44f8229aa6a526290d7dc90069c44dd3a5928649a0109d1031c706366cf310",
+    "crates/lrr/src/syntax/body_index.rs": "c9988e93d581f89f703d7104902f314de2671a2518588b2e9817eb1ceed61bb4",
+    "crates/lrr/src/core/profile.rs": "8595d712087c9329f46516116c6cf533f58f95556b187d1e18915c53290d0067",
+    "crates/lrr/src/core/digest.rs": "69685b44e12f316b12332090d55d05f67b93a39b539ff160ba988f4ecd025d8d",
+    "crates/lrr/src/source/manifest.rs": "09ecd2b80367d397d479e14bc34b99d5be0b203bef9980747cf7693296471dc0",
+    "crates/lrr-expand-adapter/src/lib.rs": "b6dd26c2cc039e940193b7b475d925a65761670f20c92acee9e75f40c5a35f8e",
+    "crates/lrr/src/frontend/binding_constraints.rs": "69136e3b2cd885beca9b27ccca4d5e4d83ed02e7ee6132eb865af06555fecf33",
+    "crates/lrr/src/db/binding_constraint_thunk.rs": "e48a98512942edc5979dc241f3e2d1b9b46a072e9266b8348cfdc2d4414d4b00",
+    "crates/lrr/src/frontend/source_value_goals.rs": "3ee491a13751127b7a5633f36088a2cdce8223fd85a4f1a9b897d38b0e6aa479",
+    "crates/lrr/src/frontend/source_locals.rs": "050017c60d973d6a1694bdca32ff02f0d58d8c1bed9726280f2ef12c47214f3b",
+    "crates/lrr/src/syntax/local_bindings.rs": "38b25fe3d063fa504c493c7632332fe51456a09b8ea5ed62ee21e103f77b030f",
+    "crates/lrr/src/syntax/pattern_bindings.rs": "ecfa2f2ecdd489247637bed79949a2b694930601296050fe9d1e7a5716f6bf33",
+    "crates/lrr/src/syntax/source_constraints.rs": "a821db59f8c5a57fd7f3e67e7ab4159d44283cd089b3eadfb7d3654267eab331"
+  },
+  "diagnostic_reconstruction": {
+    "method": "Manually specified retained AST candidate encoded with exact existing retained-body StableEncoder and pinned syntax kinds; exact 256-bit structural hash match confirms complete event/token/edition sequence. This is diagnostic hashing, not parsing, language evaluation, or source authority. PC separately recomputed from actual captured BodyKey/node9/phase0. Original offsets are not mapped.",
+    "script": "/private/tmp/lrr-auto-retained-node-source-review.py",
+    "script_sha256": "db0b058ec89cb88f5afdfe319c9c34e8ce3c00d8f23f157bb0f7e5ec7b0b1f9f",
+    "result": {
+      "pc": "3f4696c8fc3798fee38b2d359862bcf107d2c65ae79ff5d80dd7c0f7a92f3b31",
+      "pc_matches": true,
+      "syntax_kind_source": "/Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ra_ap_parser-0.0.356/src/syntax_kind/generated.rs",
+      "syntax_kind_sha256": "782f9e92f4502974ac33fa75f372fe2c214d64f2c61db1a2c7138c3db9da2116",
+      "encoded_sha256": "aee733e42c8a06a3d8240ea5a2a11b2e13c47a907030a7465814254dc246ee54",
+      "encoded_bytes": 655,
+      "hash": "c371972e6dae0f34cdcca75a888c4721535986425fa78f8970694147059b2d87",
+      "expected": "c371972e6dae0f34cdcca75a888c4721535986425fa78f8970694147059b2d87",
+      "matches": true,
+      "text": "{auto();letauto=10;auto;autoasu8;}",
+      "nodes": [
+        {
+          "node": 0,
+          "kind": "BLOCK_EXPR",
+          "start": 0,
+          "parent": null,
+          "end": 34
+        },
+        {
+          "node": 1,
+          "kind": "STMT_LIST",
+          "start": 0,
+          "parent": 0,
+          "end": 34
+        },
+        {
+          "node": 2,
+          "kind": "EXPR_STMT",
+          "start": 1,
+          "parent": 1,
+          "end": 8
+        },
+        {
+          "node": 3,
+          "kind": "CALL_EXPR",
+          "start": 1,
+          "parent": 2,
+          "end": 7
+        },
+        {
+          "node": 4,
+          "kind": "PATH_EXPR",
+          "start": 1,
+          "parent": 3,
+          "end": 5
+        },
+        {
+          "node": 5,
+          "kind": "PATH",
+          "start": 1,
+          "parent": 4,
+          "end": 5
+        },
+        {
+          "node": 6,
+          "kind": "PATH_SEGMENT",
+          "start": 1,
+          "parent": 5,
+          "end": 5
+        },
+        {
+          "node": 7,
+          "kind": "NAME_REF",
+          "start": 1,
+          "parent": 6,
+          "end": 5
+        },
+        {
+          "node": 8,
+          "kind": "ARG_LIST",
+          "start": 5,
+          "parent": 3,
+          "end": 7
+        },
+        {
+          "node": 9,
+          "kind": "LET_STMT",
+          "start": 8,
+          "parent": 1,
+          "end": 19
+        },
+        {
+          "node": 10,
+          "kind": "IDENT_PAT",
+          "start": 11,
+          "parent": 9,
+          "end": 15
+        },
+        {
+          "node": 11,
+          "kind": "NAME",
+          "start": 11,
+          "parent": 10,
+          "end": 15
+        },
+        {
+          "node": 12,
+          "kind": "LITERAL",
+          "start": 16,
+          "parent": 9,
+          "end": 18
+        },
+        {
+          "node": 13,
+          "kind": "EXPR_STMT",
+          "start": 19,
+          "parent": 1,
+          "end": 24
+        },
+        {
+          "node": 14,
+          "kind": "PATH_EXPR",
+          "start": 19,
+          "parent": 13,
+          "end": 23
+        },
+        {
+          "node": 15,
+          "kind": "PATH",
+          "start": 19,
+          "parent": 14,
+          "end": 23
+        },
+        {
+          "node": 16,
+          "kind": "PATH_SEGMENT",
+          "start": 19,
+          "parent": 15,
+          "end": 23
+        },
+        {
+          "node": 17,
+          "kind": "NAME_REF",
+          "start": 19,
+          "parent": 16,
+          "end": 23
+        },
+        {
+          "node": 18,
+          "kind": "EXPR_STMT",
+          "start": 24,
+          "parent": 1,
+          "end": 33
+        },
+        {
+          "node": 19,
+          "kind": "CAST_EXPR",
+          "start": 24,
+          "parent": 18,
+          "end": 32
+        },
+        {
+          "node": 20,
+          "kind": "PATH_EXPR",
+          "start": 24,
+          "parent": 19,
+          "end": 28
+        },
+        {
+          "node": 21,
+          "kind": "PATH",
+          "start": 24,
+          "parent": 20,
+          "end": 28
+        },
+        {
+          "node": 22,
+          "kind": "PATH_SEGMENT",
+          "start": 24,
+          "parent": 21,
+          "end": 28
+        },
+        {
+          "node": 23,
+          "kind": "NAME_REF",
+          "start": 24,
+          "parent": 22,
+          "end": 28
+        },
+        {
+          "node": 24,
+          "kind": "PATH_TYPE",
+          "start": 30,
+          "parent": 19,
+          "end": 32
+        },
+        {
+          "node": 25,
+          "kind": "PATH",
+          "start": 30,
+          "parent": 24,
+          "end": 32
+        },
+        {
+          "node": 26,
+          "kind": "PATH_SEGMENT",
+          "start": 30,
+          "parent": 25,
+          "end": 32
+        },
+        {
+          "node": 27,
+          "kind": "NAME_REF",
+          "start": 30,
+          "parent": 26,
+          "end": 32
+        }
+      ]
+    }
+  },
+  "source_conclusion": {
+    "observed": "Exact message originates binding_constraint_thunk Pending state; captured body hash and PC identify LET_STMT node9 range8..19. Capture omits Pending node/demand and individual Value39 outcomes.",
+    "cast_edge": "Exact reconstructed AST has Cast node19 range24..32 with operand Path20 range24..28. SourceConstraints creates SourceUse(child20,parent19,ordinal0). Old query40 classifies it ExpressionRelation if actual binding is reached. Minimal candidate skips this non-equating edge, preserving actual use selection and all other edges.",
+    "earlier_blocker": "Bare target IdentPat10 range11..15 has no mut/ref/@ and is BindingOrConstant in both local_bindings and pattern_bindings. Shared prefix observes at declaration NameRef before binding visibility; actual same-name module fn auto is a Defined candidate. source_value_goals match Defined+target returns BindingClassification without selected item-kind classification. If this actual module observation is Defined, goal.local_binding remains None and query40 returns Pending(Binding) before examining Cast. This is a concrete source-supported earlier blocker, not an observed captured Pending subtype.",
+    "limit": "Cannot observationally attribute this terminal specifically to Cast; requires typed Pending discriminant or candidate actual terminal. Do not infer zero legacy routes, complete cleanup or any other-edition pass."
+  },
+  "next_minimal_fix_boundary": "Root owns production fix. Preserve typed pending for real constant/variant/ambiguous/missing authority; use shared actual source/member pattern-name classification to establish when a function Value may be shadowed by a binding. No spelling whitelist or assumed absence.",
+  "eight_mode_review": {
+    "1": "Diagnostic hash reconstruction adds no assertion evaluator; production unchanged.",
+    "2": "Exact retained tree includes ordinary call/let/path/cast AST; no literal-output executor added.",
+    "3": "Reported target-classification and Cast relations are ordinary source mechanisms; no macro/name-specific rule proposed.",
+    "4": "Retained syntax hash joins same body index and query40 as original syntax; no origin exclusion.",
+    "5": "No body/arm lowered or executed by this review; pattern target Pending remains genuine.",
+    "6": "No production planning changed; Python reconstructs exact one diagnostic candidate only. Existing immutable Source37/40/41 route remains as reviewed.",
+    "7": "No namespace scan or invalidation guard changed; actual module observations remain unextracted evidence.",
+    "8": "No immutable body clone or production node search added. Direct PC digest and full structural-body digest establish precise node identity without original offset arithmetic."
+  },
+  "execution_scope": "No Cargo/native/Rust tool run, no production source edits, no original edits; current failure preserved."
+}

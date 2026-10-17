@@ -61,10 +61,7 @@ pub(crate) fn bind_prepared_record_constructor(
     plan: &ConstructorPlan,
 ) -> QueryPoll<RecordConstructorBinding> {
     use super::source_locals::owned_plan::type_declarations::BodyTypeOutcome;
-    if sources.len() > 100_000
-        || plan.origin().body_key != *body.body()
-        || plan.profile() != body.profile()
-    {
+    if plan.origin().body_key != *body.body() || plan.profile() != body.profile() {
         return QueryPoll::Ready(Err(fault("constructor plan/owning body differs")));
     }
     let outcome = match db.fetch(
@@ -81,9 +78,57 @@ pub(crate) fn bind_prepared_record_constructor(
     if locals.context().source().index().body() != body.body() || locals.environment().is_none() {
         return QueryPoll::Ready(Err(fault("constructor owning environment differs")));
     }
+    if plan.lang_record().is_some() {
+        return bind_lang_record_constructor(
+            db,
+            graph,
+            sources,
+            plan,
+            locals.context().source().scope(),
+        );
+    }
     let selected = match locals.prepare_body_type(db, plan.node()) {
         QueryPoll::Ready(Ok(BodyTypeOutcome::Ready(selected))) => selected,
-        QueryPoll::Ready(Ok(BodyTypeOutcome::Pending(_))) => {
+        QueryPoll::Ready(Ok(BodyTypeOutcome::Pending(demand))) => {
+            // A record path may name an enum variant (`E::B { .. }`), which is
+            // a Type-namespace member of its enum but not itself a type.
+            let variant = match selected_record_variant(db, graph, body, plan, demand) {
+                QueryPoll::Ready(Ok(variant)) => variant,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            if let Some(variant) = variant {
+                return bind_variant_record_constructor(
+                    db,
+                    graph,
+                    sources,
+                    plan,
+                    variant.enumeration,
+                    Some(&variant.name),
+                    locals.context().source().scope(),
+                );
+            }
+            // A generic struct named without arguments: the ordinary Type
+            // service selected the declaration; its constructor infers the
+            // arguments from its fields or result context.
+            if let super::source_locals::owned_plan::type_declarations::BodyTypeDemand::GenericArguments(identity) = demand
+                && sources.iter().any(|source| {
+                    source.outline().items.iter().any(|item| {
+                        item.def_key.fingerprint() == identity
+                            && item.def_key.item_kind == ItemKind::Struct
+                    })
+                })
+            {
+                return bind_variant_record_constructor(
+                    db,
+                    graph,
+                    sources,
+                    plan,
+                    identity,
+                    None,
+                    locals.context().source().scope(),
+                );
+            }
             return deferred(RecordConstructorDemand::TypeContext);
         }
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -127,6 +172,274 @@ pub(crate) fn bind_prepared_record_constructor(
     }
 }
 
+/// A range expression's record of its `core::ops` lang-item struct. rustc
+/// resolves lang items by their definition, not by the caller's names: the
+/// item is looked up in the owning profile's `core` crate, then its fields
+/// bind through the same record-shape/privacy/field-order binder (and the
+/// constructor's generic `Idx` is inferred from the fields) as any record.
+fn bind_lang_record_constructor(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    plan: &ConstructorPlan,
+    caller: &ScopeKey,
+) -> QueryPoll<RecordConstructorBinding> {
+    let Some(item) = plan.lang_record() else {
+        return QueryPoll::Ready(Err(fault("lang record constructor plan differs")));
+    };
+    let core = crate::facade::unit(plan.profile(), "core");
+    let path = match NameNamespaces::path(core, &item.core_path(), plan.profile().edition) {
+        Ok(path) => path,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let definition = match graph.lookup(Namespace::Type, &path, caller) {
+        Ok(NameLookup::Defined(definition)) => definition,
+        Ok(other) => return deferred(RecordConstructorDemand::Name(other)),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    bind_variant_record_constructor(db, graph, sources, plan, definition.identity, None, caller)
+}
+
+/// The enum variant an entered record path selected, if any. An unqualified
+/// path (after `use E::*`) selects it through the ordinary body Type prefix;
+/// a qualified one through the ordinary qualified Type observation. Either
+/// stops at the variant because a variant owns no declaration inputs.
+fn selected_record_variant(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    body: &BodyIndex,
+    plan: &ConstructorPlan,
+    demand: super::source_locals::owned_plan::type_declarations::BodyTypeDemand,
+) -> QueryPoll<Option<super::names::EnumVariantDefinition>> {
+    use super::{
+        qualified_type_names::QualifiedTypeDemand,
+        source_locals::owned_plan::type_declarations::BodyTypeDemand,
+    };
+    let identity = match demand {
+        BodyTypeDemand::DeclarationPublication(identity) => identity,
+        BodyTypeDemand::QualifiedNamespace(_) => {
+            let key = crate::source::manifest::PcKey {
+                body: body.body().clone(),
+                node: plan.node().0,
+                phase: 0,
+            };
+            let observation = match db.fetch(&SyntaxProvider, QueryKey::QualifiedBodyType(key)) {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let QueryValue::QualifiedBodyType(observation) = observation.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault("qualified record path observation differs")));
+            };
+            match (observation.lookup(), observation.demand()) {
+                (
+                    Some(NameLookup::Defined(selected)),
+                    Some(QualifiedTypeDemand::DeclarationPublication(pending)),
+                ) if selected.identity == pending => pending,
+                _ => return QueryPoll::Ready(Ok(None)),
+            }
+        }
+        _ => return QueryPoll::Ready(Ok(None)),
+    };
+    QueryPoll::Ready(Ok(graph.enum_variant(identity).cloned()))
+}
+
+/// Bind a record variant constructor through its enum's schema with the same
+/// record-shape/privacy/field-order binder as a record struct.
+fn bind_variant_record_constructor(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    plan: &ConstructorPlan,
+    owner: crate::core::digest::Digest,
+    variant: Option<&str>,
+    caller: &ScopeKey,
+) -> QueryPoll<RecordConstructorBinding> {
+    let schema = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(owner)) {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("variant constructor schema outcome differs")));
+    };
+    let names = match SchemaNames::from_current_database(db, graph, sources, schema) {
+        QueryPoll::Ready(Ok(names)) => names,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    match names.bind_record_constructor_current(db, sources, variant, plan, caller) {
+        QueryPoll::Ready(Ok(NominalConstructorBinding::Ready(bound))) => {
+            QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(Box::new(bound))))
+        }
+        QueryPoll::Ready(Ok(pending)) => {
+            deferred(RecordConstructorDemand::Fields(Box::new(pending)))
+        }
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
+}
+
+/// A record constructor in the body of a published generated declaration
+/// (macro or derive item output), which has no original outline owner. Its
+/// path is read from the unit's own parsed syntax (with its token contexts)
+/// and resolves in the declaring module, as that body's call paths do
+/// (`CallResolver` for generated callers); the struct or variant fields then
+/// bind through the same record binder as original source.
+pub(crate) fn bind_generated_record_constructor(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    body: &BodyIndex,
+    plan: &ConstructorPlan,
+) -> QueryPoll<RecordConstructorBinding> {
+    match bind_generated_record_inner(db, graph, sources, body, plan) {
+        Ok(poll) => poll,
+        Err(error) => QueryPoll::Ready(Err(error)),
+    }
+}
+
+fn bind_generated_record_inner(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    body: &BodyIndex,
+    plan: &ConstructorPlan,
+) -> Result<QueryPoll<RecordConstructorBinding>, Diagnostic> {
+    macro_rules! ready {
+        ($poll:expr) => {
+            match $poll {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+            }
+        };
+    }
+    if plan.origin().body_key != *body.body() || plan.profile() != body.profile() {
+        return Err(fault("constructor plan/owning body differs"));
+    }
+    let caller = body.body().definition;
+    let Some(InputValue::DefinitionSource(parse)) =
+        db.input(&InputKey::DefinitionSource(caller)).as_deref().cloned()
+    else {
+        return Err(fault("generated constructor caller source absent"));
+    };
+    let Some(owner) = db.generated_declaration_owner(&parse, caller) else {
+        return Err(Diagnostic::new(
+            "LRR-E-UNSUPPORTED",
+            "constructor source owner absent".into(),
+        ));
+    };
+    let Some(InputValue::DefinitionBody(handle)) =
+        db.input(&InputKey::DefinitionBody(caller)).as_deref().cloned()
+    else {
+        return Err(fault("generated constructor caller body absent"));
+    };
+    let Some(InputValue::DeclarationContext(context)) =
+        db.input(&InputKey::DeclarationContext(caller)).as_deref().cloned()
+    else {
+        return Err(fault("generated constructor caller context absent"));
+    };
+    if handle.key() != *body.body()
+        || context.scope.crate_key != owner.def_key.crate_key
+        || context.scope.module_path != owner.def_key.module_path
+    {
+        return Err(fault(
+            "constructor caller source revision differs from database",
+        ));
+    }
+    let Some(InputValue::CrateCfg(cfg)) =
+        db.input(&InputKey::CrateCfg(context.scope.crate_key)).as_deref().cloned()
+    else {
+        return Err(fault("generated constructor cfg absent"));
+    };
+    // Neither an impl nor a trait introduces an item namespace.
+    let scope = ScopeKey {
+        owner: None,
+        ..context.scope.clone()
+    };
+    if plan.lang_record().is_some() {
+        return Ok(bind_lang_record_constructor(db, graph, sources, plan, &scope));
+    }
+    let parsed = ready!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(parse.clone())));
+    let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
+        return Err(fault("generated constructor parse outcome differs"));
+    };
+    let RecordPathSelection::Named(path) =
+        parsed.record_constructor_path(&handle, body, plan, &cfg)?
+    else {
+        return Ok(deferred(RecordConstructorDemand::TypeContext));
+    };
+    // A generic source parameter must not resolve to a same-spelled item.
+    let parameters = match owner.def_key.item_kind {
+        ItemKind::Function => {
+            let outcome = ready!(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(caller)));
+            let QueryValue::FunctionSignature(signature) = outcome.value.as_ref() else {
+                return Err(fault("constructor caller signature outcome differs"));
+            };
+            signature.generics.clone()
+        }
+        _ => return Ok(deferred(RecordConstructorDemand::TypeContext)),
+    };
+    if !path.absolute()
+        && let Some(ImportSegment::Name(first)) = path.segments().first()
+    {
+        let wanted = crate::expand::scopes::MacroName::parse(first, plan.profile().edition)?;
+        for parameter in &parameters {
+            if parameter.kind == crate::syntax::signatures::GenericKind::Type
+                && crate::expand::scopes::MacroName::parse(&parameter.name, plan.profile().edition)?
+                    == wanted
+            {
+                return Ok(deferred(RecordConstructorDemand::Parameter(
+                    crate::traits::term::ParamKey {
+                        definition: caller,
+                        ordinal: parameter.ordinal,
+                    },
+                )));
+            }
+        }
+    }
+    let definition = match graph.lookup_source_path(
+        Namespace::Type,
+        path.segments(),
+        path.absolute(),
+        &scope,
+        owner.edition,
+    )? {
+        NameLookup::Defined(definition) => definition,
+        other => return Ok(deferred(RecordConstructorDemand::Name(other))),
+    };
+    if let Some(variant) = graph.enum_variant(definition.identity).cloned() {
+        return Ok(bind_variant_record_constructor(
+            db,
+            graph,
+            sources,
+            plan,
+            variant.enumeration,
+            Some(&variant.name),
+            &scope,
+        ));
+    }
+    let is_struct = sources.iter().any(|view| {
+        view.outline().items.iter().any(|item| {
+            item.def_key.fingerprint() == definition.identity
+                && item.def_key.item_kind == ItemKind::Struct
+        })
+    });
+    if !is_struct {
+        return Ok(deferred(RecordConstructorDemand::Definition(definition)));
+    }
+    Ok(bind_variant_record_constructor(
+        db,
+        graph,
+        sources,
+        plan,
+        definition.identity,
+        None,
+        &scope,
+    ))
+}
+
 /// The supplied entered index must retain the actual published source/hygiene
 /// context. Pending producers/local declarations never fall back to module names.
 pub fn bind_record_constructor(
@@ -153,8 +466,7 @@ fn bind_record_inner(
     body: &BodyIndex,
     plan: &ConstructorPlan,
 ) -> Result<QueryPoll<RecordConstructorBinding>, Diagnostic> {
-    if sources.len() > 100_000
-        || entered.body != *body.body()
+    if entered.body != *body.body()
         || plan.origin().body_key != *body.body()
         || plan.profile() != body.profile()
         || !sources
@@ -165,7 +477,7 @@ fn bind_record_inner(
     }
     entered.parent.require_publication(source)?;
     for view in sources {
-        graph.require_source(view.selection(), view.outline())?;
+        graph.require_view(view)?;
     }
     let caller = body.body().definition;
     if !matches!(db.input(&InputKey::DefinitionSource(caller)).as_deref(),
@@ -188,10 +500,26 @@ fn bind_record_inner(
     if context.scope != entered.module_scope {
         return Err(fault("constructor caller declaration scope differs"));
     }
-    if context.scope.owner.is_some() {
+    // Functions of an impl resolve names in their module; trait bodies still
+    // need their implementing owner.
+    let impl_owned = context.scope.owner.is_some()
+        && source.outline().items.iter().any(|item| {
+            item.def_key.fingerprint() == caller
+                && (item.def_key.enclosing_impl == context.scope.owner || item.body.is_some())
+        });
+    if context.scope.owner.is_some() && !impl_owned {
         return Ok(deferred(RecordConstructorDemand::OwnerContext(
             context.scope.clone(),
         )));
+    }
+    if plan.lang_record().is_some() {
+        return Ok(bind_lang_record_constructor(
+            db,
+            graph,
+            sources,
+            plan,
+            &context.scope,
+        ));
     }
     let RecordPathSelection::Named(path) = source.record_constructor_path(body, plan)? else {
         return Ok(deferred(RecordConstructorDemand::TypeContext));
@@ -285,6 +613,17 @@ fn bind_record_inner(
             .map(|item| (*view, item))
     });
     let Some((selected_source, item)) = candidates.next() else {
+        if let Some(variant) = graph.enum_variant(definition.identity).cloned() {
+            return Ok(bind_variant_record_constructor(
+                db,
+                graph,
+                sources,
+                plan,
+                variant.enumeration,
+                Some(&variant.name),
+                &context.scope,
+            ));
+        }
         return Ok(deferred(RecordConstructorDemand::Definition(definition)));
     };
     if candidates.next().is_some() {

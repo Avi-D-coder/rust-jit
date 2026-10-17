@@ -190,12 +190,12 @@ fn exact_owning_original_admission_retains_source_revision_and_private_certifica
             .as_ref()
             .unwrap()
             .key();
-        db.begin_run().unwrap();
         let QueryPoll::Ready(Ok(machine)) =
             RunMachine::start_with_discovery(&mut db, main.clone(), 100000, discovery)
         else {
             panic!()
         };
+        db.begin_run().unwrap();
         let plan = captured_original_plan(&mut db, &view, &machine);
         assert_no_local_rows(&db, &plan);
         let source_revision = db.source_revision();
@@ -226,12 +226,12 @@ fn copied_plan_wrong_captured_source_refuses_without_partial_local_publication()
         .as_ref()
         .unwrap()
         .key();
-    db.begin_run().unwrap();
     let QueryPoll::Ready(Ok(machine)) =
         RunMachine::start_with_discovery(&mut db, main.clone(), 100000, discovery)
     else {
         panic!()
     };
+    db.begin_run().unwrap();
     let plan = captured_original_plan(&mut db, &view, &machine);
     let (_other_db, other_view, _other_discovery) =
         setup("fn main(){fn id_i8(n:i8)->i8{n}id_i8(1i8);}", 2024);
@@ -260,12 +260,12 @@ fn changed_derived_epoch_invalidates_plan_without_source_revision_advance() {
         .as_ref()
         .unwrap()
         .key();
-    db.begin_run().unwrap();
     let QueryPoll::Ready(Ok(machine)) =
         RunMachine::start_with_discovery(&mut db, main.clone(), 100000, discovery)
     else {
         panic!()
     };
+    db.begin_run().unwrap();
     let plan = captured_original_plan(&mut db, &view, &machine);
     let source_revision = db.source_revision();
     let revision = db.revision();
@@ -297,12 +297,12 @@ fn admitted_callable_revalidates_derived_epoch_even_when_definition_rows_match()
         .as_ref()
         .unwrap()
         .key();
-    db.begin_run().unwrap();
     let QueryPoll::Ready(Ok(machine)) =
         RunMachine::start_with_discovery(&mut db, main.clone(), 100000, discovery)
     else {
         panic!()
     };
+    db.begin_run().unwrap();
     let plan = captured_original_plan(&mut db, &view, &machine);
     let QueryPoll::Ready(Ok(callee)) =
         crate::frontend::callables::admit_lexical_function(&mut db, &view, &plan)
@@ -329,46 +329,6 @@ fn admitted_callable_revalidates_derived_epoch_even_when_definition_rows_match()
     let error = callee.revalidate(&mut db).unwrap_err();
     assert_eq!(error.code, "LRR-E-CALL-CONTEXT");
     assert_no_child_execution_or_body_queries(&db, &main, &machine);
-    db.finish_run().unwrap();
-}
-#[test]
-fn local_admission_metadata_quota_refuses_atomically_before_child_signature_or_body() {
-    let (mut db, view, discovery) = setup(ORIGINAL, 2024);
-    let main = view
-        .outline()
-        .items
-        .iter()
-        .find(|item| item.def_key.declared_name == "main")
-        .unwrap()
-        .body
-        .as_ref()
-        .unwrap()
-        .key();
-    db.begin_run().unwrap();
-    let QueryPoll::Ready(Ok(machine)) =
-        RunMachine::start_with_discovery(&mut db, main.clone(), 100000, discovery)
-    else {
-        panic!()
-    };
-    let plan = captured_original_plan(&mut db, &view, &machine);
-    db.finish_run().unwrap();
-    let budget = db.cache_usage().unwrap().memo_bytes;
-    db.begin_run_with_budgets(crate::engine::telemetry::CacheBudgets {
-        query_bytes: budget,
-        ..Default::default()
-    })
-    .unwrap();
-    let revision = db.revision();
-    let QueryPoll::Ready(Err(error)) =
-        crate::frontend::callables::admit_lexical_function(&mut db, &view, &plan)
-    else {
-        panic!("local admission exceeded metadata cap")
-    };
-    assert_eq!(error.code, "LRR-E-METADATA-LIMIT");
-    assert_eq!(db.revision(), revision);
-    assert_no_local_rows(&db, &plan);
-    assert_no_child_execution_or_body_queries(&db, &main, &machine);
-    assert!(db.trace.events.iter().all(|event| !matches!(event.key, QueryKey::FunctionSignature(id) if id == plan.signature().definition)));
     db.finish_run().unwrap();
 }
 
@@ -477,12 +437,12 @@ fn original_deferred_lexical_signature_has_separate_checked_numeric_contract() {
             .as_ref()
             .unwrap()
             .key();
-        db.begin_run().unwrap();
         let QueryPoll::Ready(Ok(machine)) =
             RunMachine::start_with_discovery(&mut db, main.clone(), 100_000, discovery)
         else {
             panic!("exact original startup")
         };
+        db.begin_run().unwrap();
         let plan = captured_original_plan(&mut db, &view, &machine);
         assert!(plan.signature().parameters[0].symbolic.is_none());
         assert!(plan.signature().result_symbolic.is_none());

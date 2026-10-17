@@ -13,13 +13,27 @@ fn original_str_pointee_and_external_alias_join_the_same_opaque_source_type_all_
         for text in [ORIGINAL_STR, alias.as_str()] {
             let (mut db, source, graph) = prepare_source(text, edition);
             let callee = callable(&mut db, &source, &graph, "compare");
-            let proof = ClosedReferenceParameter::capture(&mut db, &callee, &graph, &[&source], 0)
-                .unwrap()
-                .unwrap();
-            assert_eq!(proof.pointee_source(), &TyTerm::Str);
+            // A `str` pointee is an unsized buffer, not a location: the
+            // reference capture declines it and the parameter binds through
+            // the ordinary structural route as `&str`.
             assert!(
-                matches!(proof.source_template(), TyTerm::Ref(_, false, target) if target.as_ref() == &TyTerm::Str)
+                ClosedReferenceParameter::capture(&mut db, &callee, &graph, &[&source], 0)
+                    .unwrap()
+                    .is_none()
             );
+            let hints = match prepare_argument_hint(&mut db, &callee, &graph, &[&source], 0) {
+                QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) => hints,
+                QueryPoll::Ready(Ok(other)) => {
+                    panic!("structural &str parameter hint: {} ({edition})", other.describe())
+                }
+                QueryPoll::Ready(Err(error)) => panic!("{error} ({edition})"),
+                QueryPoll::NeedInput(_) => panic!("structural &str hint needs input"),
+            };
+            let [hint] = hints.as_slice() else { panic!() };
+            assert!(
+                matches!(&hint.source, TyTerm::Ref(_, false, target) if target.as_ref() == &TyTerm::Str)
+            );
+            assert!(hint.closed_reference.is_none());
             let name = if text == ORIGINAL_STR {
                 "str"
             } else {
@@ -31,20 +45,8 @@ fn original_str_pointee_and_external_alias_join_the_same_opaque_source_type_all_
                 panic!("actual source Str lookup failed")
             };
             assert_eq!(common.source(), &TyTerm::Str);
-            assert!(common.same_type(&proof.pointee));
-            let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+            let store = GuestStore::new(1, 1000, 1_000_000).unwrap();
             assert_eq!(common.find_descriptor(&store), Some(TypeId(16)));
-            let descriptor = proof.materialize_hint(&mut store).unwrap();
-            assert!(matches!(
-                store.type_descriptor(descriptor).unwrap().key.as_ref(),
-                TypeKey::Ref {
-                    mutable: false,
-                    target: TypeId(16)
-                }
-            ));
-            proof.require_current(&mut db, &callee).unwrap();
-            db.begin_expansion_epoch(1).unwrap();
-            assert!(proof.require_current(&mut db, &callee).is_err());
         }
     }
 }

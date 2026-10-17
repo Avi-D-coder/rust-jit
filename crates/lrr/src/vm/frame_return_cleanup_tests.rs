@@ -71,9 +71,8 @@ fn returned_context_with_guard(partial: bool) -> (Context, Option<SlotId>) {
         panic!("stock nested return transfer absent")
     };
     let source = *source;
-    let mut store = GuestStore::new(1, 10000, 4_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body.clone(), pc, &mut store).unwrap();
-    frame.set_fuel_limit(10000).unwrap();
     let mut ancestry = Vec::new();
     let mut current = Some(scope);
     while let Some(scope) = current {
@@ -209,39 +208,6 @@ fn rustc_nested_return_cleanup_retains_returned_ticket_until_all_scopes_finish()
         "LRR-E-STALE-HANDLE"
     );
 }
-#[test]
-fn rustc_nested_return_cleanup_cancellation_keeps_ticket_and_pending_owned_storage() {
-    let mut c = returned_context();
-    assert!(!c.frame.advance_return_cleanup(&mut c.store).unwrap());
-    let value = c.store.peek_ticket(c.ticket).unwrap();
-    let states: Vec<_> = c
-        .fields
-        .iter()
-        .map(|field| c.store.state(*field).unwrap())
-        .collect();
-    let used = c.frame.fuel_snapshot().used;
-    let scopes = c.frame.active_scopes.clone();
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(
-        c.frame
-            .advance_return_cleanup(&mut c.store)
-            .unwrap_err()
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(c.frame.status, FrameStatus::Faulted);
-    assert!(c.frame.has_cleanup_activation());
-    assert_eq!(c.frame.active_scopes, scopes);
-    assert_eq!(c.frame.fuel_snapshot().used, used);
-    assert_eq!(c.store.peek_ticket(c.ticket).unwrap(), value);
-    assert_eq!(
-        c.fields
-            .iter()
-            .map(|field| c.store.state(*field).unwrap())
-            .collect::<Vec<_>>(),
-        states
-    );
-}
 fn begin_guard_cleanup_chunk(c: &mut Context, guard: SlotId) {
     for _ in 0..64 {
         assert!(!c.frame.advance_return_cleanup(&mut c.store).unwrap());
@@ -327,57 +293,4 @@ fn rustc_nested_return_drains_completed_guard_field_before_retiring_enclosing_sc
     );
     assert_eq!(c.store.peek_ticket(c.ticket).unwrap(), value);
     c.store.discard(c.ticket).unwrap();
-}
-#[test]
-fn rustc_nested_return_guard_cancellation_preserves_exact_pending_field() {
-    let (mut c, guard) = returned_context_with_guard(true);
-    let guard = guard.unwrap();
-    begin_guard_cleanup_chunk(&mut c, guard);
-    let construction = c.frame.slots[guard.0 as usize]
-        .construction
-        .as_ref()
-        .unwrap()
-        .guard;
-    let value = c.store.peek_ticket(c.ticket).unwrap();
-    let states: Vec<_> = c
-        .fields
-        .iter()
-        .map(|field| c.store.state(*field).unwrap())
-        .collect();
-    let scopes = c.frame.active_scopes.clone();
-    let used = c.frame.fuel_snapshot().used;
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(
-        c.frame
-            .advance_return_cleanup(&mut c.store)
-            .unwrap_err()
-            .code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(c.frame.status, FrameStatus::Faulted);
-    assert!(c.frame.has_cleanup_activation());
-    assert!(
-        c.frame.slots[guard.0 as usize]
-            .construction
-            .as_ref()
-            .unwrap()
-            .cleaning
-    );
-    assert_eq!(
-        c.store
-            .construction_cleanup_next(construction)
-            .unwrap_err()
-            .code,
-        "LRR-E-OWNERSHIP"
-    );
-    assert_eq!(c.frame.active_scopes, scopes);
-    assert_eq!(c.frame.fuel_snapshot().used, used);
-    assert_eq!(c.store.peek_ticket(c.ticket).unwrap(), value);
-    assert_eq!(
-        c.fields
-            .iter()
-            .map(|field| c.store.state(*field).unwrap())
-            .collect::<Vec<_>>(),
-        states
-    );
 }

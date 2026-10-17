@@ -9,8 +9,6 @@ use crate::{
 };
 use std::collections::BTreeSet;
 
-const MAX_ASSOCIATIONS: usize = 100_000;
-const MAX_METADATA: usize = 32 * 1024 * 1024;
 
 // A locator need not associate a Type scope with foreign or sibling physical
 // source roots. This is only structural narrowing; consumers still require
@@ -33,13 +31,24 @@ struct SelectionKey {
     edition: u16,
 }
 impl SelectionKey {
-    fn new(source: &SourceSelection, scope: &ScopeKey, namespace: Namespace) -> Self {
+    fn source_digest(source: &SourceSelection) -> Digest {
         let mut encoder = StableEncoder::new("lrr/v1/scope-certificate-source-selection");
         encoder.string(source.path.as_str());
         encoder.record(&source.outline);
+        encoder.finish()
+    }
+    fn new(source: &SourceSelection, scope: &ScopeKey, namespace: Namespace) -> Self {
+        Self::with_digests(source, Self::source_digest(source), scope.fingerprint(), namespace)
+    }
+    fn with_digests(
+        source: &SourceSelection,
+        source_digest: Digest,
+        scope: Digest,
+        namespace: Namespace,
+    ) -> Self {
         Self {
-            source: encoder.finish(),
-            scope: scope.fingerprint(),
+            source: source_digest,
+            scope,
             namespace,
             edition: source.outline.parse.profile.edition,
         }
@@ -93,12 +102,21 @@ impl ScopeCertificateIndex {
         input.require_scope_certificate_layout()?;
         let seal = input.seal.key();
         let mut next = None;
+        // Each source and scope identity is encoded once, not per pair.
+        let source_digests: Vec<Digest> =
+            input.sources.iter().map(SelectionKey::source_digest).collect();
         for scope in input.scope_certificates() {
-            for source in &input.sources {
+            let scope_digest = scope.scope.fingerprint();
+            for (source, source_digest) in input.sources.iter().zip(&source_digests) {
                 if !source_can_own(source, scope) {
                     continue;
                 }
-                let key = SelectionKey::new(source, &scope.scope, scope.namespace);
+                let key = SelectionKey::with_digests(
+                    source,
+                    *source_digest,
+                    scope_digest,
+                    scope.namespace,
+                );
                 let current = next.as_ref().unwrap_or(self);
                 if current
                     .entries
@@ -110,7 +128,6 @@ impl ScopeCertificateIndex {
                 let associations = current
                     .associations
                     .checked_add(1)
-                    .filter(|n| *n <= MAX_ASSOCIATIONS)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-METADATA-LIMIT",
@@ -125,12 +142,6 @@ impl ScopeCertificateIndex {
                         128 + std::mem::size_of::<SelectionKey>()
                             + std::mem::size_of::<SelectionEntry>(),
                     )?;
-                }
-                if bytes > MAX_METADATA {
-                    return Err(fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "scope certificate index byte limit",
-                    ));
                 }
                 let next = next.get_or_insert_with(|| self.clone());
                 next.entries
@@ -149,7 +160,9 @@ impl ScopeCertificateIndex {
         scope: &ScopeKey,
         namespace: Namespace,
     ) -> (InputKey, InputValue) {
-        let key = SelectionKey::new(source, scope, namespace);
+        self.selection_row_for(SelectionKey::new(source, scope, namespace))
+    }
+    fn selection_row_for(&self, key: SelectionKey) -> (InputKey, InputValue) {
         let selection = key.fingerprint();
         let candidate_set = self
             .entries
@@ -165,10 +178,18 @@ impl ScopeCertificateIndex {
     }
     pub(super) fn selection_rows(&self, input: &DiscoveryInput) -> BTreeMap<InputKey, InputValue> {
         let mut rows = BTreeMap::new();
+        let source_digests: Vec<Digest> =
+            input.sources.iter().map(SelectionKey::source_digest).collect();
         for scope in input.scope_certificates() {
-            for source in &input.sources {
+            let scope_digest = scope.scope.fingerprint();
+            for (source, source_digest) in input.sources.iter().zip(&source_digests) {
                 if source_can_own(source, scope) {
-                    let (key, value) = self.selection_row(source, &scope.scope, scope.namespace);
+                    let (key, value) = self.selection_row_for(SelectionKey::with_digests(
+                        source,
+                        *source_digest,
+                        scope_digest,
+                        scope.namespace,
+                    ));
                     rows.insert(key, value);
                 }
             }

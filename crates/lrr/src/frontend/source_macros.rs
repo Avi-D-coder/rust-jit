@@ -197,14 +197,10 @@ impl SourceMacroIndex {
         scopes.add_root(root)?;
         let mut invocation_bytes = 0usize;
         let mut item_invocations = BTreeMap::new();
-        if outline.item_invocations.len() > 100_000 {
-            return Err(error("source item invocation count exceeded"));
-        }
         for call in &outline.item_invocations {
             invocation_bytes = invocation_bytes
                 .checked_add(std::mem::size_of::<crate::syntax::outline::ItemInvocation>())
                 .and_then(|n| n.checked_add(call.scope.heap_bytes()))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("source item invocation metadata exceeded"))?;
             if item_invocations
                 .insert(
@@ -240,9 +236,6 @@ impl SourceMacroIndex {
             context,
             ancestry: std::sync::Arc::new(ExpansionAncestry::default()),
         };
-        if outline.textual_events.len() > 1_000_000 || outline.items.len() > 100_000 {
-            return Err(error("source macro event limit exceeded"));
-        }
         let mut attribute_bytes = 0usize;
         for item in &outline.items {
             attribute_bytes = item
@@ -250,7 +243,6 @@ impl SourceMacroIndex {
                 .heap_bytes()
                 .checked_add(128)
                 .and_then(|amount| attribute_bytes.checked_add(amount))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| error("original item attribute metadata limit"))?;
             let mut ordered = Vec::new();
             for attribute in &item.header.attributes {
@@ -268,17 +260,14 @@ impl SourceMacroIndex {
                     .heap_bytes()
                     .checked_add(128)
                     .and_then(|amount| attribute_bytes.checked_add(amount))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("original attribute candidate metadata limit"))?;
-                if index.attribute_candidates.len() >= 100_000
-                    || index
+                if index
                         .attribute_candidates
                         .insert(
                             (item.scope.clone(), range.start, range.end),
                             item.declaration_span,
                         )
-                        .is_some()
-                {
+                        .is_some() {
                     return Err(error("duplicate or excessive original attribute candidate"));
                 }
                 ordered.push(range);
@@ -324,7 +313,18 @@ impl SourceMacroIndex {
             match &event.kind {
                 TextualEventKind::OpenScope { child, ordinal } => {
                     if index.scope_keys.contains_key(child) {
-                        return Err(error("duplicate source textual scope"));
+                        return Err(error(&format!(
+                            "duplicate source textual scope {}{} at byte {}",
+                            child
+                                .module_path
+                                .iter()
+                                .take(16)
+                                .map(|part| part.chars().take(64).collect::<String>())
+                                .collect::<Vec<_>>()
+                                .join("::"),
+                            if child.owner.is_some() { " (item owner)" } else { "" },
+                            event.at,
+                        )));
                     }
                     // A transforming attribute belongs to the opening item.
                     // Include its frontier in the captured parent visibility.
@@ -422,8 +422,7 @@ impl SourceMacroIndex {
             call.scope.clone(),
             call.range.start,
             call.range.end,
-        )) || self.producers.len() >= 100_000
-        {
+        )) {
             return Err(error("test attribute source attachment or count differs"));
         }
         let scope = *self
@@ -472,14 +471,7 @@ impl SourceMacroIndex {
         let Some((ordinal, item, dialect)) = proof.original_macro(source, producer)? else {
             return Ok(false);
         };
-        if self.source_key != source.selection().outline.parse
-            || self.cfg != source.selection().outline.cfg
-            || self.root != source.outline().root_scope
-            || self.producers.get(&producer) != Some(&ProducerKind::Attribute)
-            || self.definitions.contains_key(&proof.item)
-            || self.restored_original.contains_key(&proof.item)
-            || self.definitions.len() >= 100_000
-        {
+        if self.source_key != source.selection().outline.parse || self.cfg != source.selection().outline.cfg || self.root != source.outline().root_scope || self.producers.get(&producer) != Some(&ProducerKind::Attribute) || self.definitions.contains_key(&proof.item) || self.restored_original.contains_key(&proof.item) {
             return Err(error("original inert macro source/index/producer differs"));
         }
         // Account the new declaration, definition, restored-row and textual
@@ -488,7 +480,6 @@ impl SourceMacroIndex {
         self.metadata_bytes()?
             .checked_add(2048)
             .and_then(|bytes| bytes.checked_add(item.def_key.declared_name.len().checked_mul(4)?))
-            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
             .ok_or_else(|| error("original inert macro index budget"))?;
         let scope = *self
             .scope_keys
@@ -621,7 +612,6 @@ impl SourceMacroIndex {
         self.definitions
             .len()
             .checked_add(catalog.outward().len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| error("outward macro definition count limit"))?;
         for entry in catalog.outward() {
             if self.definitions.contains_key(&entry.definition.identity) {
@@ -830,9 +820,7 @@ impl SourceMacroIndex {
         let mut module = self.root.module_path.clone();
         module
             .len()
-            .checked_add(attribute.module_suffix().len())
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| error("source attribute module depth exceeded"))?;
+            .checked_add(attribute.module_suffix().len())            .ok_or_else(|| error("source attribute module depth exceeded"))?;
         module.extend_from_slice(attribute.module_suffix());
         if module != scope.module_path {
             return Err(error("source attribute enclosing module mismatch"));
@@ -884,9 +872,7 @@ impl SourceMacroIndex {
         let mut module = self.root.module_path.clone();
         module
             .len()
-            .checked_add(call.module_suffix().len())
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| error("declaration module depth limit"))?;
+            .checked_add(call.module_suffix().len())            .ok_or_else(|| error("declaration module depth limit"))?;
         module.extend_from_slice(call.module_suffix());
         if module != scope.module_path {
             return Err(error("declaration invocation module differs"));
@@ -930,9 +916,7 @@ impl SourceMacroIndex {
         let mut module = self.root.module_path.clone();
         module
             .len()
-            .checked_add(call.module_suffix().len())
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| error("source invocation module depth exceeded"))?;
+            .checked_add(call.module_suffix().len())            .ok_or_else(|| error("source invocation module depth exceeded"))?;
         module.extend_from_slice(call.module_suffix());
         if module != scope.module_path {
             return Err(error("source invocation enclosing module mismatch"));
@@ -997,6 +981,10 @@ impl SourceMacroIndex {
     }
     pub(crate) fn pending_producers(&self) -> impl Iterator<Item = Digest> + '_ {
         self.producers.keys().copied()
+    }
+    /// A captured `mod name;` child whose textual completion is still pending.
+    pub(crate) fn pending_captured_module(&self, input: Digest) -> bool {
+        self.producers.get(&input) == Some(&ProducerKind::ModuleSource)
     }
     pub(crate) fn pending_macro_use(&self, input: Digest) -> bool {
         self.macro_use_inputs.contains(&input)
@@ -1064,7 +1052,6 @@ impl SourceMacroIndex {
                     .checked_add(name.as_str().len())
                     .and_then(|n| n.checked_add(512))
             })
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| error("captured macro-use binding metadata limit"))?;
         let identities = bindings
             .iter()
@@ -1073,7 +1060,6 @@ impl SourceMacroIndex {
         self.definitions
             .len()
             .checked_add(identities.len())
-            .filter(|n| *n <= 1_000_000)
             .ok_or_else(|| error("captured macro-use definition count limit"))?;
         let target = *self
             .scope_keys
@@ -1168,7 +1154,6 @@ impl SourceMacroIndex {
         bytes = bytes
             .checked_add(self.ancestry.metadata_bytes()?)
             .and_then(|n| n.checked_add(facts_bytes))
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| error("source macro snapshot metadata limit"))?;
         Ok(bytes)
     }
@@ -1355,9 +1340,6 @@ impl PublishedMacroIndex {
     /// Coordinator-only cold encoding of this exact retained parent and outers.
     /// Source membership alone never substitutes for these actual roots.
     pub(crate) fn prepare_semantic_identity(&self) -> Result<Digest, Diagnostic> {
-        if self.runtime_outers.len() > 256 || self.runtime_bytes > 64 * 1024 * 1024 {
-            return Err(error("published macro environment encoding budget"));
-        }
         let mut e = crate::core::digest::StableEncoder::new("lrr/v1/published-macro-environment");
         e.string(self.source().path.as_str());
         e.record(&self.source().outline);
@@ -1410,9 +1392,6 @@ impl PublishedMacroIndex {
         outers: &[super::macro_scopes::OuterMacroScope<'_>],
         budget: usize,
     ) -> Result<Self, Diagnostic> {
-        if outers.len() > 256 {
-            return Err(error("runtime source outer depth limit"));
-        }
         let mut bytes = index
             .metadata_bytes()?
             .checked_add(facts.metadata_bytes()?)
@@ -1797,9 +1776,6 @@ impl EnteredMacroIndex<'_> {
         capture_imports: bool,
         context: Option<Arc<super::source_body_context::PreparedBodyContext>>,
     ) -> Result<EnteredMacroIndex<'_>, Diagnostic> {
-        if self.body_outers.len() >= 255 {
-            return Err(error("nested declaration scope-chain depth exceeded"));
-        }
         if context.is_none() && self.module_outer.is_none() {
             return Err(error(
                 "prepared nested body needs its own current owning context",
@@ -2544,9 +2520,6 @@ impl LinkedModuleIndex<'_> {
         facts: HygieneFacts,
     ) -> Result<LinkedModuleIndex<'_>, Diagnostic> {
         self.check_sources(expected)?;
-        if self.ancestors.len() >= 255 {
-            return Err(error("external module source depth exceeded"));
-        }
         let mut next = self
             .child
             .link_module(&expected[0], input, view, context, facts)?;
@@ -2572,9 +2545,7 @@ impl LinkedModuleIndex<'_> {
         scope
             .module_path
             .len()
-            .checked_add(call.module_suffix().len())
-            .filter(|n| *n <= 256)
-            .ok_or_else(|| error("linked invocation module depth exceeded"))?;
+            .checked_add(call.module_suffix().len())            .ok_or_else(|| error("linked invocation module depth exceeded"))?;
         scope
             .module_path
             .try_reserve(call.module_suffix().len())
@@ -2865,7 +2836,6 @@ impl PublishedMacroIndex {
         context
             .exclusive_metadata_bytes()
             .checked_add(std::mem::size_of::<EnteredMacroIndex>())
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| error("admitted local context metadata limit"))?;
         let facts = std::sync::Arc::clone(context.facts());
         self.build_entered_with_context(

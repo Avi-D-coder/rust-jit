@@ -1,0 +1,36 @@
+{
+  "kind": "common-lexical-header-admission",
+  "status": "uncompiled-unexecuted",
+  "source_fingerprint": "44fbec4dac7b1795f66694dc984f9eb2f5570d8a606d9858525bc68a67473403",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/lexical_inputs.rs",
+      "bytes": 13486,
+      "sha256": "d1cd4104c616a7296a8e2b21a8b12f6473646b1eb984e577356dbab5a4c86712"
+    },
+    {
+      "path": "crates/lrr/src/db/lexical_inputs_tests.rs",
+      "bytes": 12711,
+      "sha256": "490b871d97378697e9ca4817fc8dee01ba979470f67063521dd9d7808aa08cca"
+    }
+  ],
+  "dependencies": [
+    {
+      "component": "artifacts/macos-first/common-local-declaration-owner-v1/COMPONENT.json",
+      "sha256": "854bf5b0f9122cf6096920a17731204262f64702f6405e1459d7f7a195cbf20b",
+      "source_fingerprint": "17f855ff75fc14d19c5e534c01c3dfd32841f2896c29b1c3f7390ca122459660"
+    }
+  ],
+  "controls": [
+    "exact_cold_local_function_headers_admit_only_the_reached_body_all_editions",
+    "partial_lexical_metadata_requires_its_actual_cold_owner_and_all_three_exact_rows",
+    "exact_cold_headers_body_publication_respects_the_existing_metadata_cap"
+  ],
+  "handoff": "worktracks/04-calls-source-views/common-lexical-header-admission-handoff.md",
+  "holds": [
+    "All Rust controls uncompiled/unexecuted",
+    "Nested local body environment requires actual selected lexical receipt",
+    "Existing lexical full namespace census and cold reconstruction retained debt",
+    "No whole-fixture or four-origin runtime acceptance"
+  ]
+}

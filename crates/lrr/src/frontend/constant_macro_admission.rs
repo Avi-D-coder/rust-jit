@@ -28,7 +28,6 @@ use crate::{
     },
 };
 use std::{collections::BTreeMap, rc::Rc};
-const MAX_BYTES: usize = 32 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-MACRO-SOURCE", message.into())
 }
@@ -98,7 +97,7 @@ impl CurrentConstantMacroProof {
         range: SourceRange,
         byte_limit: usize,
     ) -> Result<AdmittedConstantPanic, Diagnostic> {
-        if byte_limit < std::mem::size_of::<Self>() + 256 || byte_limit > MAX_BYTES {
+        if byte_limit < std::mem::size_of::<Self>() + 256 {
             return Err(limit());
         }
         constant.revalidate(db, source)?;
@@ -115,7 +114,7 @@ impl CurrentConstantMacroProof {
         range: SourceRange,
         byte_limit: usize,
     ) -> Result<Self, Diagnostic> {
-        if byte_limit < std::mem::size_of::<Self>() + 256 || byte_limit > MAX_BYTES {
+        if byte_limit < std::mem::size_of::<Self>() + 256 {
             return Err(limit());
         }
         source.require_original_hygiene()?;
@@ -202,9 +201,6 @@ impl CurrentConstantMacroProof {
             || !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
         {
             return Err(fault("constant macro source graph/epoch differs"));
-        }
-        if input.compiler_inputs.len() > 100_000 || input.runtime_no_item_proofs.len() > 100_000 {
-            return Err(limit());
         }
         for (key, fingerprint) in &input.compiler_inputs {
             if db

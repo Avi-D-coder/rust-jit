@@ -188,14 +188,7 @@ fn failed_real_output_edit_preserves_seed_and_other_forks() {
 }
 
 #[test]
-fn seed_limit_and_poison_are_typed_errors() {
-    let mut tree = SyntaxAttachment::parse(
-        &input("fn main(){}", Edition::E2024, 31),
-        DeclarationGrammar::Items,
-    )
-    .unwrap();
-    tree.retained_input_bytes = MAX_RETAINED_INPUT + 1;
-    assert!(tree.into_seed().is_err());
+fn seed_poison_is_typed_error() {
     let tree = SyntaxAttachment::parse(
         &input("fn main(){}", Edition::E2024, 32),
         DeclarationGrammar::Items,

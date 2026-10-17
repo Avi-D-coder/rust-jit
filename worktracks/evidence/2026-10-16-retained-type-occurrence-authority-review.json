@@ -1,0 +1,83 @@
+{
+  "schema": "lrr/source-review/retained-type-occurrence-authority/v1",
+  "status": "source-only design review; no source edits, compilation, adapter/native/guest execution",
+  "head": "403710ae34d074468ea01df7a337dd16e2e6df62",
+  "inspected_sources": [
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "a00f9adc71e2a365096667f3f7dceaf9933093f1741f3ec6b22270523572950e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "b79bd262f6993c5136c756b71c4673f6dfcfecabd9a4e6ab6ecaa36fcae31735"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "5c1d9076f1b7b56ff1a590a975da7ff159911fcf260f4dd843d32e4dc906fa14"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "050017c60d973d6a1694bdca32ff02f0d58d8c1bed9726280f2ef12c47214f3b"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "fdc9910cd8250d576e7c504083837ae14de1fab9217404dff2ee28e4e0820bb7"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_anchors.rs",
+      "sha256": "5ff2299a65ff4cb00edc9fa373bfd2400ca00fceb015adc4bc118b464762489b"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_anchors.rs",
+      "sha256": "08c6f8be99091d51e4eaa998a80708adbb5e325e71c65aaa9fa1f16f3d5eb64d"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "5c44f8229aa6a526290d7dc90069c44dd3a5928649a0109d1031c706366cf310"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/edit.rs",
+      "sha256": "d97f817c4f9d68281f858dd44987664d74a78b23c37f02bc4d542f9e96a44635"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_type_names.rs",
+      "sha256": "eceefed4356a540b079ce531c6e48b41672a7547b474510457f4de82a0d59427"
+    },
+    {
+      "path": "crates/lrr/src/syntax/primitive_type_names.rs",
+      "sha256": "4e52fc5d1fdbcde34d891dffe94d2cce46f13cec8cc6e7e5e90871c0f424f9fb"
+    }
+  ],
+  "scope": "Review root entered Type goal42/prepared Type plan43 and normal cast consumer design after actual autoCLI f538 reached TypeResolution. This review does not claim reproduction of f538 or actual cast behavior.",
+  "confirmed_boundaries": [
+    "PreparedBodyTypeOccurrences currently marks retained source with any output NeedRetainedOccurrence globally; replace with per-occurrence proof, not unchecked origin inference.",
+    "AdmittedBodyContext retained admission joins actual current RetainedSyntax, SourceSelection/current lease, original outer declaration anchor, scope/header/body. This proves owning original member survives, not any contained PathType.",
+    "ParsedFile.retained_source_spans explicitly projects diagnostic origins without granting structural source/namespace authority; repeated/copy origins are retained and deduplicated.",
+    "MacroDefinitionAnchor::capture explicitly rejects recovering occurrence from origin equality because output may copy the same origin. It captures before expansion and translates each actual successful SyntaxEdit.",
+    "SyntaxEdit::map_original_range returns None for wholly replaced nodes even if identical tokens emitted. SourceSyntaxAssembly::attach_receipt has the actual edit but currently retains translated outer declaration/macro-definition anchors only. No surviving inner Type occurrence/edit lineage is exported in PreparedSourceSyntax."
+  ],
+  "minimal_authority_counterexample": {
+    "kind": "source-reasoned adapter/proc-span scenario, not executed",
+    "original": "fn main(){let _ = 0 as u8; selected!();}",
+    "transformation": "Admitted output at selected! emits a new cast whose u8 token carries a copied SpanRecord/context/edition from the earlier actual original u8 PathType. Outer main original declaration anchor survives.",
+    "insufficient_test": "Single projected original-root span + exact original PathType in main + source/epoch/lease + outer member anchor would accept both the surviving and newly emitted occurrences as Original.",
+    "required_distinction": "Only the surviving original position has original structural occurrence. The emitted occurrence needs its own admitted expansion-order/context join. No macro authority/proc execution is granted by this review."
+  },
+  "proposal": [
+    "Extend the existing structural attachment provenance, using actual SyntaxEdit translations. Capture bounded original Type/syntax occurrence anchors before first expansion, associate actual normalized range with exact original Type AST/token/source/body, translate with map_original_range, drop replaced nodes, and retain final canonical occurrence identity under PreparedSourceSyntax stable encoding/accounting.",
+    "A more general bounded edit lineage/surviving syntax index can serve the same proof, retained once in existing source plan; do not walk edit history or reparse text on installed dispatch.",
+    "Join current indexed PathType range to that actual surviving occurrence plus admitted retained source/epoch/current owning body lease and exact source/root context/edition. Preserve NeedRetainedOccurrence for copied/emitted/mixed/unsupported provenance until actual expansion occurrence join exists.",
+    "Use the SAME body Type prefix/header finalizer for local/generic/import/module/primitive semantics. The old primitive_type_names cast helper length32 and global namespace census are debt, not a new general source classifier."
+  ],
+  "eight_mode_review": {
+    "1": "No evaluator needed. Source origin joins cannot execute expressions.",
+    "2": "Actual indexed source Type belongs to ordinary source tree; generated positions need their real occurrence.",
+    "3": "Primitive fallback must follow shared complete Type namespace absence after the same generic/local/import/module service, without cast/macro-selected inference.",
+    "4": "Do not preserve blanket origin exclusion; implement actual structural per-occurrence join. Unproved generated positions remain explicit pending.",
+    "5": "Only actual source Type/header data; no cold executable body/lowering.",
+    "6": "Retain provenance and query result once; installed cast uses prepared readonly guard.",
+    "7": "No global source catalogue/namespace census. Existing admitted source lease/epoch plus relevant prefix/current-module/negative deps remain authoritative.",
+    "8": "Direct source range/canonical occurrence indexes and retained Arc; bounded metadata and stable encodings. No BodyIndex clone or wholefile per-op scans."
+  },
+  "next_review": "Review exact root candidate/source fingerprint after structural proof and shared finalizer implementation. No completion or acceptance inferred."
+}

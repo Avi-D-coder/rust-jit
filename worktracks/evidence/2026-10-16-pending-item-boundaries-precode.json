@@ -1,0 +1,47 @@
+{
+  "schema": "lrr/precode/pending-item-boundaries/v1",
+  "owned": [
+    "crates/lrr/src/expand/source_discovery/item_boundaries.rs"
+  ],
+  "root_owned": "source_discovery fields/hook/admission/poll wiring",
+  "task": "M018 common discovery closure; M019 prerequisite, not catalog completeness",
+  "invariant": "Actual no-catalog ordinary output boundary becomes usable exactly after its real typed prerequisite jobs complete; unsupported jobs never disappear by impl presence. No macro absence inferred from counts.",
+  "witness": "Unchanged official type-param-local-var-shadowing whole-user output contains cold generic impl. Direct impl frontier repair may expose missing retained no-catalog boundary; this next failure is source hypothesis, not observed runtime.",
+  "route": "Actual GeneratedHeaderPlan no-catalog classification -> existing CompletedEmptyBoundary -> PendingItemBoundary prepare with actual update.jobs -> Discovery::completed_job -> SourceDeclarative::complete_without_macro_bindings -> completed_empty_boundaries -> existing generated_body_macro_boundary.",
+  "authority": "Exact captured PreparedSourceView publication+selection, cfg, call metadata, record/epoch/grammar; root records/generated_owners membership and no-catalog classification remain required. Jobs are typed DiscoveryJob values, never lookup names. Root failure poisoning must remain.",
+  "alternates": "No new parser/evaluator/registry. Immediate no-prerequisite path preserved; helper delays existing common provider/boundary publication rather than forging a new boundary.",
+  "costs": "Cold bounded pending-map + exact typed job completion checks; O(sum pending prerequisites * log workjobs) per poll hook, no world census. One shared publication handle, bounded job vector and actual call scope keys accounted before allocation. No hot operation work.",
+  "acceptance": "Root frozen runtime and independent validation required; source-only helper, no tests/compiler/Cargo by worker. Wrapper child remains separately missing.",
+  "all_eight": [
+    "1 no evaluator MA001/7/8 unchanged",
+    "2 actual syntax boundary no literal/break executor MA004/5 unchanged",
+    "3 no method/numeric logic MA003/6 unchanged",
+    "4 actual generated owner proof, missing remains pending",
+    "5 cold declaration completion only no executable/pattern arms MA002 unchanged",
+    "6 existing admitted output receipt retained; no replay",
+    "7 typed relevant workjobs, no namespace world census",
+    "8 shared actual publication, no BodyIndex/parser cloning or wholefile node search"
+  ],
+  "source": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "62356c4d27d01129aef06243bf773c224cdf373f773eabc579f4f1c3cf76c00b"
+    },
+    {
+      "path": "crates/lrr/src/expand/discovery.rs",
+      "sha256": "986281e7f4c343a8bc36621a4b1fde2338df2a14b25bc0cc422b57ab5013296c"
+    },
+    {
+      "path": "crates/lrr/src/expand/body_macro_boundary.rs",
+      "sha256": "3e12be522363cd27b931c03a674fc666b182ee1b0660bdd93f11040125eb28c4"
+    },
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "sha256": "d9a2b8f9f15e65bdf8fadda823ccd0bb7d86f01ed6f837ba6a2356984b2a2110"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "af407080a42e507ab3c6bebd602a8a909da81c55fdbdc694f792dba4fcf6002f"
+    }
+  ]
+}

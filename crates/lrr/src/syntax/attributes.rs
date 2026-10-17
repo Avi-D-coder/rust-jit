@@ -25,9 +25,6 @@ fn fault(message: &str) -> Diagnostic {
 pub(crate) fn expression_enabled(expression: &ast::Expr, cfg: &CfgSet) -> Result<bool, Diagnostic> {
     let mut metas = Vec::new();
     for attribute in expression.syntax().children().filter_map(ast::Attr::cast) {
-        if metas.len() >= 100_000 {
-            return Err(fault("expression attribute inventory limit"));
-        }
         let meta = attribute
             .meta()
             .ok_or_else(|| fault("expression attribute syntax absent"))?;
@@ -45,10 +42,7 @@ pub(crate) fn source_root_enabled(
     cfg: &CfgSet,
 ) -> Result<bool, Diagnostic> {
     let mut metas = Vec::new();
-    for (index, attribute) in tree.attrs().enumerate() {
-        if index >= 100_000 {
-            return Err(fault("source root attribute inventory limit"));
-        }
+    for attribute in tree.attrs() {
         if let Some(meta) = attribute.meta() {
             metas
                 .try_reserve(1)
@@ -70,9 +64,6 @@ pub(crate) fn effective_metas(
         count = count
             .checked_add(1)
             .ok_or_else(|| fault("attribute inventory overflow"))?;
-        if count > 100_000 || depth >= 128 {
-            return Err(fault("attribute inventory/nesting limit"));
-        }
         match &meta {
             ast::Meta::CfgMeta(c) => {
                 let predicate = c
@@ -139,7 +130,6 @@ impl ParsedFile {
             .ok_or_else(|| fault("compiler Test attribute node absent"))?;
         let meta = node
             .ancestors()
-            .take(257)
             .find_map(|node| {
                 ast::Meta::cast(node).filter(|meta| range(meta.syntax().text_range()) == selected)
             })
@@ -147,7 +137,6 @@ impl ParsedFile {
         let attribute = meta
             .syntax()
             .ancestors()
-            .take(257)
             .find_map(ast::Attr::cast)
             .ok_or_else(|| fault("compiler Test attribute attachment absent"))?;
         let eligible = attribute
@@ -181,7 +170,6 @@ impl ParsedFile {
             .ok_or_else(|| fault("attribute producer node absent"))?;
         Ok(node
             .ancestors()
-            .take(257)
             .find_map(ast::Item::cast)
             .map(|item| range(item.syntax().text_range())))
     }
@@ -204,7 +192,6 @@ impl ParsedFile {
             .ok_or_else(|| fault("selected attribute item is not a node"))?;
         let item = node
             .ancestors()
-            .take(257)
             .find_map(|n| ast::Item::cast(n).filter(|i| range(i.syntax().text_range()) == selected))
             .ok_or_else(|| fault("selected attribute range is not an exact item"))?;
         inputs_from_attrs(self.key(), selected, cfg, item.attrs().collect())
@@ -249,7 +236,6 @@ fn inputs_from_attrs(
             .ok_or_else(|| fault("attribute metadata overflow"))?;
         bytes = bytes
             .checked_add(added)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| fault("attribute metadata limit"))?;
         attributes.push(AttributeInput {
             range: range(meta.syntax().text_range()),
@@ -349,9 +335,6 @@ impl ParsedFile {
             {
                 continue;
             }
-            if descendants.len() >= 100_000 {
-                return Err(fault("derive cfg owner count limit"));
-            }
             for attr in &attrs {
                 claimed.insert((
                     u32::from(attr.syntax().text_range().start()),
@@ -364,7 +347,6 @@ impl ParsedFile {
             }
             bytes = bytes
                 .checked_add(facts.allocated_bytes()?)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("derive cfg fact metadata limit"))?;
             descendants
                 .try_reserve(1)
@@ -426,9 +408,6 @@ impl ParsedFile {
             {
                 continue;
             }
-            if members.len() >= 100_000 {
-                return Err(fault("derive member count limit"));
-            }
             let facts =
                 inputs_from_attrs(self.key(), selected_member, cfg, member.attrs().collect())?;
             if !facts.enabled {
@@ -436,7 +415,6 @@ impl ParsedFile {
             }
             bytes = bytes
                 .checked_add(facts.allocated_bytes()?)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("derive member metadata limit"))?;
             members.push(facts);
         }
@@ -579,10 +557,7 @@ impl ParsedFile {
         }
         let mut exports = std::collections::BTreeSet::new();
         let mut bytes = 0usize;
-        for (index, item) in root.items().enumerate() {
-            if index >= 100_000 {
-                return Err(fault("source derive catalog item limit"));
-            }
+        for item in root.items() {
             let selected = range(item.syntax().text_range());
             let inputs = inputs_from_attrs(self.key(), selected, cfg, item.attrs().collect())?;
             if !inputs.enabled {
@@ -613,11 +588,7 @@ impl ParsedFile {
                 bytes = bytes
                     .checked_add(512)
                     .and_then(|n| n.checked_add(storage))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("source derive catalog metadata limit"))?;
-                if catalog.declarations.len() >= 4096 {
-                    return Err(fault("source derive catalog declaration limit"));
-                }
                 catalog.declarations.push((selected, declaration));
             }
         }
@@ -646,10 +617,7 @@ impl ParsedFile {
             return Ok(None);
         }
         let mut found = None;
-        for (index, item) in root.items().enumerate() {
-            if index >= 100_000 {
-                return Err(fault("macro-host source item inventory limit"));
-            }
+        for item in root.items() {
             let ast::Item::Fn(function) = item else {
                 continue;
             };

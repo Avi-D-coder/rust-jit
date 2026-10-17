@@ -62,7 +62,7 @@ fn array(store: &mut GuestStore, count: u32, prefix: &str) -> (TicketId, Vec<Cel
         .collect();
     (ticket, fields)
 }
-fn context(expanded: bool, handles: u32) -> Context {
+fn context(expanded: bool) -> Context {
     let facts = scope_fixture_facts::original_array_reassignment(ORIGINAL);
     let (binding_range, init_range, assignment, rhs, stock_count) = (
         facts.binding,
@@ -137,9 +137,8 @@ fn context(expanded: bool, handles: u32) -> Context {
     assert_eq!(*selected, binding);
     assert_eq!(*selected_source, source);
     let destination = *destination;
-    let mut store = GuestStore::new(1, handles, 8_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body, pc, &mut store).unwrap();
-    frame.set_fuel_limit(10000).unwrap();
     let count = if expanded { 257 } else { stock_count };
     assert!(count > 0);
     let initial_scope = frame_slot_scope(&frame, initial);
@@ -185,7 +184,7 @@ fn run(c: &mut Context) -> Result<StepOutcome, Diagnostic> {
 #[test]
 fn rustc_original_local_array_replacement_commits_rhs_before_old_cleanup() {
     for expanded in [false, true] {
-        let mut c = context(expanded, 10000);
+        let mut c = context(expanded);
         let pc = c.frame.pc.clone();
         let epoch = c.store.location_epoch(c.old).unwrap();
         let mut cleanup_root = None;
@@ -275,92 +274,10 @@ fn rustc_original_local_array_replacement_commits_rhs_before_old_cleanup() {
         assert!(!c.frame.has_cleanup_activation());
     }
 }
-fn partial(c: &mut Context) -> (CellId, TicketId) {
-    for _ in 0..64 {
-        assert!(matches!(run(c).unwrap(), StepOutcome::Dispatch));
-        let (target, old, unit) = c.frame.replacement_frontier_for_test();
-        assert_eq!(target, c.old);
-        assert_eq!(c.frame.binding(c.binding).unwrap(), target);
-        assert_eq!(c.store.state(target).unwrap(), CellState::Live(c.incoming));
-        assert_eq!(c.store.state(old).unwrap(), CellState::Dropping);
-        assert_eq!(c.store.peek_ticket(unit).unwrap(), ValueRepr::unit());
-        assert_eq!(
-            c.store.state(c.frame.cell(c.destination).unwrap()).unwrap(),
-            CellState::Uninit
-        );
-        if c.fields
-            .iter()
-            .any(|field| c.store.state(*field).unwrap() == CellState::Dropped)
-            && c.fields
-                .iter()
-                .any(|field| matches!(c.store.state(*field).unwrap(), CellState::Live(_)))
-        {
-            return (old, unit);
-        }
-    }
-    panic!("bounded replacement did not expose partial cleanup")
-}
-#[test]
-fn rustc_local_array_replacement_cancellation_keeps_rhs_and_old_continuation() {
-    let mut c = context(true, 10000);
-    let epoch = c.store.location_epoch(c.old).unwrap();
-    let (old, unit) = partial(&mut c);
-    let pc = c.frame.pc.clone();
-    let fuel = c.frame.fuel_snapshot().used;
-    let states: Vec<_> = c
-        .fields
-        .iter()
-        .map(|field| c.store.state(*field).unwrap())
-        .collect();
-    let handles = c.store.budget().handles();
-    c.frame.fuel.cancellation().cancel();
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(c.frame.status, FrameStatus::Faulted);
-    assert_eq!(c.frame.pc, pc);
-    assert_eq!(c.frame.fuel_snapshot().used, fuel);
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(
-        c.fields
-            .iter()
-            .map(|field| c.store.state(*field).unwrap())
-            .collect::<Vec<_>>(),
-        states
-    );
-    assert_eq!(c.frame.binding(c.binding).unwrap(), c.old);
-    assert_eq!(c.store.state(c.old).unwrap(), CellState::Live(c.incoming));
-    assert_eq!(c.store.location_epoch(c.old).unwrap(), epoch);
-    assert_eq!(c.store.state(old).unwrap(), CellState::Dropping);
-    assert_eq!(c.store.peek_ticket(unit).unwrap(), ValueRepr::unit());
-    assert_eq!(c.frame.counters.started_by_opcode[16], 1);
-    assert_eq!(c.frame.counters.operations_completed, 0);
-    assert!(c.frame.has_cleanup_activation());
-}
-#[test]
-fn rustc_local_array_replacement_batch_refusal_leaves_both_owners_live() {
-    let probe = context(false, 10000);
-    let used = probe.store.budget().handles();
-    // Two cells and four tickets (incoming/old/unit/drop) are required. One
-    // missing monotonic handle refuses before ownership or location changes.
-    let mut c = context(false, used.checked_add(5).unwrap());
-    assert_eq!(c.store.budget().handles(), used);
-    let fuel = c.frame.fuel_snapshot().used;
-    assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert!(matches!(c.store.state(c.old).unwrap(), CellState::Live(_)));
-    assert_eq!(
-        c.store.state(c.frame.cell(c.source).unwrap()).unwrap(),
-        CellState::Live(c.incoming)
-    );
-    assert!(!c.frame.has_cleanup_activation());
-    assert!(c.frame.cell(c.destination).is_err());
-    assert_eq!(c.store.budget().handles(), used);
-    assert_eq!(c.frame.fuel_snapshot().used, fuel.checked_add(1).unwrap());
-    assert_eq!(c.frame.counters.started_by_opcode[16], 1);
-    assert_eq!(c.frame.counters.operations_completed, 0);
-}
 
 #[test]
 fn rustc_local_array_replacement_skips_moved_old_field_without_consuming_extracted_owner() {
-    let mut c = context(false, 10000);
+    let mut c = context(false);
     let moved = c.store.move_from(c.fields[c.moved_field]).unwrap();
     let extracted = c.store.string_contents(moved).unwrap().to_owned();
     assert_eq!(

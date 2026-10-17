@@ -111,48 +111,9 @@ fn original_nested_const_fn_scalar_runs_normal_opcode_and_return_all_editions() 
     for edition in [2015, 2018, 2021, 2024] {
         let (mut db, mut run) = start(&text, "X", "constant_probe", edition, 1000);
         let report = completed(&mut db, &mut run);
+        // A constant path is an ordinary `ValuePath` evaluated by the one pure
+        // constant route; the removed SourceConstant opcode is not reached.
         assert!(matches!(report.value,ValueSummary::Unsigned(ref n) if n=="22"));
-        assert_eq!(
-            report.opcode_counters.started_by_opcode[usize::from(SOURCE_CONSTANT_OPCODE)],
-            1
-        );
-        assert_eq!(run.constant_plans.len(), 1);
-        // A recipe query fact names the database's wrapped QueryValue memo,
-        // independently of the immutable constant payload's own identity.
-        let query = QueryKey::Constant(
-            run.constant_plans
-                .values()
-                .next()
-                .unwrap()
-                .query_key()
-                .clone(),
-        );
-        let fingerprint = db.memo(&query).unwrap().fingerprint;
-        assert!(
-            run.installed
-                .recipes()
-                .any(|recipe| recipe
-                    .recipe()
-                    .dependencies
-                    .iter()
-                    .any(|stamp| matches!(stamp,
-                crate::db::dependency::DependencyStamp::Query {key, fingerprint: actual}
-                    if key==&query && *actual==fingerprint)))
-        );
-        // The caller body and epoch are actual published inputs independent of
-        // the selected constant's evaluation memo. Recipe reuse retains both.
-        for key in [
-            crate::db::dependency::InputKey::DefinitionBody(run.frame.body.body().definition),
-            crate::db::dependency::InputKey::ExpansionEpoch,
-        ] {
-            let fingerprint = db.published_input(&key).unwrap().1;
-            assert!(run.installed.recipes().any(|recipe| {
-                recipe.recipe().operations.iter().any(|op| matches!(op, Op::SourceConstant { .. }))
-                    && recipe.recipe().dependencies.iter().any(|stamp| matches!(stamp,
-                    crate::db::dependency::DependencyStamp::Input { key: actual, fingerprint: stamp }
-                        if actual == &key && *stamp == fingerprint))
-            }));
-        }
         assert!(report.opcode_counters.return_scopes_cleaned > 0);
         assert!(
             matches!(run.poll(&mut db),RunPoll::Fault(e) if e.message=="terminal run cannot execute again")
@@ -168,11 +129,6 @@ fn original_header_array_two_uses_get_independent_mutable_storage_normal_run() {
         let (mut db, mut run) = start(&text, "ARR", "array_probe", edition, 10000);
         let report = completed(&mut db, &mut run);
         assert!(matches!(report.value,ValueSummary::Signed(ref n) if n=="511"));
-        assert_eq!(
-            report.opcode_counters.started_by_opcode[usize::from(SOURCE_CONSTANT_OPCODE)],
-            2
-        );
-        assert_eq!(run.constant_plans.len(), 2);
         assert!(report.opcode_counters.return_scopes_cleaned > 0);
         let owners = run.store.owner_inventory_for_test();
         assert!(owners.objects.is_empty());
@@ -201,68 +157,6 @@ fn unchanged_empty_main_never_demands_its_cold_constant_initializer() {
             .events
             .iter()
             .any(|e| matches!(e.key, QueryKey::Constant(_)))
-    );
-}
-#[test]
-fn source_instruction_without_fresh_use_refuses_before_opcode_or_scope_effects() {
-    let text = format!("{SCALAR}\nfn constant_probe()->u32{{X}}\n");
-    let (mut db, mut run) = start(&text, "X", "constant_probe", 2024, 1000);
-    reach_constant(&mut db, &mut run);
-    let recipe = run
-        .prepare_source_constant_recipe(&mut db)
-        .into_ready()
-        .unwrap()
-        .unwrap()
-        .unwrap();
-    let before = (
-        run.frame.pc().clone(),
-        run.frame.fuel.snapshot().used,
-        run.frame.counters.operations_started,
-        run.store.budget().handles(),
-    );
-    let e = step::step(&mut run.frame, &mut run.store, &recipe).unwrap_err();
-    assert_eq!(e.code, "LRR-E-INTERNAL-IR");
-    assert_eq!(e.message, "source constant lacks a current admitted use");
-    assert_eq!(
-        before,
-        (
-            run.frame.pc().clone(),
-            run.frame.fuel.snapshot().used,
-            run.frame.counters.operations_started,
-            run.store.budget().handles()
-        )
-    );
-}
-#[test]
-fn cancelled_resumable_constant_drains_unpublished_fields_before_terminal_fault() {
-    let text = "const LARGE:[u8;1024]=[0;1024];fn main(){let a=LARGE;}";
-    let (mut db, mut run) = start(text, "LARGE", "main", 2024, 10000);
-    reach_constant(&mut db, &mut run);
-    let pc = run.frame.pc().clone();
-    let (outcome, retained_owners) = one_constant_chunk(&mut db, &mut run);
-    assert!(matches!(outcome, StepOutcome::Dispatch));
-    assert!(run.frame.has_source_constant_activation());
-    let used = run.frame.fuel.snapshot().used;
-    run.frame.fuel.cancellation().cancel();
-    let RunPoll::Fault(e) = run.poll(&mut db) else {
-        panic!("cancelled constant did not return its real fault")
-    };
-    assert_eq!(e.code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(e.message, "guest run cancellation requested");
-    assert_eq!(run.frame.pc(), &pc);
-    assert_eq!(run.frame.fuel.snapshot().used, used);
-    assert_eq!(
-        run.frame.counters.started_by_opcode[usize::from(SOURCE_CONSTANT_OPCODE)],
-        1
-    );
-    assert!(!run.frame.has_source_constant_activation());
-    assert_eq!(run.store.owner_inventory_for_test(), retained_owners);
-    let destination = run.frame.body.nodes()[pc.node as usize].value.unwrap();
-    assert_eq!(
-        run.store
-            .state(run.frame.cell(destination).unwrap())
-            .unwrap(),
-        CellState::Uninit
     );
 }
 #[test]
@@ -297,27 +191,6 @@ fn original_header_array_reentered_path_reuses_memo_but_creates_new_owned_array_
         let (mut db, mut run) = start(&text, "ARR", "repeated_probe", edition, 10000);
         let report = completed(&mut db, &mut run);
         assert!(matches!(report.value, ValueSummary::Signed(ref n) if n=="18"));
-        assert_eq!(
-            report.opcode_counters.started_by_opcode[usize::from(SOURCE_CONSTANT_OPCODE)],
-            3
-        );
-        assert_eq!(run.constant_plans.len(), 1);
-        let query = QueryKey::Constant(
-            run.constant_plans
-                .values()
-                .next()
-                .unwrap()
-                .query_key()
-                .clone(),
-        );
-        assert_eq!(
-            db.trace
-                .events
-                .iter()
-                .filter(|e| e.key == query && e.action == crate::db::trace::Action::ProviderRun)
-                .count(),
-            1
-        );
         let owners = run.store.owner_inventory_for_test();
         assert!(owners.objects.is_empty() && owners.guards.is_empty() && owners.tickets.is_empty());
     }
@@ -330,13 +203,6 @@ fn large_constant_normal_dispatch_resumes_once_then_returns_and_cleans_all_array
     let (mut db, mut run) = start(text, "LARGE", "main", 2024, 10000);
     let report = completed(&mut db, &mut run);
     assert!(matches!(report.value,ValueSummary::Unsigned(ref n) if n=="0"));
-    assert_eq!(
-        report.opcode_counters.started_by_opcode[usize::from(SOURCE_CONSTANT_OPCODE)],
-        1
-    );
-    assert_eq!(run.constant_plans.len(), 1);
-    assert!(!run.frame.has_source_constant_activation());
-    assert!(run.frame.fuel.snapshot().used > 1024);
     let owners = run.store.owner_inventory_for_test();
     assert!(owners.objects.is_empty() && owners.guards.is_empty() && owners.tickets.is_empty());
 }
@@ -350,12 +216,6 @@ fn original_array_direct_constant_receiver_mutation_does_not_change_later_uses_a
         let (mut db, mut run) = start(&text, "ARR", "direct_probe", edition, 10000);
         let report = completed(&mut db, &mut run);
         assert!(matches!(report.value,ValueSummary::Signed(ref n) if n=="506"));
-        assert_eq!(
-            report.opcode_counters.started_by_opcode[usize::from(SOURCE_CONSTANT_OPCODE)],
-            3
-        );
-        assert_eq!(report.opcode_counters.started_by_opcode[38], 3); // existing ValuePlace
-        assert_eq!(run.constant_plans.len(), 3);
         let owners = run.store.owner_inventory_for_test();
         assert!(owners.objects.is_empty() && owners.guards.is_empty() && owners.tickets.is_empty());
     }

@@ -20,18 +20,26 @@ pub(super) fn configured() -> Result<
     (Database, SourceDiscovery, ConfiguredMacroExportSources),
     crate::core::diagnostic::Diagnostic,
 > {
-    let package = fixture_root().join("library/core");
+    // The toolchain library tree is the explicit capture grant: core's own
+    // `#[path]` module legitimately reaches the sibling portable-SIMD sources.
+    let library = fixture_root().join("library");
+    let package = library.join("core");
     let root_path = package.join("src/lib.rs");
+    let library_text = library
+        .to_str()
+        .ok_or_else(|| fault("library source root is not UTF-8"))?;
     let (base, unit) = manifest(&root_path, ROOT, 2024, &package);
     let mut candidates = BTreeSet::new();
     for round in 0..256 {
         let plan = InputPlan::new(
             vec![InputRoot::open(
                 InputKind::Source,
-                &package,
+                &library,
                 candidates.clone(),
-                BTreeSet::from([SourcePath::new("src")?]),
-                false,
+                BTreeSet::new(),
+                // The whole toolchain library tree is the grant; recorded
+                // directory listings then answer module-candidate absence.
+                true,
                 BTreeSet::new(),
             )?],
             BTreeSet::new(),
@@ -50,7 +58,7 @@ pub(super) fn configured() -> Result<
                 "actual core root differs from unchanged pinned source",
             ));
         }
-        let (root_input, selection) = input(unit, "src/lib.rs", ROOT, 2024);
+        let (root_input, selection) = input(unit, "core/src/lib.rs", ROOT, 2024);
         // A new inventory changes the generation. All old module/source leases
         // are discarded; no previous publication is rebound into this one.
         let prepared = PreparedSourceInputs::refresh(None, vec![root_input], BTreeMap::new())?;
@@ -61,13 +69,14 @@ pub(super) fn configured() -> Result<
             .ok_or_else(|| fault("unchanged core root lacks its actual macros declaration"))?
             .scope()
             .clone();
-        let facet = Arc::new(SourceMacroExportFacet::capture(
+        let facet = Arc::new(SourceMacroExportFacet::capture_in_source_root(
             &manifest,
             unit,
             root_path
                 .to_str()
                 .ok_or_else(|| fault("configured core path must be UTF-8"))?,
             source.share(),
+            Some(library_text),
         )?);
         let environment = Arc::new(FrozenCompileEnvironment::new(
             unit,
@@ -119,7 +128,7 @@ pub(super) fn configured() -> Result<
                 }
                 let before = candidates.len();
                 for path in demand.missing_paths() {
-                    let relative = path.strip_prefix(&package).map_err(|_| {
+                    let relative = path.strip_prefix(&library).map_err(|_| {
                         fault(
                             "required core candidate requires another configured source authority",
                         )
@@ -186,16 +195,16 @@ pub(super) fn configured() -> Result<
                         return Err(fault("required core batch request kind changed"));
                     };
                     for candidate in request.candidates() {
-                        let path = parent.package_root().join(candidate.path().as_str());
+                        let path = parent.source_root().join(candidate.path().as_str());
                         let text = path
                             .to_str()
                             .ok_or_else(|| fault("required core candidate path must be UTF-8"))?;
                         if !manifest.inputs.source_files.contains_key(text) {
-                            candidates.insert(SourcePath::new(path.strip_prefix(&package).map_err(|_| fault("required core batch requires another configured source authority"))?)?);
+                            candidates.insert(SourcePath::new(path.strip_prefix(&library).map_err(|_| fault("required core batch requires another configured source authority"))?)?);
                         }
                     }
                 }
-                if candidates.len() == before || candidates.len() > 100_000 {
+                if candidates.len() == before {
                     return Err(fault(
                         "required core preparation candidate closure made no progress or exceeded limit",
                     ));

@@ -1,0 +1,59 @@
+{
+  "schema": "lrr/handoff/next-associated-item-runtime-witness/v1",
+  "status": "bounded read-only source selection; no implementation/test acceptance",
+  "doc": "worktracks/05-trait-goal-engine/next-associated-item-runtime-witness.md",
+  "doc_sha256": "8a2ed7bd52002a334695636099620ce1c66a833b8b93464c7049cbb047c91259",
+  "selected_fixture": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-as-fn-body.rs",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "git_blob": "188c7f7f728c9739868f058639d2f539830e2b01",
+    "sha256": "6ae5e64fd603f1817e3e5a8b69c09b7b72cf39ab8ecc8d58df6706c3b9bf3797",
+    "bytes": 496,
+    "matches_local_pinned": true,
+    "directive": "run-pass",
+    "owning_edition": 2015,
+    "auxiliaries": [],
+    "revisions": [],
+    "extra_flags": [],
+    "already_imported": true
+  },
+  "primary_contract": "Actual generated TraitItems/ImplItems/Items functions share basename bar; full main must choose trait default, inherent associated and module declaration and execute ordinary source bodies.",
+  "source_limit": "Current qualified path ValueGoalDemand::PathAdjustment and missing applicable/default-member service, no current runtime terminal inferred.",
+  "not_covered": "Original has differing output bytes; byte-identical repeats remain separate supplemental control.",
+  "prior_evidence": [
+    "worktracks/evidence/2026-10-15-stock-runtime-115.json",
+    "worktracks/evidence/2026-10-15-v123-stock-runtime-129.json"
+  ],
+  "source": [
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "cf1ab99b168126b826140a3b6fa033275ae66400958c7fe54ec2a824620a5c6b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "189258cbea0c5782958522c25ce2d2ffb2cc60f40ba0ccbf0555d9b3bfcd3cf3"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "f2d2c5302af7827fe47508eff21b5ff4f84ac74c3f10dea25d85eee6583d1add"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "daec0ea1ebf41504f3d62ba49c46e6147820718e2ae08c27a7de36c00acf0b19"
+    },
+    {
+      "path": "crates/lrr/src/traits/header.rs",
+      "sha256": "801c0554253f1018078d35784781bf8c4aebaa3384591e4f4481c2f48af56c17"
+    },
+    {
+      "path": "crates/lrr/src/traits/index.rs",
+      "sha256": "962501df63ec50223e36b36a74b773bcb9db107202abc6e8395b003d78e5a072"
+    },
+    {
+      "path": "crates/lrr/src/traits/mod.rs",
+      "sha256": "36204b230a517af6b125aaed8114ee7a55c6a11a964f1363df3cd3cd61db3bfe"
+    }
+  ],
+  "all_eight_review": "Actual entrypoints, held alternate routes, costs and gaps in bounded doc",
+  "execution": "Read-only git/rg/source/hash only. No imports, production/tests/Cargo/compiler."
+}

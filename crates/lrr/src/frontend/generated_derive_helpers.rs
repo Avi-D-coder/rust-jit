@@ -38,13 +38,9 @@ impl OriginalDeriveHelpers {
         let mut names = std::collections::BTreeSet::new();
         let mut bytes = std::mem::size_of::<Self>();
         for (name, class) in providers {
-            if names.len() >= 100_000 {
-                return Err(limit());
-            }
             bytes = bytes
                 .checked_add(name.capacity())
                 .and_then(|n| n.checked_add(160))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(limit)?;
             names.insert((name, class));
         }
@@ -167,7 +163,6 @@ impl GeneratedDeriveHelpers {
                     bytes = bytes
                         .checked_add(name.len())
                         .and_then(|n| n.checked_add(256))
-                        .filter(|n| *n <= 64 * 1024 * 1024)
                         .ok_or_else(limit)?;
                     providers
                         .entry((name.clone(), class))
@@ -181,7 +176,6 @@ impl GeneratedDeriveHelpers {
                     .checked_sub(prior_capacity)
                     .and_then(|n| n.checked_mul(std::mem::size_of::<Digest>()))
                     .and_then(|n| bytes.checked_add(n))
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 receipt_ids.push(receipt.fingerprint());
                 row_index += 1;
@@ -262,7 +256,6 @@ impl GeneratedDeriveHelpers {
                             .checked_mul(std::mem::size_of::<Digest>())
                             .and_then(|size| n.checked_add(size))
                     })
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 if !active.is_empty() {
                     if member {

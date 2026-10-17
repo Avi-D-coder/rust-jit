@@ -75,13 +75,11 @@ impl ArgumentDiscovery {
         for argument in &arguments {
             bytes = bytes
                 .checked_add(argument.metadata_bytes())
-                .filter(|n| *n <= 512 * 1024 * 1024)
                 .ok_or_else(fault)?;
             let index =
                 ArgumentDeclarationMacroIndex::with_parent(argument.clone(), parent.clone())?;
             bytes = bytes
                 .checked_add(index.metadata_bytes())
-                .filter(|n| *n <= 512 * 1024 * 1024)
                 .ok_or_else(fault)?;
             indexes.push(index);
         }
@@ -187,7 +185,6 @@ impl ArgumentDiscovery {
                         let bytes = self
                             .bytes
                             .checked_add(output.metadata_bytes())
-                            .filter(|n| *n <= 512 * 1024 * 1024)
                             .ok_or_else(fault)?;
                         self.completed.try_reserve(1).map_err(|_| fault())?;
                         self.indexes[*ordinal] = index;
@@ -219,7 +216,6 @@ impl ArgumentDiscovery {
                 let bytes = self
                     .bytes
                     .checked_add(128)
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(fault)?;
                 let mut index = index.clone();
                 index.retire_inert(invocation, definition)?;
@@ -237,7 +233,6 @@ impl ArgumentDiscovery {
                     .bytes
                     .checked_add(selection.metadata_bytes()?)
                     .and_then(|n| n.checked_add(std::mem::size_of::<PendingArgumentProcedural>()))
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(fault)?;
                 let selection = Arc::new(selection);
                 self.pending_procedural = Some(PendingArgumentProcedural {

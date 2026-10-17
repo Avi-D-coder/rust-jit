@@ -20,6 +20,13 @@ pub struct CompletedSourceEnvironment {
     bytes: usize,
     names_bytes: usize,
     sources_bytes: usize,
+    // Impl members of this environment's nominal types, derived once on
+    // first demand from `names`, `sources` and the generated item units, and
+    // shared by every reader (method probing, associated paths, drop/copy).
+    members: std::sync::OnceLock<Arc<crate::frontend::member_index::MemberIndex>>,
+    // Macro-generated item units of this sealed discovery, admitted when it
+    // publishes them (after the environment itself is completed).
+    generated: std::sync::OnceLock<Vec<Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>>>,
 }
 impl std::fmt::Debug for CompletedSourceEnvironment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -30,6 +37,49 @@ impl std::fmt::Debug for CompletedSourceEnvironment {
     }
 }
 impl CompletedSourceEnvironment {
+    /// The impl member index of this immutable environment (type-relative
+    /// associated paths and method probing), built at most once.
+    pub(crate) fn member_index(
+        &self,
+    ) -> Result<Arc<crate::frontend::member_index::MemberIndex>, Diagnostic> {
+        if let Some(members) = self.members.get() {
+            return Ok(Arc::clone(members));
+        }
+        let sources: Vec<_> = self.sources.iter().collect();
+        let mut built = crate::frontend::member_index::MemberIndex::build(&self.names, &sources)?;
+        for unit in self.generated.get().into_iter().flatten() {
+            built.add_generated(&self.names, unit)?;
+        }
+        // Associated functions written by impl/trait-item expansions into
+        // original owners are members of those same owners.
+        for plan in self.source_syntax.values() {
+            for member in plan.generated_associated_members()? {
+                built.add_associated(
+                    member.owner,
+                    member.owner_trait,
+                    member.constant,
+                    &member.name,
+                    member.identity,
+                    member.provided,
+                );
+            }
+        }
+        Ok(Arc::clone(self.members.get_or_init(|| Arc::new(built))))
+    }
+    /// Admit the generated item units this discovery published. The member
+    /// index must not be demanded before publication, or it would miss them.
+    pub(crate) fn admit_generated_units(
+        &self,
+        units: Vec<Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>>,
+    ) -> Result<(), Diagnostic> {
+        if self.members.get().is_some() && !units.is_empty() {
+            return Err(fault(
+                "completed member index was demanded before generated publication",
+            ));
+        }
+        let _ = self.generated.set(units);
+        Ok(())
+    }
     pub fn names(&self) -> &NameNamespaces {
         &self.names
     }
@@ -177,11 +227,9 @@ impl SourceDiscovery {
             .sources
             .len()
             .checked_add(self.staged_modules.len())
-            .filter(|n| *n <= 100_000)
             .ok_or_else(|| fault("completed source environment source limit"))?;
         count
             .checked_mul(std::mem::size_of::<PreparedSourceView>())
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let mut sources = Vec::new();
         sources
@@ -195,7 +243,7 @@ impl SourceDiscovery {
                 continue;
             }
             self.graph
-                .require_source(source.selection(), source.outline())?;
+                .require_view(source)?;
             sources.push(source.share());
         }
         for module in self.staged_modules.values() {
@@ -213,7 +261,7 @@ impl SourceDiscovery {
                 }
                 let source = module.syntax.prepared_source();
                 self.graph
-                    .require_source(source.selection(), source.outline())?;
+                    .require_view(source)?;
                 sources.push(source.share());
             }
         }
@@ -234,7 +282,6 @@ impl SourceDiscovery {
                             .checked_sub(std::mem::size_of::<PreparedSourceView>())
                             .ok_or_else(crate::runtime::arena::resource)?,
                     )
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(crate::runtime::arena::resource)
             },
         )?;
@@ -267,7 +314,6 @@ impl SourceDiscovery {
                 }
                 owner_rows = owner_rows
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(crate::runtime::arena::resource)?;
                 let owners = scope_owners.entry(scope.clone()).or_default();
                 owners
@@ -283,7 +329,6 @@ impl SourceDiscovery {
                 .and_then(|n| {
                     n.checked_add(owners.capacity().checked_mul(std::mem::size_of::<u32>())?)
                 })
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
         // Required module/source macro closure only; no executable body is
@@ -291,7 +336,6 @@ impl SourceDiscovery {
         let macro_source_bytes = sources
             .len()
             .checked_mul(256 + 16 * std::mem::size_of::<(Digest, u32)>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let mut macro_sources = BTreeMap::new();
         for (ordinal, source) in sources.iter().enumerate() {
@@ -310,7 +354,7 @@ impl SourceDiscovery {
         let mut macro_admission_bytes = 0usize;
         let mut macro_map_bytes = 0usize;
         if let Some(providers) = providers {
-            let mut remaining = 64usize * 1024 * 1024;
+            let mut remaining = usize::MAX;
             for provider in providers
                 .iter()
                 .filter(|p| p.macro_export_source_role().is_none())
@@ -383,7 +427,6 @@ impl SourceDiscovery {
         }
         macro_source_bytes
             .checked_add(macro_map_bytes)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         drop(macro_sources);
         let fingerprint = self
@@ -415,7 +458,6 @@ impl SourceDiscovery {
         })?;
         let bytes = bytes
             .checked_add(syntax_bytes)
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let names_bytes = self.graph.exclusive_retained_bytes()?;
         // Share only after all fallible preparation has passed. Subsequent
@@ -431,6 +473,8 @@ impl SourceDiscovery {
             bytes,
             names_bytes,
             sources_bytes,
+            members: std::sync::OnceLock::new(),
+            generated: std::sync::OnceLock::new(),
         }));
         Ok(())
     }
@@ -468,14 +512,12 @@ fn insert_macro_fact(
                     (u32, super::body_macro_environment::CompletedBodyMacroFacts),
                 )>(),
         )
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(crate::runtime::arena::resource)?;
     *admission_bytes = admission_bytes
         .checked_add(fact.index().runtime_bytes())
         .and_then(|n| n.checked_add(fact.index().exclusive_metadata_bytes().ok()?))
         .and_then(|n| n.checked_add(16 * std::mem::size_of::<usize>()))
         .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
-        .filter(|n| *n <= 64 * 1024 * 1024)
         .ok_or_else(crate::runtime::arena::resource)?;
     facts.insert(key, (ordinal, fact));
     Ok(())

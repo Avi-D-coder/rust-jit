@@ -93,14 +93,6 @@ struct GeneratedIntrinsicArguments {
 struct ModuleReplacementRanges(BTreeMap<Digest, Vec<crate::syntax::spans::SourceRange>>);
 impl ModuleReplacementRanges {
     fn new(masks: &[(Digest, crate::syntax::spans::SourceRange)]) -> Result<Self, Diagnostic> {
-        if masks.len() > 100_000
-            || masks
-                .len()
-                .checked_mul(128)
-                .is_none_or(|n| n > 32 * 1024 * 1024)
-        {
-            return Err(limit());
-        }
         let mut ranges = BTreeMap::<Digest, Vec<crate::syntax::spans::SourceRange>>::new();
         for (owner, range) in masks {
             if range.start >= range.end {
@@ -381,9 +373,6 @@ impl CompletedDeclarationFragment {
             ));
         }
 
-        if self.bound_attributes.len() > 4096 {
-            return Err(limit());
-        }
         for (selection, key) in &self.bound_attributes {
             let parent = selection.generated_parent().ok_or_else(limit)?.output();
             if key.invocation != selection.producer()
@@ -405,9 +394,6 @@ impl CompletedDeclarationFragment {
                     "generated cold attribute receipt differs",
                 ));
             }
-        }
-        if self.bound_procedural.len() > 4096 {
-            return Err(limit());
         }
         for (selection, key) in &self.bound_procedural {
             let parent = selection.input().captured_parent().ok_or_else(limit)?;
@@ -437,9 +423,6 @@ impl CompletedDeclarationFragment {
                 ));
             }
         }
-        if self.item_replacements.len() > 4096 {
-            return Err(limit());
-        }
         for proof in &self.item_replacements {
             let owner = self.item_owner.as_ref().ok_or_else(limit)?;
             let Some((child, range)) =
@@ -462,9 +445,6 @@ impl CompletedDeclarationFragment {
                     "generated replacement receipt differs",
                 ));
             }
-        }
-        if self.item_derives.len() > 4096 {
-            return Err(limit());
         }
         for proof in &self.item_derives {
             let owner = self.item_owner.as_ref().ok_or_else(limit)?;
@@ -494,9 +474,6 @@ impl CompletedDeclarationFragment {
                 ));
             }
         }
-        if self.item_attributes.len() > 100_000 {
-            return Err(limit());
-        }
         for proof in &self.item_attributes {
             if proof.output.epoch() != self.index.output().epoch()
                 || proof.output.scan().cfg() != cfg.fingerprint()
@@ -514,9 +491,6 @@ impl CompletedDeclarationFragment {
                     "completed item attribute receipt differs",
                 ));
             }
-        }
-        if self.inert_attributes.len() > 100_000 {
-            return Err(limit());
         }
         for proof in &self.inert_attributes {
             if proof.output.epoch() != self.index.output().epoch()
@@ -536,9 +510,6 @@ impl CompletedDeclarationFragment {
                     "generated inert attribute source/compiler record differs",
                 ));
             }
-        }
-        if self.intrinsic_arguments.len() > 100_000 {
-            return Err(limit());
         }
         for summary in &self.intrinsic_arguments {
             if !self.records.iter().any(|record| {
@@ -664,7 +635,6 @@ impl CompletedDeclarationFragment {
             for index in std::iter::once(&fragment.index).chain(&fragment.completed_indexes) {
                 traversed = traversed
                     .checked_add(1)
-                    .filter(|n| *n <= 4096)
                     .ok_or_else(limit)?;
                 let rows = index.module_bindings(expected_epoch)?;
                 let scan = index.output().scan();
@@ -676,12 +646,8 @@ impl CompletedDeclarationFragment {
                     if masked {
                         continue;
                     }
-                    if bindings.len() >= 100_000 {
-                        return Err(limit());
-                    }
                     bytes = bytes
                         .checked_add(binding.metadata_bytes()?)
-                        .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(limit)?;
                     bindings.try_reserve_exact(1).map_err(|_| limit())?;
                     bindings.push(binding);
@@ -691,7 +657,6 @@ impl CompletedDeclarationFragment {
                 pending
                     .len()
                     .checked_add(argument.assembly.completed.len())
-                    .filter(|n| *n <= 4096)
                     .ok_or_else(limit)?;
                 pending
                     .try_reserve_exact(argument.assembly.completed.len())
@@ -744,12 +709,8 @@ impl CompletedDeclarationFragment {
         while let Some(fragment) = pending.pop() {
             work = work
                 .checked_add(1)
-                .filter(|n| *n <= 4096)
                 .ok_or_else(limit)?;
             for index in std::iter::once(&fragment.index).chain(&fragment.completed_indexes) {
-                if outputs.len() >= 100_000 {
-                    return Err(limit());
-                }
                 outputs.try_reserve_exact(1).map_err(|_| limit())?;
                 outputs.push(index.output().clone());
             }
@@ -757,7 +718,6 @@ impl CompletedDeclarationFragment {
                 pending
                     .len()
                     .checked_add(argument.assembly.completed.len())
-                    .filter(|n| *n <= 4096)
                     .ok_or_else(limit)?;
                 pending
                     .try_reserve_exact(argument.assembly.completed.len())
@@ -990,7 +950,6 @@ impl DeclarationFragment {
             .metadata_bytes()?
             .checked_add(index.retained_metadata_bytes())
             .and_then(|n| n.checked_add(record.wire().len().checked_mul(2)?))
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(limit)?;
         let mut frames = Vec::new();
         frames.try_reserve_exact(1).map_err(|_| limit())?;
@@ -1019,7 +978,6 @@ impl DeclarationFragment {
                         .checked_mul(std::mem::size_of::<Arc<ExpansionRecord>>())?,
                 )
             })
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(limit)?;
         budget.freeze()?;
         budget.transaction(
@@ -1073,7 +1031,6 @@ impl DeclarationFragment {
         self.retained_bytes = self
             .retained_bytes
             .checked_add(catalog.metadata_bytes()?)
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(limit)?;
         self.item_owner = Some(catalog.clone());
         let frame = self.frames.last().ok_or_else(limit)?;
@@ -1081,7 +1038,6 @@ impl DeclarationFragment {
         let count = frame.output().scan().producers().len();
         count
             .checked_mul(std::mem::size_of::<Digest>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(limit)?;
         candidates.try_reserve_exact(count).map_err(|_| limit())?;
         candidates.extend(
@@ -1104,7 +1060,6 @@ impl DeclarationFragment {
                     .retained_bytes
                     .checked_add(std::mem::size_of::<CompletedItemAttribute>())
                     .and_then(|n| n.checked_add(catalog.metadata_bytes().ok()?))
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 self.item_attributes
                     .try_reserve_exact(1)
@@ -1226,7 +1181,6 @@ impl DeclarationFragment {
                             )>(),
                         )?)
                     })
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(limit)?;
             bound_procedural.push((selection, request.key().clone()));
         }
@@ -1287,14 +1241,10 @@ impl DeclarationFragment {
                 "bound generated attribute request differs",
             ));
         }
-        if self.bound_attributes.len() >= 4096 {
-            return Err(limit());
-        }
         let bytes = self
             .retained_bytes
             .checked_add(selection.metadata_bytes()?)
             .and_then(|n| n.checked_add(256))
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(limit)?;
         self.bound_attributes.try_reserve(1).map_err(|_| limit())?;
         self.bound_attributes
@@ -1321,7 +1271,7 @@ impl DeclarationFragment {
                 "bound generated procedural request differs",
             ));
         }
-        if self.bound_procedural.len() >= 4096 || !selection.validates_binding(request.key())? {
+        if !selection.validates_binding(request.key())? {
             return Err(limit());
         }
         let export_bytes = match &request.key().macro_identity {
@@ -1337,7 +1287,6 @@ impl DeclarationFragment {
                     crate::expand::identity::ExpansionKey,
                 )>())
             })
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(limit)?;
         self.bound_procedural
             .try_reserve_exact(1)
@@ -1429,7 +1378,6 @@ impl DeclarationFragment {
                     let mut bytes = self
                         .retained_bytes
                         .checked_add(args.assembly.metadata_bytes())
-                        .filter(|n| *n <= 512 * 1024 * 1024)
                         .ok_or_else(limit)?;
                     let scan_count =
                         args.assembly
@@ -1446,14 +1394,6 @@ impl DeclarationFragment {
                         .try_fold(0usize, |n, fragment| {
                             n.checked_add(fragment.records().len()).ok_or_else(limit)
                         })?;
-                    if self
-                        .records
-                        .len()
-                        .checked_add(record_count)
-                        .is_none_or(|n| n > 4096)
-                    {
-                        return Err(limit());
-                    }
                     self.scans.try_reserve(scan_count).map_err(|_| limit())?;
                     self.records
                         .try_reserve(record_count)
@@ -1464,7 +1404,6 @@ impl DeclarationFragment {
                     for fragment in &args.assembly.completed {
                         bytes = bytes
                             .checked_add(fragment.metadata_bytes())
-                            .filter(|n| *n <= 512 * 1024 * 1024)
                             .ok_or_else(limit)?;
                     }
                     let args = self.active_arguments.take().ok_or_else(limit)?;
@@ -1528,7 +1467,6 @@ impl DeclarationFragment {
                     let retained_bytes = self
                         .retained_bytes
                         .checked_add(inventory.metadata_bytes())
-                        .filter(|n| *n <= 512 * 1024 * 1024)
                         .ok_or_else(limit)?;
                     let index = Arc::new(self.frames.pop().expect("root checked"));
                     let complete = Arc::new(CompletedDeclarationFragment {
@@ -1554,16 +1492,12 @@ impl DeclarationFragment {
                 // Preflight retention before adoption mutates either frame. The
                 // index's owned heaps were already charged when it was admitted;
                 // moving it into an Arc adds only its container and pointer.
-                if self.completed_indexes.len() >= 4096 {
-                    return Err(limit());
-                }
                 let retention = std::mem::size_of::<GeneratedDeclarationMacroIndex>()
                     .checked_add(std::mem::size_of::<Arc<GeneratedDeclarationMacroIndex>>())
                     .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
                     .ok_or_else(limit)?;
                 self.retained_bytes
                     .checked_add(retention)
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 self.completed_indexes
                     .try_reserve_exact(1)
@@ -1608,7 +1542,6 @@ impl DeclarationFragment {
                             .retained_bytes
                             .checked_add(index.retained_metadata_bytes())
                             .and_then(|n| n.checked_add(retention))
-                            .filter(|n| *n <= 512 * 1024 * 1024)
                             .ok_or_else(limit)?;
                         self.completed_indexes.push(Arc::new(
                             self.frames.pop().expect("completed child checked"),
@@ -1667,11 +1600,7 @@ impl DeclarationFragment {
                         .and_then(|n| {
                             n.checked_add(std::mem::size_of::<GeneratedItemReplacement>())
                         })
-                        .filter(|n| *n <= 512 * 1024 * 1024)
                         .ok_or_else(limit)?;
-                    if self.frames.len() >= 256 || self.records.len() >= 4096 {
-                        return Err(limit());
-                    }
                     let parent_output = frame.output().clone();
                     self.frames.try_reserve_exact(1).map_err(|_| limit())?;
                     self.scans.try_reserve_exact(1).map_err(|_| limit())?;
@@ -1707,17 +1636,6 @@ impl DeclarationFragment {
                 && let Some((receipt, outputs)) =
                     owner.completed_declaration_derives(frame.output(), invocation)?
             {
-                if self.active_derives.len() >= 256
-                    || self.frames.len() >= 256
-                    || self.item_derives.len() >= 4096
-                    || self
-                        .records
-                        .len()
-                        .checked_add(outputs.len())
-                        .is_none_or(|n| n > 4096)
-                {
-                    return Err(limit());
-                }
                 let mut bytes = self
                     .retained_bytes
                     .checked_add(std::mem::size_of::<ActiveItemDerives>())
@@ -1742,7 +1660,6 @@ impl DeclarationFragment {
                     bytes = bytes
                         .checked_add(output.metadata_bytes()?)
                         .and_then(|n| n.checked_add(output.record().wire().len().checked_mul(2)?))
-                        .filter(|n| *n <= 512 * 1024 * 1024)
                         .ok_or_else(limit)?;
                 }
                 let parent = frame.output().clone();
@@ -1781,13 +1698,9 @@ impl DeclarationFragment {
                 && let Some(definition) =
                     owner.completed_helper_declaration(frame.output(), invocation)?
             {
-                if self.item_attributes.len() >= 100_000 {
-                    return Err(limit());
-                }
                 let bytes = self
                     .retained_bytes
                     .checked_add(std::mem::size_of::<CompletedItemAttribute>())
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 self.item_attributes
                     .try_reserve_exact(1)
@@ -1818,11 +1731,7 @@ impl DeclarationFragment {
                     .checked_add(output.metadata_bytes()?)
                     .and_then(|n| n.checked_add(index.retained_metadata_bytes()))
                     .and_then(|n| n.checked_add(record.wire().len().checked_mul(2)?))
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(limit)?;
-                if self.frames.len() >= 256 || self.records.len() >= 4096 {
-                    return Err(limit());
-                }
                 self.frames.try_reserve_exact(1).map_err(|_| limit())?;
                 self.scans.try_reserve_exact(1).map_err(|_| limit())?;
                 self.records.try_reserve_exact(1).map_err(|_| limit())?;
@@ -1922,9 +1831,6 @@ impl DeclarationFragment {
                     // this is not a final namespace or catalog certificate.
                     None
                 };
-                if self.inert_attributes.len() >= 100_000 {
-                    return Err(limit());
-                }
                 let bytes = self
                     .retained_bytes
                     .checked_add(std::mem::size_of::<GeneratedInertAttribute>() + 128)
@@ -1942,7 +1848,6 @@ impl DeclarationFragment {
                                 .map_or(0, |(parent, _)| parent.retained_metadata_bytes()),
                         )
                     })
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 self.inert_attributes
                     .try_reserve_exact(1)
@@ -1972,7 +1877,6 @@ impl DeclarationFragment {
                 let bytes = self
                     .retained_bytes
                     .checked_add(selection.metadata_bytes()?)
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(limit)?;
                 let selection = Arc::new(selection);
                 self.pending_procedural = Some(selection.clone());
@@ -2008,7 +1912,6 @@ impl DeclarationFragment {
                 if scans.iter().all(|scan| scan.producers().is_empty()) {
                     let bytes = scans.iter().try_fold(self.retained_bytes, |n, scan| {
                         n.checked_add(scan.retained_bytes())
-                            .filter(|n| *n <= 512 * 1024 * 1024)
                             .ok_or_else(limit)
                     })?;
                     let output = frame.output().clone();
@@ -2028,7 +1931,6 @@ impl DeclarationFragment {
                         .and_then(|n| {
                             n.checked_add(std::mem::size_of::<GeneratedIntrinsicArguments>())
                         })
-                        .filter(|n| *n <= 512 * 1024 * 1024)
                         .ok_or_else(limit)?;
                     self.scans.extend(scans.iter().cloned());
                     self.intrinsic_arguments.push(GeneratedIntrinsicArguments {
@@ -2042,7 +1944,7 @@ impl DeclarationFragment {
                     continue;
                 }
             }
-            match provider.generated_declaration_demand(frame, invocation)? {
+            match provider.generated_declaration_demand(frame, invocation, namespaces)? {
                 SourceDeclarativeDemand::NeedInput(input) => {
                     return Ok(DeclarationFragmentStep::NeedInput(input));
                 }
@@ -2070,9 +1972,6 @@ impl DeclarationFragment {
                 "LRR-E-EXPANSION-INPUT",
                 "declaration fragment reply key differs",
             ));
-        }
-        if self.frames.len() >= 256 || self.records.len() >= 4096 {
-            return Err(limit());
         }
         let replacement_parent = if let Some((selection, _)) = self
             .bound_attributes
@@ -2108,7 +2007,6 @@ impl DeclarationFragment {
             .checked_add(output.metadata_bytes()?)
             .and_then(|n| n.checked_add(record.wire().len().checked_mul(2)?))
             .and_then(|n| n.checked_add(index.retained_metadata_bytes()))
-            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(limit)?;
         self.frames.try_reserve(1).map_err(|_| limit())?;
         self.scans.try_reserve(1).map_err(|_| limit())?;

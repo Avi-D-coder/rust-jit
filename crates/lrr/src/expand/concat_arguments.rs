@@ -75,9 +75,6 @@ impl ConcatArguments {
         if descriptor.kind() != CompileInputKind::Concat {
             return Err(fault("selected builtin is not concat"));
         }
-        if input.allocated_bytes().map_err(|e| fault(e.to_string()))? > 64 * 1024 * 1024 {
-            return Err(fault("concat planning input metadata limit"));
-        }
         let wire = input.encode().map_err(|e| fault(e.to_string()))?;
         let original = lrr_expand_adapter::token_wire::TokenForest::decode(&wire)
             .map_err(|e| fault(e.to_string()))?;
@@ -151,13 +148,6 @@ impl ConcatArguments {
             expand::identity::GrammarSlot,
         };
         let mut work = || -> Result<ConcatMaterializationPoll, Diagnostic> {
-            if original
-                .allocated_bytes()
-                .map_err(|e| fault(e.to_string()))?
-                > 64 * 1024 * 1024
-            {
-                return Err(fault("concat original metadata limit"));
-            }
             let original_wire = original.encode().map_err(|e| fault(e.to_string()))?;
             if self.definition != descriptor.definition_identity()
                 || self.original != Digest::of_bytes(&original_wire)
@@ -215,7 +205,6 @@ impl ConcatArguments {
                 };
                 bytes = bytes
                     .checked_add(tokens.allocated_bytes().map_err(|e| fault(e.to_string()))?)
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| fault("concat child aggregate metadata limit"))?;
                 outputs.push(
                     lrr_expand_adapter::token_wire::TokenForest::decode(
@@ -293,11 +282,8 @@ impl ConcatArguments {
                 ));
             }
             if request.max_input_bytes == 0
-                || request.max_input_bytes > 64 * 1024 * 1024
                 || request.max_output_bytes == 0
-                || request.max_output_bytes > 32 * 1024 * 1024
                 || request.max_wire_bytes == 0
-                || request.max_wire_bytes > 256 * 1024 * 1024
             {
                 return Err(fault("eager concat resource limits are invalid"));
             }

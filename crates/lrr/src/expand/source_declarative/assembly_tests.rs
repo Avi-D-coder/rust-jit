@@ -360,7 +360,7 @@ fn upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies()
                 .unwrap()
                 .identity;
             let SourceDeclarativeDemand::Ready(inner) = provider
-                .generated_declaration_demand(&nested, invocation)
+                .generated_declaration_demand(&nested, invocation, None)
                 .unwrap()
             else {
                 panic!("nested demand incomplete")
@@ -510,7 +510,7 @@ fn upstream_forwarded_statement_keeps_the_issued_call_and_generated_let() {
         .unwrap()
         .identity;
     let SourceDeclarativeDemand::Ready(inner) = provider
-        .generated_declaration_demand(&nested, invocation)
+        .generated_declaration_demand(&nested, invocation, None)
         .unwrap()
     else {
         panic!("nested statement demand incomplete")
@@ -617,7 +617,7 @@ fn repeated_origin_keys_keep_distinct_generated_invocation_occurrences() {
     let mut sites = Vec::new();
     for invocation in ids {
         let SourceDeclarativeDemand::Ready(issued) = provider
-            .generated_declaration_demand(&nested, invocation)
+            .generated_declaration_demand(&nested, invocation, None)
             .unwrap()
         else {
             panic!("repeated demand incomplete")

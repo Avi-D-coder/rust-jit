@@ -135,9 +135,7 @@ impl ConstantMacroDemand {
         std::mem::size_of::<Self>()
             .checked_add(128)
             .and_then(|n| n.checked_add(self.key.heap_bytes().ok()?))
-            .and_then(|n| n.checked_add(self.evaluated_key.heap_bytes().ok()?))
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(|| invalid("constant macro demand metadata overflow"))
+            .and_then(|n| n.checked_add(self.evaluated_key.heap_bytes().ok()?))            .ok_or_else(|| invalid("constant macro demand metadata overflow"))
     }
     pub(crate) fn validate_current(
         &self,
@@ -161,20 +159,18 @@ impl ConstantMacroDemand {
             admission
                 .metadata_bytes()
                 .checked_mul(2)
-                .and_then(|n| n.checked_add(self.metadata_bytes().ok()?))
-                .filter(|n| *n <= 32 << 20)
-                .ok_or_else(|| invalid("constant macro child replay metadata limit"))?;
+                .and_then(|n| n.checked_add(self.metadata_bytes().ok()?))                .ok_or_else(|| invalid("constant macro child replay metadata limit"))?;
             let proof =
                 crate::frontend::constant_result_type::CurrentConstantResultType::capture_current(
                     db,
                     source,
                     admission.clone(),
-                    32 << 20,
+                    usize::MAX,
                 )?;
             let (_, length) = proof
                 .array()
                 .ok_or_else(|| invalid("constant macro parent no longer has a length child"))?;
-            let child = admission.reselect_array_length_current(db, source, length, 32 << 20)?;
+            let child = admission.reselect_array_length_current(db, source, length, usize::MAX)?;
             let expected = crate::db::key::ConstantKey::capture(
                 child.plan(),
                 &length.expected_wire(),

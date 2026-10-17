@@ -18,8 +18,8 @@ fn value() -> (ConstValue, ConstantWireType) {
     (wire::decode(&b, &w, 1 << 20).unwrap(), w)
 }
 #[test]
-fn pending_constant_after_construction_cancellation_aborts_only_private_owner() {
-    let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
+fn pending_constant_abort_retires_only_private_owner() {
+    let mut s = GuestStore::for_epoch(1).unwrap();
     let (v, w) = value();
     let ty = s
         .intern_type(TypeKey::Array {
@@ -28,13 +28,11 @@ fn pending_constant_after_construction_cancellation_aborts_only_private_owner() 
         })
         .unwrap();
     let plan = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
-    let mut f = RunFuel::new(2).unwrap();
-    f.charge().unwrap();
+    let mut f = RunSteps::default();
+    f.charge();
     let pending = s.instantiate_pending_constant(plan, &mut f).unwrap();
     let ticket = pending.ticket.unwrap();
     let repr = s.peek_ticket(ticket).unwrap();
-    f.cancellation().cancel();
-    assert!(f.poll().is_err());
     s.abort_pending_constant(pending).unwrap();
     assert!(s.peek_ticket(ticket).is_err());
     assert!(s.objects.get(ObjectId::from_bits(repr.payload)).is_err());
@@ -42,7 +40,7 @@ fn pending_constant_after_construction_cancellation_aborts_only_private_owner() 
 }
 #[test]
 fn pending_constant_bad_destination_retains_owner_then_commit_consumes_once() {
-    let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let mut s = GuestStore::for_epoch(1).unwrap();
     let (v, w) = value();
     let ty = s
         .intern_type(TypeKey::Array {
@@ -51,7 +49,7 @@ fn pending_constant_bad_destination_retains_owner_then_commit_consumes_once() {
         })
         .unwrap();
     let plan = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
-    let mut f = RunFuel::new(10).unwrap();
+    let mut f = RunSteps::default();
     let mut pending = s.instantiate_pending_constant(plan, &mut f).unwrap();
     let ticket = pending.ticket.unwrap();
     let frame = s.new_frame_anchor().unwrap();
@@ -100,13 +98,13 @@ fn pending_constant_bad_destination_retains_owner_then_commit_consumes_once() {
 
 #[test]
 fn store_session_prepared_constant_refuses_equal_epoch_other_store_before_charge() {
-    let a = GuestStore::new(1, 1000, 1 << 20).unwrap();
-    let mut b = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let a = GuestStore::for_epoch(1).unwrap();
+    let mut b = GuestStore::for_epoch(1).unwrap();
     let v = ConstValue::from_scalar(ValueRepr::unit()).unwrap();
     let w = ConstantWireType::Scalar(PrimitiveType::Unit);
     let plan = a.prepare_constant_instantiation(&v, &w, TypeId(1)).unwrap();
     let before = (b.budget().handles(), b.budget().bytes());
-    let mut fuel = RunFuel::new(10).unwrap();
+    let mut fuel = RunSteps::default();
     let error = b.instantiate_constant(plan, &mut fuel).unwrap_err();
     assert_eq!(error.code, "LRR-E-STALE-HANDLE");
     assert_eq!(fuel.snapshot().used, 0);
@@ -115,14 +113,14 @@ fn store_session_prepared_constant_refuses_equal_epoch_other_store_before_charge
 
 #[test]
 fn store_session_pending_owner_refuses_colliding_actual_ticket_and_destination() {
-    let mut a = GuestStore::new(1, 1000, 1 << 20).unwrap();
-    let mut b = GuestStore::new(1, 1000, 1 << 20).unwrap();
+    let mut a = GuestStore::for_epoch(1).unwrap();
+    let mut b = GuestStore::for_epoch(1).unwrap();
     let v = ConstValue::from_scalar(ValueRepr::unit()).unwrap();
     let w = ConstantWireType::Scalar(PrimitiveType::Unit);
     let pa = a.prepare_constant_instantiation(&v, &w, TypeId(1)).unwrap();
     let pb = b.prepare_constant_instantiation(&v, &w, TypeId(1)).unwrap();
-    let mut fa = RunFuel::new(10).unwrap();
-    let mut fb = RunFuel::new(10).unwrap();
+    let mut fa = RunSteps::default();
+    let mut fb = RunSteps::default();
     let mut pending_a = a.instantiate_pending_constant(pa, &mut fa).unwrap();
     let mut pending_b = b.instantiate_pending_constant(pb, &mut fb).unwrap();
     assert_eq!(

@@ -13,20 +13,12 @@ use std::collections::{BTreeMap, BTreeSet};
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
 }
-fn limit() -> Diagnostic {
-    Diagnostic::new(
-        "LRR-E-METADATA-LIMIT",
-        "original source-prefix attribute budget".into(),
-    )
-}
 pub(crate) fn capture(
     source: &PreparedSourceView,
     scan: &DeclarationScan,
     byte_limit: usize,
 ) -> Result<BTreeSet<Digest>, Diagnostic> {
-    if !(128..=32 * 1024 * 1024).contains(&byte_limit) {
-        return Err(limit());
-    }
+    let _ = byte_limit; // E-R5-006: no metadata byte budget.
     source.require_original_hygiene()?;
     source.require_declaration_syntax()?;
     let parsed = source.retained_declaration_parser()?;
@@ -57,45 +49,38 @@ pub(crate) fn capture(
         return Ok(BTreeSet::new());
     }
     let tree = parsed.parsed.tree();
-    let mut metas = Vec::new();
-    for attribute in tree.attrs() {
-        if metas.len() >= 100_000 {
-            return Err(limit());
-        }
-        metas.try_reserve_exact(1).map_err(|_| limit())?;
-        metas.push(
+    let metas = tree
+        .attrs()
+        .map(|attribute| {
             attribute
                 .meta()
-                .ok_or_else(|| fault("original root attribute meta absent"))?,
-        );
-    }
+                .ok_or_else(|| fault("original root attribute meta absent"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let (enabled, metas) =
         crate::syntax::attributes::effective_metas(metas, source.captured_macro_cfg()?)?;
     if !enabled {
         return Ok(BTreeSet::new());
     }
-    let mut bytes = metas
-        .capacity()
-        .checked_mul(std::mem::size_of::<ra_ap_syntax::ast::Meta>())
-        .and_then(|bytes| bytes.checked_add(128))
-        .filter(|bytes| *bytes <= byte_limit)
-        .ok_or_else(limit)?;
     // Associate actual root Meta ranges once. Replaying each prefix will use
-    // the retained set and independently checked source scan instead.
+    // the retained set and independently checked source scan instead. Builtin
+    // inert and tool attributes never name a macro, so the scan records no
+    // producer for them.
     let mut selected = BTreeMap::new();
-    let row_bytes = std::mem::size_of::<(
-        (u32, u32),
-        Option<&crate::syntax::declaration_scan::DeclarationProducer>,
-    )>()
-    .checked_add(128)
-    .ok_or_else(limit)?;
     for meta in metas {
         let range: SourceRange = crate::syntax::ast_adapter::range(meta.syntax().text_range());
-        bytes = bytes
-            .checked_add(row_bytes)
-            .filter(|bytes| *bytes <= byte_limit)
-            .ok_or_else(limit)?;
-        if selected.insert((range.start, range.end), None).is_some() {
+        let inert = meta.path().is_some_and(|path| {
+            let text: String = path
+                .syntax()
+                .text()
+                .to_string()
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect();
+            crate::syntax::outline::is_builtin_inert_attribute(&text)
+                || crate::syntax::outline::is_tool_attribute(&text)
+        });
+        if selected.insert((range.start, range.end), (inert, None)).is_some() {
             return Err(fault("original root meta range is duplicated"));
         }
     }
@@ -103,15 +88,20 @@ pub(crate) fn capture(
         if row.kind != DeclarationProducerKind::Attribute {
             continue;
         }
-        if let Some(selected) = selected.get_mut(&(row.range.start, row.range.end))
+        if let Some((_, selected)) = selected.get_mut(&(row.range.start, row.range.end))
             && selected.replace(row).is_some()
         {
             return Err(fault("exact original root meta producer is ambiguous"));
         }
     }
     let mut result = BTreeSet::new();
-    for row in selected.into_values() {
-        let row = row.ok_or_else(|| fault("exact original root meta producer absent"))?;
+    for (inert, row) in selected.into_values() {
+        let Some(row) = row else {
+            if inert {
+                continue;
+            }
+            return Err(fault("exact original root meta producer absent"));
+        };
         if row.lexical_scope != root.identity
             || row.scope != *scan.scope()
             || row.scope.owner.is_some()
@@ -119,10 +109,6 @@ pub(crate) fn capture(
         {
             return Err(fault("original root meta producer ownership differs"));
         }
-        bytes = bytes
-            .checked_add(std::mem::size_of::<Digest>() + 128)
-            .filter(|bytes| *bytes <= byte_limit)
-            .ok_or_else(limit)?;
         if !result.insert(row.identity) {
             return Err(fault("original root meta producer duplicated"));
         }

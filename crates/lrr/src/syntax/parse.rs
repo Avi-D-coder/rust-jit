@@ -32,13 +32,56 @@ pub(super) fn diagnostics(
                 error.range(),
                 &error.to_string(),
                 edition,
-            )
+            ) && !final_method_modifier_error(tree.syntax(), error.range(), &error.to_string())
         })
         .map(|error| ParseDiagnostic {
             range: range(error.range()),
             message: error.to_string(),
         })
         .collect()
+}
+
+/// rustc's `final` associated-function modifier (`final fn f(&self) {}` in a
+/// trait, used by `core`) postdates the pinned parser, which recovers it as an
+/// `ERROR` holding only the `final` keyword immediately before an ordinary
+/// `FN`. The function itself parses normally; `final` only forbids overriding
+/// in impls and has no runtime meaning, so this exact shape is not a
+/// declaration parse failure or boundary.
+pub(crate) fn is_final_method_modifier(node: &ra_ap_syntax::SyntaxNode) -> bool {
+    use ra_ap_syntax::{NodeOrToken, SyntaxKind};
+    if node.kind() != SyntaxKind::ERROR
+        || node.parent().map(|parent| parent.kind()) != Some(SyntaxKind::ASSOC_ITEM_LIST)
+    {
+        return false;
+    }
+    let mut tokens = node
+        .children_with_tokens()
+        .filter(|element| !element.kind().is_trivia());
+    if !matches!(tokens.next(), Some(NodeOrToken::Token(token)) if token.kind() == SyntaxKind::FINAL_KW)
+        || tokens.next().is_some()
+    {
+        return false;
+    }
+    let next = std::iter::successors(node.next_sibling_or_token(), |element| {
+        element.next_sibling_or_token()
+    })
+    .find(|element| !element.kind().is_trivia());
+    matches!(next, Some(NodeOrToken::Node(next)) if next.kind() == SyntaxKind::FN)
+}
+fn final_method_modifier_error(
+    root: &ra_ap_syntax::SyntaxNode,
+    range: ra_ap_syntax::TextRange,
+    message: &str,
+) -> bool {
+    if message != "expected an item" || !range.is_empty() {
+        return false;
+    }
+    let Some(at) = root.token_at_offset(range.start()).right_biased() else {
+        return false;
+    };
+    at.kind() == ra_ap_syntax::SyntaxKind::FINAL_KW
+        && at.text_range().start() == range.start()
+        && at.parent().is_some_and(|parent| is_final_method_modifier(&parent))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -272,7 +315,7 @@ impl ParsedFile {
                 "invalid pinned owned declaration syntax".into(),
             )
         };
-        if syntax.is_empty() || syntax.len() > 6_000_000 || text_len > 32 * 1024 * 1024 {
+        if syntax.is_empty() {
             return Err(fail());
         }
         let mut builder = ra_ap_syntax::SyntaxTreeBuilder::default();
@@ -291,7 +334,6 @@ impl ParsedFile {
                     }
                     depth = depth
                         .checked_add(1)
-                        .filter(|n| *n <= 4096)
                         .ok_or_else(fail)?;
                     builder.start_node(ra_ap_syntax::SyntaxKind::from(*raw));
                 }
@@ -369,7 +411,7 @@ impl ParsedFile {
                 "generated token edition attachment differs or exceeds limit".into(),
             )
         };
-        if self.generated_origin.is_none() || origins.len() > 2_000_000 {
+        if self.generated_origin.is_none() {
             return Err(fail());
         }
         tokens
@@ -377,7 +419,6 @@ impl ParsedFile {
             .len()
             .checked_add(tokens.spans().len())
             .and_then(|n| n.checked_mul(256))
-            .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(fail)?;
         // Normalization can add item/local context records. Bound that retained
         // expansion and interval storage before allocating the fact tables.
@@ -391,7 +432,6 @@ impl ParsedFile {
                     .checked_mul(std::mem::size_of::<TokenContext>())
                     .and_then(|intervals| bytes.checked_add(intervals))
             })
-            .filter(|bytes| *bytes <= 128 * 1024 * 1024)
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-METADATA-LIMIT",
@@ -407,7 +447,6 @@ impl ParsedFile {
         origins
             .len()
             .checked_mul(std::mem::size_of::<TokenContext>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(fail)?;
         let mut editions = Vec::new();
         editions
@@ -445,14 +484,12 @@ impl ParsedFile {
         let bytes = editions
             .capacity()
             .checked_mul(std::mem::size_of::<TokenContext>())
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(fail)?;
         let fact_bytes = facts.metadata_bytes()?;
         self.estimated_bytes = self
             .estimated_bytes
             .checked_add(bytes)
             .and_then(|n| n.checked_add(fact_bytes))
-            .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(fail)?;
         self.token_contexts = Some(editions);
         self.pinned_hygiene = Some(facts);
@@ -544,6 +581,47 @@ mod tests {
         )
         .unwrap();
         assert!(!bare.errors.is_empty());
+    }
+    #[test]
+    fn final_associated_function_modifier_is_not_a_declaration_error() {
+        // Unchanged upstream core source using `final fn` in a trait.
+        let core = include_bytes!(
+            "../../../../fixtures/upstream/rustc-checkout/library/core/src/io/size_hint.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let profile = ProfileIdentity {
+                edition,
+                ..ProfileIdentity::current()
+            };
+            let parsed =
+                ParsedFile::parse_dependency(&SourceBlob::new(core.to_vec()).unwrap(), profile)
+                    .unwrap();
+            assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+            let outline = parsed
+                .outline(crate::core::digest::Digest([7; 32]), vec![], &crate::source::snapshot::CfgSet::guest_default())
+                .unwrap();
+            assert!(outline.items.iter().any(|item| item.def_key.declared_name == "size_hint"));
+            assert!(outline.scopes.values().all(|scope| {
+                scope
+                    .blockers
+                    .iter()
+                    .all(|blocker| blocker.kind != crate::syntax::outline::BlockerKind::ParseBoundary)
+            }));
+        }
+        // Only the exact modifier position is admitted.
+        for text in [
+            "final fn f() {}",
+            "trait T { final }",
+            "trait T { final const C: u8 = 0; }",
+            "impl S { fn f() {} final }",
+        ] {
+            let parsed = ParsedFile::parse(
+                &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
+                ProfileIdentity::current(),
+            )
+            .unwrap();
+            assert!(!parsed.errors.is_empty(), "{text}");
+        }
     }
 }
 
@@ -688,12 +766,9 @@ impl ParsedFile {
             let mut depth = 0usize;
             for ancestor in node.ancestors().skip(1) {
                 depth = depth
-                    .checked_add(1)
-                    .filter(|n| *n <= 256)
-                    .ok_or_else(limit)?;
+                    .checked_add(1)                    .ok_or_else(limit)?;
                 work = work
                     .checked_add(1)
-                    .filter(|n| *n <= 100_000)
                     .ok_or_else(limit)?;
                 if ra_ap_syntax::ast::Fn::can_cast(ancestor.kind()) {
                     return Ok(true);

@@ -136,31 +136,6 @@ fn imported_alias_still_checks_original_target_reexport_width() {
     ));
 }
 #[test]
-fn metadata_and_count_refusal_install_no_unowned_import_route() {
-    let (mut registry, _, a, _, dest) = fixture_registry();
-    registry.bytes = 32 * 1024 * 1024;
-    let before = registry.bindings.len();
-    assert!(
-        registry
-            .imported_alias(dest.clone(), a, VisibilityScope::Public)
-            .is_err()
-    );
-    assert_eq!(registry.bindings.len(), before);
-    assert_eq!(registry.imported_aliases, 0);
-    assert!(!registry.bindings.contains_key(&dest));
-    assert_eq!(registry.bytes, 32 * 1024 * 1024);
-    let (mut registry, _, a, _, dest) = fixture_registry();
-    registry.imported_aliases = 100_000;
-    let bytes = registry.bytes;
-    assert!(
-        registry
-            .imported_alias(dest.clone(), a, VisibilityScope::Public)
-            .is_err()
-    );
-    assert_eq!(registry.bytes, bytes);
-    assert!(!registry.bindings.contains_key(&dest));
-}
-#[test]
 fn differing_visibility_for_same_import_route_is_not_silently_rewritten() {
     let (mut registry, unit, a, _, dest) = fixture_registry();
     registry

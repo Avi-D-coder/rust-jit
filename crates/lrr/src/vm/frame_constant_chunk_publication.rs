@@ -70,25 +70,10 @@ impl Frame {
             prepared.construction,
             usize::from(prepared.prior.is_none()),
         )?;
-        let metadata = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
-            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
-            .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
-            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
-            .and_then(|n| n.checked_add(std::mem::size_of::<ConstantPublicationActivation>()))
-            .and_then(|n| n.checked_add(physical.metadata_bytes()))
-            .and_then(|n| n.checked_add(proof.metadata_bytes()?))
-            .and_then(|n| n.checked_add(prepared.source.heap_bytes()?))
-            .filter(|n| *n <= 32 << 20)
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let _ = metadata;
-        self.fuel.poll()?;
-        let fuel_before = self.fuel.snapshot();
+        let steps_before = self.fuel.snapshot();
         charge(self)?;
-        let fuel_after = self.fuel.snapshot();
-        if fuel_before.used.checked_add(1) != Some(fuel_after.used)
-            || fuel_before.limit != fuel_after.limit
-        {
+        let steps_after = self.fuel.snapshot();
+        if steps_after.used != steps_before.used.saturating_add(1) {
             return Err(invalid(
                 "constant chunk entry must charge exactly one original opcode",
             ));
@@ -273,21 +258,6 @@ impl Frame {
                     };
                 }
                 if let Err(error) = self.preflight_source_view(a.destination, Some(&a.source)) {
-                    if let Err(diagnostic) =
-                        store.cleanup_ready_constant_chunks(&mut a.physical, pending, error)
-                    {
-                        return ConstantPublicationChunk::Fault {
-                            diagnostic,
-                            cleanup_pending: true,
-                        };
-                    }
-                    return ConstantPublicationChunk::Dispatch {
-                        steps: 0,
-                        bytes: 0,
-                        cleaning: true,
-                    };
-                }
-                if let Err(error) = self.fuel.poll() {
                     if let Err(diagnostic) =
                         store.cleanup_ready_constant_chunks(&mut a.physical, pending, error)
                     {

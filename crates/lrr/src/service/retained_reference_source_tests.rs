@@ -489,6 +489,26 @@ fn actual_field_occurrence_source_admission_refuses_foreign_pc_and_stale_epoch()
                 .unwrap();
             let pc = indexed.pc(field.id, Phase::Entry).unwrap();
             let sources = [source.share()];
+            let owner = std::sync::Arc::new(ready(crate::frontend::source_body_context::capture(
+                &mut db,
+                &[&sources[0]],
+                indexed,
+                &pc,
+            )));
+            let owning_plan = ready(std::sync::Arc::clone(&owner).prepare(&mut db));
+            assert_eq!(owning_plan.source().body(), body);
+            assert!(
+                owning_plan
+                    .facts()
+                    .bindings
+                    .iter()
+                    .any(|binding| binding.name == "p")
+            );
+            assert!(std::sync::Arc::ptr_eq(
+                owning_plan.source().index(),
+                owner.index()
+            ));
+            ready(owning_plan.require_current(&mut db));
             let (member, caller) = ready(RunMachine::current_field_source_for_test(
                 &mut db, &sources, indexed, &pc,
             ));
@@ -509,10 +529,243 @@ fn actual_field_occurrence_source_admission_refuses_foreign_pc_and_stale_epoch()
             if generated || retain_callee {
                 db.begin_expansion_epoch(2).unwrap();
                 assert!(matches!(
+                    owning_plan.require_current(&mut db),
+                    QueryPoll::Ready(Err(_))
+                ));
+                assert!(matches!(
                     RunMachine::current_field_source_for_test(&mut db, &sources, indexed, &pc),
                     QueryPoll::Ready(Err(_))
                 ));
             }
         }
     }
+}
+
+#[test]
+fn generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions() {
+    use crate::{
+        db::dependency::{InputKey, InputValue},
+        expand::scopes::MacroName,
+        frontend::{
+            macro_origins::{ExpansionAncestry, MacroSelection},
+            macro_scopes::{HygienicLookup, MacroReference},
+        },
+    };
+    for edition in [2015, 2018, 2021, 2024] {
+        for (declaration, local) in [
+            (
+                "macro_rules! emit{()=>{fn answer(){earlier!();}}}emit!();",
+                false,
+            ),
+            (
+                "macro_rules! emit{()=>{fn answer(){earlier!();}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+                false,
+            ),
+            (
+                "macro_rules! emit{()=>{mod nested{pub fn answer(){earlier!();}}}}emit!();",
+                false,
+            ),
+            (
+                "macro_rules! emit{()=>{macro_rules! local{()=>{}}fn answer(){earlier!();}}}emit!();",
+                true,
+            ),
+            (
+                "macro_rules! emit{()=>{mod nested{macro_rules! local{()=>{}}pub fn answer(){earlier!();}}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+                true,
+            ),
+            (
+                "macro_rules! emit{()=>{fn answer(){use earlier as selected;selected!();}}}emit!();",
+                false,
+            ),
+            (
+                "macro_rules! emit{()=>{fn answer(){use earlier as selected;selected!();}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+                false,
+            ),
+            (
+                "macro_rules! emit{()=>{fn answer(){use import_module::{self as module_alias};earlier!();}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+                false,
+            ),
+        ] {
+            let text = format!(
+                "mod import_module{{}}macro_rules! earlier{{()=>{{}}}}{declaration}macro_rules! later{{()=>{{}}}}fn lrr_probe(){{}}"
+            );
+            let mut db = Database::default();
+            let (_, discovery) = super::retained_body_tests::prepare_expanded_body_source(
+                &mut db,
+                &text,
+                edition,
+                1,
+                "lrr_probe",
+            );
+            // Test-only inventory selects the actual generated publication.
+            let stamps = db.lexical_namespace_stamps().unwrap();
+            let candidates = stamps
+                .keys()
+                .filter_map(|key| match db.published_input(key) {
+                    Some((InputValue::GeneratedSyntax(unit), _))
+                        if unit
+                            .definitions
+                            .values()
+                            .any(|key| key.declared_name == "answer") =>
+                    {
+                        Some(std::sync::Arc::clone(unit))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(candidates.len(), 1);
+            let unit = &candidates[0];
+            let definition = *unit
+                .definitions
+                .iter()
+                .find(|(_, key)| key.declared_name == "answer")
+                .unwrap()
+                .0;
+            let context = db.input(&InputKey::DeclarationContext(definition)).unwrap();
+            let InputValue::DeclarationContext(context) = context.as_ref() else {
+                panic!()
+            };
+            let boundary = discovery.generated_body_macro_boundary(unit).unwrap();
+            let body_input = db.input(&InputKey::DefinitionBody(definition)).unwrap();
+            let InputValue::DefinitionBody(body) = body_input.as_ref() else {
+                panic!()
+            };
+            let indexed = ready(db.fetch(
+                &crate::db::provider::SyntaxProvider,
+                QueryKey::BodyStructure(body.key()),
+            ));
+            let crate::db::value::QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
+                panic!()
+            };
+            let owner_source = boundary.source_roots()[0].share();
+            let pc = index
+                .pc(crate::ir::pc::NodeId(0), crate::ir::pc::Phase::Entry)
+                .unwrap();
+            let admitted =
+                std::sync::Arc::new(ready(crate::frontend::source_body_context::capture(
+                    &mut db,
+                    &[&owner_source],
+                    index,
+                    &pc,
+                )));
+            let unbound_identity = admitted.identity();
+            let unbound_source = std::sync::Arc::clone(&admitted);
+            let admitted = ready(
+                admitted.attach_generated_boundary(&mut db, std::sync::Arc::clone(&boundary)),
+            );
+            assert_ne!(admitted.identity(), unbound_identity);
+            let owning = ready(std::sync::Arc::clone(&admitted).prepare(&mut db));
+            assert!(std::sync::Arc::ptr_eq(owning.source(), &admitted));
+            let (module_context, module_facts) = crate::syntax::floating_fixture_hygiene::root(
+                owner_source.selection().outline.crate_key,
+                edition,
+            );
+            let published = crate::frontend::source_macros::PublishedMacroIndex::from_view(
+                owner_source.share(),
+                module_context,
+                module_facts,
+            )
+            .unwrap();
+            let entered = published
+                .enter_prepared_body(std::sync::Arc::clone(&owning))
+                .unwrap();
+            for import in &owning.facts().imports {
+                let crate::syntax::imports::ImportSegment::Name(target) = &import.source.path[0]
+                else {
+                    panic!()
+                };
+                let occurrence = owning.macro_import_occurrence(import, target).unwrap();
+                assert!(
+                    occurrence.context(&unbound_source, module_context).is_err(),
+                    "an unattached owning source cannot consume a boundary-bound occurrence"
+                );
+                occurrence.context(owning.source(), module_context).unwrap();
+                let mut wrong = import.clone();
+                wrong.source.leaf_ordinal = wrong.source.leaf_ordinal.checked_add(1).unwrap();
+                assert!(owning.macro_import_occurrence(&wrong, target).is_err());
+                assert!(
+                    owning
+                        .macro_import_occurrence(import, "different_target")
+                        .is_err()
+                );
+            }
+            let invocation = owning.facts().invocations.first().unwrap();
+            assert!(matches!(
+                entered
+                    .lookup_invocation(
+                        owner_source.selection(),
+                        &body.key(),
+                        invocation.range,
+                        &Default::default()
+                    )
+                    .unwrap(),
+                crate::frontend::macro_names::PathLookup::Defined(_)
+            ));
+            ready(owning.require_current(&mut db));
+
+            assert!(std::sync::Arc::ptr_eq(boundary.output(), &unit.items));
+            assert_eq!(boundary.seal(), &unit.seal);
+            assert!(boundary.exclusive_metadata_bytes() > 0);
+            assert!(!boundary.source_roots().is_empty());
+            let selected = boundary.declaration_outer(definition, context).unwrap();
+            assert_eq!(selected.is_some(), boundary.selected_root().is_some());
+            let mut roots = Vec::new();
+            if let Some(root) = &selected {
+                roots.push(root);
+            }
+            roots.extend(boundary.scopes());
+            let mut facts = unit.items.hygiene_facts().as_ref().clone();
+            let mut ancestry = ExpansionAncestry::default();
+            for root in &roots {
+                facts.extend(root.facts()).unwrap();
+                ancestry.extend(root.ancestry()).unwrap();
+            }
+            let (root_context, _) =
+                crate::syntax::floating_fixture_hygiene::root(unit.scope.crate_key, edition);
+            let first = roots[0].outer();
+            let outers = roots[1..]
+                .iter()
+                .map(|root| root.outer())
+                .collect::<Vec<_>>();
+            for (name, present) in [("earlier", true), ("later", false), ("local", local)] {
+                let name = MacroName::parse(name, edition).unwrap();
+                let lookup = first
+                    .declarations
+                    .resolve_with_outers(
+                        first.scopes,
+                        MacroReference {
+                            scope: first.scope,
+                            before: first.before,
+                            name: &name,
+                            context: root_context,
+                            origin: None,
+                        },
+                        &outers,
+                        &facts,
+                        &ancestry,
+                    )
+                    .unwrap();
+                assert!(matches!(
+                    (lookup, present),
+                    (HygienicLookup::Selection(MacroSelection::Defined(_)), true)
+                        | (HygienicLookup::Selection(MacroSelection::Absent), false)
+                ));
+            }
+            assert!(
+                boundary
+                    .declaration_outer(crate::core::digest::Digest([233; 32]), context)
+                    .is_err()
+            );
+            let mut wrong = context.clone();
+            wrong.range.end -= 1;
+            assert!(boundary.declaration_outer(definition, &wrong).is_err());
+            ready(boundary.require_current(&mut db, unit));
+            db.begin_expansion_epoch(2).unwrap();
+            assert!(matches!(
+                boundary.require_current(&mut db, unit),
+                QueryPoll::Ready(Err(_))
+            ));
+        }
+    }
+    // Pure scope/source controls do not execute answer or stock Point/Box main.
 }

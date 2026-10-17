@@ -38,9 +38,6 @@ impl SyntaxAttachment {
             }
             store.export_records(vec![], used)?
         };
-        if origins.allocated_bytes()? > MAX_RETAINED_INPUT {
-            return Err(error("syntax snapshot origin retention budget"));
-        }
         Ok(SyntaxSnapshot {
             syntax: self.materialize()?,
             origins,

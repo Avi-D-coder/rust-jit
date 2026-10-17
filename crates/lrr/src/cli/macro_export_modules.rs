@@ -90,14 +90,7 @@ impl ConfiguredMacroExportSources {
         epoch: u64,
     ) -> Result<Self, Diagnostic> {
         manifest.validate()?;
-        if facets.is_empty()
-            || facets.len() > 256
-            || modules.len() > 256
-            || epoch == 0
-            || scope.owner.is_some()
-            || scope.module_path.len() > 256
-            || scope.module_path.iter().any(|part| part.len() > 64 * 1024)
-        {
+        if facets.is_empty() || epoch == 0 || scope.owner.is_some() {
             return Err(fault("configured macro source count/epoch limit"));
         }
         facets.sort_by_key(|facet| facet.source().selection().location_identity());
@@ -117,11 +110,12 @@ impl ConfiguredMacroExportSources {
                     "configured source set has duplicate or unrelated publication",
                 ));
             }
-            let actual = SourceMacroExportFacet::capture(
+            let actual = SourceMacroExportFacet::capture_in_source_root(
                 manifest,
                 facet.unit(),
                 facet.recorded_path(),
                 selected,
+                Some(facet.source_root_text()),
             )?;
             if actual.identity() != facet.identity() {
                 return Err(fault(
@@ -147,28 +141,10 @@ impl ConfiguredMacroExportSources {
     pub(crate) fn modules(&self) -> &[Arc<MacroExportModuleAdoption>] {
         &self.modules
     }
-    /// Conservative cold admission, not a deduplicated pool footprint. Every
-    /// source state (including prepared) is already present under facet roots.
+    /// Informational retained size of the configured graph. E-R5-006: this is
+    /// never compared with a ceiling.
     pub(crate) fn retained_admission_bytes(&self) -> Result<usize, Diagnostic> {
-        let mut bytes = std::mem::size_of::<Self>()
-            .checked_add(self.scope.heap_bytes())
-            .and_then(|n| {
-                n.checked_add(
-                    self.facets
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<Arc<SourceMacroExportFacet>>())?,
-                )
-            })
-            .and_then(|n| {
-                n.checked_add(
-                    self.modules
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<Arc<MacroExportModuleAdoption>>())?,
-                )
-            })
-            .ok_or_else(|| fault("configured source graph metadata overflow"))?;
-        for count in self
-            .facets
+        self.facets
             .iter()
             .map(|facet| facet.metadata_bytes())
             .chain(
@@ -176,13 +152,8 @@ impl ConfiguredMacroExportSources {
                     .iter()
                     .map(|module| module.retained_admission_bytes()),
             )
-        {
-            bytes = bytes
-                .checked_add(count)
-                .filter(|n| *n <= 320 * 1024 * 1024)
-                .ok_or_else(|| fault("configured macro source graph retained admission limit"))?;
-        }
-        Ok(bytes)
+            .try_fold(std::mem::size_of::<Self>(), usize::checked_add)
+            .ok_or_else(|| fault("configured source graph size overflow"))
     }
     fn discovery(
         &self,
@@ -233,7 +204,14 @@ impl ConfiguredMacroExportSources {
             environment,
         )?
         .fingerprint();
-        for phase in 0..256u32 {
+        // Each phase adopts one new, distinct module source (a repeated scope is
+        // refused below), so the module tree itself bounds the loop.
+        let mut next_phase = 0u32;
+        loop {
+            let phase = next_phase;
+            next_phase = next_phase
+                .checked_add(1)
+                .ok_or_else(|| fault("configured module preparation phase overflow"))?;
             let (pending, producer) = match discovery.prepare_with_declarative_compiler(
                 environment,
                 crate::expand::source_declarative::engine_version(),
@@ -297,11 +275,8 @@ impl ConfiguredMacroExportSources {
                 .try_reserve_exact(request.candidates().len())
                 .map_err(|_| fault("module preparation path allocation"))?;
             for candidate in request.candidates() {
-                let path = parent.package_root().join(candidate.path().as_str());
-                let text = path
-                    .to_str()
-                    .ok_or_else(|| fault("recorded module path must be UTF-8"))?;
-                if !manifest.inputs.source_files.contains_key(text) {
+                let path = parent.source_root().join(candidate.path().as_str());
+                if recorded_candidate(manifest, &path)?.is_none() {
                     missing.push(path);
                 }
             }
@@ -319,7 +294,6 @@ impl ConfiguredMacroExportSources {
                         .ok_or_else(|| fault("recorded module preparation metadata overflow"))?,
                     |n, path| {
                         n.checked_add(path.capacity())
-                            .filter(|n| *n <= 32 * 1024 * 1024)
                             .ok_or_else(|| fault("recorded module preparation metadata limit"))
                     },
                 )?;
@@ -332,9 +306,6 @@ impl ConfiguredMacroExportSources {
                         metadata_bytes,
                     },
                 });
-            }
-            if self.facets.len() >= 256 || self.modules.len() >= 256 {
-                return Err(fault("configured module source/adoption count limit"));
             }
             let capture = SourceCapture::open(authorities, BTreeMap::new())?;
             let captured = capture.capture_module(request)?;
@@ -416,9 +387,6 @@ impl ConfiguredMacroExportSources {
                 &input,
             )?;
         }
-        Err(fault(
-            "configured module preparation step/source count limit",
-        ))
     }
     fn refresh(
         &mut self,
@@ -431,9 +399,6 @@ impl ConfiguredMacroExportSources {
         parent_chain: Option<&MacroExportModuleAdoption>,
         captured_input: &InputRequest,
     ) -> Result<SourceDiscovery, Diagnostic> {
-        if self.facets.len() >= 256 || self.modules.len() >= 256 {
-            return Err(fault("configured module source/adoption count limit"));
-        }
         if parent_chain.is_some_and(|chain| {
             chain
                 .request()
@@ -528,18 +493,19 @@ impl ConfiguredMacroExportSources {
                 SourceSelectionOutcome::Selected(source) => source,
                 _ => return Err(fault("actual parent source changed during module refresh")),
             };
-            facets.push(Arc::new(SourceMacroExportFacet::capture(
+            facets.push(Arc::new(SourceMacroExportFacet::capture_in_source_root(
                 manifest,
                 facet.unit(),
                 facet.recorded_path(),
                 selected,
+                Some(facet.source_root_text()),
             )?));
         }
         let parent = facets
             .iter()
             .find(|facet| facet.source().selection().location_identity() == parent_location)
             .ok_or_else(|| fault("refreshed module parent is absent"))?;
-        let recorded_path = parent.package_root().join(child_selection.path.as_str());
+        let recorded_path = parent.source_root().join(child_selection.path.as_str());
         let selected = match prepared.select(child_selection)? {
             SourceSelectionOutcome::Selected(source) => source,
             _ => {
@@ -548,22 +514,16 @@ impl ConfiguredMacroExportSources {
                 ));
             }
         };
-        facets.push(Arc::new(SourceMacroExportFacet::capture(
+        facets.push(Arc::new(SourceMacroExportFacet::capture_in_source_root(
             manifest,
             child_selection.outline.crate_key,
             recorded_path
                 .to_str()
                 .ok_or_else(|| fault("configured child path must be UTF-8"))?,
             selected,
+            Some(parent.source_root_text()),
         )?));
         facets.sort_by_key(|facet| facet.source().selection().location_identity());
-        let mut bytes = self.retained_admission_bytes()?;
-        for facet in &facets {
-            bytes = bytes
-                .checked_add(facet.metadata_bytes())
-                .filter(|n| *n <= 640 * 1024 * 1024)
-                .ok_or_else(|| fault("old/new configured source temporary admission limit"))?;
-        }
         // Existing atomic role-only publication. No PreparedSourceInputs::publish,
         // ordinary source input insertion or parse registry registration occurs.
         db.publish_macro_export_sources(&facets)?;
@@ -641,12 +601,7 @@ pub(crate) fn authorities(
     let mut identity = StableEncoder::new("lrr/v1/configured-macro-export-source-root");
     identity.digest(facet.unit());
     identity.digest(facet.preparation());
-    identity.string(
-        facet
-            .package_root()
-            .to_str()
-            .ok_or_else(|| fault("configured package root must be UTF-8"))?,
-    );
+    identity.string(facet.source_root_text());
     authorities_with_root(facet, identity.finish())
 }
 fn authorities_with_root(
@@ -658,7 +613,7 @@ fn authorities_with_root(
         facet.preparation(),
         [IncludeRoot {
             identity: root,
-            path: facet.package_root().to_path_buf(),
+            path: facet.source_root().to_path_buf(),
             kind: IncludeRootKind::Source,
         }],
     )
@@ -679,6 +634,38 @@ fn capture_root(input: &InputRequest) -> Result<Digest, Diagnostic> {
     }
     Ok(root)
 }
+/// A module candidate is recorded either as a captured file (present or
+/// absent) or by a recorded directory listing that does not contain the next
+/// path component, which is how rustc's module lookup observes absence.
+fn recorded_candidate(
+    manifest: &ToolManifest,
+    path: &std::path::Path,
+) -> Result<Option<Option<Digest>>, Diagnostic> {
+    let text = path
+        .to_str()
+        .ok_or_else(|| fault("recorded module path must be UTF-8"))?;
+    if let Some(recorded) = manifest.inputs.source_files.get(text) {
+        return Ok(Some(*recorded));
+    }
+    let mut child = path;
+    while let Some(parent) = child.parent() {
+        let Some(name) = child.file_name().and_then(|name| name.to_str()) else {
+            return Ok(None);
+        };
+        let directory = parent
+            .to_str()
+            .ok_or_else(|| fault("recorded module directory must be UTF-8"))?;
+        if let Some(members) = manifest.inputs.directory_membership.get(directory) {
+            return Ok(if members.iter().any(|member| member.as_str() == name) {
+                None
+            } else {
+                Some(None)
+            });
+        }
+        child = parent;
+    }
+    Ok(None)
+}
 fn verify_recorded_candidates(
     manifest: &ToolManifest,
     parent: &SourceMacroExportFacet,
@@ -687,14 +674,8 @@ fn verify_recorded_candidates(
 ) -> Result<(), Diagnostic> {
     captured.validate(request)?;
     for (candidate, actual) in request.candidates().iter().zip(captured.observations()) {
-        let path = parent.package_root().join(candidate.path().as_str());
-        let expected = manifest
-            .inputs
-            .source_files
-            .get(
-                path.to_str()
-                    .ok_or_else(|| fault("recorded candidate path must be UTF-8"))?,
-            )
+        let path = parent.source_root().join(candidate.path().as_str());
+        let expected = &recorded_candidate(manifest, &path)?
             .ok_or_else(|| fault("module candidate is missing from prepared source inventory"))?;
         let matches = match (expected, actual) {
             (None, ModuleObservation::Absent) => true,

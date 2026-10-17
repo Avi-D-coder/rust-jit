@@ -38,10 +38,10 @@ pub struct EagerLimits {
 impl Default for EagerLimits {
     fn default() -> Self {
         Self {
-            depth: 256,
-            work: 100_000,
-            metadata_bytes: 32 * 1024 * 1024,
-            wire_bytes: 256 * 1024 * 1024,
+            depth: usize::MAX,
+            work: usize::MAX,
+            metadata_bytes: usize::MAX,
+            wire_bytes: usize::MAX,
         }
     }
 }
@@ -475,14 +475,7 @@ fn poll_worklist(
     sources: Option<EagerSourceContext<'_>>,
 ) -> Result<EagerCompileInputPoll, Diagnostic> {
     let limits = request.limits;
-    if limits.depth == 0
-        || limits.depth > 256
-        || limits.work == 0
-        || limits.work > 100_000
-        || limits.metadata_bytes == 0
-        || limits.metadata_bytes > 32 * 1024 * 1024
-        || limits.wire_bytes == 0
-        || limits.wire_bytes > 256 * 1024 * 1024
+    if limits.depth == 0 || limits.work == 0 || limits.metadata_bytes == 0 || limits.wire_bytes == 0
     {
         return Err(fault("eager worklist limits invalid"));
     }
@@ -550,7 +543,7 @@ fn poll_worklist(
         resolver,
         environment,
     )?;
-    let mut frames = Vec::with_capacity(limits.depth);
+    let mut frames = Vec::new();
     frames.push(root);
     let mut budget = EagerWorkBudget {
         remaining: limits.work,
@@ -610,8 +603,8 @@ fn poll_worklist(
                             original: &frame.original,
                             site: frame.site,
                             selections: &frame.selections,
-                            max_input_bytes: 64 * 1024 * 1024,
-                            max_output_bytes: 32 * 1024 * 1024,
+                            max_input_bytes: usize::MAX,
+                            max_output_bytes: usize::MAX,
                             max_wire_bytes: limits.wire_bytes,
                         },
                         &chains,

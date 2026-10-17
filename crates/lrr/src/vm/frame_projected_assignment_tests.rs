@@ -100,7 +100,7 @@ fn original_projected_assignment(reference_value: bool) -> ProjectedFrame {
         panic!("original projected assignment opcode absent")
     };
     let (place, source, destination) = (*place, *source, *destination);
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(body, pc, &mut store).unwrap();
     let mut scopes = Vec::new();
     let mut scope = Some(assignment.scope);
@@ -238,39 +238,6 @@ fn rustc_original_string_field_assignment_installs_rhs_and_reclaims_old_allocati
         c.incoming_text.as_ref().unwrap()
     );
     assert_eq!(c.frame.counters.started_by_opcode[34], 1);
-}
-#[test]
-fn rustc_reference_field_assignment_batch_quota_refusal_preserves_both_lease_owners() {
-    let mut c = original_projected_assignment(true);
-    while c.store.budget().handles() < 998 {
-        c.store.ticket(ValueRepr::unit()).unwrap();
-    }
-    let before = snapshot(&c);
-    assert_eq!(execute(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(snapshot(&c), before);
-    assert_eq!(
-        c.store.reference_from_cell(c.target).unwrap(),
-        c.old_reference.unwrap()
-    );
-    assert_eq!(
-        c.store.read_reference(c.new_reference.unwrap()).unwrap(),
-        ValueRepr::unit()
-    );
-    assert!(c.frame.slot(c.destination).unwrap().cell.is_none());
-    assert!(c.frame.place_slot(c.place).unwrap().place.is_some());
-}
-#[test]
-fn rustc_string_field_assignment_zero_fuel_preserves_target_rhs_and_cached_completeness() {
-    let mut c = original_projected_assignment(false);
-    c.frame.set_fuel_limit(0).unwrap();
-    let before = snapshot(&c);
-    assert_eq!(execute(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    let fuel = c.frame.fuel_snapshot();
-    assert_eq!(fuel.used, 0);
-    assert_eq!(fuel.stop, Some(crate::vm::fuel::FuelStop::Exhausted));
-    assert_eq!(snapshot(&c), before);
-    c.store.admit_move(c.root).unwrap();
-    assert!(c.frame.slot(c.destination).unwrap().cell.is_none());
 }
 #[test]
 fn rustc_reference_field_assignment_shared_enclosing_lease_refuses_before_fuel() {
@@ -418,45 +385,6 @@ fn rustc_moved_reference_field_assignment_reserves_exact_three_handle_batch() {
         c.old_reference.unwrap().bits()
     );
     c.store.admit_move(c.root).unwrap();
-}
-#[test]
-fn rustc_moved_reference_field_assignment_quota_refusal_preserves_incomplete_parent() {
-    let mut c = original_projected_assignment(true);
-    let external = extract_projected_field(&mut c);
-    while c.store.budget().handles() < 998 {
-        c.store.ticket(ValueRepr::unit()).unwrap();
-    }
-    let before = snapshot(&c);
-    assert_eq!(execute(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(snapshot(&c), before);
-    assert_eq!(
-        c.store.admit_move(c.root).unwrap_err().code,
-        "LRR-E-USE-AFTER-MOVE"
-    );
-    assert_eq!(
-        c.store.peek_ticket(external).unwrap().payload,
-        c.old_reference.unwrap().bits()
-    );
-    assert!(c.frame.slot(c.destination).unwrap().cell.is_none());
-}
-#[test]
-fn rustc_moved_string_field_assignment_zero_fuel_preserves_missing_leaf_and_owners() {
-    let mut c = original_projected_assignment(false);
-    let external = extract_projected_field(&mut c);
-    c.frame.set_fuel_limit(0).unwrap();
-    let before = snapshot(&c);
-    assert_eq!(execute(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
-    assert_eq!(
-        c.frame.fuel_snapshot().stop,
-        Some(crate::vm::fuel::FuelStop::Exhausted)
-    );
-    assert_eq!(c.frame.fuel_snapshot().used, 0);
-    assert_eq!(snapshot(&c), before);
-    assert_eq!(c.store.string_contents(external).unwrap(), "foo");
-    assert_eq!(
-        c.store.admit_move(c.root).unwrap_err().code,
-        "LRR-E-USE-AFTER-MOVE"
-    );
 }
 #[test]
 fn rustc_moved_reference_field_assignment_shared_parent_refuses_before_effects() {

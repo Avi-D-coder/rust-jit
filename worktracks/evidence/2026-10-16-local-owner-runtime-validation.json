@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T17:26:13.230053+00:00",
+  "source_member": "a23a4364f3943f3d47872b4125b1ca3e7c359c3c37c673bdde74a196c9e5a445",
+  "source_unchanged": true,
+  "actual_terminals": {
+    "composition_inactive": "140a4a/0",
+    "assembly_launch": "2426b1",
+    "assembly_session": 89466,
+    "assembly_terminal": "b00daa/0",
+    "compile_launch": "9c0152",
+    "compile_session": 13804,
+    "compiler_pid": 36211,
+    "compile_terminal": "c374c3/0",
+    "test_list_harness_initial": "4e9ca5/1, zero binary executions: select.py shadowed Python select; artifact renamed list_tests.py only",
+    "test_list": "61676a/0",
+    "controls_launch": "b35e03",
+    "controls_session": 49232,
+    "controls_terminal": "a0e69b/1",
+    "inactive": "0b77ea/0"
+  },
+  "compile_seconds": 24.585224041,
+  "warnings": 13,
+  "distinct_bodies": 8,
+  "passed": 7,
+  "failed": 1,
+  "duplicate_bodies": 0,
+  "tests": [
+    {
+      "name": "db::memo::local_declaration_inputs::tests::local_owner_locator_is_derived_and_conflicts_publish_no_partial_headers",
+      "result": "ok"
+    },
+    {
+      "name": "frontend::source_locals::owned_plan::field_types::tests::unchanged_local_field_types_use_their_actual_header_scope_all_editions",
+      "result": "ok"
+    },
+    {
+      "name": "frontend::source_locals::owned_plan::field_types::tests::generated_and_wrapper_local_fields_join_the_same_declaration_prefix",
+      "result": "ok"
+    },
+    {
+      "name": "frontend::source_locals::owned_plan::field_types::tests::field_recipe_substitution_and_revoked_owning_environment_are_refused",
+      "result": "ok"
+    },
+    {
+      "name": "cli::type_preparation::tests::actual_type_fixed_point_proves_absence_without_preparing_executable_bodies",
+      "result": "ok"
+    },
+    {
+      "name": "cli::type_preparation::tests::type_preparation_rejects_run_and_query_before_cold_capture",
+      "result": "ok"
+    },
+    {
+      "name": "db::memo::body_environment_inputs::tests::unchanged_local_types_use_one_current_published_plan_all_editions",
+      "result": "ok"
+    },
+    {
+      "name": "cli::type_preparation::tests::unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_editions",
+      "result": "FAILED"
+    }
+  ],
+  "failure": {
+    "scope": "control-8",
+    "edition_reached": 2015,
+    "other_editions_unexecuted": [
+      2018,
+      2021,
+      2024
+    ],
+    "code": "LRR-E-UNSUPPORTED",
+    "message": "cleanup requires its source-selected Drop witness",
+    "pc": "e1a8b028809dcd71f6b7b11ad396ebfddb604a9f7481c3469f77c0adc979c6a7",
+    "body_definition": "c738f443efe3c5582e37a363825a77b8556146b3d3331c2e9b9ff40823fae03d",
+    "exact_body_bytes": "38003ada35932b8c6fb3a43fdc426b795dbc39776d32c723dd67f4a3559b1ef3",
+    "retained_relative_span": [
+      0,
+      78
+    ],
+    "raw_stderr_sha256": "30d751fff2edea3d0662beaea98f92db889a6001d86d479b47bb2bf571951875",
+    "completion_and_opcode_assertions_unreached": true,
+    "full_program_contract_failed": true
+  },
+  "unexecuted": [
+    "matching CLI/digester host build",
+    "separate2024 production CLI capture",
+    "strict",
+    "milestone",
+    "qualified main rerun",
+    "fullcore rerun"
+  ],
+  "runtime_contract_passes": 0,
+  "full_fixture_passes": 0,
+  "architectural_holds": [
+    "E-R5-005/all8",
+    "source-selected Drop witness",
+    "nested local-function compatibility/entry",
+    "repeated installed constructor binding",
+    "qualified record prefix",
+    "cold duplicate Type/Value preparation"
+  ],
+  "no_task_acceptance_or_promotion": true,
+  "kind": "common-local-owner-field-Type-entry-validation",
+  "claim": "LOCAL-024",
+  "release_sha256": "2a7f00c98667d97c2940bd7e2a9a77ff4ee5ee1c00327efd3eaa9cef0dfddbfd",
+  "source_component": "worktracks/evidence/2026-10-16-local-declaration-owner.json",
+  "owning_editions": "Main failed first2015; later main editions unexecuted. Several component controls independently cover all4.",
+  "upstream": "tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+  "integration": "WIP, not integrated. Complete unchanged main failed on genuine missing source-selected Drop policy."
+}

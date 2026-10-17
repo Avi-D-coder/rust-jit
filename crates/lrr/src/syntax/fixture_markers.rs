@@ -11,14 +11,12 @@ use crate::core::{
 };
 use ra_ap_syntax::{AstNode, SyntaxKind, ast};
 use std::collections::BTreeMap;
-const MAX_METADATA: usize = 32 * 1024 * 1024;
 fn fault(message: impl Into<String>) -> Diagnostic {
     Diagnostic::new("LRR-E-FIXTURE-MARKER", message.into())
 }
 fn charge(bytes: &mut usize, amount: usize) -> Result<(), Diagnostic> {
     *bytes = bytes
         .checked_add(amount)
-        .filter(|n| *n <= MAX_METADATA)
         .ok_or_else(|| fault("fixture marker metadata limit"))?;
     Ok(())
 }
@@ -83,9 +81,6 @@ impl ParsedFile {
             count = count
                 .checked_add(1)
                 .ok_or_else(|| fault("fixture expression count overflow"))?;
-            if count > 100_000 {
-                return Err(fault("fixture expression count limit"));
-            }
             let r = range(expr.syntax().text_range());
             if let Some(old) = expressions.get_mut(&r.start) {
                 if r.end > old.end {
@@ -95,9 +90,6 @@ impl ParsedFile {
                 charge(&mut bytes, 128)?;
                 expressions.insert(r.start, r);
             }
-        }
-        if self.errors.len() > 100_000 {
-            return Err(fault("fixture parse-error count limit"));
         }
         let mut errors: BTreeMap<u32, u32> = BTreeMap::new();
         for error in &self.errors {
@@ -119,9 +111,6 @@ impl ParsedFile {
             .descendants_with_tokens()
             .filter_map(|e| e.into_token())
         {
-            if tokens.len() >= 500_000 {
-                return Err(fault("fixture token count limit"));
-            }
             if tokens.len() == tokens.capacity() {
                 let before = tokens.capacity();
                 tokens
@@ -152,15 +141,11 @@ impl ParsedFile {
                 .strip_suffix("*/")
                 .ok_or_else(|| fault("unterminated fixture marker"))?;
             if name.is_empty()
-                || name.len() > 128
                 || !name
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
             {
                 return Err(fault("invalid fixture marker name"));
-            }
-            if markers.len() >= 10_000 {
-                return Err(fault("fixture marker count limit"));
             }
             if markers.contains_key(name) {
                 return Err(fault(format!("duplicate fixture marker: {name}")));

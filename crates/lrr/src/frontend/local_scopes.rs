@@ -60,7 +60,6 @@ pub struct LocalScopes {
     expansions: BTreeMap<Key, MacroDefinition>,
     records: usize,
 }
-const MAX_RECORDS: usize = 1_000_000;
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
@@ -145,7 +144,6 @@ impl LocalScopes {
     fn admit(&self, count: usize) -> Result<usize, Diagnostic> {
         self.records
             .checked_add(count)
-            .filter(|n| *n <= MAX_RECORDS)
             .ok_or_else(|| error("local scope record limit exceeded"))
     }
     fn get(&self, key: ScopeKey) -> Result<&Scope, Diagnostic> {
@@ -330,9 +328,6 @@ impl LocalScopes {
         if current.pending.get(&at) != Some(&invocation) {
             return Err(error("stale local producer publication"));
         }
-        if declarations.len() > MAX_RECORDS {
-            return Err(error("local publication record limit exceeded"));
-        }
         let upper = current
             .occupied
             .range((std::ops::Bound::Excluded(at), std::ops::Bound::Unbounded))
@@ -383,7 +378,6 @@ impl LocalScopes {
             .checked_sub(1)
             .and_then(|n| n.checked_add(staged.len()))
             .and_then(|n| n.checked_add(definitions.len()))
-            .filter(|n| *n <= MAX_RECORDS)
             .ok_or_else(|| error("local publication record limit exceeded"))?;
         self.definitions.extend(definitions);
         let current = self.scopes.get_mut(&scope).expect("validated scope");

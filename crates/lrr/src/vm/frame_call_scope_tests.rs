@@ -141,14 +141,13 @@ fn context(original: &str, binding: &str) -> Context {
             .id
     };
     let (outer, borrow, operand) = (id(facts.outer), id(facts.borrow), id(facts.operand));
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let mut frame = Frame::new(
         body.clone(),
         body.pc(outer, Phase::Entry).unwrap(),
         &mut store,
     )
     .unwrap();
-    frame.set_fuel_limit(100).unwrap();
     let mut scopes = vec![];
     let mut scope = Some(body.nodes()[outer.0 as usize].scope);
     while let Some(id) = scope {
@@ -239,6 +238,7 @@ fn prepare(c: &mut Context) -> VerifiedRecipe {
         ordinary,
         site: c.outer.0,
         hints: arguments.iter().map(|slot| (*slot, None, None)).collect(),
+        partial: Vec::new(),
     });
     r
 }
@@ -361,34 +361,6 @@ fn rustc_uppercase_function_witness_requires_exact_caller_site_and_current_sourc
     );
     // The original source owner remains retained; no test edits its bytes.
     assert!(c.inputs.select(c.view.selection()).is_ok());
-}
-#[test]
-fn rustc_call_barrier_is_not_published_on_fuel_refusal() {
-    let mut c = context(ORIGINAL, "x1");
-    let r = prepare(&mut c);
-    c.frame.set_fuel_limit(0).unwrap();
-    let handles = c.store.budget().handles();
-    assert_eq!(
-        step(&mut c.frame, &mut c.store, &r).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert!(c.frame.ordinary_calls.iter().all(Option::is_none));
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.operations_started, 0);
-}
-#[test]
-fn rustc_call_barrier_is_not_published_on_cancellation() {
-    let mut c = context(ORIGINAL, "x1");
-    let r = prepare(&mut c);
-    c.frame.fuel.cancellation().cancel();
-    let handles = c.store.budget().handles();
-    assert_eq!(
-        step(&mut c.frame, &mut c.store, &r).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert!(c.frame.ordinary_calls.iter().all(Option::is_none));
-    assert_eq!(c.store.budget().handles(), handles);
-    assert_eq!(c.frame.counters.operations_started, 0);
 }
 
 #[test]

@@ -54,11 +54,10 @@ impl SourceConstantInstruction {
         if key.body != *body.body()
             || key.phase != Phase::Entry.code()?
             || query.result_type() != wire.fingerprint_checked()?
-            || dependencies.len() > 100_000
         {
             return Err(invalid("constant instruction source shape/key differs"));
         }
-        let encoded = crate::ir::constant_data::wire::encode(value, wire, 1 << 20)?;
+        let encoded = crate::ir::constant_data::wire::encode_value(value, wire)?;
         let mut bytes = std::mem::size_of::<Self>()
             .checked_add(wire.metadata_bytes()?)
             .and_then(|n| n.checked_add(encoded.len().checked_mul(8)?))
@@ -69,9 +68,6 @@ impl SourceConstantInstruction {
                 .checked_add(std::mem::size_of::<FactDependency>())
                 .and_then(|n| n.checked_add(d.heap_bytes()))
                 .ok_or_else(|| invalid("constant instruction dependency metadata overflow"))?;
-        }
-        if bytes > 32 << 20 {
-            return Err(invalid("constant instruction metadata limit"));
         }
         let mut instruction = Self {
             key: key.clone(),
@@ -105,10 +101,9 @@ impl SourceConstantInstruction {
             && matches!(draft.exits.as_slice(),[RecipeExit::Next(next)] if next==&self.next)
             && self.dependencies.as_ref() == draft.dependencies.as_slice()
             && self.content
-                == Digest::of_bytes(&crate::ir::constant_data::wire::encode(
+                == Digest::of_bytes(&crate::ir::constant_data::wire::encode_value(
                     &self.value,
                     &self.wire,
-                    1 << 20,
                 )?))
     }
     pub(crate) fn identity(&self) -> Digest {

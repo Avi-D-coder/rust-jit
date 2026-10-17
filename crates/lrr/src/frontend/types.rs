@@ -13,8 +13,6 @@ use crate::{
 };
 use std::{borrow::Cow, collections::BTreeMap};
 
-pub(crate) const MAX_SCHEMA_BYTES: usize = 32 * 1024 * 1024;
-pub(crate) const MAX_SCHEMA_FIELDS: usize = 100_000;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum FieldShape {
@@ -62,18 +60,30 @@ impl VariantRecipe {
     /// Validates a reached constructor and retains written order independently
     /// of declaration-order storage. It evaluates no initializer.
     pub fn named_initializer_slots(&self, written: &[&str]) -> Result<Vec<u32>, Diagnostic> {
-        if self.shape != FieldShape::Record {
+        // A unit struct also accepts the empty braced form (`S {}`, and the
+        // `RangeFull` record of `..`); it has no field to name.
+        if !matches!(
+            self.shape,
+            FieldShape::Record | FieldShape::Tuple | FieldShape::Unit
+        ) {
             return Err(schema_fault("named initializer requires record fields"));
         }
-        if written.len() > MAX_SCHEMA_FIELDS || self.fields.len() > MAX_SCHEMA_FIELDS {
-            return Err(schema_limit());
-        }
+        // A tuple struct or variant may also be initialized with braces, its
+        // fields named by their decimal ordinals (`S { 0: a, 1: b }`).
+        let ordinals = if self.shape == FieldShape::Tuple {
+            (0..self.fields.len()).map(|n| n.to_string()).collect()
+        } else {
+            Vec::new()
+        };
         let mut declared = BTreeMap::new();
         for (ordinal, field) in self.fields.iter().enumerate() {
-            let name = field
-                .name
-                .as_deref()
-                .ok_or_else(|| schema_fault("record field lacks its name"))?;
+            let name = match self.shape {
+                FieldShape::Tuple => ordinals[ordinal].as_str(),
+                _ => field
+                    .name
+                    .as_deref()
+                    .ok_or_else(|| schema_fault("record field lacks its name"))?,
+            };
             let ordinal = u32::try_from(ordinal).map_err(|_| schema_limit())?;
             if declared.insert(name, ordinal).is_some() {
                 return Err(schema_fault("duplicate field in reached schema"));
@@ -106,6 +116,33 @@ impl VariantRecipe {
     }
 }
 impl NominalSchema {
+    /// Declaration-order discriminant table of a fieldless-castable enum. An
+    /// omitted discriminant is its predecessor plus one (zero for the first).
+    /// Only an integer literal, optionally negated, is decoded here; any other
+    /// discriminant expression needs the pure constant evaluator and yields
+    /// `None` for that variant and every implicit successor.
+    pub(crate) fn literal_discriminants(
+        &self,
+    ) -> Result<std::sync::Arc<[Option<i128>]>, Diagnostic> {
+        let mut table = Vec::new();
+        table
+            .try_reserve_exact(self.variants.len())
+            .map_err(|_| schema_limit())?;
+        let mut previous: Option<Option<i128>> = None;
+        for variant in &self.variants {
+            let value = if variant.discriminant.is_empty() {
+                match previous {
+                    None => Some(0),
+                    Some(previous) => previous.and_then(|value| value.checked_add(1)),
+                }
+            } else {
+                literal_discriminant(&variant.discriminant)
+            };
+            table.push(value);
+            previous = Some(value);
+        }
+        Ok(table.into())
+    }
     pub fn variant(&self, name: Option<&str>) -> Result<&VariantRecipe, Diagnostic> {
         let mut selected = self
             .variants
@@ -182,6 +219,16 @@ pub struct SchemaNames<'a> {
 struct SchemaTypeName {
     name: Option<super::signature_names::SignatureName>,
     concrete: Option<super::source_types::SourceType>,
+    /// A compound field Type selected leaf by leaf.
+    written: Option<crate::ir::written_type::WrittenType>,
+}
+/// One field-Type demand of the shared binder: a written name (the
+/// declaration's own name, or a single-name field Type), or a compound
+/// field Type.
+#[derive(Clone, Copy)]
+enum FieldTypeQuery<'q> {
+    Name(&'q str, Option<&'q FieldRecipe>),
+    Compound(&'q FieldRecipe),
 }
 impl SchemaTypeName {
     fn metadata(name: super::signature_names::SignatureName) -> Result<Self, Diagnostic> {
@@ -193,7 +240,16 @@ impl SchemaTypeName {
         Ok(Self {
             name: Some(name),
             concrete,
+            written: None,
         })
+    }
+    /// A compound field Type the metadata graph cannot select.
+    fn deferred() -> Self {
+        Self {
+            name: None,
+            concrete: None,
+            written: None,
+        }
     }
     fn from_preparation(
         prepared: super::source_types::NamedTypePreparation,
@@ -203,14 +259,17 @@ impl SchemaTypeName {
             NamedTypePreparation::Ready(concrete) => Self {
                 name: None,
                 concrete: Some(concrete),
+                written: None,
             },
             NamedTypePreparation::Name(name) => Self {
                 name: Some(name),
                 concrete: None,
+                written: None,
             },
             NamedTypePreparation::Parameter(parameter) => Self {
                 name: Some(SignatureName::Parameter(parameter)),
                 concrete: None,
+                written: None,
             },
             NamedTypePreparation::Alias(_) => {
                 return Err(Diagnostic::new(
@@ -245,6 +304,7 @@ impl<'a> SchemaNames<'a> {
                     },
                 )),
                 concrete: Some(body_type.source_type().clone()),
+                written: None,
             }));
         }
         if let Some(field) = field
@@ -274,6 +334,7 @@ impl<'a> SchemaNames<'a> {
                         },
                     )),
                     concrete: None,
+                    written: None,
                 }));
             }
         }
@@ -294,6 +355,386 @@ impl<'a> SchemaNames<'a> {
         };
         // This is the same selected-name/alias/schema kernel used by source
         // parameters and reference pointees. It does not bind child fields.
+        let (concrete, alias) = match super::source_types::prepare_selected(
+            db,
+            self.graph,
+            sources,
+            selected.clone(),
+        ) {
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Ready(proof))) => {
+                (Some(proof), None)
+            }
+            // An alias of a generic application (`type R = Result<(), E>`)
+            // is its target's structure, written leaf by leaf.
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Alias(
+                super::type_aliases::AliasTarget::Type(term),
+            ))) => (None, Some(term)),
+            QueryPoll::Ready(Ok(_)) => (None, None),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let written = match alias {
+            Some(term) => match super::written_terms::written_template(
+                db,
+                sources,
+                &term,
+                self.schema.definition,
+            ) {
+                QueryPoll::Ready(Ok(written)) => written,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            },
+            None => None,
+        };
+        QueryPoll::Ready(Ok(SchemaTypeName {
+            name: Some(selected),
+            concrete,
+            written,
+        }))
+    }
+    fn current_query(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        query: FieldTypeQuery<'_>,
+    ) -> crate::db::poll::QueryPoll<SchemaTypeName> {
+        match query {
+            FieldTypeQuery::Name(name, field) => self.current_name(db, sources, name, field),
+            FieldTypeQuery::Compound(field) => match self.current_compound(db, sources, field) {
+                crate::db::poll::QueryPoll::Ready(Ok(written)) => {
+                    crate::db::poll::QueryPoll::Ready(Ok(SchemaTypeName {
+                        written,
+                        ..SchemaTypeName::deferred()
+                    }))
+                }
+                crate::db::poll::QueryPoll::Ready(Err(error)) => {
+                    crate::db::poll::QueryPoll::Ready(Err(error))
+                }
+                crate::db::poll::QueryPoll::NeedInput(input) => {
+                    crate::db::poll::QueryPoll::NeedInput(input)
+                }
+            },
+        }
+    }
+    /// A compound field Type (`&'a T`, `(i32, P)`, `[u8; 3]`, `W<T>`) of
+    /// this declaration: its written structure around named leaves, each
+    /// selected by the same declaration-context Type service as a
+    /// single-name field (`current_name`). `None` where a part needs a further
+    /// source integration (projections, qualified paths, trait objects, const
+    /// lengths, function pointers, body-local declarations).
+    fn current_compound(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        field: &FieldRecipe,
+    ) -> crate::db::poll::QueryPoll<Option<crate::ir::written_type::WrittenType>> {
+        use crate::db::poll::QueryPoll;
+        use ra_ap_syntax::ast::{self, HasModuleItem};
+        // A body-local declaration's field Types are selected by its owning
+        // body plan, at each actual leaf occurrence of the compound Type.
+        if self.schema.scope.owner.is_some() {
+            return self.local_compound(db, sources, field);
+        }
+        let text = crate::syntax::ast_adapter::token_text(&field.ty);
+        let parser = match self.schema.header.profile.edition {
+            2015 => ra_ap_syntax::Edition::Edition2015,
+            2018 => ra_ap_syntax::Edition::Edition2018,
+            2021 => ra_ap_syntax::Edition::Edition2021,
+            _ => ra_ap_syntax::Edition::Edition2024,
+        };
+        let parsed = ast::SourceFile::parse(&format!("type LrrField = {text};"), parser);
+        if !parsed.errors().is_empty() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let Some(ast::Item::TypeAlias(alias)) = parsed.tree().items().next() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(ty) = alias.ty() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        self.compound_type(db, sources, &ty)
+    }
+    /// A body-local declaration's compound field Type, selected by its owning
+    /// body plan's header service; its own type parameters become their
+    /// declaration indexes.
+    fn local_compound(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        field: &FieldRecipe,
+    ) -> crate::db::poll::QueryPoll<Option<crate::ir::written_type::WrittenType>> {
+        use crate::{db::poll::QueryPoll, ir::written_type::WrittenType};
+        let Some(plan) = self
+            .body_type
+            .map(|ty| ty.declaration().retained_plan())
+            .or_else(|| self.body_owner.as_ref().map(|owner| &owner.plan))
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let term = match plan.prepare_field_type(db, self.schema, field) {
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Alias(
+                super::type_aliases::AliasTarget::Type(term),
+            ))) => term,
+            QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let written = match super::written_terms::written_template(
+            db,
+            sources,
+            &term,
+            self.schema.definition,
+        ) {
+            QueryPoll::Ready(Ok(Some(written))) => written,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        // Generic ordinals become indexes among the type parameters; a part
+        // left to inference is not a field Type.
+        fn index(written: WrittenType, schema: &NominalSchema) -> Option<WrittenType> {
+            Some(match written {
+                WrittenType::Parameter(ordinal) => WrittenType::Parameter(
+                    schema
+                        .generics
+                        .iter()
+                        .filter(|parameter| parameter.kind == GenericKind::Type)
+                        .position(|parameter| parameter.ordinal == ordinal)
+                        .and_then(|index| u32::try_from(index).ok())?,
+                ),
+                WrittenType::Infer | WrittenType::Dyn(_) => return None,
+                WrittenType::Tuple(members) => WrittenType::Tuple(
+                    members
+                        .into_iter()
+                        .map(|member| index(member, schema))
+                        .collect::<Option<_>>()?,
+                ),
+                WrittenType::Array(element, len) => {
+                    WrittenType::Array(Box::new(index(*element, schema)?), len)
+                }
+                WrittenType::Slice(element) => WrittenType::Slice(Box::new(index(*element, schema)?)),
+                WrittenType::Ref {
+                    region,
+                    mutable,
+                    target,
+                } => WrittenType::Ref {
+                    region,
+                    mutable,
+                    target: Box::new(index(*target, schema)?),
+                },
+                WrittenType::Generic {
+                    identity,
+                    definition,
+                    schema: fingerprint,
+                    args,
+                } => WrittenType::Generic {
+                    identity,
+                    definition,
+                    schema: fingerprint,
+                    args: args
+                        .into_iter()
+                        .map(|arg| index(arg, schema))
+                        .collect::<Option<_>>()?,
+                },
+                other => other,
+            })
+        }
+        QueryPoll::Ready(Ok(index(written, self.schema)))
+    }
+    fn compound_type(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        ty: &ra_ap_syntax::ast::Type,
+    ) -> crate::db::poll::QueryPoll<Option<crate::ir::written_type::WrittenType>> {
+        use crate::{
+            db::poll::QueryPoll,
+            ir::written_type::WrittenType,
+            traits::term::RegionTerm,
+        };
+        use ra_ap_syntax::{
+            AstNode, AstToken, SyntaxKind,
+            ast::{self, HasGenericArgs},
+        };
+        macro_rules! nested {
+            ($value:expr) => {
+                match self.compound_type(db, sources, $value) {
+                    QueryPoll::Ready(Ok(Some(written))) => written,
+                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+        }
+        QueryPoll::Ready(Ok(Some(match ty {
+            ast::Type::ParenType(paren) => {
+                let Some(inner) = paren.ty() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                nested!(&inner)
+            }
+            ast::Type::TupleType(tuple) => {
+                let mut members = Vec::new();
+                for member in tuple.fields() {
+                    members.push(nested!(&member));
+                }
+                // `()` is the unit primitive, the one canonical spelling.
+                if members.is_empty() {
+                    WrittenType::Primitive(crate::ir::op::PrimitiveType::Unit)
+                } else {
+                    WrittenType::Tuple(members)
+                }
+            }
+            ast::Type::SliceType(slice) => {
+                let Some(element) = slice.ty() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                WrittenType::Slice(Box::new(nested!(&element)))
+            }
+            ast::Type::ArrayType(array) => {
+                let Some(element) = array.ty() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                // A literal length only; a const parameter or expression
+                // needs the pure constant evaluator's length demand.
+                let Some(ast::Expr::Literal(length)) =
+                    array.const_arg().and_then(|arg| arg.expr())
+                else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let Some(number) = length
+                    .syntax()
+                    .children_with_tokens()
+                    .filter_map(|item| item.into_token())
+                    .find(|token| token.kind() == SyntaxKind::INT_NUMBER)
+                    .and_then(ast::IntNumber::cast)
+                else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                if !matches!(number.suffix(), None | Some("usize")) {
+                    return QueryPoll::Ready(Ok(None));
+                }
+                let Some(len) = number.value().ok().and_then(|len| u32::try_from(len).ok()) else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                WrittenType::Array(Box::new(nested!(&element)), len)
+            }
+            // A field's region is a declaration lifetime parameter; regions
+            // are not runtime data, so the projected view names it erased.
+            ast::Type::RefType(reference) => {
+                let Some(target) = reference.ty() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                WrittenType::Ref {
+                    region: RegionTerm::Static,
+                    mutable: reference.mut_token().is_some(),
+                    target: Box::new(nested!(&target)),
+                }
+            }
+            ast::Type::PathType(path) => {
+                let Some(path) = path.path() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let Some(segment) = path.segment() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let selected = if path.qualifier().is_some() {
+                    match self.qualified_leaf(db, sources, &path) {
+                        QueryPoll::Ready(Ok(Some(selected))) => selected,
+                        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                } else {
+                    let Some(name) = segment.name_ref().map(|name| name.text().to_string())
+                    else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    match self.current_name(db, sources, &name, None) {
+                        QueryPoll::Ready(Ok(selected)) => selected,
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                };
+                let Some(arguments) = segment.generic_arg_list() else {
+                    return QueryPoll::Ready(Ok(self.compound_leaf(selected)));
+                };
+                let Some(super::signature_names::SignatureName::Source(found)) = selected.name
+                else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let base = match self.generic_application(db, sources, found.identity) {
+                    QueryPoll::Ready(Ok(Some(base))) => base,
+                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let mut args = Vec::new();
+                for argument in arguments.generic_args() {
+                    match argument {
+                        // Regions are not runtime data.
+                        ast::GenericArg::LifetimeArg(_) => {}
+                        ast::GenericArg::TypeArg(argument) => {
+                            let Some(ty) = argument.ty() else {
+                                return QueryPoll::Ready(Ok(None));
+                            };
+                            args.push(nested!(&ty));
+                        }
+                        _ => return QueryPoll::Ready(Ok(None)),
+                    }
+                }
+                if args.len() != base.2 {
+                    return QueryPoll::Ready(Err(Diagnostic::new(
+                        "LRR-E-GENERIC-BINDING",
+                        "field type argument count differs from the declaration".into(),
+                    )));
+                }
+                WrittenType::Generic {
+                    identity: found.identity,
+                    definition: base.0,
+                    schema: base.1,
+                    args,
+                }
+            }
+            _ => return QueryPoll::Ready(Ok(None)),
+        })))
+    }
+    /// A qualified field Type path (`m::S`, `m::W<T>`) selected through the
+    /// declaration scope's source path lookup. A shorthand projection on a
+    /// type parameter (`T::V`) needs its trait/impl normalization: `None`.
+    fn qualified_leaf(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        path: &ra_ap_syntax::ast::Path,
+    ) -> crate::db::poll::QueryPoll<Option<SchemaTypeName>> {
+        use super::signature_names::SignatureName;
+        use crate::db::poll::QueryPoll;
+        let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if let Some(crate::syntax::imports::ImportSegment::Name(first)) = segments.first()
+            && !absolute
+            && self
+                .schema
+                .generics
+                .iter()
+                .any(|parameter| parameter.kind == GenericKind::Type && &parameter.name == first)
+        {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let found = match self.graph.lookup_source_path(
+            crate::source::manifest::Namespace::Type,
+            &segments,
+            absolute,
+            &self.schema.scope,
+            self.schema.header.profile.edition,
+        ) {
+            Ok(super::names::NameLookup::Defined(found)) => found,
+            Ok(_) => return QueryPoll::Ready(Ok(None)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let selected = SignatureName::Source(found);
         let concrete = match super::source_types::prepare_selected(
             db,
             self.graph,
@@ -307,10 +748,82 @@ impl<'a> SchemaNames<'a> {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        QueryPoll::Ready(Ok(SchemaTypeName {
+        QueryPoll::Ready(Ok(Some(SchemaTypeName {
             name: Some(selected),
             concrete,
-        }))
+            written: None,
+        })))
+    }
+    /// One selected single-name leaf of a compound field Type.
+    fn compound_leaf(&self, selected: SchemaTypeName) -> Option<crate::ir::written_type::WrittenType> {
+        use super::signature_names::SignatureName;
+        use crate::ir::written_type::WrittenType;
+        if let Some(SignatureName::Parameter(key)) = &selected.name {
+            if key.definition != self.schema.definition {
+                return None;
+            }
+            return self
+                .schema
+                .generics
+                .iter()
+                .filter(|parameter| parameter.kind == GenericKind::Type)
+                .position(|parameter| parameter.ordinal == key.ordinal)
+                .and_then(|index| u32::try_from(index).ok())
+                .map(WrittenType::Parameter);
+        }
+        let Some(concrete) = selected.concrete else {
+            return selected.written;
+        };
+        Some(match concrete.source() {
+            TyTerm::Primitive(primitive) => WrittenType::Primitive(*primitive),
+            TyTerm::Str => WrittenType::Str,
+            TyTerm::Nominal(_, args) if args.is_empty() => WrittenType::Nominal(Box::new(concrete)),
+            _ => return None,
+        })
+    }
+    /// The declaration key, schema identity and type-parameter count of a
+    /// generic struct/enum named by a compound field Type.
+    fn generic_application(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        identity: Digest,
+    ) -> crate::db::poll::QueryPoll<Option<(crate::source::manifest::DefKey, Digest, usize)>> {
+        use crate::db::poll::QueryPoll;
+        let definition = match super::source_types::nominal_definition(db, sources, identity) {
+            Ok(definition) => definition,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        if !matches!(
+            definition.item_kind,
+            crate::source::manifest::ItemKind::Struct | crate::source::manifest::ItemKind::Enum
+        ) {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let captured = match db.fetch(
+            &crate::db::provider::SyntaxProvider,
+            crate::db::key::QueryKey::TypeSchema(identity),
+        ) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let crate::db::value::QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
+            return QueryPoll::Ready(Err(schema_fault("field generic schema outcome differs")));
+        };
+        if schema
+            .generics
+            .iter()
+            .any(|parameter| parameter.kind == GenericKind::Const)
+        {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let parameters = schema
+            .generics
+            .iter()
+            .filter(|parameter| parameter.kind == GenericKind::Type)
+            .count();
+        QueryPoll::Ready(Ok(Some((definition, schema.fingerprint(), parameters))))
     }
     pub fn from_database(
         db: &mut crate::db::memo::Database,
@@ -322,7 +835,7 @@ impl<'a> SchemaNames<'a> {
             dependency::{InputKey, InputValue},
             poll::QueryPoll,
         };
-        if let Err(error) = graph.require_source(source.selection(), source.outline()) {
+        if let Err(error) = graph.require_view(source) {
             return QueryPoll::Ready(Err(error));
         }
         if !matches!(db.input(&InputKey::DefinitionSource(schema.definition)).as_deref(), Some(InputValue::DefinitionSource(parse)) if parse == &source.selection().outline.parse)
@@ -357,7 +870,7 @@ impl<'a> SchemaNames<'a> {
     ) -> crate::db::poll::QueryPoll<Self> {
         use crate::db::poll::QueryPoll;
         for source in sources {
-            if let Err(error) = graph.require_source(source.selection(), source.outline()) {
+            if let Err(error) = graph.require_view(source) {
                 return QueryPoll::Ready(Err(error));
             }
         }
@@ -517,16 +1030,54 @@ impl<'a> SchemaNames<'a> {
         )
     }
 
+    /// Type and lifetime parameters only; a const generic still needs its
+    /// separately evaluated argument.
+    fn generics_supported(&self) -> bool {
+        self.schema
+            .generics
+            .iter()
+            .all(|parameter| parameter.kind != GenericKind::Const)
+    }
+    fn type_parameter_count(&self) -> Result<u32, Diagnostic> {
+        u32::try_from(
+            self.schema
+                .generics
+                .iter()
+                .filter(|parameter| parameter.kind == GenericKind::Type)
+                .count(),
+        )
+        .map_err(|_| schema_limit())
+    }
+    /// The type-parameter index of a field written as a bare parameter of this
+    /// declaration (`x: T`). Its captured symbolic term names the parameter by
+    /// declaration identity, never by spelling.
+    fn generic_field(&self, recipe: &FieldRecipe) -> Option<u32> {
+        let Some(TyTerm::Param(key)) = &recipe.symbolic else {
+            return None;
+        };
+        if key.definition != self.schema.definition {
+            return None;
+        }
+        self.schema
+            .generics
+            .iter()
+            .filter(|parameter| parameter.kind == GenericKind::Type)
+            .position(|parameter| parameter.ordinal == key.ordinal)
+            .and_then(|index| u32::try_from(index).ok())
+    }
     /// Bind only the reached variant. A pending source name remains a demand;
     /// captured spelling never establishes primitive or nominal identity.
     /// Alias, generic and compound-field resolution continue through the source
     /// type engine rather than being guessed from a guest descriptor.
     pub fn bind_variant(&self, name: Option<&str>) -> Result<NominalBinding, Diagnostic> {
-        match self.bind_variant_with(name, |name, _field| {
-            crate::db::poll::QueryPoll::Ready(
+        match self.bind_variant_with(name, |query| match query {
+            FieldTypeQuery::Name(name, _) => crate::db::poll::QueryPoll::Ready(
                 self.unqualified(name, None)
                     .and_then(SchemaTypeName::metadata),
-            )
+            ),
+            FieldTypeQuery::Compound(_) => {
+                crate::db::poll::QueryPoll::Ready(Ok(SchemaTypeName::deferred()))
+            }
         })? {
             crate::db::poll::QueryPoll::Ready(result) => result,
             crate::db::poll::QueryPoll::NeedInput(_) => {
@@ -537,11 +1088,11 @@ impl<'a> SchemaNames<'a> {
     fn bind_variant_with(
         &self,
         name: Option<&str>,
-        mut lookup: impl FnMut(&str, Option<&FieldRecipe>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+        mut lookup: impl FnMut(FieldTypeQuery<'_>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalBinding>, Diagnostic> {
         use super::signature_names::SignatureName;
         let selected = self.schema.variant(name)?;
-        let own_name = match lookup(&self.definition.declared_name, None) {
+        let own_name = match lookup(FieldTypeQuery::Name(&self.definition.declared_name, None)) {
             crate::db::poll::QueryPoll::Ready(result) => result?,
             crate::db::poll::QueryPoll::NeedInput(input) => {
                 return Ok(crate::db::poll::QueryPoll::NeedInput(input));
@@ -558,7 +1109,7 @@ impl<'a> SchemaNames<'a> {
                 },
             )));
         }
-        if !self.schema.generics.is_empty() {
+        if !self.generics_supported() {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalBinding::Deferred {
                     field: None,
@@ -579,13 +1130,16 @@ impl<'a> SchemaNames<'a> {
             .map_err(|_| schema_limit())?;
         let mut field_bytes = fields
             .capacity()
-            .checked_mul(std::mem::size_of::<super::source_types::SourceType>())
-            .filter(|bytes| *bytes <= MAX_SCHEMA_BYTES)
+            .checked_mul(std::mem::size_of::<NominalFieldType>())
             .ok_or_else(schema_limit)?;
         for (ordinal, recipe) in selected.fields.iter().enumerate() {
             let field = Some(u32::try_from(ordinal).map_err(|_| schema_limit())?);
+            if let Some(parameter) = self.generic_field(recipe) {
+                fields.push(NominalFieldType::Parameter(parameter));
+                continue;
+            }
             let resolved = if recipe.ty.len() == 1 {
-                match lookup(&recipe.ty[0].text, Some(recipe)) {
+                match lookup(FieldTypeQuery::Name(&recipe.ty[0].text, Some(recipe))) {
                     crate::db::poll::QueryPoll::Ready(result) => result?,
                     crate::db::poll::QueryPoll::NeedInput(input) => {
                         return Ok(crate::db::poll::QueryPoll::NeedInput(input));
@@ -599,14 +1153,36 @@ impl<'a> SchemaNames<'a> {
                     crate::ir::op::PrimitiveType::Unit,
                 ))?
             } else {
-                return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                    NominalBinding::Deferred {
-                        field,
-                        demand: NominalBindingDemand::TypeRecipe,
-                    },
-                )));
+                let compound = match lookup(FieldTypeQuery::Compound(recipe)) {
+                    crate::db::poll::QueryPoll::Ready(result) => result?,
+                    crate::db::poll::QueryPoll::NeedInput(input) => {
+                        return Ok(crate::db::poll::QueryPoll::NeedInput(input));
+                    }
+                };
+                let Some(written) = compound.written else {
+                    return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                        NominalBinding::Deferred {
+                            field,
+                            demand: NominalBindingDemand::TypeRecipe,
+                        },
+                    )));
+                };
+                let field = NominalFieldType::Compound(std::sync::Arc::new(written));
+                field_bytes = field_bytes
+                    .checked_add(field.heap_bytes()?)
+                    .ok_or_else(schema_limit)?;
+                fields.push(field);
+                continue;
             };
             let Some(concrete) = resolved.concrete else {
+                if let Some(written) = resolved.written {
+                    let field = NominalFieldType::Compound(std::sync::Arc::new(written));
+                    field_bytes = field_bytes
+                        .checked_add(field.heap_bytes()?)
+                        .ok_or_else(schema_limit)?;
+                    fields.push(field);
+                    continue;
+                }
                 return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                     NominalBinding::Deferred {
                         field,
@@ -618,10 +1194,15 @@ impl<'a> SchemaNames<'a> {
             };
             field_bytes = field_bytes
                 .checked_add(concrete.heap_bytes()?)
-                .filter(|bytes| *bytes <= MAX_SCHEMA_BYTES)
                 .ok_or_else(schema_limit)?;
-            fields.push(concrete);
+            fields.push(NominalFieldType::Concrete(concrete));
         }
+        let discriminants = if self.definition.item_kind == crate::source::manifest::ItemKind::Enum
+        {
+            self.schema.literal_discriminants()?
+        } else {
+            std::sync::Arc::from(Vec::new())
+        };
         Ok(crate::db::poll::QueryPoll::Ready(Ok(
             NominalBinding::Ready(BoundNominalVariant {
                 identity: self.schema.definition,
@@ -629,8 +1210,27 @@ impl<'a> SchemaNames<'a> {
                 schema: self.schema.fingerprint(),
                 variant,
                 fields,
+                type_parameters: self.type_parameter_count()?,
+                discriminants,
             }),
         )))
+    }
+    /// Reached constructor preparation (unit/tuple structs and enum variants
+    /// selected through the Value namespace) binds the same selected variant as
+    /// record construction, with field Types admitted by the current
+    /// declaration service.
+    pub(crate) fn bind_variant_current(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        name: Option<&str>,
+    ) -> crate::db::poll::QueryPoll<NominalBinding> {
+        match self.bind_variant_with(name, |query| {
+            self.current_query(db, sources, query)
+        }) {
+            Ok(poll) => poll,
+            Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
+        }
     }
     fn field_visibility<'b>(&'b self, declared: &'b Visibility) -> &'b Visibility {
         if self.definition.item_kind == crate::source::manifest::ItemKind::Enum {
@@ -648,11 +1248,14 @@ impl<'a> SchemaNames<'a> {
         member: &str,
         caller: &ScopeKey,
     ) -> Result<NominalFieldBinding, Diagnostic> {
-        match self.bind_named_field_with(variant_name, member, caller, |name, _field| {
-            crate::db::poll::QueryPoll::Ready(
+        match self.bind_named_field_with(variant_name, member, caller, |query| match query {
+            FieldTypeQuery::Name(name, _) => crate::db::poll::QueryPoll::Ready(
                 self.unqualified(name, None)
                     .and_then(SchemaTypeName::metadata),
-            )
+            ),
+            FieldTypeQuery::Compound(_) => {
+                crate::db::poll::QueryPoll::Ready(Ok(SchemaTypeName::deferred()))
+            }
         })? {
             crate::db::poll::QueryPoll::Ready(result) => result,
             crate::db::poll::QueryPoll::NeedInput(_) => {
@@ -671,9 +1274,30 @@ impl<'a> SchemaNames<'a> {
         member: &str,
         caller: &ScopeKey,
     ) -> crate::db::poll::QueryPoll<NominalFieldBinding> {
-        let outcome = self.bind_named_field_with(variant_name, member, caller, |name, field| {
-            self.current_name(db, sources, name, field)
+        let outcome = self.bind_named_field_with(variant_name, member, caller, |query| {
+            self.current_query(db, sources, query)
         });
+        match outcome {
+            Ok(poll) => poll,
+            Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
+        }
+    }
+    /// The positional member `ordinal` of a tuple struct or tuple variant
+    /// (`t.0`): the same structural/privacy binder as a named member.
+    pub(crate) fn bind_positional_field_current(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        variant_name: Option<&str>,
+        ordinal: u32,
+        caller: &ScopeKey,
+    ) -> crate::db::poll::QueryPoll<NominalFieldBinding> {
+        let outcome = self.bind_field_with(
+            variant_name,
+            FieldSelector::Positional(ordinal),
+            caller,
+            |query| self.current_query(db, sources, query),
+        );
         match outcome {
             Ok(poll) => poll,
             Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
@@ -684,25 +1308,50 @@ impl<'a> SchemaNames<'a> {
         variant_name: Option<&str>,
         member: &str,
         caller: &ScopeKey,
-        mut lookup: impl FnMut(&str, Option<&FieldRecipe>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+        lookup: impl FnMut(FieldTypeQuery<'_>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+    ) -> Result<crate::db::poll::QueryPoll<NominalFieldBinding>, Diagnostic> {
+        self.bind_field_with(variant_name, FieldSelector::Named(member), caller, lookup)
+    }
+    fn bind_field_with(
+        &self,
+        variant_name: Option<&str>,
+        member: FieldSelector<'_>,
+        caller: &ScopeKey,
+        mut lookup: impl FnMut(FieldTypeQuery<'_>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalFieldBinding>, Diagnostic> {
         use super::signature_names::SignatureName;
         let selected = self.schema.variant(variant_name)?;
-        if selected.shape != FieldShape::Record {
-            return Err(schema_fault("named field requires a record variant"));
-        }
-        let member = super::names::owned_name(member, self.schema.header.profile.edition)?;
-        let mut matching = selected
-            .fields
-            .iter()
-            .enumerate()
-            .filter(|(_, field)| field.name.as_deref() == Some(member.as_str()));
-        let (ordinal, recipe) = matching
-            .next()
-            .ok_or_else(|| schema_fault("reached source field is absent"))?;
-        if matching.next().is_some() {
-            return Err(schema_fault("reached source field is ambiguous"));
-        }
+        let (ordinal, recipe) = match member {
+            FieldSelector::Named(member) => {
+                if selected.shape != FieldShape::Record {
+                    return Err(schema_fault("named field requires a record variant"));
+                }
+                let member =
+                    super::names::owned_name(member, self.schema.header.profile.edition)?;
+                let mut matching = selected
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, field)| field.name.as_deref() == Some(member.as_str()));
+                let found = matching
+                    .next()
+                    .ok_or_else(|| schema_fault("reached source field is absent"))?;
+                if matching.next().is_some() {
+                    return Err(schema_fault("reached source field is ambiguous"));
+                }
+                found
+            }
+            FieldSelector::Positional(ordinal) => {
+                if selected.shape != FieldShape::Tuple {
+                    return Err(schema_fault("positional field requires a tuple variant"));
+                }
+                let recipe = selected
+                    .fields
+                    .get(ordinal as usize)
+                    .ok_or_else(|| schema_fault("reached source field is absent"))?;
+                (ordinal as usize, recipe)
+            }
+        };
         let field = u32::try_from(ordinal).map_err(|_| schema_limit())?;
         if !crate::syntax::visibility::VisibilityScope::for_declaration(
             self.field_visibility(&recipe.visibility),
@@ -713,7 +1362,7 @@ impl<'a> SchemaNames<'a> {
         {
             return Err(schema_fault("reached source field is inaccessible"));
         }
-        let own_name = match lookup(&self.definition.declared_name, None) {
+        let own_name = match lookup(FieldTypeQuery::Name(&self.definition.declared_name, None)) {
             crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
             crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
             crate::db::poll::QueryPoll::NeedInput(request) => {
@@ -731,7 +1380,7 @@ impl<'a> SchemaNames<'a> {
                 },
             )));
         }
-        if !self.schema.generics.is_empty() {
+        if !self.generics_supported() {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalFieldBinding::Deferred {
                     field,
@@ -739,8 +1388,27 @@ impl<'a> SchemaNames<'a> {
                 },
             )));
         }
+        let variant = self
+            .schema
+            .variants
+            .iter()
+            .position(|variant| variant.name.as_deref() == variant_name)
+            .and_then(|index| u32::try_from(index).ok())
+            .ok_or_else(schema_limit)?;
+        if let Some(parameter) = self.generic_field(recipe) {
+            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                NominalFieldBinding::Ready(BoundNominalField {
+                    identity: self.schema.definition,
+                    definition: self.definition.as_ref().clone(),
+                    schema: self.schema.fingerprint(),
+                    variant,
+                    field,
+                    field_type: NominalFieldType::Parameter(parameter),
+                }),
+            )));
+        }
         let resolved = if recipe.ty.len() == 1 {
-            match lookup(&recipe.ty[0].text, Some(recipe)) {
+            match lookup(FieldTypeQuery::Name(&recipe.ty[0].text, Some(recipe))) {
                 crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
                 crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
                 crate::db::poll::QueryPoll::NeedInput(request) => {
@@ -753,14 +1421,45 @@ impl<'a> SchemaNames<'a> {
         ) {
             SchemaTypeName::metadata(SignatureName::Primitive(crate::ir::op::PrimitiveType::Unit))?
         } else {
+            let compound = match lookup(FieldTypeQuery::Compound(recipe)) {
+                crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
+                crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
+                crate::db::poll::QueryPoll::NeedInput(request) => {
+                    return Ok(crate::db::poll::QueryPoll::NeedInput(request));
+                }
+            };
+            let Some(written) = compound.written else {
+                return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                    NominalFieldBinding::Deferred {
+                        field,
+                        demand: NominalBindingDemand::TypeRecipe,
+                    },
+                )));
+            };
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                NominalFieldBinding::Deferred {
+                NominalFieldBinding::Ready(BoundNominalField {
+                    identity: self.schema.definition,
+                    definition: self.definition.as_ref().clone(),
+                    schema: self.schema.fingerprint(),
+                    variant,
                     field,
-                    demand: NominalBindingDemand::TypeRecipe,
-                },
+                    field_type: NominalFieldType::Compound(std::sync::Arc::new(written)),
+                }),
             )));
         };
         let Some(source_type) = resolved.concrete else {
+            if let Some(written) = resolved.written {
+                return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                    NominalFieldBinding::Ready(BoundNominalField {
+                        identity: self.schema.definition,
+                        definition: self.definition.as_ref().clone(),
+                        schema: self.schema.fingerprint(),
+                        variant,
+                        field,
+                        field_type: NominalFieldType::Compound(std::sync::Arc::new(written)),
+                    }),
+                )));
+            }
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalFieldBinding::Deferred {
                     field,
@@ -772,13 +1471,6 @@ impl<'a> SchemaNames<'a> {
                 },
             )));
         };
-        let variant = self
-            .schema
-            .variants
-            .iter()
-            .position(|variant| variant.name.as_deref() == variant_name)
-            .and_then(|index| u32::try_from(index).ok())
-            .ok_or_else(schema_limit)?;
         Ok(crate::db::poll::QueryPoll::Ready(Ok(
             NominalFieldBinding::Ready(BoundNominalField {
                 identity: self.schema.definition,
@@ -786,7 +1478,7 @@ impl<'a> SchemaNames<'a> {
                 schema: self.schema.fingerprint(),
                 variant,
                 field,
-                source_type,
+                field_type: NominalFieldType::Concrete(source_type),
             }),
         )))
     }
@@ -799,11 +1491,14 @@ impl<'a> SchemaNames<'a> {
         plan: &crate::syntax::constructors::ConstructorPlan,
         caller: &ScopeKey,
     ) -> Result<NominalConstructorBinding, Diagnostic> {
-        match self.bind_record_constructor_with(name, plan, caller, |name, _field| {
-            crate::db::poll::QueryPoll::Ready(
+        match self.bind_record_constructor_with(name, plan, caller, |query| match query {
+            FieldTypeQuery::Name(name, _) => crate::db::poll::QueryPoll::Ready(
                 self.unqualified(name, None)
                     .and_then(SchemaTypeName::metadata),
-            )
+            ),
+            FieldTypeQuery::Compound(_) => {
+                crate::db::poll::QueryPoll::Ready(Ok(SchemaTypeName::deferred()))
+            }
         })? {
             crate::db::poll::QueryPoll::Ready(result) => result,
             crate::db::poll::QueryPoll::NeedInput(_) => Err(schema_fault(
@@ -821,8 +1516,8 @@ impl<'a> SchemaNames<'a> {
         plan: &crate::syntax::constructors::ConstructorPlan,
         caller: &ScopeKey,
     ) -> crate::db::poll::QueryPoll<NominalConstructorBinding> {
-        match self.bind_record_constructor_with(name, plan, caller, |name, field| {
-            self.current_name(db, sources, name, field)
+        match self.bind_record_constructor_with(name, plan, caller, |query| {
+            self.current_query(db, sources, query)
         }) {
             Ok(poll) => poll,
             Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
@@ -833,7 +1528,7 @@ impl<'a> SchemaNames<'a> {
         name: Option<&str>,
         plan: &crate::syntax::constructors::ConstructorPlan,
         caller: &ScopeKey,
-        lookup: impl FnMut(&str, Option<&FieldRecipe>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+        lookup: impl FnMut(FieldTypeQuery<'_>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalConstructorBinding>, Diagnostic> {
         use crate::syntax::constructors::ConstructorKind;
         let ConstructorKind::Record {
@@ -888,6 +1583,11 @@ impl<'a> SchemaNames<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum FieldSelector<'a> {
+    Named(&'a str),
+    Positional(u32),
+}
 /// Source/schema checked order only. It confers no runtime field type or guard
 /// authority until paired with a successfully bound selected variant.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -988,7 +1688,7 @@ pub struct BoundNominalField {
     schema: Digest,
     variant: u32,
     field: u32,
-    source_type: super::source_types::SourceType,
+    field_type: NominalFieldType,
 }
 impl BoundNominalField {
     pub(crate) fn identity(&self) -> Digest {
@@ -1006,7 +1706,7 @@ impl BoundNominalField {
         for segment in &self.definition.module_path {
             bytes = bytes.checked_add(segment.capacity())?;
         }
-        bytes.checked_add(self.source_type.heap_bytes().ok()?)
+        bytes.checked_add(self.field_type.heap_bytes().ok()?)
     }
     pub fn definition(&self) -> &crate::source::manifest::DefKey {
         &self.definition
@@ -1021,10 +1721,10 @@ impl BoundNominalField {
         self.field
     }
     pub fn primitive(&self) -> Option<crate::ir::op::PrimitiveType> {
-        self.source_type.primitive()
+        self.field_type.concrete()?.primitive()
     }
-    pub(crate) fn source_type(&self) -> &super::source_types::SourceType {
-        &self.source_type
+    pub(crate) fn field_type(&self) -> &NominalFieldType {
+        &self.field_type
     }
 }
 impl StableEncode for BoundNominalField {
@@ -1035,7 +1735,7 @@ impl StableEncode for BoundNominalField {
         e.digest(self.schema);
         e.u32(self.variant);
         e.u32(self.field);
-        e.record(&self.source_type);
+        e.record(&self.field_type);
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1054,7 +1754,145 @@ pub struct BoundNominalVariant {
     definition: crate::source::manifest::DefKey,
     schema: Digest,
     variant: u32,
-    fields: Vec<super::source_types::SourceType>,
+    fields: Vec<NominalFieldType>,
+    /// Number of the declaration's type parameters; a constructed value's
+    /// `TypeKey::Nominal` args instantiate them in declaration order.
+    type_parameters: u32,
+    /// Enums only: the declaration-order discriminant table (see
+    /// `NominalSchema::literal_discriminants`). Empty for structs.
+    discriminants: std::sync::Arc<[Option<i128>]>,
+}
+/// A bound field's Type: concrete, or one of the declaration's own type
+/// parameters, instantiated by the value's `TypeKey::Nominal` args.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum NominalFieldType {
+    Concrete(super::source_types::SourceType),
+    /// Index among the declaration's type parameters.
+    Parameter(u32),
+    /// A compound written field Type (reference, tuple, array, slice or
+    /// generic application) whose named leaves the declaration's own Type
+    /// service selected, over concrete leaves and the declaration's type
+    /// parameters.
+    Compound(std::sync::Arc<crate::ir::written_type::WrittenType>),
+}
+impl NominalFieldType {
+    pub(crate) fn concrete(&self) -> Option<&super::source_types::SourceType> {
+        match self {
+            Self::Concrete(source) => Some(source),
+            Self::Parameter(_) | Self::Compound(_) => None,
+        }
+    }
+    pub(crate) fn primitive(&self) -> Option<crate::ir::op::PrimitiveType> {
+        self.concrete()?.primitive()
+    }
+    /// Whether one of the declaration's type parameters occurs in this field.
+    pub(crate) fn generic(&self) -> bool {
+        match self {
+            Self::Concrete(_) => false,
+            Self::Parameter(_) => true,
+            Self::Compound(written) => written.has_parameters(),
+        }
+    }
+    /// The run-local descriptor under the instantiating type arguments.
+    pub(crate) fn materialize(
+        &self,
+        store: &mut crate::runtime::cell::GuestStore,
+        args: &[crate::runtime::shape::TypeId],
+    ) -> Result<crate::runtime::shape::TypeId, Diagnostic> {
+        match self {
+            Self::Concrete(source) => source.materialize(store),
+            Self::Parameter(index) => args
+                .get(*index as usize)
+                .copied()
+                .ok_or_else(|| schema_fault("generic field lacks its type argument")),
+            Self::Compound(written) => written
+                .materialize_in(store, args)?
+                .ok_or_else(|| schema_fault("compound field Type names no single descriptor")),
+        }
+    }
+    /// The descriptor under type arguments that may still be open: `None`
+    /// while a parameter the field names is not fixed.
+    pub(crate) fn materialize_partial(
+        &self,
+        store: &mut crate::runtime::cell::GuestStore,
+        args: &[Option<crate::runtime::shape::TypeId>],
+    ) -> Result<Option<crate::runtime::shape::TypeId>, Diagnostic> {
+        match self {
+            Self::Concrete(source) => source.materialize(store).map(Some),
+            Self::Parameter(index) => Ok(args.get(*index as usize).copied().flatten()),
+            Self::Compound(written) => {
+                written.materialize_with(store, &|index| args.get(index as usize).copied().flatten())
+            }
+        }
+    }
+    pub(crate) fn find_descriptor(
+        &self,
+        store: &crate::runtime::cell::GuestStore,
+        args: &[crate::runtime::shape::TypeId],
+    ) -> Option<crate::runtime::shape::TypeId> {
+        match self {
+            Self::Concrete(source) => source.find_descriptor(store),
+            Self::Parameter(index) => args.get(*index as usize).copied(),
+            Self::Compound(written) => written.find_in(store, args).ok().flatten(),
+        }
+    }
+    /// The field's source Type under the instantiating type arguments; a
+    /// parameter's argument is a closed runtime descriptor's source term.
+    pub(crate) fn source(
+        &self,
+        store: &crate::runtime::cell::GuestStore,
+        args: &[crate::runtime::shape::TypeId],
+    ) -> Option<TyTerm> {
+        match self {
+            Self::Concrete(source) => Some(source.source().clone()),
+            Self::Parameter(index) => store.descriptor_source_term(*args.get(*index as usize)?),
+            Self::Compound(written) => written.source_in(Some(store), args),
+        }
+    }
+    /// Match a completed field value's descriptor against this field's Type,
+    /// fixing the declaration type parameters it determines.
+    pub(crate) fn bind(
+        &self,
+        ty: crate::runtime::shape::TypeId,
+        store: &crate::runtime::cell::GuestStore,
+        args: &mut [Option<crate::runtime::shape::TypeId>],
+    ) -> Result<bool, Diagnostic> {
+        match self {
+            Self::Concrete(source) => Ok(source.find_descriptor(store) == Some(ty)),
+            Self::Parameter(index) => {
+                crate::ir::written_type::WrittenType::Parameter(*index).bind(ty, store, args)
+            }
+            Self::Compound(written) => written.bind(ty, store, args),
+        }
+    }
+    pub(crate) fn heap_bytes(&self) -> Result<usize, Diagnostic> {
+        match self {
+            Self::Concrete(source) => source.heap_bytes(),
+            Self::Parameter(_) => Ok(0),
+            Self::Compound(written) => std::mem::size_of::<crate::ir::written_type::WrittenType>()
+                .checked_add(written.heap_bytes())
+                .ok_or_else(schema_limit),
+        }
+    }
+}
+impl StableEncode for NominalFieldType {
+    const DOMAIN: &'static str = "lrr/v1/bound-nominal-field-type";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        match self {
+            Self::Concrete(source) => {
+                e.u32(0);
+                e.record(source);
+            }
+            Self::Parameter(index) => {
+                e.u32(1);
+                e.u32(*index);
+            }
+            Self::Compound(written) => {
+                e.u32(2);
+                e.record(written.as_ref());
+            }
+        }
+    }
 }
 impl StableEncode for BoundNominalVariant {
     const DOMAIN: &'static str = "lrr/v1/bound-nominal-variant";
@@ -1064,6 +1902,15 @@ impl StableEncode for BoundNominalVariant {
         e.digest(self.schema);
         e.u32(self.variant);
         e.sequence(&self.fields, |e, field| e.record(field));
+        if self.type_parameters != 0 {
+            e.u32(self.type_parameters);
+        }
+        if !self.discriminants.is_empty() {
+            e.sequence(&self.discriminants, |e, value| {
+                e.option(value, |e, value| e.u64(*value as u64));
+                e.option(value, |e, value| e.u64((*value >> 64) as u64));
+            });
+        }
     }
 }
 impl BoundNominalVariant {
@@ -1075,7 +1922,7 @@ impl BoundNominalVariant {
             .checked_add(
                 self.fields
                     .capacity()
-                    .checked_mul(std::mem::size_of::<super::source_types::SourceType>())?,
+                    .checked_mul(std::mem::size_of::<NominalFieldType>())?,
             )?
             .checked_add(
                 self.definition
@@ -1090,6 +1937,11 @@ impl BoundNominalVariant {
         for field in &self.fields {
             bytes = bytes.checked_add(field.heap_bytes().ok()?)?;
         }
+        bytes = bytes.checked_add(
+            self.discriminants
+                .len()
+                .checked_mul(std::mem::size_of::<Option<i128>>())?,
+        )?;
         Some(bytes)
     }
     pub(crate) fn definition(&self) -> &crate::source::manifest::DefKey {
@@ -1101,8 +1953,61 @@ impl BoundNominalVariant {
     pub(crate) fn variant(&self) -> u32 {
         self.variant
     }
-    pub(crate) fn fields(&self) -> &[super::source_types::SourceType] {
+    pub(crate) fn fields(&self) -> &[NominalFieldType] {
         &self.fields
+    }
+    pub(crate) fn type_parameters(&self) -> u32 {
+        self.type_parameters
+    }
+    /// The source Type of field `ordinal` of a value whose nominal
+    /// descriptor carries these instantiating type arguments.
+    pub(crate) fn field_source(
+        &self,
+        ordinal: u32,
+        store: &crate::runtime::cell::GuestStore,
+        args: &[crate::runtime::shape::TypeId],
+    ) -> Option<TyTerm> {
+        self.fields.get(ordinal as usize)?.source(store, args)
+    }
+    pub(crate) fn discriminants(&self) -> &std::sync::Arc<[Option<i128>]> {
+        &self.discriminants
+    }
+}
+/// `[INT_NUMBER]` or `[-, INT_NUMBER]` with an optional integer suffix and any
+/// radix prefix, as written in an explicit enum discriminant.
+fn literal_discriminant(tokens: &[TokenRecipe]) -> Option<i128> {
+    use ra_ap_syntax::SyntaxKind;
+    let (negative, number) = match tokens {
+        [number] => (false, number),
+        [minus, number] if minus.kind == SyntaxKind::MINUS as u16 => (true, number),
+        _ => return None,
+    };
+    if number.kind != SyntaxKind::INT_NUMBER as u16 {
+        return None;
+    }
+    let text = number.text.replace('_', "");
+    let (radix, digits) = match text.get(..2) {
+        Some("0x") => (16, &text[2..]),
+        Some("0o") => (8, &text[2..]),
+        Some("0b") => (2, &text[2..]),
+        _ => (10, text.as_str()),
+    };
+    // A suffix starts at the first `i`/`u`, neither of which is a digit in
+    // any integer radix.
+    let end = digits.find(['i', 'u']).unwrap_or(digits.len());
+    let suffix = &digits[end..];
+    if !matches!(
+        suffix,
+        "" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64"
+            | "u128" | "usize"
+    ) {
+        return None;
+    }
+    let magnitude = u128::from_str_radix(&digits[..end], radix).ok()?;
+    if negative {
+        0i128.checked_sub_unsigned(magnitude)
+    } else {
+        i128::try_from(magnitude).ok()
     }
 }
 fn token_bytes(tokens: &Vec<TokenRecipe>) -> Option<usize> {

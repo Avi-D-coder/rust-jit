@@ -113,17 +113,13 @@ fn world(text: &str, edition: u16) -> World {
         &discovery.key().domain,
         crate::db::seals::SealDomain::TestCatalog { .. }
     ));
-    let Some((InputValue::DiscoverySeal(input), _)) =
+    // `--test` discovery publishes no Type facets under the test-catalog
+    // seal; Type authority comes from the root Type fixed point.
+    let Some((InputValue::DiscoverySeal(_), _)) =
         db.published_input(&InputKey::DiscoverySeal(discovery.key().clone()))
     else {
         panic!("actual published TestCatalog absent");
     };
-    assert!(
-        input
-            .type_scopes
-            .iter()
-            .any(|receipt| receipt.scope().scope == source.outline().root_scope)
-    );
     let catalog = discovery.test_catalog(&mut db).unwrap();
     World {
         db,

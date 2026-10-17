@@ -32,7 +32,6 @@ impl PreparedSourceView {
             .checked_add(state.files.len())
             .and_then(|n| n.checked_add(state.parses.len()))
             .and_then(|n| n.checked_add(state.outlines.len()))
-            .filter(|n| *n <= 100_000)
             .ok_or_else(limit)?;
         // Bound traversal and conservative BTree storage before walking rows.
         let mut bytes = count.checked_mul(128).ok_or_else(limit)?;

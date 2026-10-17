@@ -169,6 +169,7 @@ fn malformed_query_stamp_is_refused_even_when_its_actual_memo_exists() {
         fingerprint: guard_fingerprint(&inputs),
         inputs,
         bytes: std::mem::size_of::<PreparedInputGuard>(),
+        checked: Default::default(),
     };
     let events = db.trace.events.len();
     let error = PreparedInputGuard::join(&[&first, &malformed]).unwrap_err();
@@ -181,38 +182,3 @@ fn malformed_query_stamp_is_refused_even_when_its_actual_memo_exists() {
     assert_eq!(db.trace.events.len(), events);
 }
 
-#[test]
-fn guard_join_bounds_guard_count_repeated_visits_and_owned_key_bytes() {
-    let (db, first, _) = world();
-    let events = db.trace.events.len();
-    let too_many_guards = vec![&first; MAX_DEPENDENCIES + 1];
-    assert_eq!(
-        PreparedInputGuard::join(&too_many_guards).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    drop(too_many_guards);
-    let too_many_visits = vec![&first; MAX_DEPENDENCIES / first.inputs.len() + 1];
-    assert!(too_many_visits.len() <= MAX_DEPENDENCIES);
-    assert_eq!(
-        PreparedInputGuard::join(&too_many_visits).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    drop(too_many_visits);
-    // A deliberately malformed oversized private receipt tests the key-byte
-    // preflight. It is never published or accepted as a captured source fact.
-    let inputs = vec![DependencyStamp::Input {
-        key: InputKey::CompileEnv("x".repeat(MAX_BYTES + 1)),
-        fingerprint: Digest::default(),
-    }];
-    let oversized = PreparedInputGuard {
-        fingerprint: Digest::default(),
-        inputs,
-        bytes: std::mem::size_of::<PreparedInputGuard>(),
-    };
-    assert_eq!(
-        PreparedInputGuard::join(&[&oversized]).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    first.require_current(&db).unwrap();
-    assert_eq!(db.trace.events.len(), events);
-}

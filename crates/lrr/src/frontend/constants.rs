@@ -20,9 +20,12 @@ use crate::{
     vm::numeric::{self, NumericFailure},
 };
 use std::collections::{BTreeMap, BTreeSet};
-const MAX_STEPS: u32 = 100_000;
+// E-R5-006: the only constant-evaluation limit that rustc itself enforces is the
+// stack-frame limit, which is the crate `recursion_limit` (default 128;
+// compiler/rustc_const_eval/src/const_eval/machine.rs, `before_stack_push`).
+// Evaluation steps and result bytes are not limited.
+const MAX_STEPS: u32 = u32::MAX;
 const MAX_FRAMES: u16 = 128;
-const MAX_BYTES: usize = 1 << 20;
 fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
@@ -42,7 +45,7 @@ impl Default for ConstLimits {
         Self {
             steps: MAX_STEPS,
             frames: MAX_FRAMES,
-            result_bytes: MAX_BYTES,
+            result_bytes: usize::MAX,
         }
     }
 }
@@ -57,13 +60,7 @@ impl ConstLimits {
         Ok(Self { steps, ..self })
     }
     pub fn new(steps: u32, frames: u16, result_bytes: usize) -> Result<Self, Diagnostic> {
-        if steps == 0
-            || steps > MAX_STEPS
-            || frames == 0
-            || frames > MAX_FRAMES
-            || result_bytes == 0
-            || result_bytes > MAX_BYTES
-        {
+        if steps == 0 || frames == 0 || frames > MAX_FRAMES || result_bytes == 0 {
             return Err(fault(
                 "LRR-E-CONST-LIMIT",
                 "constant limits exceed the live profile",
@@ -134,13 +131,8 @@ impl ConstEvaluation {
     pub fn steps(&self) -> u32 {
         self.steps
     }
-    /// Pure admission calculation; the runtime must supply its actual element layout/limits.
-    pub fn admit_array_length(
-        &self,
-        element_bytes: usize,
-        max_elements: usize,
-        max_allocation_bytes: usize,
-    ) -> Result<usize, Diagnostic> {
+    /// Pure admission calculation of the exact array length.
+    pub fn admit_array_length(&self) -> Result<usize, Diagnostic> {
         let value = self
             .value
             .scalar()
@@ -153,16 +145,6 @@ impl ConstEvaluation {
         }
         let count = usize::try_from(value.payload)
             .map_err(|_| fault("LRR-E-CONST-LIMIT", "array length exceeds host width"))?;
-        if count > max_elements
-            || count
-                .checked_mul(element_bytes)
-                .is_none_or(|n| n > max_allocation_bytes)
-        {
-            return Err(fault(
-                "LRR-E-CONST-LIMIT",
-                "array length exceeds element/allocation limits",
-            ));
-        }
         Ok(count)
     }
 }
@@ -298,14 +280,8 @@ impl Evaluator<'_> {
     fn checked_value(
         &self,
         value: ConstValue,
-        at: SourceRange,
+        _at: SourceRange,
     ) -> Result<ConstValue, ConstFailure> {
-        if value
-            .serialized_bytes()
-            .is_none_or(|n| n > self.limits.result_bytes)
-        {
-            return Err(self.limit(at));
-        }
         Ok(value)
     }
     fn node(&mut self, expr: &ExprRef) -> Result<Node, ConstFailure> {
@@ -314,7 +290,6 @@ impl Evaluator<'_> {
             self.metadata_bytes = self
                 .metadata_bytes
                 .checked_add(bytes)
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| self.limit(expr.range()))?;
             return Ok(n.clone());
         }
@@ -322,9 +297,6 @@ impl Evaluator<'_> {
             .source
             .node(expr)
             .map_err(|d| self.failure(d, expr.range()))?;
-        if self.nodes.len() >= MAX_STEPS as usize {
-            return Err(self.limit(expr.range()));
-        }
         let bytes = n.owned_bytes().ok_or_else(|| self.limit(expr.range()))?;
         self.admit_metadata(bytes, expr.range())?;
         self.nodes.insert(expr.key(), n.clone());
@@ -380,7 +352,6 @@ impl Evaluator<'_> {
         self.metadata_bytes = self
             .metadata_bytes
             .checked_add(bytes)
-            .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| self.limit(at))?;
         Ok(())
     }
@@ -522,9 +493,6 @@ impl Evaluator<'_> {
         locals: &LocalScopes,
         depth: u16,
     ) -> Result<Option<PrimitiveType>, ConstFailure> {
-        if depth >= 128 {
-            return Err(self.limit(e.range()));
-        }
         Ok(match self.node(e)? {
             Node::Bool(_) | Node::Logic(..) => Some(PrimitiveType::Bool),
             Node::Char(_) => Some(PrimitiveType::Char),
@@ -559,6 +527,48 @@ impl Evaluator<'_> {
             _ => None,
         })
     }
+    /// rustc `FnCtxt::check_lit` under `ExpectCastableToType(destination)`
+    /// (compiler/rustc_hir_typeck/src/expr.rs): an unsuffixed integer
+    /// literal takes an integral cast target (`u8` for a `char` target) and
+    /// an unsuffixed float literal a float target. The expectation reaches
+    /// the literal through parentheses and unary `-`/`!` only
+    /// (`check_expr_unop` keeps it for `Not`/`Neg`). `None` keeps the
+    /// literal's own `i32`/`f64` fallback.
+    fn cast_expectation(
+        &mut self,
+        e: &ExprRef,
+        destination: PrimitiveType,
+    ) -> Result<Option<PrimitiveType>, ConstFailure> {
+        use PrimitiveType as P;
+        let mut e = e.clone();
+        loop {
+            match self.node(&e)? {
+                Node::Parentheses(child) | Node::Unary(_, child) => e = child,
+                Node::Integer(DecodedLiteral::Integer { suffix: None, .. }) => {
+                    return Ok(match destination {
+                        P::I8
+                        | P::I16
+                        | P::I32
+                        | P::I64
+                        | P::I128
+                        | P::Isize
+                        | P::U8
+                        | P::U16
+                        | P::U32
+                        | P::U64
+                        | P::U128
+                        | P::Usize => Some(destination),
+                        P::Char => Some(P::U8),
+                        _ => None,
+                    });
+                }
+                Node::Float(_, None) => {
+                    return Ok(matches!(destination, P::F32 | P::F64).then_some(destination));
+                }
+                _ => return Ok(None),
+            }
+        }
+    }
     fn expr(
         &mut self,
         e: &ExprRef,
@@ -569,11 +579,7 @@ impl Evaluator<'_> {
         self.steps = self
             .steps
             .checked_add(1)
-            .filter(|s| *s <= self.limits.steps)
             .ok_or_else(|| self.limit(e.range()))?;
-        if self.depth >= 128 {
-            return Err(self.limit(e.range()));
-        }
         self.depth += 1;
         let result = self.inner(e, hint, locals, allow_return);
         self.depth -= 1;
@@ -864,19 +870,17 @@ impl Evaluator<'_> {
                 }
             }
             Node::Cast(child, destination) => {
-                let proven = self.hint(&child, locals, 0)?.ok_or_else(|| {
-                    self.failure(
-                        fault(
-                            "LRR-E-CONST-TYPE",
-                            "unsuffixed numeric cast requires source context integration",
-                        ),
-                        at,
-                    )
-                })?;
+                // An operand without its own proven type takes rustc's cast
+                // expectation (`check_lit` under `ExpectCastableToType`);
+                // anything else keeps its ordinary literal fallback.
+                let proven = match self.hint(&child, locals, 0)? {
+                    Some(proven) => Some(proven),
+                    None => self.cast_expectation(&child, destination)?,
+                };
                 let v = take!(
                     self,
                     &child,
-                    Some(Expected::Scalar(proven)),
+                    proven.map(Expected::Scalar),
                     locals,
                     allow_return
                 );
@@ -1218,6 +1222,9 @@ impl Evaluator<'_> {
                     at,
                 ));
             }
+            Node::OutsideDomain(what) => {
+                return Err(self.failure(crate::syntax::pure_constants::outside_domain(what), at));
+            }
             Node::Unsupported => {
                 return Err(self.failure(
                     fault(
@@ -1249,15 +1256,8 @@ impl Evaluator<'_> {
         if let Some(primitive) = self.local_contexts.get(&key) {
             return Ok(*primitive);
         }
-        let remaining_work = (MAX_STEPS as usize)
-            .checked_sub(self.local_context_work)
-            .filter(|n| *n > 0)
-            .ok_or_else(|| self.limit(at))?;
-        let remaining_bytes = (32usize * 1024 * 1024)
-            .checked_sub(self.metadata_bytes)
-            .and_then(|n| n.checked_sub(128))
-            .filter(|n| *n >= 128)
-            .ok_or_else(|| self.limit(at))?;
+        let remaining_work = usize::MAX - self.local_context_work;
+        let remaining_bytes = usize::MAX - self.metadata_bytes;
         let context = self
             .source
             .numeric_local_context(statement, remaining_work, remaining_bytes)
@@ -1265,7 +1265,6 @@ impl Evaluator<'_> {
         self.local_context_work = self
             .local_context_work
             .checked_add(context.work())
-            .filter(|n| *n <= MAX_STEPS as usize)
             .ok_or_else(|| self.limit(at))?;
         self.admit_metadata(
             context
@@ -1337,7 +1336,6 @@ impl Evaluator<'_> {
         self.steps = self
             .steps
             .checked_add(1)
-            .filter(|s| *s <= self.limits.steps)
             .ok_or_else(|| self.limit(statement.range()))?;
         match self
             .source
@@ -1392,9 +1390,6 @@ impl Evaluator<'_> {
         expected: Option<Expected>,
         at: SourceRange,
     ) -> Result<(), ConstFailure> {
-        if self.loops.len() >= 128 {
-            return Err(self.limit(at));
-        }
         self.admit_metadata(
             std::mem::size_of::<(ControlTarget, Option<Expected>)>() + 64,
             at,
@@ -1505,13 +1500,10 @@ impl Evaluator<'_> {
             .checked_mul(element_bytes)
             .and_then(|n| n.checked_add(9 + 8 + ConstValue::DOMAIN.len()))
             .ok_or_else(|| self.limit(at))?;
-        if bytes > self.limits.result_bytes {
-            return Err(self.limit(at));
-        }
         count
             .checked_mul(std::mem::size_of::<ConstValue>())
-            .filter(|n| *n <= MAX_BYTES * 4)
             .ok_or_else(|| self.limit(at))?;
+        let _ = bytes;
         Ok(())
     }
 }

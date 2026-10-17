@@ -119,7 +119,7 @@ impl ParsedFile {
         let Some(node) = node else {
             return Ok(None);
         };
-        for node in node.ancestors().take(257) {
+        for node in node.ancestors() {
             let Some(call) = ast::MacroCall::cast(node) else {
                 continue;
             };
@@ -165,7 +165,6 @@ impl ParsedFile {
             .ok_or_else(|| error("selected macro call is not a node"))?;
         let call = node
             .ancestors()
-            .take(257)
             .find_map(|n| {
                 let call = ast::MacroCall::cast(n)?;
                 (range(call.syntax().text_range()) == selected).then_some(call)
@@ -191,10 +190,7 @@ impl ParsedFile {
         let (segments, absolute, mut bytes) = owned_path(path, definition_unit)?;
         let mut modules = Vec::new();
         let mut executable = false;
-        for (depth, parent) in call.syntax().ancestors().enumerate() {
-            if depth > 256 {
-                return Err(error("macro invocation ancestry depth exceeded"));
-            }
+        for parent in call.syntax().ancestors() {
             executable |= ast::Fn::can_cast(parent.kind())
                 || ast::ClosureExpr::can_cast(parent.kind())
                 || ast::BlockExpr::can_cast(parent.kind());
@@ -206,7 +202,6 @@ impl ParsedFile {
                     .ok_or_else(|| error("invalid macro invocation module name"))?;
                 bytes = bytes
                     .checked_add(name.len())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("macro invocation metadata exceeded"))?;
                 modules
                     .try_reserve(1)
@@ -235,9 +230,6 @@ fn owned_path(
     let mut bytes = 0usize;
     let absolute;
     loop {
-        if segments.len() >= 256 {
-            return Err(error("macro invocation path depth exceeded"));
-        }
         let segment = path
             .segment()
             .ok_or_else(|| error("macro invocation path segment is missing"))?;
@@ -255,7 +247,6 @@ fn owned_path(
                 }
                 bytes = bytes
                     .checked_add(text.len())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("macro invocation path text exceeded"))?;
                 ImportSegment::Name(text)
             }
@@ -368,7 +359,6 @@ impl ParsedFile {
             .ok_or_else(|| error("attribute path is not a node"))?;
         let meta = node
             .ancestors()
-            .take(257)
             .find_map(|n| ast::Meta::cast(n).filter(|m| range(m.syntax().text_range()) == selected))
             .ok_or_else(|| error("attribute path range is not an exact meta"))?;
         if self
@@ -395,10 +385,7 @@ impl ParsedFile {
         let mut owner = None;
         let mut executable = false;
         let mut container = false;
-        for (depth, parent) in meta.syntax().ancestors().enumerate() {
-            if depth > 256 {
-                return Err(error("attribute ancestry depth exceeded"));
-            }
+        for parent in meta.syntax().ancestors() {
             if !owner_seen && ast::Item::can_cast(parent.kind()) {
                 owner_seen = true;
                 owner = Some(range(parent.text_range()));
@@ -420,7 +407,6 @@ impl ParsedFile {
                     .ok_or_else(|| error("invalid attribute enclosing module"))?;
                 bytes = bytes
                     .checked_add(name.len())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| error("attribute path metadata limit"))?;
                 modules
                     .try_reserve(1)
@@ -460,7 +446,7 @@ impl ParsedFile {
             ))
             .into_node()
             .ok_or_else(|| error("macro token selection is not a node"))?;
-        for node in node.ancestors().take(257) {
+        for node in node.ancestors() {
             if range(node.text_range()) != selected {
                 continue;
             }

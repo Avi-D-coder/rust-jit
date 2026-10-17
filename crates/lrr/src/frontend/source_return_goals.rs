@@ -48,7 +48,6 @@ impl DeclaredReturnType {
                     .heap_bytes()
                     .ok_or_else(crate::runtime::arena::resource)?,
             )
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)
     }
 }
@@ -257,9 +256,6 @@ pub(crate) fn prepare_local_query(
                 signature: selected.fingerprint,
                 goal,
             };
-            if result.estimated_bytes() > 32 * 1024 * 1024 {
-                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-            }
             return QueryPoll::Ready(Ok(result));
         }
     };
@@ -276,10 +272,98 @@ pub(crate) fn prepare_local_query(
         signature: selected.fingerprint,
         goal: classify(definition, selected.fingerprint, named),
     };
-    if result.estimated_bytes() > 32 * 1024 * 1024 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     QueryPoll::Ready(Ok(result))
+}
+
+/// Common consumer, the result counterpart of
+/// `source_parameter_goals::prepare`. A local declaration uses its retained
+/// DeclaredReturnGoal memo; an ordinary module (or impl-owned) declaration
+/// uses the same SourceType adapter the call contracts use, in the caller's
+/// completed source environment. Nothing here enters or prepares a body.
+pub(crate) fn prepare(
+    db: &mut Database,
+    graph: &crate::frontend::names::NameNamespaces,
+    sources: &[&crate::source::changes::PreparedSourceView],
+    definition: Digest,
+) -> QueryPoll<ReturnTypeGoal> {
+    macro_rules! ready {
+        ($value:expr) => {
+            match $value {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        };
+    }
+    if db
+        .input(&InputKey::LocalDeclarationOwner(definition))
+        .is_some()
+    {
+        let value = ready!(db.fetch(&SyntaxProvider, QueryKey::DeclaredReturnGoal(definition)));
+        return match value.value.as_ref() {
+            QueryValue::DeclaredReturnGoal(goal) if goal.matches(definition) => {
+                QueryPoll::Ready(Ok(goal.goal().clone()))
+            }
+            _ => QueryPoll::Ready(Err(fault("declared return goal query differs"))),
+        };
+    }
+    let selected = ready!(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)));
+    let QueryValue::FunctionSignature(signature) = selected.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("declared return signature query differs")));
+    };
+    if signature.definition != definition {
+        return QueryPoll::Ready(Err(fault("declared return signature owner differs")));
+    }
+    let ready_source = |source: TyTerm| {
+        QueryPoll::Ready(Ok(ReturnTypeGoal::Ready(DeclaredReturnType {
+            definition,
+            signature: selected.fingerprint,
+            source,
+        })))
+    };
+    if let Some(source) = &signature.result_symbolic {
+        return ready_source(source.clone());
+    }
+    if signature.result.is_empty() {
+        return ready_source(TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit));
+    }
+    // A written structure (`Box<T>`, `(A, B)`, `&T`): the shared written
+    // Type resolver, as `source_parameter_goals` resolves parameters.
+    if signature.result.len() != 1 {
+        return match ready!(super::source_types::resolve_written_type(
+            db,
+            graph,
+            sources,
+            signature,
+            &signature.result
+        )) {
+            Some(source) => ready_source(source),
+            None => QueryPoll::Ready(Ok(ReturnTypeGoal::NeedName(
+                SignatureName::NeedOwnerContext(signature.scope.clone()),
+            ))),
+        };
+    }
+    // `Self` of a generic impl is a parameterized nominal type.
+    if signature.result[0].text == "Self"
+        && let QueryPoll::Ready(Ok(Some(source))) = super::source_types::resolve_written_type(
+            db,
+            graph,
+            sources,
+            signature,
+            &signature.result,
+        )
+        && !matches!(source, TyTerm::Nominal(_, ref args) if args.is_empty())
+    {
+        return ready_source(source);
+    }
+    let named = ready!(super::source_types::prepare_named(
+        db,
+        graph,
+        sources,
+        signature,
+        &signature.result[0].text
+    ));
+    QueryPoll::Ready(Ok(classify(definition, selected.fingerprint, named)))
 }
 
 #[cfg(test)]
@@ -455,7 +539,7 @@ mod tests {
         // Append an actual named source owner outside the complete unchanged
         // upstream main. It is selected by SourceDiscovery, never synthesized.
         let text = format!(
-            "{SUFFIX}\nfn return_type_control(){{fn own<T>(x:T)->T{{x}} fn nested<T>(x:T)->(T,){{(x,)}} type Named=u16; fn alias()->Named{{0}}}}\n"
+            "{SUFFIX}\nfn return_type_control(){{fn own<T>(x:T)->T{{x}} fn nested<T>(x:T)->(T,){{(x,)}} fn pointer<T>(x:T)->fn(T){{loop{{}}}} type Named=u16; fn alias()->Named{{0}}}}\n"
         );
         let (mut db, plan, _) = world(&text, 2024, false, "return_type_control");
         let own = definition(&plan, "own");
@@ -465,9 +549,15 @@ mod tests {
         let own_goal = ready(prepare_local_query(&mut db, own));
         assert!(matches!(own_goal.goal(), ReturnTypeGoal::Ready(result)
             if result.source() == &TyTerm::Param(ParamKey { definition: own, ordinal: 0 })));
+        // A compound result's leaf names are its own header occurrences;
+        // syntax with no leaf structure (`fn(T)`) stays pending.
         let nested_goal = ready(prepare_local_query(&mut db, nested));
+        assert!(matches!(nested_goal.goal(), ReturnTypeGoal::Ready(result)
+            if result.source() == &TyTerm::Tuple(vec![TyTerm::Param(ParamKey { definition: nested, ordinal: 0 })])));
+        let pointer = definition(&plan, "pointer");
+        let pointer_goal = ready(prepare_local_query(&mut db, pointer));
         assert!(matches!(
-            nested_goal.goal(),
+            pointer_goal.goal(),
             ReturnTypeGoal::NeedName(SignatureName::NeedOwnerContext(_))
         ));
         match prepare_local_query(&mut db, alias) {
@@ -596,8 +686,5 @@ pub(crate) fn prepare_plan(db: &mut Database, definition: Digest) -> QueryPoll<P
         observation_fingerprint: value.fingerprint,
         guard,
     };
-    if plan.metadata_bytes() > 32 * 1024 * 1024 {
-        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-    }
     QueryPoll::Ready(Ok(plan))
 }

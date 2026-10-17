@@ -118,7 +118,7 @@ pub(super) fn original_source() -> (
 #[test]
 fn ordinary_tuple_projection_preserves_admitted_nested_source_and_does_not_consume_fields() {
     let (_, _, index, source, node) = original_source();
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
     let mut frame = Frame::new(std::sync::Arc::new(index), entry, &mut store).unwrap();
     frame.enter(frame.body.nodes()[0].scope).unwrap();
@@ -179,7 +179,7 @@ fn ordinary_tuple_projection_preserves_admitted_nested_source_and_does_not_consu
 #[test]
 fn structural_source_mismatch_and_missing_member_proof_refuse_without_guest_changes() {
     let (_, _, _, source, _) = original_source();
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let target = type_for_source(&mut store, &source);
     Frame::require_structural_source_target(&source, target, &store).unwrap();
     let before = (store.budget().handles(), store.budget().bytes());
@@ -195,6 +195,21 @@ fn structural_source_mismatch_and_missing_member_proof_refuse_without_guest_chan
     if let TyTerm::Tuple(members) = &mut wrong {
         members[1] = TyTerm::Nominal(Digest([84; 32]), vec![]);
     }
+    // A nominal member is checked against its descriptor's identity.
+    assert!(
+        matches!(Frame::require_structural_source_target(&wrong,target,&store),Err(error) if error.code=="LRR-E-OWNERSHIP")
+    );
+    if let TyTerm::Tuple(members) = &mut wrong {
+        members[1] = TyTerm::Projection(Box::new(crate::traits::term::ProjectionKey {
+            trait_ref: crate::traits::term::TraitRef {
+                trait_key: Digest([0; 32]),
+                self_ty: TyTerm::Primitive(PrimitiveType::Char),
+                args: Vec::new(),
+            },
+            item: Digest([1; 32]),
+            item_args: Vec::new(),
+        }));
+    }
     assert!(
         matches!(Frame::require_structural_source_target(&wrong,target,&store),Err(error) if error.code=="LRR-E-UNSUPPORTED")
     );
@@ -202,20 +217,19 @@ fn structural_source_mismatch_and_missing_member_proof_refuse_without_guest_chan
 }
 
 #[test]
-fn structural_source_unit_and_depth_limits_have_explicit_outcomes() {
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+fn structural_source_unit_and_deep_nesting_are_accepted() {
+    // E-R5-006: no structural depth/work ceiling; a 300-level nest matches.
+    let mut store = GuestStore::for_epoch(1).unwrap();
     Frame::require_structural_source_target(&TyTerm::Tuple(vec![]), TypeId(1), &store).unwrap();
     let mut source = TyTerm::Primitive(PrimitiveType::Bool);
     let mut target = TypeId(2);
-    for _ in 0..256 {
+    for _ in 0..300 {
         source = TyTerm::Tuple(vec![source]);
         target = store
             .intern_type(TypeKey::Tuple(Box::new([target])))
             .unwrap();
     }
-    assert!(
-        matches!(Frame::require_structural_source_target(&source,target,&store),Err(error) if error.code=="LRR-E-RUNTIME-RESOURCE")
-    );
+    Frame::require_structural_source_target(&source, target, &store).unwrap();
 }
 
 pub(super) fn enter_slot_scopes(frame: &mut Frame, slot: SlotId) {
@@ -234,85 +248,45 @@ pub(super) fn enter_slot_scopes(frame: &mut Frame, slot: SlotId) {
 }
 
 #[test]
-fn composite_source_quota_refusal_is_atomic_and_releasing_one_view_allows_retry() {
+fn composite_source_views_release_their_accounting_exactly() {
+    // E-R5-006: no frame source quota; installing a composite view on every
+    // slot succeeds and clearing them returns the excess to zero.
     let (_, _, index, _, _) = original_source();
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
     let mut frame = Frame::new(Arc::new(index), entry, &mut store).unwrap();
-    let view = TyTerm::Tuple(vec![TyTerm::Primitive(PrimitiveType::Bool); 50_000]);
+    let view = TyTerm::Tuple(vec![TyTerm::Primitive(PrimitiveType::Bool); 8]);
     let heap = Frame::source_heap(Some(&view)).unwrap();
     assert!(heap > 2 * std::mem::size_of::<TyTerm>());
     let before = (store.budget().handles(), store.budget().bytes());
-    let mut installed = Vec::new();
-    let mut refused = None;
-    for ordinal in 0..frame.slots.len() {
-        let slot = SlotId(u32::try_from(ordinal).unwrap());
-        let charged = frame.source_extra_bytes;
-        match frame.set_source_view(slot, Some(view.clone())) {
-            Ok(()) => installed.push(slot),
-            Err(error) => {
-                assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
-                assert_eq!(frame.source_extra_bytes, charged);
-                assert!(frame.source_view_ref(slot).unwrap().is_none());
-                refused = Some(slot);
-                break;
-            }
-        }
+    let slots = (0..frame.slots.len())
+        .map(|ordinal| SlotId(u32::try_from(ordinal).unwrap()))
+        .collect::<Vec<_>>();
+    for slot in &slots {
+        frame.set_source_view(*slot, Some(view.clone())).unwrap();
     }
-    let refused = refused.expect("actual composite heap must exhaust the frame budget");
-    let released = installed.pop().unwrap();
-    frame.set_source_view(released, None).unwrap();
-    frame.set_source_view(refused, Some(view)).unwrap();
+    assert!(frame.source_extra_bytes > 0);
     assert_eq!((store.budget().handles(), store.budget().bytes()), before);
-    for slot in installed.into_iter().chain([refused]) {
+    for slot in slots {
         frame.set_source_view(slot, None).unwrap();
     }
     assert_eq!(frame.source_extra_bytes, 0);
 }
 
 #[test]
-fn composite_call_source_batch_refuses_before_publishing_any_argument() {
+fn composite_call_source_batch_admits_distinct_arguments_and_refuses_aliases() {
     let (_, _, index, _, _) = original_source();
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
     let frame = Frame::new(Arc::new(index), entry, &mut store).unwrap();
-    let source = TyTerm::Tuple(vec![TyTerm::Primitive(PrimitiveType::Bool); 90_000]);
-    let heap = Frame::source_heap(Some(&source)).unwrap();
-    let count = (32 * 1024 * 1024) / (2 * heap) + 2;
     let slots = frame
         .body
         .nodes()
         .iter()
         .filter_map(|node| node.value)
-        .take(count)
+        .take(2)
         .collect::<Vec<_>>();
-    assert_eq!(slots.len(), count);
-    let hints = slots
-        .iter()
-        .map(|slot| (*slot, None, Some(source.clone())))
-        .collect::<Vec<_>>();
-    let before = (
-        store.budget().handles(),
-        store.budget().bytes(),
-        frame.source_extra_bytes,
-    );
-    assert_eq!(
-        frame.preflight_call_source_views(&hints).unwrap_err().code,
-        "LRR-E-RUNTIME-RESOURCE"
-    );
-    assert_eq!(
-        (
-            store.budget().handles(),
-            store.budget().bytes(),
-            frame.source_extra_bytes
-        ),
-        before
-    );
-    assert!(
-        slots
-            .iter()
-            .all(|slot| frame.source_view_ref(*slot).unwrap().is_none())
-    );
+    assert_eq!(slots.len(), 2);
     let small = slots
         .iter()
         .map(|slot| {
@@ -337,7 +311,7 @@ fn composite_call_source_batch_refuses_before_publishing_any_argument() {
 #[test]
 fn source_heap_moves_with_places_and_cleanup_releases_it_once() {
     let (_, _, index, _, node) = original_source();
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
     let mut frame = Frame::new(Arc::new(index), entry, &mut store).unwrap();
     let source = frame.body.nodes()[node.0 as usize].place.unwrap();
@@ -378,7 +352,7 @@ fn source_heap_moves_with_places_and_cleanup_releases_it_once() {
 #[test]
 fn scope_cleanup_releases_composite_annotations_but_keeps_the_return_source_owned() {
     let (_, _, index, _, node) = original_source();
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
     let mut frame = Frame::new(Arc::new(index), entry, &mut store).unwrap();
     let source = frame.body.nodes()[node.0 as usize].value.unwrap();
@@ -391,7 +365,7 @@ fn scope_cleanup_releases_composite_annotations_but_keeps_the_return_source_owne
     let must_yield = frame.slots.len() > 256;
     let mut yielded = false;
     while let Some(scope) = frame.active_scopes.last().copied() {
-        frame.charge_fuel().unwrap();
+        frame.count_step();
         assert!(
             frame
                 .begin_scope_cleanup(0, &Op::ScopeLeave { scope }, &mut store)
@@ -462,7 +436,7 @@ fn original_inner_tuple_constructor_retains_actual_field_sources_through_guard_a
         .constructor_guard
         .unwrap();
     let destination = index.nodes()[plan.node().0 as usize].value.unwrap();
-    let mut store = GuestStore::new(1, 10000, 16 << 20).unwrap();
+    let mut store = GuestStore::for_epoch(1).unwrap();
     let entry = index.pc(plan.node(), Phase::Entry).unwrap();
     let mut frame = Frame::new(Arc::new(index), entry, &mut store).unwrap();
     enter_slot_scopes(&mut frame, guard);

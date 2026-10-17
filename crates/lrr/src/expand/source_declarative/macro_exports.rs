@@ -36,6 +36,7 @@ pub struct SourceMacroExportFacet {
     source_admission_bytes: usize,
     recorded_path: String,
     package_root: String,
+    source_root: String,
     compiler_builtins: Vec<Digest>,
 }
 impl std::fmt::Debug for SourceMacroExportFacet {
@@ -55,6 +56,20 @@ impl SourceMacroExportFacet {
         unit: Digest,
         recorded_path: &str,
         source: PreparedSourceView,
+    ) -> Result<Self, Diagnostic> {
+        Self::capture_in_source_root(manifest, unit, recorded_path, source, None)
+    }
+    /// `source_root` is the coordinator's explicit preparation grant for the
+    /// unit's source tree. It must contain the configured package root; the
+    /// default is the package itself. Module sources reached through `#[path]`
+    /// outside the package (for example `core`'s portable-SIMD module) are
+    /// admitted only below a root the coordinator granted and recorded.
+    pub(crate) fn capture_in_source_root(
+        manifest: &ToolManifest,
+        unit: Digest,
+        recorded_path: &str,
+        source: PreparedSourceView,
+        source_root: Option<&str>,
     ) -> Result<Self, Diagnostic> {
         manifest.validate()?;
         let configured = manifest
@@ -86,22 +101,33 @@ impl SourceMacroExportFacet {
             .cargo
             .get("CARGO_MANIFEST_DIR")
             .ok_or_else(|| fault("macro-export package source root is absent"))?;
-        if !std::path::Path::new(package).is_absolute()
-            || std::path::Path::new(package).components().any(|component| {
-                matches!(
-                    component,
-                    std::path::Component::CurDir | std::path::Component::ParentDir
-                )
-            })
-        {
+        let normalized = |path: &str| {
+            std::path::Path::new(path).is_absolute()
+                && !std::path::Path::new(path).components().any(|component| {
+                    matches!(
+                        component,
+                        std::path::Component::CurDir | std::path::Component::ParentDir
+                    )
+                })
+        };
+        if !normalized(package) {
             return Err(fault(
                 "macro-export configured package root is not normalized absolute",
             ));
         }
+        let root = source_root.unwrap_or(package);
+        if !normalized(root) || !std::path::Path::new(package).starts_with(root) {
+            return Err(fault(
+                "macro-export source authority root must be a normalized ancestor of its package",
+            ));
+        }
         let relative = std::path::Path::new(recorded_path)
-            .strip_prefix(package)
-            .map_err(|_| fault("macro-export source is outside its configured package"))?;
-        if selection.outline.module_path.is_empty() && configured.source_path != recorded_path {
+            .strip_prefix(root)
+            .map_err(|_| fault("macro-export source is outside its configured source authority"))?;
+        if selection.outline.module_path.is_empty()
+            && (configured.source_path != recorded_path
+                || !std::path::Path::new(recorded_path).starts_with(package))
+        {
             return Err(fault(
                 "macro-export crate root differs from configured Cargo source root",
             ));
@@ -115,7 +141,8 @@ impl SourceMacroExportFacet {
         source.require_declaration_syntax()?;
         // This cold upper bound rejects generated/module-origin publications.
         // Nothing is registered in the live source/query registry for accounting.
-        let source_admission_bytes = source.original_retained_admission_bytes(64 * 1024 * 1024)?;
+        // Informational size only (E-R5-006: no admission ceilings).
+        let source_admission_bytes = source.original_retained_admission_bytes(usize::MAX)?;
         // Preserve exact configured dependency aliases. Missing imported roots
         // remain a preparation prerequisite, rather than implicit std/core names.
         let dependencies = source
@@ -144,7 +171,6 @@ impl SourceMacroExportFacet {
         let builtin_count = source.outline().items.iter().filter(is_builtin).count();
         builtin_count
             .checked_mul(std::mem::size_of::<Digest>())
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("macro-export compiler marker metadata limit"))?;
         let mut compiler_builtins = Vec::new();
         compiler_builtins
@@ -176,12 +202,18 @@ impl SourceMacroExportFacet {
             .try_reserve_exact(package.len())
             .map_err(|_| fault("macro-export package root allocation"))?;
         package_root.push_str(package);
+        let mut granted_root = String::new();
+        granted_root
+            .try_reserve_exact(root.len())
+            .map_err(|_| fault("macro-export source root allocation"))?;
+        granted_root.push_str(root);
         // Pending producers/imports are retained by the ordinary route object;
         // this receipt does not claim that export discovery has completed.
         let exclusive_bytes = std::mem::size_of::<Self>()
             .checked_add(2 * std::mem::size_of::<usize>())
             .and_then(|n| n.checked_add(captured_path.capacity()))
             .and_then(|n| n.checked_add(package_root.capacity()))
+            .and_then(|n| n.checked_add(granted_root.capacity()))
             .and_then(|n| {
                 n.checked_add(
                     compiler_builtins
@@ -192,8 +224,7 @@ impl SourceMacroExportFacet {
             .and_then(|n| {
                 n.checked_add(2usize.checked_mul(source.selection().metadata_bytes().ok()?)?)
             })
-            .filter(|n| *n <= 64 * 1024 * 1024)
-            .ok_or_else(|| fault("macro-export retained metadata exceeds budget"))?;
+            .ok_or_else(|| fault("macro-export retained metadata overflow"))?;
         let provider_bytes = std::mem::size_of::<SourceDeclarative>()
             .checked_add(2 * std::mem::size_of::<usize>())
             .and_then(|n| n.checked_add(provider.module_snapshot_bytes().ok()?))
@@ -209,14 +240,14 @@ impl SourceMacroExportFacet {
             .checked_add(provider_bytes)
             .and_then(|n| n.checked_add(route_bytes))
             .and_then(|n| n.checked_add(source_admission_bytes))
-            .filter(|n| *n <= 64 * 1024 * 1024)
-            .ok_or_else(|| fault("macro-export source/provider/routes admission limit"))?;
+            .ok_or_else(|| fault("macro-export source/provider/routes size overflow"))?;
         let preparation = manifest.fingerprint();
         let mut identity = StableEncoder::new("lrr/v1/captured-source-macro-export-facet");
         identity.digest(preparation);
         identity.digest(unit);
         identity.digest(environment.fingerprint());
         identity.string(recorded_path);
+        identity.string(root);
         identity.string(selection.path.as_str());
         identity.record(&selection.outline);
         Ok(Self {
@@ -235,6 +266,7 @@ impl SourceMacroExportFacet {
             source_admission_bytes,
             recorded_path: captured_path,
             package_root,
+            source_root: granted_root,
             compiler_builtins,
         })
     }
@@ -282,6 +314,14 @@ impl SourceMacroExportFacet {
     pub(crate) fn package_root(&self) -> &std::path::Path {
         std::path::Path::new(&self.package_root)
     }
+    /// The coordinator-granted source tree containing the package. Selected
+    /// source paths and module/include candidates are relative to this root.
+    pub(crate) fn source_root(&self) -> &std::path::Path {
+        std::path::Path::new(&self.source_root)
+    }
+    pub(crate) fn source_root_text(&self) -> &str {
+        &self.source_root
+    }
     pub fn identity(&self) -> Digest {
         self.identity
     }
@@ -320,6 +360,7 @@ impl SourceMacroExportFacet {
     pub fn source_retained_admission_bytes(&self) -> usize {
         self.source_admission_bytes
     }
+
     /// Conservative admission accounting includes nested shared roots. A future
     /// publication pool may deduplicate the actual handles; it must not omit them.
     pub fn metadata_bytes(&self) -> usize {

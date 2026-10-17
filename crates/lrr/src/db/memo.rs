@@ -8,7 +8,6 @@ use super::{
 };
 use crate::core::{diagnostic::Diagnostic, digest::Digest};
 use std::{collections::BTreeMap, sync::Arc};
-pub const MAX_QUERY_DEPTH: usize = 256;
 
 #[path = "lexical_inputs.rs"]
 mod lexical_inputs;
@@ -45,7 +44,9 @@ mod prepared_modules;
 pub(crate) use prepared_inputs::PreparedInputGuard;
 #[path = "retained_body_inputs.rs"]
 mod retained_body_inputs;
-pub(crate) use retained_body_inputs::{RetainedOriginalDeclaration, RetainedSourceLease};
+pub(crate) use retained_body_inputs::{
+    GeneratedDeclarationBridge, RetainedOriginalDeclaration, RetainedSourceLease,
+};
 #[path = "retained_call_transition.rs"]
 mod retained_call_transition;
 pub(crate) use retained_call_transition::RetainedCallBodyTransition;
@@ -189,7 +190,12 @@ impl QueryPin {
     }
 }
 pub struct Database {
+    /// Process-unique identity of this database, pairing its input revisions
+    /// in `CheckedRevision` memos.
+    instance: u64,
     inputs: BTreeMap<InputKey, InputRecord>,
+    /// `lexical_namespace_stamps` of one input revision.
+    lexical_stamps: std::sync::Mutex<Option<(u64, Arc<BTreeMap<InputKey, Digest>>)>>,
     scope_certificates: scope_certificate_index::ScopeCertificateIndex,
     memos: BTreeMap<QueryKey, MemoEntry>,
     revision: u64,
@@ -212,8 +218,11 @@ pub struct Database {
 }
 impl Default for Database {
     fn default() -> Self {
+        static NEXT_INSTANCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         Self {
+            instance: NEXT_INSTANCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             inputs: BTreeMap::new(),
+            lexical_stamps: Default::default(),
             scope_certificates: Default::default(),
             memos: BTreeMap::new(),
             revision: 1,
@@ -273,7 +282,7 @@ impl Database {
                         if plans.insert(Arc::as_ptr(v)) {
                             *inner.entry(Arc::as_ptr(v.parsed()) as usize).or_insert(0) += 1;
                             *inner.entry(Arc::as_ptr(v.index()) as usize).or_insert(0) += 1;
-                            for product in v.products() {
+                            for product in v.trees() {
                                 product_retention::count_owner(
                                     super::value::SourceArtifactRef::Pattern(product),
                                     &mut inner,
@@ -369,12 +378,6 @@ impl Database {
         {
             return Ok(None);
         }
-        if self.prepared_sources.len() > 100_000 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "retained source selection count limit",
-            ));
-        }
         for state in self
             .prepared_sources
             .iter()
@@ -451,7 +454,16 @@ impl Database {
         if self.run_active || !self.active_queries.is_empty() {
             return Err(fault("LRR-E-INTERNAL-SNAPSHOT", "run already active"));
         }
-        self.evict_between_runs(budgets)?;
+        // E-R5-006: unbounded budgets never select a victim, so only the
+        // ordinary root pruning remains; no usage census is taken.
+        if budgets.query_bytes == usize::MAX
+            && budgets.parse_bytes == usize::MAX
+            && budgets.source_input_bytes == usize::MAX
+        {
+            self.prune_cache_roots()?;
+        } else {
+            self.evict_between_runs(budgets)?;
+        }
         self.run_active = true;
         self.run_budgets = Some(budgets);
         Ok(())
@@ -589,9 +601,7 @@ impl Database {
         }
         for memo in self.memos.values() {
             if QueryPin::new(&memo.value).external(&memo_outer, &memo_inner) {
-                for product in memo.value.product_roots() {
-                    product_bodies.insert(Arc::as_ptr(product.index()));
-                }
+                // Pattern trees retain no body index; their owning plan does.
             }
         }
         for memo in self.memos.values() {
@@ -1076,6 +1086,12 @@ impl Database {
     pub fn revision(&self) -> u64 {
         self.revision
     }
+    /// This database's identity and current input revision. Every input write
+    /// increases the revision, so an unchanged pair names an unchanged input
+    /// table.
+    pub(crate) fn input_epoch(&self) -> (u64, u64) {
+        (self.instance, self.revision)
+    }
     pub fn memo(&self, key: &QueryKey) -> Option<&MemoEntry> {
         self.memos.get(key)
     }
@@ -1191,11 +1207,7 @@ impl Database {
             ));
         }
         input.seal.key().validate()?;
-        if input.records.len() != records.len()
-            || records.len() > 100_000
-            || input.sources.is_empty()
-            || input.sources.len() > 100_000
-        {
+        if input.records.len() != records.len() || input.sources.is_empty() {
             return Err(fault(
                 "LRR-E-INTERNAL-SNAPSHOT",
                 "discovery publication record/source count differs",
@@ -1312,16 +1324,6 @@ impl Database {
                     })?,
             )
             .map_err(|_| fault("LRR-E-METADATA-LIMIT", "discovery dependency allocation"))?;
-        if modules
-            .len()
-            .checked_add(ordinary_modules.len())
-            .is_none_or(|n| n > 100_000)
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "module publication count limit",
-            ));
-        }
         let mut module_rows = BTreeMap::new();
         let mut module_bytes = 0usize;
         for module in modules {
@@ -1353,7 +1355,6 @@ impl Database {
             }
             module_bytes = module_bytes
                 .checked_add(module.metadata_bytes())
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -1405,7 +1406,6 @@ impl Database {
             }
             module_bytes = module_bytes
                 .checked_add(module.metadata_bytes())
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -1461,16 +1461,9 @@ impl Database {
         // parent/child relationship. Every selected role child requires its
         // genuine adopted module lease, including the actual chosen candidate
         // and current record/role stamps in this same complete seal.
-        if macro_export_modules.len() > 256 {
-            return Err(fault(
-                "LRR-E-MACRO-EXPORT-PUBLICATION",
-                "macro-export adopted module count limit",
-            ));
-        }
         macro_export_modules
             .len()
             .checked_mul(std::mem::size_of::<(Digest, Digest)>() + 128)
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-METADATA-LIMIT",
@@ -1538,12 +1531,6 @@ impl Database {
         }
         // Replay facts remain borrowed from preparation owners for this one
         // coordinator call. They never enter the ordinary runtime input map.
-        if replay_sources.len() > 256 {
-            return Err(fault(
-                "LRR-E-MACRO-EXPORT-PUBLICATION",
-                "macro-export replay source count limit",
-            ));
-        }
         let mut macro_replays = BTreeMap::new();
         for replay in replay_sources {
             let selected = replay.selection();
@@ -1686,12 +1673,6 @@ impl Database {
                 .iter()
                 .map(|(key, fingerprint)| (key.fingerprint(), *fingerprint)),
         );
-        if input.procedural_catalogs.len() > 4096 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "discovery procedural catalog count limit",
-            ));
-        }
         let mut previous = None;
         let mut catalog_bytes = 0usize;
         for catalog in &input.procedural_catalogs {
@@ -1711,7 +1692,6 @@ impl Database {
             }
             catalog_bytes = catalog_bytes
                 .checked_add(catalog.metadata_bytes()?)
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -1752,7 +1732,6 @@ impl Database {
             helper_bytes = helper_bytes
                 .checked_add(request.metadata_bytes()?)
                 .and_then(|n| n.checked_add(receipt.estimated_bytes().ok()?))
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -1769,12 +1748,6 @@ impl Database {
             .collect::<std::collections::BTreeSet<_>>();
         let mut previous_fragment = None;
         let mut fragment_bytes = 0usize;
-        if input.declaration_fragments.len() > 100_000 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "declaration fragment publication count limit",
-            ));
-        }
         for fragment in &input.declaration_fragments {
             let output = fragment.index().output();
             let identity = output.record().key().invocation;
@@ -1815,7 +1788,6 @@ impl Database {
             }
             fragment_bytes = fragment_bytes
                 .checked_add(fragment.metadata_bytes())
-                .filter(|n| *n <= 512 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -1825,11 +1797,10 @@ impl Database {
             previous_fragment = Some(identity);
             dependencies.push((identity, output.fingerprint()));
         }
-        if input.source_replacements.len() > 100_000
-            || input
-                .source_replacements
-                .windows(2)
-                .any(|pair| pair[0].fingerprint() >= pair[1].fingerprint())
+        if input
+            .source_replacements
+            .windows(2)
+            .any(|pair| pair[0].fingerprint() >= pair[1].fingerprint())
         {
             return Err(fault(
                 "LRR-E-INTERNAL-SNAPSHOT",
@@ -1869,7 +1840,6 @@ impl Database {
                 )?;
                 replacement_bytes = replacement_bytes
                     .checked_add(parsed.estimated_bytes())
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault("LRR-E-METADATA-LIMIT", "replacement parser metadata limit")
                     })?;
@@ -1880,7 +1850,6 @@ impl Database {
                 )?;
                 replacement_bytes = replacement_bytes
                     .checked_add(outline.estimated_bytes())
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault("LRR-E-METADATA-LIMIT", "replacement outline metadata limit")
                     })?;
@@ -1895,11 +1864,10 @@ impl Database {
         }
         let mut runtime_parses = std::collections::BTreeMap::new();
         let mut runtime_source_bytes = 0usize;
-        if input.argument_indexes.len() > 100_000
-            || input
-                .argument_indexes
-                .windows(2)
-                .any(|w| w[0].argument().fingerprint() >= w[1].argument().fingerprint())
+        if input
+            .argument_indexes
+            .windows(2)
+            .any(|w| w[0].argument().fingerprint() >= w[1].argument().fingerprint())
             || input.argument_fragments.windows(2).any(|w| {
                 w[0].index().output().record().key().fingerprint()
                     >= w[1].index().output().record().key().fingerprint()
@@ -1925,16 +1893,9 @@ impl Database {
         }
         let mut previous_argument_set = None;
         let mut argument_bytes = 0usize;
-        if input.argument_summaries.len() > 100_000 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "intrinsic argument summary count limit",
-            ));
-        }
         for (identity, source, arguments) in &input.argument_summaries {
             if previous_argument_set.is_some_and(|old| old >= *identity)
                 || arguments.is_empty()
-                || arguments.len() > 10_000
                 || !input.sources.iter().any(|selected| {
                     selected.outline.parse == *source.parse()
                         && selected.path == *source.path()
@@ -1985,7 +1946,6 @@ impl Database {
             )?;
             runtime_source_bytes = runtime_source_bytes
                 .checked_add(blob.bytes().len())
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -2072,7 +2032,6 @@ impl Database {
                 argument.validate_source(source, cfg, &forest)?;
                 argument_bytes = argument_bytes
                     .checked_add(argument.metadata_bytes())
-                    .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-METADATA-LIMIT",
@@ -2086,12 +2045,6 @@ impl Database {
             sequence.sequence(arguments, |e, argument| e.record(argument.as_ref()));
             dependencies.push((*identity, sequence.finish()));
             previous_argument_set = Some(*identity);
-        }
-        if input.argument_fragments.len() > 4096 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "intrinsic argument fragment count limit",
-            ));
         }
         for fragment in &input.argument_fragments {
             let output = fragment.index().output();
@@ -2137,12 +2090,6 @@ impl Database {
                 }
             }
         }
-        if input.nested_inert_proofs.len() > 100_000 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "nested inert proof count limit",
-            ));
-        }
         let mut previous_inert = None;
         let mut inert_bytes = 0usize;
         for proof in &input.nested_inert_proofs {
@@ -2165,7 +2112,6 @@ impl Database {
                 inert_bytes = inert_bytes
                     .checked_add(replay.blob().bytes().len())
                     .and_then(|n| n.checked_add(proof.metadata_bytes().ok()?))
-                    .filter(|n| *n <= 64 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault(
                             "LRR-E-METADATA-LIMIT",
@@ -2196,7 +2142,6 @@ impl Database {
             inert_bytes = inert_bytes
                 .checked_add(blob.bytes().len())
                 .and_then(|n| n.checked_add(proof.metadata_bytes().ok()?))
-                .filter(|n| *n <= 64 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault(
                         "LRR-E-METADATA-LIMIT",
@@ -2209,12 +2154,6 @@ impl Database {
         }
         let mut previous_runtime = None;
         let mut runtime_bytes = 0usize;
-        if input.runtime_no_item_proofs.len() > 100_000 {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "discovery runtime proof count limit",
-            ));
-        }
         for (identity, proof) in &input.runtime_no_item_proofs {
             if previous_runtime.is_some_and(|old| old >= *identity)
                 || !input
@@ -2256,7 +2195,6 @@ impl Database {
             if !runtime_parses.contains_key(proof.source()) {
                 runtime_source_bytes = runtime_source_bytes
                     .checked_add(blob.bytes().len())
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| {
                         fault("LRR-E-METADATA-LIMIT", "runtime proof source parse budget")
                     })?;
@@ -2300,7 +2238,6 @@ impl Database {
                     .checked_add(proof.allocated_bytes().ok_or_else(|| {
                         fault("LRR-E-METADATA-LIMIT", "runtime proof size overflow")
                     })?)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "runtime proof metadata limit"))?;
             previous_runtime = Some(*identity);
             dependencies.push((*identity, proof.fingerprint()));
@@ -2312,6 +2249,49 @@ impl Database {
                 "discovery certificate dependencies differ from complete publication",
             ));
         }
+        // Generated functions whose unit rows were superseded, before this
+        // republication, by a retained admission of the SAME unit (their body
+        // macro calls attached). Those current rows stay; nothing else may differ.
+        let retained_generated = derived
+            .iter()
+            .filter_map(|(key, value)| {
+                let (InputKey::DefinitionSource(definition), InputValue::DefinitionSource(parse)) =
+                    (key, value)
+                else {
+                    return None;
+                };
+                let InputValue::DefinitionSource(current) = self
+                    .inputs
+                    .get(&InputKey::DefinitionSource(*definition))?
+                    .value
+                    .as_ref()
+                else {
+                    return None;
+                };
+                let InputValue::RetainedSyntax(retained) = self
+                    .inputs
+                    .get(&InputKey::RetainedSyntax(current.content))?
+                    .value
+                    .as_ref()
+                else {
+                    return None;
+                };
+                let unit = retained.generated_unit()?;
+                let Some(InputValue::GeneratedSyntax(published)) =
+                    derived.get(&InputKey::GeneratedSyntax(parse.content))
+                else {
+                    return None;
+                };
+                (retained.key() == current
+                    && unit.key == *parse
+                    && published.same_unit(unit)
+                    && retained
+                        .prepared()
+                        .selected_generated()
+                        .is_some_and(|anchor| anchor.definition() == *definition))
+                .then_some(*definition)
+            })
+            .collect::<std::collections::BTreeSet<_>>();
         let mut staged = BTreeMap::new();
         for (key, value) in derived {
             if !value.matches(&key) {
@@ -2319,6 +2299,14 @@ impl Database {
                     "LRR-E-INTERNAL-SNAPSHOT",
                     "generated query input variant differs",
                 ));
+            }
+            if let InputKey::DefinitionSource(definition)
+            | InputKey::DefinitionHeader(definition)
+            | InputKey::DefinitionBody(definition)
+            | InputKey::DeclarationContext(definition) = &key
+                && retained_generated.contains(definition)
+            {
+                continue;
             }
             if let Some(expected) = module_rows.get(&key) {
                 if value.fingerprint() != *expected {
@@ -2413,18 +2401,6 @@ impl Database {
                 },
             );
         }
-        let usage =
-            self.cache_usage_with_prepared(&prepared_sources, prepared_sources.capacity())?;
-        let budgets = self.run_budgets.unwrap_or_default();
-        if usage.parse_bytes > budgets.parse_bytes
-            || usage.source_input_bytes > budgets.source_input_bytes
-            || usage.memo_bytes > budgets.query_bytes
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "discovery prepared source registry exceeds cache budgets",
-            ));
-        }
         let seal_key = InputKey::DiscoverySeal(input.seal.key());
         let value = InputValue::DiscoverySeal(Box::new(input));
         if let Some(old) = self.inputs.get(&seal_key) {
@@ -2449,36 +2425,6 @@ impl Database {
                         "discovery publication size overflow",
                     )
                 })?;
-        }
-        let index_extra = scope_certificates
-            .as_ref()
-            .map(|index| {
-                index
-                    .metadata_bytes()
-                    .checked_sub(self.scope_certificates.metadata_bytes())
-            })
-            .unwrap_or(Some(0))
-            .ok_or_else(|| {
-                fault(
-                    "LRR-E-INTERNAL-SNAPSHOT",
-                    "scope certificate index accounting decreased",
-                )
-            })?;
-        let total = usage
-            .memo_bytes
-            .checked_add(extra_bytes)
-            .and_then(|bytes| bytes.checked_add(index_extra))
-            .ok_or_else(|| {
-                fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "discovery publication metadata overflow",
-                )
-            })?;
-        if total > self.run_budgets.unwrap_or_default().query_bytes {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "discovery publication exceeds query metadata cap",
-            ));
         }
         let revision = self
             .revision
@@ -2527,18 +2473,6 @@ impl Database {
             return Err(fault("LRR-E-EXPANSION-INPUT", "expansion epoch must advance"));
         }
         let value = InputValue::ExpansionEpoch(epoch);
-        let bytes = input_metadata_bytes(&key, &value)?;
-        let total = self
-            .cache_usage()?
-            .memo_bytes
-            .checked_add(bytes)
-            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "epoch input metadata overflow"))?;
-        if total > self.run_budgets.unwrap_or_default().query_bytes {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "epoch input exceeds query metadata cap",
-            ));
-        }
         let revision = self
             .revision
             .checked_add(1)
@@ -2586,18 +2520,6 @@ impl Database {
             };
         }
         let value = InputValue::ExpansionRecord(record);
-        let bytes = input_metadata_bytes(&key, &value)?;
-        let total = self
-            .cache_usage()?
-            .memo_bytes
-            .checked_add(bytes)
-            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "expansion input metadata overflow"))?;
-        if total > self.run_budgets.unwrap_or_default().query_bytes {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "expansion input exceeds query metadata cap",
-            ));
-        }
         let revision = self
             .revision
             .checked_add(1)
@@ -2639,21 +2561,10 @@ impl Database {
                 )),
             };
         }
-        let usage = self.cache_usage()?;
-        let budgets = self.run_budgets.unwrap_or_default();
         let value = InputValue::IncludeRecord { input, captured };
-        let metadata = account_add(usage.memo_bytes, input_metadata_bytes(&key, &value)?)?;
-        let blob = value
+        value
             .source_blob()
             .ok_or_else(|| fault("LRR-E-INTERNAL-SNAPSHOT", "include record storage missing"))?;
-        // Conservatively count a full blob before insertion; accounting afterward deduplicates storage.
-        let source = account_add(usage.source_input_bytes, blob.bytes().len())?;
-        if metadata > budgets.query_bytes || source > budgets.source_input_bytes {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "include input exceeds cache cap",
-            ));
-        }
         let revision = self
             .revision
             .checked_add(1)
@@ -2695,23 +2606,10 @@ impl Database {
                 )),
             };
         }
-        let usage = self.cache_usage()?;
-        let budgets = self.run_budgets.unwrap_or_default();
         let value = InputValue::ModuleRecord {
             input,
             captured: Arc::new(captured),
         };
-        let metadata = account_add(usage.memo_bytes, input_metadata_bytes(&key, &value)?)?;
-        let mut source = usage.source_input_bytes;
-        for blob in value.source_blobs() {
-            source = account_add(source, blob.bytes().len())?;
-        }
-        if metadata > budgets.query_bytes || source > budgets.source_input_bytes {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "module input exceeds cache cap",
-            ));
-        }
         let revision = self
             .revision
             .checked_add(1)
@@ -2739,12 +2637,6 @@ impl Database {
                     | InputKey::UnitCompileEnv(_)
                     | InputKey::ExpansionRecord(_)
             ) {
-                if result.len() >= 100_000 {
-                    return Err(fault(
-                        "LRR-E-DISCOVERY-LIMIT",
-                        "compiler input universe count limit",
-                    ));
-                }
                 result.insert(key.clone(), row.fingerprint);
             }
         }
@@ -2830,13 +2722,6 @@ impl Database {
                 observation.error = Some(fault(
                     "LRR-E-INTERNAL-SNAPSHOT",
                     "expansion observation stamp conflict",
-                ));
-            } else if observation.stamps.len() >= 100_000
-                && !observation.stamps.contains_key(identity)
-            {
-                observation.error = Some(fault(
-                    "LRR-E-DISCOVERY-LIMIT",
-                    "expansion observation count limit",
                 ));
             } else {
                 observation.stamps.insert(*identity, fingerprint);
@@ -2926,6 +2811,14 @@ impl Database {
         QueryPoll::NeedInput(request)
     }
     pub fn fetch(&mut self, provider: &impl Provider, key: QueryKey) -> QueryPoll<Outcome> {
+        let _span = crate::core::timing::Span::enter(|| {
+            let name = format!("{key:?}");
+            let end = name.find(['(', ' ', '{']).unwrap_or(name.len());
+            format!("query {}", &name[..end])
+        });
+        self.fetch_untimed(provider, key)
+    }
+    fn fetch_untimed(&mut self, provider: &impl Provider, key: QueryKey) -> QueryPoll<Outcome> {
         if let QueryKey::Constant(selected) = &key
             && let Err(error) = self.verify_constant_key(selected)
         {
@@ -2957,14 +2850,10 @@ impl Database {
             );
             return self.returned(&key, outcome);
         }
-        if self.active_queries.contains(&key) || self.active_queries.len() >= MAX_QUERY_DEPTH {
-            let code = if self.active_queries.len() >= MAX_QUERY_DEPTH {
-                "LRR-E-QUERY-DEPTH"
-            } else {
-                match key {
-                    QueryKey::Constant(_) => "LRR-E-CONST-CYCLE",
-                    _ => "LRR-E-QUERY-CYCLE",
-                }
+        if self.active_queries.contains(&key) {
+            let code = match key {
+                QueryKey::Constant(_) => "LRR-E-CONST-CYCLE",
+                _ => "LRR-E-QUERY-CYCLE",
             };
             let path = self
                 .active_queries
@@ -3257,7 +3146,16 @@ mod tests {
             drop(db.fetch(&ConstantFixture, key(n)));
         }
         db.memos.get_mut(&key(0)).unwrap().estimated_bytes = usize::MAX;
-        assert_eq!(db.begin_run().unwrap_err().code, "LRR-E-METADATA-LIMIT");
+        // E-R5-006: only an explicit finite budget takes a usage census; the
+        // default unbounded run never selects a victim and takes none.
+        let finite = crate::engine::telemetry::CacheBudgets {
+            query_bytes: 0,
+            ..crate::engine::telemetry::CacheBudgets::default()
+        };
+        assert_eq!(
+            db.begin_run_with_budgets(finite).unwrap_err().code,
+            "LRR-E-METADATA-LIMIT"
+        );
         assert_eq!(db.memos.len(), 2);
         assert!(!db.run_active);
         assert!(
@@ -3282,3 +3180,21 @@ mod body_structure_accounting_tests;
 #[cfg(test)]
 #[path = "source_plan_tests.rs"]
 mod source_plan_tests;
+
+/// The input epoch at which a check that reads only published inputs last
+/// succeeded. The same database at the same revision has the same inputs, so
+/// such a check need not be repeated until an input write.
+#[derive(Debug, Default)]
+pub(crate) struct CheckedRevision(std::sync::Mutex<Option<(u64, u64)>>);
+impl CheckedRevision {
+    pub(crate) fn is_current(&self, db: &Database) -> bool {
+        self.0
+            .lock()
+            .is_ok_and(|checked| *checked == Some(db.input_epoch()))
+    }
+    pub(crate) fn record(&self, db: &Database) {
+        if let Ok(mut checked) = self.0.lock() {
+            *checked = Some(db.input_epoch());
+        }
+    }
+}

@@ -1,0 +1,1278 @@
+//! Impl members of nominal types: the run's inherent and trait impls joined to
+//! the nominal declaration their self type names, built once from every
+//! captured source's impl items through the ordinary Type namespace.
+//!
+//! This serves associated-item paths (`Type::item`), method probing and the
+//! `Drop` impl inventory. An impl whose self type does not resolve to a
+//! nominal declaration (`impl<T> Trait for T`, `impl Trait for &P`, ...) is
+//! retained as unresolved, so callers can refuse instead of guessing.
+use super::names::{NameLookup, NameNamespaces};
+use crate::{
+    core::{
+        diagnostic::Diagnostic,
+        digest::{Digest, StableEncode},
+    },
+    source::{
+        changes::PreparedSourceView,
+        manifest::{ItemKind, Namespace},
+    },
+    syntax::{imports::ImportSegment, outline::ScopeKey},
+};
+use ra_ap_syntax::ast::{self, HasModuleItem};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// A builtin self type of an inherent or trait impl (`impl i32`, `impl str`,
+/// `impl<T> [T]`, `impl<T, const N: usize> [T; N]`), as the facade core declares.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub enum BuiltinSelf {
+    Primitive(crate::ir::op::PrimitiveType),
+    Str,
+    Slice,
+    Array,
+    /// `impl .. for (A, B, ..)` by arity (`()` is arity 0).
+    Tuple(u32),
+    /// `impl .. for &A` (false) or `&mut A` (true).
+    Reference(bool),
+}
+impl BuiltinSelf {
+    fn named(name: &str) -> Option<Self> {
+        use crate::ir::op::PrimitiveType as P;
+        Some(Self::Primitive(match name {
+            "bool" => P::Bool,
+            "char" => P::Char,
+            "i8" => P::I8,
+            "i16" => P::I16,
+            "i32" => P::I32,
+            "i64" => P::I64,
+            "i128" => P::I128,
+            "isize" => P::Isize,
+            "u8" => P::U8,
+            "u16" => P::U16,
+            "u32" => P::U32,
+            "u64" => P::U64,
+            "u128" => P::U128,
+            "usize" => P::Usize,
+            "f32" => P::F32,
+            "f64" => P::F64,
+            "str" => return Some(Self::Str),
+            _ => return None,
+        }))
+    }
+}
+/// `MemberIndex::primitive_candidates`.
+#[derive(Debug, Clone)]
+pub(crate) struct PrimitiveCandidates {
+    pub(crate) direct: Vec<crate::ir::op::PrimitiveType>,
+    pub(crate) blankets: Vec<Vec<Option<Digest>>>,
+    pub(crate) unresolved: bool,
+}
+/// One impl block.
+#[derive(Debug, Clone)]
+pub struct ImplMembers {
+    pub identity: Digest,
+    /// The nominal declaration the self type names, when it names one.
+    pub self_nominal: Option<Digest>,
+    /// The builtin self type, when the self type is one.
+    pub self_builtin: Option<BuiltinSelf>,
+    /// The implemented trait's path as written, when this is a trait impl.
+    pub trait_path: Option<Vec<ImportSegment>>,
+    /// The trait's resolved definition, when it resolves to a source trait.
+    pub trait_definition: Option<Digest>,
+    /// Associated functions by name (definition identities).
+    pub functions: BTreeMap<String, Digest>,
+    /// Associated types (`type Name = Target;`) by name (alias identities).
+    pub types: BTreeMap<String, Digest>,
+    /// Associated constants (`const NAME: T = ..;`) by name.
+    pub consts: BTreeMap<String, Digest>,
+    /// A blanket impl (`impl<T: Bound> Trait for T`): the resolved trait
+    /// definitions bounding its self parameter (unresolved bounds are `None`).
+    pub blanket: Option<Vec<Option<Digest>>>,
+}
+/// An associated type alias of a trait impl: its written target in its
+/// impl-owned scope, and the impl's generic parameter count.
+#[derive(Debug, Clone)]
+pub struct AssociatedTypeAlias {
+    pub header: crate::syntax::outline::HeaderRecipe,
+    pub scope: ScopeKey,
+    pub impl_generic_count: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct MemberIndex {
+    impls: Vec<ImplMembers>,
+    by_nominal: BTreeMap<Digest, Vec<usize>>,
+    by_builtin: BTreeMap<BuiltinSelf, Vec<usize>>,
+    /// Impls whose self type is not a nominal path (or did not resolve).
+    unresolved: Vec<usize>,
+    /// Owning impl of each associated function.
+    function_owner: BTreeMap<Digest, usize>,
+    /// Provided (default) bodies of each trait, by name.
+    trait_defaults: BTreeMap<Digest, BTreeMap<String, Digest>>,
+    /// Every associated function each trait declares (required or
+    /// provided), by name: the declaration a trait-path call names.
+    trait_declarations: BTreeMap<Digest, BTreeMap<String, Digest>>,
+    /// The trait definitions of the run's world.
+    traits: BTreeSet<Digest>,
+    /// Associated type aliases of trait impls, by alias identity.
+    type_aliases: BTreeMap<Digest, AssociatedTypeAlias>,
+    /// Shorthand associated-type name keys (`T::Name`), to names.
+    type_names: BTreeMap<Digest, String>,
+    /// Provided (default) associated constants of each trait, by name.
+    trait_consts: BTreeMap<Digest, BTreeMap<String, Digest>>,
+    /// The library's `core::marker::Copy` and `core::ops::Drop` definitions,
+    /// when the run's world includes the core facade.
+    lang_copy: Option<Digest>,
+    lang_drop: Option<Digest>,
+    /// The alloc facade's `boxed::Box` declaration (rustc's `owned_box`
+    /// lang item), when the run's world includes it.
+    lang_box: Option<Digest>,
+}
+/// Stable key of an associated type name in a shorthand projection
+/// (`T::Name` whose trait is selected from the bound type's impls).
+pub(crate) fn associated_name_key(name: &str) -> Digest {
+    let mut e = crate::core::digest::StableEncoder::new("lrr/v1/associated-type-name");
+    e.string(name);
+    e.finish()
+}
+
+fn parser_edition(edition: u16) -> Option<ra_ap_syntax::Edition> {
+    Some(match edition {
+        2015 => ra_ap_syntax::Edition::Edition2015,
+        2018 => ra_ap_syntax::Edition::Edition2018,
+        2021 => ra_ap_syntax::Edition::Edition2021,
+        2024 => ra_ap_syntax::Edition::Edition2024,
+        _ => return None,
+    })
+}
+
+/// Stands for the n-th `$crate` token of a generated impl header.
+const DOLLAR_CRATE_PLACEHOLDER: &str = "__lrr_dollar_crate_";
+/// Impl header text for the source parser: a generated `$crate` token is not
+/// source syntax, so each becomes a placeholder name (resolved separately
+/// where its crate matters).
+pub(crate) fn impl_header_text(tokens: &[crate::syntax::ast_adapter::TokenRecipe]) -> String {
+    let mut dollar = 0usize;
+    tokens
+        .iter()
+        .map(|token| {
+            if token.text == "$crate" {
+                dollar += 1;
+                format!("{DOLLAR_CRATE_PLACEHOLDER}{}", dollar - 1)
+            } else {
+                token.text.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+pub(crate) fn path_segments(path: ast::Path) -> Option<(Vec<ImportSegment>, bool)> {
+    let mut segments = Vec::new();
+    let mut cursor = Some(path);
+    let mut absolute = false;
+    while let Some(path) = cursor {
+        let segment = path.segment()?;
+        segments.push(match segment.kind()? {
+            ast::PathSegmentKind::Name(name) => ImportSegment::Name(name.text().to_string()),
+            ast::PathSegmentKind::CrateKw => ImportSegment::Crate,
+            ast::PathSegmentKind::SelfKw => ImportSegment::SelfModule,
+            ast::PathSegmentKind::SuperKw => ImportSegment::Super,
+            _ => return None,
+        });
+        if path.qualifier().is_none() {
+            absolute = segment.coloncolon_token().is_some();
+        }
+        cursor = path.qualifier();
+    }
+    segments.reverse();
+    Some((segments, absolute))
+}
+
+impl MemberIndex {
+    pub fn build(graph: &NameNamespaces, sources: &[&PreparedSourceView]) -> Result<Self, Diagnostic> {
+        let mut index = Self::default();
+        for source in sources {
+            index.add_outline(graph, source.outline(), &|identity| identity, None)?;
+        }
+        Ok(index)
+    }
+    /// Index the impls/traits of a macro-generated item unit. Its published
+    /// identities are the generated header keys, not outline fingerprints.
+    pub(crate) fn add_generated(
+        &mut self,
+        graph: &NameNamespaces,
+        input: &crate::expand::generated_syntax::GeneratedSyntaxInput,
+    ) -> Result<(), Diagnostic> {
+        let outline = input.outline()?;
+        let published: BTreeMap<Digest, Digest> = input
+            .definitions
+            .iter()
+            .map(|(id, def_key)| (def_key.fingerprint(), *id))
+            .collect();
+        // Generated impl headers may name `$crate` (macro_rules output, builtin
+        // derives): each token names the crate its definition-site hygiene
+        // selects, read from the unit's own token contexts.
+        let dollar = outline
+            .items
+            .iter()
+            .any(|item| {
+                item.def_key.item_kind == ItemKind::Impl
+                    && item.header.tokens.iter().any(|token| token.text == "$crate")
+            })
+            .then(|| crate::syntax::parse::ParsedFile::from_generated_items(&input.items))
+            .transpose()?;
+        let dollar_units = |item: &crate::syntax::outline::ItemOutline| -> Result<Vec<Digest>, Diagnostic> {
+            let Some(parsed) = &dollar else {
+                return Ok(Vec::new());
+            };
+            let text = input.items.text();
+            let mut units = Vec::new();
+            for origin in input.items.origins() {
+                if origin.start < item.declaration_span.start
+                    || origin.end > item.declaration_span.end
+                    || text.get(origin.start as usize..origin.end as usize) != Some("$crate")
+                {
+                    continue;
+                }
+                let range = crate::syntax::spans::SourceRange::checked(origin.start, origin.end)?;
+                let (unit, _) = parsed.dollar_crate_root(range)?.ok_or_else(|| {
+                    Diagnostic::new(
+                        "LRR-E-MACRO-OUTPUT",
+                        "generated `$crate` lacks its token context".into(),
+                    )
+                })?;
+                units.push(unit);
+            }
+            Ok(units)
+        };
+        self.add_outline(
+            graph,
+            &outline,
+            &|identity| published.get(&identity).copied().unwrap_or(identity),
+            Some(&dollar_units),
+        )
+    }
+    /// Index a macro-generated associated function written into an original
+    /// impl (as that impl's member) or trait (as its provided default).
+    pub(crate) fn add_associated(
+        &mut self,
+        owner: Digest,
+        owner_trait: bool,
+        constant: bool,
+        name: &str,
+        identity: Digest,
+        provided: bool,
+    ) {
+        if owner_trait {
+            if constant {
+                if provided {
+                    self.trait_consts
+                        .entry(owner)
+                        .or_default()
+                        .insert(name.to_owned(), identity);
+                }
+                return;
+            }
+            self.trait_declarations
+                .entry(owner)
+                .or_default()
+                .insert(name.to_owned(), identity);
+            if provided {
+                self.trait_defaults
+                    .entry(owner)
+                    .or_default()
+                    .insert(name.to_owned(), identity);
+            }
+            return;
+        }
+        if let Some(ordinal) = self.impls.iter().position(|members| members.identity == owner) {
+            if constant {
+                self.impls[ordinal].consts.insert(name.to_owned(), identity);
+                return;
+            }
+            self.impls[ordinal]
+                .functions
+                .insert(name.to_owned(), identity);
+            self.function_owner.insert(identity, ordinal);
+        }
+    }
+    fn add_outline(
+        &mut self,
+        graph: &NameNamespaces,
+        outline: &crate::syntax::outline::Outline,
+        published: &dyn Fn(Digest) -> Digest,
+        dollar_units: Option<
+            &dyn Fn(&crate::syntax::outline::ItemOutline) -> Result<Vec<Digest>, Diagnostic>,
+        >,
+    ) -> Result<(), Diagnostic> {
+        let index = self;
+        {
+            let edition = outline.profile.edition;
+            let Some(parser) = parser_edition(edition) else {
+                return Ok(());
+            };
+            // Trait definitions of this outline; the core facade's
+            // `marker::Copy` and `ops::Drop` are the run's lang traits.
+            let core = crate::facade::unit(&outline.profile, "core");
+            // Module-level type aliases of this outline, by identity.
+            let module_aliases: BTreeMap<Digest, &crate::syntax::outline::ItemOutline> = outline
+                .items
+                .iter()
+                .filter(|item| {
+                    item.def_key.item_kind == ItemKind::TypeAlias
+                        && item.def_key.enclosing_impl.is_none()
+                        && item.scope.owner.is_none()
+                })
+                .map(|item| (published(item.def_key.fingerprint()), item))
+                .collect();
+            let owned_box = crate::facade::owned_box(&outline.profile);
+            let mut traits = BTreeSet::new();
+            for item in &outline.items {
+                if item.def_key.fingerprint() == owned_box {
+                    index.lang_box = Some(published(owned_box));
+                }
+                if item.def_key.item_kind != ItemKind::Trait {
+                    continue;
+                }
+                let fingerprint = item.def_key.fingerprint();
+                traits.insert(fingerprint);
+                index.traits.insert(published(fingerprint));
+                if item.def_key.crate_key == core && item.def_key.enclosing_impl.is_none() {
+                    match (item.def_key.module_path.as_slice(), item.def_key.declared_name.as_str()) {
+                        ([module], "Copy") if module == "marker" => {
+                            index.lang_copy = Some(published(fingerprint));
+                        }
+                        ([module], "Drop") if module == "ops" => {
+                            index.lang_drop = Some(published(fingerprint));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            // Trait method declarations and provided bodies, by owning
+            // trait definition.
+            for item in &outline.items {
+                if item.def_key.item_kind == ItemKind::Function
+                    && let Some(owner) = item.scope.owner
+                    && traits.contains(&owner)
+                {
+                    index
+                        .trait_declarations
+                        .entry(published(owner))
+                        .or_default()
+                        .insert(item.def_key.declared_name.clone(), published(item.def_key.fingerprint()));
+                }
+            }
+            for item in &outline.items {
+                if item.def_key.item_kind == ItemKind::Function
+                    && item.body.is_some()
+                    && let Some(owner) = item.scope.owner
+                    && traits.contains(&owner)
+                {
+                    index
+                        .trait_defaults
+                        .entry(published(owner))
+                        .or_default()
+                        .insert(item.def_key.declared_name.clone(), published(item.def_key.fingerprint()));
+                }
+            }
+            // Associated types by owning impl.
+            let mut types: BTreeMap<Digest, BTreeMap<String, Digest>> = BTreeMap::new();
+            for item in &outline.items {
+                if item.def_key.item_kind == ItemKind::TypeAlias
+                    && let Some(owner) = item.scope.owner
+                    && item.def_key.enclosing_impl == Some(owner)
+                {
+                    let name = item.def_key.declared_name.clone();
+                    index
+                        .type_names
+                        .insert(associated_name_key(&name), name.clone());
+                    types
+                        .entry(owner)
+                        .or_default()
+                        .insert(name, published(item.def_key.fingerprint()));
+                    index.type_aliases.insert(
+                        published(item.def_key.fingerprint()),
+                        AssociatedTypeAlias {
+                            header: item.header.clone(),
+                            // Impl-owned: names resolve in the enclosing module.
+                            scope: item.scope.clone(),
+                            impl_generic_count: 0,
+                        },
+                    );
+                }
+            }
+            // Associated constants by owning impl, and trait-provided defaults.
+            let mut consts: BTreeMap<Digest, BTreeMap<String, Digest>> = BTreeMap::new();
+            for item in &outline.items {
+                if item.def_key.item_kind != ItemKind::Constant {
+                    continue;
+                }
+                let Some(owner) = item.scope.owner else {
+                    continue;
+                };
+                let name = item.def_key.declared_name.clone();
+                // A trait's own member (whose owner is the trait definition)
+                // is a provided default when it has a body, never an impl's.
+                let trait_owned = outline.items.iter().any(|candidate| {
+                    candidate.def_key.item_kind == ItemKind::Trait
+                        && candidate.def_key.fingerprint() == owner
+                });
+                if trait_owned {
+                    if item.body.is_some() {
+                        index
+                            .trait_consts
+                            .entry(published(owner))
+                            .or_default()
+                            .insert(name, published(item.def_key.fingerprint()));
+                    }
+                } else if item.def_key.enclosing_impl == Some(owner) {
+                    consts
+                        .entry(owner)
+                        .or_default()
+                        .insert(name, published(item.def_key.fingerprint()));
+                }
+            }
+            // Associated functions by owning impl.
+            let mut functions: BTreeMap<Digest, BTreeMap<String, Digest>> = BTreeMap::new();
+            for item in &outline.items {
+                if item.def_key.item_kind == ItemKind::Function
+                    && let Some(owner) = item.scope.owner
+                    && item.def_key.enclosing_impl == Some(owner)
+                {
+                    functions
+                        .entry(owner)
+                        .or_default()
+                        .insert(item.def_key.declared_name.clone(), published(item.def_key.fingerprint()));
+                }
+            }
+            for item in &outline.items {
+                if item.def_key.item_kind != ItemKind::Impl {
+                    continue;
+                }
+                let Some(identity) = item.def_key.enclosing_impl else {
+                    continue;
+                };
+                // Header `$crate` tokens (in order) become placeholder names
+                // resolved directly in the crate each one names.
+                let dollar = match dollar_units {
+                    Some(units)
+                        if item.header.tokens.iter().any(|token| token.text == "$crate") =>
+                    {
+                        units(item)?
+                    }
+                    _ => Vec::new(),
+                };
+                let mut dollar_index = 0usize;
+                let header = item
+                    .header
+                    .tokens
+                    .iter()
+                    .map(|token| {
+                        if token.text == "$crate" && dollar_index < dollar.len() {
+                            dollar_index += 1;
+                            format!("{DOLLAR_CRATE_PLACEHOLDER}{}", dollar_index - 1)
+                        } else {
+                            token.text.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let parsed = ast::SourceFile::parse(&format!("{header} {{}}"), parser);
+                let Some(ast::Item::Impl(implementation)) = parsed.tree().items().next() else {
+                    continue;
+                };
+                let scope = ScopeKey {
+                    crate_key: item.scope.crate_key,
+                    module_path: item.scope.module_path.clone(),
+                    owner: None,
+                };
+                let resolve = |path: Option<ast::Path>| -> Result<Option<Digest>, Diagnostic> {
+                    let Some((segments, absolute)) = path.and_then(path_segments) else {
+                        return Ok(None);
+                    };
+                    if let Some(ImportSegment::Name(first)) = segments.first()
+                        && let Some(unit) = first
+                            .strip_prefix(DOLLAR_CRATE_PLACEHOLDER)
+                            .and_then(|index| index.parse::<usize>().ok())
+                            .and_then(|index| dollar.get(index))
+                    {
+                        let mut tail = Vec::new();
+                        for segment in &segments[1..] {
+                            let ImportSegment::Name(name) = segment else {
+                                return Ok(None);
+                            };
+                            tail.push(name.as_str());
+                        }
+                        let path = NameNamespaces::path(*unit, &tail, edition)?;
+                        return Ok(match graph.lookup(Namespace::Type, &path, &scope)? {
+                            NameLookup::Defined(definition) => Some(definition.identity),
+                            _ => None,
+                        });
+                    }
+                    Ok(
+                        match graph.lookup_source_path(
+                            Namespace::Type,
+                            &segments,
+                            absolute,
+                            &scope,
+                            edition,
+                        )? {
+                            NameLookup::Defined(definition) => Some(definition.identity),
+                            _ => None,
+                        },
+                    )
+                };
+                // A `$crate` root keeps the spelling of the crate it names.
+                let spell_dollar = |mut segments: Vec<ImportSegment>| {
+                    if let Some(ImportSegment::Name(first)) = segments.first_mut()
+                        && let Some(unit) = first
+                            .strip_prefix(DOLLAR_CRATE_PLACEHOLDER)
+                            .and_then(|index| index.parse::<usize>().ok())
+                            .and_then(|index| dollar.get(index))
+                    {
+                        *first = ["core", "alloc", "std"]
+                            .into_iter()
+                            .find(|name| crate::facade::unit(&outline.profile, name) == *unit)
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| super::callables::dollar_crate_segment(*unit));
+                    }
+                    segments
+                };
+                let (trait_path, trait_definition) = match implementation.trait_() {
+                    Some(ast::Type::PathType(path)) => (
+                        path.path()
+                            .and_then(path_segments)
+                            .map(|(s, _)| spell_dollar(s)),
+                        resolve(path.path())?,
+                    ),
+                    Some(_) => (Some(Vec::new()), None),
+                    None => (None, None),
+                };
+                let mut self_ty = implementation.self_ty();
+                let mut self_nominal = match &self_ty {
+                    Some(ast::Type::PathType(path)) => resolve(path.path())?,
+                    _ => None,
+                };
+                // `type Foo = W<u32>; impl Foo {..}`: an impl of a type alias
+                // is an impl of the aliased type (module aliases of this
+                // outline; the alias's own target resolves in its own scope).
+                let mut followed = BTreeSet::new();
+                while let Some(alias) = self_nominal
+                    .and_then(|identity| module_aliases.get(&identity).map(|item| (identity, item)))
+                {
+                    if !followed.insert(alias.0) {
+                        break;
+                    }
+                    let item = alias.1;
+                    let header = item
+                        .header
+                        .tokens
+                        .iter()
+                        .map(|token| token.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let parsed = ast::SourceFile::parse(&format!("{header};"), parser);
+                    let Some(ast::Item::TypeAlias(declared)) = parsed.tree().items().next() else {
+                        break;
+                    };
+                    self_ty = declared.ty();
+                    let alias_scope = ScopeKey {
+                        crate_key: item.scope.crate_key,
+                        module_path: item.scope.module_path.clone(),
+                        owner: None,
+                    };
+                    self_nominal = match &self_ty {
+                        Some(ast::Type::PathType(path)) => match path.path().and_then(path_segments) {
+                            Some((segments, absolute)) => match graph.lookup_source_path(
+                                Namespace::Type,
+                                &segments,
+                                absolute,
+                                &alias_scope,
+                                edition,
+                            )? {
+                                NameLookup::Defined(definition) => Some(definition.identity),
+                                _ => None,
+                            },
+                            None => None,
+                        },
+                        _ => None,
+                    };
+                }
+                let self_builtin = match (self_nominal, self_ty) {
+                    (None, Some(ast::Type::PathType(path))) => path
+                        .path()
+                        .filter(|path| path.qualifier().is_none())
+                        .and_then(|path| path.segment())
+                        .and_then(|segment| segment.name_ref())
+                        .and_then(|name| BuiltinSelf::named(&name.text())),
+                    (None, Some(ast::Type::SliceType(_))) => Some(BuiltinSelf::Slice),
+                    (None, Some(ast::Type::ArrayType(_))) => Some(BuiltinSelf::Array),
+                    (None, Some(ast::Type::TupleType(tuple))) => {
+                        u32::try_from(tuple.fields().count()).ok().map(BuiltinSelf::Tuple)
+                    }
+                    (None, Some(ast::Type::RefType(reference))) => {
+                        Some(BuiltinSelf::Reference(reference.mut_token().is_some()))
+                    }
+                    _ => None,
+                };
+                let blanket = blanket_bounds(&implementation, &resolve)?;
+                let ordinal = index.impls.len();
+                let functions = functions.remove(&identity).unwrap_or_default();
+                let types = types.remove(&identity).unwrap_or_default();
+                let consts = consts.remove(&identity).unwrap_or_default();
+                let impl_generic_count = ast::HasGenericParams::generic_param_list(&implementation)
+                    .map_or(0, |list| list.generic_params().count());
+                for alias in types.values() {
+                    if let Some(row) = index.type_aliases.get_mut(alias) {
+                        row.impl_generic_count = impl_generic_count;
+                    }
+                }
+                for function in functions.values() {
+                    index.function_owner.insert(*function, ordinal);
+                }
+                match (self_nominal, self_builtin) {
+                    (Some(nominal), _) => index.by_nominal.entry(nominal).or_default().push(ordinal),
+                    (None, Some(builtin)) => {
+                        index.by_builtin.entry(builtin).or_default().push(ordinal)
+                    }
+                    (None, None) => index.unresolved.push(ordinal),
+                }
+                index.impls.push(ImplMembers {
+                    identity: published(identity),
+                    self_nominal,
+                    self_builtin,
+                    trait_path,
+                    trait_definition,
+                    functions,
+                    types,
+                    consts,
+                    blanket,
+                });
+            }
+        }
+        Ok(())
+    }
+    /// Inherent associated functions named `name` of nominal `ty`.
+    pub fn inherent(&self, ty: Digest, name: &str) -> Vec<Digest> {
+        self.impls_of(ty)
+            .filter(|members| members.trait_path.is_none())
+            .filter_map(|members| members.functions.get(name).copied())
+            .collect()
+    }
+    /// Trait-impl associated functions named `name` of nominal `ty`.
+    /// Trait-impl associated functions named `name` of nominal `ty`: the
+    /// impl's own definition, else its trait's provided body.
+    pub fn trait_functions(&self, ty: Digest, name: &str) -> Vec<(&ImplMembers, Digest)> {
+        self.impls_of(ty)
+            .filter(|members| members.trait_path.is_some())
+            .filter_map(|members| {
+                members
+                    .functions
+                    .get(name)
+                    .or_else(|| {
+                        members
+                            .trait_definition
+                            .and_then(|definition| self.trait_defaults.get(&definition))
+                            .and_then(|defaults| defaults.get(name))
+                    })
+                    .map(|f| (members, *f))
+            })
+            .collect()
+    }
+    /// Inherent associated functions named `name` of a builtin self type.
+    pub fn builtin_inherent(&self, ty: BuiltinSelf, name: &str) -> Vec<Digest> {
+        self.by_builtin
+            .get(&ty)
+            .into_iter()
+            .flatten()
+            .map(|ordinal| &self.impls[*ordinal])
+            .filter(|members| members.trait_path.is_none())
+            .filter_map(|members| members.functions.get(name).copied())
+            .collect()
+    }
+    /// Trait-impl functions named `name` of a builtin self type (own
+    /// definition, else the trait's provided body).
+    pub fn builtin_trait_functions(&self, ty: BuiltinSelf, name: &str) -> Vec<Digest> {
+        self.by_builtin
+            .get(&ty)
+            .into_iter()
+            .flatten()
+            .map(|ordinal| &self.impls[*ordinal])
+            .filter(|members| members.trait_path.is_some())
+            .filter_map(|members| {
+                members.functions.get(name).or_else(|| {
+                    members
+                        .trait_definition
+                        .and_then(|definition| self.trait_defaults.get(&definition))
+                        .and_then(|defaults| defaults.get(name))
+                })
+            })
+            .copied()
+            .collect()
+    }
+    /// `<ty as Trait>::name` for the trait whose definition is `trait_key`:
+    /// each impl of that trait for `ty` (its own definition, else the trait's
+    /// provided body), then, when none applies directly, each blanket impl
+    /// of that trait whose resolved bounds `ty` meets. Operator expressions
+    /// select their lang-item trait method through this (rustc's operator
+    /// lookup), never by method name alone.
+    pub fn trait_method(
+        &self,
+        ty: Result<Digest, BuiltinSelf>,
+        trait_key: Digest,
+        name: &str,
+    ) -> Vec<(&ImplMembers, Digest)> {
+        let provided = |members: &ImplMembers| {
+            members
+                .functions
+                .get(name)
+                .or_else(|| {
+                    self.trait_defaults
+                        .get(&trait_key)
+                        .and_then(|defaults| defaults.get(name))
+                })
+                .copied()
+        };
+        let direct: Vec<_> = match ty {
+            Ok(nominal) => self.impls_of(nominal).collect::<Vec<_>>(),
+            Err(builtin) => self
+                .by_builtin
+                .get(&builtin)
+                .into_iter()
+                .flatten()
+                .map(|ordinal| &self.impls[*ordinal])
+                .collect(),
+        }
+        .into_iter()
+        .filter(|members| members.trait_definition == Some(trait_key))
+        .filter_map(|members| provided(members).map(|function| (members, function)))
+        .collect();
+        if !direct.is_empty() {
+            return direct;
+        }
+        self.unresolved()
+            .filter(|members| {
+                members.trait_definition == Some(trait_key)
+                    && members.blanket.as_ref().is_some_and(|bounds| {
+                        bounds
+                            .iter()
+                            .all(|bound| bound.is_none_or(|bound| self.implements(ty, bound)))
+                    })
+            })
+            .filter_map(|members| provided(members).map(|function| (members, function)))
+            .collect()
+    }
+    /// Whether `key` is a trait definition of the run's world.
+    pub fn is_trait(&self, key: Digest) -> bool {
+        self.traits.contains(&key)
+    }
+    /// The associated function `name` trait `trait_key` declares (required
+    /// or provided): the signature a trait-path call (`Trait::name(..)`) is
+    /// written against before its self type selects the impl.
+    pub fn trait_declaration(&self, trait_key: Digest, name: &str) -> Option<Digest> {
+        self.trait_declarations
+            .get(&trait_key)
+            .and_then(|declarations| declarations.get(name))
+            .copied()
+    }
+    /// Trait-provided functions `name` for self type `ty`, as a path through
+    /// a generic parameter (`T::name`) selects them: the trait impls of the
+    /// type itself (own definition, else the trait's provided body), else
+    /// applicable blanket impls. Inherent functions of the reached type are
+    /// not visible through the parameter.
+    pub fn trait_candidates(&self, ty: Result<Digest, BuiltinSelf>, name: &str) -> Vec<Digest> {
+        let direct = match ty {
+            Ok(nominal) => self
+                .trait_functions(nominal, name)
+                .into_iter()
+                .map(|(_, function)| function)
+                .collect::<Vec<_>>(),
+            Err(builtin) => self.builtin_trait_functions(builtin, name),
+        };
+        if direct.is_empty() {
+            self.blanket_functions(ty, name)
+        } else {
+            direct
+        }
+    }
+    pub fn impls_of(&self, ty: Digest) -> impl Iterator<Item = &ImplMembers> {
+        self.by_nominal
+            .get(&ty)
+            .into_iter()
+            .flatten()
+            .map(|ordinal| &self.impls[*ordinal])
+    }
+    /// Whether `ty` implements trait `trait_key`: a direct trait impl, or a
+    /// blanket impl whose bounds it meets (rustc requires a unique candidate,
+    /// so any applicable impl suffices here).
+    pub fn implements(&self, ty: Result<Digest, BuiltinSelf>, trait_key: Digest) -> bool {
+        self.implements_depth(ty, trait_key, 0)
+    }
+    fn implements_depth(&self, ty: Result<Digest, BuiltinSelf>, trait_key: Digest, depth: u32) -> bool {
+        // rustc's recursion limit bounds trait-solving depth.
+        if depth > 128 {
+            return false;
+        }
+        let direct = match ty {
+            Ok(nominal) => self
+                .impls_of(nominal)
+                .any(|members| members.trait_definition == Some(trait_key)),
+            Err(builtin) => self.by_builtin.get(&builtin).into_iter().flatten().any(|ordinal| {
+                self.impls[*ordinal].trait_definition == Some(trait_key)
+            }),
+        };
+        direct
+            || self.unresolved().any(|members| {
+                members.trait_definition == Some(trait_key)
+                    && members.blanket.as_ref().is_some_and(|bounds| {
+                        bounds.iter().all(|bound| {
+                            bound.is_none_or(|bound| self.implements_depth(ty, bound, depth + 1))
+                        })
+                    })
+            })
+    }
+    /// Functions named `name` of blanket impls (`impl<T: B> Trait for T`)
+    /// whose resolved bounds `ty` meets: the impl's own definition, else its
+    /// trait's provided body.
+    pub fn blanket_functions(&self, ty: Result<Digest, BuiltinSelf>, name: &str) -> Vec<Digest> {
+        self.unresolved()
+            .filter(|members| {
+                members.trait_path.is_some()
+                    && members.blanket.as_ref().is_some_and(|bounds| {
+                        bounds
+                            .iter()
+                            .all(|bound| bound.is_none_or(|bound| self.implements(ty, bound)))
+                    })
+            })
+            .filter_map(|members| {
+                members.functions.get(name).or_else(|| {
+                    members
+                        .trait_definition
+                        .and_then(|definition| self.trait_defaults.get(&definition))
+                        .and_then(|defaults| defaults.get(name))
+                })
+            })
+            .copied()
+            .collect()
+    }
+    /// Method `method` for an autoderef'd receiver self type, as rustc's
+    /// probe selects it: the impls of the self type itself (inherent impls
+    /// first, then trait impls), else applicable blanket impls; an array
+    /// with no method of its own takes the unsizing step to its slice
+    /// (`true`). Exactly one candidate must remain. The dispatcher and the
+    /// static source-constraint service share this rule.
+    pub(crate) fn select_method(
+        &self,
+        self_type: Result<Digest, BuiltinSelf>,
+        method: &str,
+    ) -> Result<(Digest, bool), Diagnostic> {
+        let candidates = |self_type| {
+            let (inherent, traits) = match self_type {
+                Ok(nominal) => (
+                    self.inherent(nominal, method),
+                    self.trait_functions(nominal, method)
+                        .into_iter()
+                        .map(|(_, function)| function)
+                        .collect::<Vec<_>>(),
+                ),
+                Err(builtin) => (
+                    self.builtin_inherent(builtin, method),
+                    self.builtin_trait_functions(builtin, method),
+                ),
+            };
+            // Blanket impls (`impl<T: Bound> Trait for T`) apply when no impl
+            // of the receiver's own type provides the method.
+            if inherent.is_empty() && traits.is_empty() {
+                (inherent, self.blanket_functions(self_type, method))
+            } else {
+                (inherent, traits)
+            }
+        };
+        let (mut inherent, mut traits) = candidates(self_type);
+        // rustc's probe ends with the unsizing step `[T; N]` -> `[T]`: an
+        // array receiver with no method of its own selects the slice method.
+        let mut unsize = false;
+        if inherent.is_empty() && traits.is_empty() && self_type == Err(BuiltinSelf::Array) {
+            (inherent, traits) = candidates(Err(BuiltinSelf::Slice));
+            unsize = true;
+        }
+        let function = match inherent.as_slice() {
+            [function] => *function,
+            [] => match traits.as_slice() {
+                [function] => *function,
+                [] => {
+                    return Err(Diagnostic::new(
+                        "LRR-E-NAME-MISSING",
+                        format!("no method `{method}` for the receiver's type"),
+                    ));
+                }
+                _ => {
+                    return Err(Diagnostic::new(
+                        "LRR-E-NAME-AMBIGUOUS",
+                        format!("method `{method}` is provided by several trait impls"),
+                    ));
+                }
+            },
+            _ => {
+                return Err(Diagnostic::new(
+                    "LRR-E-NAME-AMBIGUOUS",
+                    format!("method `{method}` has several inherent definitions"),
+                ));
+            }
+        };
+        Ok((function, unsize))
+    }
+    /// The associated type alias named `name` that a trait impl for nominal
+    /// `ty` (or builtin self `builtin`) declares; `trait_key` selects the trait
+    /// when known. Exactly one impl must provide it.
+    pub fn associated_type(
+        &self,
+        ty: Result<Digest, BuiltinSelf>,
+        trait_key: Option<Digest>,
+        name: &str,
+    ) -> Result<Option<(Digest, &AssociatedTypeAlias)>, Diagnostic> {
+        let impls: Vec<&ImplMembers> = match ty {
+            Ok(nominal) => self.impls_of(nominal).collect(),
+            Err(builtin) => self
+                .by_builtin
+                .get(&builtin)
+                .into_iter()
+                .flatten()
+                .map(|ordinal| &self.impls[*ordinal])
+                .collect(),
+        };
+        let mut found = impls.into_iter().filter(|members| {
+            members.trait_path.is_some()
+                && trait_key.is_none_or(|key| members.trait_definition == Some(key))
+        });
+        let mut selected = None;
+        for members in found.by_ref() {
+            let Some(alias) = members.types.get(name) else {
+                continue;
+            };
+            if selected.is_some() {
+                return Err(Diagnostic::new(
+                    "LRR-E-NAME-AMBIGUOUS",
+                    format!("associated type `{name}` is provided by several impls"),
+                ));
+            }
+            selected = Some(*alias);
+        }
+        // A blanket impl (`impl<T: Get> Grab for T`) whose bounds the type
+        // meets provides the name when no impl of the type itself does.
+        if selected.is_none() {
+            for members in self.unresolved().filter(|members| {
+                members.trait_path.is_some()
+                    && trait_key.is_none_or(|key| members.trait_definition == Some(key))
+                    && members.blanket.as_ref().is_some_and(|bounds| {
+                        bounds
+                            .iter()
+                            .all(|bound| bound.is_none_or(|bound| self.implements(ty, bound)))
+                    })
+            }) {
+                let Some(alias) = members.types.get(name) else {
+                    continue;
+                };
+                if selected.is_some() {
+                    return Err(Diagnostic::new(
+                        "LRR-E-NAME-AMBIGUOUS",
+                        format!("associated type `{name}` is provided by several impls"),
+                    ));
+                }
+                selected = Some(*alias);
+            }
+        }
+        Ok(selected.and_then(|alias| self.type_aliases.get(&alias).map(|row| (alias, row))))
+    }
+    /// The associated constant `name` of a type (`Type::NAME`, `Self::NAME`):
+    /// an inherent impl's, else a trait impl's own, else the implemented
+    /// trait's provided default; `trait_key` restricts to one trait
+    /// (`<Type as Trait>::NAME`). Blanket impls apply as for methods.
+    pub fn associated_const(
+        &self,
+        ty: Result<Digest, BuiltinSelf>,
+        trait_key: Option<Digest>,
+        name: &str,
+    ) -> Result<Option<Digest>, Diagnostic> {
+        let impls: Vec<&ImplMembers> = match ty {
+            Ok(nominal) => self.impls_of(nominal).collect(),
+            Err(builtin) => self
+                .by_builtin
+                .get(&builtin)
+                .into_iter()
+                .flatten()
+                .map(|ordinal| &self.impls[*ordinal])
+                .collect(),
+        };
+        if trait_key.is_none()
+            && let Some(found) = impls
+                .iter()
+                .filter(|members| members.trait_path.is_none())
+                .find_map(|members| members.consts.get(name))
+        {
+            return Ok(Some(*found));
+        }
+        let applicable = |members: &&ImplMembers| {
+            members.trait_path.is_some()
+                && trait_key.is_none_or(|key| members.trait_definition == Some(key))
+        };
+        let blanket = self.unresolved().filter(|members| {
+            members.blanket.as_ref().is_some_and(|bounds| {
+                bounds
+                    .iter()
+                    .all(|bound| bound.is_none_or(|bound| self.implements(ty, bound)))
+            })
+        });
+        let mut found = Vec::new();
+        for members in impls.iter().copied().chain(blanket).filter(applicable) {
+            if let Some(constant) = members.consts.get(name).or_else(|| {
+                members
+                    .trait_definition
+                    .and_then(|definition| self.trait_consts.get(&definition))
+                    .and_then(|defaults| defaults.get(name))
+            }) {
+                found.push(*constant);
+            }
+        }
+        match found.as_slice() {
+            [] => Ok(None),
+            [one] => Ok(Some(*one)),
+            _ => Err(Diagnostic::new(
+                "LRR-E-NAME-AMBIGUOUS",
+                format!("associated constant `{name}` is provided by several trait impls"),
+            )),
+        }
+    }
+    /// The name of a shorthand associated-type key.
+    pub fn associated_type_name(&self, key: Digest) -> Option<&str> {
+        self.type_names.get(&key).map(String::as_str)
+    }
+    /// Whether some impl's self type did not resolve to a nominal declaration.
+    /// rustc's impl candidates for an integer or float inference variable
+    /// `?v: Trait` (`family`: the variable's primitives): the primitives with
+    /// their own impl of the trait, the bounds of each applicable blanket
+    /// impl (`impl<T: B> Trait for T`), and whether some impl of the trait
+    /// has a self type this index does not resolve.
+    pub(crate) fn primitive_candidates(
+        &self,
+        trait_key: Digest,
+        family: &[crate::ir::op::PrimitiveType],
+    ) -> PrimitiveCandidates {
+        let direct = family
+            .iter()
+            .copied()
+            .filter(|primitive| {
+                self.by_builtin
+                    .get(&BuiltinSelf::Primitive(*primitive))
+                    .into_iter()
+                    .flatten()
+                    .any(|ordinal| self.impls[*ordinal].trait_definition == Some(trait_key))
+            })
+            .collect();
+        let mut blankets = Vec::new();
+        let mut unresolved = false;
+        for members in self
+            .unresolved()
+            .filter(|members| members.trait_definition == Some(trait_key))
+        {
+            match &members.blanket {
+                Some(bounds) => blankets.push(bounds.clone()),
+                None => unresolved = true,
+            }
+        }
+        PrimitiveCandidates {
+            direct,
+            blankets,
+            unresolved,
+        }
+    }
+    /// rustc's method candidates for an integer or float inference variable
+    /// receiver (`4.f()`): whether a primitive of `family` has an inherent
+    /// `name` (rustc requires the receiver's type to be known then), and the
+    /// traits whose primitive or blanket impls provide `name`.
+    pub(crate) fn primitive_method_traits(
+        &self,
+        family: &[crate::ir::op::PrimitiveType],
+        name: &str,
+    ) -> (bool, Vec<Digest>) {
+        let provides = |members: &ImplMembers| {
+            members.functions.contains_key(name)
+                || members
+                    .trait_definition
+                    .and_then(|definition| self.trait_defaults.get(&definition))
+                    .is_some_and(|defaults| defaults.contains_key(name))
+        };
+        let mut inherent = false;
+        let mut traits = Vec::new();
+        let primitive_impls = family.iter().flat_map(|primitive| {
+            self.by_builtin
+                .get(&BuiltinSelf::Primitive(*primitive))
+                .into_iter()
+                .flatten()
+                .map(|ordinal| &self.impls[*ordinal])
+        });
+        let blanket_impls = self.unresolved().filter(|members| members.blanket.is_some());
+        for members in primitive_impls.chain(blanket_impls) {
+            match (&members.trait_path, members.trait_definition) {
+                (None, _) if members.functions.contains_key(name) => inherent = true,
+                (Some(_), Some(definition)) if provides(members) => {
+                    if !traits.contains(&definition) {
+                        traits.push(definition);
+                    }
+                }
+                _ => {}
+            }
+        }
+        (inherent, traits)
+    }
+    pub fn has_unresolved(&self) -> bool {
+        !self.unresolved.is_empty()
+    }
+    pub fn unresolved(&self) -> impl Iterator<Item = &ImplMembers> {
+        self.unresolved.iter().map(|ordinal| &self.impls[*ordinal])
+    }
+    /// The impl that owns associated function `function`, if indexed.
+    pub fn owner_of(&self, function: Digest) -> Option<&ImplMembers> {
+        self.function_owner
+            .get(&function)
+            .map(|ordinal| &self.impls[*ordinal])
+    }
+    /// Whether a trait impl implements `Copy`: the core facade's
+    /// `marker::Copy` by identity; a trait path that resolves to no source
+    /// trait (a world without the facade) by its written spelling.
+    fn implements_copy(&self, members: &ImplMembers) -> bool {
+        match members.trait_definition {
+            Some(definition) => Some(definition) == self.lang_copy,
+            None => spelled(members, &[&["Copy"], &["marker", "Copy"]], "marker", "Copy"),
+        }
+    }
+    /// Whether a trait impl implements `Drop` (as `implements_copy`).
+    fn implements_drop(&self, members: &ImplMembers) -> bool {
+        match members.trait_definition {
+            Some(definition) => Some(definition) == self.lang_drop,
+            None => spelled(members, &[&["Drop"], &["ops", "Drop"]], "ops", "Drop"),
+        }
+    }
+    /// The `owned_box` lang item: the alloc facade's `Box` declaration.
+    pub fn owned_box(&self) -> Option<Digest> {
+        self.lang_box
+    }
+    /// Nominal declarations with a `Copy` impl. `None` when some trait impl's
+    /// self type is unresolved and could be such an impl. The impl's own
+    /// bounds are the value's fields being Copy (rustc requires every field of
+    /// a `Copy` type to be `Copy`); the store checks those per value.
+    pub fn copy_types(&self) -> Option<BTreeSet<Digest>> {
+        if self.unresolved().any(|members| self.implements_copy(members)) {
+            return None;
+        }
+        Some(
+            self.impls
+                .iter()
+                .filter(|members| self.implements_copy(members))
+                .filter_map(|members| members.self_nominal)
+                .collect(),
+        )
+    }
+    /// Nominal declarations with a `Drop` impl. `None` when some trait impl's
+    /// self type is unresolved and could be such an impl.
+    pub fn drop_types(&self) -> Option<BTreeSet<Digest>> {
+        if self.unresolved().any(|members| self.implements_drop(members)) {
+            return None;
+        }
+        Some(
+            self.impls
+                .iter()
+                .filter(|members| self.implements_drop(members))
+                .filter_map(|members| members.self_nominal)
+                .collect(),
+        )
+    }
+    /// `<ty as Drop>::drop`: the `drop` function of nominal `ty`'s `Drop`
+    /// impl(s), by the same written-path inventory as `drop_types`.
+    pub fn drop_functions(&self, ty: Digest) -> Vec<Digest> {
+        self.impls_of(ty)
+            .filter(|members| self.implements_drop(members))
+            .filter_map(|members| members.functions.get("drop").copied())
+            .collect()
+    }
+}
+/// `impl<T: A + B> Trait for T where T: C`: the resolved bound traits of the
+/// self parameter, when the self type is one of the impl's own type
+/// parameters. `?Sized` and lifetime bounds impose nothing here.
+fn blanket_bounds(
+    implementation: &ast::Impl,
+    resolve: &dyn Fn(Option<ast::Path>) -> Result<Option<Digest>, Diagnostic>,
+) -> Result<Option<Vec<Option<Digest>>>, Diagnostic> {
+    use ast::{HasGenericParams, HasName, HasTypeBounds};
+    let Some(ast::Type::PathType(self_ty)) = implementation.self_ty() else {
+        return Ok(None);
+    };
+    let Some(path) = self_ty.path() else {
+        return Ok(None);
+    };
+    if path.qualifier().is_some() {
+        return Ok(None);
+    }
+    let Some(name) = path
+        .segment()
+        .and_then(|segment| segment.name_ref())
+        .map(|name| name.text().to_string())
+    else {
+        return Ok(None);
+    };
+    let Some(params) = implementation.generic_param_list() else {
+        return Ok(None);
+    };
+    let Some(param) = params.type_or_const_params().find_map(|param| match param {
+        ast::TypeOrConstParam::Type(param)
+            if param.name().is_some_and(|n| n.text() == name.as_str()) =>
+        {
+            Some(param)
+        }
+        _ => None,
+    }) else {
+        return Ok(None);
+    };
+    let mut bounds = Vec::new();
+    let mut add = |list: Option<ast::TypeBoundList>| -> Result<(), Diagnostic> {
+        for bound in list.into_iter().flat_map(|list| list.bounds()) {
+            if bound.question_mark_token().is_some() || bound.lifetime().is_some() {
+                continue;
+            }
+            let Some(ast::Type::PathType(ty)) = bound.ty() else {
+                continue;
+            };
+            bounds.push(resolve(ty.path())?);
+        }
+        Ok(())
+    };
+    add(param.type_bound_list())?;
+    if let Some(clause) = implementation.where_clause() {
+        for predicate in clause.predicates() {
+            let names_param = matches!(predicate.ty(), Some(ast::Type::PathType(ty))
+                if ty.path().is_some_and(|path| path.qualifier().is_none()
+                    && path.segment().and_then(|segment| segment.name_ref())
+                        .is_some_and(|n| n.text() == name.as_str())));
+            if names_param {
+                add(predicate.type_bound_list())?;
+            }
+        }
+    }
+    Ok(Some(bounds))
+}
+/// A trait impl's written path naming `module::name` as `name`,
+/// `module::name`, `std::module::name` or `core::module::name`.
+fn spelled(members: &ImplMembers, short: &[&[&str]], module: &str, name: &str) -> bool {
+    members.trait_path.as_ref().is_some_and(|path| {
+        let names: Vec<_> = path
+            .iter()
+            .map(|segment| match segment {
+                ImportSegment::Name(name) => name.as_str(),
+                _ => "",
+            })
+            .collect();
+        short.contains(&names.as_slice())
+            || matches!(names.as_slice(), [krate, m, n]
+                if (*krate == "std" || *krate == "core") && *m == module && *n == name)
+    })
+}

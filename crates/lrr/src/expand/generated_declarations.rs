@@ -43,6 +43,7 @@ pub struct GeneratedDeclarations {
     origins: Vec<TokenOrigin>,
     parsed: ParsedFile,
     scan: Arc<DeclarationScan>,
+    headers: Vec<crate::expand::generated_items::GeneratedHeader>,
     definitions: BTreeMap<Digest, declaration_output::DefinitionCapture>,
     calls: BTreeMap<Digest, declaration_output::CallCapture>,
 }
@@ -63,6 +64,12 @@ fn binding(
     e.finish()
 }
 impl GeneratedDeclarations {
+    /// Borrow the actual already-admitted immutable output tree. This grants no
+    /// declaration-namespace completeness: consumers must join the real source,
+    /// grammar, producer closure, scope, epoch and output record themselves.
+    pub(crate) fn admitted_parsed(&self) -> &ParsedFile {
+        &self.parsed
+    }
     pub fn admit(
         expected: &ExpansionKey,
         record: Arc<ExpansionRecord>,
@@ -156,13 +163,7 @@ impl GeneratedDeclarations {
         let span = selection.declaration_site_span()?;
         if selection.source() != source.selection()
             || selection.input().identity() != key.invocation
-            || !matches!(
-                &key.macro_identity,
-                super::identity::MacroIdentity::Procedural {
-                    kind: super::identity::ProceduralKind::Derive,
-                    ..
-                }
-            )
+            || !key.macro_identity.is_derive()
             || span.source.unit.0 != source.selection().outline.crate_key.0
             || span.source.content.0 != source.selection().outline.parse.content.0
             || span.source.path != source.selection().path.as_str()
@@ -243,7 +244,6 @@ impl GeneratedDeclarations {
         active
             .len()
             .checked_mul(std::mem::size_of::<(Digest, Digest)>())
-            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "impl item attachment budget"))?;
         let mut pairs = Vec::new();
         pairs
@@ -344,7 +344,7 @@ impl GeneratedDeclarations {
                                     kind: crate::expand::identity::ProceduralKind::Attribute
                                         | crate::expand::identity::ProceduralKind::Derive,
                                     ..
-                                }
+                                } | crate::expand::identity::MacroIdentity::BuiltinDerive { .. }
                             )))
                     && p.grammar == GrammarSlot::Items
             })
@@ -399,25 +399,23 @@ impl GeneratedDeclarations {
                 "declaration expansion key/slot/source/cfg differs",
             ));
         }
-        if record.descriptor().wire_bytes > 32 * 1024 * 1024
-            || cfg.metadata_bytes()? > 32 * 1024 * 1024
-        {
-            return Err(fault(
-                "LRR-E-DISCOVERY-LIMIT",
-                "declaration expansion input budget",
-            ));
-        }
         let grammar = declaration_grammar(expected.grammar);
         let tokens = record.tokens()?;
         let adapter_tokens = lrr_expand_adapter::token_wire::TokenForest::decode(record.wire())
             .map_err(|e| fault(e.code, &e.message))?;
-        let output = declaration_output::materialize(&adapter_tokens, grammar)
-            .map_err(|e| fault(e.code, &e.message))?;
+        let (output, raw_headers) =
+            declaration_output::materialize_with_headers(&adapter_tokens, grammar)
+                .map_err(|e| fault(e.code, &e.message))?;
+        let headers = crate::expand::generated_items::retain_generated_headers(
+            expected,
+            &output.text,
+            &output.origins,
+            raw_headers,
+        )?;
         tokens
             .spans()
             .len()
             .checked_mul(128)
-            .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "declaration span index budget"))?;
         let spans = tokens
             .spans()
@@ -528,19 +526,19 @@ impl GeneratedDeclarations {
             origins: crate::expand::generated_items::retain_token_origins(output.origins)?,
             parsed,
             scan,
+            headers,
             definitions,
             calls,
         };
-        if value.metadata_bytes()? > 256 * 1024 * 1024 {
-            return Err(fault(
-                "LRR-E-DISCOVERY-LIMIT",
-                "declaration syntax retention budget",
-            ));
-        }
         Ok(value)
     }
     pub fn scan(&self) -> &Arc<DeclarationScan> {
         &self.scan
+    }
+    /// Actual pinned-AST header captures from this admitted record/grammar.
+    /// Facts alone grant neither enclosing owner nor member/call authority.
+    pub(crate) fn headers(&self) -> &[crate::expand::generated_items::GeneratedHeader] {
+        &self.headers
     }
     pub fn text(&self) -> &str {
         &self.text
@@ -682,7 +680,7 @@ impl GeneratedDeclarations {
             .attribute_item_range_at(row.range)?
             .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "generated attribute item absent"))?;
         let facts = self.parsed.attribute_inputs_at(range, cfg)?;
-        if !facts.enabled || facts.attributes.len() > 4096 {
+        if !facts.enabled {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "generated attribute inactive or excessive",
@@ -809,7 +807,50 @@ impl GeneratedDeclarations {
                     "generated invocation producer absent",
                 )
             })?;
-        self.parsed.macro_call_at(producer.range)
+        // Generated output may name `$crate`; its meaning comes from the token's
+        // definition-site hygiene, resolved by `dollar_crate_unit`.
+        self.parsed.generated_macro_call_at(producer.range)
+    }
+    /// The defining crate of a generated call path's leading `$crate` token.
+    pub(crate) fn dollar_crate_unit(&self, identity: Digest) -> Result<Digest, Diagnostic> {
+        use lrr_expand_adapter::token_wire::{Delimiter, TokenTree};
+        let call = self.macro_call(identity)?;
+        // The captured path may sit inside invisible (macro-fragment) groups.
+        let mut first = call.path.roots().first();
+        while let Some(TokenTree::Group {
+            delimiter: Delimiter::Invisible,
+            children,
+            ..
+        }) = first
+        {
+            first = children.first();
+        }
+        let span = match first {
+            Some(TokenTree::Ident { text, span, .. }) if text == "$crate" => *span,
+            _ => {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "generated dollar-crate path token absent",
+                ));
+            }
+        };
+        let context = call
+            .path
+            .spans()
+            .iter()
+            .find(|record| record.key() == span)
+            .ok_or_else(|| {
+                fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "generated dollar-crate token span absent",
+                )
+            })?
+            .context;
+        Ok(Digest(
+            self.hygiene_facts()?
+                .dollar_crate(crate::syntax::token_wire::Key(context.0))?
+                .0,
+        ))
     }
     pub(crate) fn intrinsic_arguments(
         &self,
@@ -915,7 +956,6 @@ impl GeneratedDeclarations {
             )?);
             bytes = bytes
                 .checked_add(scan.retained_bytes())
-                .filter(|n| *n <= 256 * 1024 * 1024)
                 .ok_or_else(|| {
                     fault("LRR-E-METADATA-LIMIT", "generated argument inventory limit")
                 })?;
@@ -936,7 +976,32 @@ impl GeneratedDeclarations {
             .tokens
             .allocated_bytes()
             .map_err(|e| fault(e.code, &e.message))?;
-        let mut captures = 0usize;
+        let mut captures = self
+            .headers
+            .capacity()
+            .checked_mul(std::mem::size_of::<
+                crate::expand::generated_items::GeneratedHeader,
+            >())
+            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "generated header metadata overflow"))?;
+        for header in &self.headers {
+            captures = captures
+                .checked_add(
+                    header
+                        .key
+                        .structural_path
+                        .capacity()
+                        .checked_mul(4)
+                        .ok_or_else(|| {
+                            fault("LRR-E-METADATA-LIMIT", "generated header path overflow")
+                        })?,
+                )
+                .and_then(|n| {
+                    n.checked_add(header.name.as_ref().map_or(0, |name| name.text.capacity()))
+                })
+                .ok_or_else(|| {
+                    fault("LRR-E-METADATA-LIMIT", "generated header metadata overflow")
+                })?;
+        }
         for definition in self.definitions.values() {
             let bytes = definition
                 .body

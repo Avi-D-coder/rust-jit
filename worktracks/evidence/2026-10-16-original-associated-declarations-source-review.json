@@ -1,0 +1,97 @@
+{
+  "schema": "lrr/source-review/original-associated-declaration-join/v1",
+  "baseline_commit": "adb43b9b7dc5118d139a4c7a31e0271a2b9cff41",
+  "source": [
+    {
+      "path": "crates/lrr/src/frontend/associated_declarations.rs",
+      "sha256": "ffc889175adf1d978c7223dfef76e6ba49b17350dbc40dd80109adfbc5332c49",
+      "bytes": 22496
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+      "sha256": "e315e8b0d99a8ab7b8d85bf12f951a5556b63c0f867819aa4944cc8188ff170d",
+      "bytes": 10812
+    }
+  ],
+  "status": "unhooked source-only component; no Cargo/compiler/tests/runtime acceptance",
+  "precode": "worktracks/evidence/2026-10-16-original-associated-declarations-precode.json",
+  "scanner_dependency": "/private/tmp/lrr-common-trait-header-capture-v1/COMPONENT.json SHA96084e9bcc329badab983c260dc172fcfe0aed7646f53b65be769f44ce98bc32",
+  "actual_shared_entries": [
+    "PreparedSourceView::retained_declaration_parser/declaration_inventory/outline/prepared_inputs",
+    "existing ParsedFile original/generated scanner (frozen unchanged)",
+    "PreparedOriginalAssociatedDeclarations::prepare/from_scan/publication",
+    "sorted at_span/owner/associated borrowed locator accessors"
+  ],
+  "authority": {
+    "actual": "Borrowed genuine captured PreparedSourceView, one actual declaration inventory Arc; exact parse/path/cfg/root scope/outline profile/content checks. Each canonical original row is an actual unique Outline span/kind/header, crosschecked against real captured DefinitionSource/Header/DeclarationContext/Body inputs.",
+    "identity": "Trait child scope uses real trait DefKey fingerprint; impl child scope uses real Outline HeaderRecipe fingerprint, computed once perowner. Scanned source entries and semantic headers are not reinterpreted as canonical keys.",
+    "members": "Direct member exact declaration span/kind/namespace/enclosing childscope/header tokens and owner-context/body locator/name occurrence normalization. Source rows remain owned by exact raw trait/impl entry. Real unexpanded macro row yields only actual producer identity/range/grammar/lexicalscope, not a method.",
+    "limits": "No currentness, visibility/lookup completeness, type/trait applicability, call/body entry or namespace/hygienic member selection grant. Name context remains source metadata. Original cold local owners absent from module Outline are typed missing-owner slots. Generated source is explicit NeedGeneratedParent component gap; not hooked as new language refusal."
+  },
+  "cost": {
+    "prepare": "One cold bounded raw declaration capture; once-sorted single-source Outline span and producer indexes, then owner/member locator arrays; O(N log N + compared actual header/context metadata). Owner child-scope digests cached once. No parse, executable preparation, world map, source tree or BodyIndex clone. Factory not yet query-memo integrated; no claim of caching across repeated factory invocations.",
+    "lookup": "O(log owners) or O(log slots), returning retained borrowed source/Outline/producer rows, no source walk, header hashing, query or planning.",
+    "memory": "Explicit MAX_ROWS1m/MAX_BYTES128MiB; checked totals before reserve and actual capacities after. Retained scan bounded by existing scanner and held by one Arc; captured source is borrowed. Peak accounting includes temporary indexes and scan; retained locators and Arc header reported separately from shared scan payload. Existing captured source/Outline allocation remains source owner root.",
+    "runtime": "No runtime call sites modified and no performance measurements."
+  },
+  "stable_encoding": "New lrr/v1/original-associated-declaration-source-join explicit domain over actual selection/scan fingerprint and sorted owner/slot identities, fixed tags, canonical DefKey/Header and optional actual BodyHandle/producer attachment. No pointer/address identity encoded. Equivalent immutable original capture can have same semantic preparation fingerprint without granting currentness. Frozen scanner domain3 and existing impl semantic domain2 unchanged by this slice.",
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": "prepare/from_scan/publication",
+      "finding": "Source facts only; no assertion/expression evaluator; historical MA001/MA007/MA008 runtime routes outside slice remain held."
+    },
+    {
+      "mode": 2,
+      "symbols": "source.declaration_inventory/SlotTarget",
+      "finding": "Actual AST declarations/producers, no literal/break executor or synthetic body. Applicable MA004/MA005 closure not claimed."
+    },
+    {
+      "mode": 3,
+      "symbols": "exact Outline span/kind/header/context/member_owner joins",
+      "finding": "No method basename or runtime descriptor selection, macro whitelist or numeric policy. Name normalization is an additional attachment check only; no hygienic use resolution. MA003/MA006 held."
+    },
+    {
+      "mode": 4,
+      "symbols": "AssociatedDeclarationsPreparation::NeedGeneratedParent",
+      "finding": "Explicit missing generated parent join only on unhooked source component; generated associated admission/selection still required before runtimeintegration. Existing supported semantics not narrowed or passed."
+    },
+    {
+      "mode": 5,
+      "symbols": "OriginalAssociatedTarget/BodyHandle equality",
+      "finding": "Cold body/initializer attachments compared, never lowered/typechecked/executed. Coldlocal unavailable Outline stays missing; no pattern machine or unselected arm check. MA002 held."
+    },
+    {
+      "mode": 6,
+      "symbols": "prepare/owner/associated",
+      "finding": "Factory captures/indexes once then borrowed locators; no perlookup parse/planning. Future pure memo integration required before execution consumer; no memo/hotpath claim now."
+    },
+    {
+      "mode": 7,
+      "symbols": "single-source spans/producers/locators",
+      "finding": "No world namespace census or global revision comparison. Captured source fullscan key appropriate for source component, not proposed installed-op guard."
+    },
+    {
+      "mode": 8,
+      "symbols": "borrowed PreparedSourceView + Arc<DeclarationScan>",
+      "finding": "No body/index/parser deepcopy; one-time actual Outline span index avoids wholefile search per member lookup. Checked locator buffers and retained root accounting explicit."
+    }
+  ],
+  "independent_review": {
+    "reviewer": "/root/runtime_validation_next",
+    "finding": "No concrete original-source attachment/API defect found in live source including cached member_owner; exact source/context/body and real canonical domains confirmed. Name context remains metadata, no selection/currentness authority. No tests run."
+  },
+  "tests_authored_unexecuted": [
+    "unchanged_stock_owners_join_canonical_headers_and_real_producer_slots_all_editions",
+    "actual_direct_members_keep_distinct_canonical_owners_and_cold_local_gap",
+    "changed_actual_source_cannot_reuse_join_but_equivalent_immutable_capture_can",
+    "original_component_rejects_generated_slot_scan_and_checked_index_overflow"
+  ],
+  "gaps": [
+    "No Cargo/compiler/test invocation; source-only authored controls unexecuted.",
+    "No frontend/mod.rs registration applied; hookpatch provided separately. No shared production files edited.",
+    "No genuine generated PreparedSourceView parent join; actual generated TraitItems scan only tested as unexecuted refusal control for original kernel.",
+    "No db query/provider/SourceArtifactRef/publication/currentnessguard wiring, membergoal, traitcatalog seal or callable witness.",
+    "No full stockmain, original/user/wrapper/std operation matrix, suspension/cleanup/epoch retirement or scaling acceptance."
+  ]
+}

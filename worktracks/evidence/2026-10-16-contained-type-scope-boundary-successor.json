@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "component": "contained-type-scope-boundary-and-single-parent-successor-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "base": "Type8 e67fcf1f + parent CLI cfg(test)/call retirement hook",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/sealed_name_provider.rs",
+      "sha256": "6250ab1b94a3f372adfe536b4ff42dda5638002e4c3e67fd598dbe65033ea190",
+      "bytes": 2373
+    },
+    {
+      "path": "crates/lrr/src/db/scope_certificate_index.rs",
+      "sha256": "2404ebc4478c32ea1c7a1776dec676c65624b72e447643739d8d716f5920677e",
+      "bytes": 6865
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "sha256": "51200f439ab976e990f54408e3793fb72c786f04bc338b79efbb8d764beb6e14",
+      "bytes": 10734
+    }
+  ],
+  "source_fingerprint": "0cbf00da938662ffebcd393da31534d8bcf0c0a9a6632bd13b5d726f4512bd4c",
+  "changes": [
+    "completed immutable parent lacking requested facet preserves typed request error, not retrying same immutable seal",
+    "locator excludes foreign/sibling Type scope-source pairs using actual unit/module prefix; this is not source authority, Outline membership remains required",
+    "field/constructor test world consumes actual Value-owned Type facet instead of publishing a competing standalone Type parent"
+  ]
+}

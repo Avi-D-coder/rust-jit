@@ -9,10 +9,6 @@ use crate::{
 use std::sync::Arc;
 const MAGIC: &[u8; 8] = b"LRRCNST\0";
 const VERSION: u16 = 1;
-const MAX_BYTES: usize = 1 << 20;
-const MAX_NODES: usize = 100_000;
-const MAX_DEPTH: usize = 128;
-const MAX_HEAP: usize = 32 << 20;
 /// Exact concrete result shape, including the element type of an empty array.
 /// This describes the current scalar/array evaluator surface, not a runtime TypeId
 /// admission certificate. Source-selected aliases/generics are resolved separately.
@@ -34,14 +30,14 @@ struct Layout {
 impl ConstantWireType {
     /// Checked stable type identity; includes empty-array element types and lengths.
     pub fn fingerprint_checked(&self) -> Result<crate::core::digest::Digest, Diagnostic> {
-        let admitted = admit(self, MAX_BYTES)?;
+        let admitted = admit(self)?;
         let mut encoder =
             crate::core::digest::StableEncoder::new("lrr/v1/pure-constant-result-type");
         encoder.bytes(&admitted.header);
         Ok(encoder.finish())
     }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
-        self.layout(0)?;
+        self.layout()?;
         let mut shape = self;
         let mut bytes = 0usize;
         loop {
@@ -54,11 +50,8 @@ impl ConstantWireType {
             }
         }
     }
-    fn layout(&self, depth: usize) -> Result<Layout, Diagnostic> {
-        if depth >= MAX_DEPTH {
-            return Err(invalid("constant wire type depth limit"));
-        }
-        let result = match self {
+    fn layout(&self) -> Result<Layout, Diagnostic> {
+        Ok(match self {
             Self::Scalar(ty) => {
                 PrimitiveIdentity::from_recipe(*ty)?;
                 Layout {
@@ -69,7 +62,7 @@ impl ConstantWireType {
                 }
             }
             Self::Array { element, length } => {
-                let child = element.layout(depth + 1)?;
+                let child = element.layout()?;
                 let count = usize::try_from(*length)
                     .map_err(|_| invalid("array count exceeds host width"))?;
                 Layout {
@@ -90,11 +83,7 @@ impl ConstantWireType {
                         .ok_or_else(|| invalid("array count overflow"))?,
                 }
             }
-        };
-        if result.nodes > MAX_NODES {
-            return Err(invalid("constant wire node limit"));
-        }
-        Ok(result)
+        })
     }
     fn write_shape(&self, bytes: &mut Vec<u8>) -> Result<(), Diagnostic> {
         match self {
@@ -115,11 +104,10 @@ struct Admission {
     header: Vec<u8>,
     bytes: usize,
 }
-fn admit(ty: &ConstantWireType, limit: usize) -> Result<Admission, Diagnostic> {
-    if limit == 0 || limit > MAX_BYTES {
-        return Err(invalid("constant wire byte limit exceeds profile"));
-    }
-    let layout = ty.layout(0)?;
+/// Exact wire size and canonical header for a concrete constant type. E-R5-006:
+/// no byte, node or depth ceiling; only arithmetic overflow is refused.
+fn admit(ty: &ConstantWireType) -> Result<Admission, Diagnostic> {
+    let layout = ty.layout()?;
     let header_bytes = layout
         .shape
         .checked_add(10)
@@ -128,25 +116,7 @@ fn admit(ty: &ConstantWireType, limit: usize) -> Result<Admission, Diagnostic> {
         .scalars
         .checked_mul(16)
         .and_then(|n| n.checked_add(header_bytes))
-        .filter(|n| *n <= limit)
-        .ok_or_else(|| invalid("constant wire byte limit"))?;
-    // Includes both Vec and Arc payloads during transfer, BTree-free traversal,
-    // allocation overhead for every array and the temporary canonical header.
-    let heap = layout
-        .nodes
-        .checked_mul(std::mem::size_of::<ConstValue>())
-        .and_then(|n| n.checked_mul(2))
-        .and_then(|n| {
-            layout
-                .arrays
-                .checked_mul(128)
-                .and_then(|a| n.checked_add(a))
-        })
-        .and_then(|n| n.checked_add(header_bytes))
-        .and_then(|n| n.checked_add(bytes))
-        .filter(|n| *n <= MAX_HEAP)
-        .ok_or_else(|| invalid("constant wire heap limit"))?;
-    let _ = heap;
+        .ok_or_else(|| invalid("constant wire size overflow"))?;
     let mut header = Vec::new();
     header
         .try_reserve_exact(header_bytes)
@@ -159,30 +129,14 @@ fn admit(ty: &ConstantWireType, limit: usize) -> Result<Admission, Diagnostic> {
     }
     Ok(Admission { header, bytes })
 }
-/// Reuse still obeys the requesting payload and immutable-value byte limits.
-/// This checks the exact rectangular scalar/array shape without decoding values.
+/// Checks the exact rectangular scalar/array shape without decoding values.
+// E-R5-006: ignored, remove at callers (`_wire_limit`, `_value_limit`).
 pub(crate) fn admit_result_limits(
     ty: &ConstantWireType,
-    wire_limit: usize,
-    value_limit: usize,
+    _wire_limit: usize,
+    _value_limit: usize,
 ) -> Result<(), Diagnostic> {
-    admit(ty, wire_limit)?;
-    let layout = ty.layout(0)?;
-    layout
-        .scalars
-        .checked_mul(17)
-        .and_then(|n| layout.arrays.checked_mul(9).and_then(|a| n.checked_add(a)))
-        .and_then(|n| {
-            n.checked_add(8 + <ConstValue as crate::core::digest::StableEncode>::DOMAIN.len())
-        })
-        .filter(|n| *n <= value_limit)
-        .ok_or_else(|| {
-            Diagnostic::new(
-                "LRR-E-CONST-LIMIT",
-                "constant immutable value byte limit".into(),
-            )
-        })?;
-    Ok(())
+    admit(ty).map(|_| ())
 }
 fn scalar(value: &ConstValue, ty: PrimitiveType) -> Result<ValueRepr, Diagnostic> {
     let value = value
@@ -220,13 +174,20 @@ fn write(value: &ConstValue, ty: &ConstantWireType, bytes: &mut Vec<u8>) -> Resu
     }
     Ok(())
 }
-/// Explicit little-endian schema, never repr(C), serde or Debug transport.
+// E-R5-006: ignored, remove at callers (`_byte_limit`); use `encode_value`.
 pub fn encode(
     value: &ConstValue,
     expected: &ConstantWireType,
-    byte_limit: usize,
+    _byte_limit: usize,
 ) -> Result<Vec<u8>, Diagnostic> {
-    let admission = admit(expected, byte_limit)?;
+    encode_value(value, expected)
+}
+/// Explicit little-endian schema, never repr(C), serde or Debug transport.
+pub fn encode_value(
+    value: &ConstValue,
+    expected: &ConstantWireType,
+) -> Result<Vec<u8>, Diagnostic> {
+    let admission = admit(expected)?;
     let mut bytes = Vec::new();
     bytes
         .try_reserve_exact(admission.bytes)
@@ -285,15 +246,19 @@ impl Reader<'_> {
         }
     }
 }
-/// Decode only after the caller supplies its exact expected concrete result type.
-/// Header, expanded node count, depth, wire bytes and heap are checked before
-/// allocating any value tree. No decoded payload can contain a guest handle.
+// E-R5-006: ignored, remove at callers (`_byte_limit`); use `decode_value`.
 pub fn decode(
     bytes: &[u8],
     expected: &ConstantWireType,
-    byte_limit: usize,
+    _byte_limit: usize,
 ) -> Result<ConstValue, Diagnostic> {
-    let admission = admit(expected, byte_limit)?;
+    decode_value(bytes, expected)
+}
+/// Decode only after the caller supplies its exact expected concrete result type.
+/// The exact header and wire length are checked before allocating any value
+/// tree. No decoded payload can contain a guest handle.
+pub fn decode_value(bytes: &[u8], expected: &ConstantWireType) -> Result<ConstValue, Diagnostic> {
+    let admission = admit(expected)?;
     if bytes.len() != admission.bytes || !bytes.starts_with(&admission.header) {
         return Err(invalid(
             "constant wire schema, type or exact length differs",

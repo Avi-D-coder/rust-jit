@@ -1,0 +1,59 @@
+{
+  "schema": "lrr/precode/common-trait-header-capture/v1",
+  "task": [
+    "M013/M014 declaration closure prerequisites",
+    "M017/M018 symbolic/source joins remain later",
+    "M019 genuine trait and associated declaration capture; not applicability/M020/M021 selection"
+  ],
+  "owned": [
+    "crates/lrr/src/syntax/declaration_scan.rs",
+    "crates/lrr/src/syntax/declaration_scan/trait_headers.rs",
+    "crates/lrr/src/syntax/declaration_scan/trait_header_tests.rs"
+  ],
+  "reservation": "Parent explicitly transferred scanner slice under active LOCAL024; read current claims, other WT05 LOCAL031-034 released. No other active scanner writer; no traits/engine/frontendcall edits by worker.",
+  "witness": "Already imported unchanged tests/ui/macros/macro-as-fn-body.rs SHA6ae5e64f: same def_fn macro in TraitItems/ImplItems/Items, fullmain calls default trait/inherent/module bar. No current runtime acceptance inferred.",
+  "invariant": "Capture actual cfg-active trait and associated AST source identity/name occurrence/edition/context/binder/header/owner/bodyrange using same original/generated scanner, without name-only selection, body lowering or fake published DefKey.",
+  "entrypoints": [
+    "ParsedFile::scan_declarations_in_scope",
+    "new declaration_scan::trait_headers common associated-list capture",
+    "existing ParsedFile::identifier_context/token_edition and Budget::tokens/body_exclusion",
+    "DeclarationScan::traits/associated_fragments source facts getters"
+  ],
+  "authority": "New IDs are declaration-source entry facts (tags6trait/7associated under existing source-entry domain), not callable/canonical declaration IDs. Trait/Impl owner identity explicit; associated-slot fragments retain grammar+actual rootlexicalscope and still require GeneratedDeclarations parent inventory/producer join. Names retain raw physical context or explicit Original/UnattachedGenerated data; no namespace absence/admission.",
+  "stable_migration": "Existing source-entry IDs/tags0-5 and scanned-impl-header semantic domain/fieldencoding remain unchanged. New scanned-trait-header semantic domain excludes method/initializer bodies. DeclarationScan fingerprint domain moves to v3 and encodes new trait/member source facts; this intentionally changes scan fingerprints/generated declaration binding parse identities/declarationjob/dependency fingerprints on new source, requiring fresh actual frozen validation. No old witnesshash/oracle edits.",
+  "cost": "Existing cold declaration AST pass, raw trait/associated headers and body/initializer ranges only. Common associated helper reuses existing cfg and Budget syntax capture; strict existing node/depth/metadata caps, checked allocs. No executor/BodyIndex/type/body queries, no worldcensus/hotpath code. Raw headerbuffers not deepcloned.",
+  "remaining": "Actual canonical Outline/DefKey/header join, trait identity/binders/nameType lowering, configured live/facade ImplCatalog seal, goal applicability/defaultmember/callable/service all gated; no fake Ready or pending wrapper APIs.",
+  "all_eight": [
+    "1 no alternate evaluator MA001/7/8 unchanged",
+    "2 actual full source header capture no scalar/break MA004/5",
+    "3 no method/numeric/name selector MA003/6",
+    "4 same scanner both origins with actual context gap explicit",
+    "5 cold skeleton only no executable arms/patterns MA002",
+    "6 one retained scan, common helper no reparse",
+    "7 no global namespace map or invalidation policy",
+    "8 no BodyIndex/parser deepcopies or wholefile pernode search"
+  ],
+  "controls": "New source-only syntax tests primaryunchangedfixture+real GeneratedDeclarations outputs, cfg-disabled pruning, bodyedit semanticheader stability/newsourceids, repeatedidentical outputs/scope/hygiene and metadata limits. Sole validator owns Cargo.",
+  "baseline": [
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan.rs",
+      "sha256": "023a30a30d272a9c4a5fcfcaaf8fa4c58543ac076a2e3bcee069c7930131f68c"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse.rs",
+      "sha256": "214b369295fcffe27d5d3cded75aa48ae89f5d4ecfc3656de6a8026c9938b6f4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/lexical_hygiene.rs",
+      "sha256": "1f4559169f0fe5c2bbc3d527694159510a1dbc3d092e3dccc2df49d2509377d4"
+    },
+    {
+      "path": "crates/lrr/src/traits/header.rs",
+      "sha256": "801c0554253f1018078d35784781bf8c4aebaa3384591e4f4481c2f48af56c17"
+    },
+    {
+      "path": "crates/lrr/src/traits/index.rs",
+      "sha256": "962501df63ec50223e36b36a74b773bcb9db107202abc6e8395b003d78e5a072"
+    }
+  ]
+}

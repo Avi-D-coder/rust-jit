@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "component": "common-completed-source-scope-owners-v1",
+  "status": "source-only-uncompiled-unexecuted",
+  "source_fingerprint": "93d42136154ac2160ea896c5c18431803026c20d9e9cf2b7b2d7bbc662d63687",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "b6886e49baae39af4ad9fa6fb55750dd0b7bca511172ca7c74b67ae40010faf1",
+      "bytes": 10933
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment_tests.rs",
+      "sha256": "9769edc200e14ab727cceca6c583c01284600e84fa22b7455cb0feec152dd5b2",
+      "bytes": 5563
+    }
+  ],
+  "dependencies": [
+    "frozen completed-env19+retirement2",
+    "root source_discovery.rs reexport SourceScopeOwner (only parent hook)"
+  ],
+  "exclusions": [
+    "all new namespace read-trace files/parent entries",
+    "QualifiedBodyType query36 consumer"
+  ],
+  "contracts": [
+    "one-time actual admitted ownerless ScopeKey->runtime source ordinal index",
+    "actual external ModuleSource placeholder excluded except actual selected source root",
+    "duplicate owners explicit, no spelling/path authority",
+    "cached checked key/vector bytes under existing env/pool accounting"
+  ],
+  "tests": "existing actual unchanged qualified source control extended for real original/inline ownership and wrong unit absence; no commands run"
+}

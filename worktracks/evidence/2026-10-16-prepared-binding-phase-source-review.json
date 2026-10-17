@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "component": "prepared-binding-plan-phase-and-lifetime-source-review",
+  "status": "read-only/source-only/uncompiled/unexecuted",
+  "source_fingerprint": "666a3a100cd062d53b39713bb873efba4b84ad0cce292df27cfb285d0afc0d09",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/prepared_binding_plan.rs",
+      "sha256": "b8bb4095f9e05b0cbcc8732a721017fd176541d1e59460e5aa25142c5154d351",
+      "bytes": 3330
+    },
+    {
+      "path": "crates/lrr/src/db/binding_constraint_thunk.rs",
+      "sha256": "e48a98512942edc5979dc241f3e2d1b9b46a072e9266b8348cfdc2d4414d4b00",
+      "bytes": 3284
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "301c9ef6b4263347e2008063d1d32f155a1bc585cc815d5d5e304a6c4f9e9b2d",
+      "bytes": 187656
+    },
+    {
+      "path": "crates/lrr/src/frontend/binding_constraint_tests.rs",
+      "sha256": "6b8c5aacfe5164e0e841e742099868d60a82f0c96bd582842b1943c31147f3db",
+      "bytes": 7687
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "225fee71bce79122ed7a1c9a17e9d0c88e1cf0d97f668f43d90f8f835f6517be",
+      "bytes": 11264
+    }
+  ],
+  "guard_dependency": "common-recipe-prepared-input-guard-v1 fp68d78e2d516d5b0a6e853c60167e6cf12ad66133dc45d36674573de224c511da",
+  "scope": "query41 retained guard and cold lowering/installed currentness split; source40 semantic solver delegated to existing pattern worker, not duplicated here",
+  "findings": [],
+  "observations": [
+    "prepare41 fetches actual40, refuses uncacheableResolved, capturesguardonce and records actualcachedguardfp; error/NeedInput before readyplan. NonResolved retainsno new guard/semantic grant.",
+    "statement helper normalizes phase0 key41 and shares actualArc into ordinary verified phase recipes; no repeated40 solve or inputclosure capture/hash perphase.",
+    "hint_for validates exact body/node/cachedBodyIndex semantic identity and supplies ordinary HintRecipe; annotation/SetHint/BindLocal/control/cleanup remain same lowering.",
+    "InstalledRecipes installs/checks both old namespace witness and preparedguard before VM; installed Arc owns immutableguard while mutable Frame owns execution/continuation; no additional GuestStore owner/drop resource from currentness.",
+    "thirdcontrol strongcount+2 is source-supported: memo and outcome retain same outerArc, eachphaseRecipe stores exactlyone newguardArc; capture occurs before owners count, closurefingerprinting does not clone.",
+    "thirdcontrol expects provider41/40/37 once and no query during epochrefusal. Original SourceLocalPlan parentenvironment really depends on discovery epoch; this is not fabricated epoch dependence for original header-only Type proof."
+  ],
+  "holds": [
+    "NoNumericDemand/Unconstrained explicit fallback and legacy runtime_macro_numeric/default source lanes remain held; no repair closure or activation acceptance.",
+    "New helper current source authority uses real parent env/seal dependencies; some existing coarse source/namespace dependency invalidation remains. No full world scan added to guardcheck; performance not measured.",
+    "Literal annotation/source lowering existing cold work remains; this review does not certify all numeric semantic cases, malformedinputs or unrelatednamespace independence.",
+    "new thirdcontrol/main all uncompiled/unexecuted in this source review scope"
+  ],
+  "all_eight": {
+    "1": "no evaluator added; sourceproof selects normal lowering",
+    "2": "no output-literal/break evaluator; same thunk source/index route",
+    "3": "ordinary selected parameter/binding source goals; semantic solver reviewed separately",
+    "4": "actual published BodyEnvironment selects common route for original/retained/generated; absence goes held historicalroute, not a new origin exception",
+    "5": "no child BodyStructure or unselected executable branch demanded by41 wrapper; source40 graph semantics separate review",
+    "6": "one40/guardclosure per41, normalizedphase key, sharedguardArc and cachedfpO(1), coldphase lowering only",
+    "7": "hot guard read-only relevant actual stampsO(D); legacy namespacesourceRevision/coarse env holds remain",
+    "8": "actual parser/index borrowed handles, same guardArc acrossphases; no body/index copy or wholefile selection introduced"
+  },
+  "upstream": "unchanged complete integer-literal-suffix-inference.rs1221B; actualpredecessor fullmainFAILED at id_i8(j)2a3855/1, no successor result yet"
+}

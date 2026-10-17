@@ -90,10 +90,7 @@ impl RuntimePrimitiveMethod {
 /// defaults, names, calls and casts do not manufacture source receiver evidence.
 fn written_receiver(expression: &ast::Expr) -> Result<Option<PrimitiveType>, Diagnostic> {
     let mut selected = None;
-    for (visited, node) in expression.syntax().descendants().enumerate() {
-        if visited >= 65_536 {
-            return Err(invalid("primitive receiver source work limit"));
-        }
+    for node in expression.syntax().descendants() {
         if ast::Attr::can_cast(node.kind()) {
             return Ok(None);
         }

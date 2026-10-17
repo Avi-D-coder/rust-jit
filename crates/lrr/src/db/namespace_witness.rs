@@ -10,8 +10,11 @@ use std::collections::BTreeMap;
 /// Only Database can capture this census; callers cannot supply membership.
 #[derive(Debug)]
 pub(crate) struct NamespaceWitness {
-    stamps: BTreeMap<InputKey, Digest>,
+    stamps: std::sync::Arc<BTreeMap<InputKey, Digest>>,
     metadata_bytes: usize,
+    /// The census reads only published inputs: repeated per input revision,
+    /// not per dispatch.
+    checked: super::CheckedRevision,
 }
 impl NamespaceWitness {
     pub(crate) fn metadata_bytes(&self) -> usize {
@@ -22,12 +25,16 @@ impl NamespaceWitness {
         // publication may add names without changing source_revision or epoch.
         // Parsing-only retained inputs and exact definition rows do not add
         // names. Their source/body consumers retain separate currentness checks.
+        if self.checked.is_current(db) {
+            return Ok(());
+        }
         if db.lexical_namespace_stamps()? != self.stamps {
             return Err(fault(
                 "LRR-E-NAMESPACE-STALE",
                 "installed recipe namespace membership changed; fresh source preparation is required",
             ));
         }
+        self.checked.record(db);
         Ok(())
     }
 }
@@ -48,6 +55,7 @@ impl Database {
         Ok(NamespaceWitness {
             stamps,
             metadata_bytes: bytes,
+            checked: Default::default(),
         })
     }
 }

@@ -466,7 +466,7 @@ fn copied_foreign_body_publication_and_wrong_owner_never_reuse_proof() {
     );
 }
 #[test]
-fn path_range_and_metadata_limits_refuse_without_provider_or_source_mutation() {
+fn path_range_and_caller_budget_refuse_without_provider_or_source_mutation() {
     let (db, views) = world(ROOT, PROVIDER, "const_fn_evaluated_cross_crate", 2024, 2024);
     let (body, range) = site(&views[0], ROOT, "lib::FOO");
     let refs = [&views[0], &views[1]];
@@ -482,9 +482,6 @@ fn path_range_and_metadata_limits_refuse_without_provider_or_source_mutation() {
     assert!(
         ConstantPathSelection::capture_current(&db, &views[0], &body, wrong, &refs, LIMIT).is_err()
     );
-    let a = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
-    let many = vec![&views[0]; 257];
-    assert!(a.revalidate(&db, &views[0], &many).is_err());
     assert_eq!(db.trace.events.len(), before);
     assert_eq!(db.revision(), revision);
 }

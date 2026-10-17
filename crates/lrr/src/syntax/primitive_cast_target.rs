@@ -18,7 +18,6 @@ use ra_ap_syntax::{
 fn charge(work: &mut usize) -> Result<(), Diagnostic> {
     *work = work
         .checked_add(1)
-        .filter(|n| *n <= 100_000)
         .ok_or_else(|| {
             Diagnostic::new(
                 "LRR-E-BODY-INDEX-LIMIT",
@@ -62,14 +61,8 @@ pub(super) fn resolve(
     let wanted = MacroName::parse(ty.syntax().text().to_string().trim(), parsed.edition)?;
     let mut work = 0usize;
     let mut imports = ImportBudget::default();
-    for (depth, scope) in ty.syntax().ancestors().enumerate() {
+    for scope in ty.syntax().ancestors() {
         charge(&mut work)?;
-        if depth >= 256 {
-            return Err(Diagnostic::new(
-                "LRR-E-BODY-INDEX-LIMIT",
-                "primitive cast source namespace depth limit".into(),
-            ));
-        }
         for child in scope.children() {
             charge(&mut work)?;
             let Some(parameters) = ast::GenericParamList::cast(child) else {

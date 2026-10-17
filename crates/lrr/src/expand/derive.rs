@@ -72,14 +72,10 @@ impl DeriveHelperBinding {
             count = count
                 .checked_add(1)
                 .ok_or_else(|| fault("derive helper count overflow"))?;
-            if count > 4096 || name.len() > 64 * 1024 {
-                return Err(fault("derive helper declaration limit"));
-            }
             let name = crate::syntax::ast_adapter::macro_name(&name, invocation.definition_edition)
                 .ok_or_else(|| fault("invalid derive helper identifier"))?;
             bytes = bytes
                 .checked_add(name.len() + 64)
-                .filter(|n| *n <= 1024 * 1024)
                 .ok_or_else(|| fault("derive helper metadata limit"))?;
             helpers.insert(name);
         }
@@ -127,9 +123,6 @@ impl ItemHelperScope {
         cfg: Digest,
         bindings: Vec<DeriveHelperBinding>,
     ) -> Result<Self, Diagnostic> {
-        if bindings.len() > 1024 {
-            return Err(fault("item derive count limit"));
-        }
         let mut seen = BTreeSet::new();
         let mut bytes = 0usize;
         for binding in &bindings {
@@ -138,7 +131,6 @@ impl ItemHelperScope {
                 .and_then(|n| {
                     n.checked_add(crate::expand::record::key_heap_bytes(&binding.invocation))
                 })
-                .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| fault("item helper metadata limit"))?;
             if !seen.insert(binding.invocation.invocation) {
                 return Err(fault("duplicate derive invocation in item scope"));
@@ -146,7 +138,6 @@ impl ItemHelperScope {
             for name in &binding.helpers {
                 bytes = bytes
                     .checked_add(name.capacity() + 64)
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("item helper metadata limit"))?;
             }
         }
@@ -182,9 +173,6 @@ impl ItemHelperScope {
         if owner != self.owner || cfg != self.cfg {
             return Err(fault("derive helper scope owner/cfg mismatch"));
         }
-        if active.len() > 1024 {
-            return Err(fault("active derive count limit"));
-        }
         let mut missing = Vec::new();
         let mut missing_bytes = 0usize;
         for invocation in active {
@@ -196,6 +184,7 @@ impl ItemHelperScope {
                         kind: ProceduralKind::Derive,
                         ..
                     } | MacroIdentity::Builtin { .. }
+                        | MacroIdentity::BuiltinDerive { .. }
                 )
             {
                 return Err(fault(
@@ -211,7 +200,6 @@ impl ItemHelperScope {
                 missing_bytes = missing_bytes
                     .checked_add(std::mem::size_of::<ExpansionKey>())
                     .and_then(|n| n.checked_add(crate::expand::record::key_heap_bytes(invocation)))
-                    .filter(|n| *n <= 32 * 1024 * 1024)
                     .ok_or_else(|| fault("missing helper declaration metadata limit"))?;
                 missing.push(invocation.clone());
             }

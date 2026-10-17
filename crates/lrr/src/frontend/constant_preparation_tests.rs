@@ -272,7 +272,7 @@ fn explicit_standard_module_macro_rename_retains_real_type_route_under_source_po
                 &view,
                 base.plan().owner_definition(),
                 ConstantRequest::Constant,
-                MAX_BYTES,
+                usize::MAX,
                 std::slice::from_ref(&proof),
             )
             .unwrap();

@@ -9,8 +9,6 @@ use crate::{
     source::manifest::BodyKey,
 };
 use std::collections::BTreeMap;
-const MAX_DEMANDS: usize = 100_000;
-const MAX_METADATA: usize = 32 * 1024 * 1024;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DemandContext {
     pub request: Digest,
@@ -138,15 +136,11 @@ fn error(message: &str) -> Diagnostic {
 fn add(bytes: usize, extra: usize) -> Result<usize, Diagnostic> {
     bytes
         .checked_add(extra)
-        .filter(|n| *n <= MAX_METADATA)
         .ok_or_else(|| error("demand metadata limit exceeded"))
 }
 fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
     let mut bytes = std::mem::size_of::<QueryKey>();
     let mut scope = |modules: &[String], capacity: usize| -> Result<(), Diagnostic> {
-        if modules.len() > 256 {
-            return Err(error("demand scope depth exceeded"));
-        }
         bytes = add(
             bytes,
             capacity
@@ -159,16 +153,10 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         Ok(())
     };
     match query {
-        QueryKey::PreparedBodySyntax(key) => {
-            if key.source.module_path.len() > 256 {
-                return Err(error("demand scope depth exceeded"));
-            }
+        QueryKey::PreparedBodySyntax(_key) => {
             bytes = add(bytes, query.heap_bytes())?;
         }
-        QueryKey::CurrentModuleName(key) => {
-            if key.source.module_path.len() > 256 || key.bucket.scope.module_path.len() > 256 {
-                return Err(error("demand scope depth exceeded"));
-            }
+        QueryKey::CurrentModuleName(_key) => {
             bytes = add(bytes, query.heap_bytes())?;
         }
         QueryKey::ParseFile(k) => bytes = add(bytes, k.profile.semantics.capacity())?,
@@ -335,9 +323,6 @@ impl ExpansionCoordinator {
         if let Some(token) = self.demands.get(&key) {
             return Ok(token.token.clone());
         }
-        if self.demands.len() >= MAX_DEMANDS {
-            return Err(error("demand count exceeded"));
-        }
         let sequence = self
             .next_sequence
             .checked_add(1)
@@ -433,9 +418,6 @@ impl ExpansionCoordinator {
             .as_ref()
             .err()
             .map_or(0, |e| e.heap_bytes().unwrap_or(usize::MAX));
-        if extra > 64 * 1024 {
-            return Err(error("failure diagnostic exceeds limit"));
-        }
         let metadata = add(self.metadata, extra)?;
         self.operations.insert(
             key,

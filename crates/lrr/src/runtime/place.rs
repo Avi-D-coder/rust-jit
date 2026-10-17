@@ -9,7 +9,34 @@ use crate::core::diagnostic::Diagnostic;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PlacePanic {
-    IndexOutOfBounds,
+    /// rustc: `index out of bounds: the len is {len} but the index is {index}`.
+    IndexOutOfBounds { len: u64, index: u64 },
+    /// rustc's slice range checks (`core::slice::index`):
+    /// `range end index {end} out of range for slice of length {len}`.
+    RangeEndOutOfBounds { end: u64, len: u64 },
+    /// `range start index {start} out of range for slice of length {len}`.
+    RangeStartOutOfBounds { start: u64, len: u64 },
+    /// `slice index starts at {start} but ends at {end}`.
+    RangeOrder { start: u64, end: u64 },
+}
+impl PlacePanic {
+    /// The guest panic message rustc's bounds checks format.
+    pub fn message(self) -> String {
+        match self {
+            Self::IndexOutOfBounds { len, index } => {
+                format!("index out of bounds: the len is {len} but the index is {index}")
+            }
+            Self::RangeEndOutOfBounds { end, len } => {
+                format!("range end index {end} out of range for slice of length {len}")
+            }
+            Self::RangeStartOutOfBounds { start, len } => {
+                format!("range start index {start} out of range for slice of length {len}")
+            }
+            Self::RangeOrder { start, end } => {
+                format!("slice index starts at {start} but ends at {end}")
+            }
+        }
+    }
 }
 #[derive(Debug)]
 pub enum PlaceFailure {
@@ -33,6 +60,13 @@ pub enum Projection {
     SourceField(SourceFieldProjection),
     Tuple(u32),
     Index(u32),
+    /// Element window `start..end` of an array place or of a slice window
+    /// (`a[1..3]`, `s[..2]`). The projected place is unsized (`[T]`): it can
+    /// be borrowed or indexed further, never read or assigned as a value.
+    Range { start: u32, end: u32 },
+    /// `*b` of a `Box<T>` place (rustc MIR's `Deref` projection on a box):
+    /// the box object's single owned heap cell holding its `T`.
+    BoxContents,
 }
 /// Opaque selected nominal member facts, never derived from a runtime layout.
 /// The checked source-member projection operation is the only constructor.
@@ -54,7 +88,6 @@ pub(crate) struct SourceProjectionStep {
 pub(crate) fn checked_source_projection_bytes(count: usize) -> Result<usize, Diagnostic> {
     count
         .checked_mul(std::mem::size_of::<SourceProjectionStep>())
-        .filter(|bytes| *bytes <= 32 * 1024 * 1024)
         .ok_or_else(resource)
 }
 pub struct Place {
@@ -97,7 +130,6 @@ impl Place {
 fn checked_projection_bytes(count: usize) -> Result<usize, Diagnostic> {
     count
         .checked_mul(std::mem::size_of::<Projection>())
-        .filter(|bytes| *bytes <= 32 * 1024 * 1024)
         .ok_or_else(resource)
 }
 /// Freeze an evaluated index only after checking its actual usize identity.
@@ -112,11 +144,71 @@ pub fn checked_index(value: ValueRepr) -> Result<u64, Diagnostic> {
     value.validate_scalar()?;
     Ok(value.payload)
 }
+/// An evaluated `core::ops::Range*` index operand in rustc's `SliceIndex`
+/// form: `end: None` is the slice length (`a..`, `..`), `inclusive` marks
+/// `a..=b` / `..=b`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct SliceRange {
+    pub start: u64,
+    pub end: Option<u64>,
+    pub inclusive: bool,
+}
+/// rustc's `slice_index_fail` (library/core/src/slice/index.rs): the first
+/// violated bound selects the message, start before end before order.
+fn slice_index_fail(start: u64, end: u64, len: u64) -> PlacePanic {
+    if start > len {
+        PlacePanic::RangeStartOutOfBounds { start, len }
+    } else if end > len {
+        PlacePanic::RangeEndOutOfBounds { end, len }
+    } else if start > end {
+        PlacePanic::RangeOrder { start, end }
+    } else {
+        // Only an inclusive range with `end == len` reaches this.
+        PlacePanic::RangeEndOutOfBounds { end, len }
+    }
+}
+/// The checked element window `(start, end)` a range selects from a slice of
+/// `len` elements, with rustc's `SliceIndex<[T]>` bounds semantics.
+pub fn checked_slice_range(range: SliceRange, len: u64) -> Result<(u64, u64), PlacePanic> {
+    let SliceRange {
+        start,
+        end,
+        inclusive,
+    } = range;
+    match (end, inclusive) {
+        (None, _) => {
+            if start > len {
+                return Err(slice_index_fail(start, len, len));
+            }
+            Ok((start, len))
+        }
+        (Some(end), false) => {
+            if start <= end && end <= len {
+                Ok((start, end))
+            } else {
+                Err(slice_index_fail(start, end, len))
+            }
+        }
+        (Some(end), true) => {
+            if end < len {
+                let end = end + 1;
+                if start <= end {
+                    return Ok((start, end));
+                }
+                return Err(slice_index_fail(start, end, len));
+            }
+            Err(slice_index_fail(start, end, len))
+        }
+    }
+}
 /// Conversion follows the bounds check so a huge usize is a bounds fault.
 pub fn checked_array_index(value: ValueRepr, length: u32) -> Result<Projection, PlaceFailure> {
     let index = checked_index(value)?;
     if index >= u64::from(length) {
-        return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds));
+        return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds {
+            len: u64::from(length),
+            index,
+        }));
     }
     Ok(Projection::Index(
         u32::try_from(index).map_err(|_| resource())?,
@@ -143,27 +235,27 @@ pub(crate) struct ResolvedPlace {
     pub ty: TypeId,
     pub writable: bool,
     pub source_projections: Vec<SourceProjectionStep>,
+    /// `Some((start, len))`: the place is the unsized element window of the
+    /// array at `target`, and `ty` is its `[T]` descriptor.
+    pub window: Option<(u32, u32)>,
 }
 pub(crate) fn checked_chain_bytes(count: usize) -> Result<usize, Diagnostic> {
     count
         .checked_mul(std::mem::size_of::<EnclosingObject>())
-        .filter(|bytes| *bytes <= 32 * 1024 * 1024)
         .ok_or_else(resource)
 }
-/// Grow in bounded batches. Repeated exact one-element reservations make a deep
+/// Grow geometrically. Repeated exact one-element reservations make a deep
 /// guest ownership chain quadratic even when every lookup is constant time.
 pub(crate) fn reserve_chain_link(chain: &mut Vec<EnclosingObject>) -> Result<(), Diagnostic> {
     let required = chain.len().checked_add(1).ok_or_else(resource)?;
     checked_chain_bytes(required)?;
     if required > chain.capacity() {
-        let maximum = (32 * 1024 * 1024) / std::mem::size_of::<EnclosingObject>();
         let capacity = chain
             .capacity()
             .checked_mul(2)
             .ok_or_else(resource)?
             .max(4)
-            .max(required)
-            .min(maximum);
+            .max(required);
         checked_chain_bytes(capacity)?;
         chain
             .try_reserve_exact(capacity.checked_sub(chain.len()).ok_or_else(resource)?)
@@ -188,7 +280,8 @@ mod tests {
         ] {
             assert!(matches!(
                 checked_array_index(value, length),
-                Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds))
+                Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds { len, .. }))
+                    if len == u64::from(length)
             ));
         }
         for value in [

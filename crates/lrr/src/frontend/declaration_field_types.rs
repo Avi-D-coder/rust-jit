@@ -63,6 +63,170 @@ struct HeaderField {
     range: SourceRange,
     tokens: Vec<TokenRecipe>,
     name: Option<LocalTypeUse>,
+    /// A compound Type's written structure (`&mut u8`, `Option<T>`,
+    /// `(S, [u8; 2])`); `None` for a single name or unsupported syntax.
+    shape: Option<HeaderShape>,
+}
+/// The written structure of a compound header Type. Each leaf is an actual
+/// single-segment Type name occurrence, resolved by the same header prefix
+/// service as a single-name field or parameter Type.
+enum HeaderShape {
+    Leaf {
+        name: LocalTypeUse,
+        args: Vec<HeaderShape>,
+    },
+    Tuple(Vec<HeaderShape>),
+    Array(Box<HeaderShape>, u64),
+    Slice(Box<HeaderShape>),
+    Ref(bool, Box<HeaderShape>),
+}
+impl HeaderShape {
+    /// `None` when some part is not written structure around single names
+    /// (a qualified path, function pointer, trait object or const length).
+    fn capture(
+        ty: &ast::Type,
+        use_name: &dyn Fn(ast::NameRef) -> Result<LocalTypeUse, Diagnostic>,
+    ) -> Result<Option<Self>, Diagnostic> {
+        let nested = |ty: Option<ast::Type>| -> Result<Option<Self>, Diagnostic> {
+            match ty {
+                Some(ty) => Self::capture(&ty, use_name),
+                None => Ok(None),
+            }
+        };
+        Ok(Some(match ty {
+            ast::Type::ParenType(paren) => return nested(paren.ty()),
+            ast::Type::TupleType(tuple) => {
+                let mut members = Vec::new();
+                for member in tuple.fields() {
+                    let Some(member) = Self::capture(&member, use_name)? else {
+                        return Ok(None);
+                    };
+                    members.push(member);
+                }
+                Self::Tuple(members)
+            }
+            ast::Type::SliceType(slice) => match nested(slice.ty())? {
+                Some(element) => Self::Slice(Box::new(element)),
+                None => return Ok(None),
+            },
+            ast::Type::RefType(reference) => match nested(reference.ty())? {
+                Some(target) => Self::Ref(reference.mut_token().is_some(), Box::new(target)),
+                None => return Ok(None),
+            },
+            ast::Type::ArrayType(array) => {
+                let Some(ast::Expr::Literal(length)) =
+                    array.const_arg().and_then(|argument| argument.expr())
+                else {
+                    return Ok(None);
+                };
+                let Some(number) = length
+                    .syntax()
+                    .children_with_tokens()
+                    .filter_map(|item| item.into_token())
+                    .find_map(<ast::IntNumber as ra_ap_syntax::AstToken>::cast)
+                else {
+                    return Ok(None);
+                };
+                if !matches!(number.suffix(), None | Some("usize")) {
+                    return Ok(None);
+                }
+                let Ok(len) = number.value() else {
+                    return Ok(None);
+                };
+                match nested(array.ty())? {
+                    Some(element) => Self::Array(Box::new(element), len as u64),
+                    None => return Ok(None),
+                }
+            }
+            ast::Type::PathType(path) => {
+                let Some(path) = path.path().filter(|path| path.qualifier().is_none()) else {
+                    return Ok(None);
+                };
+                let Some(segment) = path.segment().filter(|s| s.coloncolon_token().is_none())
+                else {
+                    return Ok(None);
+                };
+                let Some(name) = segment.name_ref() else {
+                    return Ok(None);
+                };
+                let mut args = Vec::new();
+                if let Some(list) = segment.generic_arg_list() {
+                    for argument in list.generic_args() {
+                        match argument {
+                            // Regions are not runtime data.
+                            ast::GenericArg::LifetimeArg(_) => {}
+                            ast::GenericArg::TypeArg(argument) => {
+                                let Some(argument) = nested(argument.ty())? else {
+                                    return Ok(None);
+                                };
+                                args.push(argument);
+                            }
+                            _ => return Ok(None),
+                        }
+                    }
+                }
+                Self::Leaf {
+                    name: use_name(name)?,
+                    args,
+                }
+            }
+            _ => return Ok(None),
+        }))
+    }
+    fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Leaf { name, args } => args.iter().fold(
+                name.name
+                    .capacity()
+                    .saturating_add(args.capacity().saturating_mul(std::mem::size_of::<Self>())),
+                |n, arg| n.saturating_add(arg.heap_bytes()),
+            ),
+            Self::Tuple(members) => members.iter().fold(
+                members.capacity().saturating_mul(std::mem::size_of::<Self>()),
+                |n, member| n.saturating_add(member.heap_bytes()),
+            ),
+            Self::Array(inner, _) | Self::Slice(inner) | Self::Ref(_, inner) => {
+                std::mem::size_of::<Self>().saturating_add(inner.heap_bytes())
+            }
+        }
+    }
+    fn encode(&self, e: &mut StableEncoder) {
+        match self {
+            Self::Leaf { name, args } => {
+                e.u8(0);
+                e.string(name.name());
+                e.u32(name.range.start);
+                e.u32(name.range.end);
+                e.u16(name.edition());
+                e.digest(Digest(name.context().0));
+                e.u64(args.len() as u64);
+                for arg in args {
+                    arg.encode(e);
+                }
+            }
+            Self::Tuple(members) => {
+                e.u8(1);
+                e.u64(members.len() as u64);
+                for member in members {
+                    member.encode(e);
+                }
+            }
+            Self::Array(element, len) => {
+                e.u8(2);
+                e.u64(*len);
+                element.encode(e);
+            }
+            Self::Slice(element) => {
+                e.u8(3);
+                element.encode(e);
+            }
+            Self::Ref(mutable, target) => {
+                e.u8(4);
+                e.bool(*mutable);
+                target.encode(e);
+            }
+        }
+    }
 }
 struct HeaderItem {
     scope: u32,
@@ -71,6 +235,9 @@ struct HeaderItem {
     header_input: Digest,
     generics: Vec<HeaderGeneric>,
     fields: Vec<HeaderField>,
+    // Source parameter ordinal -> original HeaderField row. Receiver/missing
+    // Type positions deliberately remain None, never shifted to another row.
+    parameter_fields: Vec<Option<u32>>,
 }
 pub(super) struct DeclarationFieldTypes {
     owner: Digest,
@@ -83,6 +250,8 @@ pub(in crate::frontend::source_locals) struct HeaderTypeSite<'a> {
     owner: Digest,
     item: &'a HeaderItem,
     field: &'a HeaderField,
+    /// One leaf name occurrence of a compound field Type.
+    leaf: Option<&'a LocalTypeUse>,
 }
 impl HeaderTypeSite<'_> {
     pub(in crate::frontend::source_locals) fn scope(&self) -> u32 {
@@ -95,9 +264,8 @@ impl HeaderTypeSite<'_> {
         edition: u16,
     ) -> Result<(), Diagnostic> {
         let name = self
-            .field
-            .name
-            .as_ref()
+            .leaf
+            .or(self.field.name.as_ref())
             .ok_or_else(|| error("field Type path recipe is pending"))?;
         if self.owner != owner
             || site.namespace != Namespace::Type
@@ -130,7 +298,6 @@ impl HeaderTypeSite<'_> {
 fn add(bytes: usize, extra: usize) -> Result<usize, Diagnostic> {
     bytes
         .checked_add(extra)
-        .filter(|n| *n <= 32 * 1024 * 1024)
         .ok_or_else(crate::runtime::arena::resource)
 }
 impl DeclarationFieldTypes {
@@ -153,7 +320,7 @@ impl DeclarationFieldTypes {
         let mut items = BTreeMap::new();
         let mut bytes = 0;
         let mut fingerprint =
-            StableEncoder::new("lrr/v2/local-declaration-header-Type-occurrences");
+            StableEncoder::new("lrr/v3/local-declaration-header-Type-occurrences");
         fingerprint.digest(source.identity());
         fingerprint.u64(
             context
@@ -195,9 +362,6 @@ impl DeclarationFieldTypes {
             let mut generics = Vec::new();
             if let Some(list) = syntax.children().find_map(ast::GenericParamList::cast) {
                 let count = list.generic_params().count();
-                if count > 100_000 {
-                    return Err(crate::runtime::arena::resource());
-                }
                 add(
                     add(bytes, row.item.header.estimated_bytes())?,
                     count.checked_mul(
@@ -241,6 +405,7 @@ impl DeclarationFieldTypes {
             // Function bodies are excluded: only the actual parameter list is
             // source Type evidence, never an executable child body scan.
             let mut types = Vec::new();
+            let mut parameter_count = 0usize;
             if let Some(function) = function {
                 let list = function
                     .param_list()
@@ -250,14 +415,11 @@ impl DeclarationFieldTypes {
                     .params()
                     .filter(|parameter| parameter.ty().is_some())
                     .count();
-                if list
+                parameter_count = list
                     .params()
                     .count()
                     .checked_add(first)
-                    .is_none_or(|count| count > 100_000)
-                {
-                    return Err(crate::runtime::arena::resource());
-                }
+                    .ok_or_else(crate::runtime::arena::resource)?;
                 add(
                     bytes,
                     count
@@ -287,9 +449,6 @@ impl DeclarationFieldTypes {
                             || ast::TupleField::can_cast(node.kind())
                     })
                     .count();
-                if count > crate::frontend::types::MAX_SCHEMA_FIELDS {
-                    return Err(crate::runtime::arena::resource());
-                }
                 add(
                     bytes,
                     count
@@ -341,21 +500,17 @@ impl DeclarationFieldTypes {
                 } else {
                     None
                 };
+                let shape = match name {
+                    Some(_) => None,
+                    None => HeaderShape::capture(&field, &use_name)?,
+                };
                 fields.push(HeaderField {
                     parameter,
                     range: field_range,
                     tokens: tokens(field.syntax(), None),
                     name,
+                    shape,
                 });
-                if fields.len()
-                    > if row.item.def_key.item_kind == ItemKind::Function {
-                        100_000
-                    } else {
-                        crate::frontend::types::MAX_SCHEMA_FIELDS
-                    }
-                {
-                    return Err(crate::runtime::arena::resource());
-                }
             }
             bytes = add(
                 bytes,
@@ -413,6 +568,9 @@ impl DeclarationFieldTypes {
                 if let Some(name) = &field.name {
                     bytes = add(bytes, name.name.capacity())?;
                 }
+                if let Some(shape) = &field.shape {
+                    bytes = add(bytes, shape.heap_bytes())?;
+                }
                 fingerprint.u32(field.range.start);
                 fingerprint.u32(field.range.end);
                 fingerprint.option(&field.name, |e, n| {
@@ -420,6 +578,43 @@ impl DeclarationFieldTypes {
                     e.u16(n.edition());
                     e.digest(Digest(n.context().0));
                 });
+                fingerprint.option(&field.shape, |e, shape| shape.encode(e));
+            }
+            // The retained vector preserves actual source ordinals, including
+            // a receiver or missing Type. Its storage is admitted before reserve.
+            let index_bytes = parameter_count
+                .checked_mul(std::mem::size_of::<Option<u32>>())
+                .ok_or_else(crate::runtime::arena::resource)?;
+            bytes = add(bytes, index_bytes)?;
+            let mut parameter_fields = Vec::new();
+            parameter_fields
+                .try_reserve_exact(parameter_count)
+                .map_err(|_| crate::runtime::arena::resource())?;
+            parameter_fields.resize(parameter_count, None);
+            bytes = add(
+                bytes,
+                parameter_fields
+                    .capacity()
+                    .checked_sub(parameter_count)
+                    .and_then(|extra| extra.checked_mul(std::mem::size_of::<Option<u32>>()))
+                    .ok_or_else(crate::runtime::arena::resource)?,
+            )?;
+            for (field_index, field) in fields.iter().enumerate() {
+                let Some(ordinal) = field.parameter else {
+                    continue;
+                };
+                let slot = parameter_fields.get_mut(ordinal as usize).ok_or_else(|| {
+                    error("parameter Type source ordinal outside actual parameter list")
+                })?;
+                let field_index =
+                    u32::try_from(field_index).map_err(|_| crate::runtime::arena::resource())?;
+                if slot.replace(field_index).is_some() {
+                    return Err(error("parameter Type source ordinal is duplicated"));
+                }
+            }
+            fingerprint.u64(parameter_fields.len() as u64);
+            for field in &parameter_fields {
+                fingerprint.option(field, |e, field| e.u32(*field));
             }
             // Cache the actual header-input projection once at owning-plan
             // preparation; parameter goals compare the published input stamp.
@@ -436,6 +631,7 @@ impl DeclarationFieldTypes {
                         header_input,
                         generics,
                         fields,
+                        parameter_fields,
                     },
                 )
                 .is_some()
@@ -483,6 +679,7 @@ impl DeclarationFieldTypes {
             owner: self.owner,
             item,
             field: selected,
+            leaf: None,
         })
     }
     /// Cached actual owning header projection, shared by Value/header goals.
@@ -517,20 +714,27 @@ impl DeclarationFieldTypes {
             .parameters
             .get(ordinal as usize)
             .ok_or_else(|| error("parameter Type ordinal absent"))?;
-        let mut matches = item
-            .fields
-            .iter()
-            .filter(|field| field.parameter == Some(ordinal) && field.tokens == parameter.ty);
-        let field = matches
-            .next()
+        let field_index = item
+            .parameter_fields
+            .get(ordinal as usize)
+            .copied()
+            .flatten()
             .ok_or_else(|| error("parameter Type exact occurrence absent"))?;
-        if matches.next().is_some() || !item.declaration.contains(field.range) {
-            return Err(error("parameter Type occurrence range is ambiguous"));
+        let field = item
+            .fields
+            .get(field_index as usize)
+            .ok_or_else(|| error("parameter Type indexed occurrence absent"))?;
+        if field.parameter != Some(ordinal)
+            || field.tokens != parameter.ty
+            || !item.declaration.contains(field.range)
+        {
+            return Err(error("parameter Type indexed source occurrence differs"));
         }
         Ok(HeaderTypeSite {
             owner: self.owner,
             item,
             field,
+            leaf: None,
         })
     }
 }
@@ -584,20 +788,117 @@ impl PreparedSourceLocalPlan {
                 .ok_or_else(|| error("parameter Type header stamp absent"))
         );
         let header = checked!(self.field_types.parameter(signature, ordinal, header_input));
-        // Complex symbolic signature lowering does not prove the hygiene of
-        // nested Type NameRefs. The shared header service retains a typed
-        // owner-context demand until those actual occurrences are joined.
+        // A compound Type's nested NameRefs are its retained actual leaf
+        // occurrences, each resolved by the same header service; other
+        // complex syntax keeps its typed owner-context demand.
         let range = header.field.range;
-        self.prepare_header_type(
-            db,
-            header,
-            super::DeclarationTypeSite::Parameter {
-                definition: signature.definition,
-                ordinal,
-                range,
-            },
-            &signature.scope,
-        )
+        let site = super::DeclarationTypeSite::Parameter {
+            definition: signature.definition,
+            ordinal,
+            range,
+        };
+        if header.field.name.is_none()
+            && let Some(shape) = &header.field.shape
+        {
+            return self.prepare_compound_header_type(db, &header, shape, &site, &signature.scope);
+        }
+        self.prepare_header_type(db, header, site, &signature.scope)
+    }
+    /// A compound header Type: its written structure around leaf names that
+    /// each enter the ordinary header prefix at their own occurrence.
+    fn prepare_compound_header_type(
+        self: &Arc<Self>,
+        db: &mut Database,
+        header: &HeaderTypeSite<'_>,
+        shape: &HeaderShape,
+        site: &super::DeclarationTypeSite,
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> QueryPoll<NamedTypePreparation> {
+        use crate::{
+            frontend::type_aliases::AliasTarget,
+            traits::term::{ConstTerm, GenericArg, RegionTerm, TyTerm},
+        };
+        macro_rules! nested {
+            ($shape:expr) => {
+                match ready!(self.prepare_compound_header_type(db, header, $shape, site, scope)) {
+                    NamedTypePreparation::Alias(AliasTarget::Type(term)) => term,
+                    other => return QueryPoll::Ready(Ok(other)),
+                }
+            };
+        }
+        let term = match shape {
+            HeaderShape::Leaf { name, args } => {
+                let leaf = HeaderTypeSite {
+                    owner: header.owner,
+                    item: header.item,
+                    field: header.field,
+                    leaf: Some(name),
+                };
+                let selected = ready!(self.prepare_header_name(
+                    db,
+                    leaf,
+                    site.clone(),
+                    scope,
+                    !args.is_empty()
+                ));
+                let mut arguments = Vec::new();
+                for arg in args {
+                    arguments.push(GenericArg::Type(nested!(arg)));
+                }
+                match selected {
+                    NamedTypePreparation::Ready(proof) => match proof.source() {
+                        TyTerm::Nominal(identity, written) if written.is_empty() => {
+                            TyTerm::Nominal(*identity, arguments)
+                        }
+                        source if arguments.is_empty() => source.clone(),
+                        _ => {
+                            return QueryPoll::Ready(Ok(NamedTypePreparation::Name(
+                                crate::frontend::signature_names::SignatureName::NeedOwnerContext(
+                                    scope.clone(),
+                                ),
+                            )));
+                        }
+                    },
+                    NamedTypePreparation::Parameter(key) if arguments.is_empty() => {
+                        TyTerm::Param(key)
+                    }
+                    NamedTypePreparation::Alias(AliasTarget::Nominal(nominal)) => {
+                        TyTerm::Nominal(nominal, arguments)
+                    }
+                    NamedTypePreparation::Alias(AliasTarget::Type(term)) if arguments.is_empty() => {
+                        term
+                    }
+                    NamedTypePreparation::Parameter(_) | NamedTypePreparation::Alias(AliasTarget::Type(_)) => {
+                        return QueryPoll::Ready(Ok(NamedTypePreparation::Name(
+                            crate::frontend::signature_names::SignatureName::NeedOwnerContext(
+                                scope.clone(),
+                            ),
+                        )));
+                    }
+                    other => return QueryPoll::Ready(Ok(other)),
+                }
+            }
+            HeaderShape::Tuple(members) if members.is_empty() => {
+                TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit)
+            }
+            HeaderShape::Tuple(members) => {
+                let mut terms = Vec::new();
+                for member in members {
+                    terms.push(nested!(member));
+                }
+                TyTerm::Tuple(terms)
+            }
+            HeaderShape::Array(element, len) => {
+                TyTerm::Array(Box::new(nested!(element)), ConstTerm::Value(*len))
+            }
+            HeaderShape::Slice(element) => TyTerm::Slice(Box::new(nested!(element))),
+            // Regions are not runtime data (as in the module declaration
+            // route's written Types).
+            HeaderShape::Ref(mutable, target) => {
+                TyTerm::Ref(RegionTerm::Static, *mutable, Box::new(nested!(target)))
+            }
+        };
+        QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Type(term))))
     }
     pub(crate) fn prepare_field_type(
         self: &Arc<Self>,
@@ -642,15 +943,16 @@ impl PreparedSourceLocalPlan {
             )));
         }
         let header = checked!(self.field_types.select(schema, field));
-        self.prepare_header_type(
-            db,
-            header,
-            super::DeclarationTypeSite::Field {
-                definition: schema.definition,
-                range: field.type_range,
-            },
-            &schema.scope,
-        )
+        let site = super::DeclarationTypeSite::Field {
+            definition: schema.definition,
+            range: field.type_range,
+        };
+        if header.field.name.is_none()
+            && let Some(shape) = &header.field.shape
+        {
+            return self.prepare_compound_header_type(db, &header, shape, &site, &schema.scope);
+        }
+        self.prepare_header_type(db, header, site, &schema.scope)
     }
     /// Field and parameter sites enter the same opaque local/import/module
     /// prefix and final current declaration/Type preparation service.
@@ -661,7 +963,17 @@ impl PreparedSourceLocalPlan {
         identity: super::DeclarationTypeSite,
         scope: &crate::syntax::outline::ScopeKey,
     ) -> QueryPoll<NamedTypePreparation> {
-        let Some(name) = &header.field.name else {
+        self.prepare_header_name(db, header, identity, scope, false)
+    }
+    fn prepare_header_name(
+        self: &Arc<Self>,
+        db: &mut Database,
+        header: HeaderTypeSite<'_>,
+        identity: super::DeclarationTypeSite,
+        scope: &crate::syntax::outline::ScopeKey,
+        generic_base: bool,
+    ) -> QueryPoll<NamedTypePreparation> {
+        let Some(name) = header.leaf.or(header.field.name.as_ref()) else {
             return QueryPoll::Ready(Ok(NamedTypePreparation::Name(
                 SignatureName::NeedOwnerContext(scope.clone()),
             )));
@@ -704,7 +1016,11 @@ impl PreparedSourceLocalPlan {
         };
         checked!(prefix.exclusive_metadata_bytes());
         prefix.fingerprint = StableEncode::fingerprint(&prefix);
-        prefix.prepare_named(db)
+        if generic_base {
+            prefix.prepare_named_base(db)
+        } else {
+            prefix.prepare_named(db)
+        }
     }
 }
 

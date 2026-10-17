@@ -13,8 +13,6 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
-const MAX_ENTRIES: usize = 100_000;
-const MAX_BYTES: usize = 128 * 1024 * 1024;
 fn fault(message: impl Into<String>) -> Diagnostic {
     Diagnostic::new("LRR-E-TOOLCHAIN-CAPABILITY", message.into())
 }
@@ -77,14 +75,6 @@ impl InputRoot {
             root.to_str()
                 .ok_or_else(|| fault("input root must be UTF-8"))?,
         )?;
-        if files
-            .len()
-            .checked_add(directories.len())
-            .and_then(|n| n.checked_add(excluded.len()))
-            .is_none_or(|n| n > MAX_ENTRIES)
-        {
-            return Err(fault("too many preparation grants"));
-        }
         if files.iter().chain(&directories).any(|path| {
             excluded
                 .iter()
@@ -142,9 +132,6 @@ impl InputRoot {
             if !seen.insert(path.clone()) {
                 continue;
             }
-            if seen.len() > MAX_ENTRIES || ancestors.len() >= 256 {
-                return Err(fault("preparation directory limit"));
-            }
             let canonical = self
                 .root
                 .canonicalize(&path)
@@ -177,14 +164,6 @@ impl InputRoot {
                     files.insert(normalized);
                 } else {
                     return Err(fault("preparation input is not a regular file/directory"));
-                }
-                if members
-                    .len()
-                    .checked_add(files.len())
-                    .and_then(|n| n.checked_add(queue.len()))
-                    .is_none_or(|n| n > MAX_ENTRIES)
-                {
-                    return Err(fault("preparation input membership limit"));
                 }
             }
             let absolute = self
@@ -239,8 +218,8 @@ impl InputRoot {
                 }
                 Err(e) => return Err(fault(e.to_string())),
             };
-            if !before.is_file() || before.len() > MAX_BYTES as u64 {
-                return Err(fault("input file is not a bounded regular file"));
+            if !before.is_file() {
+                return Err(fault("input file is not a regular file"));
             }
             let canonical = self
                 .root
@@ -267,9 +246,6 @@ impl InputRoot {
                 *total = total
                     .checked_add(count)
                     .ok_or_else(|| fault("input size overflow"))?;
-                if *total > MAX_BYTES {
-                    return Err(fault("preparation input bytes exceed 128 MiB"));
-                }
                 bytes.extend_from_slice(&buffer[..count]);
             }
             if Stamp::of(&file.metadata().map_err(|_| race())?) != Stamp::of(&before)
@@ -329,13 +305,6 @@ pub struct InputPlan {
 }
 impl InputPlan {
     pub fn new(roots: Vec<InputRoot>, environment: BTreeSet<String>) -> Result<Self, Diagnostic> {
-        if roots
-            .len()
-            .checked_add(environment.len())
-            .is_none_or(|n| n > MAX_ENTRIES)
-        {
-            return Err(fault("preparation grant limit"));
-        }
         for name in &environment {
             super::env_name(name)?;
         }

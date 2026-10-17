@@ -1,6 +1,18 @@
 //! Demand source constraints, never a Rust expression or runtime evaluator.
 //! Names and declared types come exclusively from the common source services.
+//!
+//! A bare numeric literal initializer gives its `let` binding an integer or
+//! float inference variable. The demand visits only the syntax connected to
+//! that variable through the built-in Rust typing relations recorded in the
+//! retained source facts (operators, `let`, blocks, `if`, calls, returns,
+//! casts, discarded statements and format arguments). A concrete primitive
+//! from a written annotation, suffix, declared parameter or declared result
+//! selects the type; a closed component with no concrete type takes Rust's
+//! fallback (`i32`, `f64`). A relation the common services cannot answer yet
+//! stays an explicit Pending goal and never becomes a guessed primitive.
 use super::source_parameter_goals::ParameterTypeGoal;
+use super::source_return_goals::ReturnTypeGoal;
+use crate::facade::functions::LibraryFunction;
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -13,10 +25,18 @@ use crate::{
         op::PrimitiveType,
         pc::{NodeId, PcKey},
     },
-    syntax::source_constraints::{FactKind, SourceConstraintPlan},
+    syntax::{
+        pattern_tree::{PatternLiteral, PatternNode},
+        source_constraints::{
+            FactKind, PatternStep, SourceConstraintPlan, SourceOperator, TypeShape,
+        },
+    },
     traits::term::TyTerm,
 };
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 macro_rules! ready {
     ($value:expr) => {
@@ -30,6 +50,20 @@ macro_rules! ready {
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-CONTEXT", message.into())
 }
+/// Whether a sub-query refusal only leaves this relation unanswered (an
+/// explicit unsupported route or an absent name): the member stays a missing
+/// goal. Currentness, stale-handle, ambiguity and internal faults propagate.
+pub(super) fn not_closed(error: &Diagnostic) -> bool {
+    matches!(error.code, "LRR-E-UNSUPPORTED" | "LRR-E-NAME-MISSING")
+}
+/// A refusal of the entered Type goal for a written annotation leaf. That
+/// service reports written shapes it does not answer yet (a qualified generic
+/// base `m::W<u8>`, a trait object `dyn T`) as `LRR-E-TYPE-CONTEXT`, the
+/// code its own internal faults also carry, so such a leaf stays open (held
+/// until the service distinguishes the two).
+fn entered_type_refusal(error: &Diagnostic) -> bool {
+    not_closed(error) || error.code == "LRR-E-TYPE-CONTEXT"
+}
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ConstraintDemand {
     Binding,
@@ -39,10 +73,35 @@ pub(crate) enum ConstraintDemand {
     ModuleEnvironment,
     ParameterType,
     NumericFamily,
+    /// Method selection is not yet a common source service.
+    MethodSelection,
+    /// A declared function result Type is not available as a primitive.
+    ResultType,
+    /// A written annotation or cast target Type is not available as a primitive.
+    AnnotationType,
+}
+impl ConstraintDemand {
+    fn tag(self) -> u8 {
+        match self {
+            Self::Binding => 0,
+            Self::ValueUse => 1,
+            Self::ExpressionRelation => 2,
+            Self::SelectedDeclaration => 3,
+            Self::ModuleEnvironment => 4,
+            Self::ParameterType => 5,
+            Self::NumericFamily => 6,
+            Self::MethodSelection => 7,
+            Self::ResultType => 8,
+            Self::AnnotationType => 9,
+        }
+    }
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum BindingConstraintState {
     NoNumericDemand,
+    /// Some use sits in syntax this service does not record (for example an
+    /// index operand or an unexpanded macro/closure body) and no concrete
+    /// Type was found. The existing held route keeps that decision.
     Unconstrained,
     Resolved(PrimitiveType),
     Pending {
@@ -56,6 +115,9 @@ pub struct PreparedBindingConstraints {
     key: PcKey,
     structure: Digest,
     binding: Option<Digest>,
+    // Indexed patterns of every local in the resolved component; they all
+    // have the one resolved Type.
+    members: Vec<NodeId>,
     state: BindingConstraintState,
 }
 impl PreparedBindingConstraints {
@@ -95,10 +157,62 @@ impl PreparedBindingConstraints {
             )),
         }
     }
+    fn require_source(
+        &self,
+        index: &crate::syntax::body_index::BodyIndex,
+    ) -> Result<(), Diagnostic> {
+        if self.key.phase != 0
+            || index.body() != &self.key.body
+            || index.semantic_identity() != self.structure
+        {
+            return Err(fault("binding constraint source/body differs"));
+        }
+        Ok(())
+    }
+    /// The resolved Type of an actual local `binding` (its indexed pattern)
+    /// that belongs to this goal's component, for another consumer of that
+    /// local such as a compound assignment. `None` for any other binding.
+    pub(crate) fn local_primitive(
+        &self,
+        index: &crate::syntax::body_index::BodyIndex,
+        binding: NodeId,
+    ) -> Result<Option<PrimitiveType>, Diagnostic> {
+        self.require_source(index)?;
+        if self.members.binary_search(&binding).is_err() {
+            return Ok(None);
+        }
+        Ok(match self.state {
+            BindingConstraintState::Resolved(primitive) => Some(primitive),
+            _ => None,
+        })
+    }
+    /// A bare literal goal's resolved Type, for that literal's own lowering.
+    pub(crate) fn literal_primitive(
+        &self,
+        index: &crate::syntax::body_index::BodyIndex,
+        key: &PcKey,
+    ) -> Result<Option<PrimitiveType>, Diagnostic> {
+        self.require_source(index)?;
+        if self.key.body != key.body || self.key.node != key.node || self.binding.is_some() {
+            return Err(fault("literal constraint source node differs"));
+        }
+        Ok(match self.state {
+            BindingConstraintState::Resolved(primitive) => Some(primitive),
+            _ => None,
+        })
+    }
     fn pending(mut self, node: NodeId, demand: ConstraintDemand) -> QueryPoll<Self> {
         self.state = BindingConstraintState::Pending { node, demand };
         QueryPoll::Ready(Ok(self))
     }
+}
+/// A declaration owned by a body (its retained goal memos need no module
+/// environment).
+fn is_local(db: &mut Database, definition: Digest) -> bool {
+    db.input(&crate::db::dependency::InputKey::LocalDeclarationOwner(
+        definition,
+    ))
+    .is_some()
 }
 fn entry(key: &PcKey, node: NodeId) -> PcKey {
     PcKey {
@@ -113,21 +227,44 @@ fn family(primitive: PrimitiveType) -> Option<bool> {
         | PrimitiveType::I16
         | PrimitiveType::I32
         | PrimitiveType::I64
+        | PrimitiveType::I128
         | PrimitiveType::Isize
         | PrimitiveType::U8
         | PrimitiveType::U16
         | PrimitiveType::U32
         | PrimitiveType::U64
+        | PrimitiveType::U128
         | PrimitiveType::Usize => Some(false),
         PrimitiveType::F32 | PrimitiveType::F64 => Some(true),
         _ => None,
+    }
+}
+/// An unsuffixed literal reached through parentheses and unary `-`/`!`,
+/// which rustc checks with its parent's expectation.
+fn literal_operand(plan: &SourceConstraintPlan, mut node: NodeId) -> bool {
+    loop {
+        let Some(fact) = plan.fact(node) else {
+            return false;
+        };
+        match (fact.kind(), fact.operation()) {
+            (FactKind::Integer | FactKind::Float, _) => return true,
+            (FactKind::Parenthesis, _)
+            | (FactKind::Prefix, Some(SourceOperator::Negate | SourceOperator::Not)) => {
+                match fact.operand(0).filter(|child| *child > node) {
+                    Some(child) => node = child,
+                    None => return false,
+                }
+            }
+            _ => return false,
+        }
     }
 }
 fn numeric_initializer(
     plan: &SourceConstraintPlan,
     mut node: NodeId,
 ) -> Result<Option<bool>, Diagnostic> {
-    for _ in 0..4096 {
+    // Each step moves to a strictly later preorder child, so this terminates.
+    loop {
         let fact = plan
             .fact(node)
             .ok_or_else(|| fault("numeric constraint initializer node absent"))?;
@@ -135,22 +272,1882 @@ fn numeric_initializer(
             FactKind::Integer => return Ok(Some(false)),
             FactKind::Float => return Ok(Some(true)),
             FactKind::Parenthesis => {
-                let Some(Some(child)) = fact.operands().first() else {
+                let Some(child) = fact.operand(0).filter(|child| *child > node) else {
                     return Ok(None);
                 };
-                node = *child;
+                node = child;
             }
             FactKind::Prefix if fact.numeric_prefix() => {
-                let Some(Some(child)) = fact.operands().first() else {
+                let Some(child) = fact.operand(0).filter(|child| *child > node) else {
                     return Ok(None);
                 };
-                node = *child;
+                node = child;
             }
             _ => return Ok(None),
         }
     }
-    Err(crate::runtime::arena::resource())
 }
+
+/// One step of a structural projection from a value's Type, outermost first.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+enum Step {
+    Deref,
+    /// A tuple position, or a tuple struct's positional field.
+    Field(u32),
+    /// The element of an array or slice.
+    Element,
+    /// Strip every reference: a field access's base is auto-dereferenced
+    /// before its field step (a pattern never takes this step).
+    AutoDeref,
+    /// A record struct's field, by its written name's member row.
+    Named(u32),
+    /// Field `field` (declaration order) of variant `variant` of enum
+    /// `definition`.
+    Variant {
+        definition: Digest,
+        variant: u32,
+        field: u32,
+    },
+    /// `<T as IntoIterator>::Item` of the value's Type `T` (a `for` head).
+    Item,
+    /// The value's nominal Type's own type argument at this position.
+    TypeArgument(u32),
+}
+#[path = "binding_constraint_generics.rs"]
+mod generics;
+#[path = "binding_constraint_iteration.rs"]
+mod iteration;
+#[path = "binding_constraint_methods.rs"]
+mod methods;
+#[path = "binding_constraint_nominal.rs"]
+mod nominal;
+use nominal::ConstructorSite;
+/// How a member relates to the component's variable: projecting the
+/// member's Type by `steps` yields the variable. A `strict` member was
+/// reached only through scalar relations, whose unanswerable goals stay
+/// explicitly pending; a member reached through a structural relation
+/// (borrow, dereference, tuple, `match`, patterns) instead leaves an
+/// unanswerable goal to the existing held route (Unconstrained).
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+struct Via {
+    steps: Vec<Step>,
+    strict: bool,
+}
+impl Via {
+    fn scalar() -> Self {
+        Self {
+            steps: Vec::new(),
+            strict: true,
+        }
+    }
+    fn is_scalar(&self) -> bool {
+        self.steps.is_empty()
+    }
+    fn wrap(&self, step: Step) -> Self {
+        let mut steps = Vec::with_capacity(self.steps.len() + 1);
+        steps.push(step);
+        steps.extend_from_slice(&self.steps);
+        Self {
+            steps,
+            strict: false,
+        }
+    }
+    fn unwrap(&self, step: Step) -> Option<Self> {
+        (self.steps.first() == Some(&step)).then(|| Self {
+            steps: self.steps[1..].to_vec(),
+            strict: false,
+        })
+    }
+    fn loose(&self) -> Self {
+        Self {
+            steps: self.steps.clone(),
+            strict: false,
+        }
+    }
+    /// `prefix` then these steps; strictness survives only an empty prefix.
+    fn within(&self, prefix: &[Step]) -> Self {
+        let mut steps = prefix.to_vec();
+        steps.extend_from_slice(&self.steps);
+        Self {
+            steps,
+            strict: self.strict && prefix.is_empty(),
+        }
+    }
+}
+/// A nominal Type's `position`th type argument.
+fn type_argument(args: &[crate::traits::term::GenericArg], position: u32) -> Option<TyTerm> {
+    args.iter()
+        .filter_map(|arg| match arg {
+            crate::traits::term::GenericArg::Type(term) => Some(term),
+            _ => None,
+        })
+        .nth(position as usize)
+        .cloned()
+}
+/// A written `_` Type hole (its initializer decides the Type).
+fn hole() -> TyTerm {
+    TyTerm::Infer(crate::traits::term::InferVarKey {
+        transaction: Digest::default(),
+        ordinal: u32::MAX,
+    })
+}
+/// A call's ordinary selection.
+enum Callee {
+    Source(Digest),
+    Facade(LibraryFunction),
+    /// A local bound directly to a closure expression (its node): a closure
+    /// has a unique type, so the local always calls that closure's body.
+    Closure(NodeId),
+}
+
+/// One numeric inference variable's connected source component.
+struct Component<'a> {
+    key: &'a PcKey,
+    plan: &'a SourceConstraintPlan,
+    floating: bool,
+    concrete: Option<(NodeId, PrimitiveType)>,
+    pending: Option<(NodeId, ConstraintDemand)>,
+    // A use in syntax that records no relation, or a possible unindexed use.
+    unrecorded: bool,
+    // The member being processed.
+    via: Via,
+    expressions: BTreeSet<(NodeId, Via)>,
+    pattern_members: BTreeSet<(NodeId, Via)>,
+    // Actual hygienic binding identity -> its indexed pattern.
+    bindings: BTreeMap<(Digest, Via), NodeId>,
+    work: Vec<(NodeId, Via)>,
+    pattern_work: Vec<(NodeId, Via)>,
+    patterns: Vec<(Digest, NodeId, Via)>,
+    environment: Option<Arc<crate::expand::source_discovery::CompletedSourceEnvironment>>,
+    /// The demand started from a literal (not a binding's declaration).
+    literal_start: bool,
+    constructors: BTreeMap<ConstructorSite, Option<Arc<nominal::Constructed>>>,
+    /// Static expression Types answered for method selection and indexing.
+    types: BTreeMap<NodeId, Option<TyTerm>>,
+}
+impl<'a> Component<'a> {
+    fn new(key: &'a PcKey, plan: &'a SourceConstraintPlan, floating: bool) -> Self {
+        Self {
+            key,
+            plan,
+            floating,
+            concrete: None,
+            pending: None,
+            unrecorded: false,
+            via: Via::scalar(),
+            expressions: BTreeSet::new(),
+            pattern_members: BTreeSet::new(),
+            bindings: BTreeMap::new(),
+            work: Vec::new(),
+            pattern_work: Vec::new(),
+            patterns: Vec::new(),
+            environment: None,
+            literal_start: false,
+            constructors: BTreeMap::new(),
+            types: BTreeMap::new(),
+        }
+    }
+    fn defer(&mut self, node: NodeId, demand: ConstraintDemand) {
+        if !self.via.strict {
+            self.unrecorded = true;
+        } else if self.pending.is_none() {
+            self.pending = Some((node, demand));
+        }
+    }
+    /// A finite Type never contains itself; a projection deeper than every
+    /// structural constructor in the body only arises from ill-typed source.
+    fn admit(&mut self, node: NodeId, via: &Via) -> bool {
+        if via.steps.len() > self.plan.structural_depth() {
+            let current = std::mem::replace(&mut self.via, via.clone());
+            self.defer(node, ConstraintDemand::ExpressionRelation);
+            self.via = current;
+            return false;
+        }
+        true
+    }
+    fn expression_via(&mut self, node: Option<NodeId>, via: Via) {
+        if let Some(node) = node
+            && self.admit(node, &via)
+            && self.expressions.insert((node, via.clone()))
+        {
+            self.work.push((node, via));
+        }
+    }
+    fn expression(&mut self, node: Option<NodeId>) {
+        let via = self.via.clone();
+        self.expression_via(node, via);
+    }
+    fn pattern_via(&mut self, node: Option<NodeId>, via: Via) {
+        if let Some(node) = node
+            && self.admit(node, &via)
+            && self.pattern_members.insert((node, via.clone()))
+        {
+            self.pattern_work.push((node, via));
+        }
+    }
+    fn binding(&mut self, identity: Digest, pattern: NodeId) {
+        let via = self.via.clone();
+        if self
+            .bindings
+            .insert((identity, via.clone()), pattern)
+            .is_none()
+        {
+            self.patterns.push((identity, pattern, via));
+        }
+    }
+    fn constrain(&mut self, node: NodeId, primitive: PrimitiveType) -> Result<(), Diagnostic> {
+        if family(primitive) != Some(self.floating) {
+            self.defer(node, ConstraintDemand::NumericFamily);
+            return Ok(());
+        }
+        match self.concrete {
+            Some((_, old)) if old != primitive => Err(fault("source numeric constraints disagree")),
+            Some(_) => Ok(()),
+            None => {
+                self.concrete = Some((node, primitive));
+                Ok(())
+            }
+        }
+    }
+    /// The Type a projection selects from a declared Type term; a nominal
+    /// field step goes through the shared schema binder.
+    fn project_term(
+        &mut self,
+        db: &mut Database,
+        term: &TyTerm,
+        steps: &[Step],
+    ) -> QueryPoll<Option<TyTerm>> {
+        let mut term = term.clone();
+        for step in steps {
+            // A written `_` is filled by the initializer: it states nothing.
+            if term == hole() {
+                return QueryPoll::Ready(Ok(Some(term)));
+            }
+            // Indexing and field access auto-deref their base, through
+            // references and boxes alike.
+            if matches!(step, Step::Element | Step::AutoDeref) {
+                loop {
+                    while let TyTerm::Ref(_, _, inner) = term {
+                        term = *inner;
+                    }
+                    match ready!(self.box_contents(db, &term)) {
+                        Some(contents) => term = contents,
+                        None => break,
+                    }
+                }
+            }
+            // `*b` of a `Box<T>` is its builtin dereference: `T`.
+            if *step == Step::Deref
+                && let Some(contents) = ready!(self.box_contents(db, &term))
+            {
+                term = contents;
+                continue;
+            }
+            if *step == Step::Item {
+                term = match ready!(self.iteration_item(db, &term)) {
+                    iteration::ItemAnswer::Concrete(item) => item,
+                    iteration::ItemAnswer::Part(path) => {
+                        match ready!(self.project_term(db, &term, &path)) {
+                            Some(item) => item,
+                            None => return QueryPoll::Ready(Ok(None)),
+                        }
+                    }
+                    iteration::ItemAnswer::Unknown => return QueryPoll::Ready(Ok(None)),
+                };
+                continue;
+            }
+            term = match (step, term) {
+                (Step::AutoDeref, term) => term,
+                (Step::TypeArgument(position), TyTerm::Nominal(_, args)) => {
+                    match type_argument(&args, *position) {
+                        Some(argument) => argument,
+                        None => return QueryPoll::Ready(Ok(None)),
+                    }
+                }
+                (Step::Deref, TyTerm::Ref(_, _, inner)) => *inner,
+                (Step::Field(index), TyTerm::Tuple(mut elements)) => {
+                    if (*index as usize) < elements.len() {
+                        elements.swap_remove(*index as usize)
+                    } else {
+                        return QueryPoll::Ready(Ok(None));
+                    }
+                }
+                (Step::Element, TyTerm::Array(inner, _) | TyTerm::Slice(inner)) => *inner,
+                (
+                    Step::Field(_) | Step::Named(_) | Step::Variant { .. },
+                    TyTerm::Nominal(definition, args),
+                ) => match ready!(self.nominal_field(db, definition, &args, step)) {
+                    Some(field) => field,
+                    None => return QueryPoll::Ready(Ok(None)),
+                },
+                _ => return QueryPoll::Ready(Ok(None)),
+            };
+        }
+        QueryPoll::Ready(Ok(Some(term)))
+    }
+    /// `Some(T)` when `term` is `Box<T>`, the `owned_box` lang item (its
+    /// declaration's identity in its own facade profile).
+    fn box_contents(&mut self, db: &mut Database, term: &TyTerm) -> QueryPoll<Option<TyTerm>> {
+        let TyTerm::Nominal(definition, args) = term else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let schema = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(*definition)) {
+            QueryPoll::Ready(Ok(schema)) => schema,
+            QueryPoll::Ready(Err(error)) if not_closed(&error) => {
+                return QueryPoll::Ready(Ok(None));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint box schema differs")));
+        };
+        if crate::facade::owned_box(&schema.header.profile) != *definition {
+            return QueryPoll::Ready(Ok(None));
+        }
+        QueryPoll::Ready(Ok(type_argument(args, 0)))
+    }
+    /// A declared Type term, projected by the current member's steps.
+    fn constrain_term(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        term: &TyTerm,
+        demand: ConstraintDemand,
+    ) -> QueryPoll<()> {
+        let steps = self.via.steps.clone();
+        match ready!(self.project_term(db, term, &steps)) {
+            Some(TyTerm::Primitive(primitive)) => QueryPoll::Ready(self.constrain(node, primitive)),
+            Some(term) if term == hole() => QueryPoll::Ready(Ok(())),
+            // `!` coerces to every Type; it constrains nothing.
+            Some(TyTerm::Never) => QueryPoll::Ready(Ok(())),
+            _ => {
+                self.defer(node, demand);
+                QueryPoll::Ready(Ok(()))
+            }
+        }
+    }
+    fn fact(
+        &self,
+        node: NodeId,
+    ) -> Result<&'a crate::syntax::source_constraints::SourceFact, Diagnostic> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        plan.fact(node)
+            .ok_or_else(|| fault("numeric constraint source node absent"))
+    }
+
+    fn pattern_binding(&mut self, db: &mut Database, pattern: NodeId) -> QueryPoll<Option<Digest>> {
+        pattern_binding(db, self.key, pattern)
+    }
+
+    /// A written Type at its canonical indexed occurrence: the written
+    /// structure (`&T`, tuples, arrays, generic applications) around named
+    /// leaves the ordinary entered Type goal selects, projected by the
+    /// member's steps. Unresolved or nonprimitive stays pending.
+    fn annotation(&mut self, db: &mut Database, owner: NodeId) -> QueryPoll<()> {
+        let annotation = match self.fact(owner) {
+            Ok(fact) => fact.annotation_node(),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let Some(annotation) = annotation else {
+            self.defer(owner, ConstraintDemand::AnnotationType);
+            return QueryPoll::Ready(Ok(()));
+        };
+        let term = ready!(self.written_term(db, annotation));
+        self.constrain_term(db, owner, &term, ConstraintDemand::AnnotationType)
+    }
+    /// The Type term of a written Type node. A leaf the entered Type
+    /// service cannot select is an open part (never a guess).
+    fn written_term(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<TyTerm> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        let open = || {
+            TyTerm::Infer(crate::traits::term::InferVarKey {
+                transaction: Digest::default(),
+                ordinal: 0,
+            })
+        };
+        QueryPoll::Ready(Ok(match plan.type_shape(node) {
+            Some(TypeShape::Parenthesis(inner)) => ready!(self.written_term(db, *inner)),
+            Some(TypeShape::Reference(inner)) => TyTerm::Ref(
+                crate::traits::term::RegionTerm::Static,
+                false,
+                Box::new(ready!(self.written_term(db, *inner))),
+            ),
+            Some(TypeShape::Element(inner)) => {
+                TyTerm::Slice(Box::new(ready!(self.written_term(db, *inner))))
+            }
+            Some(TypeShape::Tuple(elements)) => {
+                let mut members = Vec::with_capacity(elements.len());
+                for element in elements {
+                    members.push(ready!(self.written_term(db, *element)));
+                }
+                TyTerm::Tuple(members)
+            }
+            Some(TypeShape::Infer) => hole(),
+            Some(TypeShape::Generic(base, arguments)) => {
+                // The local annotation service's own generic base selection.
+                match crate::frontend::nominal_constructors::generic_annotation_base(
+                    db,
+                    &self.key.body,
+                    *base,
+                ) {
+                    QueryPoll::Ready(Ok(selected))
+                        if selected.type_parameters == arguments.len() =>
+                    {
+                        let mut args = Vec::with_capacity(arguments.len());
+                        for argument in arguments {
+                            args.push(crate::traits::term::GenericArg::Type(ready!(
+                                self.written_term(db, *argument)
+                            )));
+                        }
+                        TyTerm::Nominal(selected.identity, args)
+                    }
+                    QueryPoll::Ready(Ok(_)) => open(),
+                    QueryPoll::Ready(Err(error)) if entered_type_refusal(&error) => open(),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
+            None => match db.fetch(
+                &SyntaxProvider,
+                QueryKey::EnteredType(entry(self.key, node)),
+            ) {
+                QueryPoll::Ready(Ok(goal)) => match goal.value.as_ref() {
+                    QueryValue::EnteredType(goal) => goal.source_type().source().clone(),
+                    _ => {
+                        return QueryPoll::Ready(Err(fault(
+                            "constraint annotation query variant differs",
+                        )));
+                    }
+                },
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                // Unresolved names, aliases and generic parameters are open.
+                QueryPoll::Ready(Err(error)) if entered_type_refusal(&error) => open(),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            },
+        }))
+    }
+
+    /// The caller body's completed source environment: the same name graph
+    /// and sources the run machine uses for call contracts. Retained through
+    /// the ordinary SourceLocalPlan (and its BodyEnvironment input) query.
+    fn environment(
+        &mut self,
+        db: &mut Database,
+    ) -> QueryPoll<Option<Arc<crate::expand::source_discovery::CompletedSourceEnvironment>>> {
+        if let Some(environment) = &self.environment {
+            return QueryPoll::Ready(Ok(Some(Arc::clone(environment))));
+        }
+        let plan = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::SourceLocalPlan(self.key.body.clone())
+        ));
+        let QueryValue::SourceLocalPlan(plan) = plan.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint source plan variant differs")));
+        };
+        let Some(environment) = plan.environment() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let environment = Arc::clone(environment.macros().source_environment());
+        self.environment = Some(Arc::clone(&environment));
+        QueryPoll::Ready(Ok(Some(environment)))
+    }
+
+    /// rustc's `ExpectCastableToType` for an unsuffixed literal operand:
+    /// an integer literal takes an integer target (`u8` for `char`), a float
+    /// literal a float target; any other target leaves it a fresh variable.
+    fn cast_expectation(&mut self, db: &mut Database, cast: NodeId) -> QueryPoll<()> {
+        let annotation = match self.fact(cast) {
+            Ok(fact) => fact.annotation_node(),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let Some(annotation) = annotation else {
+            self.defer(cast, ConstraintDemand::AnnotationType);
+            return QueryPoll::Ready(Ok(()));
+        };
+        let goal = match db.fetch(
+            &SyntaxProvider,
+            QueryKey::EnteredType(entry(self.key, annotation)),
+        ) {
+            QueryPoll::Ready(Ok(goal)) => goal,
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            QueryPoll::Ready(Err(error)) if entered_type_refusal(&error) => {
+                self.defer(cast, ConstraintDemand::AnnotationType);
+                return QueryPoll::Ready(Ok(()));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        };
+        let QueryValue::EnteredType(goal) = goal.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint annotation query variant differs")));
+        };
+        let expected = match (goal.source_type().primitive(), self.floating) {
+            (Some(PrimitiveType::Char), false) => Some(PrimitiveType::U8),
+            (Some(primitive), floating) if family(primitive) == Some(floating) => Some(primitive),
+            _ => None,
+        };
+        if let Some(expected) = expected
+            && let Err(error) = self.constrain(cast, expected)
+        {
+            return QueryPoll::Ready(Err(error));
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+
+    /// The declared result Type of an actual selected function definition,
+    /// local or module/impl-owned, through the common declared-result goal.
+    /// `None` is a missing goal (an unreadable header, a non-function
+    /// selection or no environment for a module declaration).
+    fn result(&mut self, db: &mut Database, node: NodeId, definition: Digest) -> QueryPoll<()> {
+        match ready!(self.result_term(db, node, definition)) {
+            Some(term) => {
+                self.constrain_declared(db, node, definition, &term, ConstraintDemand::ResultType)
+            }
+            None => QueryPoll::Ready(Ok(())),
+        }
+    }
+    /// A selected function's declared parameter or result Type projected by
+    /// the current member's steps: a concrete leaf constrains; the callee's
+    /// own type parameter relates its other positions (and its bounds).
+    fn constrain_declared(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        definition: Digest,
+        term: &TyTerm,
+        demand: ConstraintDemand,
+    ) -> QueryPoll<()> {
+        let steps = self.via.steps.clone();
+        let is_call = matches!(
+            self.plan.fact(node).map(|fact| fact.kind()),
+            Some(FactKind::Call | FactKind::MethodCall)
+        );
+        match ready!(self.project_parametric(db, term, &steps)) {
+            generics::TermProjection::Parameter(key, remaining) if is_call => {
+                self.relate_parameter(db, node, definition, key, remaining)
+            }
+            generics::TermProjection::Leaf(_) => self.constrain_term(db, node, term, demand),
+            _ => {
+                self.defer(node, demand);
+                QueryPoll::Ready(Ok(()))
+            }
+        }
+    }
+    /// The declared result Type term of a selected function, or `None`
+    /// after deferring `node` on the missing goal.
+    fn result_term(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        definition: Digest,
+    ) -> QueryPoll<Option<TyTerm>> {
+        let goal = if let Some(environment) = ready!(self.environment(db)) {
+            let sources: Vec<_> = environment.sources().iter().collect();
+            super::source_return_goals::prepare(db, environment.names(), &sources, definition)
+        } else if is_local(db, definition) {
+            // Without a completed environment only a local declaration's
+            // retained memo can answer.
+            match db.fetch(&SyntaxProvider, QueryKey::DeclaredReturnGoal(definition)) {
+                QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                    QueryValue::DeclaredReturnGoal(goal) => {
+                        QueryPoll::Ready(Ok(goal.goal().clone()))
+                    }
+                    _ => {
+                        return QueryPoll::Ready(Err(fault(
+                            "constraint result query variant differs",
+                        )));
+                    }
+                },
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            }
+        } else {
+            self.defer(node, ConstraintDemand::ModuleEnvironment);
+            return QueryPoll::Ready(Ok(None));
+        };
+        let goal = match goal {
+            QueryPoll::Ready(Ok(goal)) => goal,
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            QueryPoll::Ready(Err(error)) if not_closed(&error) => {
+                self.defer(node, ConstraintDemand::ResultType);
+                return QueryPoll::Ready(Ok(None));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        };
+        let ReturnTypeGoal::Ready(declared) = goal else {
+            self.defer(node, ConstraintDemand::ResultType);
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(Ok(Some(declared.source().clone())))
+    }
+
+    /// The actual selected callee of a call through the ordinary hygienic
+    /// Value goal (module and generated `$crate` paths included). A
+    /// type-relative path (`P::f`) awaits the common member goal and stays
+    /// pending.
+    /// Relate a closure's body value to the calls that return it: a closure
+    /// called where it is written, or every call of the local it initializes
+    /// (a closure has a unique type, so that local only ever calls it).
+    /// Calls the source does not relate here (a closure passed to a generic
+    /// callee or stored) add no constraint: the closed component falls back
+    /// as rustc's would without that callee's `Fn*` bound.
+    fn closure_calls(&mut self, db: &mut Database, closure: NodeId) -> QueryPoll<()> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        for edge in plan.uses(closure) {
+            let Some(parent) = plan.fact(edge.parent) else {
+                continue;
+            };
+            match parent.kind() {
+                FactKind::Call if edge.ordinal == 0 => self.expression(Some(edge.parent)),
+                FactKind::Parenthesis => ready!(self.closure_calls(db, edge.parent)),
+                FactKind::Let if edge.ordinal == 1 => {
+                    let Some(pattern) = parent.operand(0) else {
+                        continue;
+                    };
+                    let Some(identity) = ready!(self.pattern_binding(db, pattern)) else {
+                        continue;
+                    };
+                    let Some((_, row)) = plan.name_of(pattern) else {
+                        continue;
+                    };
+                    for use_node in row.paths().iter().copied() {
+                        let observed = ready!(db.fetch(
+                            &SyntaxProvider,
+                            QueryKey::EnteredValue(entry(self.key, use_node))
+                        ));
+                        let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
+                            return QueryPoll::Ready(Err(fault(
+                                "closure use query variant differs",
+                            )));
+                        };
+                        if observed.local_binding() != Some(identity) {
+                            continue;
+                        }
+                        for call in plan.uses(use_node) {
+                            if call.ordinal == 0
+                                && plan
+                                    .fact(call.parent)
+                                    .is_some_and(|fact| fact.kind() == FactKind::Call)
+                            {
+                                self.expression(Some(call.parent));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+    /// The closure expression a callee expression evaluates to, when the
+    /// source states it: a closure written there (through parentheses), a
+    /// local declared with one, or a call of a closure whose body is one.
+    fn closure_of(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        depth: usize,
+    ) -> QueryPoll<Option<NodeId>> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        let Some(fact) = plan.fact(node) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        // Every step descends into strictly smaller syntax.
+        if depth > plan.facts_len() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        match fact.kind() {
+            FactKind::Closure => QueryPoll::Ready(Ok(Some(node))),
+            FactKind::Parenthesis => match fact.operand(0) {
+                Some(inner) => self.closure_of(db, inner, depth + 1),
+                None => QueryPoll::Ready(Ok(None)),
+            },
+            FactKind::Call => {
+                let Some(callee) = fact.operand(0) else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let Some(closure) = ready!(self.closure_of(db, callee, depth + 1)) else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                match plan.fact(closure).and_then(|fact| fact.operand(0)) {
+                    Some(body) => self.closure_of(db, body, depth + 1),
+                    None => QueryPoll::Ready(Ok(None)),
+                }
+            }
+            FactKind::Path => {
+                let selected = ready!(db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::EnteredValue(entry(self.key, node))
+                ));
+                let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
+                    return QueryPoll::Ready(Err(fault("closure callee query variant differs")));
+                };
+                match selected.local_binding() {
+                    Some(identity) if selected.pending().is_none() => {
+                        self.bound_closure(db, node, identity)
+                    }
+                    _ => QueryPoll::Ready(Ok(None)),
+                }
+            }
+            _ => QueryPoll::Ready(Ok(None)),
+        }
+    }
+    /// The closure expression a local is declared with (`let f = |..| ..;`).
+    fn bound_closure(
+        &mut self,
+        db: &mut Database,
+        use_node: NodeId,
+        identity: Digest,
+    ) -> QueryPoll<Option<NodeId>> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        let Some(pattern) = ready!(binding_pattern(db, self.key, plan, use_node, identity)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        for edge in plan.uses(pattern) {
+            let Some(statement) = plan.fact(edge.parent) else {
+                continue;
+            };
+            if statement.kind() != FactKind::Let || edge.ordinal != 0 {
+                continue;
+            }
+            if let Some(initializer) = statement.operand(1)
+                && plan
+                    .fact(initializer)
+                    .is_some_and(|fact| fact.kind() == FactKind::Closure)
+            {
+                return QueryPoll::Ready(Ok(Some(initializer)));
+            }
+        }
+        QueryPoll::Ready(Ok(None))
+    }
+    /// A call through a callee value: a literal's demand keeps its reached
+    /// (run-time) context; a binding's component has no static Type from it.
+    fn runtime_callee(&mut self, callee: NodeId) {
+        if self.literal_start {
+            self.defer(callee, ConstraintDemand::SelectedDeclaration);
+        } else {
+            self.unrecorded = true;
+        }
+    }
+    fn callee(&mut self, db: &mut Database, call: NodeId) -> QueryPoll<Option<Callee>> {
+        let callee = match self.fact(call) {
+            Ok(fact) => fact.operand(0),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let Some(callee) = callee else {
+            self.defer(call, ConstraintDemand::SelectedDeclaration);
+            return QueryPoll::Ready(Ok(None));
+        };
+        // A callee value (a closure or function item in a local, parameter
+        // or any non-path expression) selects its callee only at run time:
+        // its parameter and result Types are the reached values' own, so the
+        // component stays unconstrained (no fallback) rather than pending.
+        if !matches!(
+            self.fact(callee).map(|fact| fact.kind()),
+            Ok(FactKind::Path)
+        ) {
+            if let Some(closure) = ready!(self.closure_of(db, callee, 0)) {
+                return QueryPoll::Ready(Ok(Some(Callee::Closure(closure))));
+            }
+            self.runtime_callee(callee);
+            return QueryPoll::Ready(Ok(None));
+        }
+        let selected = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::EnteredValue(entry(self.key, callee))
+        ));
+        let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint callee query variant differs")));
+        };
+        if selected.pending().is_some() {
+            self.defer(callee, ConstraintDemand::SelectedDeclaration);
+            return QueryPoll::Ready(Ok(None));
+        }
+        if let Some(function) = selected.facade() {
+            return QueryPoll::Ready(Ok(Some(Callee::Facade(function))));
+        }
+        if let Some(identity) = selected.local_binding() {
+            if let Some(closure) = ready!(self.bound_closure(db, callee, identity)) {
+                return QueryPoll::Ready(Ok(Some(Callee::Closure(closure))));
+            }
+            self.runtime_callee(callee);
+            return QueryPoll::Ready(Ok(None));
+        }
+        let Some(declaration) = selected.declaration() else {
+            self.defer(callee, ConstraintDemand::SelectedDeclaration);
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(Ok(Some(Callee::Source(declaration.identity()))))
+    }
+
+    fn argument(&mut self, db: &mut Database, call: NodeId, ordinal: u32) -> QueryPoll<()> {
+        let definition = match ready!(self.callee(db, call)) {
+            Some(Callee::Source(definition)) => definition,
+            // The argument binds the closure's parameter of that position.
+            Some(Callee::Closure(closure)) => {
+                let parameter = match self.fact(closure) {
+                    Ok(fact) => fact.operand(ordinal as usize),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                if let Some(parameter) = parameter
+                    && let Some(identity) = ready!(self.pattern_binding(db, parameter))
+                {
+                    self.binding(identity, parameter);
+                }
+                return QueryPoll::Ready(Ok(()));
+            }
+            // `must_use<T>(T) -> T` gives its result the argument's Type.
+            Some(Callee::Facade(LibraryFunction::MustUse)) => {
+                self.expression(Some(call));
+                return QueryPoll::Ready(Ok(()));
+            }
+            // No other facade parameter is numeric; `assert_failed`'s `&T`
+            // and `&U` are generic formatting operands.
+            Some(Callee::Facade(_)) | None => return QueryPoll::Ready(Ok(())),
+        };
+        self.declared_parameter(db, call, definition, ordinal - 1)
+    }
+    /// Relate the current member to parameter `ordinal` of a selected
+    /// function's declared signature.
+    fn declared_parameter(
+        &mut self,
+        db: &mut Database,
+        call: NodeId,
+        definition: Digest,
+        ordinal: u32,
+    ) -> QueryPoll<()> {
+        match ready!(self.parameter_term(db, call, definition, ordinal)) {
+            Some(term) => self.constrain_declared(
+                db,
+                call,
+                definition,
+                &term,
+                ConstraintDemand::ParameterType,
+            ),
+            None => QueryPoll::Ready(Ok(())),
+        }
+    }
+    /// Parameter `ordinal`'s declared Type term, or `None` after deferring
+    /// `node` on the missing goal.
+    fn parameter_term(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        definition: Digest,
+        ordinal: u32,
+    ) -> QueryPoll<Option<TyTerm>> {
+        let call = node;
+        let goal = if let Some(environment) = ready!(self.environment(db)) {
+            let sources: Vec<_> = environment.sources().iter().collect();
+            super::source_parameter_goals::prepare(
+                db,
+                environment.names(),
+                &sources,
+                definition,
+                ordinal as usize,
+            )
+        } else if is_local(db, definition) {
+            match db.fetch(
+                &SyntaxProvider,
+                QueryKey::DeclaredParameterGoal {
+                    definition,
+                    ordinal,
+                },
+            ) {
+                QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                    QueryValue::DeclaredParameterGoal(goal) => {
+                        QueryPoll::Ready(Ok(goal.goal().clone()))
+                    }
+                    _ => {
+                        return QueryPoll::Ready(Err(fault(
+                            "constraint parameter query variant differs",
+                        )));
+                    }
+                },
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            }
+        } else {
+            self.defer(call, ConstraintDemand::ModuleEnvironment);
+            return QueryPoll::Ready(Ok(None));
+        };
+        let goal = match goal {
+            QueryPoll::Ready(Ok(goal)) => goal,
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            // An excess argument, a constructor or an unreadable header.
+            QueryPoll::Ready(Err(error)) if not_closed(&error) => {
+                self.defer(call, ConstraintDemand::ParameterType);
+                return QueryPoll::Ready(Ok(None));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        };
+        let ParameterTypeGoal::Ready(goal) = goal else {
+            self.defer(call, ConstraintDemand::ParameterType);
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(Ok(Some(goal.source().clone())))
+    }
+
+    /// A read of the owning function's own parameter: its declared Type
+    /// through the common parameter goal. The parameter is selected by its
+    /// written identifier pattern (`x` / `mut x`); any other parameter
+    /// pattern stays a missing goal.
+    fn parameter(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<()> {
+        match ready!(self.own_parameter_term(db, node)) {
+            Some(term) => self.constrain_term(db, node, &term, ConstraintDemand::ParameterType),
+            None => QueryPoll::Ready(Ok(())),
+        }
+    }
+    /// The declared Type of the owning function's parameter a path reads:
+    /// its written identifier pattern (`x` / `mut x`) or the receiver for
+    /// `self`. Any other parameter pattern stays a missing goal.
+    fn own_parameter_term(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<Option<TyTerm>> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        let Some((name, _)) = plan.name_of(node) else {
+            self.defer(node, ConstraintDemand::Binding);
+            return QueryPoll::Ready(Ok(None));
+        };
+        let definition = self.key.body.definition;
+        let signature = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            QueryPoll::Ready(Err(error)) if not_closed(&error) => {
+                self.defer(node, ConstraintDemand::Binding);
+                return QueryPoll::Ready(Ok(None));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        };
+        let QueryValue::FunctionSignature(signature) = signature.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint parameter signature differs")));
+        };
+        let written = |parameter: &crate::syntax::signatures::ParameterRecipe| {
+            if parameter.receiver {
+                return name == "self";
+            }
+            let tokens: Vec<&str> = parameter
+                .pattern
+                .iter()
+                .map(|token| token.text.as_str())
+                .collect();
+            let spelled = match tokens.as_slice() {
+                [only] | ["mut", only] => only.strip_prefix("r#").unwrap_or(only),
+                _ => return false,
+            };
+            spelled == name
+        };
+        let mut ordinals = signature
+            .parameters
+            .iter()
+            .enumerate()
+            .filter(|(_, parameter)| written(parameter))
+            .map(|(ordinal, _)| ordinal);
+        let (Some(ordinal), None) = (ordinals.next(), ordinals.next()) else {
+            self.defer(node, ConstraintDemand::Binding);
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Ok(ordinal) = u32::try_from(ordinal) else {
+            self.defer(node, ConstraintDemand::Binding);
+            return QueryPoll::Ready(Ok(None));
+        };
+        self.parameter_term(db, node, definition, ordinal)
+    }
+
+    /// What the expression itself says about its own Type.
+    fn inward(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<()> {
+        let fact = match self.fact(node) {
+            Ok(fact) => fact,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        // A `for` head's Item: selected from the expression's static Type;
+        // value-carrying syntax (paths, blocks, calls, ..) also passes it on.
+        if self.via.steps.first() == Some(&Step::Item) {
+            let selected = ready!(self.item_inward(db, node));
+            let passes = matches!(
+                fact.kind(),
+                FactKind::Path
+                    | FactKind::Parenthesis
+                    | FactKind::Block
+                    | FactKind::If
+                    | FactKind::Match
+                    | FactKind::Call
+                    | FactKind::MethodCall
+                    | FactKind::Field
+                    | FactKind::Index
+            );
+            if !passes {
+                if !selected {
+                    self.defer(node, ConstraintDemand::ExpressionRelation);
+                }
+                return QueryPoll::Ready(Ok(()));
+            }
+        }
+        let scalar = self.via.is_scalar();
+        match fact.kind() {
+            FactKind::Integer if scalar && !self.floating => {}
+            FactKind::Float if scalar && self.floating => {}
+            FactKind::SuffixedInteger | FactKind::SuffixedFloat if scalar => match fact.suffix() {
+                Some(primitive) => {
+                    if let Err(error) = self.constrain(node, primitive) {
+                        return QueryPoll::Ready(Err(error));
+                    }
+                }
+                None => self.defer(node, ConstraintDemand::NumericFamily),
+            },
+            FactKind::Path => {
+                let observed = ready!(db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::EnteredValue(entry(self.key, node))
+                ));
+                let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
+                    return QueryPoll::Ready(Err(fault("binding use query variant differs")));
+                };
+                if observed.pending().is_some() {
+                    self.defer(node, ConstraintDemand::ValueUse);
+                } else if let Some(identity) = observed.local_binding() {
+                    if !self.bindings.contains_key(&(identity, self.via.clone())) {
+                        let pattern = ready!(self.binding_pattern(db, node, identity));
+                        match pattern {
+                            Some(pattern) => self.binding(identity, pattern),
+                            // A hygienic local with no indexed pattern in
+                            // this body is one of its function's parameters.
+                            None => ready!(self.parameter(db, node)),
+                        }
+                    }
+                } else if let Some(declaration) = observed.declaration() {
+                    // A constant's or static's declared Type.
+                    let identity = declaration.identity();
+                    match ready!(self.declared_item_type(db, observed, identity)) {
+                        Some(term) => ready!(self.constrain_term(
+                            db,
+                            node,
+                            &term,
+                            ConstraintDemand::SelectedDeclaration
+                        )),
+                        None => self.defer(node, ConstraintDemand::SelectedDeclaration),
+                    }
+                } else {
+                    // A function item or library value: no numeric Type here.
+                    self.defer(node, ConstraintDemand::SelectedDeclaration);
+                }
+            }
+            FactKind::Parenthesis | FactKind::Block => match fact.operand(0) {
+                Some(child) => self.expression(Some(child)),
+                None => self.defer(node, ConstraintDemand::ExpressionRelation),
+            },
+            FactKind::Prefix => match fact.operation() {
+                Some(SourceOperator::Negate | SourceOperator::Not) if scalar => {
+                    self.expression(fact.operand(0))
+                }
+                Some(SourceOperator::Deref) => {
+                    let via = self.via.wrap(Step::Deref);
+                    self.expression_via(fact.operand(0), via);
+                }
+                _ => self.defer(node, ConstraintDemand::ExpressionRelation),
+            },
+            FactKind::Binary if scalar => match fact.operation() {
+                Some(SourceOperator::Arithmetic) => {
+                    self.expression(fact.operand(0));
+                    self.expression(fact.operand(1));
+                }
+                Some(SourceOperator::Shift) => self.expression(fact.operand(0)),
+                // bool and unit results cannot hold a numeric variable.
+                _ => self.defer(node, ConstraintDemand::ExpressionRelation),
+            },
+            FactKind::If => match (fact.operand(1), fact.operand(2)) {
+                (Some(then), Some(otherwise)) => {
+                    self.expression(Some(then));
+                    self.expression(Some(otherwise));
+                }
+                _ => self.defer(node, ConstraintDemand::ExpressionRelation),
+            },
+            // The arms' values are the match's value.
+            FactKind::Match => {
+                let via = self.via.loose();
+                for body in fact.operands().iter().skip(2).step_by(2) {
+                    self.expression_via(*body, via.clone());
+                }
+            }
+            FactKind::Borrow => match self.via.steps.first() {
+                Some(Step::Deref) => {
+                    let via = self.via.unwrap(Step::Deref).expect("checked step");
+                    self.expression_via(fact.operand(0), via)
+                }
+                // Autoderef of `&e` continues into `e`.
+                Some(Step::AutoDeref) => {
+                    let via = self.via.loose();
+                    self.expression_via(fact.operand(0), via)
+                }
+                _ => self.defer(node, ConstraintDemand::ExpressionRelation),
+            },
+            // `base.i` / `base.name` is that field of the auto-dereferenced
+            // base (a tuple position, or a struct field by written name).
+            FactKind::Field => {
+                let step = match (fact.field(), fact.member()) {
+                    (Some(position), _) => Some(Step::Field(position)),
+                    (None, Some(row)) => Some(Step::Named(row)),
+                    (None, None) => None,
+                };
+                match step {
+                    Some(step) => {
+                        let via = self.via.wrap(step).wrap(Step::AutoDeref);
+                        self.expression_via(fact.operand(0), via);
+                    }
+                    None => self.defer(node, ConstraintDemand::ExpressionRelation),
+                }
+            }
+            // `S { f: e, ..base }`: the selected field's initializer and
+            // declared Type; `..base` has the record's own Type.
+            FactKind::Record => {
+                if fact.flag() {
+                    let rows = self.plan.record_fields(node).map_or(0, <[u32]>::len);
+                    let via = self.via.clone();
+                    self.expression_via(fact.operand(rows), via);
+                }
+                ready!(self.record_inward(db, node));
+            }
+            // Every element has the array's element Type (an array value
+            // is not a reference; autoderef selects it).
+            FactKind::Array => match self
+                .via
+                .unwrap(Step::AutoDeref)
+                .unwrap_or_else(|| self.via.clone())
+                .unwrap(Step::Element)
+            {
+                Some(via) => {
+                    for element in fact.operands() {
+                        self.expression_via(*element, via.clone());
+                    }
+                }
+                None => self.defer(node, ConstraintDemand::ExpressionRelation),
+            },
+            // `base[literal]` is one element of the auto-dereferenced base.
+            FactKind::Index if fact.flag() => {
+                let via = self.via.wrap(Step::Element).wrap(Step::AutoDeref);
+                self.expression_via(fact.operand(0), via);
+            }
+            FactKind::Tuple => {
+                // A tuple value is not a reference; autoderef selects it.
+                let via = match self.via.steps.first() {
+                    Some(Step::AutoDeref) => {
+                        self.via.unwrap(Step::AutoDeref).expect("checked step")
+                    }
+                    _ => self.via.clone(),
+                };
+                match via.steps.first() {
+                    Some(Step::Field(index)) => {
+                        let index = *index;
+                        let rest = via.unwrap(Step::Field(index)).expect("checked field step");
+                        match fact.operand(index as usize) {
+                            Some(element) => self.expression_via(Some(element), rest),
+                            None => self.defer(node, ConstraintDemand::ExpressionRelation),
+                        }
+                    }
+                    _ => self.defer(node, ConstraintDemand::ExpressionRelation),
+                }
+            }
+            // `return` has Type `!`, which coerces to every Type.
+            FactKind::Return => {}
+            FactKind::Cast => ready!(self.annotation(db, node)),
+            FactKind::Call => {
+                if let Some(constructed) =
+                    ready!(self.constructor(db, ConstructorSite::Expression(node)))
+                {
+                    let operands: Vec<(u32, NodeId)> = fact
+                        .operands()
+                        .iter()
+                        .enumerate()
+                        .skip(1)
+                        .filter_map(|(ordinal, operand)| {
+                            Some((u32::try_from(ordinal - 1).ok()?, (*operand)?))
+                        })
+                        .collect();
+                    return self.constructed_inward(db, node, &constructed, &operands);
+                }
+                match ready!(self.callee(db, node)) {
+                    Some(Callee::Source(definition)) => ready!(self.result(db, node, definition)),
+                    // The closure's body value is the call's result.
+                    Some(Callee::Closure(closure)) => {
+                        let body = match self.fact(closure) {
+                            Ok(fact) => fact.operand(0),
+                            Err(error) => return QueryPoll::Ready(Err(error)),
+                        };
+                        self.expression(body)
+                    }
+                    Some(Callee::Facade(LibraryFunction::MustUse)) => {
+                        self.expression(fact.operand(1))
+                    }
+                    // `!` coerces to every Type.
+                    Some(Callee::Facade(function)) if function.diverges() => {}
+                    // `()` or `String`.
+                    Some(Callee::Facade(_)) => self.defer(node, ConstraintDemand::NumericFamily),
+                    None => {}
+                }
+            }
+            FactKind::MethodCall => ready!(self.method_inward(db, node)),
+            FactKind::Integer | FactKind::Float => {
+                self.defer(node, ConstraintDemand::NumericFamily)
+            }
+            _ => self.defer(node, ConstraintDemand::ExpressionRelation),
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+
+    /// What each consumer of the expression's value says about its Type.
+    fn outward(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<()> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        let uses = plan.uses(node);
+        if uses.is_empty() {
+            if node == NodeId(0) {
+                // The body root's value is the function result.
+                let definition = self.key.body.definition;
+                ready!(self.result(db, node, definition));
+            } else {
+                self.unrecorded = true;
+            }
+            return QueryPoll::Ready(Ok(()));
+        }
+        let scalar = self.via.is_scalar();
+        for edge in uses {
+            let parent = match self.fact(edge.parent) {
+                Ok(fact) => fact,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let other = |ordinal: u32| parent.operand(if ordinal == 0 { 1 } else { 0 });
+            match parent.kind() {
+                FactKind::Parenthesis | FactKind::Block => self.expression(Some(edge.parent)),
+                FactKind::Prefix => match parent.operation() {
+                    Some(SourceOperator::Negate | SourceOperator::Not) if scalar => {
+                        self.expression(Some(edge.parent))
+                    }
+                    Some(SourceOperator::Deref) => match self.via.steps.first() {
+                        Some(Step::Deref) => {
+                            let via = self.via.unwrap(Step::Deref).expect("checked step");
+                            self.expression_via(Some(edge.parent), via)
+                        }
+                        // Autoderef of `*e` is autoderef of `e`.
+                        Some(Step::AutoDeref) => {
+                            let via = self.via.loose();
+                            self.expression_via(Some(edge.parent), via)
+                        }
+                        _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
+                    },
+                    _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
+                },
+                FactKind::Binary => match parent.operation() {
+                    Some(SourceOperator::Arithmetic) if scalar => {
+                        self.expression(Some(edge.parent));
+                        self.expression(other(edge.ordinal));
+                    }
+                    Some(SourceOperator::Shift) if scalar => {
+                        if edge.ordinal == 0 {
+                            self.expression(Some(edge.parent));
+                        }
+                    }
+                    Some(SourceOperator::Comparison | SourceOperator::CompoundArithmetic)
+                        if scalar =>
+                    {
+                        self.expression(other(edge.ordinal))
+                    }
+                    // `=` gives both places one Type at every depth.
+                    Some(SourceOperator::Assign) => self.expression(other(edge.ordinal)),
+                    Some(SourceOperator::CompoundShift) => {}
+                    _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
+                },
+                FactKind::Discard => {}
+                // A cast constrains its result, not a named operand. Only a
+                // literal operand (through parentheses and unary `-`/`!`)
+                // takes rustc's castable expectation from the target.
+                FactKind::Cast if edge.ordinal == 0 => {
+                    if scalar && literal_operand(plan, node) {
+                        ready!(self.cast_expectation(db, edge.parent));
+                    }
+                }
+                // The initializer's Type is the pattern's matched Type.
+                FactKind::Let if edge.ordinal == 1 => {
+                    let via = self.via.clone();
+                    self.pattern_via(parent.operand(0), via);
+                }
+                FactKind::Call if edge.ordinal > 0 => {
+                    match ready!(self.constructor(db, ConstructorSite::Expression(edge.parent))) {
+                        // A constructor argument is that field of the value.
+                        Some(constructed) => {
+                            match self.field_step(&constructed, edge.ordinal - 1) {
+                                Some(step) => {
+                                    let via = self.via.wrap(step);
+                                    self.expression_via(Some(edge.parent), via);
+                                    self.type_argument_relation(
+                                        edge.parent,
+                                        &constructed,
+                                        edge.ordinal - 1,
+                                    );
+                                }
+                                None => {
+                                    self.defer(edge.parent, ConstraintDemand::ExpressionRelation)
+                                }
+                            }
+                        }
+                        None => ready!(self.argument(db, edge.parent, edge.ordinal)),
+                    }
+                }
+                FactKind::Record => {
+                    let rows = self.plan.record_fields(edge.parent).unwrap_or(&[]);
+                    match rows.get(edge.ordinal as usize).copied() {
+                        Some(row) => {
+                            let constructed = ready!(
+                                self.constructor(db, ConstructorSite::Expression(edge.parent))
+                            );
+                            let field = constructed
+                                .as_deref()
+                                .and_then(|constructed| self.written_field(constructed, row));
+                            let step = constructed.as_deref().zip(field).and_then(
+                                |(constructed, field)| self.field_step(constructed, field),
+                            );
+                            match step {
+                                Some(step) => {
+                                    let via = self.via.wrap(step);
+                                    self.expression_via(Some(edge.parent), via);
+                                    if let (Some(constructed), Some(field)) =
+                                        (constructed.as_deref(), field)
+                                    {
+                                        self.type_argument_relation(
+                                            edge.parent,
+                                            constructed,
+                                            field,
+                                        );
+                                    }
+                                }
+                                None => {
+                                    self.defer(edge.parent, ConstraintDemand::ExpressionRelation)
+                                }
+                            }
+                        }
+                        // `..base` has the record's own Type.
+                        None => self.expression(Some(edge.parent)),
+                    }
+                }
+                FactKind::MethodCall => {
+                    ready!(self.method_outward(db, edge.parent, edge.ordinal))
+                }
+                // The iterated head: its `Item` is the pattern's `Some` field.
+                FactKind::For if edge.ordinal == 0 => ready!(self.for_head(db, edge.parent)),
+                // A loop body's value is `()`.
+                FactKind::For => {}
+                FactKind::If if edge.ordinal > 0 => {
+                    if parent.operand(2).is_some() {
+                        self.expression(Some(edge.parent));
+                    } else {
+                        self.defer(edge.parent, ConstraintDemand::ExpressionRelation);
+                    }
+                }
+                FactKind::Match if edge.ordinal == 0 => {
+                    // Every arm's pattern matches the scrutinee's Type.
+                    let via = self.via.loose();
+                    for pattern in parent.operands().iter().skip(1).step_by(2) {
+                        self.pattern_via(*pattern, via.clone());
+                    }
+                }
+                FactKind::Match if edge.ordinal % 2 == 0 => {
+                    let via = self.via.loose();
+                    self.expression_via(Some(edge.parent), via);
+                }
+                FactKind::Return => {
+                    let definition = self.key.body.definition;
+                    ready!(self.result(db, edge.parent, definition));
+                }
+                // The base of `base.f`: only its field `f` (through any
+                // auto-dereference) is the access's Type.
+                FactKind::Field => {
+                    let steps = &self.via.steps;
+                    let derefs = steps
+                        .iter()
+                        .take_while(|step| matches!(step, Step::Deref | Step::AutoDeref))
+                        .count();
+                    let selected = match (parent.field(), parent.member(), steps.get(derefs)) {
+                        (Some(position), _, Some(Step::Field(selected))) => {
+                            Some(*selected == position)
+                        }
+                        (None, Some(row), Some(Step::Named(selected))) => Some(*selected == row),
+                        _ => None,
+                    };
+                    match selected {
+                        Some(true) => {
+                            let via = Via {
+                                steps: steps[derefs + 1..].to_vec(),
+                                strict: false,
+                            };
+                            self.expression_via(Some(edge.parent), via);
+                        }
+                        // Another field of the same value.
+                        Some(false) => {}
+                        None => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
+                    }
+                }
+                FactKind::Array => {
+                    let via = self.via.wrap(Step::Element);
+                    self.expression_via(Some(edge.parent), via);
+                }
+                // The base of `base[literal]`: its element is the read.
+                FactKind::Index if edge.ordinal == 0 && parent.flag() => {
+                    let steps = &self.via.steps;
+                    let derefs = steps
+                        .iter()
+                        .take_while(|step| matches!(step, Step::Deref | Step::AutoDeref))
+                        .count();
+                    match steps.get(derefs) {
+                        Some(Step::Element) => {
+                            let via = Via {
+                                steps: steps[derefs + 1..].to_vec(),
+                                strict: false,
+                            };
+                            self.expression_via(Some(edge.parent), via);
+                        }
+                        _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
+                    }
+                }
+                // The index operand: its Type is the selected `Index` impl's.
+                FactKind::Index if edge.ordinal == 1 => {
+                    ready!(self.index_operand(db, edge.parent))
+                }
+                FactKind::Tuple => {
+                    let via = self.via.wrap(Step::Field(edge.ordinal));
+                    self.expression_via(Some(edge.parent), via);
+                }
+                FactKind::Borrow => {
+                    let via = self.via.wrap(Step::Deref);
+                    self.expression_via(Some(edge.parent), via);
+                }
+                // An explicit format argument is a generic formatting-trait
+                // operand, unless the template may use it as a usize count.
+                FactKind::FormatArguments if edge.ordinal > 0 && !parent.counted_format() => {}
+                // A closure body's value is what its calls return.
+                FactKind::Closure if edge.ordinal == 0 => {
+                    ready!(self.closure_calls(db, edge.parent))
+                }
+                FactKind::Closure => {}
+                _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
+            }
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+
+    /// A `let` or match-arm root pattern matched against a value whose Type,
+    /// projected by the current member's steps, is the variable: what the
+    /// pattern engine's retained tree says about that Type, and which value
+    /// the root matches.
+    fn pattern(&mut self, db: &mut Database, root: NodeId) -> QueryPoll<()> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        match plan.tree(root) {
+            Some(tree) => {
+                let via = self.via.clone();
+                ready!(self.walk(db, root, tree.root(), via));
+            }
+            None => self.defer(root, ConstraintDemand::Binding),
+        }
+        let uses = plan.uses(root);
+        if uses.is_empty() {
+            self.defer(root, ConstraintDemand::Binding);
+        }
+        for edge in uses {
+            let parent = match self.fact(edge.parent) {
+                Ok(fact) => fact,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            match parent.kind() {
+                FactKind::Let if edge.ordinal == 0 => {
+                    if parent.annotation().is_some() {
+                        ready!(self.annotation(db, edge.parent));
+                    }
+                    self.expression(parent.operand(1));
+                }
+                FactKind::Match if edge.ordinal % 2 == 1 => {
+                    let via = self.via.loose();
+                    self.expression_via(parent.operand(0), via.clone());
+                    for pattern in parent.operands().iter().skip(1).step_by(2) {
+                        self.pattern_via(*pattern, via.clone());
+                    }
+                }
+                FactKind::For if edge.ordinal == 1 => {
+                    ready!(self.for_pattern(db, root, edge.parent))
+                }
+                _ => self.defer(root, ConstraintDemand::Binding),
+            }
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+    fn walk(
+        &mut self,
+        db: &mut Database,
+        root: NodeId,
+        node: &PatternNode,
+        via: Via,
+    ) -> QueryPoll<()> {
+        let current = std::mem::replace(&mut self.via, via);
+        let result = self.walk_current(db, root, node);
+        self.via = current;
+        result
+    }
+    /// One retained pattern node against the current member's projection.
+    fn walk_current(
+        &mut self,
+        db: &mut Database,
+        root: NodeId,
+        node: &PatternNode,
+    ) -> QueryPoll<()> {
+        match node {
+            PatternNode::Wildcard => {}
+            PatternNode::Binding {
+                occurrence,
+                binding,
+                by_reference,
+                subpattern,
+                ..
+            } => {
+                // Or-alternatives share the canonical binding's identity.
+                match ready!(self.pattern_binding(db, *binding)) {
+                    Some(identity) if *by_reference => {
+                        let via = self.via.wrap(Step::Deref);
+                        let current = std::mem::replace(&mut self.via, via);
+                        self.binding(identity, *binding);
+                        self.via = current;
+                    }
+                    Some(identity) => self.binding(identity, *binding),
+                    None => self.defer(*occurrence, ConstraintDemand::Binding),
+                }
+                if let Some(subpattern) = subpattern {
+                    let via = self.via.clone();
+                    ready!(self.walk(db, root, subpattern, via));
+                }
+            }
+            PatternNode::Literal(literal) => {
+                if let Err(error) = self.pattern_literal(root, literal) {
+                    return QueryPoll::Ready(Err(error));
+                }
+            }
+            PatternNode::Range { start, end, .. } => {
+                for endpoint in [start, end].into_iter().flatten() {
+                    match endpoint {
+                        Ok(literal) => {
+                            if let Err(error) = self.pattern_literal(root, literal) {
+                                return QueryPoll::Ready(Err(error));
+                            }
+                        }
+                        Err(_) => self.unrecorded = true,
+                    }
+                }
+            }
+            PatternNode::Tuple { items, rest } => match self.via.steps.first() {
+                Some(Step::Field(ordinal)) => {
+                    let ordinal = *ordinal;
+                    let via = self
+                        .via
+                        .unwrap(Step::Field(ordinal))
+                        .expect("checked field step");
+                    if rest.is_some_and(|rest| ordinal >= rest) {
+                        // A position after `..` needs the matched arity.
+                        self.unrecorded = true;
+                    } else if let Some(item) = items.get(ordinal as usize) {
+                        ready!(self.walk(db, root, item, via));
+                    } else {
+                        self.defer(root, ConstraintDemand::Binding);
+                    }
+                }
+                // A tuple pattern against a reference adjusts binding modes,
+                // which needs the shared pattern Type relation.
+                _ => self.defer(root, ConstraintDemand::Binding),
+            },
+            PatternNode::Reference { inner, .. } => match self.via.unwrap(Step::Deref) {
+                Some(via) => ready!(self.walk(db, root, inner, via)),
+                None => self.defer(root, ConstraintDemand::Binding),
+            },
+            PatternNode::Or(alternatives) => {
+                for alternative in alternatives {
+                    let via = self.via.clone();
+                    ready!(self.walk(db, root, alternative, via));
+                }
+            }
+            // Every element pattern matches the array/slice element Type.
+            PatternNode::Array { items, .. } => match self.via.unwrap(Step::Element) {
+                Some(via) => {
+                    for item in items {
+                        ready!(self.walk(db, root, item, via.clone()));
+                    }
+                }
+                None => self.defer(root, ConstraintDemand::Binding),
+            },
+            // The field pattern of the declared field the projection selects.
+            PatternNode::Constructor { slot, form } => {
+                ready!(self.walk_constructor(db, root, *slot, form))
+            }
+            PatternNode::Unsupported(_) => self.unrecorded = true,
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+    /// A literal pattern has the matched Type: its suffix is concrete, an
+    /// unsuffixed literal only fixes the numeric family.
+    fn pattern_literal(
+        &mut self,
+        root: NodeId,
+        literal: &PatternLiteral,
+    ) -> Result<(), Diagnostic> {
+        if !self.via.is_scalar() {
+            self.defer(root, ConstraintDemand::Binding);
+            return Ok(());
+        }
+        match literal {
+            PatternLiteral::Integer { suffix, .. } | PatternLiteral::Float { suffix, .. } => {
+                let floating = matches!(literal, PatternLiteral::Float { .. });
+                match suffix {
+                    Some(primitive) => self.constrain(root, *primitive)?,
+                    None if floating != self.floating => {
+                        self.defer(root, ConstraintDemand::NumericFamily)
+                    }
+                    None => {}
+                }
+            }
+            _ => self.defer(root, ConstraintDemand::NumericFamily),
+        }
+        Ok(())
+    }
+
+    fn binding_pattern(
+        &mut self,
+        db: &mut Database,
+        use_node: NodeId,
+        identity: Digest,
+    ) -> QueryPoll<Option<NodeId>> {
+        binding_pattern(db, self.key, self.plan, use_node, identity)
+    }
+
+    /// The binding's own pattern (its declaration) and every actual use.
+    fn declared(&mut self, db: &mut Database, identity: Digest, pattern: NodeId) -> QueryPoll<()> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        // The value this binding's root pattern matches, at its position.
+        match plan.occurrence(pattern) {
+            Some(occurrence) => {
+                let bound = if occurrence.by_reference {
+                    self.via.unwrap(Step::Deref)
+                } else {
+                    Some(self.via.clone())
+                };
+                let mut steps = Vec::with_capacity(occurrence.steps.len());
+                for step in &occurrence.steps {
+                    let step = match *step {
+                        PatternStep::Deref => Some(Step::Deref),
+                        PatternStep::Field(position) => Some(Step::Field(position)),
+                        PatternStep::Element => Some(Step::Element),
+                        PatternStep::Constructor { slot, written } => ready!(
+                            self.occurrence_constructor_step(db, occurrence.root, slot, written)
+                        ),
+                    };
+                    match step {
+                        Some(step) => steps.push(step),
+                        None => break,
+                    }
+                }
+                match bound {
+                    Some(bound) if steps.len() == occurrence.steps.len() => {
+                        let via = bound.within(&steps);
+                        self.pattern_via(Some(occurrence.root), via);
+                    }
+                    _ => self.defer(pattern, ConstraintDemand::Binding),
+                }
+            }
+            // A closure parameter has its written Type, if any; without one
+            // its call argument decides it, which no source use here sees.
+            None if plan
+                .fact(pattern)
+                .is_some_and(|fact| fact.closure_parameter()) =>
+            {
+                if plan
+                    .fact(pattern)
+                    .is_some_and(|fact| fact.annotation_node().is_some())
+                {
+                    ready!(self.annotation(db, pattern));
+                }
+            }
+            // A parameter, loop or `if let` binding: its Type needs the
+            // shared pattern relation of that owner.
+            None => self.defer(pattern, ConstraintDemand::Binding),
+        }
+        let Some((_, row)) = plan.name_of(pattern) else {
+            self.defer(pattern, ConstraintDemand::Binding);
+            return QueryPoll::Ready(Ok(()));
+        };
+        // An unindexed region after the declaration may read this local.
+        if row.hidden().iter().any(|region| *region > pattern) {
+            self.unrecorded = true;
+        }
+        for use_node in row.paths().iter().copied() {
+            let observed = ready!(db.fetch(
+                &SyntaxProvider,
+                QueryKey::EnteredValue(entry(self.key, use_node))
+            ));
+            let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault("binding use query variant differs")));
+            };
+            if observed.pending().is_some() {
+                self.defer(use_node, ConstraintDemand::ValueUse);
+                continue;
+            }
+            if observed.local_binding() == Some(identity) {
+                self.expression(Some(use_node));
+            }
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+
+    fn solve(&mut self, db: &mut Database) -> QueryPoll<()> {
+        loop {
+            if let Some((identity, pattern, via)) = self.patterns.pop() {
+                self.via = via;
+                ready!(self.declared(db, identity, pattern));
+            } else if let Some((node, via)) = self.pattern_work.pop() {
+                self.via = via;
+                ready!(self.pattern(db, node));
+            } else if let Some((node, via)) = self.work.pop() {
+                self.via = via;
+                ready!(self.inward(db, node));
+                ready!(self.outward(db, node));
+            } else {
+                return QueryPoll::Ready(Ok(()));
+            }
+        }
+    }
+    /// Indexed patterns of the scalar locals (every one has the variable's Type).
+    fn members(&self) -> Vec<NodeId> {
+        let mut members: Vec<NodeId> = self
+            .bindings
+            .iter()
+            .filter(|((_, via), _)| via.is_scalar())
+            .map(|(_, pattern)| *pattern)
+            .collect();
+        members.sort_unstable();
+        members.dedup();
+        members
+    }
+}
+
+/// The local binding an indexed identifier pattern introduces, through the
+/// ordinary hygienic Value goal.
+fn pattern_binding(db: &mut Database, key: &PcKey, pattern: NodeId) -> QueryPoll<Option<Digest>> {
+    let selected = ready!(db.fetch(&SyntaxProvider, QueryKey::EnteredValue(entry(key, pattern))));
+    let QueryValue::EnteredValue(target) = selected.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("binding target query variant differs")));
+    };
+    let (Some(binding), Some(target)) = (target.local_binding(), target.binding_target()) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    if binding != target.identity() {
+        return QueryPoll::Ready(Err(fault("binding target occurrence identity differs")));
+    }
+    QueryPoll::Ready(Ok(Some(binding)))
+}
+/// Select the indexed pattern of a local selected for a path use. Equal
+/// spelling is only a candidate filter; the actual hygienic binding identity
+/// of the candidate pattern must match.
+fn binding_pattern(
+    db: &mut Database,
+    key: &PcKey,
+    plan: &SourceConstraintPlan,
+    use_node: NodeId,
+    identity: Digest,
+) -> QueryPoll<Option<NodeId>> {
+    let Some((_, row)) = plan.name_of(use_node) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    for candidate in row.bindings() {
+        if ready!(pattern_binding(db, key, *candidate)) == Some(identity) {
+            return QueryPoll::Ready(Ok(Some(*candidate)));
+        }
+    }
+    QueryPoll::Ready(Ok(None))
+}
+/// The declaring `let` statement of the local a path expression reads, when
+/// that local is a plain `let` binding. Selection uses the ordinary hygienic
+/// Value goals; this never lowers or executes the statement.
+pub(crate) fn declaring_let(db: &mut Database, key: &PcKey) -> QueryPoll<Option<PcKey>> {
+    if key.phase != 0 {
+        return QueryPoll::Ready(Err(fault("declaring let goal requires entry phase")));
+    }
+    let facts = ready!(db.fetch(
+        &SyntaxProvider,
+        QueryKey::SourceConstraints(key.body.clone())
+    ));
+    let QueryValue::SourceConstraints(plan) = facts.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("binding constraint source plan variant differs")));
+    };
+    let node = NodeId(key.node);
+    if plan.fact(node).map(|fact| fact.kind()) != Some(FactKind::Path) {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let observed = ready!(db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key.clone())));
+    let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("binding use query variant differs")));
+    };
+    let Some(identity) = observed
+        .local_binding()
+        .filter(|_| observed.pending().is_none())
+    else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let Some(pattern) = ready!(binding_pattern(db, key, plan, node, identity)) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let statement = plan
+        .uses(pattern)
+        .iter()
+        .find(|edge| {
+            edge.ordinal == 0
+                && plan.fact(edge.parent).map(|fact| fact.kind()) == Some(FactKind::Let)
+        })
+        .map(|edge| entry(key, edge.parent));
+    if statement.is_some() {
+        return QueryPoll::Ready(Ok(statement));
+    }
+    // A binding destructured from a `let` (`let (mut a, b) = (1, 2.0);`):
+    // the goal of the literal its position selects in the initializer,
+    // whose component holds this binding.
+    QueryPoll::Ready(Ok(
+        destructured_literal(plan, pattern).map(|literal| entry(key, literal))
+    ))
+}
+/// The unsuffixed literal a nested `let` binding's position selects in its
+/// initializer's written tuple/array/borrow structure.
+fn destructured_literal(plan: &SourceConstraintPlan, pattern: NodeId) -> Option<NodeId> {
+    let occurrence = plan.occurrence(pattern)?;
+    if occurrence.by_reference || occurrence.steps.is_empty() {
+        return None;
+    }
+    let statement = plan.uses(occurrence.root).iter().find(|edge| {
+        edge.ordinal == 0 && plan.fact(edge.parent).map(|fact| fact.kind()) == Some(FactKind::Let)
+    })?;
+    let mut node = plan.fact(statement.parent)?.operand(1)?;
+    for step in &occurrence.steps {
+        // Parentheses keep their operand's value.
+        while let Some(fact) = plan.fact(node)
+            && fact.kind() == FactKind::Parenthesis
+        {
+            node = fact.operand(0)?;
+        }
+        let fact = plan.fact(node)?;
+        node = match (step, fact.kind()) {
+            (PatternStep::Field(position), FactKind::Tuple) => fact.operand(*position as usize)?,
+            (PatternStep::Element, FactKind::Array) => fact.operand(0)?,
+            (PatternStep::Deref, FactKind::Borrow) => fact.operand(0)?,
+            _ => return None,
+        };
+    }
+    // Through parentheses and unary `-`/`!` to the literal itself.
+    loop {
+        let fact = plan.fact(node)?;
+        match fact.kind() {
+            FactKind::Integer | FactKind::Float => return Some(node),
+            FactKind::Parenthesis => node = fact.operand(0)?,
+            FactKind::Prefix if fact.numeric_prefix() => node = fact.operand(0)?,
+            _ => return None,
+        }
+    }
+}
+
 /// Pure provider. Syntax discovery/prelude publication must already be genuine;
 /// missing authority remains pending and never becomes a guessed primitive.
 pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindingConstraints> {
@@ -168,137 +2165,75 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
         key: key.clone(),
         structure: plan.structure(),
         binding: None,
+        members: Vec::new(),
         state: BindingConstraintState::NoNumericDemand,
     };
     let Some(fact) = plan.fact(NodeId(key.node)) else {
         return QueryPoll::Ready(Err(fault("binding constraint node absent")));
     };
-    if fact.kind() != FactKind::Let || fact.annotation().is_some() {
-        return QueryPoll::Ready(Ok(result));
-    }
-    let [Some(pattern), Some(initializer)] = fact.operands() else {
-        return QueryPoll::Ready(Ok(result));
-    };
-    let floating = match numeric_initializer(plan, *initializer) {
-        Ok(Some(floating)) => floating,
-        Ok(None) => return QueryPoll::Ready(Ok(result)),
-        Err(error) => return QueryPoll::Ready(Err(error)),
-    };
-    let selected = ready!(db.fetch(
-        &SyntaxProvider,
-        QueryKey::EnteredValue(entry(key, *pattern))
-    ));
-    let QueryValue::EnteredValue(target) = selected.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("binding target query variant differs")));
-    };
-    let Some(binding) = target.local_binding() else {
-        return result.pending(*pattern, ConstraintDemand::Binding);
-    };
-    let Some(target) = target.binding_target() else {
-        return result.pending(*pattern, ConstraintDemand::Binding);
-    };
-    if binding != target.identity() {
-        return QueryPoll::Ready(Err(fault("binding target occurrence identity differs")));
-    }
-    result.binding = Some(binding);
-    result.state = BindingConstraintState::Unconstrained;
-    let mut concrete = None;
-    let mut work = 100_000usize;
-    // Spelling is only a bounded candidate filter. Actual use identity below
-    // excludes another same-spelling binding, including each shadowing let.
-    for use_node in plan.paths_named(target.name()) {
-        let observed = ready!(db.fetch(
-            &SyntaxProvider,
-            QueryKey::EnteredValue(entry(key, *use_node))
-        ));
-        let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
-            return QueryPoll::Ready(Err(fault("binding use query variant differs")));
-        };
-        if observed.pending().is_some() {
-            return result.pending(*use_node, ConstraintDemand::ValueUse);
-        }
-        if observed.local_binding() != Some(binding) {
-            continue;
-        }
-        let mut pending = vec![*use_node];
-        let mut visited = BTreeSet::new();
-        while let Some(node) = pending.pop() {
-            work = match work.checked_sub(1) {
-                Some(work) => work,
-                None => return QueryPoll::Ready(Err(crate::runtime::arena::resource())),
+    // The goal's own inference variable: a plain `let` binding with a bare
+    // numeric literal initializer, or a bare unsuffixed literal expression.
+    let (floating, start) = match fact.kind() {
+        FactKind::Let if fact.annotation().is_none() => {
+            let [Some(pattern), Some(initializer)] = fact.operands() else {
+                return QueryPoll::Ready(Ok(result));
             };
-            if !visited.insert(node) {
-                continue;
+            let floating = match numeric_initializer(plan, *initializer) {
+                Ok(Some(floating)) => floating,
+                Ok(None) => return QueryPoll::Ready(Ok(result)),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let selected = ready!(db.fetch(
+                &SyntaxProvider,
+                QueryKey::EnteredValue(entry(key, *pattern))
+            ));
+            let QueryValue::EnteredValue(target) = selected.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault("binding target query variant differs")));
+            };
+            let Some(binding) = target.local_binding() else {
+                return result.pending(*pattern, ConstraintDemand::Binding);
+            };
+            let Some(target) = target.binding_target() else {
+                return result.pending(*pattern, ConstraintDemand::Binding);
+            };
+            if binding != target.identity() {
+                return QueryPoll::Ready(Err(fault("binding target occurrence identity differs")));
             }
-            for use_edge in plan.uses(node) {
-                let Some(parent) = plan.fact(use_edge.parent) else {
-                    return QueryPoll::Ready(Err(fault("binding use parent absent")));
-                };
-                if parent.kind() == FactKind::Parenthesis {
-                    if pending.try_reserve(1).is_err() {
-                        return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-                    }
-                    pending.push(use_edge.parent);
-                    continue;
-                }
-                // A cast constrains its result, not its numeric operand. Stop
-                // this edge without following the result's expected type;
-                // other uses of the same actual binding still contribute.
-                if parent.kind() == FactKind::Cast && use_edge.ordinal == 0 {
-                    continue;
-                }
-                if parent.kind() != FactKind::Call || use_edge.ordinal == 0 {
-                    return result.pending(use_edge.parent, ConstraintDemand::ExpressionRelation);
-                }
-                let Some(Some(callee)) = parent.operands().first() else {
-                    return result.pending(use_edge.parent, ConstraintDemand::SelectedDeclaration);
-                };
-                let selected =
-                    ready!(db.fetch(&SyntaxProvider, QueryKey::EnteredValue(entry(key, *callee))));
-                let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
-                    return QueryPoll::Ready(Err(fault("constraint callee query variant differs")));
-                };
-                let Some(declaration) = selected.declaration() else {
-                    return result.pending(*callee, ConstraintDemand::SelectedDeclaration);
-                };
-                if selected.pending().is_some() {
-                    return result.pending(*callee, ConstraintDemand::SelectedDeclaration);
-                }
-                if declaration.owner().is_none() {
-                    return result.pending(*callee, ConstraintDemand::ModuleEnvironment);
-                }
-                let goal = ready!(db.fetch(
-                    &SyntaxProvider,
-                    QueryKey::DeclaredParameterGoal {
-                        definition: declaration.identity(),
-                        ordinal: use_edge.ordinal - 1
-                    }
-                ));
-                let QueryValue::DeclaredParameterGoal(goal) = goal.value.as_ref() else {
-                    return QueryPoll::Ready(Err(fault(
-                        "constraint parameter query variant differs",
-                    )));
-                };
-                let ParameterTypeGoal::Ready(goal) = goal.goal() else {
-                    return result.pending(use_edge.parent, ConstraintDemand::ParameterType);
-                };
-                let TyTerm::Primitive(primitive) = goal.source() else {
-                    return result.pending(use_edge.parent, ConstraintDemand::ParameterType);
-                };
-                if family(*primitive) != Some(floating) {
-                    return result.pending(use_edge.parent, ConstraintDemand::NumericFamily);
-                }
-                if concrete.is_some_and(|old| old != *primitive) {
-                    return QueryPoll::Ready(Err(fault("source numeric constraints disagree")));
-                }
-                concrete = Some(*primitive);
-            }
+            result.binding = Some(binding);
+            (floating, Start::Binding(binding, *pattern))
         }
+        FactKind::Integer => (false, Start::Literal(NodeId(key.node))),
+        FactKind::Float => (true, Start::Literal(NodeId(key.node))),
+        _ => return QueryPoll::Ready(Ok(result)),
+    };
+    let mut component = Component::new(key, plan, floating);
+    component.literal_start = matches!(start, Start::Literal(_));
+    match start {
+        Start::Binding(binding, pattern) => component.binding(binding, pattern),
+        Start::Literal(node) => component.expression(Some(node)),
     }
-    if let Some(primitive) = concrete {
-        result.state = BindingConstraintState::Resolved(primitive);
+    ready!(component.solve(db));
+    // In well-typed source every relation agrees, so one concrete primitive
+    // is the variable's Type even beside relations that remain pending.
+    result.state = match (component.concrete, component.pending) {
+        (Some((_, primitive)), _) => BindingConstraintState::Resolved(primitive),
+        (None, Some((node, demand))) => BindingConstraintState::Pending { node, demand },
+        (None, None) if component.unrecorded => BindingConstraintState::Unconstrained,
+        // A closed component: Rust's integer/float fallback.
+        (None, None) => BindingConstraintState::Resolved(if floating {
+            PrimitiveType::F64
+        } else {
+            PrimitiveType::I32
+        }),
+    };
+    if matches!(result.state, BindingConstraintState::Resolved(_)) {
+        result.members = component.members();
     }
     QueryPoll::Ready(Ok(result))
+}
+enum Start {
+    Binding(Digest, NodeId),
+    Literal(NodeId),
 }
 impl StableEncode for PreparedBindingConstraints {
     const DOMAIN: &'static str = "lrr/v1/prepared-binding-constraints";
@@ -306,6 +2241,7 @@ impl StableEncode for PreparedBindingConstraints {
         e.record(&self.key);
         e.digest(self.structure);
         e.option(&self.binding, |e, id| e.digest(*id));
+        e.sequence(&self.members, |e, node| e.u32(node.0));
         match self.state {
             BindingConstraintState::NoNumericDemand => e.u8(0),
             BindingConstraintState::Unconstrained => e.u8(1),
@@ -316,15 +2252,7 @@ impl StableEncode for PreparedBindingConstraints {
             BindingConstraintState::Pending { node, demand } => {
                 e.u8(3);
                 e.u32(node.0);
-                e.u8(match demand {
-                    ConstraintDemand::Binding => 0,
-                    ConstraintDemand::ValueUse => 1,
-                    ConstraintDemand::ExpressionRelation => 2,
-                    ConstraintDemand::SelectedDeclaration => 3,
-                    ConstraintDemand::ModuleEnvironment => 4,
-                    ConstraintDemand::ParameterType => 5,
-                    ConstraintDemand::NumericFamily => 6,
-                });
+                e.u8(demand.tag());
             }
         }
     }

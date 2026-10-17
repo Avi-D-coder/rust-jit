@@ -379,7 +379,7 @@ mod borrowed_operand_tests {
     };
 
     fn reference(value: ValueRepr, access: Access) -> (GuestStore, CellId, CellId) {
-        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
+        let mut store = GuestStore::for_epoch(1).unwrap();
         let frame = store.new_frame_anchor().unwrap();
         let target = store
             .new_cell(
