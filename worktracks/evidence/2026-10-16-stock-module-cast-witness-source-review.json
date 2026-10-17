@@ -1,0 +1,123 @@
+{
+  "status": "SOURCE-ONLY independent review of new test; no Cargo/native/runtime terminal",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_stock_module_cast_tests.rs",
+      "sha256": "9e1fe2c9908fa09ab67ec792687a923f8f75512f0cfdde715224b61cf50adaaa",
+      "bytes": 7790,
+      "before_sha256": null
+    }
+  ],
+  "inputs": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/shift.rs",
+      "sha256": "d6457a9cb5e412016ddc8de0687e0267654fdb577410958cf2fa48bd45e64cf4",
+      "bytes": 1947,
+      "status": "already imported; unchanged",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "git_blob": "beb4f29381159e8a978df31951f2f8c646450de4"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "sha256": "e743843c9d3ac2480bd2b272356000b0475274660b601f9bc7670678c5acb306",
+      "cases": 338,
+      "status": "no mutation, reservation unused"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation_tests.rs",
+      "sha256": "0443773b3741f175ef94188b34d1cf5632983ee0ebde08e5d07d0f97465958a6",
+      "status": "read-only actual shared harness dependency"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_stock_type_argument_tests.rs",
+      "sha256": "4707848f981bd521c544726debdd96404f92d73a4f6d44c7d736b09caecea2c7",
+      "status": "read-only actual shared harness dependency"
+    },
+    {
+      "path": "crates/lrr/src/engine/lexical_numeric_callees_tests.rs",
+      "sha256": "231294c6aa42c14eea0b30e92902011a597822cb5a883ddd836757293f7a200a",
+      "status": "read-only actual shared harness dependency"
+    }
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "whole_shift_main",
+        "start",
+        "completed"
+      ],
+      "review": "Existing ordinary full-source harness and RunMachine poll; no new interpreter/assertion evaluator. All original assertions retained; require zero legacy Assert on success."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "SHIFT include_str",
+        "start"
+      ],
+      "review": "1947B unchanged complete official source; real entry main, no synthetic block/function, truncation or literal/break executor."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "test_expr CastExpr observation",
+        "QueryKey::EnteredType",
+        "QueryKey::PreparedTypePlan"
+      ],
+      "review": "Actual post-execution canonical indexed Type nodes from real owning child source; provider-run evidence checked before observer fetch, current guard and source_for. Names in test identify upstream declarations only; no production whitelist/profile change."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "start retained_entry adapter"
+      ],
+      "review": "No production route or original/generated gate changed. This test only handwritten full fixture; macro wrapper/std route acceptance remains unexecuted and separate."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "whole_shift_main cold trace assertions"
+      ],
+      "review": "Only actual declaration/header/body-key inventory observed before runtime. No child BodyStructure/Thunk/type planning fetch or empty SourceLocalPlan observer manufactured. Setup/cold/macro unsupported is test failure."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "runs",
+        "actual main Q44 count",
+        "actual child Q42/Q43 count"
+      ],
+      "review": "Source preparation evidence demands one provider run per actual main call and reached target Type plan. Post-execution queries inspect reached evidence only; no runtime planning code added. Eviction/repeated entry and performance not established."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "whole_shift_main source/header input inspection"
+      ],
+      "review": "No production namespace map or invalidation path changed. Test reads exact actual DefinitionSource/DefinitionBody for selected three upstream definitions; no dispatch scan introduced."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "BodyStructure Arc query",
+        "parsed.syntax_at",
+        "nodes_at_range"
+      ],
+      "review": "Existing immutable index/parse handles borrowed, direct canonical range nodes. No cloned BodyIndex or whole-file source search per runtime operation. Test-only full fixture AST cast scan occurs after completion."
+    }
+  ],
+  "required_actual_evidence": [
+    "Owning2015 complete test terminal then all4 editions by sole validator",
+    "First unsupported/error must retain stage and actual code, no accepted-error oracle",
+    "Same operations user/wrapper/applicable standard macro and currentness/authority/cleanup controls before architecture closure"
+  ],
+  "known_prerequisites": [
+    "Shared setup configures real CompileInputCatalog::standalone and declarative compiler; allow attributes/assert_eq/core catalog can fail before child cast. No observed setup terminal exists from this worker.",
+    "All3 module calls, fifteen direct test_expr let casts, assertions and local static constants remain full runtime obligations.",
+    "Unhooked Module source component is separate; integrate only actual reached demand, not observer repair."
+  ],
+  "acceptance": "No source component/runtime/full-fixture/architecture pass claimed. Imported case metadata remains pending/native unexecuted. No fixture/manifest/license changes."
+}

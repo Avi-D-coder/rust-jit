@@ -498,3 +498,6 @@ fn entered_local_source_rejects_wrong_entry_owner_and_revoked_parent_without_pub
     assert!(!db.inputs.contains_key(&InputKey::BodyEnvironment(child)));
     db.finish_run().unwrap();
 }
+
+#[path = "body_lease_original_source_tests.rs"]
+mod body_lease_original_source_tests;

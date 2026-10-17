@@ -1,0 +1,130 @@
+{
+  "status": "SOURCE-ONLY architecture investigation, no production edits/Cargo/runtime; V7 actual20-pass historical separate",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_module_source_preparation.rs",
+      "sha256": "d66c9528d9995499d79bfe41b949e03983c4b53d53364dd4874f2de7494c3757"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "28a237edb99ac30eac55c23b2b051f69b60fa67cbcfa6c1f1a649fb4d84ed9cb"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "fda30cd63d08f3ae49b6069c8490ba31e24b0756922369ce10c92158f32c82ad"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "37f4719011f6538ab872743f5b9d6cfbaa88161bee3417385934a97657b6d1b0"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+      "sha256": "179a703d9f6dc08432c9c86221a4f8cdde20057eaede88a5481bdc6e55aa46c1"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "cf72e8c621d7a33ec2f60e52d1f2dabb868043d5867830293e1098b3e31726c3"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_syntax.rs",
+      "sha256": "908a42ba934f85987dfa64a612f43e08475991acede3d42ee88f6a591a7f0a43"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_body_inputs.rs",
+      "sha256": "b2719b29ec2ffdc176b29cb5bb46c391ccc04f358d4d457dc27e1b12c9f52062"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "67f2de5a7e18170a0312467781ac5ff5d804defa47f444179d299fdcfa8915e6"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "cb85040a6b4b2526ff6a83f5f4afc2ef2f2d4b26f15f21e0f23b02f5a9966607"
+    },
+    {
+      "path": "crates/lrr/src/cli/retained_entry.rs",
+      "sha256": "aa096094ffc330711e2617274aa4a4f66338e83aae14874c9e879fe795f1bb0e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+      "sha256": "d0f1c0b23f6ce5475f08b042aace7e8a6cad94d8b6d0b604e2a1c33a36fbb66e"
+    }
+  ],
+  "witness": "Unchanged numbers-arithmetic/shift.rs complete main calls module test_misc first, whose actual body contains assert_eq; test_expr later has15 direct let casts needing actual callee Type context. Standard macro closure must not be replaced by legacy Op::Assert. No observed shift terminal yet in this worker.",
+  "direct_owner_delta_review": {
+    "packet": "/private/tmp/lrr-reached-module-direct-source-owner-v1/COMPONENT.json",
+    "leaf": "d66c9528",
+    "finding": "No concrete source blocker in narrow replacement: actual selected DeclarationContext.scope -> existing CompletedSourceEnvironment::scope_owner, Selected actual owner passed to same capture, ambiguity/missing explicit. Removes all-source Vec/census, no fallback or new selection authority. Generated boundary export and module body syntax readiness unchanged/held."
+  },
+  "actual_common_readiness_route": [
+    "SourceDiscovery::prepare_body_syntax(sourceSelection,actualDef) -> prepare_syntax",
+    "SourceSyntaxAssembly::new actual provider owned forest +actual DeclarationMacroIndex/scan/epoch",
+    "next_body_invocation actual function ownership -> attach_receipt exact SyntaxRequestReceipt/GeneratedDeclarations producer, epoch, seal dependency",
+    "finish_for_body actual selected body permit -> RetainedSyntaxInput::prepare actual current seal/capturedsource/outputs -> publish_retained_syntax",
+    "publish_retained_body canonical original declaration anchor maps actual retained header/body/context -> ordinary source callable rejoin -> actual BodyEnvironment/source local plan -> same BodyIndex/Thunk/verifier/VM"
+  ],
+  "missing_authority_transport": [
+    "CompletedSourceEnvironment currently retains source leases/names/scope owners and future per-source macro index facts, but not source assembly issued receipts, actual admitted outputs, DeclarationMacroIndex/source provider forest needed by prepare_body_syntax. Raw capture or empty module macro envelope cannot substitute.",
+    "SourceDiscovery::prepare_syntax itself is coordinator-only and reconstructs source assembly; discovery is consumed by start_with_discovery. Required immutable preparation inputs must be captured once through existing completed source path, not retained whole mutable discovery/world or alternate resolver.",
+    "All actual output/receipt attachment identity and sealed record dependency checks in source_syntax must remain authority. Newly reached macro work absent admitted output requires existing proper macro producer/authority demand; pure provider cannot expand/compiler-execute."
+  ],
+  "publication_guard_blocker": {
+    "trigger": "Use existing publish_retained_body at reached module call after installed Q44/Q47 selection",
+    "reason": "It atomically rewrites callee DefinitionSource/Header/Body/DeclarationContext. Those exact published rows are captured by canonical EnteredModuleAdmission and full Q44 guard retained in Q47. Existing installed target must become stale; silently refreshing/dropping the guard or preserving original SourceCallable is unsound.",
+    "existing_entry_behavior": "CLI retained_entry prepares/publishes selected body then reselects genuine entry BEFORE creating runtime/installed plans, avoiding the reached target lifetime issue.",
+    "required_join": "Common entered executable body authority must be joined to unchanged genuine declaration/name/signature authority through actual original anchor/current prepared syntax; final normal SourceCallable/body inputs and query dependencies must represent that derivation explicitly. Distinguish declaration authority from entered executable locator through existing common source model; no new source-kind execution lane. Exact API/data publication separation remains root design prerequisite, not implemented by this review."
+  },
+  "minimal_common_preparation_boundaries": [
+    "Cold completed source owner retains only bounded actual per-source assembly inputs/issued receipts/output handles once, explicitly charged/stably keyed by actual source/scope/edition/epoch/sealed dependencies. No all-source runtime graph scan.",
+    "First actually reached selected module function requests one immutable body readiness plan through same pure memo framework. It must consume real SourceSyntaxAssembly attachment logic, preserve cold sibling/nested function bodies, and issue actual per-body readiness; no evaluator/parser selected by macro name.",
+    "Reached coordinator publishes only genuine body preparation after existing macro authority closure; exact callable/target/Type currentness must remain valid under a sound declaration/executable locator join, never refreshed by spelling or global revision waiver.",
+    "Retain actual completed callee plan at real source/execution owner so repeat entries/phases use immutable results; no replayed whole-file assembly per call or installed planning. Existing shared module env helper alone does not establish this."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "No implementation added. Current frontend/runtime_macro_plan legacy assertion lowering explicitly emits Op::Assert; must stay named/held, not be used to claim source-body readiness."
+    },
+    {
+      "mode": 2,
+      "review": "Required common source attachment is SyntaxRequestReceipt+GeneratedDeclarations into actual retained tree, never literal/break executor/synthetic function."
+    },
+    {
+      "mode": 3,
+      "review": "No method/numeric/macro-name profile proposed; actual selected declaration/owning edition/index and normal Type/call/member services remain sole semantics."
+    },
+    {
+      "mode": 4,
+      "review": "Raw original, retained and generated body preparation must consume actual common authority. Generated body boundary export remains absent; do not bypass or add original-only successful profile."
+    },
+    {
+      "mode": 5,
+      "review": "prepare_body_syntax is function-owned, cold nested/sibling bodies stay pending. No executable shape checks for unselected branches, no pattern machinery changes."
+    },
+    {
+      "mode": 6,
+      "review": "Do not call source_syntax reconstruction at each installed call. It currently gathers output maps and creates assembly; future immutable source transport/body memo must prepare once and share."
+    },
+    {
+      "mode": 7,
+      "review": "Peer direct-owner change removes census correctly. Exact scope_owner ambiguity/missing remain. Whole SourceDiscovery retention/world map comparisons are not recommended runtime authority."
+    },
+    {
+      "mode": 8,
+      "review": "Share actual syntax/index/outputs via existing Arc roots and direct indexed locations; no BodyIndex deep clone or display-text reparse. Persistent assembly input reuse and allocation accounting still need implementation evidence."
+    }
+  ],
+  "unexecuted_controls": [
+    "Actual unchanged shift2015 terminal thenall4: full assertions/static items retained",
+    "Actual module body with inner call/cast forces owning source env; cold module siblings unchanged",
+    "Wrong source/header/body/scope/cfg/epoch/seal and generated boundary cases",
+    "Retained body derivation must not self-invalidate or weaken selected target/Type guards",
+    "Repeated entry/suspension/eviction no replanning and source-root retirement",
+    "Common ordinary/user/wrapper/applicable standard macro route matrix, zero legacy assertions"
+  ],
+  "acceptance": "No new module source runtime integration or full body readiness acceptance justified by this source review alone. Stage actual next failure before choosing production extension."
+}

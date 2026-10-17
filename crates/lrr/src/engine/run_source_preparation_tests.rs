@@ -44,9 +44,8 @@ fn start(text: &str, edition: u16, entry: &str) -> Harness {
     };
     // Use the production entry adapter: completed macro outputs must join the
     // ordinary retained source tree before indexing/executing the selected body.
-    let selected = crate::cli::retained_entry::prepare(
-        &mut db, &discovery, &source, entry, selected,
-    ).unwrap();
+    let selected =
+        crate::cli::retained_entry::prepare(&mut db, &discovery, &source, entry, selected).unwrap();
     selected.revalidate(&mut db).unwrap();
     let body = selected.body().expect("selected source entry body").key();
     let parent = ready(db.prepare_source_local_plan(&discovery, &[&source], &body));
@@ -437,3 +436,6 @@ fn retired_local_preparation_roots_are_charged_until_last_raw_source_context_or_
         assert_eq!(released.after.source_input_bytes, 0);
     }
 }
+
+#[path = "run_stock_module_cast_tests.rs"]
+mod stock_module_cast_tests;

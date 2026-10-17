@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "task": "T032/M013/M017/M018 common entered body/source/macro readiness prerequisite",
+  "source_member": "04cb078eb8768bb55294b28f7813b4709700db7bb15135261f72dfa27623fadb",
+  "production_identical_to": "b69405c82add8fbe0f727c482a94706bea2721a4722d03902f0dc6bad09454eb",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "fixture": "tests/ui/numbers-arithmetic/shift.rs",
+  "fixture_sha256": "d6457a9cb5e412016ddc8de0687e0267654fdb577410958cf2fa48bd45e64cf4",
+  "directives": [
+    "run-pass"
+  ],
+  "auxiliaries": [],
+  "compile": "1141e3/0",
+  "original_none_all4_control": "ed334a/0",
+  "runtime_2015": "e94ed7/1",
+  "failure": {
+    "code": "LRR-E-UNSUPPORTED",
+    "message": "assertion non-local binding awaits ordinary namespace resolution",
+    "source_fragment": "assert_eq!(r1_1, 2 as usize)",
+    "absolute_range": [
+      1279,
+      1307
+    ],
+    "runtime_owner": "syntax/thunks.rs::runtime_macro_binding_operation",
+    "route": "Held legacy assertion-specific binding route inside actual reached test_const; not evidence of missing module Type environment as first error."
+  },
+  "release": "13eac01967a8545b1fdff7e3c074e063fba996226c12f0d6580f971cf38670c5",
+  "runtime_contract_passes": 0,
+  "full_fixture_passes": 0,
+  "unexecuted": [
+    "shift all editions",
+    "full common-source architecture matrix",
+    "full interpreter milestone"
+  ],
+  "next": "Common reached-body expanded syntax admission and exact callable/executable locator guards. Never add static binding lookup to runtime_macro_binding_operation. Preserve active caller source, evaluated argument exact-once and canonical selected declaration authority. Retain immutable syntax/issued receipts once; no repeat source parsing/census at call entry.",
+  "all8_review": "Baseline only changes4 test leaves; production identical V7. Witness requires zero legacy Assert but post-completion oracle not reached. All unsupported/unexecuted outcomes remain gaps.",
+  "compiler_evidence_is_not_interpreter": true
+}

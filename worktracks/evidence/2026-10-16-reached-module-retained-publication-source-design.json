@@ -1,0 +1,159 @@
+{
+  "status": "READ-ONLY bounded design/prerequisite source review, not implementation or runtime acceptance; actual unchanged baseline pending",
+  "claim": "LOCAL-024 / WT04, T032/M013/M017/M018 common source admission prerequisite; E-R5-005, MA001/MA006/MA008 distinct from modes1-8",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "e817484ec324166061edd8e3c99a2c6eeb78b5c520660a8295bee5a7e3a80915"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_module_source_preparation.rs",
+      "sha256": "d66c9528d9995499d79bfe41b949e03983c4b53d53364dd4874f2de7494c3757"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "5be8a0d6f0a49ca94f50414d78ce92bca65c615dd715ea9fd765b95d7e50488e"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "fda30cd63d08f3ae49b6069c8490ba31e24b0756922369ce10c92158f32c82ad"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "28a237edb99ac30eac55c23b2b051f69b60fa67cbcfa6c1f1a649fb4d84ed9cb"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "37f4719011f6538ab872743f5b9d6cfbaa88161bee3417385934a97657b6d1b0"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "cf72e8c621d7a33ec2f60e52d1f2dabb868043d5867830293e1098b3e31726c3"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+      "sha256": "125bce096ace0912c76247032ac88dba987138e8b84eb918931305f1afda3788"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/snapshot.rs",
+      "sha256": "c87d853243ce54ffddc3f68304313122f4b9dd12abe73e6565713a5443f31165"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_body_inputs.rs",
+      "sha256": "b2719b29ec2ffdc176b29cb5bb46c391ccc04f358d4d457dc27e1b12c9f52062"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_syntax.rs",
+      "sha256": "908a42ba934f85987dfa64a612f43e08475991acede3d42ee88f6a591a7f0a43"
+    }
+  ],
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/shift.rs",
+    "sha256": "d6457a9cb5e412016ddc8de0687e0267654fdb577410958cf2fa48bd45e64cf4",
+    "unchanged_calls": "main -> test_misc -> test_expr -> test_const; test_misc already contains assert_eq!, test_expr has direct casts, test_const nested statics",
+    "acceptance": "No runtime terminal observed by worker; no first-failure attribution or pass."
+  },
+  "invariant": "Prepare actual reached module body through common admitted structural syntax before guest entry, keeping active caller unchanged and retaining exact current canonical selection. Do not mutate old callable/guard or infer generated boundary.",
+  "current_route": {
+    "selection": "actual indexed CallExpr -> Value39 -> EnteredCall Module Arc<EnteredModuleAdmission> -> PreparedExplicitTypeArguments shared guard -> ordinary SourceCallable",
+    "publication": "SourceCallable and EnteredModuleAdmission bind exact DefinitionSource/Header/Context/Body, syntax input, selection/signature guards. publish_retained_body checks actual original anchor and unowned target then atomically replaces target rows and increments db revision. It preserves source_revision, touches no caller rows, but intentionally stales old selected target evidence.",
+    "entry": "live prepare_source_call only prepublishes local owner environment; held prepare_reached_module_source uses actual selected scope owner and real BodyEnvironment core, no hook yet. entered_type_thunk returns None without child BodyEnvironment.",
+    "reference": "CLI retained_entry::prepare publishes actual retained syntax/body then reruns entry_function and validates actual selected body/source, rather than patching old callable. Runtime arguments/installed evidence require stronger controlled coordinator rejoin."
+  },
+  "concrete_conflicts": [
+    "CanonicalModuleDeclaration::revalidate compares actual source/header/context rows and stamps; EnteredModuleAdmission also checks body stamp and selection/signature guards. Rebinding an original module to retained syntax must invalidate old proof.",
+    "SourceCallable::revalidate checks exact source/header/context/body and source_revision. Target-only derived db revision is not caller source replacement, but ignoring stale target rows is unsound.",
+    "Existing caller installed recipe/PreparedExplicitTypeArguments/EnteredCall guards may depend on canonical target source rows. Re-fetching only a callee callable after publication does not automatically refresh already retained recipe proof.",
+    "Recursion into an already active target cannot republish body: require_body_unowned must stay. Reuse exact previously admitted target readiness instead."
+  ],
+  "existing_source_assembly_inputs": {
+    "source": "actual provider.source PreparedSourceView + owned_forest (actual token origins/owning editions), actual DeclarationMacroIndex.scan_handle (source/parse/path/cfg/root scope). SourceSyntaxAssembly::new uses no macro resolver/provider execution beyond those source inputs.",
+    "outputs": "prepare_syntax builds BTreeMap<(parent_inventory,parent_invocation),Arc<GeneratedDeclarations>> from source item inputs and completed nested/argument fragments; each actual record epoch/key+descriptor must appear in actual seal dependencies. Duplicate/conflicting exact producer outputs refused.",
+    "receipts": "actual syntax_requests keyed by ExpansionKey fingerprint; SyntaxRequestReceipt preserves actual issued key/site/token-root identity/definition and grammar form. attach_receipt validates occurrence/parent/grammar/source authority.",
+    "selected_body": "next_body_invocation resolves nearest actual Fn owner in retained tree; finish_for_body mints only selected original definition permit. No empty-catalog or output-count authority."
+  },
+  "proposed_minimal_factors": [
+    {
+      "owner": "expand/source_declarative assembly + pinned adapter",
+      "api": "Common immutable admitted attachment seed, with checked structural fork for a selected-body variant; new captured constructor takes actual PreparedSourceView/scanArc/seed rather than entire SourceDeclarative/DeclarationMacroIndex.",
+      "requirement": "SyntaxSnapshot currently exports structural events/origins but has no pinned SyntaxAttachment root/fork. Never reparse display text. An actual adapter seed/fork requires explicit bounded ownership/accounting; no assumption that deep cloning SpanStore/origins is free."
+    },
+    {
+      "owner": "expand/source_discovery/source_syntax.rs + completed_source_environment.rs",
+      "api": "Prepare actual per-source immutable syntax transport once at completion: source owner+scanArc+seed, shared exact producer-output index and issued receipt index, actual epoch/cfg/profile/selection and seal stamp. Expose direct lookup by actual SourceSelection/canonical target scope; selected-body preparation consumes only needed actual producer chain.",
+      "requirement": "Retain original and staged module sources with actual owners, generated receipt parent chain/boundary separately. Do not retain mutable SourceDiscovery, resolver/provider census, procedural worker or executable runtime evaluator. Existing output index/syntax_outputs reconstruction moves to cold once-per-owner preparation."
+    },
+    {
+      "owner": "existing pure query/memo + coordinator retained input/body publication",
+      "api": "Memo actual reached body structural preparation by real source selection, original canonical definition, epoch and semantic dependencies; coordinator consumes result to publish current retained syntax/target rows.",
+      "requirement": "No provider producer execution or arbitrary native build. Missing genuine output/issued receipt remains explicit demand. Cache owns actual Arc outputs/seed and bounded checked metadata; never attach all cold executable bodies merely to finish reached one."
+    },
+    {
+      "owner": "root engine/call proof integration",
+      "api": "Opaque target publication/rejoin step before contracts and frame mutation, preserving current caller BodyKey/site and already evaluated argument slots/effects. Fresh ordinary selected-call/explicit Type evidence must bind same actual declaration identity after authorized rebind.",
+      "requirement": "Do not patch callee fields/replace guard by digest or disable old guard refusal. All old target rows/arguments/currentness validated before mutation; no repeat argument evaluation. Actual changed recipe-dependency replacement policy needs source-aware implementation/control before integration."
+    }
+  ],
+  "authority_and_currentness": [
+    "Actual source/parse/path/cfg/edition and expansion epoch; real seal query publication fingerprint and source lease membership.",
+    "Exact issued request key/site/input roots, actual output descriptor and parent inventory/producer/grammar join at every attachment.",
+    "Actual canonical original declaration anchor -> retained declaration header/body/context; raw scan digest not DefKey.",
+    "Target-only derived publication under coordinator, quota/overflow preflight and unowned target guard; active caller rows/lease and installed source_revision unchanged.",
+    "Fresh selected declaration proof after body rebind must preserve actual NameDefinition/canonical definition, caller site/index/source and positive/negative namespace guards.",
+    "Generated declaration boundary joins remain required; source component cannot create original-only runtime semantics."
+  ],
+  "costs": {
+    "cold": "Once per actual source owner, existing assembly initial tokenization/parse and real output/receipt indexing; repeated per-target prepare_syntax full output indexing/full original parse is existing debt to remove. Selected attachments proportional to needed producer chain and actual structural edits; current next_body_invocation can rebuild actual snapshot/parser per edit, separate inherited cost to account.",
+    "entry": "Direct owner and selected body memo lookup plus relevant receipt guards, no all-world source vector/namespace census, no installed operation source planning. First reached preparation may suspend before guest mutation.",
+    "retention": "Arc source/scan/pinned seed/output/receipt ownership exposed to existing input/query/source artifact traversal, deduplicated shared payload. No hidden completed-root cycle or source registry. Section32.2 caps/checks before allocation; stable domains encode actual changed facts, no pointer addresses in keys.",
+    "claims": "No measured performance/scaling claim."
+  },
+  "all8": [
+    {
+      "mode": 1,
+      "finding": "Use actual SourceSyntaxAssembly+ordinary parser/index/lowerer; legacy declarative_runtime/runtime_macro_plan/assert evaluator remain named held until real replacement evidenced."
+    },
+    {
+      "mode": 2,
+      "finding": "Actual structural attachment and selected-body permit; never literal/break-only output execution or rendered text parser."
+    },
+    {
+      "mode": 3,
+      "finding": "Same ordinary Value/Type/member services and canonical declared signature; no assert/method/numeric whitelist."
+    },
+    {
+      "mode": 4,
+      "finding": "Original/retained/generated need real parent/source/boundary evidence; missing generated join explicit component gap, not new language exclusion."
+    },
+    {
+      "mode": 5,
+      "finding": "Only actual reached body syntax readiness, required declaration closure allowed; no executable lower/check for cold funcs/arms. Nested pending function markers preserved."
+    },
+    {
+      "mode": 6,
+      "finding": "Prepare shared source seed/index once and memo selected body. Installed recipes consume immutable guards; inherited snapshot-per-edit cost explicit. No repeated display/source parsing at dispatch."
+    },
+    {
+      "mode": 7,
+      "finding": "Direct scope/source owner and real relevant dependencies; no world census/global revision guard relaxation. Target row rebind deliberately requires proof renewal."
+    },
+    {
+      "mode": 8,
+      "finding": "Pinned structures and parser/body/index Arc handles retained; no BodyIndex deep copy or repeated file-wide syntax node search. New seed fork API must prove actual sharing/bounds."
+    }
+  ],
+  "required_controls": [
+    "Unchanged shift whole main first actual baseline, then all editions and arbitrary user/wrapper/std nesting without imported-original changes.",
+    "Exact call selection and target source/body/guard before and after actual publication; active caller lease remains current; no body preparation for cold functions.",
+    "First target currentness change stales old admission; fresh ordinary evidence selects same real declaration, unrelated publications do not invalidate.",
+    "Suspend during needed input with zero frame/call-stack mutation, args/effects once, no replay on resume, normal cleanup.",
+    "Recursive/repeated target reuses actual current admitted body without replacing active one.",
+    "Wrong owner/sibling source/cfg/epoch/seal/receipt/descriptor/grammar rejects before publication; generated parent gap never fabricated.",
+    "Inspect actual indices/Type42/43/call guards/opcode trace, zero legacy Assert route; matching output alone insufficient."
+  ],
+  "changes": "Only this design record written; no production source edits/Cargo/compiler/tests."
+}

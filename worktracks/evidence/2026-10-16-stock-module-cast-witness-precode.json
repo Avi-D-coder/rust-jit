@@ -1,0 +1,42 @@
+{
+  "status": "source-only test before execution; no production changes or Cargo",
+  "task": "LOCAL-024 shared entered module Type/call source authority prerequisite; T032/M013/M017/M018 ordering held",
+  "invariant": "Full unchanged official program runs through common source CallExpr and Type occurrence services; test observers may inspect only actual reached preparation and must not manufacture an unused SourceLocalPlan demand.",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/shift.rs",
+    "upstream": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "sha256": "d6457a9cb5e412016ddc8de0687e0267654fdb577410958cf2fa48bd45e64cf4",
+    "bytes": 1947,
+    "directives": [
+      "//@ run-pass"
+    ],
+    "auxiliaries": [],
+    "revisions": [],
+    "expected_files": [],
+    "already_imported": true,
+    "manifest_cases": 338,
+    "manifest_sha256": "e743843c9d3ac2480bd2b272356000b0475274660b601f9bc7670678c5acb306"
+  },
+  "owned": [
+    "crates/lrr/src/engine/run_stock_module_cast_tests.rs"
+  ],
+  "root_registration_only": "run_source_preparation_tests.rs child module registration; no shared parent edit by worker",
+  "route": [
+    "existing start complete real SourceDiscovery::entry_function and retained_entry adapter",
+    "actual whole original main -> module test_misc/test_expr/test_const",
+    "selected_source_body common BodyIndex; actual reached cast TypeGoal42/PreparedTypePlan43",
+    "existing completed runtime poll, ordinary counters/cleanup"
+  ],
+  "cold_cost": "Only declaration/source/body-key observations before poll; no callee BodyStructure, Type goal or executable prefetch by test.",
+  "runtime_cost": "No production code changed. After success inspect existing provider events before any observer query, actual canonical child AST/index Type nodes and current published source/body rows; never fetch SourceLocalPlan for empty observer.",
+  "acceptance": "Any setup/core/assertion/call/cast/static unsupported or NeedInput is an actual failure. No fixture slicing or accepted errors. Existing unhooked Module source component remains separate until genuine demand terminal.",
+  "required_evidence": [
+    "Source-aware exact all8 review",
+    "2015 owning-edition terminal then all4 by sole validator",
+    "Preserved full source/manifest/licenses; provider/call/cleanup assertions actual"
+  ],
+  "holds": [
+    "No runtime or full architecture pass from source-only test",
+    "Required core macro/catalog/cast/static gaps must be actual and common-engine repaired, no assertion shortcut"
+  ]
+}
