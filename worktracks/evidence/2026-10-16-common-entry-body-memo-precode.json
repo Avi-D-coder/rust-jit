@@ -1,0 +1,37 @@
+{
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "M013",
+    "M017",
+    "M018"
+  ],
+  "invariant": "Actual standalone selected-body admission consumes the same pure prepared-body query as future reached bodies; repeated same source/edition/epoch/definition demands reuse the immutable prepared result, with producer execution and publication remaining coordinator actions. No macro-specific semantics or executable cold-body preparation.",
+  "witness": "Unchanged rustc macros/macro-nested_stmt_macros.rs at ae0fe511b15ab760d7e963b13389d1bc2ab42b18 and existing hygiene/issue-40847.rs CLI whole-main control, all four editions.",
+  "shared_route": [
+    "cli::retained_entry::prepare",
+    "SourceDiscovery::completed_source_environment",
+    "Database::publish_completed_source_syntax",
+    "SyntaxProvider QueryKey::PreparedBodySyntax (48)",
+    "PreparedBodySyntax::admit",
+    "Database::publish_retained_syntax/publish_retained_body",
+    "ordinary entry_function and prepare_source_local_plan"
+  ],
+  "remove": "Direct discovery.prepare_body_syntax at standalone entry, which reconstructs selected assembly on repeated entry preparation. Keep original declaration anchor/generated-entry migration refusal and all actual source authority checks unchanged.",
+  "authority": "Opaque actual completed environment, current published seal, exact source plan/input, source edition, epoch and definition key; pure provider cannot expand macros or publish. Existing retained source body publisher owns canonical declaration migration.",
+  "cost": "One coordinator input registration and one memo fetch per cold standalone entry preparation. Same-key selected assembly runs once per retained valid query; no hot dispatch change or whole source/global namespace walk added. Completed immutable graph/plan/body handles shared through Arc. Existing admission replay/coarse source publication and opaque Salsa accounting debts remain explicit.",
+  "evidence": [
+    "Existing unchanged CLI whole-main test",
+    "LRR route control over unchanged official nested macro source: repeated actual entry preparation invokes Query48 provider once, same canonical selected body, no Thunk/BodyStructure execution demand by memo",
+    "Separate exact-source all8 review and sole validator actual async results"
+  ],
+  "baseline": {
+    "path": "crates/lrr/src/cli/retained_entry.rs",
+    "sha256": "aa096094ffc330711e2617274aa4a4f66338e83aae14874c9e879fe795f1bb0e"
+  },
+  "holds": [
+    "No runtime module-call hook or shift pass",
+    "Generated entry migration and old runtime-macro evaluator held",
+    "Full architectural matrix/current milestone/JIT gate incomplete"
+  ]
+}

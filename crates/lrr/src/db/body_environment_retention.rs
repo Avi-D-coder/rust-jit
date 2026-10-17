@@ -220,6 +220,33 @@ impl Roots {
         }
         Ok(())
     }
+    // Payload sizes are cached and charged by SourceArtifactRef. This walk
+    // only keeps their actual retirement rows reachable from input/result DAGs.
+    fn syntax_input(
+        &mut self,
+        value: &Arc<super::source_syntax_inputs::CompletedSourceSyntaxInput>,
+    ) -> Result<(), Diagnostic> {
+        if self.add(value, 0)? {
+            self.syntax_plan(value.plan())?;
+        }
+        Ok(())
+    }
+    fn syntax_plan(
+        &mut self,
+        plan: &Arc<crate::expand::source_discovery::CompletedSourceSyntax>,
+    ) -> Result<(), Diagnostic> {
+        self.add(plan, 0)?;
+        Ok(())
+    }
+    fn prepared_syntax(
+        &mut self,
+        value: &Arc<super::source_syntax_inputs::PreparedBodySyntax>,
+    ) -> Result<(), Diagnostic> {
+        if self.add(value, 0)? {
+            self.syntax_plan(value.plan())?;
+        }
+        Ok(())
+    }
     fn completed_environment(
         &mut self,
         environment: &Arc<crate::expand::source_discovery::CompletedSourceEnvironment>,
@@ -234,6 +261,9 @@ impl Roots {
         )?;
         for index in environment.macro_index_roots() {
             self.published(index)?;
+        }
+        for plan in environment.syntax_plan_roots() {
+            self.syntax_plan(plan)?;
         }
         // All retained views are actual live-runtime source publications. Their
         // state/parser/input allocations remain in the existing prepared-source
@@ -376,8 +406,10 @@ impl Database {
                     .filter_map(std::sync::Weak::upgrade),
             )
         {
-            if let InputValue::BodyEnvironment(environment) = value.as_ref() {
-                roots.environment(environment)?;
+            match value.as_ref() {
+                InputValue::BodyEnvironment(environment) => roots.environment(environment)?,
+                InputValue::CompletedSourceSyntax(input) => roots.syntax_input(input)?,
+                _ => {}
             }
         }
         // Inspect before pruning. A raw admitted source/context can outlive
@@ -388,6 +420,9 @@ impl Database {
                 continue;
             }
             match root {
+                SourceArtifactRef::SourceSyntaxInput(input) => roots.syntax_input(input)?,
+                SourceArtifactRef::CompletedSourceSyntax(plan) => roots.syntax_plan(plan)?,
+                SourceArtifactRef::PreparedBodySyntax(value) => roots.prepared_syntax(value)?,
                 SourceArtifactRef::LocalPlan(plan) => roots.plan(plan)?,
                 SourceArtifactRef::BodyEnvironment(environment) => {
                     roots.environment(environment)?
@@ -515,8 +550,10 @@ impl Database {
         // A current or externally retained input owns these roots even if its
         // between-run retirement row has already been pruned.
         for value in self.inputs.values().map(|row| &row.value) {
-            if let InputValue::BodyEnvironment(environment) = value.as_ref() {
-                roots.environment(environment)?;
+            match value.as_ref() {
+                InputValue::BodyEnvironment(environment) => roots.environment(environment)?,
+                InputValue::CompletedSourceSyntax(input) => roots.syntax_input(input)?,
+                _ => {}
             }
         }
         for value in self
@@ -524,8 +561,10 @@ impl Database {
             .values()
             .filter_map(std::sync::Weak::upgrade)
         {
-            if let InputValue::BodyEnvironment(environment) = value.as_ref() {
-                roots.environment(environment)?;
+            match value.as_ref() {
+                InputValue::BodyEnvironment(environment) => roots.environment(environment)?,
+                InputValue::CompletedSourceSyntax(input) => roots.syntax_input(input)?,
+                _ => {}
             }
         }
         for root in self.source_plan_pins.roots() {
@@ -533,6 +572,9 @@ impl Database {
                 SourceArtifactRef::CompletedEnvironment(environment) => {
                     roots.completed_environment(environment)?
                 }
+                SourceArtifactRef::SourceSyntaxInput(input) => roots.syntax_input(input)?,
+                SourceArtifactRef::CompletedSourceSyntax(plan) => roots.syntax_plan(plan)?,
+                SourceArtifactRef::PreparedBodySyntax(value) => roots.prepared_syntax(value)?,
                 SourceArtifactRef::LocalPlan(plan) => roots.plan(plan)?,
                 SourceArtifactRef::BodyEnvironment(environment) => {
                     roots.environment(environment)?

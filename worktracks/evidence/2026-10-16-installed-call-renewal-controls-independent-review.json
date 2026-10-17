@@ -1,0 +1,34 @@
+{
+  "status": "SOURCE-ONLY independent narrow test/API/oracle review; no Cargo/runtime evidence",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/installed_call_renewal_tests.rs",
+      "sha256": "d421630c15d253c9e294e194c928a431f67e1f13d76a49f317844c5458a1df3f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/module_target_publication_tests.rs",
+      "sha256": "73dca31e337f67f61382d86da90e6411e54013729e840b1fe32081ef72246d18"
+    },
+    {
+      "path": "crates/lrr/src/engine/install_call_renewal.rs",
+      "sha256": "aaec4d79a46507396cb5b39166344736f12b1afae7f4e9f50bcc83b5b320e85f"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "2f5112bb28f9c44cc7477b7878588010d669f15775c0177aed57f18c63f9ecb2"
+    }
+  ],
+  "finding": "No concrete test/API/oracle defect found in pinned d421630c leaf against actual live signatures. Existing actual_world/actual_locator setup uses complete unchanged nested statement fixture; no independent substitute evaluator.",
+  "authority": "Actual oldQ47 and installed ordinary Entry exist BEFORE opaque target publication. Old table/recipe/type guard exact stale message tested, same RecipeId and full executable shape preserved after genuine fresh Q47/Thunk renewal. Bar nominal identity from actual caller facts retained; caller lease and actual new target body compared.",
+  "all8": [
+    "1 Same InstalledRecipes.resolve/renew and common thunk, no assertion evaluator",
+    "2 No literal/break output runner, actual structural publication reused",
+    "3 Actual scoped Bar Type row, no spelling/numeric special selection",
+    "4 All4 editions original owning syntax; generated context matrix not claimed",
+    "5 Other callnodes/phases and target BodyStructure excluded from trace; no cold body preparation",
+    "6 Exact wrongPC/epoch noquery count; actualEntry-only baseline, multi-phase runtime/NeedInput effects still unexecuted gaps",
+    "7 No new namespace census in tests; guardrefusal exact before requery; production renewal distinct source review still required",
+    "8 Test snapshots bounded recipe values only, actual BodyIndex sharedArc; no production immutable body copy"
+  ],
+  "bounds": "Exact table budget is filled by genuine ordinary resolve and renewal scratch is required by current implementation. Quota/wrongPC/epoch snapshot atomicity checks match current signatures/diagnostics. No assertion that only zeroargs proves argument effects/exactonce or runtime matrix."
+}

@@ -1,0 +1,57 @@
+{
+  "status": "PRECODE; no production edits; waiting root API agreement; no Cargo",
+  "claim": "LOCAL-024 WT04 T032/M013/M017/M018, E-R5-005 common retained source preparation; modes1-8 separately reviewed",
+  "invariant": "Actual sealed CompletedSourceSyntax::prepare_body is pure memoized preparation keyed by real exact source/epoch/plan/definition. Only coordinator publishes opaque input from genuine CompletedSourceEnvironment. Providers never execute producer/worker/publication. External result/input Arc lifetimes remain accounted under existing SourcePlanPins.",
+  "witness": "Unchanged whole shift baseline e94ed7 legacy nonlocal static assert failure remains current actual baseline. Component memo controls use actual existing assembly nested stock fixture and explicit LRR authority invalidation controls; no runtime acceptance.",
+  "proposed_key": "Query tag48 PreparedBodySyntax(Box<PreparedBodySyntaxKey { source:OutlineKey,path:String,epoch:u64,plan:Digest,definition:Digest canonical original DefKey fingerprint }>), explicit stable domain. Input tag34 CompletedSourceSyntax(Digest actualplanfp).",
+  "input": "Opaque CompletedSourceSyntaxInput retains actual planArc and actual current DiscoveryInput publication stamp. Only coordinator publisher accepts genuine completedEnvironmentArc+exactselection, obtains plan via existing private owner API and validates same real seal/source/epoch. Generic publish_inputs rejects derived input.",
+  "result": "Arc<PreparedBodySyntax> caches result/key/fingerprint/fullpayload bytes and retains actual planArc+prepared syntaxArc. Borrow syntax by reference; admit(db) delegates existing RetainedSyntaxInput::prepare so no untracked raw preparedArc extraction.",
+  "pure_provider": "Reads exact typed input, ExpansionEpoch, CapturedSource, actual DiscoverySeal query/current input publication stamp; source/cfg/blob dependencies through actual certified seal. Validates key/source/epoch/plan plus sealvalue. Calls only retainedplan.prepare_body(definition) once per memo miss. No provider.owned_forest, full output index reconstruction, macro producer/worker calls or new namespace authority.",
+  "accounting": "Extend existing SourceArtifactRef/RetainedSourceArtifact variants for actual plan and result; conservative payload charged with cached metadata. Count actual result->plan handle once and actual input->plan once. Completedparent raw planhandle can conservatively retain plan until parentdies; no new registry. Registry resolves external result/input roots after memo/input/Completed retirement.",
+  "owners": "Worker key/dependency/value/provider +newsource_syntax_inputs/provider leaves +existing product_retention/body_environment_retention; root db/memo tiny module/denyderived/ownercount hooks and db/mod module hook. No frozen source component edits.",
+  "required_match_sites": [
+    "key.rs QueryKey declaration/heap_bytes/kind/StableEncode",
+    "dependency.rs InputKey/InputValue declarations, estimated_bytes/matches/fingerprint and InputKey StableEncode; heap default remains0 for digest",
+    "value.rs QueryValue Debug payload/custom result debug, matches/fingerprint/estimated_bytes/source_roots; SourceArtifactRef allocation/strong_count/metadata/admission/index",
+    "provider.rs SyntaxProvider::provide QueryKey branch",
+    "product_retention.rs RetainedSourceArtifact retain/root, count_owner result->plan, registerinput helper",
+    "body_environment_retention.rs collect actual input plans and registry plan/results with cached metadata; external input-root traversal",
+    "root memo.rs modulehook, publish_inputs derived denylist, memo_owners exact planinput ownercount and sourcepin query roots alreadygeneric",
+    "root db/mod.rs newprovider/module public opaque type path"
+  ],
+  "cost": "Once cold query selected body attachments only; cached result shares structural syntax. Actual seal purememo closure may cover all certified sources, inherited relevant certificate dependency scope; no global namespace lookup at runtime. Cached metadata/fingerprint prevents accounting phase treewalk. Inherited structural attachment costs and pinned opaque Salsa arena exclusion remain held.",
+  "evidence_required": [
+    "Typed key and cold source/epoch/plan/DefKey mismatches",
+    "actual seal/source/cfg/epoch revocation + unrelated publication remainscurrent",
+    "memo hit no repeated structural preparation",
+    "actual resultArc/planArc survives Completedparent and input/memo retirement with retained budget charge",
+    "source all8 exactfingerprint review",
+    "solevalidator compile/runtime and root installed-memo transport, no sourceplanning installed"
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "0289ba4402ec8095dc40a08a0be067759fa564004bb19f43d2664b67c3eb88c7"
+    },
+    {
+      "path": "crates/lrr/src/db/dependency.rs",
+      "sha256": "5fc64da66fae6d715c2ccb7eb3ac7dd6aad695169ba21a375e6f62a0f18de7d0"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "864bb13f0af6cfe6dee89a0feedc885d11d9b047561f49b3ff5bc4148cd5d65f"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "5efa2fb5ac3fd943b987eaa5690ba71fcc55c8e84ca878f007ed9a64cb726e46"
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "40ffcd1b192ac981946f27b3195ce93d94a17fde141b841f7cf0d6c74f018288"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "sha256": "08c6b5c658c02fc77bc7caf4780aa4cf46005833e434150c64ef9834a21970c6"
+    }
+  ]
+}

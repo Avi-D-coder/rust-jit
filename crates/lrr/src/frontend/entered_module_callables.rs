@@ -640,14 +640,22 @@ pub(crate) fn prepare_entered_module_function(
             ValueGoalDemand::BindingClassification(declaration.identity()),
         )));
     }
-    let body_stamp = match db.published_input(&InputKey::DefinitionBody(declaration.identity())) {
-        Some((InputValue::DefinitionBody(actual), stamp))
-            if canonical.body.as_ref() == Some(actual)
-                && stamp == InputValue::DefinitionBody(actual.clone()).fingerprint() =>
+    let body_key = InputKey::DefinitionBody(declaration.identity());
+    // Admission observes the real body locator, without preparing executable
+    // syntax. Record that dependency in the entered call's query closure too;
+    // published_input alone deliberately grants no dependency observation.
+    let body_input = db.input(&body_key);
+    let body_stamp = match (body_input.as_deref(), db.published_input(&body_key)) {
+        (
+            Some(InputValue::DefinitionBody(observed)),
+            Some((InputValue::DefinitionBody(actual), stamp)),
+        ) if observed == actual
+            && canonical.body.as_ref() == Some(actual)
+            && stamp == InputValue::DefinitionBody(actual.clone()).fingerprint() =>
         {
             Some(stamp)
         }
-        None => {
+        (None, None) => {
             return QueryPoll::Ready(Ok(ModuleFunctionPreparation::Pending(
                 ValueGoalDemand::DeclarationPublication(declaration.identity()),
             )));

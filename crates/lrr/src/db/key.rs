@@ -83,9 +83,74 @@ impl StableEncode for CurrentModuleNameKey {
         e.record(&self.bucket);
     }
 }
+/// Exact retained structural preparation demand; a key grants no entry authority.
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct PreparedBodySyntaxKey {
+    pub source: OutlineKey,
+    pub path: String,
+    pub epoch: u64,
+    pub plan: Digest,
+    pub definition: Digest,
+}
+impl PreparedBodySyntaxKey {
+    pub(crate) fn heap_bytes(&self) -> usize {
+        self.path
+            .capacity()
+            .saturating_add(self.source.parse.profile.semantics.capacity())
+            .saturating_add(
+                self.source
+                    .module_path
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<String>()),
+            )
+            .saturating_add(
+                self.source
+                    .module_path
+                    .iter()
+                    .fold(0usize, |n, s| n.saturating_add(s.capacity())),
+            )
+    }
+    pub(crate) fn selection(
+        &self,
+    ) -> Result<crate::source::changes::SourceSelection, crate::core::diagnostic::Diagnostic> {
+        let invalid = || {
+            crate::core::diagnostic::Diagnostic::new(
+                "LRR-E-QUERY-REQUEST",
+                "body syntax key is not canonical or bounded".into(),
+            )
+        };
+        if self.epoch == 0
+            || self.path.len() > 64 * 1024
+            || self.source.module_path.len() > 256
+            || self.heap_bytes() > 32 * 1024 * 1024
+        {
+            return Err(invalid());
+        }
+        self.source.parse.profile.validate_source()?;
+        let source = crate::source::changes::SourceSelection {
+            path: crate::source::snapshot::SourcePath::new(self.path.clone())?,
+            outline: self.source.clone(),
+        };
+        if source.canonical()? != source {
+            return Err(invalid());
+        }
+        Ok(source)
+    }
+}
+impl StableEncode for PreparedBodySyntaxKey {
+    const DOMAIN: &'static str = "lrr/v1/prepared-body-syntax-key";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.record(&self.source);
+        e.string(&self.path);
+        e.u64(self.epoch);
+        e.digest(self.plan);
+        e.digest(self.definition);
+    }
+}
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
     PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
     EnteredCall(crate::source::manifest::PcKey),
     DeclaredReturnGoal(Digest),
@@ -123,6 +188,9 @@ pub enum QueryKey {
 impl QueryKey {
     pub fn heap_bytes(&self) -> usize {
         match self {
+            Self::PreparedBodySyntax(key) => {
+                std::mem::size_of::<PreparedBodySyntaxKey>().saturating_add(key.heap_bytes())
+            }
             Self::CurrentModuleName(key) => {
                 std::mem::size_of::<CurrentModuleNameKey>().saturating_add(key.heap_bytes())
             }
@@ -170,6 +238,7 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::PreparedBodySyntax(_) => "PreparedBodySyntax",
             Self::PreparedExplicitTypeArguments(_) => "PreparedExplicitTypeArguments",
             Self::EnteredCall(_) => "EnteredCall",
             Self::DeclaredReturnGoal(_) => "DeclaredReturnGoal",
@@ -210,6 +279,10 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::PreparedBodySyntax(key) => {
+                e.u32(48);
+                e.record(key.as_ref());
+            }
             Self::PreparedExplicitTypeArguments(key) => {
                 e.u32(47);
                 e.record(key);

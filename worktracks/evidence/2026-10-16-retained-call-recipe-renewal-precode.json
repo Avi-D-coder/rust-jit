@@ -1,0 +1,41 @@
+{
+  "claim": "LOCAL-024",
+  "task": "T032/M013/M017/M018 common reached body publication continuation prerequisite",
+  "invariant": "Authorized target-only source publication leaves old installed Q47 call recipes stale. Recompute genuine ordinary recipes cold and atomically replace only already installed phases of the SAME actual caller call site, preserving RecipeId and exact operations/origin/exit; do not refresh old guards, replay evaluated args, prepare cold phases or change constructor/other-node entries.",
+  "minimal_witness": "Unchanged macro-nested_stmt_macros main actual Bar call: target static_assert_exists publication correctly invalidates old recipe; root transition controls first establish staleold/freshsameDef/sourcebody. Shift remains actual runtime failure until wholecommon reachedexpandedbody route integrated.",
+  "shared_entries": [
+    "InstalledRecipes::resolve/prepare_install/get_current",
+    "VerifiedRecipe common entered_call_thunk source_call and EXACT shared prepared-input guard",
+    "RetainedCallBodyTransition::require_current/require_rebound",
+    "Q47 PreparedExplicitTypeArguments and ordinary QueryKey::Thunk"
+  ],
+  "routes_to_remove": "No new assertion/expression/macro evaluator. Existing legacy assert/runtime_macro_plan and rawcallee route stay held; final runtime integration must replace them.",
+  "authority": "Opaque transition must certify same actual current continuation; old recipe retains actual old typed plan/guard Arc, unrelated legacy namespace witness stays current. New Q47/callable binds same real declaration/fullsignature/actualnominal Type rows and actual published body. New ordinary recipe strict currentness and execution shape verified before atomic swap.",
+  "cost": "Cold O(alreadyinstalled phases for ONE call + actual regeneratedrecipe sizes); avoid wholeinstalledtable/globalnamespace scans by by_pc bounded range lookup. No BodyIndex clone/sourceparse/guardrefresh/hotquery added. Bound scratch/staging+old/newpeak and actual post-swap bytes before any mutation. IDs and table shape unchanged.",
+  "acceptance": [
+    "Exact unchanged upstream caller/target/control setup",
+    "old installedrecipe stales after actualpublisher; coldrenewal returnsnewQ47 and sameRecipeId getsstrictcurrentnewsourcecall",
+    "Only actualsamecallsite installedphases renewed, coldphases remainuninstalled",
+    "Changed operations/origin/exit, foreigncall site/guard/constructor or quota failure rejects atomically",
+    "NeedInput leaves all installedentries unchanged; runtime suspend/args exactonce remains separate integration requirement",
+    "All8 exactsource review and async solevalidator realterminals"
+  ],
+  "holds": [
+    "No engine reachedbody preparation/resume hook until sourceplan query/currentness and transition persistentstate are integrated",
+    "Opaque Salsa retention accounting and wholearchitecture/milestone remain held"
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "fb7db5b7d1ce2cbec10a3e72a4431ab1e93044268ceb2668a1bf1e792c98cb64"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "94cf9d1018379af5671a1748c57d2686da4cc418bb1b2b90e53bd5d8590e6910"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "649473d1b6454c976af7ca9b5df19a0ae28ec5fd92c9bccad29b004fdfdd8838"
+    }
+  ]
+}

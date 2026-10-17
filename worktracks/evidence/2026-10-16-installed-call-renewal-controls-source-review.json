@@ -1,0 +1,103 @@
+{
+  "status": "SOURCE-ONLY tests-only packet, no Cargo/compiler/tests/guest execution or feature acceptance",
+  "claim": "LOCAL-024 T032/M013/M017/M018 retained target installed renewal authority component",
+  "new_leaf": {
+    "path": "crates/lrr/src/frontend/installed_call_renewal_tests.rs",
+    "sha256": "d421630c15d253c9e294e194c928a431f67e1f13d76a49f317844c5458a1df3f",
+    "bytes": 9392
+  },
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/frontend/module_target_publication_tests.rs",
+      "sha256": "71d736c63114362ab93ca2c46826f67320db529c61776e71d6a5373e8154741d",
+      "bytes": 17128
+    },
+    {
+      "path": "crates/lrr/src/engine/install_call_renewal.rs",
+      "sha256": "aaec4d79a46507396cb5b39166344736f12b1afae7f4e9f50bcc83b5b320e85f",
+      "bytes": 8226
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "01f2cf76b66135d27aba80bc0a4ad68ef6e4f63669e7a4ffcd5c0e39c27ea119",
+      "bytes": 12112
+    },
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "2f5112bb28f9c44cc7477b7878588010d669f15775c0177aed57f18c63f9ecb2",
+      "bytes": 10238
+    }
+  ],
+  "parent_helpers": {
+    "packet": "/private/tmp/lrr-module-target-publication-controls-v2/COMPONENT.json",
+    "sha256": "ceed17d2fe6523b683adf1421325100546ab86a78e3d9205e17a64efad6cf224",
+    "status": "Existing frozen parent helpers reused unchanged. Parent V2 test body failed7f1ab6 totaltrace oracle before fresh proof; that failure preserved, not silently accepted. New child does not invoke its test body."
+  },
+  "registration": "Unapplied patch only appends2line child hook to existing parent; root owns integration. Frozen parent bytes are not edited or copied as replacement.",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-nested_stmt_macros.rs",
+    "sha256": "abef2c55f007cf929838a1cae6e3e329f8bf4747979db3e78b11580d5b86eb49",
+    "scope": "Whole unchanged source real actual_world discovery/CLI retained main; first actual generic zero-runtime-argument call selected. Component metadata/installed table only, no main execution/full fixture pass."
+  },
+  "controls": [
+    {
+      "name": "actual_installed_call_renews_same_id_and_executable_with_real_bar_all_editions",
+      "scope": "2015/2018/2021/2024 actual main index, real canonical target + actual nominal Bar Q47, ordinary installed Entry resolve before real target publication, current caller lease, old current/recipe/Q47 exact stale error, opaque transition, actual sameID renewal and fresh guard/currentcallee/newBodyKey, exact old/new executablekey/origin/ops/exit, other call nodes/phases/target body cold."
+    },
+    {
+      "name": "renewal_quota_wrong_pc_and_epoch_failure_leave_installed_table_unchanged",
+      "scope": "One2024 world; genuine recipe meter then exact initial-charge limited table, wrong uninstalled actual otherPC exact error/noquery, quota scratch refusal exactresource error, full tablelen/bytes/Recipe vector unchanged, oldguard stale, epoch advance exactguard refusal/noquery/full table unchanged."
+    }
+  ],
+  "oracles": [
+    "No arbitrary Err accepted: wrongPC/quota/epoch/stale guard code+message exact. Positive path must Ready/Ok throughout. NeedInput is failure in component harness, not a caught pass.",
+    "RecipeId equality and get_current after actual renewal independently checks table route; fresh nominal Bar + callee samecanonicaldefinition/newbody and retainedguard fingerprint inspected.",
+    "No broad no-trace assertion around sourcelease.require_current: existing memo validation events allowed. Exact trace count only around immediate wrongPC/no-query and already-revoked opaque transition fence.",
+    "No BodyStructure other than existing actual caller, no Thunk except actual selected Entry; no observer prewarms target body or future phases. Trace truncation mustzero.",
+    "Snapshots clone only flat test Recipe data to compare table atomicity. Production BodyIndex/plan/parser handles retain real shared Arcs."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "finding": "No new language/compiler/evaluator route, tests consume actual ordinary installed queries only."
+    },
+    {
+      "mode": 2,
+      "finding": "Real retained tree/discovery/issued macro outputs via unchanged parent helper; no literal/break executor, synthetic selected body or display replay."
+    },
+    {
+      "mode": 3,
+      "finding": "Actual nominal Bar DefKey read from common facts and Q47 SourceType; fixture name identification only an assertion, never production selection permission."
+    },
+    {
+      "mode": 4,
+      "finding": "No generated exclusion added. Caller is actual retained macro-expanded main; target actual original-module definition is re-published through existing authoritative retained publisher. Wider generated-target runtime remains explicit gap."
+    },
+    {
+      "mode": 5,
+      "finding": "Selected Entry is sole executable preparation; other caller nodes/phases/target child body remain cold. No fake invalid operand phase to inflate multiphase evidence."
+    },
+    {
+      "mode": 6,
+      "finding": "Ordinary resolve once per local table before targetpub and explicit cold renew, exact currentness thereafter; no guest execution/installed runtime source planning claimed."
+    },
+    {
+      "mode": 7,
+      "finding": "Actual guard dependencies and exact wrongPC/quota/epoch controls. No namespace/source census or broad memo-validation-as-replanning assumption."
+    },
+    {
+      "mode": 8,
+      "finding": "Actual BodyIndex Arc shared from parent; no parser/index deep clone. Flat Recipe snapshots are test-only and local tables share actual memo/source handles."
+    }
+  ],
+  "source_review": "Separate static pass checked actual method visibility/signatures, QueryValue wrapper.as_ref, public RecipeId Eq, tuple/Recipe Eq snapshot, zeroarg ordinary lowerer Entry CallSeal, actual BodyKey/lease types, exact resource/transition messages, no broad sourcelease trace oracle. Rustfmt only; no compiler/test execution.",
+  "independent_review": "Requested peer narrow static pass; pending at freeze.",
+  "gaps": [
+    "Only actual zeroarg Entry installed; multiple written arguments/phases/effects not exercised.",
+    "No runtime frame/arguments/effects/cleanup/suspension/resume execution, no hook acceptance.",
+    "Publication/fresh Q47 production controls beyond prior parentfailure7f still pending actual validator terminals.",
+    "Quota path refuses before cloning/staging; mid-staging NeedInput/changed-op failure controls remain missing.",
+    "Wholefixture/context matrix/currentmilestone/JIT/Section32.2 complete acceptance not claimed."
+  ],
+  "preservation": "Root frozencombinedc5 and adapter grouping9717/parent7f failures remain historical; parentfrozenleaf untouched. New test packet can compile only after root registers hook. No Cargo/import/source/production modifications by worker."
+}

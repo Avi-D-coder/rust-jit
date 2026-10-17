@@ -1,0 +1,125 @@
+{
+  "status": "Independent exact-source review only; no Cargo/compiler/tests/production edits; runtime/milestone acceptance held",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/retained_entry.rs",
+      "sha256": "88759adcd9e0845f6a8c6d87bad306752635b080b4f2c8e3ab605f4d40efbbdf",
+      "bytes": 3810
+    },
+    {
+      "path": "crates/lrr/src/db/entry_body_memo_tests.rs",
+      "sha256": "fb4ca2387da221f41b24a49b5a19b8f77d80fd3be70f649c7dfe742ea3d8b05e",
+      "bytes": 2002
+    },
+    {
+      "path": "crates/lrr/src/db/lexical_inputs_tests.rs",
+      "sha256": "83bbbf27a2d3042e3a395d015c3fb49910b28eab43ef2e45c4d6c4ab35934457",
+      "bytes": 19626
+    },
+    {
+      "path": "crates/lrr/src/db/source_syntax_inputs.rs",
+      "sha256": "b0b93eb610769c94f16aee6127f916b2ad745e6a54e89dfa785538505915aae9",
+      "bytes": 13645
+    },
+    {
+      "path": "crates/lrr/src/db/source_syntax_provider.rs",
+      "sha256": "d23ce7777e4ec8402601cc95a4f0dc2a7d08c10820e696889327538cf3967f01",
+      "bytes": 1378
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "1df3120cfca187cac94d5b7e1f07b56a4ae1f7b108b4e3631631e355fcab950a",
+      "bytes": 20758
+    }
+  ],
+  "scope": "CLI retained_entry memo consumer delta, new entry-body control and child registration; underlying memo48/input34 accounting separately reviewed in 2026-10-16-source-syntax-memo-independent-source-review.json.",
+  "finding": "No concrete new source/epoch/seal/canonical-body or currentness authority defect found in bounded changed path. No runtime module hook is introduced.",
+  "authority": [
+    "prepare first revalidates actual SourceCallable and obtains its genuine canonical definition. Existing body-none handling and original-outline-anchor/generated-entry migration branch remain unchanged; no synthetic source/BodyKey or additional generated semantic refusal.",
+    "Actual SourceDiscovery.completed_source_environment fetches real current seal and shares existing opaque completed graph, then Database.publish_completed_source_syntax requires cold coordinator preparation and actual matching source/seal/epoch/certificate plan. No digest can mint that graph.",
+    "Actual pure SyntaxProvider Query48 receives canonical key from opaque publisher. Consumer checks exact result variant and cacheable retention before PreparedBodySyntax.admit; actual RetainedSyntaxInput source/epoch/seal validation remains mandatory.",
+    "Existing publish_retained_syntax and publish_retained_body own publication; stale old callable is discarded. Actual discovery.entry_function is reselected AFTER target publication, exact same canonical definition and returned BodyKey required, then selected.revalidate and prepare_source_local_plan execute through existing source authority.",
+    "No old Q47/source guard mutation, no alternate macro evaluator, no runtime/frame/argument mutation. Existing partial publication behavior on later failure remains inherited coordinator behavior, not transactional guest execution."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "cli::retained_entry::prepare",
+        "SyntaxProvider::PreparedBodySyntax"
+      ],
+      "finding": "Common structural assembly memo consumer only; no assertion operand evaluator or expression compiler."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "PreparedBodySyntax::admit",
+        "publish_retained_body"
+      ],
+      "finding": "Actual pinned attached source enters existing ordinary body service; no displaytext parser/literal or break-only execution."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "SourceCallable::identity",
+        "discovery.entry_function"
+      ],
+      "finding": "Real canonical selection is rejoined after publication. No numeric/member/macro-name selection rules introduced."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "prepare original-outline-anchor branch"
+      ],
+      "finding": "Existing generated-entry migration gap is preserved exactly, not newly expanded. Generated canonical selected-body preparation remains prerequisite; no full four-context feature claim."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "Query48",
+        "prepare_source_local_plan"
+      ],
+      "finding": "Selected-body structural preparation only. Existing actual entry/source planning can demand its BodyStructure; test proves no Thunk lowering, not no BodyStructure. No cold callee executable lowering or pattern changes introduced."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "QueryKey::PreparedBodySyntax",
+        "PreparedBodySyntax::admit"
+      ],
+      "finding": "Superseded direct discovery.prepare_body_syntax call removed from original standalone entry branch. Selected assembly is memoized by real source/cfg/edition/epoch/plan/definition; coordinator admission replay/reselection still occurs per prepare call. No hot dispatch change or measured speed claim."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "completed_source_environment",
+        "publish_completed_source_syntax",
+        "SourceCallable::revalidate"
+      ],
+      "finding": "No new namespace world census; actual source seal/input checks retained. Underlying registration still performs certificate membership/lease validation and completed-environment retention traversal on cold entry demand; no claim these are O(1)."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "Arc CompletedSourceEnvironment",
+        "PreparedBodySyntax::admit"
+      ],
+      "finding": "Existing immutable plan/prepared Arcs shared; no BodyIndex/parser deep clone added by consumer. Existing admission structural replay/snapshot accounting costs retained and separately held."
+    }
+  ],
+  "control_static_review": {
+    "name": "db::lexical_inputs_tests::entry_body_memo_tests::actual_standalone_entry_reuses_selected_body_memo_all_editions",
+    "witness": "Unchanged official macros/macro-nested_stmt_macros.rs, setup uses genuine captured source/decl compiler/discovery and actual original main, all four editions.",
+    "checks": "Actual callable identity/body stable across two real entry preparations, same Query48 provider count exactly1, detailed trace truncated0, no Thunk events. Existing issue-40847 whole-main CLI control remains unchanged.",
+    "limits": "New control does not compare Arc pointers, mutation matrix, or BodyStructure absence; corresponding memo source controls cover some exact authority/lifetime cases separately. No test/guest execution performed by reviewer. Child hook only appends entry test registration after existing source_syntax_memo_tests hook."
+  },
+  "costs_and_holds": [
+    "Cold source outline anchor scan O(items) unchanged; opaque completed graph acquisition/current seal validation + input registration +memo fetch each prepare; actual assembly only on query miss. Admission replay/republication/reselection not eliminated.",
+    "Existing physical root accounting and per-result128MiB caps supplied by independently reviewed memo component; consumer only temporary Arc handles, no new persistent registry.",
+    "Opaque Salsa intern arena accounting, aggregate512MiB plus transient candidate peak, unregistered admission escape debt remain prior explicit holds.",
+    "Actual stdmacro producer closure for outputs skipped by legacy runtime-no-item proof is NOT supplied by memo; other worker owns genuine common producer repair.",
+    "Runtime reached-module publication/renewal/resume integration and generated-entry migration remain held. No unchanged shift runtime pass or overall architecture/milestone completion inferred."
+  ],
+  "evidence": "Source review only. Parent/validator reported earlier frozen-c5 publication authority control pass04abbd/0 all4 editions, but that source did not include this CLI consumer or new tests; not acceptance evidence for these changed leaves."
+}

@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "M013",
+    "M017",
+    "M018"
+  ],
+  "status": "Scoped component evidence; runtime integration incomplete",
+  "attempts": [
+    {
+      "version": 5,
+      "source_member": "8e0910a5b4837754b344d7f7673af5083518f2493117307d9f8d4217a41d8229",
+      "release_sha256": "295f896a6331b737543ba2785ddcc3580e9f7e04b578ca50b72a644e6828b274",
+      "passed_bodies": 0,
+      "failed_bodies": 0,
+      "compile_terminal": "84f7be/1",
+      "queue_terminal": null,
+      "failure": null,
+      "unexecuted_authorized": [
+        "memo-key-currentness",
+        "memo-result-retention",
+        "memo-wrapper-retention",
+        "memo-quota-atomic",
+        "renew-positive",
+        "renew-refusals"
+      ]
+    },
+    {
+      "version": 6,
+      "source_member": "9432ff6740b55d31a995a16e4d939bb13afb72a614ec565c1a5445a4875e25a5",
+      "release_sha256": "751eec3a233886f2cbf7d264240ee47ca7a4ff5aed12487c1a803d68808b59a8",
+      "passed_bodies": 0,
+      "failed_bodies": 1,
+      "compile_terminal": "f9c680/0",
+      "queue_terminal": null,
+      "failure": "LRR-E-EXPANSION-INPUT body syntax source/epoch publication differs",
+      "unexecuted_authorized": [
+        "memo-result-retention",
+        "memo-wrapper-retention",
+        "memo-quota-atomic",
+        "renew-positive",
+        "renew-refusals",
+        "entry-memo-reuse",
+        "cli-40847-main"
+      ]
+    },
+    {
+      "version": 7,
+      "source_member": "05bbe91f32ebad0e8e4714e9873df84a088446cded0ed577bdeebb637f7e0434",
+      "release_sha256": "a96e595911fce8c990706fe49983bdb733afded5143d42b5b9441242840b8431",
+      "passed_bodies": 8,
+      "failed_bodies": 1,
+      "compile_terminal": "14ee55/0",
+      "queue_terminal": "4e7ff0/1",
+      "failure": {
+        "scope": "cli-40847-main",
+        "edition": 2015,
+        "code": "LRR-E-CATALOG-INCOMPLETE",
+        "message": "fixed point retains unresolved import or macro producers; blocked macro `assert_eq`",
+        "original_range": [
+          274,
+          294
+        ],
+        "invocation": "fd02ce447686d6deeb2d4039bf85f0f39b748e0c04d82359f39940f8e8a603a0",
+        "guest_stack": null
+      },
+      "unexecuted_authorized": [
+        "stock-typearg-all4",
+        "stock-plain",
+        "stock-user",
+        "stock-wrapper",
+        "child-parent-authority",
+        "child-cache-owner",
+        "boundary-exact-once",
+        "boundary-currentness",
+        "boundary-wrong-job",
+        "authority-impl-only",
+        "authority-mixed-owner",
+        "authority-cfg-active",
+        "pre-body-revocation",
+        "user-suffix"
+      ]
+    }
+  ],
+  "v7_scope": "22exactbodiesPASS (8newcomponent controls +14 existingruntime/regression). CLI40847 main FAIL2015 blocked assert_eq; remainingeditions unexecuted. No rootruntime module/export hook or completefixture acceptance. Sourcecallorder confirms discover_diagnostic precedes newretained_entry query; actualstderr lacks internal stage tracing.",
+  "shared_changes": [
+    "Actual standalone entry uses pure PreparedBodySyntax query48 from opaque completed source input34, removing direct selected assembly reconstruction there.",
+    "Retained input wrapper, plan and prepared result have accounted physical retention in existing weak root framework.",
+    "Cold module admission now records real DefinitionBody dependency while preserving exact canonical published locator check; FunctionSignature remains body-independent.",
+    "Publisher and observer proof scopes use one bounded atomic installed phase replacement kernel; observers must show ALL4actual prior target stamps and preserve their own source callsite/signature/type rows. Old evidence remains stale."
+  ],
+  "production_macros": "No macro-specific execution logic added. Existing legacy evaluator routes held; actual source export graph adoption is the next blocked upstream prerequisite.",
+  "classification": {
+    "new_distinct_upstream_runtime_passes": 0,
+    "new_full_fixture_passes": 0,
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "not established",
+    "compiler_tooling_compatibility": "not established",
+    "full_suite_compatibility": "incomplete",
+    "architecture_matrix": "incomplete",
+    "current_milestone": "not run/integrated",
+    "guest_jit": "blocked"
+  },
+  "holds": [
+    "CLI actual standard macro source graph admission unresolved; worker common immutable export provider transport underway.",
+    "Actual run.rs reached module publication/persistent receipt/argument continuation hook not present.",
+    "No suspension/argument effects/multiphase/full fixture acceptance from zeroargument source controls.",
+    "Opaque Salsa intern memory and coarse external result payload accounting incomplete.",
+    "V5 E0004compile failure/V6 actual missing expansionepoch testsetup failure retained, not passes."
+  ],
+  "supplemental_v7": {
+    "source_member": "05bbe91f32ebad0e8e4714e9873df84a088446cded0ed577bdeebb637f7e0434",
+    "release_path": "artifacts/macos-first/root-common-reached-body-components-v7/SUPPLEMENTAL-RELEASE.json",
+    "release_sha256": "ec4ab78004f740b48d8e0731b6b39e2b2ad03f69962075c08e4d025595e02d39",
+    "queue_terminal": "4f4445/0",
+    "passed_bodies": 14,
+    "combined_passed_bodies": 22,
+    "combined_failed_bodies": 1,
+    "authorized_unexecuted": 0,
+    "scope": "Same frozen source/binary, no Cargo rerun. Fourteen genuine nested call/type and lexical/body-authority regressions pass independently of failed CLI macro source discovery. No new distinct stock runtime/fullfixture passes."
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "M017",
+    "M018"
+  ],
+  "invariant": "A reached target publication can stale another genuinely selected source-call continuation to the SAME definition. Prove that observer crossed exactly the same four real target-row replacements using its sealed prior input stamps, then fetch new ordinary Q47/Thunk preserving the observer own caller/typeargs/signature/operations. Never mark the old guard current or use another callsite identity as its authority.",
+  "minimal_witness": "Unchanged macro-nested_stmt_macros.rs has three real calls to same static_assert_exists Def with distinct Bar/Baz/Xyzzy source Type rows. Retain two real Q47/installed entries before genuine publisher; old evidence for both must stale; observer must renew its own Baz contract, publisher strictsite rejection retained. Real nested argument witness investigation remains separate runtime integration acceptance.",
+  "shared_entries": [
+    "PreparedInputGuard exact flattened input closure",
+    "PreparedExplicitTypeArguments source-site identity and actual cached target definition",
+    "RetainedCallBodyTransition actual target before/after rows",
+    "VerifiedRecipe actual source_call/shared guard",
+    "InstalledRecipes same-node bounded phase range atomic replacement"
+  ],
+  "routes_to_remove": "No new parser/evaluator or macro-specific logic. Extend existing cold renewal; strict publisher-only API remains strict and delegates common swap machinery. Runtime persistent receipt integration remains future.",
+  "authority": "Observer guard must contain ALL four actual target keys at the exact recorded before stamps; compare actual after stamps and strictly current all other input dependencies. Require actual old target Def, real retained caller syntax index/site, same_call_contract fresh and fresh fully current ordinary callable actual published target body. Source/epoch/seal still fenced by original opaque transition. No global observer census.",
+  "cost": "Cold O(observer dependency closure + already installed phases of that single node + actual recipe bytes), direct target/index scalar identities; no source preparation on installed execution, global namespace/table scan or BodyIndex clone. Existing checked staging quota atomicity reused.",
+  "acceptance": [
+    "All4 actual unchanged original two-call source Type identities and sameRecipeIds/ops/origin/exit",
+    "Old immutable evidence stays stale; strict publisher wrongsite still rejects",
+    "Other target/non-target dependencies/currentness refuse; no guard replacement",
+    "Exact all8 independent source review and async real terminal before acceptance"
+  ],
+  "holds": [
+    "No module runtime hook, argument replay/suspension/exactonce or stock shift pass",
+    "Full matrix/milestone/Section32.2 remains open"
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "c49d1030cc3f7c92ed387ec9ba6a52fc02e12eae9136874f0adb4b3811579a97"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "2f5112bb28f9c44cc7477b7878588010d669f15775c0177aed57f18c63f9ecb2"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "77917d36f5953158fe075e6787cbd06a64564a7aac033261c7c432a4a10c8504"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "adcc09a14b8e1a3c58e2cbccafc8a59761e4a6758acf6a8c9dea6250b675ad1d"
+    },
+    {
+      "path": "crates/lrr/src/engine/install_call_renewal.rs",
+      "sha256": "5d0658b9ac265c5a205f6626d866b0fe369b3674920439a82aa47ba6daaca420"
+    },
+    {
+      "path": "crates/lrr/src/frontend/installed_call_renewal_tests.rs",
+      "sha256": "d421630c15d253c9e294e194c928a431f67e1f13d76a49f317844c5458a1df3f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358"
+    }
+  ],
+  "dependency_prerequisite": "Independent source review ec9156fe found actual DefinitionBody canonical admission check uses published_input, not dependency-recording input. Read exact same body row via db.input during cold admission and preserve actual published stamp/body invariant. Keep FunctionSignature body-independent; never demand BodyStructure/Thunk."
+}

@@ -1,0 +1,14 @@
+{
+  "status": "Independent read-only mechanical delta review; no compiler/tests/runtime acceptance",
+  "reviewer": "drop_catalog_next",
+  "supersedes_source_only_for_delta": "Prior review cdba7208940bb571572c8c7d30742a5f6bc18f4bfc544223f1f0d57166ef40ba remains attached to aaec4d79 historical source.",
+  "file": {
+    "path": "crates/lrr/src/engine/install_call_renewal.rs",
+    "sha256": "5d0658b9ac265c5a205f6626d866b0fe369b3674920439a82aa47ba6daaca420",
+    "bytes": 8235
+  },
+  "delta": "Final selected = fresh.as_ref().clone() unwraps borrowed Box<PreparedExplicitTypeArguments> and clones the actual inner prepared value required by QueryPoll<PreparedExplicitTypeArguments>; no authority or executable-shape comparison removed.",
+  "finding": "Reread entire current helper: same exact old guard transition checks, actual fresh Q47 rebound, bounded same-node installed phase selection, equal key/origin/operations/exit, fresh guard, preflight all staging, final rejoin then infallible same-RecipeId commit. No new concrete source authority defect found.",
+  "retention": "Inner prepared clone shares immutable source proof/parser/body handles through existing Clone; no BodyIndex clone. Newly returned proof external-root accounting remains future runtime ownership integration obligation, as previous review records.",
+  "holds": "No installed renewal controls executed; no engine hook/frame/arguments/suspension/resume effect claim; prior exact all8 conclusions apply to reviewed authority logic."
+}

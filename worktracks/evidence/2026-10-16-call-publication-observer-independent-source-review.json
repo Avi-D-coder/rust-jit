@@ -1,0 +1,137 @@
+{
+  "status": "Independent exact-source review of frozen observer prerequisite only; no production edits/Cargo/compiler/tests/runtime integration",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "18b96c2a775b8d533bdd96773b1caf024f1b70603a7050960e8d7ef640f7174b",
+      "bytes": 32726
+    },
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "c6b0ea01df34f94984ac8b90d55b057b360d1df5c8fdcba252d7257623d328f6",
+      "bytes": 12014
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "23c814c3538a9b4cbd1a6e1562697bd51d6b49883edd7b94157ef812b37dfdff",
+      "bytes": 16091
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "13184c3fc1373b11235b335fbda3984a905388d771c10cad3b26ce57762b7a18",
+      "bytes": 29206
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "5a55e622fc1b15175a952e363873a26b31d77d82854424856e0c5fbcde9ad03c",
+      "bytes": 32771
+    },
+    {
+      "path": "crates/lrr/src/engine/install_call_renewal.rs",
+      "sha256": "0bbd8265b32d9694d49653d9a5f9a8ab6cce074c30367e33f6eb245b90877dca",
+      "bytes": 9847
+    },
+    {
+      "path": "crates/lrr/src/frontend/installed_call_renewal_tests.rs",
+      "sha256": "b5434e66608c44c273cd535d3bc54bcfdcdcbf269cdffb528f8280f5007950dc",
+      "bytes": 12460
+    }
+  ],
+  "finding": "No remaining concrete authority/site/effect/atomic replacement defect found in bounded observer delta after actual target DefinitionBody dependency fix. Component authority tests unexecuted; no runtime pending/argument/resume acceptance.",
+  "fixed_source_finding": {
+    "prior_record": "2026-10-16-call-observer-missing-target-body-dependency.json SHAec9156fe4f8348cf5117a51051d4d316723d77610ff164d91e38d940190e908f",
+    "cause": "Module admission inspected real body using nonobserving published_input; FunctionSignature correctly does not depend on body. Full Q44/Q47 guards could omit target body despite private proof validation.",
+    "resolution": "prepare_entered_module_function now db.input(DefinitionBody) then exact same current published body/stamp/canonical body comparison. Module Q44 collector records real positive target body input. Existing source/header/context are observed by canonical_module_declaration/Q39/signature. Q47 captures full Q44 memo closure; capture_input_closure traverses actual dependencies and join retains all4. Signatures remain body-independent; no executable body query introduced.",
+    "limits": "Positive module source route established by source tracing; no general local/generated readiness acceptance or executed all4 guard assertion inferred."
+  },
+  "authority": [
+    "Q47.definition returns its cached canonical signature definition scalar, not stale callable revalidation or fresh name lookup. require_site factors byte-identical structural/index/site checks from require_current; require_current still invokes full old guard immediately after site checks. Factoring introduces no execution grant.",
+    "RetainedCallBodyTransition retains same actual publisher source_revision/target4before+after/body/syntax+stamp/oldguard/newParseFile guard. require_current still requires real current target/source/syntax permit/newsourceguard and all original non-target dependencies. Existing exact publisher require_before_plan/require_rebound remain issuer-specific.",
+    "require_observer_plan requires cached actual same target definition then genuine private observer guard. require_observed_call_body MUST find all4 actual target keys with EXACT token.before stamps; missing/after/foreign fingerprints rejected before across check. Full across check validates every other actual old dependency current and allows only exact recorded target before->after replacements. No guard contents mutate.",
+    "require_observer_rebound also validates observer own actual index/callsite, same_call_contract full key/definition/signature/caller source and actual Type row ordinal/site/range/source, fresh.require_current, fresh real SourceCallable identity and exact token new BodyHandle. Issuer PC cannot substitute for observer PC.",
+    "VerifiedRecipe common private call_body_transition_plan requires actual source_call and Arc::ptr_eq old prepared_inputs with Q47 guard, plus any namespace witness current. Observer and publisher call separate opaque token checks; no arbitrary stale recipe permission.",
+    "InstalledRecipes::renew_call requires actual installed PC/source_revision and before.require_site BEFORE any provider fetch. Only proof scope differs Publisher/Observer; same actual freshQ47 fetch+rejoin, same-node installed-phase BTree range, actual freshThunk, exactkey/origin/operations/exit, freshproof/guardfp/current namespace, checked staging and finalrejoin before sameRecipeId swap. Constructor/foreignsource routes reject. No oldguard refresh or mutation of frame/args."
+  ],
+  "cost_and_retention": [
+    "Observer uses two bounded old dependency passes O(D), 4 fixed target keys each; target membership all4 on stack, no additional persistent metadata fields beyond cached definition getter (already existed). New body observation retains existing actual inputArc under existing input-pins; does not clone bodyindex or prepare executable body.",
+    "Renewal common code retains prior O(log installed + P) same-node range with count+stage passes, P<=u16 phases/explicit100k cap. Exact executable comparison O(recipe size). Existing checked scratch preallocation+actualcapacity+old/new recipe payload+Arc headers and final quota remain same.",
+    "NeedInput/Err drops staging and leaves installed entries/bytes unchanged; pure memo fills may occur. All fallible rejoin/metadata work occurs before infallible same-ID replacement. Returned Q47 shares actual retained source handles; future persistent runtime owner must charge external handles/proof payload.",
+    "No runtime receipt map, suspended observer storage, source publication retry lifecycle, frame argument preservation or persistent resume implemented here. Review applies to component only; inherited opaque Salsa/full32.2/aggregate seed peak holds remain."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "renew_call",
+        "prepare_entered_module_function"
+      ],
+      "finding": "Common actual source/member/ordinaryQ47+Thunk route, no assertion operand compiler/evaluator."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "require_observer_rebound",
+        "fresh.callable"
+      ],
+      "finding": "Actual canonical new body and admitted syntax proof, no literal/break executor or displaytext/synthetic body."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "definition",
+        "same_call_contract",
+        "require_observed_call_body"
+      ],
+      "finding": "Cached canonical definition and real source Type rows; no tokenname/macro-name/numeric-method rules."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "prepare_entered_module_function body_input"
+      ],
+      "finding": "Same common module admission across original/generated/retained canonical joins; dependency observation has no new original-only refusal. Existing missing generated owner/source readiness stays genuine gap."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "db.input DefinitionBody",
+        "require_site"
+      ],
+      "finding": "Cold header/bodylocator facts only; no BodyStructure/Thunk added to signature/Q44 dependency repair. Runtime body preparation must remain after evaluated arguments; component has no pattern or cold-arm checking."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "PreparedInputGuard::require_observed_call_body",
+        "InstalledRecipes::renew_call"
+      ],
+      "finding": "Pure real retained stamps/fresh cached ordinaryqueries at explicit cold renewal only. No per-phase source parse/reconstructed plan or installed dispatch source work introduced; runtime hook absent."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "before_rows",
+        "same-node by_pc.range"
+      ],
+      "finding": "4 exact target rows and own bounded dependency closure; installed range only same actual body/node. No fullworld namespace or installedtable scan/global revision relaxation."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "require_site",
+        "Replacement",
+        "Arc::ptr_eq"
+      ],
+      "finding": "Borrowed actual index and shared immutable old/fresh proofs; only flat verified recipe cloning under checked budget. No BodyIndex/parser graph/frame deep copy or wholefile node search."
+    }
+  ],
+  "controls_static_review": {
+    "new": "actual_second_call_observer_keeps_its_own_type_and_recipe_all_editions uses actual unchanged macro-nested_stmt_macros fixture, actual firstBar and second actual call PCs preinstalled before publisher; same canonical definition, distinct Type rows. Genuine transition makes both old guards stale; issuerwrongplan still refuses observer; observer renews own source row/site/newbody and identical full executable, stableRecipeId/table size; publisher separately renews; callerlease current; epoch revocation refuses without extraquery.",
+    "limits": "Second row is preserved from real canonical indexed observer and required different from Bar; test does not independently reconstruct canonical Baz DefKey by name. It is a genuine distinct observer rather than fresh publisher substitution, but no claim stronger nominal oracle than these assertions. Epoch/wrongissuer negative checks use is_err rather than exactreason. New observer control lacks explicit missingtargetrow/foreigndefinition/non-targetmutation/scratchquota/NeedInput atomicity tests; generic publisher quota/wrongPC/epoch controls remain source-only and not observer-specific.",
+    "inherited": "Prior actual_installed_call_renews... and renewal_quota_wrong_pc... retained. Actual setup selected main is retained complete source; zero target runtime params, only Entry phase. No guest frame/effects/call-progress/nestedargument runtime exercised.",
+    "execution": "No control executed by reviewer; parent sole validator will compile frozen candidate. Source-aware acceptance cannot infer runtime integration or unchangedfixturepass from test presence."
+  },
+  "stable_identity": "No explicit public schema/tag/domain changes introduced by observer methods. Correct new targetbody dependency intentionally changes genuine memo dependency closure/guard/result fingerprints; source semantically relevant publication now invalidates full Q44/Q47 observations. Existing stable encodings remain explicit.",
+  "next_runtime_prerequisite": "Root pending/suspended persistent receipt storage before postpublication NeedInput and before installed.resolve, safe observer renewal preserving argument slots/hints/progress/packets; bounded target delta lifetime/multiplepublication handling. See runtime-module-publication-continuation-source-review b82824c3; not supplied by this component."
+}

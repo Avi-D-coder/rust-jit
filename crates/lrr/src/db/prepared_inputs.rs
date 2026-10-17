@@ -142,6 +142,31 @@ impl PreparedInputGuard {
         }
         Ok(())
     }
+    /// An already selected observer must actually have captured every target
+    /// row before this publication. Equal current stamps alone are insufficient.
+    pub(super) fn require_observed_call_body(
+        &self,
+        db: &Database,
+        transition: &super::RetainedCallBodyTransition,
+    ) -> Result<(), Diagnostic> {
+        let required = transition.before_rows();
+        let mut observed = 0u8;
+        for dependency in &self.inputs {
+            let DependencyStamp::Input { key, fingerprint } = dependency else {
+                return Err(stale("call body observer contains a derived demand"));
+            };
+            if let Some(position) = required.iter().position(|(target, _)| target == key) {
+                if *fingerprint != required[position].1 {
+                    return Err(stale("call body observer did not capture the prior target"));
+                }
+                observed |= 1 << position;
+            }
+        }
+        if observed != 0b1111 {
+            return Err(stale("call body observer lacks the complete prior target"));
+        }
+        self.require_current_across_call_body(db, transition)
+    }
 }
 fn stale(message: &str) -> Diagnostic {
     fault("LRR-E-INTERNAL-SNAPSHOT", message)

@@ -8,6 +8,8 @@ use crate::{
     ir::{pc::PcKey, recipe::VerifiedRecipe},
 };
 use std::{collections::BTreeMap, sync::Arc};
+#[path = "install_call_renewal.rs"]
+mod call_renewal;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct RecipeId(u32);
 struct InstalledRecordConstructor {

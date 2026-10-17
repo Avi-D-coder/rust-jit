@@ -1,0 +1,183 @@
+{
+  "status": "Independent exact-source memo48/input34/component accounting review; no Cargo/compiler/tests/runtime integration acceptance",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/source_syntax_inputs.rs",
+      "sha256": "5133b52c1e2cadd650db8bd15bca417102585963950ec08356e62d800f92c1f1",
+      "bytes": 13661
+    },
+    {
+      "path": "crates/lrr/src/db/source_syntax_provider.rs",
+      "sha256": "d23ce7777e4ec8402601cc95a4f0dc2a7d08c10820e696889327538cf3967f01",
+      "bytes": 1378
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "7935179809e5f2ef3043e14dc7312109781e58d934566de1c9905cd321cee187",
+      "bytes": 15729
+    },
+    {
+      "path": "crates/lrr/src/db/dependency.rs",
+      "sha256": "b84922e53d4d555d08067d0750fadbfa1646a7e08d098188f75b1f302d3d6388",
+      "bytes": 18659
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "1b051cc07c20d6ee7a696b8c78b17844b15097800e6884c7942bb1e0a9e3dd50",
+      "bytes": 25383
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "e2b9bee58f2bf2546497de4a6bfdabada2a67848de07f6c0ac0d2ab4eb63a6f7",
+      "bytes": 20034
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "sha256": "e00e455e8885bae3f66f26e460ce5d6a101f23f59714422a8f8053828f614d58",
+      "bytes": 23359
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "72c21fc96db0baf812dafeb0b4fdc971b72bc3b50decc00af627d9d074f9f358",
+      "bytes": 140301
+    },
+    {
+      "path": "crates/lrr/src/db/mod.rs",
+      "sha256": "61d4b44ba46f06f7ebb3c6fa1eb6d6d5dff008f725df489cb08a0fefd88684fb",
+      "bytes": 582
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "35ee3d625c4e0507a57beb3a5f403adc0bd9e56580a2a745739a6d3f3eeb7227",
+      "bytes": 60967
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "1df3120cfca187cac94d5b7e1f07b56a4ae1f7b108b4e3631631e355fcab950a",
+      "bytes": 20758
+    },
+    {
+      "path": "crates/lrr/src/db/source_syntax_memo_tests.rs",
+      "sha256": "9f9001932bd19773d4bb0f49cdc714f837486f91ccd06da8ceaa940722f9c2fb",
+      "bytes": 9336
+    }
+  ],
+  "review_scope": "Changed source-syntax input/provider/key/value/artifact branches plus tiny root memo/db/provider hooks, not a full audit of every inherited shared-file feature. Tests read statically, unexecuted.",
+  "finding": "No remaining concrete source/epoch/seal/pure-provider/physical-root authority defect found after fixes below. Full32.2 private Salsa arena and runtime integration remain held.",
+  "fixed_findings": [
+    {
+      "finding": "Initial publisher omitted opaque SourceSyntaxInput wrapper extra artifact row/payload from run querybudget preflight, registering wrapper+plan after charging only plan.",
+      "resolution": "Current publisher5133b52c charges BOTH actual existing SourceArtifactRef extra roots before atomic register_syntax_input."
+    },
+    {
+      "finding": "Ad hoc outer row estimate did not use existing full InputKey/InputRecord heap formula.",
+      "resolution": "Uses existing input_metadata_bytes(input_key,value) instead of duplicated estimator."
+    },
+    {
+      "finding": "CompletedEnvironment owns actual source_syntax map planArcs, absent from physical owner count and retirement traversal.",
+      "resolution": "Borrowed syntax_plan_roots iterator1df3120c; count_owner increments each actual env->plan handle only once per physical environment allocation; Roots.completed_environment visits same planIDs."
+    }
+  ],
+  "authority": [
+    "Only coordinator cold require_source_preparation may publish completed source-syntax input. Generic publish_inputs rejects derived CompletedSourceSyntax variants. Plan must come from exact opaque CompletedSourceEnvironment.source_syntax(source) and its real seal dependency must match plan seal/fingerprint.",
+    "Registration checks actual ExpansionEpoch, exact CapturedSource selection, real DiscoverySeal query key/result fingerprint and actual certificate membership plus captured prepared source lease. Private fields prevent arbitrary digest/UnitGraph or mock catalog conversion.",
+    "Input captures source_revision, plan fp and exact certificate publication. Later currentness checks actual source/epoch and real seal publication; membership/lease proof is cached only for exactly same certificate/source universe, avoiding repeated membership census. Source universe replacement invalidates; unrelated derived db revision is not a dependency.",
+    "PreparedBodySyntaxKey explicitly binds source Outline/profile/cfg/parse/modulepath, canonical path, epoch, exact completed plan and definition. selection validates path canonicality/64KiB, module depth256, ownedheap32MiB and known source profile/edition. Query48/Input34 appended tags do not renumber existing stable arms.",
+    "Pure provider reads actual CompletedSourceSyntax input and uses common structural assembly driver to attach already admitted outputs/issued receipts; no resolver/producer expansion, source publication, filesystem/build/native effect or guest operation. Missing output/receipt stays failure/demand.",
+    "Prepared result rechecks source/epoch/plan identity and actual selected-body permit; fingerprint binds real key/input/prepared identity. It exposes borrowed prepared syntax only, not a direct raw PreparedSourceSyntax Arc. admit checks current opaque input/source universe then delegates actual retained source admission/epoch/seal path; it is not namespace or frame authority."
+  ],
+  "physical_roots": [
+    "Three distinct actual allocations: CompletedSourceSyntaxInput inner wrapper, CompletedSourceSyntax shared plan, PreparedBodySyntax result. Registered as variants in existing SourcePlanPins only; no separate registry.",
+    "Outer InputValue estimated_bytes excludes inner opaque payload; SourceSyntaxInput artifact charges real wrapper+Arc. InputValue box owns ONE wrapper Arc regardless of outer box strong handles; memo_owners deduplicates actual box before counting.",
+    "Input wrapper owns ONE plan Arc; result owns ONE plan Arc; CompletedEnvironment map owns one per actual map entry. count_owner increments physical handles while allocations set prevents rewalking a wrapper/environment allocation multiple times. Registry own handles count separately.",
+    "Input wrapper/plan registration preflights both artifact rows before publication; result registration includes result+plan before memo exposure. Actual input/result escape or direct plan clone after memo/input retirement is detected by strong_count versus physical internal owners; external root traversal retains descendant plan row before pruning.",
+    "SourceArtifactRef/Roots use pointer addresses solely for private allocation accounting, never stable keys, namespace/call/expansion authority. No Completed plan/result->CompletedEnvironment backreference cycle.",
+    "Borrowed source_syntax getter and syntax_plan_roots expose real shared Arc handles, not reconstructed identities. Whole environment payload and standalone plan artifact may conservatively overcharge shared nested payload; no deduplicated/RSS or scaling claim."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "source_syntax_provider::prepare",
+        "PreparedBodySyntax::construct"
+      ],
+      "finding": "Pure common structural source preparation memo; no assertion/expression evaluator or alternate runtime compiler."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "CompletedSourceSyntax::prepare_body",
+        "PreparedBodySyntax::admit"
+      ],
+      "finding": "Uses actual retained pinned assembly + actual issued output receipts, not rendered text/literal/break executor/synthetic body."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "PreparedBodySyntaxKey",
+        "CompletedSourceSyntaxInput"
+      ],
+      "finding": "Source/epoch/seal/actual canonical definition identity only, no method/numeric/macro-name rules or Type/member grants."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "PreparedBodySyntax::construct"
+      ],
+      "finding": "Existing common selected original-anchor source service remains component boundary; generated parent/canonical join still genuine prerequisite, no new runtime original-only semantic branch."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "plan.prepare_body(key.definition)"
+      ],
+      "finding": "Only selected body structural readiness, no BodyStructure/Thunk/executable lowering or cold-arm/static type checks. Required declaration discovery can retain syntax/outputs without executing bodies."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "QueryKey::PreparedBodySyntax",
+        "PreparedBodySyntax::prepare"
+      ],
+      "finding": "Existing pure memo keyed by actual source/cfg/edition/epoch/plan/definition caches assembly result. Same source seed/index retained once. No query-provider publish/producer effect; later admit is explicit coordinator action. No claim hotpath/memo hits until executed."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "current",
+        "publish_completed_source_syntax"
+      ],
+      "finding": "Actual certificate membership scan only once per cold registration, O(certificate sources); later exact-publication checks use real guard/query deps. No world namespace construction or per-operation census introduced. Relevant source-universe refusal retained, unrelated derived publication allowed."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "SourceArtifactRef",
+        "count_owner",
+        "Roots::syntax_input/plan/prepared_syntax"
+      ],
+      "finding": "Input/result/plan immutable Arcs shared and physically counted, including env map handle. No BodyIndex/parser graph deep copy or file node search added by memo/accounting; actual result snapshot metadata bounded."
+    }
+  ],
+  "bounds_and_costs": {
+    "publication": "Checked existing input row metadata + both new artifact root extras before cachequota/register, checked revision, existing atomic register_roots count100k/registry32MiB/artifact128MiB. Final input/revision store after all fallible checks. Quota failure may fill pure memo cache but publishes no input/registry partial rows.",
+    "memo": "Result budget128MiB counts keyheap/prepared/snapshot metadata, plan separately owned artifact. Query caps/canonical key checked before plan construction; common assembly per-source/candidate transient bounds remain inherited. Actual first structural preparation can be costly; same key memo intended to run once.",
+    "retention": "Existing between-run root registry/pruning only; no new dispatch traversal. Owned counters use actual Arcs, source/input handles and bounded root100k traversal. Returns on logicalsize overflow/resource; no unsafe.",
+    "holds": [
+      "Private shared Salsa arena sizing remains unobservable through stable noncancelling API; adapter full32.2 acceptance held.",
+      "Existing RetainedSyntaxInput::prepare/admit returns an unpublished Arc before existing publish path registers/accountspins. Arbitrarily retaining that unregistered admission object is inherited budget-lifetime debt; no blanket charge guarantee across that escape.",
+      "Completed environment coarse nested plan payload plus separately accounted plan may overcharge; report estimates, not actual allocator/RSS.",
+      "Source seed aggregate512MiB retained vs one128MiB candidate transient/old discovery owners remains explicit prior hold.",
+      "Runtime coordinator suspends/cold registration/admit/target publication/installed renewal/persistent resume integration not delivered by memo component."
+    ]
+  },
+  "controls_read_unexecuted": [
+    "actual_nested_stock_body_preparation_memo_and_exact_key_controls_all_editions: actual source, sameArc memo/provider count, no Thunk/BodyStructure, idempotent pub, key mutations, unrelated derived stamp, epoch refusal",
+    "actual_structural_result_outlives_completed_input_and_memo_with_accounted_roots: external result/plan retained and charged, completed root no cycle, eventually reclaimed",
+    "actual_inner_plan_input_arc_outlives_outer_input_with_charged_wrapper_and_plan: new distinct opaque inner wrapper escape after all outer/memo owners retire",
+    "real_plan_input_two_root_quota_refusal_leaves_publication_atomic: actual current completed source, two real new roots vs one remaining registry slot, no revision/input/root partial publication"
+  ],
+  "test_limits": "Some malformed-key negative tests assert Err without exact reason; positive genuine all-edition result is mandatory. No native/guest/fullfixture/runtime contract/milestone outcome inferred. Tests unexecuted by reviewer.",
+  "changes": "Evidence only; no production edits/Cargo/compiler/tests."
+}

@@ -87,6 +87,12 @@ impl CompletedSourceEnvironment {
             .map(|(_, fact)| fact)
             .ok_or_else(|| fault("completed module macro provider absent"))
     }
+    /// Actual physical map-owned handles, only for retention accounting.
+    pub(crate) fn syntax_plan_roots(
+        &self,
+    ) -> impl Iterator<Item = &Arc<super::source_syntax::CompletedSourceSyntax>> {
+        self.source_syntax.values()
+    }
     pub(crate) fn source_syntax(
         &self,
         selection: &crate::source::changes::SourceSelection,

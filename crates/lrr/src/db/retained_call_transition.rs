@@ -57,6 +57,45 @@ impl RetainedCallBodyTransition {
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
     }
+    pub(super) fn before_rows(&self) -> [(InputKey, Digest); 4] {
+        let [a, b, c, d] = target_keys(self.definition);
+        [
+            (a, self.before[0]),
+            (b, self.before[1]),
+            (c, self.before[2]),
+            (d, self.before[3]),
+        ]
+    }
+    /// A different genuinely selected call may have observed the same old
+    /// target. Its own immutable input closure must prove that observation.
+    /// This grants no authority to execute the old call or refresh its guard.
+    pub(crate) fn require_observer_plan(
+        &self,
+        db: &Database,
+        plan: &PreparedExplicitTypeArguments,
+    ) -> Result<(), Diagnostic> {
+        self.require_current(db)?;
+        if plan.definition() != self.definition {
+            return Err(invalid("call body observer selected another definition"));
+        }
+        plan.guard().require_observed_call_body(db, self)
+    }
+    pub(crate) fn require_before_plan(
+        &self,
+        db: &Database,
+        plan: &PreparedExplicitTypeArguments,
+    ) -> Result<(), Diagnostic> {
+        self.require_current(db)?;
+        if plan.fingerprint() != self.before_plan
+            || plan.key().body != self.site.body
+            || plan.key().node != self.site.node
+        {
+            return Err(invalid(
+                "retained call transition belongs to another old plan",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn permits_replacement(
         &self,
         key: &InputKey,
@@ -112,6 +151,30 @@ impl RetainedCallBodyTransition {
         if callee.identity() != self.definition || callee.body() != Some(&self.body) {
             return Err(invalid(
                 "retained call renewal selected another target body",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_observer_rebound(
+        &self,
+        db: &mut Database,
+        before: &PreparedExplicitTypeArguments,
+        fresh: &PreparedExplicitTypeArguments,
+        index: &BodyIndex,
+        pc: &PcKey,
+    ) -> Result<(), Diagnostic> {
+        self.require_observer_plan(db, before)?;
+        before.require_site(index, pc)?;
+        if !before.same_call_contract(fresh) {
+            return Err(invalid(
+                "call body observer renewal changed its selected contract",
+            ));
+        }
+        fresh.require_current(db, index, pc)?;
+        let callee = fresh.callable(db)?;
+        if callee.identity() != self.definition || callee.body() != Some(&self.body) {
+            return Err(invalid(
+                "call body observer renewal selected another target body",
             ));
         }
         Ok(())

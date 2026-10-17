@@ -1,6 +1,9 @@
 //! Target-only derived publication authority on unchanged official source.
 //! This does not execute the fixture or count a runtime/whole-fixture pass.
 use super::*;
+
+#[path = "installed_call_renewal_tests.rs"]
+mod installed_call_renewal_tests;
 use crate::{
     db::retained_syntax::RetainedSyntaxInput,
     frontend::entered_call_goals::EnteredCallGoal,

@@ -55,6 +55,8 @@ pub(crate) mod body_environment_inputs;
 mod local_declaration_inputs;
 #[path = "retained_syntax_inputs.rs"]
 mod retained_syntax_inputs;
+#[path = "source_syntax_inputs.rs"]
+pub(crate) mod source_syntax_inputs;
 pub(crate) use body_leases::BodyExecutionLease;
 
 #[derive(Debug, Clone)]
@@ -285,6 +287,7 @@ impl Database {
                     | QueryValue::SourceLocalPlan(_)
                     | QueryValue::QualifiedBodyType(_)
                     | QueryValue::PreparedExplicitTypeArguments(_)
+                    | QueryValue::PreparedBodySyntax(_)
                     | QueryValue::EnteredCall(_)
                     | QueryValue::EnteredType(_)
                     | QueryValue::PreparedTypePlan(_)
@@ -328,6 +331,13 @@ impl Database {
                     InputValue::BodyEnvironment(input) => {
                         product_retention::count_owner(
                             super::value::SourceArtifactRef::BodyEnvironment(input),
+                            &mut inner,
+                            &mut products,
+                        );
+                    }
+                    InputValue::CompletedSourceSyntax(input) => {
+                        product_retention::count_owner(
+                            super::value::SourceArtifactRef::SourceSyntaxInput(input),
                             &mut inner,
                             &mut products,
                         );
@@ -1082,6 +1092,7 @@ impl Database {
                 value,
                 InputValue::LocalDeclarationOwner(_)
                     | InputValue::BodyEnvironment(_)
+                    | InputValue::CompletedSourceSyntax(_)
                     | InputValue::ExpansionRecord(_)
                     | InputValue::ModuleRecord { .. }
                     | InputValue::IncludeRecord { .. }

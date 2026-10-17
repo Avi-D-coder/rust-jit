@@ -112,6 +112,9 @@ impl PreparedExplicitTypeArguments {
     pub(crate) fn key(&self) -> &PcKey {
         &self.key
     }
+    pub(crate) fn definition(&self) -> Digest {
+        self.definition
+    }
     pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
         &self.plan
     }
@@ -188,6 +191,12 @@ impl PreparedExplicitTypeArguments {
         index: &BodyIndex,
         pc: &PcKey,
     ) -> Result<(), Diagnostic> {
+        self.require_site(index, pc)?;
+        self.guard.require_current(db)
+    }
+    /// Structural association only; this does not grant current execution
+    /// authority. Cold publication renewal separately checks the actual guard.
+    pub(crate) fn require_site(&self, index: &BodyIndex, pc: &PcKey) -> Result<(), Diagnostic> {
         let source = self.plan.context().source();
         let phase = Phase::from_code(pc.phase);
         if self.key.phase != 0
@@ -205,7 +214,7 @@ impl PreparedExplicitTypeArguments {
         {
             return Err(fault("explicit Type plan caller use differs"));
         }
-        self.guard.require_current(db)
+        Ok(())
     }
 }
 impl StableEncode for PreparedExplicitTypeArguments {

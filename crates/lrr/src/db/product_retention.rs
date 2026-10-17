@@ -22,6 +22,9 @@ const ROW_BYTES: usize = 64 + std::mem::size_of::<(usize, RetainedSourceArtifact
 const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
 
 enum RetainedSourceArtifact {
+    SourceSyntaxInput(Arc<super::source_syntax_inputs::CompletedSourceSyntaxInput>),
+    CompletedSourceSyntax(Arc<crate::expand::source_discovery::CompletedSourceSyntax>),
+    PreparedBodySyntax(Arc<super::source_syntax_inputs::PreparedBodySyntax>),
     LocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     BodyEnvironment(Arc<super::super::BodyEnvironmentInput>),
     CompletedEnvironment(Arc<crate::expand::source_discovery::CompletedSourceEnvironment>),
@@ -31,6 +34,15 @@ enum RetainedSourceArtifact {
 impl RetainedSourceArtifact {
     fn retain(root: SourceArtifactRef<'_>) -> Self {
         match root {
+            SourceArtifactRef::SourceSyntaxInput(value) => {
+                Self::SourceSyntaxInput(Arc::clone(value))
+            }
+            SourceArtifactRef::CompletedSourceSyntax(value) => {
+                Self::CompletedSourceSyntax(Arc::clone(value))
+            }
+            SourceArtifactRef::PreparedBodySyntax(value) => {
+                Self::PreparedBodySyntax(Arc::clone(value))
+            }
             SourceArtifactRef::LocalPlan(value) => Self::LocalPlan(Arc::clone(value)),
             SourceArtifactRef::BodyEnvironment(value) => Self::BodyEnvironment(Arc::clone(value)),
             SourceArtifactRef::CompletedEnvironment(value) => {
@@ -42,6 +54,9 @@ impl RetainedSourceArtifact {
     }
     fn root(&self) -> SourceArtifactRef<'_> {
         match self {
+            Self::SourceSyntaxInput(value) => SourceArtifactRef::SourceSyntaxInput(value),
+            Self::CompletedSourceSyntax(value) => SourceArtifactRef::CompletedSourceSyntax(value),
+            Self::PreparedBodySyntax(value) => SourceArtifactRef::PreparedBodySyntax(value),
             Self::LocalPlan(value) => SourceArtifactRef::LocalPlan(value),
             Self::BodyEnvironment(value) => SourceArtifactRef::BodyEnvironment(value),
             Self::CompletedEnvironment(value) => SourceArtifactRef::CompletedEnvironment(value),
@@ -69,6 +84,9 @@ impl SourcePlanPins {
     }
     pub(super) fn register(&mut self, value: &QueryValue) -> Result<(), Diagnostic> {
         let completed = match value {
+            QueryValue::PreparedBodySyntax(value) => {
+                Some(SourceArtifactRef::CompletedSourceSyntax(value.plan()))
+            }
             QueryValue::SourceLocalPlan(plan) => plan.environment().map(|environment| {
                 SourceArtifactRef::CompletedEnvironment(environment.macros().source_environment())
             }),
@@ -147,6 +165,18 @@ impl SourcePlanPins {
             [
                 SourceArtifactRef::BodyEnvironment(input),
                 SourceArtifactRef::CompletedEnvironment(input.macros().source_environment()),
+            ]
+            .into_iter()
+        })
+    }
+    pub(super) fn register_syntax_input(
+        &mut self,
+        input: &Arc<super::source_syntax_inputs::CompletedSourceSyntaxInput>,
+    ) -> Result<(), Diagnostic> {
+        self.register_roots(|| {
+            [
+                SourceArtifactRef::SourceSyntaxInput(input),
+                SourceArtifactRef::CompletedSourceSyntax(input.plan()),
             ]
             .into_iter()
         })
@@ -252,6 +282,16 @@ pub(super) fn count_owner(
             *inner.entry(Arc::as_ptr(index) as usize).or_insert(0) += 1;
         }
         match root {
+            SourceArtifactRef::SourceSyntaxInput(value) => count_owner(
+                SourceArtifactRef::CompletedSourceSyntax(value.plan()),
+                inner,
+                allocations,
+            ),
+            SourceArtifactRef::PreparedBodySyntax(value) => count_owner(
+                SourceArtifactRef::CompletedSourceSyntax(value.plan()),
+                inner,
+                allocations,
+            ),
             SourceArtifactRef::LocalPlan(plan) => {
                 for context in plan.context_roots() {
                     let id = Arc::as_ptr(context) as usize;
@@ -284,6 +324,13 @@ pub(super) fn count_owner(
                 }
             }
             SourceArtifactRef::CompletedEnvironment(environment) => {
+                for plan in environment.syntax_plan_roots() {
+                    count_owner(
+                        SourceArtifactRef::CompletedSourceSyntax(plan),
+                        inner,
+                        allocations,
+                    );
+                }
                 *inner
                     .entry(Arc::as_ptr(environment.names_root()) as usize)
                     .or_insert(0) += 1;

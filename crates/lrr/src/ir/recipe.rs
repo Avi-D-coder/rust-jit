@@ -112,6 +112,46 @@ impl VerifiedRecipe {
     ) -> Option<&crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments> {
         self.source_call.as_ref()
     }
+    /// Cold migration check for the ordinary source-call lowering route only.
+    /// The actual old joined guard is retained unchanged; the opaque publisher
+    /// receipt fences its exact target replacements. No recipe executes here.
+    pub(crate) fn require_call_body_transition(
+        &self,
+        db: &crate::db::memo::Database,
+        transition: &crate::db::memo::RetainedCallBodyTransition,
+    ) -> Result<(), crate::core::diagnostic::Diagnostic> {
+        transition.require_before_plan(db, self.call_body_transition_plan(db)?)
+    }
+    pub(crate) fn require_call_body_observer(
+        &self,
+        db: &crate::db::memo::Database,
+        transition: &crate::db::memo::RetainedCallBodyTransition,
+    ) -> Result<(), crate::core::diagnostic::Diagnostic> {
+        transition.require_observer_plan(db, self.call_body_transition_plan(db)?)
+    }
+    fn call_body_transition_plan(
+        &self,
+        db: &crate::db::memo::Database,
+    ) -> Result<
+        &crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments,
+        crate::core::diagnostic::Diagnostic,
+    > {
+        let invalid = || {
+            crate::core::diagnostic::Diagnostic::new(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "recipe is not the actual prepared source call being renewed".into(),
+            )
+        };
+        let plan = self.source_call.as_ref().ok_or_else(invalid)?;
+        let guard = self.prepared_inputs.as_ref().ok_or_else(invalid)?;
+        if !std::sync::Arc::ptr_eq(guard, plan.guard()) {
+            return Err(invalid());
+        }
+        if let Some(witness) = &self.namespace_witness {
+            witness.require_current(db)?;
+        }
+        Ok(plan)
+    }
     pub(crate) fn with_source_call(
         mut self,
         plan: &crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments,

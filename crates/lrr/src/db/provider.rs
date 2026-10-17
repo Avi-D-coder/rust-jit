@@ -403,6 +403,9 @@ impl Provider for SyntaxProvider {
                     inventory: input.declaration_inventory.clone(),
                 }
             }
+            QueryKey::PreparedBodySyntax(key) => {
+                return super::source_syntax_provider::prepare(self, db, key);
+            }
             QueryKey::DiscoverySeal(key) => {
                 if let Err(error) = key.validate() {
                     return QueryPoll::Ready(Err(error));

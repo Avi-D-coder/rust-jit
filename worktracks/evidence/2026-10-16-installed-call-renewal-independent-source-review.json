@@ -1,0 +1,118 @@
+{
+  "status": "Independent exact-source review of installed renewal component; no Cargo/compiler/tests, no engine/runtime/resume integration acceptance",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/install_call_renewal.rs",
+      "sha256": "aaec4d79a46507396cb5b39166344736f12b1afae7f4e9f50bcc83b5b320e85f",
+      "bytes": 8226
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "01f2cf76b66135d27aba80bc0a4ad68ef6e4f63669e7a4ffcd5c0e39c27ea119",
+      "bytes": 12112
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "adcc09a14b8e1a3c58e2cbccafc8a59761e4a6758acf6a8c9dea6250b675ad1d",
+      "bytes": 32162
+    },
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "2f5112bb28f9c44cc7477b7878588010d669f15775c0177aed57f18c63f9ecb2",
+      "bytes": 10238
+    }
+  ],
+  "witness": "Root unchanged nested-statement-macro target transition control pending; shift legacy assertion/static failuree94ed7 preserved, combinedc5 adapter grouping oracle failure9717 preserved separately. No guest pass from this review.",
+  "finding": "No concrete authority/effect-preservation/atomic replacement defect found at exact reviewed hashes after scratch/checked Arc-header tightening. Final source controls and sole-validator compile/execution pending.",
+  "authority": [
+    "InstalledRecipes::renew_source_call requires same source_revision and actual installed pc; opaque transition.require_before_plan binds real old Q47 fingerprint/body/node and validates new ParseFile source closure plus old non-target stamps.",
+    "Bounded BTreeMap key range is same BodyKey/node across only installed u16 phases; no other body/node scan and no uninstalled future phase preparation. Constructor routes and mismatched old source_call fingerprints refused.",
+    "VerifiedRecipe::require_call_body_transition requires actual old source_call and ptr-equal prepared_inputs Arc to its genuine Q47 guard; any existing namespace witness must remain current. It delegates to opaque transition instead of refreshing stale guard.",
+    "Actual cacheable new Q47 is fetched through ordinary pure provider and transition.require_rebound checks same full call contract, actual caller/index/site and new target body. For each old installed phase, actual cacheable fresh QueryKey::Thunk is fetched; fresh source_call fingerprint and prepared guard fingerprint must match fresh Q47; fresh namespace/currentness guard required.",
+    "All executable Recipe fields key/origin/operations/exit equal exactly. Dependency/proof facts may change through real ordinary preparation, but no executable effect/slot/continuation changes allowed. Fresh VerifiedRecipe comes from existing structural verifier/provider, no mutable unverified recipe.",
+    "Only after all phase staging, final metadata checks and final transition.require_rebound does commit replace each immutable recipe Arc at its existing RecipeId and update bytes. NeedInput/Err drops staging and leaves InstalledRecipes unchanged. DB pure memo cache fills can occur; no VM/argument/frame mutation or argument replay occurs in helper."
+  ],
+  "effect_semantics": "Exact operations equality includes actual effect/call sites, source slots, destinations and packet operations; exit equality includes next/resume PCs, result slots, control targets and effect/call boundary. Identical origin retains diagnostics/source lineage. Existing frame operation cursor is not changed here; future engine integration must bind actual current frame/phase/continuation and persist transition/fresh plan across suspension.",
+  "bounds_and_retention": {
+    "phase_selection": "BTreeMap range O(log installed + P), P bounded by u16 phase space and explicit100k cap. Two range passes count+stage; no whole installed table/source/namespace census.",
+    "staging": "Required count*sizeof Replacement checked with existing bytes/limit BEFORE reserve; actual capacity checked after reserve. Arc-header count product checked. Before cloning each flat recipe, old installed bytes+all new recipe charges+scratch+all staged headers must fit limit. Final bytes subtract exact old charges/add exact new using same existing install formula.",
+    "atomicity": "Each ID was validated by self.entry while entries cannot mutate; staging holds bounded index+Arc pairs. Final commit has only infallible same-ID field assignment and bytes update. No source/body/index plan clone at commit.",
+    "handles": "VerifiedRecipe clone copies flat LRIR operation/dependency/origin allocations as ordinary installation already does; source_call immutable plan/target/row/guard handles share Arcs. No immutable BodyIndex/parser deep copy or source planning in normal installed lookup.",
+    "accounting_holds": "Returned fresh PreparedExplicitTypeArguments and transition must be charged by future runtime owner; helper does not persist them. Existing install/verified metadata conservative baseline retained (512-byte verifier base); shared source/input/product roots remain existing traversal responsibility. Runtime integration not reviewed or implemented.",
+    "performance": "Source inspection only, no measured speed/scaling claim. Cold renewal fetches only already installed phases and may execute ordinary pure providers; no provider-free renewal claim."
+  },
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "renew_source_call"
+      ],
+      "finding": "Ordinary verified recipe replacement only, no assertion/expression evaluator or alternative call executor."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "QueryKey::Thunk",
+        "VerifiedRecipe"
+      ],
+      "finding": "Actual ordinary lowerer/verifier output, no literal/break macro-output route, text reparse or fabricated body."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "transition.require_rebound",
+        "same_call_contract"
+      ],
+      "finding": "Real full source-call contract and explicit nominal Type rows; no method/numeric/macro spelling shortcut."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "require_call_body_transition"
+      ],
+      "finding": "Same source-call route for admitted original/retained/generated evidence; missing source/parent boundary remains explicit prerequisite. No new generated-only semantics refusal."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "self.by_pc.range"
+      ],
+      "finding": "Only installed phases of already selected node renewed; no cold callee body/branch/arm/pattern preparation. Root must still bind actual reached continuation."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "renew_source_call",
+        "get_current"
+      ],
+      "finding": "Renewal is explicit cold post-publication preparation, never guard refresh. Existing get_current/hot installed lookup unchanged. Runtime hook absent, so no claim repeated entry/resume avoids renewal/planning until integrated and tested."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "BTreeMap same-body/node range",
+        "transition exact stamps"
+      ],
+      "finding": "Bounded per-call installed-phase range and relevant dependency guards; no full-world/source/namespace map or unrelated global revision invalidation."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "Replacement::recipe",
+        "Arc<VerifiedRecipe>"
+      ],
+      "finding": "Stages shared immutable plan handles and flat verified LRIR clones, no BodyIndex/parser graph duplication or full-file node lookup. Bounds preflight before clone; same RecipeIds preserved."
+    }
+  ],
+  "required_controls_pending": [
+    "Real old installed multi-phase call -> target-only retained publication -> fresh ordinary Q47/thunks -> all sameRecipeIds/current fresh guards; old external recipe/callable/guard remains stale.",
+    "Wrong old plan/caller/index/site/phase, other installed route/constructor, changed signature/explicit nominal Type/callee/source dependency refuses without table swap.",
+    "Fresh recipe changed origin/op/effect site/exit/resume/result slot refuses atomically; all phase entries and bytes identical before/after failure.",
+    "NeedInput after one staged phase, query/provider error, oversized scratch/new recipe, overflow/limit refusal leave installed table unchanged and no VM/argument effects.",
+    "Repeated renewal/resume actual engine integration, arguments/effects once, cleanup and pending transition lifetime/accounting.",
+    "Uninstalled future phases stay unqueried; unrelated installed bodies/nodes remain unchanged; source/epoch/seal/namespace revocation still refuses."
+  ],
+  "boundary": "Root owns engine hook and persistent suspension/resume. Frozencombinedc5 remains untouched; this review is newer source-only component.",
+  "changes": "Reviewer wrote evidence only; no production edits/Cargo/compiler/tests."
+}

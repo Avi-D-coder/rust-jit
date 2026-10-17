@@ -355,6 +355,7 @@ impl Packet {
                 | QueryKey::ReferenceHeader(_)
                 | QueryKey::TypeAlias(_) => {}
                 QueryKey::BodyStructure(_)
+                | QueryKey::PreparedBodySyntax(_)
                 | QueryKey::PreparedExplicitTypeArguments(_)
                 | QueryKey::EnteredCall(_)
                 | QueryKey::DeclaredReturnGoal(_)

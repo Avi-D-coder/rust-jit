@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum InputKey {
+    CompletedSourceSyntax(Digest),
     LocalDeclarationOwner(Digest),
     BodyEnvironment(crate::source::manifest::BodyKey),
     MacroExportSource(Digest),
@@ -36,6 +37,7 @@ pub enum InputKey {
 }
 #[derive(Debug, Clone)]
 pub enum InputValue {
+    CompletedSourceSyntax(Arc<super::memo::source_syntax_inputs::CompletedSourceSyntaxInput>),
     LocalDeclarationOwner(crate::source::manifest::BodyKey),
     BodyEnvironment(Arc<super::BodyEnvironmentInput>),
     MacroExportSource(Box<super::MacroExportSourceReceipt>),
@@ -107,6 +109,7 @@ impl InputValue {
             Ok::<_, crate::core::diagnostic::Diagnostic>(())
         };
         match self {
+            Self::CompletedSourceSyntax(_) => {} // actual opaque inner allocation is a retained source artifact
             Self::BodyEnvironment(_) => {} // actual inner allocation is a retained source artifact
             Self::MacroExportSource(receipt) => add(receipt.metadata_bytes())?,
             Self::SourceDependencies(graph) => add(graph.metadata_bytes()?)?,
@@ -150,6 +153,11 @@ impl InputValue {
         Ok(bytes)
     }
     pub fn matches(&self, k: &InputKey) -> bool {
+        if let (Self::CompletedSourceSyntax(input), InputKey::CompletedSourceSyntax(plan)) =
+            (self, k)
+        {
+            return input.plan().fingerprint() == *plan;
+        }
         if let (Self::BodyEnvironment(input), InputKey::BodyEnvironment(body)) = (self, k) {
             return input.body() == body;
         }
@@ -219,6 +227,10 @@ impl InputValue {
             _ => "lrr/v2/input-value",
         });
         match self {
+            Self::CompletedSourceSyntax(input) => {
+                e.u32(34);
+                e.digest(input.fingerprint());
+            }
             Self::LocalDeclarationOwner(body) => {
                 e.u32(33);
                 e.record(body);
@@ -377,6 +389,10 @@ impl StableEncode for InputKey {
     const DOMAIN: &'static str = "lrr/v2/input-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::CompletedSourceSyntax(plan) => {
+                e.u32(34);
+                e.digest(*plan);
+            }
             Self::LocalDeclarationOwner(definition) => {
                 e.u32(33);
                 e.digest(*definition);

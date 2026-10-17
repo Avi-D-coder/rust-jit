@@ -159,6 +159,12 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         Ok(())
     };
     match query {
+        QueryKey::PreparedBodySyntax(key) => {
+            if key.source.module_path.len() > 256 {
+                return Err(error("demand scope depth exceeded"));
+            }
+            bytes = add(bytes, query.heap_bytes())?;
+        }
         QueryKey::CurrentModuleName(key) => {
             if key.source.module_path.len() > 256 || key.bucket.scope.module_path.len() > 256 {
                 return Err(error("demand scope depth exceeded"));

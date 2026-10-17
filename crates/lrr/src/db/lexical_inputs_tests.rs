@@ -501,3 +501,9 @@ fn entered_local_source_rejects_wrong_entry_owner_and_revoked_parent_without_pub
 
 #[path = "body_lease_original_source_tests.rs"]
 mod body_lease_original_source_tests;
+
+#[path = "source_syntax_memo_tests.rs"]
+mod source_syntax_memo_tests;
+
+#[path = "entry_body_memo_tests.rs"]
+mod entry_body_memo_tests;

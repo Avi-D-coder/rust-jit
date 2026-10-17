@@ -2,7 +2,9 @@
 //! expansion, expression evaluation or runtime macro recipe is performed here.
 use crate::{
     core::{diagnostic::Diagnostic, digest::StableEncode},
-    db::{memo::Database, poll::QueryPoll, retained_syntax::RetainedSyntaxInput},
+    db::{
+        key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue,
+    },
     expand::source_discovery::SourceDiscovery,
     frontend::callables::{CallSelection, SourceCallable},
     source::changes::PreparedSourceView,
@@ -50,12 +52,23 @@ pub(crate) fn prepare(
     // Do not infer expansion absence from only ExpressionKind::Macro: source
     // declaration-slot calls can have other index roles. Existing scoped
     // assembly establishes readiness from all actual retained call occurrences.
-    let prepared = discovery.prepare_body_syntax(source.selection(), definition)?;
-    let input = ready(RetainedSyntaxInput::prepare(
-        db,
-        prepared,
-        discovery.key().clone(),
-    ))?;
+    let completed = ready(discovery.completed_source_environment(db))?;
+    let key =
+        ready(db.publish_completed_source_syntax(&completed, source.selection(), definition))?;
+    let prepared = ready(db.fetch(&SyntaxProvider, QueryKey::PreparedBodySyntax(Box::new(key))))?;
+    let QueryValue::PreparedBodySyntax(prepared_body) = prepared.value.as_ref() else {
+        return Err(Diagnostic::new(
+            "LRR-E-INTERNAL-SNAPSHOT",
+            "standalone retained body preparation result variant differs".into(),
+        ));
+    };
+    if !prepared.cacheable {
+        return Err(Diagnostic::new(
+            "LRR-E-INTERNAL-SNAPSHOT",
+            "standalone retained body preparation was not memoized".into(),
+        ));
+    }
+    let input = ready(prepared_body.admit(db))?;
     ready(db.publish_retained_syntax(input.clone()))?;
     let body = ready(db.publish_retained_body(input, definition))?;
     let selected = ready(discovery.entry_function(db, entry))?;

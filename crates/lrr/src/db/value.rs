@@ -15,6 +15,9 @@ use std::sync::Arc;
 /// locators, never a source/name authority or part of a stable key.
 #[derive(Clone, Copy)]
 pub(crate) enum SourceArtifactRef<'a> {
+    SourceSyntaxInput(&'a Arc<super::memo::source_syntax_inputs::CompletedSourceSyntaxInput>),
+    CompletedSourceSyntax(&'a Arc<crate::expand::source_discovery::CompletedSourceSyntax>),
+    PreparedBodySyntax(&'a Arc<super::memo::source_syntax_inputs::PreparedBodySyntax>),
     LocalPlan(&'a Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     BodyEnvironment(&'a Arc<super::BodyEnvironmentInput>),
     CompletedEnvironment(&'a Arc<crate::expand::source_discovery::CompletedSourceEnvironment>),
@@ -24,6 +27,9 @@ pub(crate) enum SourceArtifactRef<'a> {
 impl<'a> SourceArtifactRef<'a> {
     pub(crate) fn allocation(self) -> usize {
         match self {
+            Self::SourceSyntaxInput(value) => Arc::as_ptr(value) as usize,
+            Self::CompletedSourceSyntax(value) => Arc::as_ptr(value) as usize,
+            Self::PreparedBodySyntax(value) => Arc::as_ptr(value) as usize,
             Self::LocalPlan(value) => Arc::as_ptr(value) as usize,
             Self::BodyEnvironment(value) => Arc::as_ptr(value) as usize,
             Self::CompletedEnvironment(value) => Arc::as_ptr(value) as usize,
@@ -33,6 +39,9 @@ impl<'a> SourceArtifactRef<'a> {
     }
     pub(crate) fn strong_count(self) -> usize {
         match self {
+            Self::SourceSyntaxInput(value) => Arc::strong_count(value),
+            Self::CompletedSourceSyntax(value) => Arc::strong_count(value),
+            Self::PreparedBodySyntax(value) => Arc::strong_count(value),
             Self::LocalPlan(value) => Arc::strong_count(value),
             Self::BodyEnvironment(value) => Arc::strong_count(value),
             Self::CompletedEnvironment(value) => Arc::strong_count(value),
@@ -42,6 +51,13 @@ impl<'a> SourceArtifactRef<'a> {
     }
     pub(crate) fn metadata_bytes(self) -> Result<usize, Diagnostic> {
         let bytes = match self {
+            Self::SourceSyntaxInput(value) => Some(value.exclusive_metadata_bytes()),
+            Self::CompletedSourceSyntax(value) => value
+                .metadata_bytes()
+                .checked_add(2 * std::mem::size_of::<usize>()),
+            Self::PreparedBodySyntax(value) => value
+                .metadata_bytes()
+                .checked_add(2 * std::mem::size_of::<usize>()),
             Self::LocalPlan(value) => value
                 .exclusive_metadata_bytes()
                 .checked_add(2 * std::mem::size_of::<usize>()),
@@ -70,6 +86,9 @@ impl<'a> SourceArtifactRef<'a> {
         match self {
             Self::Pattern(value) => Some(value.index()),
             Self::StringLiteral(_)
+            | Self::SourceSyntaxInput(_)
+            | Self::CompletedSourceSyntax(_)
+            | Self::PreparedBodySyntax(_)
             | Self::LocalPlan(_)
             | Self::BodyEnvironment(_)
             | Self::CompletedEnvironment(_) => None,
@@ -84,6 +103,7 @@ pub struct Bucket {
 }
 #[derive(Debug)]
 pub enum QueryValue {
+    PreparedBodySyntax(Arc<super::memo::source_syntax_inputs::PreparedBodySyntax>),
     PreparedExplicitTypeArguments(
         Box<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
     ),
@@ -135,6 +155,7 @@ impl QueryValue {
             _ => None,
         };
         let local = match self {
+            Self::PreparedBodySyntax(value) => Some(SourceArtifactRef::PreparedBodySyntax(value)),
             Self::PreparedExplicitTypeArguments(value) => {
                 Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
             }
@@ -190,6 +211,9 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::PreparedBodySyntax(value), QueryKey::PreparedBodySyntax(key)) = (self, key) {
+            return value.key() == key.as_ref();
+        }
         if let (
             Self::PreparedExplicitTypeArguments(value),
             QueryKey::PreparedExplicitTypeArguments(key),
@@ -318,6 +342,10 @@ impl QueryValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/query-value");
         match self {
+            Self::PreparedBodySyntax(value) => {
+                e.u32(48);
+                e.digest(value.fingerprint());
+            }
             Self::PreparedExplicitTypeArguments(value) => {
                 e.u32(47);
                 e.digest(value.fingerprint());
@@ -488,6 +516,7 @@ impl QueryValue {
     }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(match self {
+            Self::PreparedBodySyntax(_) => 0, // Actual result allocation is retained by source artifact pins.
             Self::PreparedExplicitTypeArguments(value) => value.metadata_bytes(),
             Self::EnteredCall(value) => value.metadata_bytes(),
             Self::DeclaredReturnGoal(value) => value.estimated_bytes(),

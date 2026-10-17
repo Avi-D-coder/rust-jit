@@ -1,0 +1,41 @@
+{
+  "status": "Concrete source finding; no production edits/tests/Cargo. Parent observer all4 prerequisite remains held until real dependency capture fixed and validated.",
+  "finding": "Module Q47 full target input closure does not guarantee DefinitionBody although private module admission separately validates body locator.",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "23c814c3538a9b4cbd1a6e1562697bd51d6b49883edd7b94157ef812b37dfdff"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "67f2de5a7e18170a0312467781ac5ff5d804defa47f444179d299fdcfa8915e6"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "35ee3d625c4e0507a57beb3a5f403adc0bd9e56580a2a745739a6d3f3eeb7227"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "72c21fc96db0baf812dafeb0b4fdc971b72bc3b50decc00af627d9d074f9f358"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "18b96c2a775b8d533bdd96773b1caf024f1b70603a7050960e8d7ef640f7174b"
+    }
+  ],
+  "trace": [
+    "PreparedExplicitTypeArguments::prepare captures full actual Query44 closure via prepare_input_guard, joins Type argument guards and stores resulting real flattened guard. It does not synthesize target row stamps.",
+    "EnteredCallGoal::prepare Module invokes prepare_entered_module_function, including actual canonical declaration+signature.",
+    "canonical_module_declaration reads actual target DefinitionSource/Header/DeclarationContext via db.input, recording dependencies.",
+    "prepare_entered_module_function body_stamp branch checks actual target DefinitionBody using db.published_input. Database::published_input explicitly promises no query dependency observation. EnteredModuleAdmission::revalidate uses same read-only inspection.",
+    "FunctionSignature provider intentionally has body=None when !is_alias. This preserves signature-only demand and must stay body-independent. Header/Source/DeclarationContext are observed; DefinitionBody is not guaranteed via FunctionSignature.",
+    "PreparedInputGuard::capture_input_closure walks actual memo dependencies only. Embedded private admission fields/body stamp are not automatically dependencies. Therefore flattened Q44/Q47 guard may contain only3 of4 target rows. Existing stale source/header/context checks can still refuse publication, hiding missing body dependency until strict all4 observer validation."
+  ],
+  "minimal_common_fix": "At cold prepare_entered_module_function, read real DefinitionBody via db.input and validate exact actual body plus published stamp using existing invariant. Preserve pending/mismatch handling and no callee BodyStructure/Thunk fetch. This records the real positive body row in Q44 dependencies; full Q44\u2192Q47 guard captures it. Do not make FunctionSignature depend on executable body or weaken require_observed_call_body all4 requirement.",
+  "acceptance": "Actual unchanged nested2call Q47 guards contain exact source/header/body/context before stamps; genuine target publication makes old evidence stale; separate observer rejoin fresh trueBaz and strict originalwrongPC control. No assertion whitelist, new parser, evaluator, worldcensus or bodyprep needed.",
+  "all8": "Dependency-only common canonical source admission repair; no alternative assertion/literal/method/pattern/generated semantic route, no eager executable prep, no per-op planning/world scans/deepbody copies. Actual new dependency changes relevant invalidation intentionally; source-only until sole validator terminal."
+}

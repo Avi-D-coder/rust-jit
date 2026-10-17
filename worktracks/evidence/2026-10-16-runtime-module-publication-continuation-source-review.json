@@ -1,0 +1,103 @@
+{
+  "status": "Read-only prerequisite diagnosis, no implementation/tests/Cargo or runtime claim",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "5be8a0d6f0a49ca94f50414d78ce92bca65c615dd715ea9fd765b95d7e50488e"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_return.rs",
+      "sha256": "df49ad4ef616e96d0365fac0fc79be434b2f76513bfcc81226a8057ebda2b850"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_panic.rs",
+      "sha256": "bfa8c5ce060c5ce688aebd3a75691a79a4c65fa73cb87583999670da1a17afb6"
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "01f2cf76b66135d27aba80bc0a4ad68ef6e4f63669e7a4ffcd5c0e39c27ea119"
+    },
+    {
+      "path": "crates/lrr/src/engine/install_call_renewal.rs",
+      "sha256": "5d0658b9ac265c5a205f6626d866b0fe369b3674920439a82aa47ba6daaca420"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "2f5112bb28f9c44cc7477b7878588010d669f15775c0177aed57f18c63f9ecb2"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "c49d1030cc3f7c92ed387ec9ba6a52fc02e12eae9136874f0adb4b3811579a97"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "77917d36f5953158fe075e6787cbd06a64564a7aac033261c7c432a4a10c8504"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "6e791921964933def4568f3a3a1b04f749ded8a030e81e83fb1037462fc39975"
+    },
+    {
+      "path": "crates/lrr/src/vm/call.rs",
+      "sha256": "531546f3c7d8ffb850ca9d6450eeee2f6b8d8936244efa3f3ff82dfe8c75202c"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "c2421fb371236b39d9937554d113b972b458f1862c6a200d3a48f6f58df91832"
+    }
+  ],
+  "current_ownership": [
+    "SelectedArgumentCall is retained in RunMachine.pending keyed by actual frame.call_identity(site), with genuine callee/Q47/explicit rows/hints/argument slots/result hint and bytes. CallPrepare inserts before argument evaluation; CallSeal retrieves after all arguments. Zeroarg CallSeal performs initial selection.",
+    "On guest nested call entry, run.rs moves the entire pending map into SuspendedCall.pending alongside actual caller Frame/BodyExecutionLease/resume/action/result. pending_bytes stays globally charged. Return/panic cleanup restores that same map; only exact current selected call is removed at successful entry. retire_pending_frame retires current map on cleanup.",
+    "PreparedSourceCall local temporary is created at CallSeal; NeedInput before it is stored leaves original pending entry unchanged. Therefore publication receipt only stored in the local cloned selected/prepare_source_call temporary would be lost.",
+    "Poll loop calls installed.resolve/get_current before revisiting CallPrepare/CallSeal. An authorized target publication stales installed old guard immediately, so renewal must run before resolution on every resume while relevant receipt is pending.",
+    "Frame.call_progress/hints/slots retain which arguments already ran. ArgumentPacket is nonClone and canonical store-backed once-consumed; it is sealed by VM CallSeal only after dispatcher source preparation succeeds. NeedInput must preserve PC/operation cursor/call_progress/slots/actions and never rerun VM CallPrepare or evaluated arguments."
+  ],
+  "concrete_hazard": "Outer f(g()) selected before arguments can be in current pending or suspended caller pending while g publishes f. Current exact-site RetainedCallBodyTransition cannot authorize outer Q47 because before_plan and exact PcKey belong original publishing site. A fresh relookup alone would discard the old selection constraint; accepting stale old callable is invalid.",
+  "approved_design_assessment": [
+    "Root proposed generalized observer proof can avoid prepublication active-observer census: real private old Q47 already retains genuine flattened input stamps. Target definition must equal opaque transition definition; every old non-target input must remain current and each changed target row must equal exact token before->after tuple. Real fresh ordinary Q47 must same_call_contract(old,fresh), validate actual observer index/PC and select token actual new BodyHandle.",
+    "Expose cached private PreparedExplicitTypeArguments.definition scalar; callable(db) necessarily revalidates stale guard and is inappropriate for finding target. Factor require_current site/index validation into guard-independent private check only for opaque observer path, retaining canonical Entry Q47 key, same body/node, actual semantic index/source/role and permitted phase. Fresh.require_current remains mandatory.",
+    "Keep current exact original require_before_plan/require_rebound methods and wrong-PC controls strict. Add separate observer method, not relaxed acceptance in old APIs. Existing PreparedInputGuard.require_current_across_call_body is read-only; add evidence old observer actually contains required target before stamps (full4 if genuine Q47 closure guarantees them; otherwise exact actual required subset plus positive cached target proof), rather than accepting a guard with no target observations or already-after stamps as an old crossing.",
+    "Factor renewal implementation so original and observer paths share exact installed-phase executable equality, real freshQ47 guard, atomic sameRecipeId swaps. Observer key is its own canonical call site, not issuer site. No oldguard stamp mutation or unconditional retry/staleness catch.",
+    "Persist preparation state/receipt in RunMachine ownership BEFORE any post-publication NeedInput return. A bounded by-canonical-definition receipt map can share one Arc opaque target delta across current/suspended selections; lazy exact lookup on reached installed source-call PC occurs before installed.resolve. For runtime state expose stale cached source-call proof only as private inspection, never executable authorization. Existing source_call accessor uses get rather than get_current but its documentation currently assumes dispatch already validated; update/factor consciously.",
+    "After renewal atomically replace selected.typed and selected.callee with fresh actual projections while preserving materialized explicit descriptors, hints, argument_slots, result_hint, frame call_progress and all existing argument values. Full same_call_contract source row/signature equality validates those preserved facts; then require current fresh callable/contracts before entry. Do not reconstruct hints by replaying source argument evaluation.",
+    "No callee body preparation at CallPrepare: an argument may diverge/panic before call entry, and unsupported callee executable shape must not preempt reached argument effects. Structural body completion/publication belongs actual CallSeal boundary after evaluated arguments, before argument packet transfer/frame mutation."
+  ],
+  "quota_lifetime": [
+    "Before target publication preflight receipt Self+both guard payloads+Arc header/map allocation/handles against checked call_limits pending+call metadata and transition cap. DB publisher preflights own rows separately. Installing runtime receipt cannot fail after successful publication due to an unreserved map allocation; reserve a bounded staging owner first or carry receipt directly in preallocated pending state until infallible map insertion.",
+    "NeedInput after publication retains receipt and oldQ47 in charged persistent state; retry only unfinished immutable preparation/renewal, never republish or re-execute argument operations. NeedInput before publication retains exact prepublication state, no manufactured token.",
+    "Simplest bounded lifecycle is retain one receipt per reached canonical definition for entire run, charging it until terminal cleanup/drop; avoids per-operation scanning for last observer. More selective retirement requires checking current and all suspended pending owners, but only cold bounded call metadata, never source-world maps.",
+    "Do not replace existing by-definition receipt with a new incompatible before/after delta while older selections remain: single exact transition does not compose arbitrary old->middle->new rows. Same actual completed source plan/epoch should make repeat preparation idempotent; changed source/epoch invalidates. If multiple same-epoch distinct publications are genuinely needed, implement bounded explicit transition chain or refusal as tracked gap, never overwrite old proof silently.",
+    "BodyExecutionLease require_body_unowned prevents mutation of actual active/suspended target bodies; an outer selected but not entered f has no f execution lease, so nested publication of f is legitimate. Active caller leases must remain untouched/current. No scope-source/cfg/epoch/currentness relaxation."
+  ],
+  "upstream_witness": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "primary": {
+      "path": "rustc/rust/tests/ui/generics/issue-94923.rs",
+      "sha256": "df85ac9c30d908aeabde7e9d015f42ef767852fd72f906fc1089cf19167c3e47",
+      "directives": [
+        "run-pass",
+        "compile-flags: -C opt-level=3"
+      ],
+      "actual_contract": "Full main calls f8::<()>(1), checks348. Each fN composes two calls to SAME canonical previous function, e.g f1 executes f0::<(i8,T)>(f0::<(u8,T)>(x)); nested argument completes while outer selection remains pending. No auxiliaries. Genuine shared DefKey with distinct real generic rows, not same-name coincidence.",
+      "limits": "Minimal concrete same-target runtime nested pair found in bounded fn/expr/generics/recursion/typeck/traits scan; full unchanged file adds tuples/generics/loop/arithmetic requirements and is not claimed supported/imported/executed. Actual target body lacks macros; LRR external authority/suspension controls must trigger authentic publication rather than editing upstream original."
+    },
+    "rejected_smaller": {
+      "path": "rustc/rust/tests/ui/consts/const-fn-nested.rs",
+      "sha256": "dac2e7e29e55b9a65ea6e5a51c865dfe4fceb70f2bee35c0152cb13d02995f03",
+      "reason": "Only sub(sub(...)) occurs in const X; main only asserts X. It is a pure-constant evaluator witness, not runtime nested guest-call acceptance."
+    }
+  },
+  "all8": [
+    "No assertion-specific evaluator: extend real ordinary selected-call/dispatcher/DB continuation APIs.",
+    "No literal/break macro executor or synthetic wrapper source.",
+    "Same cached canonical target/signature/genuine Type rows; no spelling method/numeric rule.",
+    "No new original-only semantic branch; generated canonical owner/body readiness stays genuine tracked prerequisite.",
+    "Do not prepare callee body before arguments; preserve reached effects/divergence/coldness and ordinary pattern machinery.",
+    "Memo48 structural preparation + persistent exact receipt; no repeated source parse/planning per phase or installed dispatch.",
+    "By-definition receipt lookup O(log reacheddefs) plus bounded installed same-node range and exact guard checks; no world namespace census.",
+    "Share immutable source/index/Q47/guard/receipt Arcs; no Frame/BodyIndex clone; mutable frame moves preserve continuations."
+  ],
+  "next_ownership": "Root engine/run persistent selection/renewal state; DB transition observer certificate and Q47 cachedtarget/site factor must be coordinated disjoint. Ordinaryworker source producer closure unchanged. No production edits by reviewer."
+}
