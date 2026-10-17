@@ -25,10 +25,14 @@ type RouteDependencySets = (DependencyRoutes, DependencyRoutes);
 pub mod assembly;
 #[path = "source_declarative/compiler_attribute_preparation.rs"]
 pub(crate) mod compiler_attribute_preparation;
+#[path = "source_declarative/imported_definition_context.rs"]
+mod imported_definition_context;
 #[path = "source_declarative/macro_exports.rs"]
 pub mod macro_exports;
 #[path = "source_declarative/original_annotations.rs"]
 pub(crate) mod original_annotations;
+#[path = "source_declarative/retained_provider.rs"]
+mod retained_provider;
 #[path = "source_declarative/scalar_pattern_replay.rs"]
 mod scalar_pattern_replay;
 pub struct SourceDeclarative {
@@ -66,6 +70,8 @@ pub(crate) struct CapturedMacroContext<'a> {
     pub owners: &'a [SourceDeclarative],
     pub before: u64,
     pub inherited: Option<&'a InheritedMacroContext<'a>>,
+    /// Separate actual provider arena; never used to index caller parents.
+    pub exports: Option<&'a super::source_discovery::SealedMacroExportProviders>,
 }
 pub(crate) struct InheritedMacroContext<'a> {
     facts: HygieneFacts,
@@ -340,21 +346,29 @@ impl<'a> CapturedMacroContext<'a> {
         definition: &crate::expand::scopes::MacroDefinition,
         ancestry: &mut crate::frontend::macro_origins::ExpansionAncestry,
     ) -> Result<Option<Option<crate::syntax::token_wire::Key>>, Diagnostic> {
-        let Some(parent) = self.inherited else {
-            return Ok(None);
-        };
-        ancestry.extend(&parent.ancestry)?;
         let mut origin = None;
-        for catalog in &parent.bodies {
-            if let Some(found) = catalog.definition_origin(definition)? {
-                if origin.is_some_and(|old| old != found) {
-                    return Err(fault(
-                        "LRR-E-EXPANSION-INPUT",
-                        "inherited textual origin differs",
-                    ));
+        if let Some(parent) = self.inherited {
+            ancestry.extend(&parent.ancestry)?;
+            for catalog in &parent.bodies {
+                if let Some(found) = catalog.definition_origin(definition)? {
+                    if origin.is_some_and(|old| old != found) {
+                        return Err(fault(
+                            "LRR-E-EXPANSION-INPUT",
+                            "inherited textual origin differs",
+                        ));
+                    }
+                    origin = Some(found);
                 }
-                origin = Some(found);
             }
+        }
+        if let Some(found) = self.exported_definition_origin(definition, ancestry)? {
+            if origin.is_some_and(|old| old != found) {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "imported textual origin differs",
+                ));
+            }
+            origin = Some(found);
         }
         Ok(origin)
     }
@@ -362,12 +376,14 @@ impl<'a> CapturedMacroContext<'a> {
         self,
         definition: &crate::expand::scopes::MacroDefinition,
     ) -> Option<std::sync::Arc<super::generated_items::GeneratedItems>> {
-        self.inherited.and_then(|parent| {
-            parent
-                .bodies
-                .iter()
-                .find_map(|catalog| catalog.module_definition_body(definition))
-        })
+        self.inherited
+            .and_then(|parent| {
+                parent
+                    .bodies
+                    .iter()
+                    .find_map(|catalog| catalog.module_definition_body(definition))
+            })
+            .or_else(|| self.exported_definition_body(definition))
     }
     pub(crate) fn definition_owner(
         self,
@@ -385,6 +401,9 @@ impl<'a> CapturedMacroContext<'a> {
             if let Some(found) = owner.retained_definition_owner(definition, 0, &mut remaining)? {
                 return Ok(found);
             }
+        }
+        if let Some(found) = self.exported_definition_owner(definition, &mut remaining)? {
+            return Ok(found);
         }
         Err(fault(
             "LRR-E-EXPANSION-INPUT",
@@ -1393,6 +1412,19 @@ impl SourceDeclarative {
         owners: &[Self],
         inherited: &InheritedMacroContext<'_>,
     ) -> Result<(), Diagnostic> {
+        self.revalidate_module_catalogs_in_context(CapturedMacroContext {
+            provider: self,
+            owners,
+            before: 0,
+            inherited: Some(inherited),
+            exports: None,
+        })
+    }
+    pub(crate) fn revalidate_module_catalogs_in_context(
+        &self,
+        context: CapturedMacroContext<'_>,
+    ) -> Result<(), Diagnostic> {
+        context.require_provider(self)?;
         for (invocation, catalog) in &self.catalogs {
             let call = self
                 .source
@@ -1416,10 +1448,8 @@ impl SourceDeclarative {
                 })?;
             catalog.revalidate_calls(
                 CapturedMacroContext {
-                    provider: self,
-                    owners,
                     before: u64::from(call.range.start),
-                    inherited: Some(inherited),
+                    ..context
                 },
                 &[],
             )?;
@@ -1496,6 +1526,19 @@ impl SourceDeclarative {
         &self,
         owners: &[Self],
     ) -> Result<(), Diagnostic> {
+        self.revalidate_generated_selections_in_context(CapturedMacroContext {
+            provider: self,
+            owners,
+            before: 0,
+            inherited: None,
+            exports: None,
+        })
+    }
+    pub(crate) fn revalidate_generated_selections_in_context(
+        &self,
+        context: CapturedMacroContext<'_>,
+    ) -> Result<(), Diagnostic> {
+        context.require_provider(self)?;
         let calls = &self.source.outline().item_invocations;
         let count = calls
             .len()
@@ -1535,9 +1578,8 @@ impl SourceDeclarative {
                 catalog.revalidate_calls(
                     CapturedMacroContext {
                         provider: prefix,
-                        owners,
                         before: *before,
-                        inherited: None,
+                        ..context
                     },
                     &[],
                 )?;
@@ -1548,10 +1590,8 @@ impl SourceDeclarative {
                 .map_err(|_| fault("LRR-E-EXPANSION-INPUT", "generated selection owner absent"))?;
             catalog.revalidate_calls(
                 CapturedMacroContext {
-                    provider: self,
-                    owners,
                     before: u64::from(positions[index].1),
-                    inherited: None,
+                    ..context
                 },
                 &[],
             )?;
@@ -2512,6 +2552,32 @@ impl SourceDeclarative {
         compile_env: Digest,
         engine: Digest,
     ) -> Result<SourceDeclarativeDemand, Diagnostic> {
+        self.declaration_import_request_in_context(
+            index,
+            invocation,
+            namespaces,
+            CapturedMacroContext {
+                provider: self,
+                owners,
+                before: 0,
+                inherited: None,
+                exports: None,
+            },
+            compile_env,
+            engine,
+        )
+    }
+    pub(crate) fn declaration_import_request_in_context(
+        &self,
+        index: &crate::frontend::impl_index::DeclarationMacroIndex,
+        invocation: Digest,
+        namespaces: &crate::frontend::macro_names::MacroNamespaces,
+        context: CapturedMacroContext<'_>,
+        compile_env: Digest,
+        engine: Digest,
+    ) -> Result<SourceDeclarativeDemand, Diagnostic> {
+        context.require_provider(self)?;
+        let owners = context.owners;
         use crate::frontend::{macro_names::PathLookup, macro_origins::MacroSelection};
         let selection = self.source.selection();
         let scan = index.scan();
@@ -2576,31 +2642,36 @@ impl SourceDeclarative {
         if let Some(input) = namespaces.pending_body_owner(definition.identity) {
             return Ok(SourceDeclarativeDemand::NeedInput(input));
         }
-        let owner = CapturedMacroContext {
-            provider: self,
-            owners,
-            before: 0,
-            inherited: None,
-        }
-        .definition_owner(&definition)?;
-        let range = owner
-            .source
-            .outline()
-            .items
-            .iter()
-            .find(|item| {
-                item.def_key.item_kind == ItemKind::Macro
-                    && item.def_key.fingerprint() == definition.identity
-                    && (!require_module_macro2 || item.scope.owner.is_none())
-            })
-            .map(|item| item.declaration_span);
-        // This fallback admits only a captured source declaration. Generated and
-        // compiler/procedural owners retain their existing separate request paths.
-        let Some(range) = range else {
-            return Ok(SourceDeclarativeDemand::NeedInput(invocation));
+        let generated_body = context.inherited_body(&definition);
+        let source_owner = if generated_body.is_none() {
+            Some(context.definition_owner(&definition)?)
+        } else {
+            None
         };
+        let range = source_owner.and_then(|owner| {
+            owner
+                .source
+                .outline()
+                .items
+                .iter()
+                .find(|item| {
+                    item.def_key.item_kind == ItemKind::Macro
+                        && item.def_key.fingerprint() == definition.identity
+                        && (!require_module_macro2 || item.scope.owner.is_none())
+                })
+                .map(|item| item.declaration_span)
+        });
+        // The unresolved lexical slot can settle only the existing actual
+        // source Macro2 route, not grant a generated definition by absence.
+        if require_module_macro2 && range.is_none() {
+            return Ok(SourceDeclarativeDemand::NeedInput(invocation));
+        }
         if require_module_macro2
-            && owner.source.macro_definition_shape_at(range)?.dialect()
+            && source_owner
+                .expect("source Macro2 range owner")
+                .source
+                .macro_definition_shape_at(range.expect("source Macro2 range"))?
+                .dialect()
                 != crate::syntax::macro_calls::MacroDefinitionDialect::Macro2
         {
             // The current invocation's own unresolved index slot is not a
@@ -2608,7 +2679,11 @@ impl SourceDeclarative {
             // original module Macro2 route can settle this distinct producer.
             return Ok(SourceDeclarativeDemand::NeedInput(invocation));
         }
-        let body = owner.original_definition_body(range)?;
+        let body = match (source_owner, range) {
+            (Some(owner), Some(range)) => Some(owner.original_definition_body(range)?),
+            _ if generated_body.is_some() => None,
+            _ => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
+        };
         let input = group(
             &self.owned_forest()?,
             self.source.macro_token_group(producer.range, false)?,
@@ -2642,6 +2717,17 @@ impl SourceDeclarative {
             procedural_epoch: None,
         };
         key.validate()?;
+        if let Some(items) = generated_body {
+            let input =
+                crate::syntax::token_wire::TokenForest::decode(&input.encode().map_err(adapter)?)
+                    .map_err(|e| fault(e.code, &e.message))?;
+            let site = crate::syntax::token_wire::Key(site.0);
+            return Ok(SourceDeclarativeDemand::Ready(Box::new(
+                SourceDeclarativeRequest::module_generated(&definition, key, &input, site, items)?,
+            )));
+        }
+        let owner = source_owner.expect("captured source request owner");
+        let body = body.expect("captured source request body");
         let mut origin =
             owner.original_failure_origin(definition.identity, invocation, &input, site)?;
         origin.invocation = self
@@ -3149,7 +3235,13 @@ impl SourceDeclarative {
         Vec<std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>>,
         Diagnostic,
     > {
-        self.routes_using(owners, None)
+        self.routes_using(CapturedMacroContext {
+            provider: self,
+            owners,
+            before: 0,
+            inherited: None,
+            exports: None,
+        })
     }
     pub(crate) fn module_routes(
         &self,
@@ -3159,7 +3251,22 @@ impl SourceDeclarative {
         Vec<std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>>,
         Diagnostic,
     > {
-        self.routes_using(owners, Some(inherited))
+        self.routes_using(CapturedMacroContext {
+            provider: self,
+            owners,
+            before: 0,
+            inherited: Some(inherited),
+            exports: None,
+        })
+    }
+    pub(crate) fn routes_in_context(
+        &self,
+        context: CapturedMacroContext<'_>,
+    ) -> Result<
+        Vec<std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>>,
+        Diagnostic,
+    > {
+        self.routes_using(context)
     }
     /// Captured Cargo aliases plus the installed owned compiler facets. This
     /// is pure route metadata and grants no expansion or runtime authority.
@@ -3202,12 +3309,14 @@ impl SourceDeclarative {
     }
     fn routes_using(
         &self,
-        owners: &[Self],
-        inherited: Option<&InheritedMacroContext<'_>>,
+        context: CapturedMacroContext<'_>,
     ) -> Result<
         Vec<std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>>,
         Diagnostic,
     > {
+        context.require_provider(self)?;
+        let owners = context.owners;
+        let inherited = context.inherited;
         let mut routes = Vec::new();
         routes
             .try_reserve_exact(
@@ -3282,9 +3391,8 @@ impl SourceDeclarative {
                 };
             let route = catalog.routes(CapturedMacroContext {
                 provider,
-                owners,
                 before,
-                inherited,
+                ..context
             })?;
             bytes = bytes
                 .checked_add(route.metadata_bytes()?)
@@ -3331,7 +3439,20 @@ impl SourceDeclarative {
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
         owners: &[Self],
     ) -> Result<SourceDeclarativeDemand, Diagnostic> {
-        self.demand_using(invocation, compile_env, engine, namespaces, owners, false)
+        self.demand_using(
+            invocation,
+            compile_env,
+            engine,
+            namespaces,
+            CapturedMacroContext {
+                provider: self,
+                owners,
+                before: 0,
+                inherited: None,
+                exports: None,
+            },
+            false,
+        )
     }
     /// Only pure unsealed discovery may use an available candidate across frontiers.
     pub(crate) fn demand_for_discovery(
@@ -3342,7 +3463,29 @@ impl SourceDeclarative {
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
         owners: &[Self],
     ) -> Result<SourceDeclarativeDemand, Diagnostic> {
-        self.demand_using(invocation, compile_env, engine, namespaces, owners, true)
+        self.demand_for_discovery_in_context(
+            invocation,
+            compile_env,
+            engine,
+            namespaces,
+            CapturedMacroContext {
+                provider: self,
+                owners,
+                before: 0,
+                inherited: None,
+                exports: None,
+            },
+        )
+    }
+    pub(crate) fn demand_for_discovery_in_context(
+        &self,
+        invocation: Digest,
+        compile_env: Digest,
+        engine: Digest,
+        namespaces: &crate::frontend::macro_names::MacroNamespaces,
+        context: CapturedMacroContext<'_>,
+    ) -> Result<SourceDeclarativeDemand, Diagnostic> {
+        self.demand_using(invocation, compile_env, engine, namespaces, context, true)
     }
     fn demand_using(
         &self,
@@ -3350,9 +3493,11 @@ impl SourceDeclarative {
         compile_env: Digest,
         engine: Digest,
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
-        owners: &[Self],
+        context: CapturedMacroContext<'_>,
         discovery: bool,
     ) -> Result<SourceDeclarativeDemand, Diagnostic> {
+        context.require_provider(self)?;
+        let owners = context.owners;
         let call = self
             .source
             .outline()
@@ -3481,25 +3626,27 @@ impl SourceDeclarative {
         {
             return Ok(SourceDeclarativeDemand::Ready(Box::new(request)));
         }
-        let owner = CapturedMacroContext {
-            provider: self,
-            owners,
-            before: 0,
-            inherited: None,
-        }
-        .definition_owner(&definition)?;
-        let generated = owner.generated.get(&definition.identity).cloned();
-        let body_range = owner
-            .source
-            .outline()
-            .items
-            .iter()
-            .find(|i| {
-                i.def_key.item_kind == ItemKind::Macro
-                    && i.def_key.fingerprint() == definition.identity
-            })
-            .map(|i| i.declaration_span);
-        if body_range.is_none() && generated.is_none() {
+        let inherited_body = context.inherited_body(&definition);
+        let source_owner = if inherited_body.is_none() {
+            Some(context.definition_owner(&definition)?)
+        } else {
+            None
+        };
+        let generated =
+            source_owner.and_then(|owner| owner.generated.get(&definition.identity).cloned());
+        let body_range = source_owner.and_then(|owner| {
+            owner
+                .source
+                .outline()
+                .items
+                .iter()
+                .find(|i| {
+                    i.def_key.item_kind == ItemKind::Macro
+                        && i.def_key.fingerprint() == definition.identity
+                })
+                .map(|i| i.declaration_span)
+        });
+        if body_range.is_none() && generated.is_none() && inherited_body.is_none() {
             return Err(fault("LRR-E-EXPANSION-INPUT", "resolved macro body absent"));
         }
         let input_range = self.source.macro_token_group(call.range, false)?;
@@ -3514,11 +3661,15 @@ impl SourceDeclarative {
             .0,
         );
         let body = match body_range {
-            Some(range) => owner.original_definition_body(range)?,
-            None => DeclarativeBody::Generated {
-                catalog: generated.expect("validated generated definition"),
+            Some(range) => Some(
+                source_owner
+                    .expect("captured definition range owner")
+                    .original_definition_body(range)?,
+            ),
+            None => generated.map(|catalog| DeclarativeBody::Generated {
+                catalog,
                 definition: definition.identity,
-            },
+            }),
         };
         let input = group(&forest, input_range)?;
         let [TokenTree::Group { open, .. }] = input.roots() else {
@@ -3543,6 +3694,17 @@ impl SourceDeclarative {
             procedural_epoch: None,
         };
         key.validate()?;
+        if let Some(items) = inherited_body {
+            let input =
+                crate::syntax::token_wire::TokenForest::decode(&input.encode().map_err(adapter)?)
+                    .map_err(|e| fault(e.code, &e.message))?;
+            let site = crate::syntax::token_wire::Key(site.0);
+            return Ok(SourceDeclarativeDemand::Ready(Box::new(
+                SourceDeclarativeRequest::module_generated(&definition, key, &input, site, items)?,
+            )));
+        }
+        let owner = source_owner.expect("captured selected definition owner");
+        let body = body.expect("captured selected definition body");
         let mut origin =
             owner.original_failure_origin(definition.identity, invocation, &input, site)?;
         origin.invocation = self

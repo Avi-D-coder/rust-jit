@@ -1,0 +1,58 @@
+{
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T063",
+    "M012",
+    "M013",
+    "M014"
+  ],
+  "invariant": "A caller may use configured SDK macros only with a genuine owning sealed source-provider graph. SDK ownership stays separate from guest runtime source authority and original provider arenas. Actual completed SDK seal must be a query dependency of caller discovery so SDK source/cfg/epoch changes invalidate prepared macro source, even if the old SDK certificate input row is unchanged.",
+  "minimal_witness": [
+    "Unchanged hygiene/issue-40847 CLI2015 FAIL unresolved assert_eq before retained entry",
+    "Unchanged generics/issue-94923 owning2015 FAIL selected assembly missing actual producer reply1373f0f7 before gueststart"
+  ],
+  "shared_entries": [
+    "SourceDiscovery prepare_declarative and actual CapturedMacroContext factories",
+    "SealedMacroExportProviders exact actual graph/guard/seal",
+    "Existing SourceDeclarative common request/import expansion and issued receipt attachment"
+  ],
+  "alternate_routes": "Keep current configured-facet refusal until genuine SDK owner plus generic request/definition/context join are installed. Do not extend runtime macro summary/assertion evaluators, invent facets, alias SDK source as guest CapturedSource or concatenate provider ordinal arenas. Legacy routes held until actual removal and matrix.",
+  "root_slice": "First retain optional actual export owner on SourceDiscovery solely for borrowed CapturedMacroContext, defaultNone; transfer any imported owner across consuming SDK graph with checked ancestor bound/metadata/identity and cold authority. SDK admission builder and caller query dependency integration are HELD until actual narrow certified macro bucket/selected definition service is implemented. Existing blanketconfiguredrefusal preserved. Root owns discovery context factory borrows; worker common imported-definition service.",
+  "authority": "Real SDK graph/epoch must match caller compilation graph/epoch, current guard and actual pure seal result. No SDK namespace/body execution authority minted. Recurrent SDK parent edges are immutable older owners with current seals; direct self-seal dependency rejected. Any incomplete/revoked graph remains unsupported/NeedInput.",
+  "cost": "Cold graph ownership/certificate registration and bounded dependency vector. Normal memo validation uses actual retained SDK query dependencies; no new hot parsing/global namespace scan/BodyIndex clone. One SDKArc owner, contexts borrow; never attach huge SDK owner to every SourceAssemblySeed/result. Checked metadata accounts graph handle/payload/dependency capacity and imported-parent retention.",
+  "acceptance": [
+    "Genuine AUX configured source/role positive, no runtime grants, invalidation and consumed owner checks",
+    "Existing fullcore strict positive mustactuallypass before claiming fullcore transport",
+    "Same unchanged stock wholemain all4 through actual macro output/common source pipeline required for runtimeacceptance",
+    "Exact source reviewed against all8, frozen async validation; source-only staged component notfeaturecompletion"
+  ],
+  "holds": [
+    "No existing macro-specific evaluator removal or complete source/epoch/continuation matrix yet",
+    "SDK naming/consumer import lookup and common borrowed definition body joins still in progress",
+    "Existing Salsa opaque memory/cold source capture accounting debt remains",
+    "No JIT or full-suite/task acceptance",
+    "No full SDKseal dependency folded into runtime; actual certified Macro namespace bucket projection/publisher prerequisite under independent source investigation."
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "4644f2fe3076fdaf4261c56b9977bf9f7deec37eadb513545870a073b57f374f"
+    },
+    {
+      "path": "crates/lrr/src/db/seals.rs",
+      "sha256": "67805a037e93effd10c542bd2cc2b3dec45480a8c724dd8ccfd555e90789e9ea"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "35ee3d625c4e0507a57beb3a5f403adc0bd9e56580a2a745739a6d3f3eeb7227"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/sealed_macro_export_providers.rs",
+      "sha256": "4705a677c7c015efa9d454911b04e8c22c67f9941c9e693f24d47367fec8a386"
+    }
+  ],
+  "rejected_before_implementation": {
+    "proposal": "Outer DiscoverySeal queries full SDKseal; flatten its input closure into ordinary prepared guards.",
+    "reason": "Mode7: PreparedInputGuard flattening would couple every runtime operation to entire SDK source/namespace world. Existing SealedName does same; CurrentModuleName requires runtime CapturedSource. Must use actual certified selected macro buckets/body-source closure; preserve current configured-facet refusal until equally sound relevant dependency service. No such SDK query dependency code was added."
+  }
+}

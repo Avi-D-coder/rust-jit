@@ -1,0 +1,82 @@
+{
+  "status": "SOURCE-ONLY independent second pass after implementation, exact2leaf candidate; no Cargo/tests",
+  "claim": "LOCAL-024 E-R5-005; recurring modes1-8 separate from MA001-MA008",
+  "source": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "0015e8eb70b9efb0cdc09c454168990e4de4565bd00caaa66cb2500614f42b1b",
+      "bytes": 188086,
+      "before_sha256": "47b63704fbbd951a113dd2b50db803bdede41719951d6aa0351a1fe51e3ae572"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/imported_definition_context.rs",
+      "sha256": "51045a97aeb74762cefa28398a743b38f1e247513bbf8c1e1f01b76116310713",
+      "bytes": 5475,
+      "before_sha256": null
+    }
+  ],
+  "API": [
+    "CapturedMacroContext::exports:Option<&SealedMacroExportProviders> borrowed only",
+    "declaration_import_request_in_context(index,invocation,namespaces,context,compile_env,engine)",
+    "demand_for_discovery_in_context(invocation,compile_env,engine,namespaces,context)",
+    "revalidate_generated_selections_in_context(context)",
+    "revalidate_module_catalogs_in_context(context)",
+    "routes_in_context(context)"
+  ],
+  "invariant": "Actual caller self/source/index/scope/input/context/edition remain caller; exact selected definition body may come from separate genuine sealed imported source arena. Parent indices are never interpreted against guest vector. No SDK Arc on SourceDeclarative/body seeds or query products.",
+  "review": [
+    {
+      "mode": 1,
+      "symbols": "declaration_import_request_in_context/demand_using -> SourceDeclarativeRequest original body or existing module_generated",
+      "finding": "Same selected macro request/pinned producer route, no assertion-specific compiler/evaluator. RuntimeMacroKind and runtime-no-item summary route untouchedheld pending removal after actual matrix."
+    },
+    {
+      "mode": 2,
+      "symbols": "CapturedMacroContext::inherited_body -> exported_definition_body -> GeneratedMacroCatalog::module_definition_body",
+      "finding": "Actual selected GeneratedItems retained Arc, exact full MacroDefinition comparison at catalog entry. Existing pinned macro body expansion shared for any ordinary grammar; no scalar/break executor."
+    },
+    {
+      "mode": 3,
+      "symbols": "context.require_provider; ordinary lookup_declaration_invocation_using/lookup_invocation_using unchanged",
+      "finding": "No spelling/primitive/numeric/method rule. Actual caller lexical lookup stays same owners; new pure helper only joins selected identity to actual sealed body."
+    },
+    {
+      "mode": 4,
+      "symbols": "imported_definition_context arena_sources/arena_catalogs; declaration_import_request_in_context generated branch",
+      "finding": "Original/staged/genuine generated output catalogs all join. Actual staged providers and frame.child_order borrowed; existing Macro2 unresolved-slot rule preserved as source proof, not absence grant. Missing actual owner still typed existing failure/pending; no synthetic context/sourcefallback."
+    },
+    {
+      "mode": 5,
+      "symbols": "request construction + catalog revalidate/routes variants",
+      "finding": "No executable body/type/pattern preparation or callee execution. No new eager branch checks. Existing macro syntax declaration work remains cold."
+    },
+    {
+      "mode": 6,
+      "symbols": "exports borrowed context and common kernels; definitions origin/body search",
+      "finding": "Pure bounded cold selected-owner/catalog traversal; no database/provider effect or runtime source planning. Old API defaultsNone same kernels. Existing request original owned_forest materialization inherited cold cost, no speedclaim. Query/record reuse and installedexecution remain common existingservice."
+    },
+    {
+      "mode": 7,
+      "symbols": "exported_definition_owner/body/origin; exports imports iterator",
+      "finding": "No guard or namespace census perlookup/operation added. Full imported seal revalidation is coordinator-owned cold prerequisite only. Relevant selecteddefinition/bucket positive+negative dependency service must join before runtimeguard acceptance; full SDKguard mustnot beflattened into hotrecipe."
+    },
+    {
+      "mode": 8,
+      "symbols": "CapturedMacroContext borrow; actual provider/module/catalog iterators; request generated body Arc",
+      "finding": "No immutable BodyIndex/tree/source deepcopy or whole-file pernode search added. SDK arena remains distinct from caller; no huge SDKArc on each SourceDeclarative/result. Existing original macro declaration-span inventory search remains bounded cold."
+    }
+  ],
+  "authority": "Context-aware kernels verify exact caller provider pointer identity then keep caller owners solely for lexical scope lookup. Selected body joins full actual MacroDefinition, real source owning index, exported staged actual provider roots and actual generated catalog record. Generated body requests use existing module_generated edition check and actual caller ExpansionKey. New helper imports ancestor borrowing bounded256 relies on root private transfer/builder to validate real retained chain/no cycles; truncation cannot inventbody and missingowner refuses. Neither helper nor context performs databasecurrentness; cold coordinator must supply actual current selected proof. Contextvariants preserve exports through route construction/final generated catalog revalidation while old wrappers useNone.",
+  "cost": "Cold owner search existing depth256/100000visit budget extended across genuine exported source roots; exported catalog walk bounded by actual transferred metadata collections and <=256 ownerancestors. No additional owned index/string/body payload in helper; context adds one borrowed pointer. Actual generated body clones existing Arc. No runtime/scaling measurement or full32.2 arena claim. Original macro forests copied/decoded by existing common request paths retain inherited cold cost.",
+  "remaining_integration": [
+    "Root SourceDiscovery.exports Arc builder/field/cold currentness and all discovery contextliteral initialization/callsites.",
+    "Root SealedMacroExportProviders::imports getter plus genuine recursive parent owner retention, checkedmetadata/identity and <=256chain bound. Newhelper compiles only after this approved API dependency lands.",
+    "Root frontend/generated_macros.rs::call_namespaces_with_routes must add genuine SDK routes and preserve borrowed exports in provider routes; SDKdefinition-local source scope/parent context transport must use actual SDK provider ordinal arena, never append all SDK scopes as caller lexical scopes.",
+    "Selecteddefinition positive/negative relevant namespace dependencies remain separate prerequisite before full SDK consumer/runtime acceptance; configured macrofacets refusal remains.",
+    "Actual unchanged hygiene/issue-40847 V7 discovery blocked assert_eq beforegueststack; actual AUX/fullcore positives +rootconsumer/CLI successor validation pending.",
+    "No new tests run; existing noSDK component/regression and genuine SDK original/generated/staged context controls required by solevalidator.",
+    "Runtime summary/assertion legacy route removal/full architecture matrix remains held."
+  ],
+  "baseline": "Exact source_declarative.before47b63704 frozen transport component API; no frozen predecessor modified. New module initialization moved by rustfmt only, no unrelated source behavior change.",
+  "fixture_policy": "No imported originals modified or miniature macro definitions added."
+}

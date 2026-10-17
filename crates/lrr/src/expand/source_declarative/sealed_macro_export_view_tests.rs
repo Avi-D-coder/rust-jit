@@ -205,6 +205,21 @@ fn genuine_role_source_seal_yields_borrowed_view_without_runtime_source_grants()
             .with_macro_export_source_publications(&mut db)
             .is_err()
     );
+    // Re-establish the actual role after the existing revocation oracle and
+    // prepare a second genuine complete discovery for the owning transfer.
+    db.publish_macro_export_sources(&[Arc::clone(&facet)])
+        .unwrap();
+    let mut ownership = configure(
+        build(manifest.graph.fingerprint())
+            .with_macro_export_source_publications(&mut db)
+            .unwrap(),
+    );
+    assert!(matches!(
+        ownership.poll().unwrap(),
+        SourceDiscoveryStep::Sealed(_)
+    ));
+    ownership.publish(&mut db).unwrap();
+    owning_providers::exercise(&mut db, ownership, &[Arc::clone(&facet)]);
 }
 
 /// Required source-publication frontier, not an expected-refusal compatibility
@@ -270,7 +285,12 @@ fn unchanged_full_core_macro_source_requires_real_annotation_closure_and_publica
             .is_none()
     );
     assert!(db.prepared_source(selection).unwrap().is_none());
+    drop(view);
+    owning_providers::exercise(&mut db, discovery, sources.facets());
 }
 
 #[path = "full_core_preparation.rs"]
 mod full_core_preparation;
+
+#[path = "sealed_macro_export_provider_tests.rs"]
+mod owning_providers;

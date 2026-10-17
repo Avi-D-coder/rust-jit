@@ -1,0 +1,91 @@
+{
+  "status": "Read-only bounded shared API/prerequisite diagnosis; no edits/tests/Cargo/runtime claim",
+  "reviewer": "drop_catalog_next",
+  "witness": "Unchanged issue-40847 unresolved actual assert_eq before entry; issue-94923 actual selected assembly missing producer reply1373f0f7 before gueststart. Full SDK graph owner is source preparation authority only.",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/macro_export_inputs.rs",
+      "sha256": "bf6b21375d511608f18096393d05df03b24a7ccc7871c2005a50d75c19ab5ffd"
+    },
+    {
+      "path": "crates/lrr/src/db/sealed_name_provider.rs",
+      "sha256": "6250ab1b94a3f372adfe536b4ff42dda5638002e4c3e67fd598dbe65033ea190"
+    },
+    {
+      "path": "crates/lrr/src/db/seals.rs",
+      "sha256": "67805a037e93effd10c542bd2cc2b3dec45480a8c724dd8ccfd555e90789e9ea"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "35ee3d625c4e0507a57beb3a5f403adc0bd9e56580a2a745739a6d3f3eeb7227"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "18b96c2a775b8d533bdd96773b1caf024f1b70603a7050960e8d7ef640f7174b"
+    },
+    {
+      "path": "crates/lrr/src/db/scope_certificate_index.rs",
+      "sha256": "ff8e2b362d25a35e80c43c7653bb3270875c93a127f83b863e4448c0d77093f2"
+    },
+    {
+      "path": "crates/lrr/src/db/lexical_inputs.rs",
+      "sha256": "e739f44586553832e27f135d3e670a493b32039db7e5f08435110ed9b7da4adc"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "72c21fc96db0baf812dafeb0b4fdc971b72bc3b50decc00af627d9d074f9f358"
+    },
+    {
+      "path": "crates/lrr/src/frontend/namespace_reads.rs",
+      "sha256": "4497dde247fc653ea9577aad769ec72e7bfb25ea031e04d24abb6ac31d94a772"
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_names.rs",
+      "sha256": "c5a9c0a99d83a46ad1624e24ea69a976d19e9b70865bcd046bc98811fc375e1d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macro_routes.rs",
+      "sha256": "8d4a53a8a8121e2e903de9b24306e26e4f367a4107fc9d69184a7d19ab429ad7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/current_module_names.rs",
+      "sha256": "6eaa8b2617f134d815ddf7b52245545f96b49a6dd22a2d21fc4404cc0f24c0f5"
+    },
+    {
+      "path": "crates/lrr/src/cli/macro_export_modules.rs",
+      "sha256": "11712442d515c81cac2cd926edbab552d62fc64e6a71843596c804582123b4e5"
+    }
+  ],
+  "concrete_findings": [
+    "Outer DiscoverySeal -> SDK QueryDiscoverySeal would flatten entire SDK source/env/record closure into PreparedInputGuard via capture_input_closure. SealedName is NOT an escape hatch: sealed_name_provider::execute fetches fullDiscoverySeal then reads fullDiscoverySeal input. CurrentModuleName and NamespaceReads::certify also take fullseal paths and require ordinary CapturedSource; they cannot be reused unchanged for role-only SDK or narrowruntime dependencies.",
+    "Real reusable observed resolver already exists: MacroNamespaces::lookup_from_in_class_observed, observed source/import/module path helpers, module_paths::resolve_observed and glob_lookup::lookup_in_class_observed emit bounded NamespaceReads. Name/module-prefix/reexport/glob/absent/access/alias reads arise from same ordinary worklists, not secondresolver.",
+    "Database::macro_export_source_dependencies and macro_export_source_observation provide real selected MacroExportSource(location)+UnitCompileEnv(unit) stamps, actual configuredfacet/source/graph checks; sourceobservation also records absence of ordinary CapturedSource. They do not prove lookup completeness, candidateuniqueness/absence, reexportroute, hygieneselection or generatedproducerclosure.",
+    "ScopeBucket is truly granular inputmechanics: ScopeBlockers(scope)+NameCandidates(exactBucketKey), absence included. Current publication derives those from ordinary ScopeMembers at publish_inputs; this is not a genuine completeSDK MacroNamespaces publication, and raw Vec<DefDigest> is insufficient for sourceedition/class/visibility/route/hygiene authority. Reuse mechanics, not manufacture compatibilityrows.",
+    "ScopeCertificateIndex is existing checked atomic relevant-source/scope publication/index lifecycle pattern. Current selector is scopewide sealcandidate set and current_scope_certificate observes full DiscoverySeal row; using it as finalruntime dependency still invalidates same-scope unrelatednames. CertifiedScope is a real completed namespace projection, but current getter/storage remains inside fullcertificate; no actual perbucket sealedSDK publisher currently exists."
+  ],
+  "minimal_contract": {
+    "coordinator": "Full owning SDK guard and actual SDKseal are checked COLD before lookup/projection mint. Do not retain or query that fullSDK guard under caller DiscoveryInput/runtime query dependency DAG. Ownershipguard remains on coordinator sourcegraph only.",
+    "lookup": "Use actual caller indexed invocation, source/profile/epoch/token hygiene/adjustment, ScopeKey/MacroPath/NameBindingClass and existing observed MacroNamespaces kernel. Collect exact NamespaceReads through alias/module/reexport/glob lookup. Raw MacroDefinition is candidate only until actual pinned hygiene/commonrequest selects it. No name-only assert_eq path.",
+    "projection": "Privately mint selected lookup/source receipt only from real current completedSDK owner and actual resolver readset. Reuse BucketKey/scope/namespace/owningedition and exact request/access/class context, positive/negative/module-prefix facts. Key must not embed wholeSDK seal fingerprint as runtime dependency identity. New typed projection within existing DB InputKey/InputValue/publisher framework if current scalar rows cannot express authority; no independent registry or namespace.",
+    "owner": "Selected definition joins actual body/origin via common retained SourceDeclarative/provider/generatedcatalog owner service, preserving definingunit/edition/hygiene and real providerordinal/parentchain. Retain real body token/syntax handle, not renderedtext or guest CapturedSource alias. Generated owner records require exact admitted output/descriptor/epoch/producer ancestry source/role/environment deps, using existing record inputs and actual completedfragment proof.",
+    "dependencies": "Caller discovery/query consumes only exact projected lookup/readset completion rows plus actual selected sourceRole/UnitCompileEnv and relevant generated/ancestor producer record/module/include inputs. Include ExpansionEpoch/current configuration authority as needed; all stablekey/tag/cap changes explicit. Do not pass entire SDK compiler_inputs/records/sources to caller or retain fullSDK guard in recipeproof.",
+    "invalidation": "Cold coordinator publication MUST maintain projection validity. On SDK source/env/epoch changes, invalidate affected scope/projectedcertificates before old proofs can be consumed, or atomically recompute with real completedclosure. On genuine completednamespace publication compare/update changed bucket/module-prefix/alias/visibility/completeness facts, including prior absent->present/ambiguity/newcompetitor from OTHER source. Existing public macro role publisher only replaces source receipts, so this lifecycle is missing today. A private once-minted row plus selecteddefinition source alone would leave negative/unique answers stale.",
+    "granularity": "Scope completeness means no unresolved contributor, not membership hash of everyname. Unrelated completeSDK namespace publication/unchangedselectedbucket must not change its semantic inputstamp; relevant additions/negativechanges must. Scopewide dirtystate may temporarily revoke until recompletion after arbitrary sourcechanges; do not claim unrelated-edit reuse until perbucket actualcomparison exists. UnitCompileEnv and MacroExportSource envelopes are currently coarse and include preparation identity; report those safety refusals, do not silently weaken.",
+    "purity": "Providers only consume privately coordinator-published projection/input/selectedsource facts and pure queries. Producer execution stays actual SourceDeclarativeRequest/pinnedadapter outsidequeries, returns realExpansionRecord and issued structuralreceipt; ordinary GeneratedDeclarations/SourceSyntaxAssembly attachesactual output before ordinary lower/verify/VM. Missing infrastructure keeps configuredrefusal, not silent fullseal import."
+  },
+  "callgraph": [
+    "COLD configuredSDK discovery actualfullseal -> SealedMacroExportProviders owner/currentguard",
+    "actual caller SourceDiscovery selection -> common observed path/hygienic lookup -> NamespaceReads",
+    "COLD selected lookup proofpublisher: genuineSDK closure+actual readset/sourceowner/generatedancestry -> narrow actual inputprojection(s)",
+    "outer caller DiscoveryInput records selected projection/source/producer input dependencies only (requires explicit allowedinput schema extension)",
+    "pure callerseal/structuralbodymemo -> actual issued outputattachment -> normal Type/call/lowering/verifier/interpreter; installed guards validate only retained relevant stamps"
+  ],
+  "implementation_ownership": "Root SourceDiscovery consumerbuilder; worker common definitionowner/borrowedcontext helper; root/assigned DB input/projectionpublisher +namespace publication invalidation, reusing existing observedresolver and ScopeCertificateIndex staging patterns. No shared production edits by this reviewer.",
+  "evidence_required": [
+    "Actual configuredAUX source with original and generatedexport, same genuine SDK owner separate from guest source; selected actualmacro body+edition/context, positive/reexport/glob/module-prefix and negative/ambiguity controls.",
+    "FullSDKguard must be absent from flattened caller runtime guard inputs: bound selectedlookup/producerclosure and verify no unrelatedSDKsource/record rows. No source parse/provider execution from installedguard.",
+    "Unrelated actualnamespace publication preservesselectedproof; relevant newlyadded competitor/previousabsence/modulealias/generator change invalidates; selectedsource/env/epoch revocation refuses.",
+    "Actual fullcoreclosure and unchanged stock wholemain all4 remain later actual terminals; no unsupported/NeedInput acceptedaspass."
+  ],
+  "all8": "1/2 no new evaluator/output lane, 3 canonical/hygienic selectedmacro notnamepolicy, 4 role-only original/generated owner join not guestsource alias, 5 cold declarationclosure not executablecoldbody, 6 capture/index once not perphase parse, 7 prevent fullSDKseal flattening and preserve relevantnegative invalidation, 8 share actual parser/body/context Arcs not fullDiscovery/deepcopies. This is API prerequisite analysis, not architecture closure."
+}

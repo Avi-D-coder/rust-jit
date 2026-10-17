@@ -1,0 +1,35 @@
+{
+  "status": "STOPPED after investigation/API proposal only; NO selected SDK projection production edits/tests/hook/schema changes started",
+  "reason": "Parent relayed user instruction: finish current work then handoff, no new work. Existing bounded contract finalized; no implementation begun.",
+  "reviewer": "drop_catalog_next",
+  "existing_contract": {
+    "path": "worktracks/evidence/2026-10-16-selected-sdk-macro-dependency-contract.json",
+    "sha256": "a3a07954c1e8f6cc3491a24b234b2d64e08a6b215e7950505fcd07ca70c44b91"
+  },
+  "production_files_changed_in_this_assignment": [],
+  "commands": "Read-only source/API inspections only; no Cargo/compiler/test/target/commit/push or external fetch. New evidence handoff only.",
+  "proposed_next_api_NOT_implemented": [
+    "Privately coordinator-published Macro namespace selection projection under existing InputKey/InputValue framework; stable tag35 was merely candidate, not reserved/added. Canonical request binds genuine source/profile/epoch/path/callerScope/NameBindingClass; no fullSDK seal in runtime key/guard.",
+    "Database coldpublisher from actual SealedMacroExportProviders must require fullSDKguard then invoke existing NameNamespaces::lookup_in_class_observed with bounded NamespaceReads. Rawlookup remains candidate until common hygienic actual request validates selection. Retain actual positive/negative/moduleprefix/reexport/glob/alias proof, not invented ScopeMembers rows.",
+    "Observation/currentness must depend on projection input +genuine selected role/source/env and generatedproducer ancestry inputs+epoch only. FullSDKowner guard and broader invalidation watch metadata remain cold coordinator authority, never flatten into normal runtimeguards.",
+    "Common definition-owner body/origin/source/producerguard service belongs existing SourceDeclarative/context worker; no parallel DB bodyresolver was started. Exact API/ownership coordination was still pending."
+  ],
+  "lifecycle_NOT_implemented": [
+    "Extend same source-role/epoch/source reset/discovery publication machinery. All invalidation/recomputation/quota/revision checks staged before mutation.",
+    "publish_macro_export_sources must remove/revoke affected selections before changed/removed source/env producer facts can coexist with old unique/negative answer. Private watchmetadata may be broader than runtimeguard but requires bounded accounted ownership, no independent namespace registry.",
+    "begin_expansion_epoch makes old proof unusable via real epoch dependency; generic publish_inputs resets derived inputs. Relevant namespace additions require real completedpublisher update; mere selected-source guard cannot detect competitor from another source.",
+    "publish_discovery could compare recorded positive/negative/moduleprefix facts against its actual CertifiedScope and preserve unaffected facts; exact provenance/class/visibility/glob crossscope join and invalidation completeness MUST be established before coding. Current CertifiedScope/SealedName fullcertificate APIs are not themselves adequate narrow authority. No proof-complete implementation claim from this proposal."
+  ],
+  "authority_blockers_preserved": [
+    "Blanket configured SDK refusal stays until equally sound selected lookup/source/generation proof +publisher lifecycle exists.",
+    "Existing SealedName/CurrentModuleName/NamespaceReads.certify import fullDiscoverySeal dependencyclosure; using them unchanged would violate requested SDK granularity. Source-role receipts supply only2selectedsource/env stamps, not namespacecompleteness.",
+    "Root initial outerDiscoverySeal->fullSDKseal proposal is held. No new globalruntimecensus, guardrefresh, ordinaryCapturedSource alias, assertion evaluator/whitelist or context-specific fallback."
+  ],
+  "evidence_preservation": [
+    "Unchanged issue-40847 actual unresolvedassert_eq beforeentry and issue-94923 missingproducerreply1373f0f7 remain failures, no newexecution or acceptance.",
+    "Actual imported issue-94923 witness source/test packet8c75e7bd remains separate unchanged historical source-only payload; its actual validation outcomes belong solevalidator, no pass inferred.",
+    "Final reviewed owningtransport fef2bcc6 +independentproductionreviewb8d14391 remain separate sourcecomponent; common consumer/outputattachment/runtimeintegration held."
+  ],
+  "nextsteps_ONLY_if_user_resumes": "Confirm bounded DB/memo/source-role hook ownership and actual common definitionowner dependency API; specify exact certificate publication/invalidation proof first; then implement and validate with unchanged cross-crate-pat-span.rs+actualaux, positive/negative/ambiguity/producer/unrelatedbucket controls outside originals. No work launched now.",
+  "handoff": "No new tasks/subagents requested or created. Worker remains idle after final."
+}

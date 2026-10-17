@@ -45,6 +45,9 @@ mod original_inert;
 #[path = "source_discovery/source_syntax.rs"]
 mod source_syntax;
 pub(crate) use source_syntax::CompletedSourceSyntax;
+#[path = "source_discovery/sealed_macro_export_providers.rs"]
+mod sealed_macro_export_providers;
+pub(crate) use sealed_macro_export_providers::SealedMacroExportProviders;
 #[path = "source_discovery/type_scope_receipts.rs"]
 mod type_scope_receipts;
 pub(crate) use type_scope_receipts::TypeScopeReceipt;
@@ -459,6 +462,9 @@ pub struct SourceDiscovery {
     key: crate::db::seals::SealKey,
     graph: std::sync::Arc<NameNamespaces>,
     completed_source_environment: Option<std::sync::Arc<CompletedSourceEnvironment>>,
+    // Source-only SDK owner. Contexts borrow it; ordinary runtime source and
+    // namespace authority still require their existing independent admission.
+    exports: Option<std::sync::Arc<SealedMacroExportProviders>>,
     work: Discovery,
     source_jobs: BTreeMap<Digest, usize>,
     original_modules: BTreeMap<Digest, OriginalModuleDeclaration>,
@@ -1027,6 +1033,7 @@ impl SourceDiscovery {
             key,
             graph: std::sync::Arc::new(graph),
             completed_source_environment: None,
+            exports: None,
             work,
             source_jobs,
             original_modules,
@@ -1458,6 +1465,9 @@ impl SourceDiscovery {
         environment: &crate::expand::builtins::FrozenCompileEnvironment,
         authorities: &crate::source::include_paths::IncludeAuthorities,
     ) -> Result<crate::service::eager_compile_inputs::EagerCompileInputPoll, Diagnostic> {
+        if let Some(error) = &self.failed {
+            return Err(error.clone());
+        }
         use crate::service::eager_compile_inputs::EagerCompileInputPoll;
         let (result, mut usage) = db.observe_expansion_inputs(|db| {
             self.poll_compiler_inner(db, environment, authorities)
@@ -1593,6 +1603,7 @@ impl SourceDiscovery {
                 .ok_or_else(|| fault("generated compiler provider ordinal absent"))?,
         };
         let captured = super::source_declarative::CapturedMacroContext {
+            exports: self.exports.as_deref(),
             provider,
             owners: providers,
             before: u64::from(fragment.call.range.start),
@@ -1792,6 +1803,7 @@ impl SourceDiscovery {
                 .2;
             let inherited = self.module_projection_inherited(&staged.syntax)?;
             let context = super::source_declarative::CapturedMacroContext {
+                exports: self.exports.as_deref(),
                 provider: &staged.provider,
                 owners: providers,
                 before: 0,
@@ -1843,6 +1855,7 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("compiler source providers absent"))?
             .2;
         let context = super::source_declarative::CapturedMacroContext {
+            exports: self.exports.as_deref(),
             provider: &providers[*ordinal],
             owners: providers,
             before: 0,
@@ -4522,6 +4535,7 @@ impl SourceDiscovery {
                     &self.fragments,
                     providers,
                     &self.staged_modules,
+                    self.exports.as_deref(),
                     &staged.syntax,
                     0,
                 )?)
@@ -4547,6 +4561,7 @@ impl SourceDiscovery {
                 .checked_add(u64::from(fragment.source_derive.is_some()))
                 .ok_or_else(|| fault("source derive prefix position overflow"))?;
             let context = super::source_declarative::CapturedMacroContext {
+                exports: self.exports.as_deref(),
                 provider,
                 owners: providers,
                 before,
@@ -5615,12 +5630,13 @@ impl SourceDiscovery {
             .as_ref()
             .ok_or_else(|| fault("module inherited owners absent"))?
             .2;
-        Self::projection_inherited_in(&self.fragments, providers, &self.staged_modules, syntax, 0)
+        Self::projection_inherited_in(&self.fragments, providers, &self.staged_modules, self.exports.as_deref(), syntax, 0)
     }
     fn projection_inherited_in<'a>(
         fragments: &'a BTreeMap<Digest, GeneratedFragment>,
         providers: &'a [super::source_declarative::SourceDeclarative],
         modules: &'a BTreeMap<Digest, StagedModule>,
+        exports: Option<&'a sealed_macro_export_providers::SealedMacroExportProviders>,
         syntax: &StagedModuleSyntax,
         depth: usize,
     ) -> Result<super::source_declarative::InheritedMacroContext<'a>, Diagnostic> {
@@ -5632,6 +5648,7 @@ impl SourceDiscovery {
                 fragments,
                 providers,
                 modules,
+                exports,
                 syntax.origin().parent_header().expansion,
                 depth + 1,
             )?
@@ -5649,6 +5666,7 @@ impl SourceDiscovery {
                     }
                 };
                 let context = super::source_declarative::CapturedMacroContext {
+                    exports,
                     provider,
                     owners: providers,
                     before: 0,
@@ -5664,6 +5682,7 @@ impl SourceDiscovery {
                         fragments,
                         providers,
                         modules,
+                        exports,
                         &modules
                             .get(parent)
                             .ok_or_else(|| fault("ordinary module inherited parent absent"))?
@@ -6272,6 +6291,7 @@ impl SourceDiscovery {
         let (key, tokens, site) =
             provider.module_invocation_input(invocation, &definition, *env, *engine)?;
         let context = super::source_declarative::CapturedMacroContext {
+            exports: self.exports.as_deref(),
             provider,
             owners: providers,
             before: 0,
@@ -7242,6 +7262,7 @@ impl SourceDiscovery {
             &self.fragments,
             providers,
             &self.staged_modules,
+            self.exports.as_deref(),
             identity,
             0,
         )
@@ -7296,6 +7317,7 @@ impl SourceDiscovery {
                     .get(*ordinal)
                     .ok_or_else(|| fault("empty macro insertion provider absent"))?;
                 let captured = super::source_declarative::CapturedMacroContext {
+                    exports: self.exports.as_deref(),
                     provider,
                     owners: providers,
                     before: u64::from(empty.call.range.start),
@@ -7389,6 +7411,7 @@ impl SourceDiscovery {
         fragments: &'a BTreeMap<Digest, GeneratedFragment>,
         providers: &'a [super::source_declarative::SourceDeclarative],
         modules: &'a BTreeMap<Digest, StagedModule>,
+        exports: Option<&'a sealed_macro_export_providers::SealedMacroExportProviders>,
         identity: Digest,
         depth: usize,
     ) -> Result<GeneratedCompilerScope<'a>, Diagnostic> {
@@ -7419,6 +7442,7 @@ impl SourceDiscovery {
                                 fragments,
                                 providers,
                                 modules,
+                                exports,
                                 &staged.syntax,
                                 depth + 1,
                             )?)
@@ -7430,6 +7454,7 @@ impl SourceDiscovery {
                         ancestors: completed.ancestors,
                         inherited,
                         captured: super::source_declarative::CapturedMacroContext {
+                            exports,
                             provider,
                             owners: providers,
                             before: completed.before,
@@ -7451,6 +7476,7 @@ impl SourceDiscovery {
                 fragments,
                 providers,
                 modules,
+                exports,
                 &staged.syntax,
                 depth + 1,
             )?)
@@ -7493,6 +7519,7 @@ impl SourceDiscovery {
         Ok(GeneratedCompilerScope {
             catalog,
             captured: super::source_declarative::CapturedMacroContext {
+                exports,
                 provider,
                 owners: providers,
                 before: u64::from(fragment.call.range.start),
@@ -8662,6 +8689,9 @@ impl SourceDiscovery {
     pub fn impl_header_inventory(
         &self,
     ) -> Result<crate::frontend::impl_index::ImplHeaderIndex, Diagnostic> {
+        if let Some(error) = &self.failed {
+            return Err(error.clone());
+        }
         let mut scans = Vec::new();
         for index in self.nested_sources.values() {
             scans
@@ -8712,6 +8742,9 @@ impl SourceDiscovery {
     pub fn sealed_declaration_expansions(
         &self,
     ) -> Result<Vec<std::sync::Arc<super::record::ExpansionRecord>>, Diagnostic> {
+        if let Some(error) = &self.failed {
+            return Err(error.clone());
+        }
         if self.seal.is_none() {
             return Err(fault("declaration records require completed source scope"));
         }
@@ -10829,6 +10862,9 @@ impl SourceDiscovery {
     }
     /// Read-only lookup from the requested sealed scope. No graph mutation escapes.
     pub fn lookup(&self, name: &str) -> Result<NameLookup, Diagnostic> {
+        if let Some(error) = &self.failed {
+            return Err(error.clone());
+        }
         if self.seal.is_none() {
             return Err(fault("namespace lookup requires completed scope discovery"));
         }

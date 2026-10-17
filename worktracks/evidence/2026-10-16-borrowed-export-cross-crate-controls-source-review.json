@@ -1,0 +1,93 @@
+{
+  "status": "SOURCE-ONLY final currentassigned component/control; noCargo/testterminal; STOPafterhandoff",
+  "context_dependency": {
+    "component": "/private/tmp/lrr-borrowed-export-definition-context-v1/COMPONENT.json",
+    "sha256": "476a82c5b27204a33e5ca3cea3e445ed3f0c1bb6b12d40fd0a572fa5efc6c3a4",
+    "all8_review": "e69ce7d4e368e8db42c89ac61adcbeeed6bf86c10482c2e268908e4e1c1d9093"
+  },
+  "payload": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "0015e8eb70b9efb0cdc09c454168990e4de4565bd00caaa66cb2500614f42b1b",
+      "bytes": 188086,
+      "before_sha256": "47b63704fbbd951a113dd2b50db803bdede41719951d6aa0351a1fe51e3ae572"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/imported_definition_context.rs",
+      "sha256": "51045a97aeb74762cefa28398a743b38f1e247513bbf8c1e1f01b76116310713",
+      "bytes": 5475,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/borrowed_export_definition_context_tests.rs",
+      "sha256": "dd8ddf1e719f8244b1c317add6361b7811014316c610a8d8a2b6ca06eac25358",
+      "bytes": 12394,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "00f5e1e7f4776e524991518329ed468f15ce778560a1aa14aa5c442578b64a9f",
+      "bytes": 14462,
+      "before_sha256": "25d0512fd021f2b1ed83795e664c51922bc6934eb5fa5cc4a1234451fa63c79b",
+      "patch_only_registration": true
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/cross-crate-pat-span.rs",
+      "sha256": "34da79f1c953d81d3525d1c8f507b7bb90832b8651f22f5be944ea145bd150be",
+      "unchanged_matches_pinned_checkout": true
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/foreign-crate-macro-pat.rs",
+      "sha256": "87f225051556bb7c8d61b2fe47cfea3e424247b8788322e9979477b9a1360419",
+      "unchanged_matches_pinned_checkout": true
+    }
+  ],
+  "witness_contract": "cross-crate-pat-span.rs actual edition2021/check-pass/aux-build; auxiliary2018. Structural source+macro-preparation component only, not upstream runtimecontract or fullfixturepass.",
+  "actual_route": "Coherent constructed schema4 Live root2021 key+actualdependencyedge alias to real MacroExport auxiliary2018; actual SourceDependencies capturedroots; role UnitCompileEnv publication; SourceDiscovery selectedSDKsource complete poll/seal/pub; owningtransfer anddropDiscovery; cachedcurrentness COLD; callerroute+actualownedSDKroute SourceMacroRoutes::discovery_graph (existing common unsealed candidate graph); actual caller DeclarationMacroIndex sourceproducer; common declaration_import_request_in_context withcaller owners andborrowedexports separate; SyntaxRequestReceipt::capture(actualrequest); explicit request.expand pinnedadapter. No manualresolver/NameDefinition/source/definitionID fabrication.",
+  "test_oracles": "Actualcallerinput group source/unit/content/edition/range +SDKselectedsourceowner pointer/key/hash/edition; realrequest Source body, selectedidentity SyntaxRequestReceipt ownerfields, actualcaller invocation andactualSDKdefinitionlabel origins; output match/true/false retainSDK2018 sources, substituted byteexpression/patterns retaincaller2021 source/ranges. Same actualnamespace with exportsNone refuses bodyowner; wrongcontextcaller refuses. SDK noCapturedSource/SourceBlob/DefinitionHeader/Body/preparedsource; detailedtrace trunc0 noBodyStructure/Thunk; cold epochguardrevoked. No guestexecution/output-only acceptance inference.",
+  "all8": [
+    {
+      "mode": 1,
+      "pass_source": "Common pinned SourceDeclarativeRequest expansion, no assertion/evaluator. Existing runtime summary route untouchedheld."
+    },
+    {
+      "mode": 2,
+      "pass_source": "Actual emitted match syntax tokens from original AUX, no literal/break executor or guestsyntheticbody."
+    },
+    {
+      "mode": 3,
+      "pass_source": "Actual alias/source graph and owning editions only; no method/primitive/numeric/name whitelist productionchange."
+    },
+    {
+      "mode": 4,
+      "pass_source": "Context2leaf retainsactual original/staged/generated SDKbodies; thiscontrol exercises originalAUXonly. Generated/staged lookup acceptance unexecuted separately."
+    },
+    {
+      "mode": 5,
+      "pass_source": "No executable body/type/pattern preparation; onlymacro producerrequest. Check-pass no guestbranchexecution claim."
+    },
+    {
+      "mode": 6,
+      "pass_source": "Pure shared request noDBtrace increase; explicitcoldSDKseal andmacroexpand. No perphase/runtimeSDKplanning added. Measurements unexecuted."
+    },
+    {
+      "mode": 7,
+      "pass_source": "Cold discovery_graph actualcommonservice allowed byroot. No runtimecertification or fullSDKguard recipeattachment; certifiedrelevantSDKbuckets remainsprerequisite."
+    },
+    {
+      "mode": 8,
+      "pass_source": "Separate callerandSDKprovider arenas; borrowedcontext no hugeSDKArc perprovider; existingactualoutputtokenhandles only. No immutableBodyIndex copy/search."
+    }
+  ],
+  "API_static_check": "Used actual Arc<DeclarationScan> from declaration_inventory, actual FrozenCompileEnvironment fingerprint, actualSourceMacroFacet package-relativepath andactual macro_definition_header labelrange; source caller/SDKcontexts inspected byactualTokenForest rows, no displaytext reparse. Compilation intentionallysolevalidator.",
+  "holds": [
+    "No worker Cargo/tests; allnewcontrol assertions unexecuted untilsolevalidator terminal.",
+    "RootSourceDiscovery builder/adoption and relevantcertifiedSDKnamespacebucket/selecteddefinitiondependencies stillnotintegrated; configuredfacet refusal stays.",
+    "SDKgenerated/staged/recursiveparent scope ancestry actualaccepted matrix notestablished bythisoriginalAUXtest.",
+    "Fullcore closure/hygieneCLI issue40847 andstockshift runtime legacy summary route failures remain attached toactualfrozenruns, notfixed by component claim.",
+    "Opaque pinned Salsa accounting/full32.2 andinterpreter gate remainheld."
+  ],
+  "composition": "Context2leaf copiedunchangedfromfrozen476a82c5; onlynewtestleaf live; macro_exports_tests childmodulehook is PATCH-ONLY frozen file, liveparent notmodified. No sourceoriginal/otherproduction edit."
+}

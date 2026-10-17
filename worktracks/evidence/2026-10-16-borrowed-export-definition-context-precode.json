@@ -1,0 +1,20 @@
+{
+  "status": "PRECODE source-only newcontext/commonrequestjoin; noCargo",
+  "claim": "LOCAL-024 E-R5-005 M013/M014/M017/M018/M039 T032",
+  "invariant": "Actual caller source/index/scope/tokens/hygiene stays caller. Selected SDK definition body is borrowed from actual sealed owning provider arenas. SDK parents ordinals never index guestowners. No macro name/numeric/facade or copied definition body shortcut.",
+  "witness": "Unchanged hygiene/issue-40847.rs actual V7 discovery blocked assert_eq!(m!(x),1) beforegueststack; unchanged core macros/mod.rs actual exported definition must enter commonrequest/pinned producer. Transport alone didnotgrant ownership consumer.",
+  "symbols": [
+    "CapturedMacroContext exports optional borrowedowner field",
+    "CapturedMacroContext::definition_owner/inherited_body/inherited_origin",
+    "SourceDeclarative::declaration_import_request_in_context",
+    "SourceDeclarative::demand_for_discovery_in_context",
+    "new source_declarative/imported_definition_context.rs actual exported roots/catalog helpers"
+  ],
+  "ordinary": "Existing SourceDeclarativeRequest body/input/key construction and actual SourceMacroIndex/declarationlookup; originalDefinitionBody/generatedcatalog/GeneratedItems common pinned expansion; caller arguments unchanged. Existing noSDK wrappers samekernel defaultsNone.",
+  "ownership": "Root holds ownerArc in SourceDiscovery andhandlesrecursiveimportedparent retention. Context onlyborrows; noArc addedtoeachprovider/SourceAssemblySeed/queryproduct. Source origins/editions/cfg/epoch/seal remain real. Root coldcoordinator must revalidate importedguard beforeuse; helpers noDatabase/queryeffects.",
+  "scope": "Only source_declarative.rs+newchildhelper and8internal literal defaults. No frontend generated_macros or discovery edits. Root discovery literals andcallsites separate.",
+  "cost": "Bounded existing cold ownersearch(maxdepth256/max100000visits) plus exportedroot/catalog traversal with checkedcount. No runtime parsing/newresolver/executablelowering. Original commonrequest existing owned_forest cost notmadehot; no performanceclaim.",
+  "alternates": "RuntimeMacroKind/declaration_runtime_no_item_proof summarylane untouchedheld; removal requiresactual macro output/ordinaryexecution acceptance. No newevaluator.",
+  "evidence": "Exacthash all8sourcereview andfutureactual officialAUX/fullcore/CLI tests bysolevalidator; no fullfixture/matrixclosure.",
+  "before_sha256": "47b63704fbbd951a113dd2b50db803bdede41719951d6aa0351a1fe51e3ae572"
+}

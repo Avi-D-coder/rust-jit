@@ -405,3 +405,6 @@ fn wrong_unit_source_configuration_and_unpublished_facet_remain_typed() {
 
 #[path = "../../cli/macro_export_modules_tests.rs"]
 mod configured_module_preparation_tests;
+
+#[path = "borrowed_export_definition_context_tests.rs"]
+mod borrowed_export_definition_context_tests;

@@ -1,0 +1,126 @@
+{
+  "status": "Independent exact frozen PRODUCTION review;6leaf payload fingerprints verified, tests reviewed separately; no production edits/Cargo/compiler/tests",
+  "reviewer": "drop_catalog_next",
+  "component": {
+    "path": "/private/tmp/lrr-owning-sealed-macro-export-providers-v1/COMPONENT.json",
+    "sha256": "fef2bcc6e26686f6d916cc9d6d379938611e6f3f642192522a80019c099bbc26"
+  },
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "1dc78237c266f81b0f938d939143953e8cc8ec0dc9b2e83c40608ccf3e2d73bd",
+      "bytes": 521317,
+      "before_sha256": "d57bd1af81b72c99724e8a3325d3c730dd005f7f8bf700f9fa14a4a2de906f7e",
+      "live_sha256": "4644f2fe3076fdaf4261c56b9977bf9f7deec37eadb513545870a073b57f374f"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/sealed_macro_export_providers.rs",
+      "sha256": "9c7faf92ae7bb0edb334f351f4531794cd3e620ee7535bc7eefe86bb9a1bebb1",
+      "bytes": 28784,
+      "before_sha256": null,
+      "live_sha256": "9c7faf92ae7bb0edb334f351f4531794cd3e620ee7535bc7eefe86bb9a1bebb1"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "47b63704fbbd951a113dd2b50db803bdede41719951d6aa0351a1fe51e3ae572",
+      "bytes": 182568,
+      "before_sha256": "af407080a42e507ab3c6bebd602a8a909da81c55fdbdc694f792dba4fcf6002f",
+      "live_sha256": "47b63704fbbd951a113dd2b50db803bdede41719951d6aa0351a1fe51e3ae572"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/retained_provider.rs",
+      "sha256": "7d4a6fe753be50a9cd30395b7b2a56861d5e7d3145692a885cf6b83f6ee1ec5b",
+      "bytes": 3440,
+      "before_sha256": null,
+      "live_sha256": "7d4a6fe753be50a9cd30395b7b2a56861d5e7d3145692a885cf6b83f6ee1ec5b"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "sha256": "aa1f5e82261ae94cb85e092ec84c4ac17c035786fdcb36a2749b987a7c9b4d40",
+      "bytes": 11380,
+      "before_sha256": "5c1bdb06fed328ce6a575fee3e1aea015f73248edc4e95358420fe48f19a2f54",
+      "live_sha256": "aa1f5e82261ae94cb85e092ec84c4ac17c035786fdcb36a2749b987a7c9b4d40"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_provider_tests.rs",
+      "sha256": "a2f9233fce81a7a2843c6cf40338a30f128ec7830bf1dc7984de72014cdf51b1",
+      "bytes": 6100,
+      "before_sha256": null,
+      "live_sha256": "a2f9233fce81a7a2843c6cf40338a30f128ec7830bf1dc7984de72014cdf51b1"
+    }
+  ],
+  "scope": "New source_discovery owning provider transport, SourceDeclarative retained metadata walk and tinyhooks/four consumedguards. Not full inherited source_discovery audit. Test expectations/provenance delegated to runtime_validation_next INDEPENDENT-TEST-SOURCE-REVIEW SHAa529575315eee0866d6b621d4a1de8be1cb38a2214e7f60fcb7cab998aa0d2c3, not independently repeated here.",
+  "finding": "No remaining concrete production authority/lifetime/drain/currentness defect found in bounded changed slice after four consumed-state fixes. Actual tests and runtime integration remain unexecuted/held by this review.",
+  "fixed_finding": {
+    "cause": "After actual maps drained, sealed_declaration_expansions checked only seal and could serve false empty completed records; impl_header_inventory likewise emptiedfacts; lookup served graph and poll_compiler lacked failedguard.",
+    "fix": "Frozen source_discovery now fails on self.failed at all4 entrypoints. Transfer latches explicit LRR-E-MACRO-EXPORT-CONSUMED only after successfulmove. Existing poll/publish/sealed_expansions/entry/source_syntax/generatedboundary guards already refuse failedstate; ordinary/module binding refuses sealedorfailed.",
+    "remaining_inspection": "Raw expansion_record/count/diagnostic inspectors may returndataorNone but do not certifycomplete namespace/outputworld. Undrained original_module_declaration stays genuine immutable rawsourcefact, not completed provider authority."
+  },
+  "authority": [
+    "Only cold require_source_preparation coordinator can transfer. Actual sealed_expansions first validates completion/failstate; Macro namespace/exactfacet countbounded256/unique selectedrootscope required.",
+    "Actual completed_macro_export_facet checks genuine configuredrole/source/provider/samepublication/rootScope/unitgraph/sealdomain/engine and fetches full current DiscoverySeal exactfingerprint. prepare_input_guard captures actual complete real published source/cfg/edition/epoch/record/role/environment dependencyclosure. No bare unitgraph/CompileInputCatalog digest can fabricate it.",
+    "Each facet requires same graph/preparation, unique source location, actual SourceDiscovery.sources samepublication and corresponding preserved providerordinal/sourcelease/completed index. Exact role.require_facet, db macro_export_source_dependencies and actual published compiler_inputs membership join every configuredsource. No facet/source omission inferred from names/countalone.",
+    "Generated frame requires no activechild, real sourceordinal and existing moduleowner. Parent/order/catalog and exact child_order bijection preserved. Staged modules require namespacecomplete and actualordinal; own realprovider, original/generated StagedModuleSyntax including actual OrdinaryModuleOwner, parsejob/catalog/annotationplan retained. Prefix/derive actualArc roots remain, not reconstructed callercontext.",
+    "Complete declaration/argument indexes, real completedfragments/itemoutputs/recordArcs retained. Actual original providerVec moved in order; actual graph/routes/facets retained. No new source body/namespaceabsence/call/member permission minted.",
+    "All fallible currentness/metadata/routeprojection/retainedfacetallocation checks before any self.take. Last cachedguard currentness check precedes drain. NeedInput/error leaves discovery intact. Postdrain only actualmoves/Arc/mapconstruction, no provider or recoverableDiagnostic. Explicit consumed latch prevents completed service reuse.",
+    "Privateimmutable receipt has no discovery/scheduler backreference. Raw borrowed providers/catalogs/contextroots are source preparation inputs. require_current checks cached actual inputstamps; future consumer still needs common capturedmacrocontext/request/issuedreceipt/outputattach and actual body admission."
+  ],
+  "cost_retention": [
+    "Cold <=256 facets/<=100000roots percollection or providerworklist,512MiB conservative logicalmetadata and32MiB providerwalkscratch, checked arithmetic. Actual shared source allocationowner must be matching facet or stagedsource. source.share copies bounded sourcekey/pathhandle while sharing immutable state; no sourcebodytext/parser/bodyindex clone.",
+    "SourceDeclarative.retained_admission_bytes walks real source_modules/derive_prefixes with localvisitedpointer dedup and bounded worklist, charging actual index/dependencymap/roles/adoptions/compiler/procedural/catalog/parents/sourcehandles. Pointers never enter stableidentity; fingerprint encodes actualseal/sourceenv/engine/facets/providerorder/index/generatedparent/order/modules.",
+    "Perfacet source matching O(F*S); source-owner dedup/scans can be linear in configured+stagedsource count pervisit. Perroot graphwalk can conservatively repeat sharedmetadata charging. No hotdispatch work/globalnamespace census or speed/scalingclaim.",
+    "Providerobjects/catalogs/maps move; immutable source/index roots Arcshared. Projection maps+Archeaders conservativelyprecharged. Postdrain ordinary Arc/mapcollect uses infallible standardallocation; logicalmetadata bound does not prove allocatorOOM recovery/exactprocesspeak. Full32.2 opaque pinned Salsa arena remains held.",
+    "No sourceartifact/input/runtimeowner registration is created by this transport. Consumer must retain and charge actualgraph and escapedinnerArcs through existing ownership framework. Relevant cachedguard checks do not grant execution; graph can outlive discovery only as source preparation fact."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "take_completed_macro_export_providers; prepare_sealed_export_transfer",
+      "finding": "Source-only actual graph transport, no assertionoperand compiler/evaluator. RuntimeMacroKind/declaration_runtime_no_item_proof untouched and held."
+    },
+    {
+      "mode": 2,
+      "symbols": "SealedExportGeneratedFrame/Child/Module; item_outputs/records",
+      "finding": "Actual admitted sourcecatalog/parent/output roots, no scalar/literal/break executor or fabricated wrapperbody."
+    },
+    {
+      "mode": 3,
+      "symbols": "role.require_facet; macro_export_source_dependencies",
+      "finding": "Real source/engine/context proof, no macro-name/method/numeric policy. Later standard macro request uses commonresolver."
+    },
+    {
+      "mode": 4,
+      "symbols": "StagedModuleSyntax; providerordinal; source_prefix/source_derive",
+      "finding": "Original/generated/aux/module roots and realparent contexts preserved; missing actualrole/closure explicit, no new generated-only semantic refusal."
+    },
+    {
+      "mode": 5,
+      "symbols": "DeclarationMacroIndex::is_complete; retained_admission_bytes",
+      "finding": "Declaration sourcefacts only, no BodyStructure/Thunk/executablecoldbody or pattern/typechecker route."
+    },
+    {
+      "mode": 6,
+      "symbols": "prepare_input_guard; guard.require_current; completed_macro_routes",
+      "finding": "One cold capturedclosure/routeprojection. Later certifiedstampchecks; no parse/replan perphase or installedexecution. Consumerintegration absent."
+    },
+    {
+      "mode": 7,
+      "symbols": "DiscoverySeal.compiler_inputs; facet samepublication join",
+      "finding": "Bounded cold source/certificatewalk, no runtimeworldnamespace comparison/unrelateddbrevision relaxation."
+    },
+    {
+      "mode": 8,
+      "symbols": "std::mem::take; source.share; Arc actualcatalogs",
+      "finding": "Move immutable roots/shareactual parser/sourcehandles, no BodyIndex/text deepclone or pernodewholefile search."
+    }
+  ],
+  "composition": "Verified all6 frozenpayload hashes andlivehashes. source_discovery frozen differs ONLY omission of exact inherited held impl_catalog2linehook; other5 live/frozen byteequal. No promotion/review of implcatalog component. All affected4 sourceleaf conclusions pinned to normalizedsource1dc78237/helper9c7faf92/account7d4a6fe7/declarative47b63704.",
+  "acceptance_holds": [
+    "No execution/compiler/controlpass from this reviewer. Validator compiling frozen c078bfff separately; terminalnotyetobserved.",
+    "Fullcorepositive remains genuine possiblyfailing gate, not implied by source transport.",
+    "SDK graph adoption/caller context/pinnedrequest/issuedreceipt/outputattachment/ordinarylowering nextphase remain held; no real runtime authority minted.",
+    "Actual CLI assert_eqpreentry blockage and shift e94ed7 legacyassert/static debt remain distinct unresolved witnesses. No legacy vocabularyextension accepted.",
+    "Runtime persistent observerreceipt/NeedInput/argumentexactonce/cleanup crosscontextmatrix not implemented here.",
+    "Full32.2/performance/interpreter/JITmilestone incomplete."
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "status": "SOURCE-ONLY separate source-aware review; no Cargo or runtime execution",
+  "claim": "LOCAL-024 WT04 M013/M014/M017/M018/M039 T032; E-R5-005; recurring modes separate from MA001-MA008",
+  "source": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "1dc78237c266f81b0f938d939143953e8cc8ec0dc9b2e83c40608ccf3e2d73bd",
+      "bytes": 521317,
+      "before_sha256": "d57bd1af81b72c99724e8a3325d3c730dd005f7f8bf700f9fa14a4a2de906f7e",
+      "live_sha256": "4644f2fe3076fdaf4261c56b9977bf9f7deec37eadb513545870a073b57f374f"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/sealed_macro_export_providers.rs",
+      "sha256": "9c7faf92ae7bb0edb334f351f4531794cd3e620ee7535bc7eefe86bb9a1bebb1",
+      "bytes": 28784,
+      "before_sha256": null,
+      "live_sha256": "9c7faf92ae7bb0edb334f351f4531794cd3e620ee7535bc7eefe86bb9a1bebb1"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "47b63704fbbd951a113dd2b50db803bdede41719951d6aa0351a1fe51e3ae572",
+      "bytes": 182568,
+      "before_sha256": "af407080a42e507ab3c6bebd602a8a909da81c55fdbdc694f792dba4fcf6002f",
+      "live_sha256": "47b63704fbbd951a113dd2b50db803bdede41719951d6aa0351a1fe51e3ae572"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/retained_provider.rs",
+      "sha256": "7d4a6fe753be50a9cd30395b7b2a56861d5e7d3145692a885cf6b83f6ee1ec5b",
+      "bytes": 3440,
+      "before_sha256": null,
+      "live_sha256": "7d4a6fe753be50a9cd30395b7b2a56861d5e7d3145692a885cf6b83f6ee1ec5b"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "sha256": "aa1f5e82261ae94cb85e092ec84c4ac17c035786fdcb36a2749b987a7c9b4d40",
+      "bytes": 11380,
+      "before_sha256": "5c1bdb06fed328ce6a575fee3e1aea015f73248edc4e95358420fe48f19a2f54",
+      "live_sha256": "aa1f5e82261ae94cb85e092ec84c4ac17c035786fdcb36a2749b987a7c9b4d40"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_provider_tests.rs",
+      "sha256": "a2f9233fce81a7a2843c6cf40338a30f128ec7830bf1dc7984de72014cdf51b1",
+      "bytes": 6100,
+      "before_sha256": null,
+      "live_sha256": "a2f9233fce81a7a2843c6cf40338a30f128ec7830bf1dc7984de72014cdf51b1"
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports.rs",
+      "sha256": "3041f4951136ba546f1809e62827a2488ac96ab75e576ab3733b185eb30aea29"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/full_core_preparation.rs",
+      "sha256": "59c29fef9041a019b4add9d2c2bf910e46ceb15527b5daa87b033861d2cd1a2a"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/macro_export_modules.rs",
+      "sha256": "89fe02f2cf80176ceaf91b982f1d1970e5eb0072adaa47b3d44aefaab0aef467"
+    },
+    {
+      "path": "crates/lrr/src/cli/macro_export_modules.rs",
+      "sha256": "11712442d515c81cac2cd926edbab552d62fc64e6a71843596c804582123b4e5"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "18b96c2a775b8d533bdd96773b1caf024f1b70603a7050960e8d7ef640f7174b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macro_routes.rs",
+      "sha256": "8d4a53a8a8121e2e903de9b24306e26e4f367a4107fc9d69184a7d19ab429ad7"
+    },
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_macros.rs",
+      "sha256": "097184e6964424b3d15469f3d3e8e93884864c3146a8d0024f9dd70c7937365b"
+    }
+  ],
+  "review": [
+    {
+      "mode": 1,
+      "symbols": "take_completed_macro_export_providers; prepare_sealed_export_transfer",
+      "finding": "Only moves actual completed source graph. No assertion operand/compiler/evaluator. RuntimeMacroKind/declaration_runtime_no_item_proof unchanged and held. Common CapturedMacroContext/declaration_import_request/SourceDeclarativeRequest pinned producer join is next root-owned integration."
+    },
+    {
+      "mode": 2,
+      "symbols": "SealedExportGeneratedFrame/Child/Module; fragments/item_outputs/records",
+      "finding": "Retains actual catalogs, generated parent/order graph, exact child_order, real staged syntax owner enum and complete fragment/output records. No literal/scalar/break execution or manufactured expansion."
+    },
+    {
+      "mode": 3,
+      "symbols": "facet exact role.require_facet + macro_export_source_dependencies + published compiler_inputs membership",
+      "finding": "No macro/method/numeric name decisions. Test assert_eq lookup only observes unchanged official core actual exported definition; no production name whitelist."
+    },
+    {
+      "mode": 4,
+      "symbols": "SealedExportModule.syntax; generated child catalog parents; SourceMacroExportFacet source.same_publication",
+      "finding": "No new generated-semantic exclusion; genuine parent roots preserved. Missing owning role/source/completion refuses; role is source authority, not body/namespace grant. Test checks actual absence of CapturedSource/SourceBlob/prepared_source."
+    },
+    {
+      "mode": 5,
+      "symbols": "prepare_sealed_export_transfer; retained_admission_bytes",
+      "finding": "Cold metadata and source declaration closure only; no executable BodyStructure/Thunk preparation, type checker or pattern evaluator. Cold executable arms remain outside component."
+    },
+    {
+      "mode": 6,
+      "symbols": "one prepare_input_guard then cached guard.require_current; completed_macro_routes once cold",
+      "finding": "No provider invocation after successful preflight and before move. Transfer once; currentness is cached certified input stamps, no parsing or repeated source planning. Actual future consumer capture/index reuse remains root-owned and unvalidated."
+    },
+    {
+      "mode": 7,
+      "symbols": "published DiscoverySeal.compiler_inputs exact fact map; macro_export_source_dependencies per actualfacet",
+      "finding": "Cold sealed closure walk only, not dispatch namespace census; later require_current checks relevant retained stamps. No unrelated namespace comparison introduced. Existing full-source/reset safety refusals unchanged."
+    },
+    {
+      "mode": 8,
+      "symbols": "std::mem::take real providers/modules/fragments/indexes/records; Arc actual catalogs and source.share handles",
+      "finding": "No BodyIndex clone, text copy/parser or whole-file per-node search. Provider pointer dedup only allocation accounting. No backreference to SourceDiscovery; retained source/providers immutable."
+    }
+  ],
+  "authority": "Actual selected root borrowed completion checks exact scope and published seal. Every other configured facet joins actual source/provider ordinal, same_publication, role identity, actual source/environment deps present in published seal. One cached full guard. Source graph/body grants not fabricated. After all fallible preflight/currentness/metadata checks, move actual roots and latch existing failed state with explicit consumed diagnostic. poll_compiler/impl_header_inventory/sealed_declaration_expansions/lookup now reject consumed. Existing poll/publish/entry/sealed_expansions already failed guarded. Raw expansion_record/count inspectors may return data/None but cannot certify completeness. Ordinary module source facts undrained and immutable.",
+  "cost": "Preparation is bounded conservative cold metadata traversal: <=256 configured facets, <=100000 roots per collection/provider worklist; source allocation membership linear scan may produce O(provider-visits * source-count) cold cost and per-root provider walks conservatively re-account shared graphs. No scaling/speed claim. 512MiB owned metadata bound, <=32MiB provider walk scratch, checked arithmetic; output projection maps allocate only after all recoverable checks. Bound does not claim process peak or opaque pinned Salsa arena size. Currentness O(relevant certified input stamps).",
+  "ownership": "Real provider Vec is moved preserving actual original ordinals; generated Frame/Child catalogs and staged providers moved into Arc without source text/body clones. Existing parent/order/child_order maps moved. Completed indexes/fragments/source outputs/records/facets/names/routes retained. No fullDiscovery/scheduler/cycle. Aggregate bytes deliberately conservative over shared roots. Runtime Query/sourceartifact retention integration required if imported graph later retained in query products; not granted by this component.",
+  "controls": "Existing AUX revocation/absence and fullcore strict positive preserved. AUX owning setup re-publishes genuine role and reconstructs actual complete discovery only AFTER old oracle. New helper exercised after unchanged required core actual closure/publish/assert_eq definition/currentness checks. NeedInput/error/quota0 prove no drain; real provider storage pointer observation; consumes APIs; outlives discovery; detailed trace enabled for transfer scope+truncated0; actual source absence and epoch revocation. All unexecuted; fullcore setup failure remains real failure, never transport acceptance.",
+  "composition": "Frozen source_discovery and normalized baseline omit ONLY pre-existing held impl_catalog modulehook. Live source remains unchanged with inherited hook; exact live/source hashes recorded. All other change hunks are only module/reexport +four consumed guards. No other held work imported.",
+  "holds": [
+    "No compilation/test executed by worker.",
+    "Actual SDK graph adoption into common caller macro context, pinned request/receipt and actual output attach remain root integration.",
+    "No claim fullcore closure positive currently passes; existing failure must remain real failing test.",
+    "Actual CLI issue-40847 V7 blocked assert_eq before guest stack; shift e94ed7 legacy nonlocalstatic remains historical unchanged.",
+    "RuntimeMacroKind summary/assertion legacy routes unchanged and held until common engine replaces them with required matrix evidence.",
+    "Full32.2 opaque pinned Salsa arena accounting remains held. No interpreter/JIT milestone closure."
+  ]
+}

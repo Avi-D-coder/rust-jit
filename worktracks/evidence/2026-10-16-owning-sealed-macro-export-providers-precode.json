@@ -1,0 +1,37 @@
+{
+  "status": "PRECODE exact authorized common owning source transport; no Cargo/runtime",
+  "claim": "LOCAL-024 WT04 M013/M014/M017/M018/M039 T032; E-R5-005; modes1-8 separate from MA001/MA006/MA008",
+  "witness": "Unchanged full shift source/current e94ed7 legacy assert nonlocalstatic failure. Actual assert_eq pinnedbody core/src/macros/mod.rs43 onward requires real configured roleworld/fullseal; no copied source definition or facadebody. Existing required unchanged fullcore positive remains failing/historical or new configured source-only, not acceptance.",
+  "invariant": "Consume genuine complete published MacroExport discovery into bounded immutable owning provider/context graph, preserving actual source/cfg/edition/epoch/role/preparation/seal dependencies, no fullDiscovery retained, no semantic owner synthesis.",
+  "API": "SourceDiscovery::take_completed_macro_export_providers(&mut self,db,&[Arc<SourceMacroExportFacet>])->QueryPoll<Arc<SealedMacroExportProviders>>. All fallible work including fullguard/currentness/bounds before moving any source data. Selectedroot actual borrowedview requires exact scope, allotherfacets exact actualprovider role/samepublication/current source/env, fullseal closurecaptured once.",
+  "ownership": "Moves real providerVec preserving ordinals and parentlinks, staged actualprovider/syntax roots, actual generatedcatalog parent maps, complete declaration indexes/fragments and actual namespacegraph/routes into owning immutablepayload. Facets retained byArc. No source/provider deepclone, fullDiscovery or backreference cycle. Exact actual preparedstate shared dedup only for allocation accounting.",
+  "files": [
+    "expand/source_discovery/sealed_macro_export_providers.rs new",
+    "expand/source_discovery.rs tiny module/reexport + standard consumed terminal latch only through existingfailed state",
+    "expand/source_declarative/retained_provider.rs new shared bounded actualprovider accounting",
+    "expand/source_declarative.rs tiny childmodule hook"
+  ],
+  "authority_boundary": "Only configured actual roleSource publications qualify. Bare CompileInputCatalog macrofacets refusal remains; borrowed SealedMacroExportView not widened. Transport itself grants no ordinary parser/namespace/body authority. Root CLI must explicitly select/adopt immutable actual graph and commonrequest owner/context before summary replacement. Generated pending authority stays typed/factual, never primitive context whitelist.",
+  "cost": "Cold bounded graph/source provider metadata walk and one fullseal inputclosure capture, no producer execution/parser/symbol loading. Shared Arc context and fixed cached fingerprint/size afterward, relevant directguard currentness only. Sourceowner and remaininggenerated/staged bookkeeping accounted, opaque pinned Salsa arena sizing remains held.",
+  "evidence": "Exact all8 source review+actual fixture-backed authority controls. Producer requests must subsequently use same SourceDeclarativeRequest/pinned engine/receipt+GeneratedDeclarations/SourceSyntaxAssembly before ordinary lowering; root CLI adoption/runtime not in component. NeedInput/error leaves discovery intact; successful transfer explicitly refuses repeated poll/publish/provider use.",
+  "all8": [
+    "No alternate assertion evaluator",
+    "No scalar/break output lane",
+    "No macro/method/numeric spelling policy",
+    "No new generated semantic gate; retain actualgenerated/staged roots",
+    "No executablebody preparation or coldarm checking",
+    "Capture once, no installed parsing/planning",
+    "No hot worldnamespace census; fullcert capturecold directcurrent guard",
+    "Move actual immutable roots; no BodyIndex clone or pernodefile search"
+  ],
+  "before": [
+    {
+      "path": "expand/source_discovery.rs",
+      "sha256": "c71a1c3cca0665aa334469a721800004072d707c41e9eef56d3f27f089ba1e27"
+    },
+    {
+      "path": "expand/source_declarative.rs",
+      "sha256": "af407080a42e507ab3c6bebd602a8a909da81c55fdbdc694f792dba4fcf6002f"
+    }
+  ]
+}

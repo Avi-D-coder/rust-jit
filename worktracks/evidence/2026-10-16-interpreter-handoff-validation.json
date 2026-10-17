@@ -1,0 +1,318 @@
+{
+  "schema": 1,
+  "at": "2026-10-17T03:30:40.060046+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T024",
+    "T063",
+    "M012",
+    "M013",
+    "M014"
+  ],
+  "status": "Finished current bounded source checkpoint and stopped for user-requested handoff; component validation FAIL, no feature integration",
+  "baseline_commit": "7337f1cd4760634de3ab4b0fcbd944a0feb30bb0",
+  "source_member": "c9ad087752af9738e7a9d139383220f1df429cdd370a8c3d41b871c666308e09",
+  "source_copy_terminal": "503aec -> 67a0df/0; cp -Rc source only, no target copy",
+  "release_path": "artifacts/macos-first/root-handoff-final-source-v2/RELEASE.json",
+  "release_sha256": "1124d0c39819aabe5472c1e3b3a58d3dab4703be30b7b85ee4cdbbaf86c530e1",
+  "release": {
+    "released": true,
+    "target_inactive": true,
+    "source_unchanged": true,
+    "source_member": "c9ad087752af9738e7a9d139383220f1df429cdd370a8c3d41b871c666308e09",
+    "owner_sha256": "5700475c444995602252670a73cb4586e8b740251d2b96afaf2100e70bd8a46f",
+    "at": "2026-10-17T03:29:46.013349+00:00",
+    "source_guard": {
+      "source_member": "c9ad087752af9738e7a9d139383220f1df429cdd370a8c3d41b871c666308e09",
+      "frozen_files": 5501,
+      "symlinks": 3,
+      "owner_sha256": "5700475c444995602252670a73cb4586e8b740251d2b96afaf2100e70bd8a46f",
+      "raw_files": 859,
+      "cases": 337,
+      "manifest_sha256": "28baf75289cbea194f1865d0197894ab7566b1c9c2505f3fda8dc96f3b728bfa",
+      "licenses": {
+        "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+        "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+      },
+      "free_bytes": 71984545792
+    },
+    "library_binary": {
+      "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/deps/lrr-613ddfd4d90d020a",
+      "bytes": 119661696,
+      "sha256": "1b4beab32811cecdb1a409efbbdb19addcf4bd0225e4cee3567620eb128f0dc8"
+    },
+    "scopes": {
+      "compile-library": {
+        "exit_code": 0,
+        "bodies": 0,
+        "passed": 0,
+        "failed": 0,
+        "sha256": "fa0ecab62fa68102fdbb7c2a9a1b5e57899ac35d105329057cd717cd4c6df921"
+      },
+      "borrowed-negative": {
+        "exit_code": 0,
+        "bodies": 1,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "488c34bcacd20646be7cba9f9cd19f4f3320bb3605a0e3adfd3e027cc09529a8"
+      },
+      "aux-owning-positive": {
+        "exit_code": 0,
+        "bodies": 1,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "65c30f8084b5002f5d914cbc8404f0f7626b91575a2855b8d7a277d0867159cd"
+      },
+      "core-owning-positive": {
+        "exit_code": 101,
+        "bodies": 1,
+        "passed": 0,
+        "failed": 1,
+        "sha256": "5ed67ddb45bd7808d415c32302f4f5dcc1a3792d5b13883abc03b8bfecdb157d"
+      },
+      "borrowed-cross-crate": {
+        "exit_code": 101,
+        "bodies": 1,
+        "passed": 0,
+        "failed": 1,
+        "sha256": "272633a540561aa93f9ba7b7e286aecc102268784d9fda2d724cdcf32ea3e290"
+      }
+    },
+    "compile_terminal": "a6d276/0",
+    "queue_terminal": "c241e0/1",
+    "compile_failed": false,
+    "passed_bodies": 2,
+    "failed_bodies": 2,
+    "unexecuted_authorized": [],
+    "failures": [
+      {
+        "scope": "core-owning-positive",
+        "code": "LRR-E-SOURCE-PATH",
+        "phase": "full_core_preparation::configured before realfullcoreseal/owningtransport",
+        "detail": "include target outside granted core sourceauthority: core/src/../../portable-simd/crates/core_simd/src/mod.rs",
+        "callsite": "sealed_macro_export_view_tests.rs232 setup panic"
+      },
+      {
+        "scope": "borrowed-cross-crate",
+        "code": "LRR-E-CATALOG-INCOMPLETE",
+        "phase": "SourceDiscovery::new SDKonly setup beforeseal/owning/contextrequest",
+        "detail": "source dependency consumer not selected",
+        "callsite": "borrowed_export_definition_context_tests.rs153 constructor unwrap"
+      }
+    ],
+    "test_review_sha256": "a529575315eee0866d6b621d4a1de8be1cb38a2214e7f60fcb7cab998aa0d2c3",
+    "cross_review_sha256": "ccb47ea98cdc23ba848f3d90681cdd03738c98bcb138fadd8b09ded0b4690efb",
+    "scope_limit": "Positive AUX owningtransport component established; fullcore/CROSS failedactualsetup before respective assertions. NoSDKconsumerbuilder/namespaceprojection/CLI/stock/guestexecution/fullfixture/milestone/full32.2 acceptance. Mechanicalcompilefailure965b preserved separately. UserhandoffSTOP; no further runs or implementation authorized by this receipt."
+  },
+  "prior_compile_failures": [
+    {
+      "artifact": "artifacts/macos-first/root-owning-sealed-macro-export-providers-v1/RELEASE.json",
+      "sha256": "822bacb6ade446651b54e57da5481fed187f8ed69e67e3c127394dae853b2403",
+      "receipt": {
+        "released": true,
+        "target_inactive": true,
+        "source_unchanged": true,
+        "source_member": "c078bfff713cd9f6394aa3efdd7285f02ce4e0f2ed2be006a36931728fe248b7",
+        "owner_sha256": "07fd16023837ee7fa7a1cfb157a19f1ee94d549f81625e214cd913f8ba7a10d1",
+        "at": "2026-10-17T02:27:32.026461+00:00",
+        "source_guard": {
+          "source_member": "c078bfff713cd9f6394aa3efdd7285f02ce4e0f2ed2be006a36931728fe248b7",
+          "frozen_files": 5499,
+          "symlinks": 3,
+          "owner_sha256": "07fd16023837ee7fa7a1cfb157a19f1ee94d549f81625e214cd913f8ba7a10d1",
+          "raw_files": 859,
+          "cases": 337,
+          "manifest_sha256": "28baf75289cbea194f1865d0197894ab7566b1c9c2505f3fda8dc96f3b728bfa",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 74687176704
+        },
+        "scopes": {
+          "compile-library": {
+            "exit_code": 101,
+            "bodies": 0,
+            "sha256": "e20e06fbdef85716f400ae77f0ee34cc2cb8537da11b87d29ce564f9667a2f23"
+          }
+        },
+        "compile_failed": true,
+        "compile_terminal": "cf907e/1",
+        "passed_bodies": 0,
+        "failed_bodies": 0,
+        "errors": [
+          {
+            "code": "E0425",
+            "path": "crates/lrr/src/expand/source_discovery/sealed_macro_export_providers.rs",
+            "lines": [
+              96,
+              123
+            ],
+            "detail": "missing SealKey import"
+          },
+          {
+            "code": "E0596",
+            "path": "crates/lrr/src/expand/source_discovery/sealed_macro_export_providers.rs",
+            "line": 482,
+            "detail": "metadata_and_validate db:&Database cannot call mutable macro_export_source_dependencies"
+          }
+        ],
+        "unexecuted_authorized": [
+          "borrowed-negative",
+          "aux-owning-positive",
+          "core-owning-positive"
+        ],
+        "test_review_sha256": "a529575315eee0866d6b621d4a1de8be1cb38a2214e7f60fcb7cab998aa0d2c3",
+        "review_scope": "Validator independentlyreviewed tests/API/provenance; productionauthority/retention owned drop_catalog_next. Actualcompile detects productionAPI mismatches beforetestexecution. No componentruntime/fullfixture/consumeracceptance."
+      }
+    },
+    {
+      "artifact": "artifacts/macos-first/root-handoff-final-source-v1/RELEASE.json",
+      "sha256": "1c760bb32a7ebe923c352a074accd56bd57fa7ef3fdd0c477b3ad3f7eeebea9e",
+      "receipt": {
+        "released": true,
+        "target_inactive": true,
+        "source_unchanged": true,
+        "source_member": "965b9407418f99dc74613f718c032795948161d741d5bf88529d7a848b216acd",
+        "owner_sha256": "2167a770ae813f6d96887c626c0f06bf004c5c885ee34d22417c63cbd884e546",
+        "at": "2026-10-17T03:19:30.353017+00:00",
+        "source_guard": {
+          "source_member": "965b9407418f99dc74613f718c032795948161d741d5bf88529d7a848b216acd",
+          "frozen_files": 5501,
+          "symlinks": 3,
+          "owner_sha256": "2167a770ae813f6d96887c626c0f06bf004c5c885ee34d22417c63cbd884e546",
+          "raw_files": 859,
+          "cases": 337,
+          "manifest_sha256": "28baf75289cbea194f1865d0197894ab7566b1c9c2505f3fda8dc96f3b728bfa",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 72682643456
+        },
+        "scopes": {
+          "compile-library": {
+            "exit_code": 101,
+            "bodies": 0,
+            "sha256": "c1c7f5713c411143964c6e85d6fbc4e0999b009dca26bd0102b5d8dca2391963"
+          }
+        },
+        "compile_failed": true,
+        "compile_terminal": "91180b/1",
+        "passed_bodies": 0,
+        "failed_bodies": 0,
+        "errors": [
+          {
+            "code": "E0424",
+            "message": "cannot find value `self` in this scope",
+            "location": "crates/lrr/src/expand/source_discovery.rs:5666:30"
+          },
+          {
+            "code": "E0424",
+            "message": "cannot find value `self` in this scope",
+            "location": "crates/lrr/src/expand/source_discovery.rs:7450:38"
+          },
+          {
+            "code": "E0424",
+            "message": "cannot find value `self` in this scope",
+            "location": "crates/lrr/src/expand/source_discovery.rs:7514:26"
+          },
+          {
+            "code": "E0308",
+            "message": "mismatched types",
+            "location": "crates/lrr/src/expand/source_declarative/imported_definition_context.rs:142:12"
+          },
+          {
+            "code": "E0616",
+            "message": "field `definition` of struct `assembly::receipt::SyntaxRequestReceipt` is private",
+            "location": "crates/lrr/src/expand/source_declarative/borrowed_export_definition_context_tests.rs:245:24"
+          },
+          {
+            "code": "E0308",
+            "message": "mismatched types",
+            "location": "crates/lrr/src/expand/source_declarative/borrowed_export_definition_context_tests.rs:278:33"
+          },
+          {
+            "code": "E0308",
+            "message": "mismatched types",
+            "location": "crates/lrr/src/expand/source_declarative.rs:365:48"
+          },
+          {
+            "code": "E0308",
+            "message": "mismatched types",
+            "location": "crates/lrr/src/expand/source_declarative.rs:371:27"
+          },
+          {
+            "code": "E0308",
+            "message": "arguments to this function are incorrect",
+            "location": "crates/lrr/src/expand/source_declarative.rs:2722:17"
+          },
+          {
+            "code": "E0308",
+            "message": "arguments to this function are incorrect",
+            "location": "crates/lrr/src/expand/source_declarative.rs:3695:17"
+          },
+          {
+            "code": "E0502",
+            "message": "cannot borrow `*db` as mutable because it is also borrowed as immutable",
+            "location": "crates/lrr/src/expand/source_discovery/sealed_macro_export_providers.rs:522:24"
+          }
+        ],
+        "stderr_sha256": "006f1718ec068251a350d2ffbefa2ebdebda29c21b8f4247d4804336a5394132",
+        "unexecuted_authorized": [
+          "borrowed-negative",
+          "aux-owning-positive",
+          "core-owning-positive",
+          "borrowed-cross-crate"
+        ],
+        "test_review_sha256": "a529575315eee0866d6b621d4a1de8be1cb38a2214e7f60fcb7cab998aa0d2c3",
+        "cross_test_review_sha256": "0a4ac67b2be624245f73e4b90685cac37edd7c5e4ebf2b5eafe99e231310f154",
+        "review_limits": "Priorstatic testreview missed private receiptfield and adapter-vsLRR duplicatewiretypes; actualcompiler errors supersede mechanicalAPI conclusions, notprovenancecontract. No tests executed. Root+worker ownonlymechanicalsuccessor, no newfeatures."
+      }
+    }
+  ],
+  "source_review": "worktracks/evidence/2026-10-16-interpreter-handoff-source-review.json",
+  "source_review_sha256": "ca4b1d43324cb0040e4c5ef0ab05bba2147c4048f60a99265cb30210f3b226ec",
+  "terminal_summary": {
+    "compile": "a6d276/0",
+    "four_body_queue": "c241e0/1",
+    "passed": [
+      "borrowed-negative",
+      "aux-owning-positive"
+    ],
+    "failed": [
+      "core-owning-positive",
+      "borrowed-cross-crate"
+    ],
+    "unexecuted_authorized_scopes": []
+  },
+  "failure_contracts": [
+    {
+      "scope": "core-owning-positive",
+      "diagnostic": "LRR-E-SOURCE-PATH",
+      "detail": "Unchanged full core source requests ../../portable-simd/crates/core_simd/src/mod.rs outside currently granted source authority. Preparation fails before owning graph transfer. Preserve genuine authority; complete correct source capture/preparation in later work, do not strip include or mark unsupported as pass."
+    },
+    {
+      "scope": "borrowed-cross-crate",
+      "diagnostic": "LRR-E-CATALOG-INCOMPLETE",
+      "detail": "SourceDiscovery::new receives only aux but its shared captured dependency rows include caller -> aux; consumer not selected at test line153. Request/receipt/expansion/origin assertions are unexecuted. Requires coherent configured SDK/caller preparation, not dropping actual dependency evidence to force a pass."
+    }
+  ],
+  "acceptance": {
+    "focused_passed": 2,
+    "focused_failed": 2,
+    "new_distinct_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "component_complete": false,
+    "architecture_complete": false,
+    "milestone_run": false,
+    "guest_jit_gate": "held"
+  },
+  "holds": [
+    "SDK caller admission builder and certified relevant namespace projection remain unimplemented; proposed tag35 not added.",
+    "Generated/staged/recursive SDK context matrix and parent ownership integration unexecuted.",
+    "RunMachine persistent body-publication/observer renewal/NeedInput continuation remains unintegrated.",
+    "Legacy macro evaluators and all8 architecture repair obligations remain; no benchmark/security/performance/release claims."
+  ],
+  "handoff": "docs/handoffs/2026-10-16-interpreter-handoff.md"
+}

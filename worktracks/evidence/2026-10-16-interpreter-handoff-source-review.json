@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "at": "2026-10-17T03:22:53.127677+00:00",
+  "claim": "LOCAL-024",
+  "reviewer": "/root separate post-edit source review",
+  "baseline_commit": "7337f1cd4760634de3ab4b0fcbd944a0feb30bb0",
+  "source_member": "c9ad087752af9738e7a9d139383220f1df429cdd370a8c3d41b871c666308e09",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/borrowed_export_definition_context_tests.rs",
+      "bytes": 12596,
+      "sha256": "de4a051fdd55526e7985dee395f4cdb56eac63052373b12695a86099324581ef",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/imported_definition_context.rs",
+      "bytes": 5502,
+      "sha256": "5c521aae6ec59e27e08b6ff1c8dca6428b9c3d5b5d746c0356e0499237e28b2e",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "bytes": 14462,
+      "sha256": "00f5e1e7f4776e524991518329ed468f15ce778560a1aa14aa5c442578b64a9f",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/retained_provider.rs",
+      "bytes": 3440,
+      "sha256": "7d4a6fe753be50a9cd30395b7b2a56861d5e7d3145692a885cf6b83f6ee1ec5b",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_provider_tests.rs",
+      "bytes": 6100,
+      "sha256": "a2f9233fce81a7a2843c6cf40338a30f128ec7830bf1dc7984de72014cdf51b1",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "bytes": 11380,
+      "sha256": "aa1f5e82261ae94cb85e092ec84c4ac17c035786fdcb36a2749b987a7c9b4d40",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "bytes": 188580,
+      "sha256": "e5fd8155bfaea3d25cd0b9563bf5d2822e3038c59ee508090fb631a801850176",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/sealed_macro_export_providers.rs",
+      "bytes": 30618,
+      "sha256": "5b0c706580c8b0209ef3c9aa74f5e5dcd615106d1d2d97d41f62da6518b252bc",
+      "mode": 420
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "bytes": 522356,
+      "sha256": "d524ba4868b8b73e07e26d2af39d6e070bdc59eece6fda595910c18f8beaa947",
+      "mode": 420
+    }
+  ],
+  "scope": "Final in-flight owning SDK provider transport plus borrowed definition context and mechanical compiler corrections. Source review only; final async validation separately labeled. No new implementation work started after handoff request.",
+  "read_first": [
+    "AGENTS.md architecture statement of work",
+    "docs/audits/macro-specific-semantics.json",
+    "docs/errata/revision5-common-macro-engine.md"
+  ],
+  "prior_reviews": [
+    {
+      "path": "worktracks/evidence/2026-10-16-owning-sealed-macro-export-providers-independent-review.json",
+      "scope": "Earlier six-leaf transport component only; not final imported-parent/context deltas"
+    },
+    {
+      "path": "worktracks/evidence/2026-10-16-borrowed-export-definition-context-source-review.json",
+      "scope": "Earlier context before mechanical key/codec fixes"
+    },
+    {
+      "path": "worktracks/evidence/2026-10-16-borrowed-export-cross-crate-controls-source-review.json",
+      "scope": "Earlier control before actual compiler found private receipt/wire API errors"
+    }
+  ],
+  "actual_route": [
+    "SourceDiscovery owns optional Arc<SealedMacroExportProviders>, initialized None; nine CapturedMacroContext factories borrow it. Static projection_inherited_in/module_scope_in explicitly carry same borrowed graph through existing recursion.",
+    "take_completed_macro_export_providers -> actual completed_macro_export_facet -> prepare_input_guard -> prepare_sealed_export_transfer -> final currentness -> moves actual original/staged/generated roots -> consumed latch. Imported parent moves from self.exports; no fabricated provider, seal or source.",
+    "CapturedMacroContext exported_definition_owner/body/origin augments existing source-selected context service. declaration_import_request_in_context and demand_for_discovery_in_context share ordinary request kernels; generated foreign body uses existing module_generated with explicit adapter-wire encoding/decoding, preserving actual tokens and site key.",
+    "Existing pinned expansion produces real request/reply/receipt, and later common syntax attachment/body admission remains required. No runtime execution or ordinary guest source grants from SDK role."
+  ],
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": "take_completed_macro_export_providers; CapturedMacroContext; SourceDeclarativeRequest::module_generated",
+      "finding": "No assertion operand compiler/evaluator or synthetic source wrapper added. Existing syntax/runtime_macro_* and frontend/runtime_macro_plan remain held, not removed."
+    },
+    {
+      "mode": 2,
+      "symbols": "SealedExportGeneratedFrame/Child/Module; exported_definition_body; module_generated",
+      "finding": "Retains actual generated catalog/parent/output roots and actual definition body. No literal/break/payload executor introduced. Legacy generated_expression route still held."
+    },
+    {
+      "mode": 3,
+      "symbols": "declaration_import_request_in_context; demand_for_discovery_in_context; definition_origin",
+      "finding": "Selection remains ordinary source/hygiene/namespace service. No macro-name/method/numeric whitelist. Existing macro-specific numeric/method routes remain repair debt."
+    },
+    {
+      "mode": 4,
+      "symbols": "projection_inherited_in; module_scope_in; imported_definition_context::arena_sources/arena_catalogs",
+      "finding": "Carries actual original/staged/generated provider arena and owning editions. Missing source evidence refuses; no new generated-only language restriction. Deep generated/staged/imported-parent matrix unexecuted."
+    },
+    {
+      "mode": 5,
+      "symbols": "retained_definition_owner; SourceDeclarative common request kernels",
+      "finding": "Source/definition transport only, no pattern evaluator or eager executable arm/body checking. Common transactional pattern completion remains separate unresolved repair."
+    },
+    {
+      "mode": 6,
+      "symbols": "prepare_sealed_export_transfer; require_current; exported_definition_owner/body/origin",
+      "finding": "Preparation-only walks and wire conversion. No installed runtime/phase call site introduced, no repeated source planning on dispatch. Future consumer must use retained pure plan and narrow dependency service."
+    },
+    {
+      "mode": 7,
+      "symbols": "SealedMacroExportProviders::require_current; CapturedMacroContext; SourceMacroRoutes::discovery_graph",
+      "finding": "Whole SDK guard and owner scans restricted to cold preparation. No recipe full-world guard or global namespace scan added. Relevant certified SDK bucket projection/lifecycle is unimplemented; do not attach full seal into flattened PreparedInputGuard."
+    },
+    {
+      "mode": 8,
+      "symbols": "std::mem::take; Arc retained catalogs; imports Option<Arc>; CapturedMacroContext borrowed exports",
+      "finding": "Moves actual immutable roots and borrows owner graph. No immutable BodyIndex clone or whole-file per-phase node search. Definition identity joins can scan cold catalog graph; no performance claim."
+    }
+  ],
+  "authority_retention": [
+    "All recoverable checks precede ownership transfer. Existing source preparation role, genuine actual published seal/compiler dependencies, same source publication/role/facet, graph/epoch/engine and generated parent bijection checks preserved. Consumed services refuse after drain.",
+    "Parent import chain private immutable older owners, matching graph/epoch, direct same-seal rejection, depth checked <=256 before transfer; identity domain commits actual parent identity. Every currentness check remains cold, validates each retained owner.",
+    "Cold compiler_inputs map now owns cloned InputKey values to end immutable published_input borrow before existing mutable dependency-fetch calls. <=100000 rows, <=256 facets and conservative rows/512MiB metadata guards preserved; exact allocator/transient peak and opaque Salsa intern arena accounting not established.",
+    "Parent bytes conservatively include parent metadata. No SDK owner per source/result/seed. Existing consumer escape/weak ownership charge integration remains held."
+  ],
+  "costs": {
+    "cold": "Owner transfer preflight O(F*S) source matching and bounded graph/catalog walks; parent validation O(depth + sum guard inputs), depth<=256. Cold identity joins may scan retained catalogs. Conservative logical bytes include parent owner, maps and handle overhead; source/parser roots shared.",
+    "hot": "No new guest dispatch, ordinary call-entry, installed guard or runtime source-plan work in this unadopted component. No measured speed/scaling claim."
+  },
+  "compiler_corrections": {
+    "failed_source": "965b9407418f99dc74613f718c032795948161d741d5bf88529d7a848b216acd",
+    "terminal": "91180b/1",
+    "errors": 11,
+    "changes": "Static helper explicit borrowed owner arg; actual LRR origin key return; existing adapter-to-LRR wire codec at two generated request boundaries; public receipt key test and explicit wire conversion for request span checks; own cold compiler_input keys for borrow lifetime. No semantic fallback."
+  },
+  "acceptance_holds": [
+    "Final four scoped bodies pending separate actual terminals at review time; no new stock/runtime/full-fixture pass claimed.",
+    "Configured SDK admission builder, relevant certified namespace projection, some context wrapper callers and route propagation still unimplemented. Blanket configured-facet safety refusal stays.",
+    "Actual full-core annotation/producer closure may fail; source transport does not waive it.",
+    "No RunMachine persistent publication/observer renewal/resume integration, full source/user/wrapper/std route matrix, exact-once cleanup, source epoch invalidation matrix or milestone acceptance.",
+    "No MA001-MA008 closure or all-eight complete repair claim. No guest JIT work."
+  ],
+  "closure": "Source-only staged component checkpoint permitted with explicit holds; not feature/architecture integration. Original pre-mechanical failed review and compiler evidence retained."
+}
