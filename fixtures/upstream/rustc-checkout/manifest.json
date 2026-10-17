@@ -4722,6 +4722,12 @@
       "bytes": 1992
     },
     {
+      "path": "tests/ui/resolve/type-param-local-var-shadowing.rs",
+      "git_blob": "e08379e2acff9fd21465eb6709b64de627dd83df",
+      "sha256": "c90c918b7d21b237f7137bd8a744022bf5b63c5fd61253b30fd7d893ad259d23",
+      "bytes": 398
+    },
+    {
       "path": "tests/ui/return/early-return-with-unreachable-code-24353.rs",
       "git_blob": "13add4652d9946b0564bb5b7b9dc82094d46a19e",
       "sha256": "14da3397020b38db497a9eb72223c0305764cf117a931c0046c19e473c188c18",
@@ -7470,6 +7476,14 @@
       "directives": [
         "//@ run-pass",
         "//@ aux-build:i8.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/resolve/type-param-local-var-shadowing.rs",
+      "directives": [
+        "//@ run-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "reviewer": "/root separate source-review pass",
+  "at": "2026-10-16T23:57:14.913510+00:00",
+  "source_member": "7d239fbc2bd6235e95942755cedc9f33165f76dd831e3f5aef5372993005b4fd",
+  "baseline_source": "b405a42968b63e887426ae04d5f51241a212159db0292b055fbf9c96d116b079",
+  "status": "source-reviewed scoped cold discovery repair; compile/runtime controls pending; no architecture closure",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v8/packet/overlay/crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "96b04b2a8f681c3d635f4ddb409234cf1bf584c3e6942c91db5abed3779ca61d",
+      "bytes": 511563,
+      "before_sha256": "9aa35f871688578e9375fa900e52e89cbb66cca92af07363d3335aacd893fc36"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v8/packet/overlay/crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "090573aca19b80d9cddfd5b4bf6622927989e05868c309aaa07bd81fbc1ccaa4",
+      "bytes": 37170,
+      "before_sha256": "acbb98694b7b40b193e1102a0cdd9015d7c0a676b6f6d9cc270c2ede874d49a9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v8/packet/overlay/crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "efdb05c89ade07fb95f66ead7906cbc8952bca8d1baeb7893433219636057d56",
+      "bytes": 27935,
+      "before_sha256": "73e6318e2ec2017ee9e9a79c8e1900ee38f31ddd3a4caefe1ce14f3ba38cd94b"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundaries.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v8/packet/overlay/crates/lrr/src/expand/source_discovery/item_boundaries.rs",
+      "sha256": "09379f72a5e17b3f755082b0db3641cdadb5e996b938a035ff2ebd7076e3a58c",
+      "bytes": 9425,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_frontier_tests.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v8/packet/overlay/crates/lrr/src/frontend/generated_impl_frontier_tests.rs",
+      "sha256": "f5dc7ddfe9e75e8ac08424516c17e909ae38583e81c3bb7cdba25cceabc35c7c",
+      "bytes": 5449,
+      "before_sha256": null
+    }
+  ],
+  "tasks": [
+    "LOCAL-024",
+    "WT08-02",
+    "M013",
+    "M014"
+  ],
+  "witness": "unchanged official resolve/type-param-local-var-shadowing.rs; direct emitter V7 actual Defined then selfcycle",
+  "common_route": "SourceDiscovery::admit_expansion_inner and integrate_source_derive_append -> exact GeneratedHeaderPlan active ranges -> GeneratedDeclarations::item_impl_headers -> actual nested declaration_job/completed inventory -> existing ScanNestedDeclarations item_impl_jobs handler -> deferred actual source no-catalog boundary -> ordinary source/index/name/query44/VM CallSeal",
+  "review": [
+    {
+      "mode": 1,
+      "symbols": [
+        "admit_expansion_inner",
+        "complete_ready_item_boundaries"
+      ],
+      "conclusion": "No expression evaluator or assertion operand compiler added. Changes are cold owned syntax/declaration completion only. Existing legacy evaluators remain held per MA001/E-R5-005."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "GeneratedHeaderPlan::prepare_using",
+        "GeneratedDeclarations::item_impl_headers"
+      ],
+      "conclusion": "Actual complete generated item/header facts, no literal/break output subset or alternate executable lowering. Header facet does not grant body execution."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "prepare_using",
+        "item_impl_headers"
+      ],
+      "conclusion": "No macro identity/name whitelist, member body selection or numeric inference. Exact source header owner determines impl scope; no fixture-specific symbol."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "active_impl_ranges",
+        "admit_expansion_inner"
+      ],
+      "conclusion": "Common adopted source facts and completed inventory replace ownerless impl producer. Generated-child wrapper route still refuses missing declaration closure and is a named gap, not compatibility acceptance."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "poll_item_declarations",
+        "ScanNestedDeclarations handler"
+      ],
+      "conclusion": "No patterns or unselected executable arm checks changed. Cold declaration scan required for catalog completeness is preserved, without BodyStructure/Thunk body preparation. Runtime cold counters unexecuted on successor."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "item_impl_headers",
+        "PendingItemBoundary::prepare",
+        "PendingItemBoundary::ready"
+      ],
+      "conclusion": "Attachment reuses admitted immutable DeclarationScan; no second generated parse/scan. Active ranges retained from existing header preparation once. Pending fixed-job checks perform no parse/query execution; all work cold."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "GeneratedHeaderPlan::impl_frontier",
+        "complete_ready_item_boundaries_inner"
+      ],
+      "conclusion": "Distinct stable impl frontier binds exact record/scope/cfg/epoch, separate from unsupported invocation reasons. Same completion handler requires all actual canonical impl headers. Pending checks source publication/record and typed work jobs, not namespace world. Existing macro route installation is cold, may traverse prepared namespace facts; no hot-path dispatch changes."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "PendingItemBoundary",
+        "item_impl_headers"
+      ],
+      "conclusion": "Source.share retains actual immutable publication; record shared Arc. No BodyIndex clone or runtime whole-file node search. Active range/header joins use retained lists; O(active impls * (raw headers + scanned impls)) cold attachment remains explicit cost, not speed/scaling claim."
+    }
+  ],
+  "costs": "Bounded cold borrowed impl-scope index and active range vector, source-owned header pairs, per-invocation prerequisite vector O(J log J) preparation. Pending completion sweep O(P * J log W) per discovery step; bounded metadata, no measured scaling claim. Runtime operations/call dispatch unchanged.",
+  "authority": "All allocation/count/budget checks before direct publication where added; canonical completed impl inventory required before relevant frontier release; pending receipt finalization waits every actual typed admission job including declaration closure; failures after provider mutation poison SourceDiscovery. Unsupported mixed owner/import frontier remains independent.",
+  "evidence_required": [
+    "three exact source authority controls incl cfg-disabled/active mix",
+    "whole unchanged main and arbitrary emitter allfour editions",
+    "wrapper recorded separately",
+    "exact source/epoch refusal and prior user macro regression on changed discovery route"
+  ],
+  "holds": [
+    "required interpreter/runtime matrix incomplete",
+    "generated child declaration closure",
+    "standard macro nesting",
+    "all legacy production routes not removed",
+    "full milestone unexecuted",
+    "no JIT"
+  ]
+}

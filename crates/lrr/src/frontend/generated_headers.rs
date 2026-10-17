@@ -20,6 +20,10 @@ pub struct GeneratedHeaderPlan {
     scope: ScopeKey,
     routes: Vec<GeneratedRoute>,
     blocked: BTreeSet<Digest>,
+    impl_frontier: Option<Digest>,
+    impl_ranges: Vec<crate::syntax::spans::SourceRange>,
+    cfg: Digest,
+    epoch: u64,
     attributes: BTreeSet<Digest>,
     guard: Digest,
     imports: Vec<crate::syntax::imports::SourceImport>,
@@ -160,6 +164,8 @@ impl GeneratedHeaderPlan {
                 .contains(&r.declaration.definition().identity)
         });
         plan.blocked.clear();
+        plan.impl_frontier = None;
+        plan.impl_ranges.clear();
         plan.attributes.clear();
         plan.imports.clear();
         plan.module_sources.clear();
@@ -273,8 +279,54 @@ impl GeneratedHeaderPlan {
             .collect::<BTreeSet<_>>();
         let mut blocked = BTreeSet::new();
         blocked.extend(attributes.iter().copied());
+        // Impl inventory completion cannot discharge unsupported imports or
+        // other owner scopes which also keep this expansion incomplete.
+        let impl_scope_bytes = outline
+            .items
+            .len()
+            .checked_mul(128)
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "impl scope index limit"))?;
+        let impl_scopes = outline
+            .items
+            .iter()
+            .filter(|item| item.def_key.item_kind == ItemKind::Impl)
+            .map(|item| (item.scope.module_path.as_slice(), item.header.fingerprint()))
+            .collect::<BTreeSet<_>>();
+        let impl_frontier = (!impl_scopes.is_empty()).then(|| {
+            let mut e = crate::core::digest::StableEncoder::new("lrr/v1/generated-impl-frontier");
+            e.digest(items.record().descriptor().fingerprint());
+            e.record(&scope);
+            e.digest(cfg.fingerprint());
+            e.u64(epoch);
+            e.finish()
+        });
+        let mut impl_ranges = Vec::new();
+        impl_ranges
+            .try_reserve_exact(
+                outline
+                    .items
+                    .iter()
+                    .filter(|item| item.def_key.item_kind == ItemKind::Impl)
+                    .count(),
+            )
+            .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "impl range allocation"))?;
+        impl_ranges.extend(
+            outline
+                .items
+                .iter()
+                .filter(|item| item.def_key.item_kind == ItemKind::Impl)
+                .map(|item| item.declaration_span),
+        );
+        impl_ranges.sort_by_key(|range| (range.start, range.end));
+        let impl_owned_scope = |candidate: &ScopeKey| {
+            candidate.crate_key == scope.crate_key
+                && candidate.owner.is_some_and(|owner| {
+                    impl_scopes.contains(&(candidate.module_path.as_slice(), owner))
+                })
+        };
         let mut routes = Vec::new();
-        let mut bytes = 0usize;
+        let mut bytes = impl_scope_bytes;
         for members in outline.scopes.values() {
             for b in &members.blockers {
                 let id = items.frontier_identity(b.syntax);
@@ -469,7 +521,16 @@ impl GeneratedHeaderPlan {
             imports.push(import);
         }
         for item in &outline.items {
-            if !contained_scope(&item.scope, &scope) || item.def_key.item_kind == ItemKind::Impl {
+            if item.def_key.item_kind == ItemKind::Impl || impl_owned_scope(&item.scope) {
+                blocked.insert(
+                    impl_frontier.ok_or_else(|| {
+                        fault("LRR-E-EXPANSION-INPUT", "impl frontier owner absent")
+                    })?,
+                );
+                if !contained_scope(&item.scope, &scope) && !impl_owned_scope(&item.scope) {
+                    blocked.insert(items.record().key().invocation);
+                }
+            } else if !contained_scope(&item.scope, &scope) {
                 blocked.insert(items.record().key().invocation);
             } else if item.def_key.item_kind == ItemKind::Macro {
                 let header = headers
@@ -491,7 +552,13 @@ impl GeneratedHeaderPlan {
         }
         for (route_scope, members) in &outline.scopes {
             if !contained_scope(route_scope, &scope) {
-                blocked.insert(items.record().key().invocation);
+                if impl_owned_scope(route_scope) {
+                    blocked.insert(impl_frontier.ok_or_else(|| {
+                        fault("LRR-E-EXPANSION-INPUT", "impl scope frontier absent")
+                    })?);
+                } else {
+                    blocked.insert(items.record().key().invocation);
+                }
                 continue;
             }
             for ((namespace, _name), ids) in &members.candidates {
@@ -565,6 +632,10 @@ impl GeneratedHeaderPlan {
             scope,
             routes,
             blocked,
+            impl_frontier,
+            impl_ranges,
+            cfg: cfg.fingerprint(),
+            epoch,
             attributes,
             guard: items.record().descriptor().fingerprint(),
             imports,
@@ -583,6 +654,29 @@ impl GeneratedHeaderPlan {
     }
     pub fn blocked(&self) -> impl Iterator<Item = &Digest> {
         self.blocked.iter()
+    }
+    pub(crate) fn impl_frontier(&self) -> Option<Digest> {
+        self.impl_frontier
+    }
+    pub(crate) fn active_impl_ranges(
+        &self,
+        items: &GeneratedItems,
+        cfg: &CfgSet,
+        scope: &ScopeKey,
+        epoch: u64,
+    ) -> Result<&[crate::syntax::spans::SourceRange], Diagnostic> {
+        if self.guard != items.record().descriptor().fingerprint()
+            || self.cfg != cfg.fingerprint()
+            || &self.scope != scope
+            || self.epoch != epoch
+            || items.epoch() != epoch
+        {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "active impl projection owner differs",
+            ));
+        }
+        Ok(&self.impl_ranges)
     }
     pub fn publish(self, graph: &mut NameNamespaces) -> Result<(), Diagnostic> {
         // Import frontiers are installed at their actual lexical module by
@@ -620,3 +714,7 @@ impl GeneratedHeaderPlan {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "generated_impl_frontier_tests.rs"]
+mod frontier_tests;

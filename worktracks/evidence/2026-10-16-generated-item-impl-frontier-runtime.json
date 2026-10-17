@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "task": "WT08-02 / M013/M014 shared generated implementation frontier; no task closure",
+  "source_member": "7d239fbc2bd6235e95942755cedc9f33165f76dd831e3f5aef5372993005b4fd",
+  "source_baseline": "b405a42968b63e887426ae04d5f51241a212159db0292b055fbf9c96d116b079",
+  "validation_receipt": {
+    "path": "artifacts/macos-first/root-common-entered-call-validation-v8/RELEASE.json",
+    "sha256": "a2c4bb3a44c4dab106075cb3bcc2f7c2bbea1feadddd917a7b02f3e62ac63f71"
+  },
+  "compile": "0f525a/0; Rust1.99.0 aarch64-apple-darwin; no-run host build, no runtime acceptance by compilation",
+  "execution_terminal": "8cf446/1; stopped at first failing wrapper",
+  "passed_test_bodies": 5,
+  "failed_test_bodies": 1,
+  "unexecuted_test_bodies": 2,
+  "passing_scope": [
+    "three source authority controls in all four editions: distinct impl frontier, unrelated trait-owner blocker retained, active/cfg-disabled impl exact projection with stale epoch refusal",
+    "entire unchanged official resolve/type-param-local-var-shadowing.rs main in editions2015/2018/2021/2024",
+    "entire main with genuine arbitrary macro-emitted items in all four editions; exact ordinary zero-argument CallSeal, shadowing, cold-body and cleanup checks"
+  ],
+  "failing_scope": "wrapper emitted child stops before interpreter entry at generated child requires further declaration discovery; no completed execution claimed",
+  "unexecuted_scope": [
+    "pre-body revocation regression",
+    "prior user-suffix regression"
+  ],
+  "distinct_upstream_increment": 0,
+  "reason_no_increment": "This extends source contexts for the same already-passing official shadowing program, not a new original or full-fixture pass. Prior V3 plain original added one distinct runtime contract.",
+  "full_fixture_increment": 0,
+  "mechanism": "same actual GeneratedHeaderPlan/retained DeclarationScan -> completed inventory proof -> distinct impl frontier release -> retained actual macro boundary -> ordinary entered source/name/query44/VM; no new interpreter/evaluator",
+  "source_review": {
+    "root_path": "worktracks/evidence/2026-10-16-generated-item-impl-frontier-source-review.json",
+    "root_sha256": "1d3e809225daeb1d6b734003e373a5eb64870b13705af2b86bad18b77f3f14ad",
+    "validator_path": "artifacts/macos-first/root-common-entered-call-validation-v8/SOURCE-REVIEW.json",
+    "validator_sha256": "dc1e78a75667b832f3dbb53c73402565ef8b81e5f35ceff3d210ad2a0d3f1ed3"
+  },
+  "holds": [
+    "generated-child declaration closure",
+    "standard macro context matrix",
+    "remaining obsolete production routes",
+    "complete interpreter runtime prerequisite and milestone",
+    "guest JIT",
+    "full-suite diagnostics/compiler-tooling compatibility"
+  ],
+  "scope": "source-only WIP checkpoint may be published; not feature/integration/release acceptance"
+}

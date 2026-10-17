@@ -1,0 +1,73 @@
+{
+  "schema": "lrr/source-review/entered-call-v8-independent/v1",
+  "source_member": "7d239fbc2bd6235e95942755cedc9f33165f76dd831e3f5aef5372993005b4fd",
+  "baseline_source": "b405a42968b63e887426ae04d5f51241a212159db0292b055fbf9c96d116b079",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "96b04b2a8f681c3d635f4ddb409234cf1bf584c3e6942c91db5abed3779ca61d",
+      "bytes": 511563,
+      "before_sha256": "9aa35f871688578e9375fa900e52e89cbb66cca92af07363d3335aacd893fc36"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "090573aca19b80d9cddfd5b4bf6622927989e05868c309aaa07bd81fbc1ccaa4",
+      "bytes": 37170,
+      "before_sha256": "acbb98694b7b40b193e1102a0cdd9015d7c0a676b6f6d9cc270c2ede874d49a9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "efdb05c89ade07fb95f66ead7906cbc8952bca8d1baeb7893433219636057d56",
+      "bytes": 27935,
+      "before_sha256": "73e6318e2ec2017ee9e9a79c8e1900ee38f31ddd3a4caefe1ce14f3ba38cd94b"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundaries.rs",
+      "sha256": "09379f72a5e17b3f755082b0db3641cdadb5e996b938a035ff2ebd7076e3a58c",
+      "bytes": 9425,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_frontier_tests.rs",
+      "sha256": "f5dc7ddfe9e75e8ac08424516c17e909ae38583e81c3bb7cdba25cceabc35c7c",
+      "bytes": 5449,
+      "before_sha256": null
+    }
+  ],
+  "verification": "All five frozen leaf hashes/bytes and actual V6 before hashes independently rechecked. No source changed. No Cargo/compiler/tests run by reviewer.",
+  "conclusion": "No concrete source blocker found in the exact V8 active impl projection and pending item-boundary integration. Generated-child opaque declaration closure remains explicitly held. This is source review, not runtime or architecture acceptance.",
+  "shared_authority": [
+    "GeneratedHeaderPlan derives only cfg-active Outline Impl ranges and actual header-owned ScopeKeys. Dedicated frontier domain binds descriptor/scope/cfg/epoch; unsupported owner/import frontiers remain independent.",
+    "GeneratedDeclarations::item_impl_headers requires same record/epoch/cfg/Items grammar/text/origins, exact active projection owner, unique raw Impl span and unique retained ScannedImpl range. Missing retained rows never prove cfg inactivity.",
+    "SourceDiscovery direct item and derive admission create plan before range join. Completion waits exact declaration job and every actual expected header identity, retiring only stored dedicated frontier at actual scope.",
+    "PendingItemBoundary retains actual CompletedEmptyBoundary/call/record/source publication/epoch/cfg and all actual typed update.jobs. ready checks same source publication/selection, actual record/owner and every scheduler Complete job; incomplete or skipped work is not success.",
+    "Pending sweep runs before work.poll can seal. Provider mutation failure poisons discovery. Old dropped no-macro boundary receipt is retained until actual completion; no namespace frontier is released by macro-empty finalization."
+  ],
+  "all8": {
+    "1": "No assertion/expression evaluator; syntax/declaration closure only.",
+    "2": "Actual generated source/header records, not scalar/break-only execution.",
+    "3": "No macro/name/numeric profile; actual ItemKind/scope/header identity.",
+    "4": "No new original-only exclusion. Generated child remains explicit missing closure join, not accepted compatibility.",
+    "5": "Header/declaration discovery only; cold callee bodies and unselected executable arms not lowered. Pattern engine unchanged.",
+    "6": "Cold fixed-point projection and completion sweep only; no installed execution planning or macro reexecution added.",
+    "7": "Distinct relevant producer/frontier dependencies preserve unrelated blockers. No runtime namespace census or unchecked absence.",
+    "8": "Shared actual source/record Arcs; no BodyIndex deep copies or per-runtime-node whole-file searches."
+  },
+  "costs": {
+    "projection": "O(I log I) active scope/range preparation; helper O(A*(R+S)) unique raw/retained joins, no reparsing. Checked output vector <=64MiB.",
+    "pending": "Preparation O(J log J), each receipt <=100000 prerequisites/64MiB, map+completed count <=100000, cumulative retained metadata <=320MiB. Sweep per fixed-point step O(sum J log W) plus source/cfg checks; repeated steps can be quadratic. Bounded ready vector <=100000. No measured speed/scaling claim.",
+    "ownership": "Source publication shared; exclusive metadata charged. Cumulative pending accounting conservatively not decremented, no exact unique-byte claim."
+  },
+  "source_controls": "New generated_impl_frontier_tests covers all4 editions actual impl owner frontier, unrelated trait-owner blocker, cfg-disabled-only and mixed active/inactive projection, wrong epoch. Source inspected, not executed by reviewer.",
+  "remaining": [
+    "Full unchanged stock wrapper requires genuine generated-child declaration closure; separate common join pending.",
+    "Runtime exact-once/suspension/cleanup/invalidation and full standard macro matrix not inferred from source review.",
+    "Dedicated PendingItemBoundary negative replacement/source/scope/epoch/incomplete-prerequisite/failstop tests not established by this review.",
+    "Impl inventory is not ImplCatalogSeal/Drop presence absence or method selection."
+  ],
+  "scope_exclusions": [
+    "Live post-freeze Sealed/nonempty pending-map defensive refusal is excluded and needs separate review/control.",
+    "Inherited admitted_parsed accessor stripped from exact V8 delta; no impl_catalog hook/future module/generic integration included."
+  ],
+  "parent_report_after_review": "Parent reports V8 three authority tests plus stock user/all4 and plain/all4 pass; wrapper fails at expected generated-child closure. Reviewer did not run or independently inspect those terminals; exact validator evidence owns those results."
+}

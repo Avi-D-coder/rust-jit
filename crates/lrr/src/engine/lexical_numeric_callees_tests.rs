@@ -83,7 +83,33 @@ pub(super) fn setup(text: &str, edition: u16) -> (Database, PreparedSourceView, 
             SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
                 .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
                 .unwrap(),
-            _ => panic!("lexical source discovery requires unsupported authority"),
+            SourceDiscoveryStep::Incomplete {
+                diagnostic,
+                blocked,
+            } => panic!(
+                "ordinary source discovery incomplete in edition {edition}: {diagnostic:?}; blocked={blocked:?}"
+            ),
+            SourceDiscoveryStep::NeedSourceDeriveSelection { .. } => {
+                panic!("ordinary source discovery edition {edition}: NeedSourceDeriveSelection")
+            }
+            SourceDiscoveryStep::NeedSourceDeriveExpansion { .. } => {
+                panic!("ordinary source discovery edition {edition}: NeedSourceDeriveExpansion")
+            }
+            SourceDiscoveryStep::NeedSourceDeriveAppend { .. } => {
+                panic!("ordinary source discovery edition {edition}: NeedSourceDeriveAppend")
+            }
+            SourceDiscoveryStep::NeedDeriveAppend { .. } => {
+                panic!("ordinary source discovery edition {edition}: NeedDeriveAppend")
+            }
+            SourceDiscoveryStep::NeedDeriveDeclaration { .. } => {
+                panic!("ordinary source discovery edition {edition}: NeedDeriveDeclaration")
+            }
+            SourceDiscoveryStep::NeedAttributeSelection { .. } => {
+                panic!("ordinary source discovery edition {edition}: NeedAttributeSelection")
+            }
+            SourceDiscoveryStep::NeedProceduralSelection { .. } => {
+                panic!("ordinary source discovery edition {edition}: NeedProceduralSelection")
+            }
         }
     }
     (db, view, discovery)

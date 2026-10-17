@@ -1,5 +1,7 @@
 //! Actual ordinary interpreter controls. The primary program is the complete,
 //! unchanged rustc suffix-inference source, not a selected-body replacement.
+#[path = "run_stock_local_call_tests.rs"]
+mod stock_local_call_tests;
 use super::super::lexical_numeric_callees_tests::{ORIGINAL, setup};
 use super::*;
 use crate::{
@@ -245,6 +247,55 @@ fn wrong_runtime_argument_type_never_executes_the_selected_local_callee_all_edit
         assert_eq!(h.run.peak_guest_frames, 1);
         h.db.finish_run().unwrap();
     }
+}
+
+#[test]
+fn revoked_selected_local_source_is_refused_before_child_body_query() {
+    let mut h = start(ORIGINAL, 2024, "main");
+    let site = h
+        .parent
+        .context()
+        .source()
+        .index()
+        .nodes()
+        .iter()
+        .find(|node| node.role == NodeRole::Expression(ExpressionKind::Call))
+        .unwrap()
+        .id;
+    let key = h
+        .parent
+        .context()
+        .source()
+        .index()
+        .pc(site, Phase::Entry)
+        .unwrap();
+    let selected = ready(h.db.fetch(&SyntaxProvider, QueryKey::EnteredCall(key)));
+    let QueryValue::EnteredCall(goal) = selected.value.as_ref() else {
+        panic!()
+    };
+    let crate::frontend::entered_call_goals::EnteredCallSelection::Local(proof) = goal.selection()
+    else {
+        panic!()
+    };
+    h.db.publish_ordinary_local_function(proof).unwrap();
+    let callee = goal.local_callable(&mut h.db).unwrap();
+    let child = callee.body().unwrap().key();
+    assert!(h.db.memo(&QueryKey::BodyStructure(child.clone())).is_none());
+    h.db.finish_run().unwrap();
+    h.db.begin_expansion_epoch(2).unwrap();
+    let start = h.db.trace.events.len();
+    match RunMachine::selected_source_body(&mut h.db, &callee) {
+        QueryPoll::Ready(Err(error)) => {
+            assert_eq!(error.code, "LRR-E-INTERNAL-SNAPSHOT");
+            assert_eq!(error.message, "prepared operation input changed");
+        }
+        other => panic!("revoked selected source was not refused: {other:?}"),
+    }
+    assert!(
+        !h.db.trace.events[start..]
+            .iter()
+            .any(|event| matches!(&event.key, QueryKey::BodyStructure(body) if *body == child))
+    );
 }
 
 enum RetainedLocalSource {

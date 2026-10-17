@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "worktrack": "WT04-01 / WT08-02",
+  "status": "scoped upstream runtime pass; generated-context preparation repair incomplete",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/resolve/type-param-local-var-shadowing.rs",
+    "sha256": "c90c918b7d21b237f7137bd8a744022bf5b63c5fd61253b30fd7d893ad259d23",
+    "unchanged": true
+  },
+  "runtime": {
+    "source": "f7dda5e969dc53c09c42c4d938ab51bb4ddc036e21debff6ec96d2b58798838a",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "contract": "entire unchanged main, inner zero-argument f shadows outer f binding; ordinary CallSeal exactly once and cleanup; cold generic Foo/Box method remains unentered",
+    "new_distinct_runtime_contracts": 1,
+    "full_fixture_passes": 0,
+    "receipt": {
+      "path": "artifacts/macos-first/root-common-entered-call-validation-v3/stock-plain/terminal.json",
+      "sha256": "208619f28ebb2267fadc2dc431a4a40abab690eb3ce5d8005e49f790346e3373",
+      "exit_code": 0,
+      "source_member": "f7dda5e969dc53c09c42c4d938ab51bb4ddc036e21debff6ec96d2b58798838a"
+    },
+    "terminal": "4d8119/0"
+  },
+  "generated_context": {
+    "status": "valid arbitrary emitter fails discovery before interpreter entry",
+    "corrected_source_sha256": "ae596c3f4368e73c1bbf554db6eee0511bba290fd0f54e148727cb3313026072",
+    "source_blob_domain_digest": "54e7bc035b5f989802d5fc7f11c8b6148c9598c17cb8439de6667c74be87aeaf",
+    "receipt": {
+      "path": "artifacts/macos-first/root-common-entered-call-validation-v7/stock-user/terminal.json",
+      "sha256": "bcbd00dcbfb43e14a02c134d6ddc21d7f6ea0dde9d288a0c4f9edbf089c80d54",
+      "exit_code": 101,
+      "source_member": "703b82c8d7fe02461608eee5eeebad306f27cdaceb0be51190b155c03bafa091"
+    },
+    "terminal": "fb0f5b/1",
+    "actual_lookup": "Defined; missing opaque impl frontier completion bridge diagnosed after macro lookup",
+    "wrapper": "unexecuted; generated-child declaration closure remains an additional prerequisite"
+  },
+  "supplemental_controls": {
+    "receipt": {
+      "path": "artifacts/macos-first/root-common-entered-call-validation-v7/SUPPLEMENTAL-RELEASE.json",
+      "sha256": "d5c0df26ba675b4cd66a4fe5cc275173a7cbecb8d028836347bab17fbae3faf6",
+      "exit_code": null,
+      "source_member": "703b82c8d7fe02461608eee5eeebad306f27cdaceb0be51190b155c03bafa091"
+    },
+    "passed_test_bodies": 2,
+    "pre_body_revocation": "df214d/0; exact stale source refusal before any child BodyStructure query",
+    "prior_user_suffix": "08a977/0; same entire upstream suffix program, all4 editions, 72 calls, zero new distinct cases"
+  },
+  "separate_compiler_reference": {
+    "path": "artifacts/macos-first/root-stock-shadowing-generated-reference-v2/",
+    "terminal": "1a637f/0; Rust 1.99.0 edition2015 metadata-only validation of exact adapted source",
+    "counts_as_interpreter_execution": false
+  },
+  "preserved_failed_adapters": "V3/V4/V5 adaptation emitted inner documentation at item position; separately rejected by rustc E0753. V6/V7 use actual pinned AnyAttr inner attributes at crate root. Prior receipts retained.",
+  "acceptance_holds": [
+    "complete architecture matrix",
+    "obsolete evaluator removal",
+    "full milestone",
+    "guest JIT",
+    "diagnostic/compiler-tooling/full-suite compatibility"
+  ],
+  "cumulative_total": "not measured; no total inferred from imported inventory or selected component passes"
+}

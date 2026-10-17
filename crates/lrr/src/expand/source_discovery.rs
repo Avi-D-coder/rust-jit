@@ -34,6 +34,8 @@ pub(crate) use compiler_preparation::SourceCompilerPreparation;
 #[path = "source_discovery/original_modules.rs"]
 mod original_modules;
 use original_modules::{OrdinaryModuleOwner, OriginalModuleDeclaration};
+#[path = "source_discovery/item_boundaries.rs"]
+mod item_boundaries;
 #[path = "source_discovery/original_inert.rs"]
 mod original_inert;
 #[path = "source_discovery/source_syntax.rs"]
@@ -569,6 +571,7 @@ pub struct SourceDiscovery {
     generated_owners: BTreeMap<Digest, (usize, ScopeKey)>,
     completed_empty_boundaries:
         BTreeMap<Digest, super::body_macro_boundary::CompletedEmptyBoundary>,
+    pending_item_boundaries: BTreeMap<Digest, item_boundaries::PendingItemBoundary>,
     generated_source_modules: BTreeMap<Digest, Digest>,
     compiler_inputs: BTreeMap<crate::db::dependency::InputKey, Digest>,
     macro_export_sources: BTreeMap<
@@ -1080,6 +1083,7 @@ impl SourceDiscovery {
             generated_procedural_origin_bytes: 0,
             generated_owners: BTreeMap::new(),
             completed_empty_boundaries: BTreeMap::new(),
+            pending_item_boundaries: BTreeMap::new(),
             generated_source_modules: BTreeMap::new(),
             compiler_inputs: BTreeMap::new(),
             macro_export_sources: BTreeMap::new(),
@@ -2458,12 +2462,17 @@ impl SourceDiscovery {
         let mut encoded = crate::core::digest::StableEncoder::new("lrr/v2/item-declaration-job");
         encoded.digest(declaration.fingerprint());
         let declaration_job = encoded.finish();
-        let impl_headers = declaration.item_impl_headers(&items, cfg)?;
+        let plan = crate::frontend::generated_headers::GeneratedHeaderPlan::prepare(
+            &items,
+            call.scope.clone(),
+            crate::syntax::token_wire::Key(request.key().parent_context.0),
+            self.sources[ordinal].captured_macro_cfg()?,
+            self.epoch,
+        )?;
+        let impl_headers = declaration.item_impl_headers(&items, cfg, &plan)?;
         if self.item_declaration_inputs.len() >= 4096
             || self.nested_jobs.contains_key(&declaration_job)
             || self.item_declaration_inputs.contains_key(&declaration_job)
-            || (!impl_headers.is_empty()
-                && self.item_impl_jobs.contains_key(&record.key().invocation))
         {
             return Err(fault(
                 "source derive declaration inventory conflict or limit",
@@ -2477,13 +2486,17 @@ impl SourceDiscovery {
             .and_then(|n| n.checked_add(call.scope.heap_bytes()))
             .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(|| fault("source derive declaration metadata limit"))?;
-        let plan = crate::frontend::generated_headers::GeneratedHeaderPlan::prepare(
-            &items,
-            call.scope.clone(),
-            crate::syntax::token_wire::Key(request.key().parent_context.0),
-            self.sources[ordinal].captured_macro_cfg()?,
-            self.epoch,
-        )?;
+        let impl_frontier = if impl_headers.is_empty() {
+            None
+        } else {
+            Some(
+                plan.impl_frontier()
+                    .ok_or_else(|| fault("derive impl frontier absent"))?,
+            )
+        };
+        if impl_frontier.is_some_and(|frontier| self.item_impl_jobs.contains_key(&frontier)) {
+            return Err(fault("derive impl frontier conflict"));
+        }
         let catalog = crate::frontend::generated_macros::GeneratedMacroCatalog::for_discovery(
             &items,
             call.scope.clone(),
@@ -2623,9 +2636,9 @@ impl SourceDiscovery {
             self.nested_jobs.insert(declaration_job, ordinal);
             self.item_declaration_inputs
                 .insert(declaration_job, declaration);
-            if !bound_impl_headers.is_empty() {
+            if let Some(frontier) = impl_frontier {
                 self.item_impl_jobs.insert(
-                    record.key().invocation,
+                    frontier,
                     (declaration_job, bound_impl_headers, call.scope.clone()),
                 );
             }
@@ -3007,14 +3020,39 @@ impl SourceDiscovery {
         } else {
             None
         };
+        let plan = crate::frontend::generated_headers::GeneratedHeaderPlan::prepare(
+            &items,
+            call.scope.clone(),
+            crate::syntax::token_wire::Key(request.key().parent_context.0),
+            self.sources[ordinal].captured_macro_cfg()?,
+            self.epoch,
+        )?;
         let declaration_bytes = declaration_output
             .as_ref()
             .map(|output| output.metadata_bytes())
             .transpose()?
             .unwrap_or(0);
+        // Keep the same opaque implementation frontier used by derive output
+        // tied to the completed, source-owned declaration inventory. The item
+        // header plan cannot discharge this frontier merely by seeing syntax.
+        let impl_headers = declaration_output
+            .as_ref()
+            .map(|output| {
+                output.item_impl_headers(&items, self.sources[ordinal].captured_macro_cfg()?, &plan)
+            })
+            .transpose()?
+            .unwrap_or_default();
         let nested_bytes = self
             .nested_bytes
             .checked_add(declaration_bytes)
+            .and_then(|n| n.checked_add(impl_headers.len().checked_mul(256)?))
+            .and_then(|n| {
+                n.checked_add(if impl_headers.is_empty() {
+                    0
+                } else {
+                    call.scope.heap_bytes()
+                })
+            })
             .and_then(|n| n.checked_add(128))
             .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(|| fault("item declaration metadata limit"))?;
@@ -3040,13 +3078,17 @@ impl SourceDiscovery {
             )
             .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(|| fault("replacement retained size limit"))?;
-        let plan = crate::frontend::generated_headers::GeneratedHeaderPlan::prepare(
-            &items,
-            call.scope.clone(),
-            crate::syntax::token_wire::Key(request.key().parent_context.0),
-            self.sources[ordinal].captured_macro_cfg()?,
-            self.epoch,
-        )?;
+        let impl_frontier = if impl_headers.is_empty() {
+            None
+        } else {
+            Some(
+                plan.impl_frontier()
+                    .ok_or_else(|| fault("item impl frontier absent"))?,
+            )
+        };
+        if impl_frontier.is_some_and(|frontier| self.item_impl_jobs.contains_key(&frontier)) {
+            return Err(fault("item impl frontier conflict"));
+        }
         let headers = self
             .generated_headers
             .checked_add(items.items().len())
@@ -3096,9 +3138,14 @@ impl SourceDiscovery {
         {
             catalog.inherit_original_helpers(helpers.clone())?;
         }
-        let empty_boundary = if !requires_macro_catalog {
-            if self.completed_empty_boundaries.len() >= 100_000
+        let mut empty_boundary = if !requires_macro_catalog {
+            if self
+                .completed_empty_boundaries
+                .len()
+                .checked_add(self.pending_item_boundaries.len())
+                .is_none_or(|count| count >= 100_000)
                 || self.completed_empty_boundaries.contains_key(&identity)
+                || self.pending_item_boundaries.contains_key(&identity)
             {
                 return Err(fault("completed empty macro boundary count/conflict"));
             }
@@ -3274,6 +3321,37 @@ impl SourceDiscovery {
                 .iter()
                 .map(|(key, fingerprint)| (key.fingerprint(), *fingerprint)),
         );
+        let pending_item_boundary = if !opaque.is_empty() {
+            empty_boundary
+                .take()
+                .map(|boundary| {
+                    item_boundaries::PendingItemBoundary::prepare(
+                        boundary,
+                        &self.sources[ordinal],
+                        self.epoch,
+                        &update.jobs,
+                    )
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let retained_bytes = retained_bytes
+            .checked_add(
+                pending_item_boundary
+                    .as_ref()
+                    .map(item_boundaries::PendingItemBoundary::metadata_bytes)
+                    .transpose()?
+                    .unwrap_or(0),
+            )
+            .filter(|n| *n <= 320 * 1024 * 1024)
+            .ok_or_else(|| fault("pending item boundary metadata limit"))?;
+        let mut bound_impl_headers = Vec::new();
+        bound_impl_headers
+            .try_reserve_exact(impl_headers.len())
+            .map_err(|_| fault("item impl frontier allocation"))?;
+        bound_impl_headers.extend(impl_headers.iter().map(|(_, header)| *header));
+        let impl_scope = call.scope.clone();
         self.work.preflight_complete(&ticket, &mut update)?;
         // The original frontier remains until header/import publication succeeds.
         let result = (|| {
@@ -3361,6 +3439,10 @@ impl SourceDiscovery {
             {
                 return Err(fault("item declaration job conflict"));
             }
+            if let Some(frontier) = impl_frontier {
+                self.item_impl_jobs
+                    .insert(frontier, (job, bound_impl_headers, impl_scope));
+            }
             self.nested_bytes = nested_bytes;
         }
         if let (Some(proof), Some((parent, retired, _bytes))) = (replacement, replacement_preflight)
@@ -3377,6 +3459,9 @@ impl SourceDiscovery {
         }
         self.source_bases.insert(identity, source_base);
         self.records.insert(identity, record);
+        if let Some(boundary) = pending_item_boundary {
+            self.pending_item_boundaries.insert(identity, boundary);
+        }
         self.retained_record_bytes = retained_bytes;
         self.generated_bytes = bytes;
         self.generated_headers = headers;
@@ -9476,6 +9561,7 @@ impl SourceDiscovery {
             });
         }
         loop {
+            self.complete_ready_item_boundaries()?;
             if let Some((_, _, providers)) = &mut self.declarative {
                 match super::source_declarative::SourceDeclarative::synchronize_macro_uses(
                     providers,

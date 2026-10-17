@@ -201,53 +201,81 @@ impl GeneratedDeclarations {
         &self,
         items: &super::generated_items::GeneratedItems,
         cfg: &CfgSet,
+        plan: &crate::frontend::generated_headers::GeneratedHeaderPlan,
     ) -> Result<Vec<(Digest, Digest)>, Diagnostic> {
         if self.record.descriptor().fingerprint() != items.record().descriptor().fingerprint()
             || self.epoch != items.epoch()
             || self.scan.cfg() != cfg.fingerprint()
+            || self.record.key().grammar != GrammarSlot::Items
+            || self.text.as_str() != items.text()
+            || self.origins.as_slice() != items.origins()
         {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "impl item declaration owner differs",
             ));
         }
-        let parsed = ParsedFile::from_generated_items(items)?;
-        let scan = parsed.scan_declarations(
-            self.scan.path().clone(),
-            self.scan.scope().clone(),
-            cfg,
-            Default::default(),
-        )?;
+        // Both admitted facets use the exact record's MacroItems arena. The
+        // declaration facet's enclosing SOURCE_FILE adds no tokens or offsets;
+        // text/origin agreement above excludes a different coordinate space.
+        // The common active Outline projection (not missing scan rows) selects
+        // the required impls. Raw headers can include cfg-disabled subtrees.
+        let active = plan.active_impl_ranges(items, cfg, self.scan.scope(), self.epoch)?;
+        if active
+            .windows(2)
+            .any(|pair| (pair[0].start, pair[0].end) >= (pair[1].start, pair[1].end))
+        {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "active impl projection is duplicated or unordered",
+            ));
+        }
+        active
+            .len()
+            .checked_mul(std::mem::size_of::<(Digest, Digest)>())
+            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
+            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "impl item attachment budget"))?;
         let mut pairs = Vec::new();
         pairs
-            .try_reserve_exact(items.items().len())
+            .try_reserve_exact(active.len())
             .map_err(|_| fault("LRR-E-METADATA-LIMIT", "impl item attachment allocation"))?;
-        for item in items
-            .items()
-            .iter()
-            .filter(|i| i.kind == super::generated_items::GeneratedHeaderKind::Impl)
-        {
-            let header = scan
-                .impls()
-                .iter()
-                .find(|h| h.range.start == item.start && h.range.end == item.end)
-                .ok_or_else(|| {
-                    fault(
-                        "LRR-E-EXPANSION-INPUT",
-                        "owned item impl syntax attachment absent",
-                    )
-                })?;
-            if !self
+        for range in active {
+            let mut items = items.items().iter().filter(|item| {
+                item.kind == super::generated_items::GeneratedHeaderKind::Impl
+                    && item.start == range.start
+                    && item.end == range.end
+            });
+            let item = items.next().ok_or_else(|| {
+                fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "active impl raw syntax attachment absent",
+                )
+            })?;
+            if items.next().is_some() {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "active impl raw attachment is ambiguous",
+                ));
+            }
+            let mut headers = self
                 .scan
                 .impls()
                 .iter()
-                .any(|h| h.header_identity == header.header_identity)
-            {
+                .filter(|header| header.range == *range);
+            let header = headers.next().ok_or_else(|| {
+                fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "owned item impl syntax attachment absent",
+                )
+            })?;
+            if headers.next().is_some() {
                 return Err(fault(
                     "LRR-E-EXPANSION-INPUT",
-                    "owned impl declaration header differs",
+                    "owned impl declaration attachment is ambiguous",
                 ));
             }
+            // Attribute/unsupported-context producer retirement remains the
+            // completed declaration job's authority, not this range join.
             pairs.push((item.key.fingerprint(), header.header_identity));
         }
         Ok(pairs)

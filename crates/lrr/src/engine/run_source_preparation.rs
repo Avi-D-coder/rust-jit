@@ -98,6 +98,11 @@ impl RunMachine {
         db: &mut Database,
         callee: &SourceCallable,
     ) -> QueryPoll<Arc<BodyIndex>> {
+        // A selected identity can outlive argument evaluation or a pause. Check
+        // its real source authority before the first executable body demand.
+        if let Err(error) = callee.revalidate(db) {
+            return QueryPoll::Ready(Err(error));
+        }
         let Some(handle) = callee.body() else {
             return QueryPoll::Ready(Err(call_fault("selected source function has no body")));
         };
