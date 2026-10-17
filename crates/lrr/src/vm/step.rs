@@ -1049,15 +1049,16 @@ fn numeric_preflight(
                 Some(discriminant) => discriminant,
                 None => store.preview_scalar(cell, None)?,
             };
-            let target = concrete(&HintRecipe::Primitive(*target))?
+            let primitive = *target;
+            let target = concrete(&HintRecipe::Primitive(primitive))?
                 .ok_or_else(|| invalid("cast target absent"))?;
             numeric::cast_types(TypeId(value.type_id), target).map_err(runtime)?;
-            (*destination, target, None)
+            // The result's Type is the written target primitive exactly.
+            (*destination, target, Some(primitive))
         }
         _ => return Ok(None),
     };
     if matches!(op, Op::PrimitiveCast { .. }) {
-        // Cast source propagation remains its existing separate prerequisite.
         frame.preflight_write_type(destination, ty, store)?;
     } else {
         frame.preflight_primitive_operator_result(destination, ty, source, store)?;
@@ -1593,6 +1594,7 @@ pub(crate) fn step_with_constant(
             if frame.has_source_constant_activation() {
                 return Err(invalid("source constant resumed into another operation"));
             }
+            frame.clear_rerun(index);
             if frame.has_copy_activation() {
                 frame.check_copy_activation(index, op)?;
                 if !frame.advance_aggregate_copy(store)? {
@@ -1629,16 +1631,9 @@ pub(crate) fn step_with_constant(
                         increment(&mut frame.counters.operations_completed)?;
                         continue;
                     }
-                    // The operation began once already.
-                    frame.counters.operations_started = frame
-                        .counters
-                        .operations_started
-                        .checked_sub(1)
-                        .ok_or_else(|| invalid("VM counter underflow"))?;
-                    let tag = usize::from(op.opcode_tag());
-                    frame.counters.started_by_opcode[tag] = frame.counters.started_by_opcode[tag]
-                        .checked_sub(1)
-                        .ok_or_else(|| invalid("VM counter underflow"))?;
+                    // The suspended start completes as the dereference step;
+                    // the operation starts again over the new base.
+                    increment(&mut frame.counters.operations_completed)?;
                     return Ok(StepOutcome::Dispatch);
                 }
                 frame.complete_operator_operation(index, op)?;
@@ -1665,10 +1660,28 @@ pub(crate) fn step_with_constant(
             } else {
                 numeric_preflight(frame, store, op)?
             };
-            let (projection, projection_panic) = match frame.prepare_projection(op, store) {
-                Ok(prepared) => (prepared, None),
-                Err(crate::runtime::place::PlaceFailure::RuntimeFault(error)) => return Err(error),
-                Err(crate::runtime::place::PlaceFailure::GuestPanic(panic)) => (None, Some(panic)),
+            // A place operation suspended for its base's overloaded `Deref`
+            // step is checked when it runs again over the dereferenced base.
+            let deferred_place = overloaded.is_some()
+                && matches!(
+                    op,
+                    Op::DerefPlace { .. }
+                        | Op::ProjectField { .. }
+                        | Op::ProjectTuple { .. }
+                        | Op::ProjectIndex { .. }
+                );
+            let (projection, projection_panic) = if deferred_place {
+                (None, None)
+            } else {
+                match frame.prepare_projection(op, store) {
+                    Ok(prepared) => (prepared, None),
+                    Err(crate::runtime::place::PlaceFailure::RuntimeFault(error)) => {
+                        return Err(error);
+                    }
+                    Err(crate::runtime::place::PlaceFailure::GuestPanic(panic)) => {
+                        (None, Some(panic))
+                    }
+                }
             };
             // rustc's deref coercion of a borrowed box (`&b` expected as
             // `&T` borrows `&*b`), before the borrow's own admission.
@@ -1678,7 +1691,11 @@ pub(crate) fn step_with_constant(
             {
                 frame.box_deref_coercion(*place, *destination, store)?;
             }
-            let place_panic = projection_panic.or(place_preflight(frame, store, op)?);
+            let place_panic = if deferred_place {
+                None
+            } else {
+                projection_panic.or(place_preflight(frame, store, op)?)
+            };
             frame.count_step();
             increment(&mut frame.counters.operations_started)?;
             increment(&mut frame.counters.started_by_opcode[tag])?;

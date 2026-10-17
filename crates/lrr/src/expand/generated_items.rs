@@ -490,10 +490,10 @@ impl GeneratedItems {
             |origin| (origin.start, origin.end),
             |origin| {
                 let spans = self.tokens.spans();
-                spans
-                    .binary_search_by_key(&origin.span, |span| span.key())
+                self.tokens
+                    .span_position(&origin.span)
                     .map(|index| &spans[index])
-                    .map_err(|_| {
+                    .ok_or_else(|| {
                         fault(
                             "LRR-E-INTERNAL-SOURCE-MAP",
                             "diagnostic token span is absent",

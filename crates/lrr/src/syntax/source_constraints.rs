@@ -250,6 +250,9 @@ pub(crate) enum PatternStep {
 /// Type service.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum TypeShape {
+    /// `dyn Trait`: the principal trait `PathType`'s canonical Syntax node
+    /// (the first trait bound, as the local annotation service reads it).
+    Dyn(NodeId),
     Reference(NodeId),
     Tuple(Vec<NodeId>),
     Parenthesis(NodeId),
@@ -913,6 +916,18 @@ fn annotate(
                 None => None,
             },
             ast::Type::InferType(_) => Some(TypeShape::Infer),
+            ast::Type::DynTraitType(object) => {
+                let principal = object.type_bound_list().and_then(|bounds| {
+                    bounds.bounds().find_map(|bound| match bound.ty() {
+                        Some(ast::Type::PathType(path)) => Some(ast::Type::PathType(path)),
+                        _ => None,
+                    })
+                });
+                match principal {
+                    Some(principal) => type_node(body, index, &principal)?.map(TypeShape::Dyn),
+                    None => None,
+                }
+            }
             ast::Type::PathType(path) => {
                 // Type arguments on the only segment, as the local annotation
                 // service's generic application reads them.
@@ -1543,6 +1558,10 @@ impl StableEncode for SourceConstraintPlan {
                         e.u32(inner.0);
                     }
                     TypeShape::Infer => e.u8(5),
+                    TypeShape::Dyn(principal) => {
+                        e.u8(6);
+                        e.u32(principal.0);
+                    }
                     TypeShape::Generic(base, arguments) => {
                         e.u8(4);
                         e.u32(base.0);

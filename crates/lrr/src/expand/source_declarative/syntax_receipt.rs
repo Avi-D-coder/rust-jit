@@ -145,6 +145,11 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
         .map_err(|_| fault("syntax root work allocation"))?;
     pending.extend(roots.iter().rev());
     let mut work = 0usize;
+    // A lifetime (`'a`) is one lexical token that tokenizes as `'` then its
+    // name: the lexer and a replay from the syntax tree give the two halves
+    // different span splits of the same origin, so the name carries the
+    // apostrophe's span.
+    let mut apostrophe: Option<Key> = None;
     while let Some(token) = pending.pop() {
         work = work
             .checked_add(1)
@@ -156,6 +161,7 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
                 close,
                 children,
             } => {
+                apostrophe = None;
                 e.u8(0);
                 e.u8(match delimiter {
                     Delimiter::Parenthesis => 0,
@@ -182,13 +188,14 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
                 e.u8(1);
                 e.string(text);
                 e.bool(*raw);
-                e.digest(Digest(span.0));
+                e.digest(Digest(apostrophe.take().unwrap_or(*span).0));
             }
             TokenTree::Punct {
                 scalar,
                 spacing,
                 span,
             } => {
+                apostrophe = (*scalar == '\'' && *spacing == Spacing::Joint).then_some(*span);
                 e.u8(2);
                 e.u32(u32::from(*scalar));
                 e.u8(match spacing {
@@ -199,6 +206,7 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
                 e.digest(Digest(span.0));
             }
             TokenTree::Literal { token_text, span } => {
+                apostrophe = None;
                 e.u8(3);
                 e.string(token_text);
                 e.digest(Digest(span.0));

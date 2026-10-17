@@ -2649,7 +2649,20 @@ impl RunMachine {
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
             }
+            // A place operation whose base needs an overloaded `Deref` step
+            // first demands it before the operation is prepared.
+            match self.prepare_place_deref(db, id) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+                QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
+            }
             let field = match self.installed.get_current(db, id) {
+                Ok(_) if self.frame.has_place_deref_demand() || self.frame.place_deref_returned() => {
+                    None::<(SlotId, SlotId)>
+                }
                 Ok(recipe) => recipe
                     .recipe()
                     .operations
@@ -2674,7 +2687,11 @@ impl RunMachine {
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
             }
-            match self.prepare_nominal_operations(db, id) {
+            match if self.frame.has_place_deref_demand() || self.frame.place_deref_returned() {
+                QueryPoll::Ready(Ok(()))
+            } else {
+                self.prepare_nominal_operations(db, id)
+            } {
                 QueryPoll::Ready(Ok(())) => {}
                 QueryPoll::Ready(Err(error)) => {
                     self.terminal = true;

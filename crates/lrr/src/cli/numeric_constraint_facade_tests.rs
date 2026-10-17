@@ -519,3 +519,93 @@ fn main() {
         "4 5\n",
     );
 }
+
+#[test]
+fn associated_type_projections_give_literals_the_impl_type() {
+    // The literals beyond `i32` run only under `isize`/`u64`, the Types the
+    // selected impls' associated types state: `<T as Get>::Value` of the
+    // argument's Type, `Self::Value` of a provided method's receiver, the
+    // same call emitted by a user macro, and `<I as Foo>::A` of an integer
+    // variable that its one applicable impl decides.
+    prints(
+        "projection-literals",
+        "trait Get {
+    type Value;
+    fn get(&self) -> &<Self as Get>::Value;
+    fn grab(&self) -> &<Self as Get>::Value { self.get() }
+}
+struct S { x: isize }
+impl Get for S {
+    type Value = isize;
+    fn get(&self) -> &isize { &self.x }
+}
+fn grab<T: Get>(x: &T) -> &<T as Get>::Value { x.get() }
+macro_rules! value { ($s:expr) => { *grab(&$s) } }
+trait Foo { type A; fn boo(&self) -> <Self as Foo>::A; }
+struct Bar;
+impl Foo for u8 { type A = u64; fn boo(&self) -> u64 { 5_000_000_000 } }
+impl Foo for Bar { type A = u32; fn boo(&self) -> u32 { 7 } }
+fn foo2<I: Foo>(x: I) -> <I as Foo>::A { x.boo() }
+fn main() {
+    let s = S { x: 5_000_000_000 };
+    assert_eq!(*grab(&s), 5_000_000_000);
+    assert_eq!(*s.grab(), 5_000_000_000);
+    assert_eq!(value!(s), 5_000_000_000);
+    let a = 42;
+    assert_eq!(foo2(a), 5_000_000_000);
+    assert_eq!(foo2(Bar), 7);
+    println!(\"ok\");
+}
+",
+        "ok\n",
+    );
+}
+
+#[test]
+fn aggregate_comparisons_type_their_literals_from_the_other_operand() {
+    // `u8` values beyond `i8`'s range: the right-hand literals inside an
+    // `Option`, a tuple and an array take the left operand's `u8`.
+    prints(
+        "aggregate-compare",
+        "fn main() {
+    let x: Option<u8> = Some(243);
+    let y: (u8, bool) = (217, true);
+    let a: [u8; 4] = [1, 2, 3, 4];
+    assert_eq!(x, Some(243));
+    assert_eq!(y, (217, true));
+    assert_eq!(a, [1, 2, 3, 4]);
+    assert!(x == Some(243));
+    println!(\"{} {} {} {}\", x == Some(243), y == (217, true), a == [1, 2, 3, 4], x == Some(244));
+}
+",
+        "true true true false\n",
+    );
+}
+
+#[test]
+fn box_dereference_trait_objects_and_function_items_relate_literals() {
+    // Each right-hand literal beyond `i32` runs only under the Type the
+    // relation states: `u64` through a `Box` dereference, through a trait
+    // object's method and its one applicable impl, through a literal
+    // receiver's trait method, and through a local holding a function item.
+    prints(
+        "box-dyn-fn-item",
+        "trait Foo { fn f(&self) -> u64; fn b(&self) -> u64 { self.f() + 2 } }
+impl Foo for u64 { fn f(&self) -> u64 { *self } }
+fn ten() -> u64 { 10 }
+fn main() {
+    let b = Box::new(5);
+    let sum: u64 = *b + 5_000_000_000;
+    let seven = 7;
+    let o: &dyn Foo = &seven;
+    let bo: Box<dyn Foo> = Box::new(8);
+    let rs = ten;
+    assert_eq!(rs(), 10);
+    assert_eq!(3.b(), 5);
+    assert!(o.f() == 7);
+    println!(\"{} {} {} {}\", sum, o.f() + 5_000_000_000, bo.f() + 5_000_000_000, rs() + 5_000_000_000);
+}
+",
+        "5000000005 5000000007 5000000008 5000000010\n",
+    );
+}

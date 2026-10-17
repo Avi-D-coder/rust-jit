@@ -590,3 +590,859 @@ fn upstream_vec_and_string_witnesses_complete() {
         upstream_completes(path);
     }
 }
+
+// --- slice 2: user Deref, smart pointers, library breadth ---
+
+/// `prints` for programs whose expected output is rustc's under 2021 only
+/// (array `into_iter` by value, or heavy enough that one edition suffices).
+fn prints21(label: &str, source: &str, expected: &str) {
+    match run(label, source, 2021) {
+        Ok(StandaloneOutcome::Completed(report)) => {
+            assert_eq!(report.output.stdout, expected, "edition 2021\n{source}")
+        }
+        Ok(StandaloneOutcome::Panicked(report)) => {
+            panic!("edition 2021 panicked: {:?}\n{source}", report.panic)
+        }
+        Ok(_) => panic!("edition 2021: unexpected outcome\n{source}"),
+        Err(error) => panic!("edition 2021: {error}\n{source}"),
+    }
+}
+
+/// Method receivers autoderef through user `Deref`/`DerefMut` impls (single, double, mutable, through a reference, to a `String` and to a `Vec`'s slice).
+#[test]
+fn user_deref_method_autoderef_chains() {
+    prints(
+        "deref",
+        r####"use std::ops::{Deref, DerefMut};
+struct In { n: i32 }
+impl In {
+    fn get(&self) -> i32 { self.n }
+    fn bump(&mut self) { self.n += 1; }
+}
+struct W2 { i: In }
+impl Deref for W2 { type Target = In; fn deref(&self) -> &In { &self.i } }
+impl DerefMut for W2 { fn deref_mut(&mut self) -> &mut In { &mut self.i } }
+struct W3 { w: W2 }
+impl Deref for W3 { type Target = W2; fn deref(&self) -> &W2 { &self.w } }
+impl DerefMut for W3 { fn deref_mut(&mut self) -> &mut W2 { &mut self.w } }
+struct Text(String);
+impl Deref for Text { type Target = String; fn deref(&self) -> &String { &self.0 } }
+fn main() {
+    let mut w2 = W2 { i: In { n: 4 } };
+    println!("{}", w2.get());
+    w2.bump();
+    println!("{}", w2.get());
+    let mut w3 = W3 { w: W2 { i: In { n: 10 } } };
+    println!("{}", w3.get());
+    w3.bump();
+    println!("{}", w3.get());
+    let r = &w3;
+    println!("{}", r.get());
+    let t = Text(String::from("deref chain"));
+    println!("{} {}", t.len(), t.chars().count());
+    let v: Vec<i32> = vec![3, 1, 2];
+    println!("{} {:?} {:?}", v.iter().count(), v.first(), v.last());
+    println!("{}", v.contains(&2));
+}
+"####,
+        r####"4
+5
+10
+11
+11
+11 11
+3 Some(3) Some(2)
+true
+"####,
+    );
+}
+
+/// `*x`, `x.field` and `x.f = v` through overloaded `Deref`/`DerefMut` take the trait method of the place's use (read, assignment, compound assignment, `&mut`).
+#[test]
+fn explicit_overloaded_deref_of_places_fields_and_assignment() {
+    prints(
+        "derefs",
+        r####"use std::ops::{Deref, DerefMut};
+struct W(i32);
+impl Deref for W {
+    type Target = i32;
+    fn deref(&self) -> &i32 {
+        &self.0
+    }
+}
+impl DerefMut for W {
+    fn deref_mut(&mut self) -> &mut i32 {
+        &mut self.0
+    }
+}
+struct Name(String);
+impl Deref for Name {
+    type Target = String;
+    fn deref(&self) -> &String {
+        &self.0
+    }
+}
+struct Pair {
+    a: i32,
+    b: i32,
+}
+struct Holder(Pair);
+impl Deref for Holder {
+    type Target = Pair;
+    fn deref(&self) -> &Pair {
+        &self.0
+    }
+}
+impl DerefMut for Holder {
+    fn deref_mut(&mut self) -> &mut Pair {
+        &mut self.0
+    }
+}
+fn main() {
+    let mut w = W(5);
+    println!("{}", *w);
+    println!("{}", *w + 1);
+    *w += 2;
+    println!("{}", w.0);
+    *w = 10;
+    println!("{}", w.0);
+    let r: &i32 = &*w;
+    println!("{}", r);
+    let m: &mut i32 = &mut *w;
+    *m += 1;
+    println!("{}", w.0);
+    let n = Name(String::from("deref"));
+    println!("{} {}", n.len(), n.to_uppercase());
+    let mut h = Holder(Pair { a: 1, b: 2 });
+    println!("{} {}", h.a, h.b);
+    h.a = 7;
+    h.b += 5;
+    println!("{} {}", h.a, h.b);
+    let t = Holder(Pair { a: 3, b: 4 });
+    println!("{}", t.a * t.b);
+}
+"####,
+        r####"5
+6
+7
+10
+10
+11
+5 DEREF
+1 2
+7 7
+12
+"####,
+    );
+}
+
+/// `Rc`, `Weak`, `RefCell` guards and a user smart pointer: `*b`, `rc.field`, `guard[i]`, `guard.0 += 1`, `*cell.borrow_mut() = v`.
+#[test]
+fn rc_weak_refcell_and_user_boxes_share_one_deref_route() {
+    prints21(
+        "rc2",
+        r####"use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
+use std::rc::{Rc, Weak};
+struct Node {
+    name: String,
+    parent: RefCell<Weak<Node>>,
+    children: RefCell<Vec<Rc<Node>>>,
+}
+struct MyBox<T>(T);
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+impl<T> DerefMut for MyBox<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
+}
+struct Point {
+    x: i32,
+    y: i32,
+}
+fn main() {
+    let leaf = Rc::new(Node {
+        name: String::from("leaf"),
+        parent: RefCell::new(Weak::<Node>::new()),
+        children: RefCell::new(Vec::new()),
+    });
+    println!("{}", leaf.parent.borrow().upgrade().is_none());
+    let branch = Rc::new(Node {
+        name: String::from("branch"),
+        parent: RefCell::new(Weak::<Node>::new()),
+        children: RefCell::new(vec![Rc::clone(&leaf)]),
+    });
+    *leaf.parent.borrow_mut() = Rc::downgrade(&branch);
+    match leaf.parent.borrow().upgrade() {
+        Some(p) => println!("{}", p.name.len()),
+        None => println!("none"),
+    }
+    println!("{} {}", Rc::strong_count(&branch), Rc::weak_count(&branch));
+    println!("{} {}", Rc::strong_count(&leaf), branch.children.borrow().len());
+    println!("{}", branch.children.borrow()[0].name);
+    let b = MyBox(5);
+    println!("{} {}", *b, *b + 1);
+    let mut m = MyBox(Point { x: 1, y: 2 });
+    println!("{} {}", m.x, m.y);
+    m.x = 10;
+    m.y += 5;
+    println!("{} {}", m.x, m.y);
+    let mut n = MyBox(3);
+    *n += 4;
+    *n = *n * 2;
+    println!("{}", *n);
+    let shared = Rc::new(Point { x: 7, y: 8 });
+    let other = Rc::clone(&shared);
+    println!("{} {}", other.x + shared.y, *Rc::new(9i32));
+    let cell = RefCell::new(vec![1i32, 2, 3]);
+    *cell.borrow_mut() = vec![4i32, 5];
+    cell.borrow_mut()[0] = 9;
+    println!("{:?} {}", cell.borrow(), cell.borrow()[1]);
+    let grid = RefCell::new((1i32, 2i32));
+    grid.borrow_mut().0 += 10;
+    println!("{:?}", grid.borrow());
+}
+"####,
+        r####"true
+6
+1 1
+2 1
+leaf
+5 6
+1 2
+10 7
+14
+15 9
+[9, 5] 5
+(11, 2)
+"####,
+    );
+}
+
+/// `Rc` reference counts, `Weak::upgrade`, `try_unwrap`/`get_mut`, and the last owner dropping its contents.
+#[test]
+fn rc_counts_weak_upgrade_try_unwrap_and_drop_order() {
+    prints(
+        "rc",
+        r####"use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
+struct D(i32);
+impl D {
+    fn val(&self) -> i32 {
+        self.0
+    }
+}
+impl Drop for D {
+    fn drop(&mut self) {
+        println!("drop {}", self.0);
+    }
+}
+struct Counter {
+    hits: Cell<i32>,
+    log: RefCell<Vec<String>>,
+}
+impl Counter {
+    fn hit(&self, what: &str) {
+        self.hits.set(self.hits.get() + 1);
+        self.log.borrow_mut().push(what.to_string());
+    }
+}
+fn main() {
+    let a = Rc::new(D(1));
+    println!("{}", Rc::strong_count(&a));
+    let b = Rc::clone(&a);
+    println!("{} {}", Rc::strong_count(&a), a.val());
+    drop(b);
+    println!("{}", Rc::strong_count(&a));
+    let c = a.clone();
+    println!("{}", Rc::ptr_eq(&a, &c));
+    drop(a);
+    println!("before last");
+    drop(c);
+    println!("after last");
+    let shared = Rc::new(RefCell::new(vec![1i32, 2]));
+    let other = Rc::clone(&shared);
+    other.borrow_mut().push(3);
+    shared.borrow_mut().push(4);
+    println!("{:?} {}", shared.borrow(), Rc::strong_count(&shared));
+    println!("{}", shared.borrow().len());
+    let counter = Rc::new(Counter { hits: Cell::new(0), log: RefCell::new(Vec::new()) });
+    let again = Rc::clone(&counter);
+    counter.hit("a");
+    again.hit("b");
+    println!("{} {:?}", counter.hits.get(), counter.log.borrow());
+    let weak: Weak<Counter> = Rc::downgrade(&counter);
+    println!("{} {}", Rc::strong_count(&counter), Rc::weak_count(&counter));
+    println!("{}", weak.upgrade().is_some());
+    drop(counter);
+    drop(again);
+    println!("{}", weak.upgrade().is_none());
+    let unique = Rc::new(String::from("solo"));
+    println!("{:?}", Rc::try_unwrap(unique));
+    let mut owned = Rc::new(5i32);
+    println!("{}", Rc::get_mut(&mut owned).is_some());
+    let copy = Rc::clone(&owned);
+    println!("{}", Rc::get_mut(&mut owned).is_none());
+    println!("{}", copy);
+    let cell = RefCell::new(5);
+    println!("{:?}", cell);
+    let held = cell.borrow_mut();
+    println!("{} {}", cell.try_borrow().is_err(), cell.try_borrow_mut().is_err());
+    drop(held);
+    println!("{}", cell.try_borrow().is_ok());
+    println!("{}", cell.replace(9));
+    println!("{}", cell.into_inner());
+}
+"####,
+        r####"1
+2 1
+1
+true
+before last
+drop 1
+after last
+[1, 2, 3, 4] 2
+4
+2 ["a", "b"]
+2 1
+true
+true
+Ok("solo")
+true
+true
+5
+RefCell { value: 5 }
+true true
+true
+5
+9
+"####,
+    );
+}
+
+/// `Cell`, `RefCell::borrow`/`borrow_mut`/`try_borrow*`/`replace`/`into_inner` and guard drops.
+#[test]
+fn cell_and_refcell_borrow_flags_and_guards() {
+    prints(
+        "cells",
+        r####"use std::cell::{Cell, RefCell};
+fn main() {
+    let c = Cell::new(5);
+    c.set(c.get() + 1);
+    println!("{}", c.get());
+    let old = c.replace(10);
+    println!("{} {}", old, c.get());
+    let r = RefCell::new(vec![1i32, 2, 3]);
+    r.borrow_mut().push(4);
+    println!("{:?}", r.borrow());
+    println!("{}", r.borrow().len());
+    {
+        let mut g = r.borrow_mut();
+        g.push(5);
+        println!("{}", g.len());
+    }
+    println!("{:?}", r);
+    println!("{}", r.try_borrow_mut().is_ok());
+    let held = r.borrow_mut();
+    println!("{} {}", r.try_borrow().is_err(), r.try_borrow_mut().is_err());
+    drop(held);
+    println!("{}", r.try_borrow().is_ok());
+    let cell = RefCell::new(5);
+    println!("{}", cell.replace(9));
+    println!("{}", cell.into_inner());
+    let tuple = RefCell::new((1i32, 2i32));
+    tuple.borrow_mut().0 += 10;
+    println!("{:?}", tuple.borrow());
+}
+"####,
+        r####"6
+6 10
+[1, 2, 3, 4]
+4
+5
+RefCell { value: [1, 2, 3, 4, 5] }
+true
+true true
+true
+5
+9
+(11, 2)
+"####,
+    );
+}
+
+/// `sort`, `sort_by`, `sort_by_key`, `windows`, `chunks`, `retain`, `drain(range)` and `iter().rev()` (closures receiving references).
+#[test]
+fn slice_methods_sort_windows_chunks_retain_drain_and_closures() {
+    prints(
+        "slices2",
+        r####"fn main() {
+    let mut v: Vec<i32> = vec![5, 3, 9, 1, 7, 3];
+    v.sort();
+    println!("{:?}", v);
+    v.sort_by(|a, b| b.cmp(a));
+    println!("{:?}", v);
+    let mut w: Vec<(i32, u8)> = vec![(2, 1), (1, 2), (2, 0), (1, 1)];
+    w.sort_by_key(|p| p.0);
+    println!("{:?}", w);
+    let n: Vec<i32> = vec![1, 2, 3, 4, 5];
+    for win in n.windows(2) {
+        println!("{} {}", win[0], win[1]);
+    }
+    for c in n.chunks(2) {
+        println!("{}", c.len());
+    }
+    let mut r: Vec<i32> = vec![1, 2, 3, 4, 5, 6];
+    r.retain(|x| x % 2 == 0);
+    println!("{:?}", r);
+    let mut d: Vec<i32> = vec![1, 2, 3, 4, 5];
+    let taken: Vec<i32> = d.drain(1..3).collect();
+    println!("{:?} {:?}", taken, d);
+    let all: Vec<i32> = d.drain(..).collect();
+    println!("{:?} {}", all, d.len());
+    let mut total: i32 = 0;
+    for x in n.iter().rev() {
+        total = total * 10 + *x;
+    }
+    println!("{}", total);
+    println!("{} {}", n.starts_with(&[1i32, 2]), n.ends_with(&[4i32, 5]));
+    let copy: Vec<i32> = n[1..4].to_vec();
+    println!("{:?}", copy);
+}
+"####,
+        r####"[1, 3, 3, 5, 7, 9]
+[9, 7, 5, 3, 3, 1]
+[(1, 2), (1, 1), (2, 1), (2, 0)]
+1 2
+2 3
+3 4
+4 5
+2
+2
+1
+[2, 4, 6]
+[2, 3] [1, 4, 5]
+[1, 4, 5] 0
+54321
+true true
+[2, 3, 4]
+"####,
+    );
+}
+
+/// `trim*`, `split`, `split_whitespace`, `lines`, `find`, `contains`, `starts_with`, `parse::<T>`, case mapping, `repeat`, `replace`, `from_utf8` and `str` ordering.
+#[test]
+fn str_methods_parse_split_find_case_repeat_and_ordering() {
+    prints21(
+        "strs3",
+        r####"fn main() {
+    let s = "  hello world  ";
+    println!("[{}] [{}] [{}]", s.trim(), s.trim_start(), s.trim_end());
+    let parts: Vec<&str> = "a,b,,c".split(',').collect();
+    println!("{:?} {}", parts, parts.len());
+    let words: Vec<&str> = "  the quick  brown fox ".split_whitespace().collect();
+    println!("{:?}", words);
+    let text = "one\ntwo\r\nthree\n";
+    for line in text.lines() {
+        println!("<{}>", line);
+    }
+    println!("{:?} {:?}", "hello".find('l'), "hello".find("lo"));
+    println!("{} {} {}", "hello".contains("ell"), "hello".starts_with("he"), "hello".ends_with('o'));
+    let n = "42".parse::<i32>().unwrap();
+    println!("{}", n + 1);
+    let bad = "4x2".parse::<i32>();
+    println!("{:?}", bad);
+    println!("{:?} {:?}", "255".parse::<u8>(), "256".parse::<u8>());
+    println!("{:?}", "-129".parse::<i8>());
+    println!("{}", "MiXed".to_uppercase());
+    println!("{}", "MiXed".to_lowercase());
+    println!("{}", "ab".repeat(3));
+    println!("{}", "a-b-c".replace("-", "+"));
+    let rev: String = "héy".chars().rev().collect();
+    println!("{}", rev);
+    for (i, c) in "aé".char_indices() {
+        println!("{} {}", i, c);
+    }
+    println!("{}", "xxabcxx".trim_matches('x'));
+    let owned = String::from("  pad ");
+    println!("[{}]", owned.trim());
+    println!("{}", owned.len());
+    println!("{:?}", String::from_utf8(vec![104u8, 105u8]));
+    println!("{}", String::from_utf8(vec![255u8]).is_err());
+    println!("{}", "apple" < "banana");
+    println!("{}", String::from("b") > String::from("a"));
+    println!("{:?}", "abc".cmp("abd"));
+}
+"####,
+        r####"[hello world] [hello world  ] [  hello world]
+["a", "b", "", "c"] 4
+["the", "quick", "brown", "fox"]
+<one>
+<two>
+<three>
+Some(2) Some(3)
+true true true
+43
+Err(ParseIntError { kind: InvalidDigit })
+Ok(255) Err(ParseIntError { kind: PosOverflow })
+Err(ParseIntError { kind: NegOverflow })
+MIXED
+mixed
+ababab
+a+b+c
+yéh
+0 a
+1 é
+abc
+[pad]
+6
+Ok("hi")
+true
+true
+true
+Less
+"####,
+    );
+}
+
+/// `join`/`concat` for strings and vectors, `Vec == [T; N]`/`&[T]`/`Vec`, `Vec` ordering, `max`/`min`, tuple `clone`, `zip` and `sum`/`product`.
+#[test]
+fn join_concat_vec_comparisons_tuples_of_references_and_sums() {
+    prints(
+        "joins",
+        r####"fn main() {
+    let words: Vec<String> = vec![String::from("a"), String::from("bc"), String::from("d")];
+    println!("{}", words.join(", "));
+    println!("{}", words.concat());
+    let parts = vec!["x", "y", "z"];
+    println!("{}", parts.join("-"));
+    println!("{}", parts.concat());
+    let vv: Vec<Vec<i32>> = vec![vec![1, 2], vec![3], vec![4, 5]];
+    println!("{:?}", vv.concat());
+    println!("{:?}", vv.join(&0i32));
+    let v: Vec<i32> = vec![1, 2, 3];
+    let w: Vec<i32> = vec![1, 2, 3];
+    println!("{} {}", v == [1i32, 2, 3], v == w);
+    let a = [1i32, 2, 3];
+    let s: &[i32] = &a;
+    println!("{} {}", v == s, v[..] == a[..]);
+    let lo: Vec<i32> = vec![1, 2];
+    let hi: Vec<i32> = vec![1, 3];
+    println!("{} {:?}", lo < hi, lo.cmp(&hi));
+    let names: Vec<&str> = vec!["b", "a"];
+    println!("{:?} {:?}", names.iter().max(), names.iter().min());
+    let t: (i32, &str) = (1, "a");
+    let u = t.clone();
+    println!("{:?}", u);
+    let pairs: Vec<(i32, &str)> = vec![(1, "a"), (2, "b")];
+    let copy = pairs.clone();
+    println!("{:?} {}", copy, copy == pairs);
+    let xs: Vec<i32> = vec![4, 5, 6];
+    let ys: Vec<i32> = vec![7, 8, 9];
+    let zipped: Vec<(&i32, &i32)> = xs.iter().zip(ys.iter()).collect();
+    println!("{:?}", zipped);
+    let total: i32 = xs.iter().sum();
+    let product: i32 = xs.iter().product();
+    println!("{} {}", total, product);
+}
+"####,
+        r####"a, bc, d
+abcd
+x-y-z
+xyz
+[1, 2, 3, 4, 5]
+[1, 2, 0, 3, 0, 4, 5]
+true true
+true true
+true Less
+Some("b") Some("a")
+(1, "a")
+[(1, "a"), (2, "b")] true
+[(4, 7), (5, 8), (6, 9)]
+15 120
+"####,
+    );
+}
+
+/// `BTreeMap` (entry API, ordered iteration, `first_key_value`), `BTreeSet` set algebra, `VecDeque` and `BinaryHeap`.
+#[test]
+fn ordered_maps_sets_deques_and_heaps() {
+    prints21(
+        "btree",
+        r####"use std::collections::{BTreeMap, BTreeSet, BinaryHeap, VecDeque};
+fn main() {
+    let mut words: BTreeMap<String, usize> = BTreeMap::new();
+    for w in vec!["pear", "apple", "fig", "apple", "pear", "apple"] {
+        let count = words.entry(String::from(w)).or_insert(0);
+        *count += 1;
+    }
+    println!("{:?}", words);
+    println!("{:?} {:?}", words.get("apple"), words.get("kiwi"));
+    println!("{}", words.contains_key("fig"));
+    for (k, v) in words.iter_mut() {
+        *v += k.len();
+    }
+    for (k, v) in &words {
+        println!("{}={}", k, v);
+    }
+    println!("{:?}", words.first_key_value());
+    println!("{:?}", words.last_key_value());
+    let keys: Vec<&String> = words.keys().collect();
+    println!("{:?}", keys);
+    let total: usize = words.values().sum();
+    println!("{}", total);
+    println!("{:?}", words.remove("fig"));
+    println!("{}", words.len());
+    let mut inv: BTreeMap<i32, &str> = BTreeMap::new();
+    inv.insert(5, "five");
+    inv.insert(1, "one");
+    inv.insert(3, "three");
+    inv.entry(3).and_modify(|v| *v = "THREE").or_insert("x");
+    inv.entry(4).or_default();
+    println!("{:?}", inv);
+    let cloned = inv.clone();
+    println!("{}", cloned == inv);
+    let mut set: BTreeSet<i32> = BTreeSet::new();
+    for x in [5, 1, 3, 1, 5] {
+        set.insert(x);
+    }
+    println!("{:?} {}", set, set.len());
+    println!("{} {}", set.contains(&3), set.contains(&4));
+    let other: BTreeSet<i32> = [3, 4, 5].into_iter().collect();
+    let union: Vec<&i32> = set.union(&other).collect();
+    let inter: Vec<&i32> = set.intersection(&other).collect();
+    let diff: Vec<&i32> = set.difference(&other).collect();
+    println!("{:?} {:?} {:?}", union, inter, diff);
+    let mut dq: VecDeque<i32> = VecDeque::new();
+    dq.push_back(1);
+    dq.push_back(2);
+    dq.push_front(0);
+    println!("{:?} {:?} {:?}", dq, dq.front(), dq.back());
+    println!("{:?} {:?} {}", dq.pop_front(), dq.pop_back(), dq.len());
+    let mut heap: BinaryHeap<i32> = BinaryHeap::new();
+    heap.push(3);
+    heap.push(9);
+    heap.push(1);
+    println!("{:?}", heap.peek());
+    println!("{:?}", heap.pop());
+    println!("{:?}", heap.into_sorted_vec());
+}
+"####,
+        r####"{"apple": 3, "fig": 1, "pear": 2}
+Some(3) None
+true
+apple=8
+fig=4
+pear=6
+Some(("apple", 8))
+Some(("pear", 6))
+["apple", "fig", "pear"]
+18
+Some(4)
+2
+{1: "one", 3: "THREE", 4: "", 5: "five"}
+true
+{1, 3, 5} 3
+true false
+[1, 3, 4, 5] [3, 5] [1]
+[0, 1, 2] Some(0) Some(2)
+Some(0) Some(2) 1
+Some(9)
+Some(9)
+[1, 3]
+"####,
+    );
+}
+
+/// `HashMap` (`insert`/`get`/`entry`/`remove`/`into_iter`) and `HashSet` with string and `char` keys.
+#[test]
+fn hash_maps_and_sets() {
+    prints(
+        "hashm",
+        r####"use std::collections::{HashMap, HashSet};
+fn main() {
+    let mut scores: HashMap<String, i32> = HashMap::new();
+    scores.insert(String::from("ann"), 3);
+    scores.insert(String::from("bob"), 5);
+    scores.insert(String::from("ann"), 4);
+    println!("{} {:?} {:?}", scores.len(), scores.get("ann"), scores.get("zed"));
+    *scores.entry(String::from("cy")).or_insert(0) += 7;
+    let mut keys: Vec<&String> = scores.keys().collect();
+    keys.sort();
+    println!("{:?}", keys);
+    let mut total = 0;
+    for (_, v) in &scores {
+        total += *v;
+    }
+    println!("{}", total);
+    if let Some(v) = scores.get_mut("bob") {
+        *v *= 2;
+    }
+    println!("{:?}", scores.get("bob"));
+    println!("{:?}", scores.remove("ann"));
+    println!("{}", scores.contains_key("ann"));
+    let mut counts: HashMap<char, usize> = HashMap::new();
+    for c in "hello world".chars() {
+        *counts.entry(c).or_insert(0) += 1;
+    }
+    let mut pairs: Vec<(char, usize)> = counts.into_iter().collect();
+    pairs.sort();
+    println!("{:?}", pairs);
+    let mut seen: HashSet<i32> = HashSet::new();
+    for x in vec![3, 1, 3, 2, 1] {
+        if !seen.insert(x) {
+            println!("dup {}", x);
+        }
+    }
+    let mut items: Vec<&i32> = seen.iter().collect();
+    items.sort();
+    println!("{:?} {}", items, seen.contains(&2));
+    let single: HashMap<&str, i32> = HashMap::from([("k", 1)]);
+    println!("{:?}", single);
+}
+"####,
+        r####"2 Some(4) None
+["ann", "bob", "cy"]
+16
+Some(10)
+Some(4)
+false
+[(' ', 1), ('d', 1), ('e', 1), ('h', 1), ('l', 3), ('o', 2), ('r', 1), ('w', 1)]
+dup 3
+dup 1
+[1, 2, 3] true
+{"k": 1}
+"####,
+    );
+}
+
+/// `for x in [D(1), D(2), D(3)]` with a `break`: the yielded element drops with its iteration, the rest drop with the iterator.
+#[test]
+fn array_by_value_iteration_drops_unyielded_elements_in_order() {
+    prints(
+        "arrays",
+        r####"struct D(i32);
+impl Drop for D {
+    fn drop(&mut self) {
+        println!("drop {}", self.0);
+    }
+}
+fn main() {
+    let mut total: i32 = 0;
+    for x in [5i32, 1, 3] {
+        total += x;
+    }
+    println!("{}", total);
+    for d in [D(1), D(2), D(3)] {
+        println!("got {}", d.0);
+        if d.0 == 2 {
+            break;
+        }
+    }
+    println!("end");
+}
+"####,
+        r####"9
+got 1
+drop 1
+got 2
+drop 2
+drop 3
+end
+"####,
+    );
+}
+
+/// A generic type with a `Drop` impl, closures forwarding reference arguments, an iterator yielding `(&K, &V)` and by-value array loops.
+#[test]
+fn generic_drop_reference_forwarding_closures_and_tuple_of_reference_items() {
+    prints(
+        "misc2",
+        r####"struct W<T>(T);
+impl<T> Drop for W<T> {
+    fn drop(&mut self) {
+        println!("drop W");
+    }
+}
+fn call<T, F: FnMut(&T, &T) -> bool>(a: &T, b: &T, mut f: F) -> bool {
+    f(a, b)
+}
+struct Pairs<'a, K, V> {
+    s: &'a [(K, V)],
+    i: usize,
+}
+impl<'a, K, V> Iterator for Pairs<'a, K, V> {
+    type Item = (&'a K, &'a V);
+    fn next(&mut self) -> Option<(&'a K, &'a V)> {
+        if self.i < self.s.len() {
+            let e = &self.s[self.i];
+            self.i += 1;
+            Some((&e.0, &e.1))
+        } else {
+            None
+        }
+    }
+}
+fn main() {
+    let w = W(5);
+    println!("made {}", w.0);
+    let x = 3i32;
+    let y = 4i32;
+    println!("{}", call(&x, &y, |a, b| a < b));
+    println!("{}", call(&x, &y, |a, b| b.cmp(a).is_le()));
+    let v: Vec<(i32, i32)> = vec![(1, 2), (3, 4)];
+    let it = Pairs { s: &v[..], i: 0 };
+    for (k, val) in it {
+        println!("{} {}", k, val);
+    }
+    let t: (i32, &str) = (1, "a");
+    println!("{:?}", t.clone());
+    for x in [5i32, 1, 3] {
+        println!("{}", x);
+    }
+    println!("end");
+}
+"####,
+        r####"made 5
+true
+false
+1 2
+3 4
+(1, "a")
+5
+1
+3
+end
+drop W
+"####,
+    );
+}
+
+/// Unchanged upstream rustc run-pass fixtures that complete with the second
+/// slice (`Rc`/`RefCell`, `HashMap`, `mem::swap`, `str::parse`/`split_whitespace`,
+/// overloaded `Deref` of places and receivers).
+#[test]
+fn upstream_smart_pointer_collection_and_deref_witnesses_complete() {
+    for path in [
+        "tests/ui/binding/borrowed-ptr-pattern-2.rs",
+        "tests/ui/binding/match-with-ret-arm.rs",
+        "tests/ui/borrowck/borrow-box-in-map-3026.rs",
+        "tests/ui/borrowck/borrowck-mut-uniq.rs",
+        "tests/ui/borrowck/issue-23338-params-outlive-temps-of-body.rs",
+        "tests/ui/borrowck/ref-mut-rebind-does-not-affect-outer.rs",
+        "tests/ui/deref/deref-newtype-method-call.rs",
+        "tests/ui/drop/drop-with-type-ascription-1.rs",
+        "tests/ui/drop/rc-trait-object-double-drop.rs",
+        "tests/ui/mir/mir_early_return_scope.rs",
+        "tests/ui/nll/rc-loop.rs",
+        "tests/ui/rfcs/rfc-2005-default-binding-mode/for-ok.rs",
+        "tests/ui/traits/issue-6128.rs",
+    ] {
+        upstream_completes(path);
+    }
+}

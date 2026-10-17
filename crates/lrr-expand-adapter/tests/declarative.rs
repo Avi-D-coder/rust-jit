@@ -219,10 +219,11 @@ fn token_preflight_refuses_before_materialization_and_preserves_exact_boundaries
     assert!(literal_texts(&result.unwrap().tokens).is_empty());
     assert_eq!(stats.admitted_tokens, 2);
     assert_eq!(stats.materializations, 1);
+    // E-R5-006: no fixed ceiling on the requested limit; the OS bounds memory.
     assert!(
         rules
             .expand_with_token_limit(&args, call_site(&args), 2_000_001)
-            .is_err()
+            .is_ok()
     );
 }
 

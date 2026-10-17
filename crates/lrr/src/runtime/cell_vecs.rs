@@ -64,7 +64,7 @@ impl GuestStore {
         Ok(Some((element, len)))
     }
     /// Whether `ty` is a `Vec<T>` descriptor.
-    pub(super) fn is_vec_type(&self, ty: TypeId) -> Result<bool, Diagnostic> {
+    pub(crate) fn is_vec_type(&self, ty: TypeId) -> Result<bool, Diagnostic> {
         Ok(self.vec_element_type(ty)?.is_some())
     }
     /// The vector a reference value designates.

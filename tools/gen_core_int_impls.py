@@ -303,21 +303,9 @@ pub fn overflowing_pow(self, exp: u32) -> (@T@, bool) {
     }
 }
 pub fn pow(self, exp: u32) -> @T@ {
-    if exp == 0 {
-        return 1;
-    }
-    let mut e = exp;
-    let mut base = self;
-    let mut acc: @T@ = 1;
-    loop {
-        if (e & 1) == 1 {
-            acc = acc * base;
-            if e == 1 {
-                return acc;
-            }
-        }
-        e = e / 2;
-        base = base * base;
+    match self.checked_pow(exp) {
+        Option::Some(x) => x,
+        Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
     }
 }
 pub fn checked_ilog2(self) -> Option<u32> {
@@ -936,6 +924,63 @@ pub fn from_str_radix(src: &str, radix: u32) -> Result<@T@, ParseIntError> {
 """
 
 
+# ----- u8 only: the ASCII methods -------------------------------------------
+
+U8_ONLY = """\
+pub fn is_ascii(&self) -> bool {
+    *self <= 127
+}
+pub fn is_ascii_alphabetic(&self) -> bool {
+    self.is_ascii_uppercase() || self.is_ascii_lowercase()
+}
+pub fn is_ascii_uppercase(&self) -> bool {
+    *self >= 65 && *self <= 90
+}
+pub fn is_ascii_lowercase(&self) -> bool {
+    *self >= 97 && *self <= 122
+}
+pub fn is_ascii_alphanumeric(&self) -> bool {
+    self.is_ascii_alphabetic() || self.is_ascii_digit()
+}
+pub fn is_ascii_digit(&self) -> bool {
+    *self >= 48 && *self <= 57
+}
+pub fn is_ascii_hexdigit(&self) -> bool {
+    self.is_ascii_digit() || (*self >= 97 && *self <= 102) || (*self >= 65 && *self <= 70)
+}
+pub fn is_ascii_punctuation(&self) -> bool {
+    (*self >= 33 && *self <= 47)
+        || (*self >= 58 && *self <= 64)
+        || (*self >= 91 && *self <= 96)
+        || (*self >= 123 && *self <= 126)
+}
+pub fn is_ascii_graphic(&self) -> bool {
+    *self >= 33 && *self <= 126
+}
+pub fn is_ascii_whitespace(&self) -> bool {
+    *self == 9 || *self == 10 || *self == 12 || *self == 13 || *self == 32
+}
+pub fn is_ascii_control(&self) -> bool {
+    *self <= 31 || *self == 127
+}
+pub fn to_ascii_uppercase(&self) -> u8 {
+    if self.is_ascii_lowercase() { *self - 32 } else { *self }
+}
+pub fn to_ascii_lowercase(&self) -> u8 {
+    if self.is_ascii_uppercase() { *self + 32 } else { *self }
+}
+pub fn make_ascii_uppercase(&mut self) {
+    *self = self.to_ascii_uppercase();
+}
+pub fn make_ascii_lowercase(&mut self) {
+    *self = self.to_ascii_lowercase();
+}
+pub fn eq_ignore_ascii_case(&self, other: &u8) -> bool {
+    self.to_ascii_lowercase() == other.to_ascii_lowercase()
+}
+"""
+
+
 def impl_block(name, bits, signed):
     d = info(name, bits, signed)
     parts = [COMMON]
@@ -954,6 +999,8 @@ def impl_block(name, bits, signed):
     else:
         parts.append(UNSIGNED)
         parts.append(FROM_STR_RADIX_UNSIGNED)
+        if name == "u8":
+            parts.append(U8_ONLY)
     body = sub("".join(parts), d)
     return "impl %s {\n%s\n}\n" % (name, indent(body.rstrip("\n")))
 

@@ -42,6 +42,7 @@ impl Frame {
                     .and_then(|activation| activation.operation_index())
             })
             .or_else(|| self.operator_operation_index())
+            .or_else(|| self.rerun_operation_index())
             .or_else(|| self.format_operation_index())
             .unwrap_or(0)
     }

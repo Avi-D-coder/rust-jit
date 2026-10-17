@@ -188,13 +188,15 @@ pub(crate) fn generic_annotation_base(
         &plan_key,
         owner.fingerprint
     ))));
-    let identity = match ready!(plan.generic_base_body_type(db, node)) {
-        BodyTypeOutcome::Pending(BodyTypeDemand::GenericArguments(identity)) => identity,
-        BodyTypeOutcome::Ready(_) => {
-            return QueryPoll::Ready(Err(Diagnostic::new(
-                "LRR-E-GENERIC-BINDING",
-                "type arguments written for a non-generic Type".into(),
-            )));
+    let (identity, resolved_without_arguments) = match ready!(plan.generic_base_body_type(db, node))
+    {
+        BodyTypeOutcome::Pending(BodyTypeDemand::GenericArguments(identity)) => (identity, false),
+        // The declaration resolved without asking for generic arguments: it
+        // is usable here only when it has no Type parameter (`Context<'a>`
+        // written `Context<'_>`: the written arguments are lifetimes, which
+        // carry no runtime Type).
+        BodyTypeOutcome::Ready(prepared) => {
+            (prepared.declaration().definition_identity(), true)
         }
         BodyTypeOutcome::Pending(_) => {
             return unsupported("generic Type occurrence requires further source resolution");
@@ -229,6 +231,12 @@ pub(crate) fn generic_annotation_base(
         .iter()
         .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
         .count();
+    if resolved_without_arguments && type_parameters > 0 {
+        return QueryPoll::Ready(Err(Diagnostic::new(
+            "LRR-E-GENERIC-BINDING",
+            "type arguments written for a non-generic Type".into(),
+        )));
+    }
     let schema_identity = captured.fingerprint();
     guards.push(Arc::new(ready!(db.prepare_input_guard(
         &SyntaxProvider,

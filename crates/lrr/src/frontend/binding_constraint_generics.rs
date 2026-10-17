@@ -580,6 +580,35 @@ impl<'a> Component<'a> {
         let Some(paths) = ready!(self.declared_bound_paths(db, definition, key)) else {
             return QueryPoll::Ready(Ok(None));
         };
+        self.elaborated_method(
+            db,
+            Vec::new(),
+            paths.into_iter().map(|path| (definition, path)).collect(),
+            name,
+        )
+    }
+    /// A method called on a trait object `dyn Principal` (through any
+    /// references and boxes): the declaration of `name` in the principal
+    /// trait or its supertraits, as rustc's object candidates select it.
+    pub(super) fn dyn_method(
+        &mut self,
+        db: &mut Database,
+        principal: Digest,
+        name: &str,
+    ) -> QueryPoll<Option<Digest>> {
+        self.elaborated_method(db, vec![principal], Vec::new(), name)
+    }
+    /// The one declaration of `name` among `roots` (trait identities), the
+    /// traits the written `pending` paths name (each resolved from its
+    /// scope's definition), and all their supertraits (resolved in the
+    /// subtrait's own module).
+    fn elaborated_method(
+        &mut self,
+        db: &mut Database,
+        mut roots: Vec<Digest>,
+        mut pending: Vec<(Digest, String)>,
+        name: &str,
+    ) -> QueryPoll<Option<Digest>> {
         let Some(environment) = ready!(self.environment(db)) else {
             return QueryPoll::Ready(Ok(None));
         };
@@ -593,48 +622,144 @@ impl<'a> Component<'a> {
                 Ok(resolver) => resolver,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
-        // The elaborated param-env: the written bounds, then each bound
-        // trait's supertraits (resolved in that trait's own module).
-        let mut pending: Vec<(Digest, String)> =
-            paths.into_iter().map(|path| (definition, path)).collect();
+        // The elaborated param-env: the bounds, then each bound trait's
+        // supertraits (resolved in that trait's own module). Each trait is
+        // visited once, so the walk is finite.
         let mut traits: Vec<Digest> = Vec::new();
         let mut declared = Vec::new();
-        while let Some((scope, path)) = pending.pop() {
-            let found = match resolver.lookup_written(db, scope, &path, Namespace::Type) {
-                QueryPoll::Ready(Ok(found)) => found,
-                QueryPoll::Ready(Err(error)) if super::not_closed(&error) => {
+        loop {
+            let identity = if let Some(identity) = roots.pop() {
+                identity
+            } else if let Some((scope, path)) = pending.pop() {
+                let found = match resolver.lookup_written(db, scope, &path, Namespace::Type) {
+                    QueryPoll::Ready(Ok(found)) => found,
+                    QueryPoll::Ready(Err(error)) if super::not_closed(&error) => {
+                        return QueryPoll::Ready(Ok(None));
+                    }
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let crate::frontend::names::NameLookup::Defined(bound) = found else {
                     return QueryPoll::Ready(Ok(None));
-                }
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                bound.identity
+            } else {
+                break;
             };
-            let crate::frontend::names::NameLookup::Defined(bound) = found else {
-                return QueryPoll::Ready(Ok(None));
-            };
-            if traits.contains(&bound.identity) {
+            if traits.contains(&identity) {
                 continue;
             }
-            traits.push(bound.identity);
-            if let Some(function) = members.trait_declaration(bound.identity, name)
+            traits.push(identity);
+            if let Some(function) = members.trait_declaration(identity, name)
                 && !declared.contains(&function)
             {
                 declared.push(function);
             }
             let Some(item) = sources
                 .iter()
-                .find_map(|source| source.outline_item(bound.identity))
+                .find_map(|source| source.outline_item(identity))
             else {
                 return QueryPoll::Ready(Ok(None));
             };
             let Some(supertraits) = supertrait_paths(&item.header.tokens) else {
                 return QueryPoll::Ready(Ok(None));
             };
-            pending.extend(supertraits.into_iter().map(|path| (bound.identity, path)));
+            pending.extend(supertraits.into_iter().map(|path| (identity, path)));
         }
         QueryPoll::Ready(Ok(match declared.as_slice() {
             [function] => Some(*function),
             _ => None,
         }))
+    }
+    /// The traits among `traits` that declare `name` as a method: an
+    /// associated function without a receiver is no method candidate.
+    fn method_traits(
+        &mut self,
+        db: &mut Database,
+        members: &crate::frontend::member_index::MemberIndex,
+        traits: Vec<Digest>,
+        name: &str,
+    ) -> QueryPoll<Vec<Digest>> {
+        let mut kept = Vec::with_capacity(traits.len());
+        for candidate in traits {
+            let Some(function) = members.trait_declaration(candidate, name) else {
+                kept.push(candidate);
+                continue;
+            };
+            let Some(signature) = ready!(self.method_signature(db, function)) else {
+                kept.push(candidate);
+                continue;
+            };
+            let QueryValue::FunctionSignature(signature) = signature.as_ref() else {
+                return QueryPoll::Ready(Err(fault("constraint method signature differs")));
+            };
+            if signature
+                .parameters
+                .first()
+                .is_some_and(|parameter| parameter.receiver)
+            {
+                kept.push(candidate);
+            }
+        }
+        QueryPoll::Ready(Ok(kept))
+    }
+    /// The declaration of the method `name` called on the unsuffixed literal
+    /// `receiver` (or a local holding one): rustc probes the traits in scope
+    /// that the literal's family implements; exactly one providing `name` as
+    /// a method (and no inherent method of a primitive) selects its
+    /// declaration, whose declared signature then relates the call.
+    pub(super) fn numeric_receiver_method(
+        &mut self,
+        db: &mut Database,
+        receiver: NodeId,
+        name: &str,
+    ) -> QueryPoll<Option<Digest>> {
+        let Some((_, floating)) = ready!(self.literal_origin(db, receiver)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(environment) = ready!(self.environment(db)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let family = if floating { FLOATS } else { INTEGERS };
+        let (false, traits) = members.primitive_method_traits(family, name) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let traits = ready!(self.method_traits(db, &members, traits, name));
+        QueryPoll::Ready(Ok(match traits.as_slice() {
+            [only] => members.trait_declaration(*only, name),
+            _ => None,
+        }))
+    }
+    /// The numeric variable coerced to a trait object `dyn Principal` (an
+    /// unsizing coercion): rustc's obligation `?v: Principal`. One applicable
+    /// impl selects the variable's Type, several leave it to fallback.
+    pub(super) fn object_obligation(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        principal: Digest,
+    ) -> QueryPoll<()> {
+        let Some(environment) = ready!(self.environment(db)) else {
+            self.defer(node, ConstraintDemand::AnnotationType);
+            return QueryPoll::Ready(Ok(()));
+        };
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let sources: Vec<_> = environment.sources().iter().collect();
+        match ready!(self.trait_bound(db, &members, &sources, principal, 0)) {
+            BoundAnswer::Unconstraining => QueryPoll::Ready(Ok(())),
+            BoundAnswer::Selected(primitive) => QueryPoll::Ready(self.constrain(node, primitive)),
+            BoundAnswer::Unknown => {
+                self.defer(node, ConstraintDemand::AnnotationType);
+                QueryPoll::Ready(Ok(()))
+            }
+        }
     }
     /// A method called on the numeric variable itself (`4.f()`): rustc
     /// probes the traits in scope providing `name`; with exactly one such
@@ -661,10 +786,13 @@ impl<'a> Component<'a> {
         let sources: Vec<_> = environment.sources().iter().collect();
         let family = if self.floating { FLOATS } else { INTEGERS };
         let answer = match members.primitive_method_traits(family, &name) {
-            (false, traits) => match traits.as_slice() {
-                [only] => ready!(self.trait_bound(db, &members, &sources, *only, 0)),
-                _ => BoundAnswer::Unknown,
-            },
+            (false, traits) => {
+                let traits = ready!(self.method_traits(db, &members, traits, &name));
+                match traits.as_slice() {
+                    [only] => ready!(self.trait_bound(db, &members, &sources, *only, 0)),
+                    _ => BoundAnswer::Unknown,
+                }
+            }
             (true, _) => BoundAnswer::Unknown,
         };
         match answer {

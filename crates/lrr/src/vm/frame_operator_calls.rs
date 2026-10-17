@@ -137,6 +137,9 @@ pub(super) struct OperatorActivation {
     /// A place operation whose base place takes an overloaded `Deref` step
     /// first: the base place slot.
     place_deref: Option<SlotId>,
+    /// The holder slot's reached expectation (a value the operation's node
+    /// will produce later, not the `&Target` this step returns).
+    held_hint: Option<TypeId>,
 }
 /// The dispatcher's finding that the next place operation's base place needs
 /// an overloaded `Deref` step (`DerefMut` when `mutable`) before the
@@ -145,6 +148,8 @@ pub(super) struct OperatorActivation {
 pub(crate) struct PlaceDerefDemand {
     pub(crate) base: SlotId,
     pub(crate) mutable: bool,
+    /// The recipe position the demand was made at.
+    pub(crate) pc: crate::core::digest::Digest,
 }
 /// A method receiver's autoderef steps, applied in order; an overloaded step
 /// suspends the receiver operation for its `Deref` call, whose returned
@@ -334,7 +339,7 @@ impl Frame {
             | Op::ProjectTuple { base, .. }
             | Op::ProjectIndex { base, .. } => self
                 .place_deref
-                .filter(|demand| demand.base == *base)
+                .filter(|demand| demand.base == *base && demand.pc == self.pc.fingerprint())
                 .map(|demand| OperatorKind::Deref(demand.mutable)),
             // A receiver with an overloaded autoderef step demands its
             // `Deref` method before the receiver can be formed.
@@ -374,6 +379,7 @@ impl Frame {
             return self.begin_receiver_overload(index, op, (site.0, *place, *scratch, *destination), store);
         }
         let mut place_deref = None;
+        let mut held_hint = None;
         let destination = match op {
             Op::NumericBinary { destination, .. }
             | Op::NumericUnary { destination, .. }
@@ -387,7 +393,8 @@ impl Frame {
             | Op::ProjectIndex { base, .. } => {
                 place_deref = Some(*base);
                 self.place_deref = None;
-                self.body
+                let holder = self
+                    .body
                     .nodes()
                     .get(self.pc.node as usize)
                     .and_then(|node| node.value)
@@ -396,7 +403,9 @@ impl Frame {
                             "LRR-E-UNSUPPORTED",
                             "overloaded place dereference lacks a node value slot".into(),
                         )
-                    })?
+                    })?;
+                held_hint = self.slots[holder.0 as usize].hint.take();
+                holder
             }
             _ => return Err(invalid("operator call requires an operator operation")),
         };
@@ -414,6 +423,7 @@ impl Frame {
             owned: Vec::new(),
             receiver: None,
             place_deref,
+            held_hint,
         });
         Ok(())
     }
@@ -478,6 +488,7 @@ impl Frame {
                         owned: Vec::new(),
                         receiver: Some(progress),
                         place_deref: None,
+                        held_hint: None,
                     });
                     return Ok(true);
                 }
@@ -1150,10 +1161,23 @@ impl Frame {
     /// The dispatcher found that `base`'s place needs an overloaded `Deref`
     /// step before the next place operation (`DerefMut` when `mutable`).
     pub(crate) fn demand_place_deref(&mut self, base: SlotId, mutable: bool) {
-        self.place_deref = Some(PlaceDerefDemand { base, mutable });
+        self.place_deref = Some(PlaceDerefDemand {
+            base,
+            mutable,
+            pc: self.pc.fingerprint(),
+        });
     }
     pub(crate) fn has_place_deref_demand(&self) -> bool {
         self.place_deref.is_some()
+    }
+    /// The operation a dereferenced base re-enters.
+    pub(crate) fn rerun_operation_index(&self) -> Option<usize> {
+        self.rerun_index.map(|index| index as usize)
+    }
+    pub(crate) fn clear_rerun(&mut self, index: usize) {
+        if self.rerun_index.is_some_and(|rerun| rerun as usize == index) {
+            self.rerun_index = None;
+        }
     }
     /// The reached type of the place `slot` holds, `None` while that place
     /// has not executed.
@@ -1207,12 +1231,16 @@ impl Frame {
         let view = self.source_view(holder)?;
         let ticket = store.move_from(cell)?;
         store.reset_moved_contract(cell)?;
+        // The holder carries none of this step's view into the value the
+        // operation's node produces later.
+        self.set_source_view(holder, None)?;
         let value = store.peek_ticket(ticket)?;
         if value.kind != 9 {
             return Err(invalid("a Deref method returned a non-reference"));
         }
         let reference = crate::runtime::cell::RefId::from_bits(value.payload);
         let scope = self.slot(holder)?.scope;
+        self.slots[holder.0 as usize].hint = activation.held_hint;
         self.deref_parked.push((scope, ticket));
         let pointee = match view {
             Some(TyTerm::Ref(_, _, pointee)) => Some(*pointee),
@@ -1244,6 +1272,9 @@ impl Frame {
                     .ok_or_else(|| invalid("place projection accounting underflow"))?;
                 self.set_source_view(base, pointee)?;
                 self.slots[base.0 as usize].place = Some(place);
+                self.rerun_index = Some(
+                    u32::try_from(index).map_err(|_| invalid("operator operation index overflow"))?,
+                );
                 Ok(false)
             }
         }
@@ -1264,5 +1295,38 @@ impl Frame {
             }
         }
         Ok(())
+    }
+}
+
+impl Frame {
+    /// Replace `base`'s place by the place its reference/box chain reaches,
+    /// carrying each step's pointee view.
+    pub(crate) fn peel_builtin_derefs(
+        &mut self,
+        base: SlotId,
+        store: &GuestStore,
+    ) -> Result<(), PlaceFailure> {
+        loop {
+            let place = self.executed_place(base)?;
+            let ty = store.place_type_id(place)?;
+            let is_reference = matches!(store.type_descriptor(ty)?.key.as_ref(), TypeKey::Ref { .. });
+            if !is_reference && store.box_contents_type(ty)?.is_none() {
+                return Ok(());
+            }
+            let dereferenced = store.dereference_place(place)?;
+            let released = place.projection_bytes()?;
+            let view = match self.place_slot(base)?.source.as_ref() {
+                Some(TyTerm::Ref(_, _, pointee)) => self.clone_source(Some(pointee.as_ref()))?,
+                Some(source) => self.clone_source(Self::box_contents_source(source, store))?,
+                None => None,
+            };
+            self.projection_bytes = self
+                .projection_bytes
+                .checked_sub(released)
+                .and_then(|bytes| bytes.checked_add(dereferenced.projection_bytes().ok()?))
+                .ok_or_else(|| invalid("place projection accounting underflow"))?;
+            self.slots[base.0 as usize].place = Some(dereferenced);
+            self.set_source_view(base, view)?;
+        }
     }
 }

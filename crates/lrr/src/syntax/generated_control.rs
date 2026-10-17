@@ -334,9 +334,8 @@ pub(crate) fn try_decode_break(
                     .checked_add(1)
                     .ok_or_else(limit)?;
                 let position = tokens
-                    .spans()
-                    .binary_search_by_key(&span_key, SpanRecord::key)
-                    .map_err(|_| invalid("generated lifetime origin span absent"))?;
+                    .span_position(&span_key)
+                    .ok_or_else(|| invalid("generated lifetime origin span absent"))?;
                 let span = &tokens.spans()[position];
                 if let Some((_, prior)) = primary
                     && (prior.context != span.context || prior.edition != span.edition)

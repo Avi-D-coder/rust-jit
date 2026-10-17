@@ -326,6 +326,9 @@ pub struct NameNamespaces {
     /// path. Variants are not outline items and own no source inputs; their
     /// declaration facts stay with the owning enum's schema.
     enum_variants: std::collections::BTreeMap<Digest, EnumVariantDefinition>,
+    /// The module-like scopes of enums (`crate`, enum path), whose members are
+    /// variants fixed by the enum's declaration, not by a source scope.
+    enum_scopes: std::collections::BTreeSet<(Digest, Vec<String>)>,
     /// Each crate's standard prelude module (`std::prelude::rust_20xx`, or
     /// core's for `#![no_std]`), selected by the compiler-injected import of
     /// its root source. Absent for `#![no_core]`/crate `#![no_implicit_prelude]`.
@@ -409,6 +412,13 @@ impl NameNamespaces {
     pub(crate) fn enum_variant(&self, identity: Digest) -> Option<&EnumVariantDefinition> {
         self.enum_variants.get(&identity)
     }
+    /// Whether `scope` is an enum's module-like namespace of variants.
+    pub(crate) fn is_enum_scope(&self, scope: &ScopeKey) -> bool {
+        scope.owner.is_none()
+            && self
+                .enum_scopes
+                .contains(&(scope.crate_key, scope.module_path.clone()))
+    }
     /// rustc resolves an enum as a module-like namespace of its variants: the
     /// enum's own path becomes a module prefix whose members are the variants,
     /// defined in the Type namespace and, for unit/tuple constructors, in the
@@ -430,6 +440,10 @@ impl NameNamespaces {
         let visibility =
             VisibilityScope::for_declaration(&item.header.visibility, &item.scope, edition)?;
         self.declare_module(item.scope.crate_key, &path, edition, visibility.clone())?;
+        self.enum_scopes.insert((
+            item.scope.crate_key,
+            path.iter().map(|part| (*part).to_owned()).collect(),
+        ));
         let enumeration = item.def_key.fingerprint();
         for variant in &item.variants {
             let name = crate::syntax::ast_adapter::semantic_name(&variant.name).ok_or_else(|| {

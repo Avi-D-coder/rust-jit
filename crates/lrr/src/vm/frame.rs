@@ -352,6 +352,9 @@ pub struct Frame {
     /// calls returned (their places live until their scope ends).
     place_deref: Option<operator_calls_frame::PlaceDerefDemand>,
     deref_parked: Vec<(ScopeId, crate::runtime::cell::TicketId)>,
+    /// A place operation to run again, from this operation index, over the
+    /// base its overloaded `Deref` step produced.
+    rerun_index: Option<u32>,
     /// A `FormatArguments` operation suspended for a trait-method `fmt`.
     format_activation: Option<format_calls_frame::FormatActivation>,
     /// Comparison operand slots holding an autoref (`&operand`).
@@ -579,6 +582,7 @@ impl Frame {
             trait_calls: std::collections::BTreeMap::new(),
             place_deref: None,
             deref_parked: Vec::new(),
+            rerun_index: None,
             nominal: nominal_values_frame::NominalFacts::default(),
             item_values: item_values_frame::ItemValueFacts::default(),
             partial_hints: partial_hints_frame::PartialHints::default(),

@@ -117,6 +117,8 @@ fn lrr_parse_digits(
 }
 fn lrr_check_radix(radix: u32) {
     if radix < 2 || radix > 36 {
+        // Real core appends ` - found {radix}`; the facade cannot format a
+        // runtime message (`format_args!` in facade source is not lowered).
         core::panicking::panic("from_ascii_bytes_radix: radix must lie in the range `[2, 36]`");
     }
 }

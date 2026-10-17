@@ -37,21 +37,23 @@ impl RuntimeMacroContext<'_> {
         frame: FloatingFrameSite<'_>,
         proofs: impl Iterator<Item = &'p RuntimeNoItemProof>,
     ) -> QueryPoll<Option<FloatingConstantRecipe>> {
-        self.with_floating_site(
+        let planned = self.with_floating_site(
             db,
             frame,
             proofs,
             |db, locals, site| match plan_floating_constant(db, graph, locals, site) {
-                QueryPoll::Ready(Ok(FloatingConstantOutcome::Ready(plan))) => {
-                    plan.lower_recipe(db, graph, locals, site, frame.body, frame.pc)
-                }
-                QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Err(fault(
-                    "reached floating constant requires unresolved source type integration",
-                ))),
+                QueryPoll::Ready(Ok(FloatingConstantOutcome::Ready(plan))) => plan
+                    .lower_recipe(db, graph, locals, site, frame.body, frame.pc)
+                    .map(Some),
+                // The qualifier is not `f32`/`f64` (`i32::MAX`, `Type::MAX`,
+                // ...): not a floating constant, so the path takes the
+                // ordinary associated-constant route.
+                QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
                 QueryPoll::Ready(Err(e)) => QueryPoll::Ready(Err(e)),
                 QueryPoll::NeedInput(i) => QueryPoll::NeedInput(i),
             },
-        )
+        );
+        planned.map(Option::flatten)
     }
     pub(crate) fn revalidate_floating_constant<'p>(
         &self,

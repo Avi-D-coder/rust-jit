@@ -296,12 +296,37 @@ impl TokenTree {
         }
     }
 }
+/// The stable key of every span record, in table order, computed once per
+/// forest (each key is a hash of its record). A derived cache: it takes no part
+/// in equality, hashing or identity.
+#[derive(Default)]
+struct SpanKeyIndex(std::sync::OnceLock<Vec<Key>>);
+impl Clone for SpanKeyIndex {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl PartialEq for SpanKeyIndex {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for SpanKeyIndex {}
+impl std::hash::Hash for SpanKeyIndex {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+impl std::fmt::Debug for SpanKeyIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SpanKeyIndex")
+    }
+}
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TokenForest {
     schema: u32,
     roots: Vec<TokenTree>,
     contexts: Vec<ContextRecord>,
     spans: Vec<SpanRecord>,
+    span_keys: SpanKeyIndex,
 }
 impl TokenForest {
     pub fn new(
@@ -320,9 +345,20 @@ impl TokenForest {
             roots,
             contexts,
             spans,
+            span_keys: SpanKeyIndex::default(),
         };
         f.validate()?;
         Ok(f)
+    }
+    /// The stable key of each span record, in table order (computed once).
+    pub fn span_keys(&self) -> &[Key] {
+        self.span_keys
+            .0
+            .get_or_init(|| self.spans.iter().map(SpanRecord::key).collect())
+    }
+    /// The position of the span record with `key` in the key-ordered table.
+    pub fn span_position(&self, key: &Key) -> Option<usize> {
+        self.span_keys().binary_search(key).ok()
     }
     pub fn roots(&self) -> &[TokenTree] {
         &self.roots
@@ -388,7 +424,7 @@ impl TokenForest {
         }
         // Each stable key is one hash; compute it once per record.
         let context_keys: Vec<Key> = self.contexts.iter().map(ContextRecord::key).collect();
-        let span_keys: Vec<Key> = self.spans.iter().map(SpanRecord::key).collect();
+        let span_keys = self.span_keys();
         let contexts: BTreeMap<_, _> = context_keys.iter().copied().zip(&self.contexts).collect();
         let spans: std::collections::BTreeSet<Key> = span_keys.iter().copied().collect();
         if contexts.len() != self.contexts.len()
@@ -945,11 +981,14 @@ mod codec {
         if r.at != bytes.len() {
             return Err(error("trailing token wire bytes"));
         }
+        let cache = SpanKeyIndex::default();
+        let _ = cache.0.set(span_keys);
         let f = TokenForest {
             schema: 2,
             roots,
             contexts,
             spans,
+            span_keys: cache,
         };
         f.validate()?;
         Ok(f)

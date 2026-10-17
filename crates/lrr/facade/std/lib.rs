@@ -53,10 +53,16 @@ pub mod thread;
 pub mod time;
 
 pub mod f32 {
-    pub use core::f32::{consts, EPSILON, INFINITY, MAX, MIN, MIN_POSITIVE, NAN, NEG_INFINITY};
+    pub use core::f32::{
+        consts, DIGITS, EPSILON, INFINITY, MANTISSA_DIGITS, MAX, MAX_10_EXP, MAX_EXP, MIN, MIN_10_EXP,
+        MIN_EXP, MIN_POSITIVE, NAN, NEG_INFINITY, RADIX,
+    };
 }
 pub mod f64 {
-    pub use core::f64::{consts, EPSILON, INFINITY, MAX, MIN, MIN_POSITIVE, NAN, NEG_INFINITY};
+    pub use core::f64::{
+        consts, DIGITS, EPSILON, INFINITY, MANTISSA_DIGITS, MAX, MAX_10_EXP, MAX_EXP, MIN, MIN_10_EXP,
+        MIN_EXP, MIN_POSITIVE, NAN, NEG_INFINITY, RADIX,
+    };
 }
 pub mod task {
     pub use core::task::{Context, Poll, RawWaker, Waker};

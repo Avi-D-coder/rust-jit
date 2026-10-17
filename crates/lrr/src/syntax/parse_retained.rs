@@ -111,10 +111,11 @@ impl ParsedFile {
             range,
             |origin| (origin.start, origin.end),
             |origin| {
-                spans
-                    .binary_search_by_key(&origin.span, |span| span.key())
+                snapshot
+                    .origin_records()
+                    .span_position(&origin.span)
                     .map(|index| &spans[index])
-                    .map_err(|_| {
+                    .ok_or_else(|| {
                         Diagnostic::new(
                             "LRR-E-INTERNAL-SOURCE-MAP",
                             "retained diagnostic span absent".into(),

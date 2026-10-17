@@ -371,6 +371,56 @@ impl NamespaceReads {
                     // projections determine semantics, not an unrelated alias.
                     let _ = db.input(&InputKey::UnitCompileEnv(*unit));
                 }
+                // The Macro namespace has no per-scope discovery certificate:
+                // its table is part of the one completed fixed point that
+                // produced `environment`, so a read of it is certified by the
+                // environment's own seal. (A block-level `use` is probed in
+                // every namespace to decide whether it is resolved.)
+                NamespaceRead::Scope {
+                    scope,
+                    namespace: Namespace::Macro,
+                }
+                | NamespaceRead::Name {
+                    scope,
+                    namespace: Namespace::Macro,
+                    ..
+                } => {
+                    semantic.u8(3);
+                    semantic.record(scope);
+                    semantic.record(environment.dependency());
+                    if let NamespaceRead::Name { name, .. } = read {
+                        semantic.string(name);
+                    }
+                }
+                // A lexical (body) scope holds the block's own items and
+                // imports: it is no module of the discovery fixed point, and
+                // its content is the immutable entered body source that the
+                // goal's owning plan identity already covers.
+                NamespaceRead::Scope { scope, namespace }
+                | NamespaceRead::Name {
+                    scope, namespace, ..
+                } if scope.owner.is_some() => {
+                    semantic.u8(4);
+                    semantic.record(scope);
+                    semantic.u32(namespace.tag());
+                    if let NamespaceRead::Name { name, .. } = read {
+                        semantic.string(name);
+                    }
+                }
+                // An enum's module-like scope: its members are the variants
+                // its declaration fixes, covered by the enclosing module reads
+                // the same walk recorded for the enum's own name.
+                NamespaceRead::Scope { scope, namespace }
+                | NamespaceRead::Name {
+                    scope, namespace, ..
+                } if environment.names().is_enum_scope(scope) => {
+                    semantic.u8(5);
+                    semantic.record(scope);
+                    semantic.u32(namespace.tag());
+                    if let NamespaceRead::Name { name, .. } = read {
+                        semantic.string(name);
+                    }
+                }
                 NamespaceRead::Scope { scope, namespace }
                 | NamespaceRead::Name {
                     scope, namespace, ..

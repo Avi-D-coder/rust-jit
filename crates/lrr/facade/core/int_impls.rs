@@ -237,21 +237,9 @@ impl i8 {
         }
     }
     pub fn pow(self, exp: u32) -> i8 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: i8 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -742,21 +730,9 @@ impl i16 {
         }
     }
     pub fn pow(self, exp: u32) -> i16 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: i16 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -1256,21 +1232,9 @@ impl i32 {
         }
     }
     pub fn pow(self, exp: u32) -> i32 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: i32 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -1770,21 +1734,9 @@ impl i64 {
         }
     }
     pub fn pow(self, exp: u32) -> i64 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: i64 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -2292,21 +2244,9 @@ impl isize {
         }
     }
     pub fn pow(self, exp: u32) -> isize {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: isize = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -2814,21 +2754,9 @@ impl u8 {
         }
     }
     pub fn pow(self, exp: u32) -> u8 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: u8 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -3103,6 +3031,57 @@ impl u8 {
             Result::Err(error) => Result::Err(error),
         }
     }
+    pub fn is_ascii(&self) -> bool {
+        *self <= 127
+    }
+    pub fn is_ascii_alphabetic(&self) -> bool {
+        self.is_ascii_uppercase() || self.is_ascii_lowercase()
+    }
+    pub fn is_ascii_uppercase(&self) -> bool {
+        *self >= 65 && *self <= 90
+    }
+    pub fn is_ascii_lowercase(&self) -> bool {
+        *self >= 97 && *self <= 122
+    }
+    pub fn is_ascii_alphanumeric(&self) -> bool {
+        self.is_ascii_alphabetic() || self.is_ascii_digit()
+    }
+    pub fn is_ascii_digit(&self) -> bool {
+        *self >= 48 && *self <= 57
+    }
+    pub fn is_ascii_hexdigit(&self) -> bool {
+        self.is_ascii_digit() || (*self >= 97 && *self <= 102) || (*self >= 65 && *self <= 70)
+    }
+    pub fn is_ascii_punctuation(&self) -> bool {
+        (*self >= 33 && *self <= 47)
+            || (*self >= 58 && *self <= 64)
+            || (*self >= 91 && *self <= 96)
+            || (*self >= 123 && *self <= 126)
+    }
+    pub fn is_ascii_graphic(&self) -> bool {
+        *self >= 33 && *self <= 126
+    }
+    pub fn is_ascii_whitespace(&self) -> bool {
+        *self == 9 || *self == 10 || *self == 12 || *self == 13 || *self == 32
+    }
+    pub fn is_ascii_control(&self) -> bool {
+        *self <= 31 || *self == 127
+    }
+    pub fn to_ascii_uppercase(&self) -> u8 {
+        if self.is_ascii_lowercase() { *self - 32 } else { *self }
+    }
+    pub fn to_ascii_lowercase(&self) -> u8 {
+        if self.is_ascii_uppercase() { *self + 32 } else { *self }
+    }
+    pub fn make_ascii_uppercase(&mut self) {
+        *self = self.to_ascii_uppercase();
+    }
+    pub fn make_ascii_lowercase(&mut self) {
+        *self = self.to_ascii_lowercase();
+    }
+    pub fn eq_ignore_ascii_case(&self, other: &u8) -> bool {
+        self.to_ascii_lowercase() == other.to_ascii_lowercase()
+    }
 }
 impl u16 {
     pub const MIN: u16 = 0;
@@ -3313,21 +3292,9 @@ impl u16 {
         }
     }
     pub fn pow(self, exp: u32) -> u16 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: u16 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -3821,21 +3788,9 @@ impl u32 {
         }
     }
     pub fn pow(self, exp: u32) -> u32 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: u32 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -4329,21 +4284,9 @@ impl u64 {
         }
     }
     pub fn pow(self, exp: u32) -> u64 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: u64 = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {
@@ -4839,21 +4782,9 @@ impl usize {
         }
     }
     pub fn pow(self, exp: u32) -> usize {
-        if exp == 0 {
-            return 1;
-        }
-        let mut e = exp;
-        let mut base = self;
-        let mut acc: usize = 1;
-        loop {
-            if (e & 1) == 1 {
-                acc = acc * base;
-                if e == 1 {
-                    return acc;
-                }
-            }
-            e = e / 2;
-            base = base * base;
+        match self.checked_pow(exp) {
+            Option::Some(x) => x,
+            Option::None => core::panicking::panic("attempt to exponentiate with overflow"),
         }
     }
     pub fn checked_ilog2(self) -> Option<u32> {

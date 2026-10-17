@@ -348,6 +348,8 @@ enum Step {
     /// The value's nominal Type's own type argument at this position.
     TypeArgument(u32),
 }
+#[path = "binding_constraint_comparison.rs"]
+mod comparison;
 #[path = "binding_constraint_generics.rs"]
 mod generics;
 #[path = "binding_constraint_iteration.rs"]
@@ -360,6 +362,8 @@ mod methods;
 mod nominal;
 #[path = "binding_constraint_open.rs"]
 mod open;
+#[path = "binding_constraint_projection.rs"]
+mod projection;
 use nominal::ConstructorSite;
 /// How a member relates to the component's variable: projecting the
 /// member's Type by `steps` yields the variable. A `strict` member was
@@ -488,6 +492,9 @@ struct Component<'a> {
     goals: BTreeMap<(Digest, Option<u32>), (Option<TyTerm>, Vec<ConstraintDemand>)>,
     /// The demands `defer` is recording for the goal being read.
     deferred: Option<Vec<ConstraintDemand>>,
+    /// The member projection at the root of the pattern being walked: the
+    /// steps a nested pattern has consumed are the root's, less its own.
+    root_via: Option<Via>,
 }
 impl<'a> Component<'a> {
     fn new(key: &'a PcKey, plan: &'a SourceConstraintPlan, floating: bool) -> Self {
@@ -517,6 +524,7 @@ impl<'a> Component<'a> {
             declared_depth: 0,
             goals: BTreeMap::new(),
             deferred: None,
+            root_via: None,
         }
     }
     fn defer(&mut self, node: NodeId, demand: ConstraintDemand) {
@@ -760,11 +768,19 @@ impl<'a> Component<'a> {
         demand: ConstraintDemand,
     ) -> QueryPoll<()> {
         let steps = self.via.steps.clone();
+        // A declared projection of concrete Types (`<S as Tr>::Out`) is the
+        // Type its impl states.
+        let term = &ready!(self.normalize_projections(db, term));
         match ready!(self.project_term(db, term, &steps)) {
             Some(TyTerm::Primitive(primitive)) => QueryPoll::Ready(self.constrain(node, primitive)),
             Some(term) if term == hole() => QueryPoll::Ready(Ok(())),
             // `!` coerces to every Type; it constrains nothing.
             Some(TyTerm::Never) => QueryPoll::Ready(Ok(())),
+            // A numeric variable unsized to a trait object must implement
+            // its principal trait.
+            Some(TyTerm::Dyn(principal)) if !self.open => {
+                self.object_obligation(db, node, principal.0)
+            }
             Some(term) if self.open && crate::frontend::call_contracts::closed_term(&term) => {
                 self.candidate(node, term);
                 QueryPoll::Ready(Ok(()))
@@ -832,6 +848,20 @@ impl<'a> Component<'a> {
                 TyTerm::Tuple(members)
             }
             Some(TypeShape::Infer) => hole(),
+            // A trait object is its principal trait's schema, as the
+            // local annotation service reads it.
+            Some(TypeShape::Dyn(principal)) => match crate::frontend::nominal_constructors::dyn_annotation_principal(
+                db,
+                &self.key.body,
+                *principal,
+            ) {
+                QueryPoll::Ready(Ok(principal)) => TyTerm::Dyn(
+                    crate::traits::term::DynSchemaKey(principal.identity),
+                ),
+                QueryPoll::Ready(Err(error)) if entered_type_refusal(&error) => open(),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            },
             Some(TypeShape::Generic(base, arguments)) => {
                 // The local annotation service's own generic base selection.
                 match crate::frontend::nominal_constructors::generic_annotation_base(
@@ -969,6 +999,16 @@ impl<'a> Component<'a> {
             self.plan.fact(node).map(|fact| fact.kind()),
             Some(FactKind::Call | FactKind::MethodCall | FactKind::LangCall)
         );
+        // The callee's own parameters are bound by the call's operands, so an
+        // associated-type projection of them (`<T as Get>::Value`) is the
+        // Type the selected impl states.
+        let instantiated;
+        let term = if super::associated_types::contains_projection(term) {
+            instantiated = ready!(self.instantiated_declared(db, node, definition, term));
+            &instantiated
+        } else {
+            term
+        };
         match ready!(self.project_parametric(db, term, &steps)) {
             generics::TermProjection::Parameter(key, remaining) if is_call => {
                 self.relate_parameter(db, node, definition, key, remaining)
@@ -1208,6 +1248,54 @@ impl<'a> Component<'a> {
         }
         QueryPoll::Ready(Ok(None))
     }
+    /// The function item a local is declared with (`let f = path;`, no
+    /// annotation): the declaration the path's ordinary Value goal selects.
+    fn bound_function_item(
+        &mut self,
+        db: &mut Database,
+        use_node: NodeId,
+        identity: Digest,
+    ) -> QueryPoll<Option<Digest>> {
+        let plan: &'a SourceConstraintPlan = self.plan;
+        let Some(pattern) = ready!(binding_pattern(db, self.key, plan, use_node, identity)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let mut initializer = plan.uses(pattern).iter().find_map(|edge| {
+            let statement = plan.fact(edge.parent)?;
+            (edge.ordinal == 0
+                && statement.kind() == FactKind::Let
+                && statement.annotation().is_none())
+            .then(|| statement.operand(1))
+            .flatten()
+        });
+        // Parentheses keep their operand's value; each step descends.
+        while let Some(node) = initializer
+            && plan
+                .fact(node)
+                .is_some_and(|fact| fact.kind() == FactKind::Parenthesis)
+        {
+            initializer = plan.fact(node).and_then(|fact| fact.operand(0));
+        }
+        let Some(initializer) = initializer else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if plan.fact(initializer).map(|fact| fact.kind()) != Some(FactKind::Path) {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let selected = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::EnteredValue(entry(self.key, initializer))
+        ));
+        let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("function item query variant differs")));
+        };
+        if selected.pending().is_some() || selected.local_binding().is_some() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        QueryPoll::Ready(Ok(selected
+            .declaration()
+            .map(|declaration| declaration.identity())))
+    }
     /// A call through a callee value: a literal's demand keeps its reached
     /// (run-time) context; a binding's component has no static Type from it.
     fn runtime_callee(&mut self, callee: NodeId) {
@@ -1257,6 +1345,11 @@ impl<'a> Component<'a> {
         if let Some(identity) = selected.local_binding() {
             if let Some(closure) = ready!(self.bound_closure(db, callee, identity)) {
                 return QueryPoll::Ready(Ok(Some(Callee::Closure(closure))));
+            }
+            // A local declared with a function item (`let rs = ten;`) has
+            // that function's signature.
+            if let Some(function) = ready!(self.bound_function_item(db, callee, identity)) {
+                return QueryPoll::Ready(Ok(Some(Callee::Source(function))));
             }
             self.runtime_callee(callee);
             return QueryPoll::Ready(Ok(None));
@@ -1757,6 +1850,21 @@ impl<'a> Component<'a> {
                             let via = self.via.loose();
                             self.expression_via(Some(edge.parent), via)
                         }
+                        // `*b` of a `Box<T>` is its content, the box's own
+                        // type argument (the builtin dereference).
+                        Some(Step::TypeArgument(0)) => {
+                            let boxed = match ready!(self.expression_type(db, node)) {
+                                Some(term) => ready!(self.box_contents(db, &term)).is_some(),
+                                None => false,
+                            };
+                            if boxed {
+                                let via =
+                                    self.via.unwrap(Step::TypeArgument(0)).expect("checked step");
+                                self.expression_via(Some(edge.parent), via)
+                            } else {
+                                self.defer(edge.parent, ConstraintDemand::ExpressionRelation)
+                            }
+                        }
                         _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
                     },
                     _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
@@ -1780,6 +1888,17 @@ impl<'a> Component<'a> {
                     // both operands hold the same Type at every depth.
                     Some(SourceOperator::Comparison) if self.open => {
                         self.expression(other(edge.ordinal))
+                    }
+                    // A numeric variable inside an aggregate operand: the same
+                    // relation, stated where the operand's Type shows its
+                    // comparison impls take `Rhs = Self`.
+                    Some(SourceOperator::Comparison) => {
+                        ready!(self.aggregate_comparison(
+                            db,
+                            node,
+                            edge.parent,
+                            other(edge.ordinal)
+                        ))
                     }
                     // `=` gives both places one Type at every depth.
                     Some(SourceOperator::Assign) => self.expression(other(edge.ordinal)),
@@ -2031,7 +2150,10 @@ impl<'a> Component<'a> {
         match plan.tree(root) {
             Some(tree) => {
                 let via = self.via.clone();
-                ready!(self.walk(db, root, tree.root(), via));
+                let outer = self.root_via.replace(via.clone());
+                let walked = self.walk(db, root, tree.root(), via);
+                self.root_via = outer;
+                ready!(walked);
             }
             None => self.defer(root, ConstraintDemand::Binding),
         }
@@ -2134,9 +2256,25 @@ impl<'a> Component<'a> {
                         .via
                         .unwrap(Step::Field(ordinal))
                         .expect("checked field step");
-                    if rest.is_some_and(|rest| ordinal >= rest) {
+                    if let Some(rest) = rest.filter(|rest| ordinal >= *rest) {
                         // A position after `..` needs the matched arity.
-                        self.unrecorded = true;
+                        match ready!(self.tuple_arity(db, root)) {
+                            Some(arity) => {
+                                let (items_len, rest) = (items.len(), rest as usize);
+                                let trailing = items_len - rest.min(items_len);
+                                let position = ordinal as usize;
+                                // The trailing patterns match the last positions; the
+                                // positions between the leading ones and those are `..`.
+                                if arity >= items_len && position + trailing >= arity {
+                                    if let Some(item) = items.get(position + items_len - arity) {
+                                        ready!(self.walk(db, root, item, via));
+                                    } else {
+                                        self.defer(root, ConstraintDemand::Binding);
+                                    }
+                                }
+                            }
+                            None => self.unrecorded = true,
+                        }
                     } else if let Some(item) = items.get(ordinal as usize) {
                         ready!(self.walk(db, root, item, via));
                     } else {
@@ -2510,7 +2648,12 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
     component.literal_start = matches!(start, Start::Literal(_));
     match start {
         Start::Binding(binding, pattern) => component.binding(binding, pattern),
-        Start::Literal(node) => component.expression(Some(node)),
+        Start::Literal(node) => {
+            // A nested demand for this literal's Type (see `decided_numeric`)
+            // is not asked again while it is being decided.
+            component.deciding.push(node);
+            component.expression(Some(node))
+        }
     }
     ready!(component.solve(db));
     // In well-typed source every relation agrees, so one concrete primitive

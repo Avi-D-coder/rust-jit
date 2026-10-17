@@ -83,7 +83,7 @@ fn mentions_parameter(term: &TyTerm) -> bool {
 /// Bind each parameter of `definition` that the declared Type `declared`
 /// names to the part of the reached Type `actual` at the same position
 /// (through references: the receiver and arguments auto-ref and auto-deref).
-fn bind_parameters(
+pub(super) fn bind_parameters(
     declared: &TyTerm,
     actual: &TyTerm,
     definition: Digest,
@@ -124,41 +124,6 @@ fn bind_parameters(
         _ => {}
     }
 }
-/// `term` with each bound parameter replaced.
-fn replace_parameters(
-    term: &TyTerm,
-    bound: &BTreeMap<crate::traits::term::ParamKey, TyTerm>,
-) -> TyTerm {
-    use crate::traits::term::GenericArg;
-    match term {
-        TyTerm::Param(key) => bound.get(key).cloned().unwrap_or_else(|| term.clone()),
-        TyTerm::Ref(region, mutable, inner) => TyTerm::Ref(
-            region.clone(),
-            *mutable,
-            Box::new(replace_parameters(inner, bound)),
-        ),
-        TyTerm::Slice(inner) => TyTerm::Slice(Box::new(replace_parameters(inner, bound))),
-        TyTerm::Array(inner, length) => {
-            TyTerm::Array(Box::new(replace_parameters(inner, bound)), length.clone())
-        }
-        TyTerm::Tuple(members) => TyTerm::Tuple(
-            members
-                .iter()
-                .map(|member| replace_parameters(member, bound))
-                .collect(),
-        ),
-        TyTerm::Nominal(identity, args) => TyTerm::Nominal(
-            *identity,
-            args.iter()
-                .map(|arg| match arg {
-                    GenericArg::Type(inner) => GenericArg::Type(replace_parameters(inner, bound)),
-                    other => other.clone(),
-                })
-                .collect(),
-        ),
-        other => other.clone(),
-    }
-}
 /// The autoderef'd receiver self type the probe selects from.
 fn probe_self(mut term: &TyTerm) -> Option<Result<Digest, BuiltinSelf>> {
     while let TyTerm::Ref(_, _, inner) = term {
@@ -190,7 +155,13 @@ impl<'a> Component<'a> {
         let saved = (self.pending, self.unrecorded, self.via.clone());
         let result = self.expression_type_inner(db, node);
         (self.pending, self.unrecorded, self.via) = saved;
-        let found = ready!(result);
+        let found = match ready!(result) {
+            // A declared Type that names a projection of concrete Types
+            // (`const C: <S as Tr>::Out`, an own parameter) is the Type the
+            // selected impl states.
+            Some(term) => Some(ready!(self.normalize_projections(db, &term))),
+            None => None,
+        };
         self.types.insert(node, found.clone());
         QueryPoll::Ready(Ok(found))
     }
@@ -376,31 +347,49 @@ impl<'a> Component<'a> {
         if !mentions_parameter(&result) {
             return QueryPoll::Ready(Ok(result));
         }
-        let (operands, offset) = match self.fact(call) {
-            Ok(fact) => (
-                fact.operands().to_vec(),
-                usize::from(fact.kind() != FactKind::MethodCall),
-            ),
-            Err(error) => return QueryPoll::Ready(Err(error)),
+        // The shared binding and projection normalization of a declared goal
+        // (`binding_constraint_projection.rs`): parameters replaced, then
+        // `<T as Trait>::Name` of the bound Types normalized.
+        self.instantiated_declared(db, call, definition, &result)
+    }
+    /// The arity of the tuple the pattern node being walked matches: the
+    /// static Type of the value the root pattern `root` matches (a `let`
+    /// initializer or `match` scrutinee), projected by the steps the walk
+    /// has consumed since the root. Those are the root's projection less the
+    /// current one, which is only a suffix of it while no nominal pattern
+    /// has rewritten the steps; otherwise no arity is stated.
+    pub(super) fn tuple_arity(
+        &mut self,
+        db: &mut Database,
+        root: NodeId,
+    ) -> QueryPoll<Option<usize>> {
+        let Some(root_via) = self.root_via.clone() else {
+            return QueryPoll::Ready(Ok(None));
         };
-        let mut bound = BTreeMap::new();
-        for (position, operand) in operands.iter().enumerate().skip(offset) {
-            let (Some(operand), Ok(ordinal)) = (operand, u32::try_from(position - offset)) else {
-                continue;
-            };
-            let Some(declared) = ready!(self.quiet_parameter_term(db, call, definition, ordinal))
-            else {
-                continue;
-            };
-            let Some(actual) = ready!(self.expression_type(db, *operand)) else {
-                continue;
-            };
-            bind_parameters(&declared, &actual, definition, &mut bound);
+        let (all, rest) = (&root_via.steps, &self.via.steps);
+        if !all.ends_with(rest) {
+            return QueryPoll::Ready(Ok(None));
         }
-        QueryPoll::Ready(Ok(if bound.is_empty() {
-            result
-        } else {
-            replace_parameters(&result, &bound)
+        let consumed = all[..all.len() - rest.len()].to_vec();
+        let plan = self.plan;
+        let matched = plan.uses(root).iter().find_map(|edge| {
+            let parent = plan.fact(edge.parent)?;
+            match parent.kind() {
+                FactKind::Let if edge.ordinal == 0 => parent.operand(1),
+                FactKind::Match if edge.ordinal % 2 == 1 => parent.operand(0),
+                _ => None,
+            }
+        });
+        let Some(matched) = matched else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(matched) = ready!(self.expression_type(db, matched)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(Ok(match ready!(self.project_term(db, &matched, &consumed)) {
+            Some(TyTerm::Tuple(items)) => Some(items.len()),
+            Some(TyTerm::Primitive(PrimitiveType::Unit)) => Some(0),
+            _ => None,
         }))
     }
     /// The written annotation of a fact as its Type term.
@@ -617,6 +606,14 @@ impl<'a> Component<'a> {
         let Some(receiver) = ready!(self.expression_type(db, receiver)) else {
             return QueryPoll::Ready(Ok(None));
         };
+        // An unsuffixed literal receiver (`3.b()`): the method of the one
+        // trait its family implements that provides `name`.
+        if receiver == open()
+            && let Some(receiver_node) = fact.operand(0)
+        {
+            let name = name.to_owned();
+            return self.numeric_receiver_method(db, receiver_node, &name);
+        }
         let Some(self_type) = probe_self(&receiver) else {
             // A receiver of the function's own type parameter: its bounds'
             // declared method.
@@ -628,6 +625,12 @@ impl<'a> Component<'a> {
                 let key = *key;
                 let name = name.to_owned();
                 return self.bound_method(db, &key, &name);
+            }
+            // A trait object: its principal trait declares the method.
+            if let TyTerm::Dyn(principal) = parameter {
+                let principal = principal.0;
+                let name = name.to_owned();
+                return self.dyn_method(db, principal, &name);
             }
             return QueryPoll::Ready(Ok(None));
         };
@@ -674,6 +677,12 @@ impl<'a> Component<'a> {
         let mut term = receiver;
         while let TyTerm::Ref(_, _, inner) = term {
             term = inner;
+        }
+        // `Box<dyn Trait>` dereferences (builtin) to the trait object, whose
+        // principal trait declares the method.
+        if let Some(TyTerm::Dyn(principal)) = ready!(self.box_contents(db, term)) {
+            let name = name.to_owned();
+            return self.dyn_method(db, principal.0, &name);
         }
         let Some(element) = ready!(self.vec_elements(db, term)) else {
             return QueryPoll::Ready(Ok(None));

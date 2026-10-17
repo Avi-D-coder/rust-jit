@@ -142,6 +142,18 @@ pub(crate) fn select_pattern_name(
             )));
         }
         _ => {
+            // `Type::NAME` names an associated constant (inherent, trait impl
+            // or trait default) of a nominal or primitive type, as value paths do.
+            if name.form == NameForm::Path && spelling.contains("::") {
+                match resolver.associated_value(db, caller, spelling) {
+                    QueryPoll::Ready(Ok(Some(constant))) => {
+                        return QueryPoll::Ready(Ok((name, PatternSelection::Constant(constant))));
+                    }
+                    QueryPoll::Ready(Ok(None)) => {}
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
             return QueryPoll::Ready(Err(unsupported(format!(
                 "pattern name `{spelling}` has no unique accessible declaration"
             ))));

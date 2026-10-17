@@ -779,10 +779,20 @@ fn structural_relations_project_the_component_variable() {
             "fn main() { let n = 3; let arr = [n, 2]; let s: &[u8] = &arr[1..]; }",
             Resolved(PrimitiveType::U8),
         ),
-        // A position after `..` needs the matched arity: the held route.
+        // A position after `..` is counted from the matched Type's arity:
+        // the initializer's tuple states it.
         (
             "fn main() { let n = 3; let (.., a) = (1u8, n); let c: u16 = a; }",
-            Unconstrained,
+            Resolved(PrimitiveType::U16),
+        ),
+        // ... through a leading `..` of a longer tuple and a trailing one.
+        (
+            "fn main() { let n = 3; let (a, .., b) = (1u8, 2, 3, n); let c: u16 = b; }",
+            Resolved(PrimitiveType::U16),
+        ),
+        (
+            "fn main() { let n = 3; let (a, .., b) = (n, 2, 3, 4u8); let c: u16 = a; }",
+            Resolved(PrimitiveType::U16),
         ),
     ];
     for edition in [2015, 2018, 2021, 2024] {
@@ -1427,5 +1437,301 @@ fn open_arguments_take_literal_tuple_and_dependent_types() {
             false,
         );
         assert!(found.len() == 2, "{edition} {found:?}");
+    }
+}
+
+/// An associated-type projection of a selected callee's own type parameters
+/// (`<T as Get>::Value`, `Self::Value`, `<isize as Tr>::Out`) is normalized
+/// through the impl member index once the call's operands bind the
+/// parameters, so a literal related to the projection takes the Type the
+/// selected impl states (unchanged upstream `associated-types-in-fn` and its
+/// neighbours exercise the same shapes end to end).
+#[test]
+fn associated_type_projections_normalize_through_the_shared_impl_index() {
+    use BindingConstraintState::Resolved;
+    use PrimitiveType::*;
+    const GET: &str = "trait Get { type Value; fn get(&self) -> &<Self as Get>::Value;\n\
+        fn grab(&self) -> &<Self as Get>::Value { self.get() } }\n\
+        struct S { x: isize }\n\
+        impl Get for S { type Value = isize; fn get(&self) -> &isize { &self.x } }\n";
+    let program = |declarations: &str, body: &str| format!("{GET}{declarations}\nfn main() {{ let s = S {{ x: 1 }}; {body} }}");
+    let cases: Vec<(String, BindingConstraintState)> = vec![
+        // The callee's parameter is bound by the argument's Type.
+        (
+            program(
+                "fn grab<T: Get>(x: &T) -> &<T as Get>::Value { x.get() }",
+                "let n = 5; let m = *grab(&s) == n;",
+            ),
+            Resolved(Isize),
+        ),
+        // ... also in a parameter position of the same call.
+        (
+            program(
+                "fn put<T: Get>(t: &T, v: <T as Get>::Value) {}",
+                "let n = 5; put(&s, n);",
+            ),
+            Resolved(Isize),
+        ),
+        // A provided trait method: `Self` is bound by the receiver.
+        (program("", "let n = 5; let m = *s.grab() == n;"), Resolved(Isize)),
+        // An inherent associated function with a generic parameter.
+        (
+            program(
+                "impl S { fn pick<T: Get>(x: &T) -> &<T as Get>::Value { x.get() } }",
+                "let n = 5; let m = *S::pick(&s) == n;",
+            ),
+            Resolved(Isize),
+        ),
+        // A blanket impl's method: the impl's parameter is bound by the receiver.
+        (
+            program(
+                "trait Grab { type U; fn pull(&self) -> &<Self as Grab>::U; }\n\
+                 impl<T: Get> Grab for T { type U = <T as Get>::Value; \n\
+                     fn pull(&self) -> &<T as Get>::Value { self.get() } }",
+                "let n = 5; let m = *s.pull() == n;",
+            ),
+            Resolved(Isize),
+        ),
+        // A projection of a concrete Type needs no binding.
+        (
+            program(
+                "trait Flip { type Opposite; }\n\
+                 impl Flip for isize { type Opposite = u64; }\n\
+                 fn flipped() -> <isize as Flip>::Opposite { 7 }",
+                "let n = 5; let m = flipped() == n;",
+            ),
+            Resolved(U64),
+        ),
+        // `Self::Name` in a concrete impl.
+        (
+            program(
+                "trait Tr { type Out; fn out(&self) -> Self::Out; }\n\
+                 impl Tr for S { type Out = u16; fn out(&self) -> Self::Out { 3 } }",
+                "let n = 5; let m = s.out() == n;",
+            ),
+            Resolved(U16),
+        ),
+        // An unsuffixed integer variable is the callee's parameter: its one
+        // applicable impl (rustc's selection) decides the projection.
+        (
+            "trait Foo { type A; fn boo(&self) -> <Self as Foo>::A; }\n\
+             struct Bar;\n\
+             impl Foo for u8 { type A = i64; fn boo(&self) -> i64 { 1 } }\n\
+             impl Foo for Bar { type A = u32; fn boo(&self) -> u32 { 2 } }\n\
+             fn foo2<I: Foo>(x: I) -> <I as Foo>::A { x.boo() }\n\
+             fn main() { let a = 42; let n = 7; let m = foo2(a) == n; }"
+                .to_string(),
+            Resolved(I64),
+        ),
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for (text, expected) in &cases {
+            // The first literal `let` is the `n` whose Type is asked for
+            // (the leading `s`/`a` bindings are not bare literals, except
+            // the integer-variable case, whose first literal is `a`).
+            let state = if text.contains("foo2(a)") {
+                literal_goals(text, edition, true)[1]
+            } else {
+                first_literal_let(text, edition, true)
+            };
+            assert_eq!(state, *expected, "{edition}: {text}");
+        }
+    }
+}
+
+/// A projection no impl states stays an unanswered goal: nothing is guessed
+/// (the integer fallback is rustc's only after every relation was recorded).
+#[test]
+fn unnormalizable_projections_stay_explicit() {
+    for edition in [2015, 2018, 2021, 2024] {
+        let text = "trait Get { type Value; fn get(&self) -> &<Self as Get>::Value; }\n\
+             struct S;\n\
+             fn grab<T: Get>(x: &T) -> &<T as Get>::Value { x.get() }\n\
+             fn main() { let s = S; let n = 5; let m = *grab(&s) == n; }";
+        let state = first_literal_let(text, edition, true);
+        assert!(
+            !matches!(state, BindingConstraintState::Resolved(_)),
+            "{edition} {state:?}"
+        );
+    }
+}
+
+/// The same projection relation, handwritten, emitted by a user macro,
+/// wrapped by a second macro and nested in `assert_eq!`, takes one route.
+#[test]
+fn generated_and_handwritten_projections_share_one_route() {
+    const DECLARATIONS: &str = "trait Get { type Value; fn get(&self) -> &<Self as Get>::Value; }\n\
+        struct S { x: isize }\n\
+        impl Get for S { type Value = isize; fn get(&self) -> &isize { &self.x } }\n\
+        fn grab<T: Get>(x: &T) -> &<T as Get>::Value { x.get() }\n";
+    let sources = [
+        "fn main() { let s = S { x: 1 }; let n = 5; let m = *grab(&s) == n; }",
+        "macro_rules! value { ($s:expr) => { *grab(&$s) } }\n\
+         fn main() { let s = S { x: 1 }; let n = 5; let m = value!(s) == n; }",
+        "macro_rules! value { ($s:expr) => { *grab(&$s) } }\n\
+         macro_rules! same { ($a:expr, $b:expr) => { $a == $b } }\n\
+         fn main() { let s = S { x: 1 }; let n = 5; let m = same!(value!(s), n); }",
+        "macro_rules! inner { ($s:expr, $n:expr) => { *grab(&$s) == $n } }\n\
+         macro_rules! outer { ($s:expr, $n:expr) => { inner!($s, $n) } }\n\
+         fn main() { let s = S { x: 1 }; let n = 5; let m = outer!(s, n); }",
+        "fn main() { let s = S { x: 1 }; let n = 5; assert_eq!(*grab(&s), n); }",
+        "macro_rules! check { ($s:expr, $n:expr) => { assert_eq!(*grab(&$s), $n) } }\n\
+         fn main() { let s = S { x: 1 }; let n = 5; check!(s, n); }",
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for body in sources {
+            let text = format!("{DECLARATIONS}{body}");
+            assert_eq!(
+                first_literal_let(&text, edition, true),
+                BindingConstraintState::Resolved(PrimitiveType::Isize),
+                "{edition}: {body}"
+            );
+        }
+        // A bare literal beside the call (no binding) takes the same Type.
+        let text = format!(
+            "{DECLARATIONS}fn main() {{ let s = S {{ x: 1 }}; assert_eq!(*grab(&s), 100); }}"
+        );
+        assert_eq!(
+            literal_goals(&text, edition, true),
+            [
+                // `S { x: 1 }` (the declared field Type) and the asserted `100`.
+                BindingConstraintState::Resolved(PrimitiveType::Isize),
+                BindingConstraintState::Resolved(PrimitiveType::Isize)
+            ],
+            "{edition}"
+        );
+    }
+}
+
+/// A numeric variable inside an aggregate operand of a comparison has the
+/// Type at the same depth of the other operand, where the aggregate's
+/// comparison impls take `Rhs = Self`; an impl naming another `Rhs` is the
+/// dispatcher's selection and relates nothing here.
+#[test]
+fn aggregate_comparison_operands_share_one_type() {
+    use BindingConstraintState::Resolved;
+    use PrimitiveType::U8;
+    const MAYBE: &str = "enum Maybe<T> { No, Yes(T) }\n";
+    let cases: Vec<(String, Vec<BindingConstraintState>)> = vec![
+        (
+            "fn main() { let y: (u8, bool) = (217, true); let c = y == (218, true); }".into(),
+            vec![Resolved(U8), Resolved(U8)],
+        ),
+        (
+            // The first literal is the array Type's length.
+            "fn main() { let a: [u8; 2] = [1, 2]; let c = a == [3, 4]; }".into(),
+            vec![BindingConstraintState::Unconstrained, Resolved(U8), Resolved(U8), Resolved(U8), Resolved(U8)],
+        ),
+        (
+            format!("{MAYBE}fn main() {{ let x: Maybe<u8> = Maybe::Yes(243); let c = x == Maybe::Yes(5); }}"),
+            vec![Resolved(U8), Resolved(U8)],
+        ),
+        // Through the same relation when a user macro emits the comparison,
+        // when a second macro wraps it and when `assert_eq!` nests it.
+        (
+            "macro_rules! same { ($a:expr, $b:expr) => { $a == $b } }\n\
+             fn main() { let y: (u8, bool) = (217, true); let c = same!(y, (218, true)); }"
+                .into(),
+            vec![Resolved(U8), Resolved(U8)],
+        ),
+        (
+            "macro_rules! same { ($a:expr, $b:expr) => { $a == $b } }\n\
+             macro_rules! wrap { ($a:expr, $b:expr) => { same!($a, $b) } }\n\
+             fn main() { let y: (u8, bool) = (217, true); let c = wrap!(y, (218, true)); }"
+                .into(),
+            vec![Resolved(U8), Resolved(U8)],
+        ),
+        (
+            "fn main() { let y: (u8, bool) = (217, true); assert_eq!(y, (218, true)); }".into(),
+            vec![Resolved(U8), Resolved(U8)],
+        ),
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for (text, expected) in &cases {
+            assert_eq!(literal_goals(text, edition, true), *expected, "{edition}: {text}");
+        }
+        // `impl PartialEq<H<u16>> for G<T>` selects by the other operand's
+        // Type: the `500` is not forced to `G`'s `u8`.
+        let text = "struct G<T>(T);\nstruct H<T>(T);\n\
+            impl<T> PartialEq<H<u16>> for G<T> { fn eq(&self, _o: &H<u16>) -> bool { true } }\n\
+            fn main() { let g: G<u8> = G(1); let c = g == H(500); }";
+        let goals = literal_goals(text, edition, true);
+        assert_eq!(goals.len(), 2, "{edition}");
+        assert_ne!(goals[1], Resolved(U8), "{edition} {goals:?}");
+    }
+}
+
+/// Method selection and coercion obligations through the shared services:
+/// a trait object's principal trait declares its methods and bounds a
+/// numeric variable unsized to it (one applicable impl selects its Type, as
+/// rustc's); an unsuffixed literal receiver takes the one trait method of its
+/// family; a local declared with a function item has that function's
+/// signature.
+#[test]
+fn trait_objects_literal_receivers_and_function_items_relate_literals() {
+    use BindingConstraintState::Resolved;
+    use PrimitiveType::*;
+    const FOO: &str = "trait Foo { fn f(&self) -> u64; fn b(&self) -> u64 { self.f() + 2 } }\n\
+        struct S;\n\
+        impl Foo for S { fn f(&self) -> u64 { 1 } }\n";
+    let cases: Vec<(String, BindingConstraintState)> = vec![
+        // `?v: Foo` for the unsizing `&?v -> &dyn Foo`: one applicable impl.
+        (
+            "trait Foo { fn f(&self) -> u8; }\nimpl Foo for u8 { fn f(&self) -> u8 { 1 } }\n\
+             fn main() { let n = 3; let o: &dyn Foo = &n; }"
+                .into(),
+            Resolved(U8),
+        ),
+        // Several applicable impls leave the variable to fallback.
+        (
+            "trait Foo { fn f(&self) -> u8; }\nimpl Foo for u8 { fn f(&self) -> u8 { 1 } }\n\
+             impl Foo for u16 { fn f(&self) -> u8 { 1 } }\n\
+             fn main() { let n = 3; let o: &dyn Foo = &n; }"
+                .into(),
+            Resolved(I32),
+        ),
+        // A method called on a trait object is the principal trait's.
+        (
+            format!("{FOO}fn main() {{ let o: &dyn Foo = &S; let n = 3; let c = o.f() == n; }}"),
+            Resolved(U64),
+        ),
+        // ... including a provided method.
+        (
+            format!("{FOO}fn main() {{ let o: &dyn Foo = &S; let n = 3; let c = o.b() == n; }}"),
+            Resolved(U64),
+        ),
+        // The method of the one trait a literal receiver's family implements.
+        (
+            "trait Foo { fn a(&self) -> u64; fn b(&self) -> u64 { self.a() + 2 } }\n\
+             impl Foo for u64 { fn a(&self) -> u64 { 3 } }\n\
+             fn main() { let n = 5; let c = 3.b() == n; }"
+                .into(),
+            Resolved(U64),
+        ),
+        // An associated function without `self` is no method candidate.
+        (
+            "trait Foo { fn new() -> bool { false } }\ntrait Bar { fn new(&self) -> u16 { 1 } }\n\
+             impl Foo for i32 {}\nimpl Bar for i32 {}\n\
+             fn main() { let n = 5; let c = 1.new() == n; }"
+                .into(),
+            Resolved(U16),
+        ),
+        // A local declared with a function item.
+        (
+            "fn ten() -> u8 { 10 }\nfn main() { let rs = ten; let n = 3; let c = rs() == n; }"
+                .into(),
+            Resolved(U8),
+        ),
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for (text, expected) in &cases {
+            assert_eq!(first_literal_let(text, edition, true), *expected, "{edition}: {text}");
+        }
+        // The same relations when a user macro emits the call.
+        let text = format!(
+            "{FOO}macro_rules! value {{ ($o:expr) => {{ $o.f() }} }}\n\
+             fn main() {{ let o: &dyn Foo = &S; let n = 3; let c = value!(o) == n; }}"
+        );
+        assert_eq!(first_literal_let(&text, edition, true), Resolved(U64), "{edition}");
     }
 }

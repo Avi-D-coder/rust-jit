@@ -459,10 +459,7 @@ impl ParsedFile {
             }
             // The validated immutable forest already has a strict span-key
             // index; do not rebuild it for every representation conversion.
-            let position = tokens
-                .spans()
-                .binary_search_by_key(&span, |record| record.key())
-                .map_err(|_| fail())?;
+            let position = tokens.span_position(&span).ok_or_else(fail)?;
             let context = crate::syntax::token_wire::Key(tokens.spans()[position].context.0);
             let edition = match facts.context(context)?.edition {
                 crate::syntax::token_wire::Edition::E2015 => 2015,

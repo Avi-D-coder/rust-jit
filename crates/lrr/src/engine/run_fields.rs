@@ -118,6 +118,254 @@ impl RunMachine {
     }
 }
 
+/// What the next place operation needs of its base place.
+enum PlaceNeed {
+    /// `*place`: the operand's own type dereferences (not a reference or box).
+    Explicit,
+    /// `base.name`
+    Named,
+    /// `base.n`
+    Positional(u32),
+    /// `base[i]`
+    Index,
+}
+
+impl RunMachine {
+    /// rustc's overloaded autoderef of a place expression: when the next
+    /// place operation's base place is (a reference or box to) a nominal
+    /// value that cannot serve the operation itself -- `*rc`, `rc.field`,
+    /// `rc.0`, `guard[i]` -- but implements `Deref`, the base takes that
+    /// step first. The operation then suspends for the trait method, as an
+    /// overloaded operator or a method receiver does, and runs over the
+    /// returned reference's referent. `DerefMut` is used when the type has
+    /// it and the place is used mutably (assigned to, `&mut`-borrowed or a
+    /// method receiver).
+    pub(super) fn prepare_place_deref(
+        &mut self,
+        db: &mut Database,
+        id: super::super::install::RecipeId,
+    ) -> QueryPoll<()> {
+        match self.prepare_place_deref_inner(db, id) {
+            Ok(poll) => poll,
+            Err(error) => QueryPoll::Ready(Err(error)),
+        }
+    }
+    fn prepare_place_deref_inner(
+        &mut self,
+        db: &mut Database,
+        id: super::super::install::RecipeId,
+    ) -> Result<QueryPoll<()>, Diagnostic> {
+        use crate::runtime::shape::TypeKey;
+        if self.frame.has_place_deref_demand() || self.frame.has_operator_activation() {
+            return Ok(QueryPoll::Ready(Ok(())));
+        }
+        let resume = self.frame.resume_operation_index();
+        let operation = {
+            let recipe = self.installed.get_current(db, id)?;
+            recipe
+                .recipe()
+                .operations
+                .iter()
+                .skip(resume)
+                .find_map(|op| match op {
+                    Op::DerefPlace { reference, .. } => Some((*reference, PlaceNeed::Explicit)),
+                    Op::ProjectField { base, .. } => Some((*base, PlaceNeed::Named)),
+                    Op::ProjectTuple { base, field, .. } => {
+                        Some((*base, PlaceNeed::Positional(*field)))
+                    }
+                    Op::ProjectIndex { base, .. } => Some((*base, PlaceNeed::Index)),
+                    _ => None,
+                })
+        };
+        let Some((base, need)) = operation else {
+            return Ok(QueryPoll::Ready(Ok(())));
+        };
+        let Some(mut ty) = self.frame.place_type_if_executed(base, &self.store)? else {
+            return Ok(QueryPoll::Ready(Ok(())));
+        };
+        if !matches!(need, PlaceNeed::Explicit) {
+            // The builtin steps first: references and boxes to the value.
+            loop {
+                match self.store.type_descriptor(ty)?.key.as_ref() {
+                    TypeKey::Ref { target, .. } => ty = *target,
+                    _ => match self.store.box_contents_type(ty)? {
+                        Some(contents) => ty = contents,
+                        None => break,
+                    },
+                }
+            }
+        } else if self.store.box_contents_type(ty)?.is_some() {
+            return Ok(QueryPoll::Ready(Ok(())));
+        }
+        let TypeKey::Nominal { identity, .. } = self.store.type_descriptor(ty)?.key.as_ref()
+        else {
+            return Ok(QueryPoll::Ready(Ok(())));
+        };
+        let identity = *identity;
+        if !matches!(need, PlaceNeed::Explicit) && self.store.is_vec_type(ty)? {
+            if matches!(need, PlaceNeed::Index) {
+                return Ok(QueryPoll::Ready(Ok(())));
+            }
+        }
+        let Some(members) = self.members.clone() else {
+            return Ok(QueryPoll::Ready(Ok(())));
+        };
+        // Whether the nominal value serves the operation itself.
+        let serves = match need {
+            PlaceNeed::Explicit => false,
+            PlaceNeed::Index => self.store.is_vec_type(ty)?,
+            PlaceNeed::Named | PlaceNeed::Positional(_) => {
+                let captured = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(identity)) {
+                    QueryPoll::Ready(Ok(captured)) => captured,
+                    QueryPoll::Ready(Err(error)) => return Err(error),
+                    QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
+                };
+                let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
+                    return Err(field_fault("place dereference schema outcome differs"));
+                };
+                let Ok(variant) = schema.variant(None) else {
+                    return Ok(QueryPoll::Ready(Ok(())));
+                };
+                match need {
+                    PlaceNeed::Positional(position) => {
+                        variant.shape == crate::frontend::types::FieldShape::Tuple
+                            && (position as usize) < variant.fields.len()
+                    }
+                    _ => {
+                        let graph = self
+                            .graph
+                            .as_ref()
+                            .ok_or_else(|| field_fault("field requires a checked source catalogue"))?;
+                        for view in &self.sources {
+                            graph.require_view(view)?;
+                        }
+                        let sources: Vec<_> = self.sources.iter().collect();
+                        let member =
+                            match source::capture(db, &sources, &self.frame.body, self.frame.pc()) {
+                                QueryPoll::Ready(Ok(caller)) => caller.member().to_owned(),
+                                QueryPoll::Ready(Err(error)) => return Err(error),
+                                QueryPoll::NeedInput(request) => {
+                                    return Ok(QueryPoll::NeedInput(request));
+                                }
+                            };
+                        variant
+                            .fields
+                            .iter()
+                            .any(|field| field.name.as_deref() == Some(member.as_str()))
+                    }
+                }
+            }
+        };
+        if serves {
+            return Ok(QueryPoll::Ready(Ok(())));
+        }
+        let deref = match self.operator_trait(db, "ops", "Deref") {
+            QueryPoll::Ready(Ok(deref)) => deref,
+            QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => {
+                return Ok(QueryPoll::Ready(Ok(())));
+            }
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+        };
+        if members.trait_method(Ok(identity), deref, "deref").is_empty() {
+            return Ok(QueryPoll::Ready(Ok(())));
+        }
+        let deref_mut = match self.operator_trait(db, "ops", "DerefMut") {
+            QueryPoll::Ready(Ok(deref_mut)) => Some(deref_mut),
+            QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => None,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+        };
+        let mutable_capable = deref_mut
+            .is_some_and(|deref_mut| !members.trait_method(Ok(identity), deref_mut, "deref_mut").is_empty());
+        let mutable = if mutable_capable {
+            match self.place_used_mutably(db) {
+                QueryPoll::Ready(Ok(mutable)) => mutable,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+            }
+        } else {
+            false
+        };
+        if !matches!(need, PlaceNeed::Explicit) {
+            self.frame
+                .peel_builtin_derefs(base, &self.store)
+                .map_err(|failure| match failure {
+                    crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                    crate::runtime::place::PlaceFailure::GuestPanic(panic) => {
+                        Diagnostic::new("LRR-E-INTERNAL-IR", panic.message())
+                    }
+                })?;
+        }
+        self.frame.demand_place_deref(base, mutable);
+        Ok(QueryPoll::Ready(Ok(())))
+    }
+    /// Whether the place expression at the current node is used mutably:
+    /// assigned to, compound-assigned, `&mut`-borrowed or a method receiver,
+    /// through any chain of fields, indexing, parentheses and dereferences
+    /// (rustc's `convert_place_derefs_to_mutable`).
+    fn place_used_mutably(&mut self, db: &mut Database) -> QueryPoll<bool> {
+        use crate::syntax::source_constraints::{FactKind, SourceOperator};
+        let outcome = match db.fetch(
+            &SyntaxProvider,
+            QueryKey::SourceConstraints(self.frame.body.body().clone()),
+        ) {
+            QueryPoll::Ready(Ok(outcome)) => outcome,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::SourceConstraints(plan) = outcome.value.as_ref() else {
+            return QueryPoll::Ready(Err(field_fault("place use plan outcome differs")));
+        };
+        let mut node = NodeId(self.frame.pc().node);
+        // Every step climbs to a parent expression.
+        for _ in 0..plan.facts_len() {
+            let mut next = None;
+            for edge in plan.uses(node) {
+                let Some(parent) = plan.fact(edge.parent) else {
+                    continue;
+                };
+                match parent.kind() {
+                    FactKind::Binary
+                        if edge.ordinal == 0
+                            && matches!(
+                                parent.operation(),
+                                Some(
+                                    SourceOperator::Assign
+                                        | SourceOperator::CompoundArithmetic
+                                        | SourceOperator::CompoundShift
+                                )
+                            ) =>
+                    {
+                        return QueryPoll::Ready(Ok(true));
+                    }
+                    FactKind::Borrow => return QueryPoll::Ready(Ok(parent.flag())),
+                    // A receiver may take `&mut self`: the method is selected
+                    // only after the place, so a `DerefMut` type is assumed
+                    // to be used through it mutably.
+                    FactKind::MethodCall if edge.ordinal == 0 => {
+                        return QueryPoll::Ready(Ok(true));
+                    }
+                    FactKind::Field | FactKind::Index | FactKind::IndexRange | FactKind::Parenthesis
+                        if edge.ordinal == 0 =>
+                    {
+                        next = Some(edge.parent);
+                    }
+                    FactKind::Prefix if parent.operation() == Some(SourceOperator::Deref) => {
+                        next = Some(edge.parent);
+                    }
+                    _ => {}
+                }
+            }
+            match next {
+                Some(parent) => node = parent,
+                None => return QueryPoll::Ready(Ok(false)),
+            }
+        }
+        QueryPoll::Ready(Ok(false))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

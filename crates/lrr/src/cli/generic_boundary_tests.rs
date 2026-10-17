@@ -127,3 +127,68 @@ fn main() {
         "took b\ndrop b\nend\ndrop a\ndrop c\n",
     );
 }
+
+#[test]
+fn range_indexed_slices_share_the_array_element_type() {
+    // `base[a..b]` is the slice of the base's elements: the literals of an
+    // array only borrowed as a slice take a later use's Type or the i32/f64
+    // fallback, through the one static constraint service.
+    prints(
+        "range-index",
+        "fn take(s: &[u8]) -> u8 { s[1] }
+fn main() {
+    let a = [1, 2, 3];
+    let s = &a[..];
+    let t = &a[1..2];
+    println!(\"{} {} {}\", s.len(), t[0], a[1..3][1]);
+    let f = [1.5, 2.0];
+    println!(\"{}\", (&f[..])[1]);
+    let b = [7, 8, 9];
+    println!(\"{}\", take(&b[1..]));
+    let c = [1; 2];
+    println!(\"{}\", (&c[..]).len());
+}
+",
+        "3 2 3\n2\n9\n2\n",
+    );
+}
+
+#[test]
+fn lifetime_arguments_name_the_bare_nominal_inside_macro_arguments() {
+    // `Ctx<'_>` has no Type argument, and a lifetime token inside a macro
+    // call keeps the same identity when the call is replayed.
+    prints(
+        "lifetime-args",
+        "use std::marker::PhantomData;
+struct Ctx<'a> { x: u8, _m: PhantomData<&'a ()> }
+fn size_ok<T>() -> bool { true }
+fn main() {
+    println!(\"{}\", size_ok::<Ctx<'_>>());
+    println!(\"{}\", size_ok::<&Ctx<'static>>());
+}
+",
+        "true\ntrue\n",
+    );
+}
+
+#[test]
+fn primitive_cast_results_carry_their_target_type_as_a_local_source() {
+    // `5u64 as i64` has exactly the written target Type, so a local bound to
+    // it can be borrowed and compared like an annotated one.
+    prints(
+        "cast-source",
+        "fn main() {
+    let x = 5u64 as i64;
+    let y = 7u64 as i64;
+    println!(\"{:?} {}\", x.cmp(&y), x == y);
+    let c = 300i32 as u8;
+    let d = c as char;
+    let f = c as f64;
+    println!(\"{} {} {}\", c, d, f);
+    let r = &(x as u8);
+    println!(\"{}\", *r + 1);
+}
+",
+        "Less false\n44 , 44\n6\n",
+    );
+}

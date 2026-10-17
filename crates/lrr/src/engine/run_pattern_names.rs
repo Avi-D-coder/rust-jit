@@ -130,7 +130,7 @@ impl RunMachine {
         };
         let sources: Vec<_> = self.sources.iter().collect();
         let resolver = match CallResolver::new(graph, &sources) {
-            Ok(resolver) => resolver,
+            Ok(resolver) => resolver.with_members(self.members.as_deref()),
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         let (name, selection) = match select_pattern_name(

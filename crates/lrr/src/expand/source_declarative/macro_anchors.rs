@@ -97,9 +97,7 @@ pub(super) fn capture(
         // TokenForest validates strict span-key order. Reuse that immutable
         // index instead of rebuilding a full span map for declaration capture.
         let span = forest
-            .spans()
-            .binary_search_by_key(&capture.name_span, |span| span.key())
-            .ok()
+            .span_position(&capture.name_span)
             .map(|position| &forest.spans()[position])
             .ok_or_else(|| fault("original macro declaration name source absent"))?;
         if span.source.unit.0 != selection.outline.crate_key.0
