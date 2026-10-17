@@ -1,0 +1,101 @@
+{
+  "schema": "lrr/source-review/generated-child-impl-v9-independent/v1",
+  "source_member": "9f0a2a5f120d347c0ba88ac1f13c1773891b8106ec418cd03dff6456d19bdc72",
+  "baseline_source": "7d239fbc2bd6235e95942755cedc9f33165f76dd831e3f5aef5372993005b4fd",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "124dca52fae0e125daa02b5a4f912b44a276cfbb0a23338bf45cbf76a87d8e3d",
+      "bytes": 520340,
+      "before_sha256": "96b04b2a8f681c3d635f4ddb409234cf1bf584c3e6942c91db5abed3779ca61d"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "28168283f2169f3bb8c0edbe23528eda8df5ca77238cc9c1943492fd166edd66",
+      "bytes": 37698,
+      "before_sha256": "090573aca19b80d9cddfd5b4bf6622927989e05868c309aaa07bd81fbc1ccaa4"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "5e315b6701f907f085ce1c4ca6dc79a12cd4a6bf1895d280663cf25c30e53e1d",
+      "bytes": 28220,
+      "before_sha256": "efdb05c89ade07fb95f66ead7906cbc8952bca8d1baeb7893433219636057d56"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_projection.rs",
+      "sha256": "c416dd7857fcdd690cab01f3aa5a79f2a90ad2146ce3b6b9603207fe65f96a56",
+      "bytes": 4464,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242",
+      "bytes": 8043,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "sha256": "d5b059acb26d9141682abbb7ec1d55b97a25760876f4714ce99c0cd84ef57746",
+      "bytes": 7985,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "sha256": "9840b40aee7600c25edfded48cc5fb839caa024b37d3325f26ab4de353bd201c",
+      "bytes": 17394,
+      "before_sha256": "771344b4ae0ed59a3601d1f5a440bd1eed8bfdb87446846b1646610b5d5af82a"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "sha256": "4b0056db1c09f4ed603dfb356d3a7b96911b86edeb75b57bfe95696dfe1911a5",
+      "bytes": 9327,
+      "before_sha256": null
+    }
+  ],
+  "status": "Exact frozen V9 independent source review. No code edits, Cargo/compiler/tests/imports run by reviewer. Runtime terminals belong validator; feature/matrix/milestone/JIT closure held.",
+  "verification": "All8 overlay hashes+bytes and actual V8 beforehashes verified. Frozen SourceDiscovery differs reviewedlive only by exclusion of unrelated impl_catalog hook; frozen generated_declarations shared helper excludes inherited admitted_parsed accessor. Root headerplan final5e315b67 inspected. Frozen V8 historical review/evidence unchanged.",
+  "conclusion": "No concrete source blocker found in exact V9 root wiring and combined components. Genuine nested child output ancestry and canonical inventory authority are retained, shared indexes cached once, unrelated blockers remain held. This establishes source review only, not execution acceptance.",
+  "root_wiring": {
+    "root_job": "Direct item/source derive preflight genuine declaration_facet output and deterministic v2 declarationjob; new item_root_declarations maps actual root fragment identity to that job. Duplicate checks precede insertion, same input/producers/record/cfg/epoch authority remains. Newmap entries retain no parser/bodycopy.",
+    "child_admission": "pending_generated exact request.key==record.key and explicit compiler/procedural adoption preserved. ticket.job.identity selects actual root fragment; fragment.active_child selects actual parentcatalog. parent.child_for_discovery binds actual source/context/scope; child and parent retained_items Arcs plus child actual scope/cfg/currentepoch and sameplanprojection retained in waiter. Dedicated implfrontier only exempted from opaque refusal; all other unrelated unsupported owner/import/module blockers remain existing typedjobs/refusal.",
+    "jobs": "Child impl ScanNestedDeclarations job appended to fragment.jobs and schedulerupdate, exact name/frontier stable identity; separate from child.release call/outward set. Ancestorjob from actual root mapping. Workpreflight before namespace/parent mutations. Changed child admission wraps post-preflight mutation failures into persistent self.failed.",
+    "closure_dependency": "Catalog closure proceeds through actual child_for_discovery/park_child/complete_child and original provider complete_generated_bindings. Genuine ancestor poll waits root fragment removal then uses provider.completed_root_catalog + DeclarationFragment.with_completed_item_owner. Existing recursive completed_declaration_call admits actual childscan via structural occurrence/fullcoverage receipt. Waiter blocks on genuine ancestorjob, not its own frontier; catalog macroclosure does not wait for implfrontier discharge. No source-confirmed new cycle in reviewed flow; runtime/cycle controls remain required.",
+    "completion_cache": "At real nested_completed[ancestor], prepare immutable AncestorImplCompletion only if absent; map<=4096. Once actual rootjob/source/cfg/epoch/Items validated and syntax_outputs/indexes built. Every reuse Arc::ptr_eq(real nested_completed,prepared.completed) and waiter require_owner tuple. Cache remains shared until SourceDiscovery ownership ends; no perchild rebuild/namespace census/parser/bodycopy.",
+    "child_proof": "Unique exact same_record childoutput; actual scope/cfg/epoch. First parent must same_record actual selected parentItems and epoch. Every generated edge uses unique parentinventory scan plus actual producer identity/grammar/scope; cycle/depth bounded, must reach exact root. Shared activeprojection canonical rawImpl-to-ScannedImpl rangejoin and completed canonicalheader membership required. Equalshape/count/listing never grants completeness.",
+    "retirement": "Successful resolve produces actual canonical header members and immutable waiter fingerprint dependency; scheduler complete first, then release_generated_frontier at waiter actual child scope, remove exact producer+waiter. Mutation errors poison coordinator. No release of recordinvocation blanket/import/otherowner frontiers. Cached completion/rootmap conservative retained until discovery drop.",
+    "sealing": "New defensive worklist-Sealed check refuses nonempty pending_item_boundaries and poisons coordinator. It addresses malformed internal receipt control only; not claimed observed valid-source failure. Existing pending boundary sweep and provider/source/currentness proof unchanged."
+  },
+  "metadata_cost": {
+    "newmaps": "item_root_declarations extra128 allowance added to direct/derive existing nested metadata total256; count bounded by retained item_declaration_inputs<=4096 (not removed) and records<=100000. child_impl_frontiers<=100000; waiter Self includes actual3 Arc handles, scope/cfgheap, conservative projection graph plus128 map allowance; existing generatedframe bookkeeping allowance retained. item_impl_completions<=4096; initial64MiB temporary budget preflight then actual checked vectors/Self/Arc header +128 cachemap allowance, cumulative nested_bytes<=512MiB.",
+    "lifecycle": "Waiter removal does not refund cumulative metadata; rootmap/cache intentionally retained and charged. Shared GeneratedItems/catalog and completed source/output payload remain existing countedowners; newextra handles are charged in Self. No claim of exact unique-byte allocator accounting or measured memory reduction.",
+    "once": "Projection prepared from actual active Outline then Arccloned; ancestor outputlist/sortedscan/record/headerindexes once per actual completed root. O(OlogO+IlogI) plus existing source/hash work, <=100000rows/64MiB. Existing macrocatalog planning remains cold existingroute; no claim entire discovery has no inherited rescan debt.",
+    "child": "Each child recordlookup O(logO+candidatewirecompare), ancestry <=256 with binarylookup+actualproducer scans; canonical rangejoin O(A*(raw+scan)), membership O(logI). Scope/cfg/Arcs retained, no immutable body/indexclone. Normal runtime/call entry untouched; no speed/scaling claim."
+  },
+  "all8": {
+    "1": "No separate assertion/expression evaluator; source/declaration metadata feeds normal engine.",
+    "2": "Actual admitted generated records/index/source boundaries; no literal/break outputexecutor.",
+    "3": "No macro/name/numeric profile. Same opaque actual scope/header/source services.",
+    "4": "Replaces generatedchild impl-only refusal with actual retained declarationclosure proof. Other gaps remain explicit, no originalgate added.",
+    "5": "Header/cfg/declaration discovery only, cold method bodies/unselected executable arms not lowered. Pattern engine unchanged.",
+    "6": "Actual shared immutable projection/cache, one ancestor index per real completedroot; prior repeated childlisting/sort/inventoryscan removed. No installed sourceplanning introduced.",
+    "7": "Exact dedicated frontier and actual ancestor dependencies, unrelated blockers held, no fullworld hotnamespace scan. Scope seal defensivehold preserves incomplete receipts.",
+    "8": "Actual source/output Arcs retained and bounded deterministic auxiliary indexes. No BodyIndexdeepclone or per-entry wholefile node search."
+  },
+  "source_controls_inspected_not_run": [
+    "Existing generated_impl_frontier_tests inheritedV8 activecfg/owner/epoch controls remain unchanged through4arghelper wrapper.",
+    "New item_boundary_tests actual fullunchanged shadowing source usermacro all4 waits genuine declarationjobs, exact same record/provider emptyreceipt finalizes once without expansioncountchange.",
+    "New boundary negatives changedepoch, equal-selection independently captured sourcepublication, changedcontent, changedcfg retainpending/refuse/poison.",
+    "Malformed internal wrong typedprerequisite uses genuine jobs, never marks arbitraryjobs complete; actualwork canseal but nonemptyreceipt hold refuses/poisons."
+  ],
+  "required_pending": [
+    "Validator exactV9 build and actual authority terminals; unchanged fullshadowing plain/user/wrapper all4 runtime/trace and regressions.",
+    "Generated-child missing/ambiguous childrecord, swappedactualparent, scope/cfg/epoch/job/rootArc/header/producerchain/cycle/index-sharing controls.",
+    "Applicable standardmacro/exactonce/coldbranch/suspension/cleanup/invalidation architecturematrix and current milestone.",
+    "Legacy macro-specific runtime/evaluator/index routes remain broader held repair obligations; this slice removes none and closes no feature/JIT gate."
+  ],
+  "related_reviews": [
+    "2026-10-16-entered-call-v8-independent-source-review.json",
+    "2026-10-16-retained-child-impl-components-independent-review.json"
+  ],
+  "next_edge_only": "Unchanged nestedmacro candidate paths/contracts already recorded in combined componentreview; no imports or additional implementation authorized here."
+}

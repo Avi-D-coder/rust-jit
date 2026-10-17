@@ -441,3 +441,5 @@ mod original_module_staging_tests;
 
 #[path = "completed_source_environment_tests.rs"]
 mod completed_source_environment_tests;
+#[path = "item_boundary_tests.rs"]
+mod item_boundary_tests;

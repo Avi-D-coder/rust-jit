@@ -203,6 +203,16 @@ impl GeneratedDeclarations {
         cfg: &CfgSet,
         plan: &crate::frontend::generated_headers::GeneratedHeaderPlan,
     ) -> Result<Vec<(Digest, Digest)>, Diagnostic> {
+        self.item_impl_headers_from_projection(items, cfg, plan.impl_projection())
+    }
+    /// Join the same retained active Outline facts after plan publication.
+    /// Completion of the actual declaration job remains a separate authority.
+    pub(crate) fn item_impl_headers_from_projection(
+        &self,
+        items: &super::generated_items::GeneratedItems,
+        cfg: &CfgSet,
+        projection: &crate::frontend::generated_headers::ActiveImplProjection,
+    ) -> Result<Vec<(Digest, Digest)>, Diagnostic> {
         if self.record.descriptor().fingerprint() != items.record().descriptor().fingerprint()
             || self.epoch != items.epoch()
             || self.scan.cfg() != cfg.fingerprint()
@@ -220,7 +230,7 @@ impl GeneratedDeclarations {
         // text/origin agreement above excludes a different coordinate space.
         // The common active Outline projection (not missing scan rows) selects
         // the required impls. Raw headers can include cfg-disabled subtrees.
-        let active = plan.active_impl_ranges(items, cfg, self.scan.scope(), self.epoch)?;
+        let active = projection.active_impl_ranges(items, cfg, self.scan.scope(), self.epoch)?;
         if active
             .windows(2)
             .any(|pair| (pair[0].start, pair[0].end) >= (pair[1].start, pair[1].end))

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-17T00:15:26.660792+00:00",
+  "reviewer": "/root separate exact delta source review",
+  "source_member": "7afabcb7d051962effaf0a6061bd85987a80f30847d5f2beb0c27f1e639cb23c",
+  "baseline_source": "9f0a2a5f120d347c0ba88ac1f13c1773891b8106ec418cd03dff6456d19bdc72",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v10/packet/overlay/crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "87800a93035da868ff453339f6c28182dc086d46648edfad6686eb5d19049b7e",
+      "bytes": 520721,
+      "before_sha256": "124dca52fae0e125daa02b5a4f912b44a276cfbb0a23338bf45cbf76a87d8e3d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v10/packet/overlay/crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "2d9ff06f9176d604cfac2b5906386cb31ba05cdd1e9c1f780071e70c21b2c504",
+      "bytes": 7463,
+      "before_sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v10/packet/overlay/crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "sha256": "3235064cb35714815c7834021f70de1d5c2accc2839e9d75293c48a2ec5a9398",
+      "bytes": 9391,
+      "before_sha256": "4b0056db1c09f4ed603dfb356d3a7b96911b86edeb75b57bfe95696dfe1911a5"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v10/packet/overlay/crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs",
+      "sha256": "7a481964bbc6926033780dcd41b3d27a485ee4623950dbbc52a4e44179b117c7",
+      "bytes": 7078,
+      "before_sha256": null
+    }
+  ],
+  "task": "LOCAL-024 WT08-02 M013/M014; actual V9 strict publication failure6590cf/1",
+  "status": "source review only; async compile/runtime pending",
+  "prior_full_eight_mode_review": "worktracks/evidence/2026-10-16-generated-child-impl-source-review.json",
+  "correction": "Prior V9 review missed canonical publication dependency join; preserve failed receipt and reviewer correction. Internal child waiter fingerprint was not independently reconstructable as an input. Child completion now depends on SAME actual completed fragment invocation/output fingerprint already validated by DB; every child expansion record/source/cfg remains independently bound.",
+  "strict_guards_unchanged": {
+    "crates/lrr/src/db/memo.rs": "97c9396bd0f53510292ce5cf5653e2f07d165d5840a8b3708eae8f34431cd5e3",
+    "crates/lrr/src/db/seals.rs": "67805a037e93effd10c542bd2cc2b3dec45480a8c724dd8ccfd555e90789e9ea",
+    "crates/lrr/src/expand/discovery.rs": "986281e7f4c343a8bc36621a4b1fde2338df2a14b25bc0cc422b57ab5013296c"
+  },
+  "eight_mode_delta": [
+    {
+      "mode": 1,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    },
+    {
+      "mode": 2,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    },
+    {
+      "mode": 3,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    },
+    {
+      "mode": 4,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    },
+    {
+      "mode": 5,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    },
+    {
+      "mode": 6,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    },
+    {
+      "mode": 7,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    },
+    {
+      "mode": 8,
+      "result": "Inspected SourceDiscovery child completion, ChildImplFrontier cleanup and new source authority controls against prior exact review. No expression/pattern/member/numeric evaluator added; no generated-source exclusion or executable eager check; no parser, source-plan replay, namespace census or immutable body copy introduced."
+    }
+  ],
+  "actual_changed_calls": "ScanNestedDeclarations child handler keeps exact nested_completed Arc equality, waiter.resolve parent-chain/projection/cfg/epoch/canonical inventory checks before computing canonical fragmentpair; DiscoveryUpdate uses existing dependency identity; strict dependency equality unchanged. Removed superseded waiter fingerprint storage/getter/encoding. New tests use same real stockwrapper sources and exact refusal/unfinishedfrontier assertions.",
+  "new_controls_unexecuted": [
+    "actual wrong parent, epoch and ancestor refusal",
+    "equal-metadata different actual completed Arc refuses before frontier release"
+  ],
+  "known_gaps": [
+    "all required source/stdmacro contexts and suspension matrix",
+    "full milestone and obsolete production route removals",
+    "inherited outer budget post-work deadline failstop concern",
+    "no full-suite/feature/JIT closure"
+  ],
+  "cost_delta": "No new production planning/query cost; removed one per-waiter derived fingerprint encoding. Exact parent-chain and shared prepared-index behavior unchanged; no performance measurement claimed."
+}

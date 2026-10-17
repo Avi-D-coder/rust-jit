@@ -16,14 +16,15 @@ use std::{
 #[path = "declared_item_names.rs"]
 pub(crate) mod declared_names;
 use declared_names::DeclaredItemName;
+#[path = "generated_impl_projection.rs"]
+pub(crate) mod impl_projection;
+pub(crate) use impl_projection::ActiveImplProjection;
 pub struct GeneratedHeaderPlan {
     scope: ScopeKey,
     routes: Vec<GeneratedRoute>,
     blocked: BTreeSet<Digest>,
     impl_frontier: Option<Digest>,
-    impl_ranges: Vec<crate::syntax::spans::SourceRange>,
-    cfg: Digest,
-    epoch: u64,
+    impl_projection: Arc<ActiveImplProjection>,
     attributes: BTreeSet<Digest>,
     guard: Digest,
     imports: Vec<crate::syntax::imports::SourceImport>,
@@ -165,7 +166,6 @@ impl GeneratedHeaderPlan {
         });
         plan.blocked.clear();
         plan.impl_frontier = None;
-        plan.impl_ranges.clear();
         plan.attributes.clear();
         plan.imports.clear();
         plan.module_sources.clear();
@@ -319,6 +319,13 @@ impl GeneratedHeaderPlan {
                 .map(|item| item.declaration_span),
         );
         impl_ranges.sort_by_key(|range| (range.start, range.end));
+        let impl_projection = Arc::new(ActiveImplProjection::prepare(
+            items,
+            cfg,
+            &scope,
+            epoch,
+            impl_ranges,
+        )?);
         let impl_owned_scope = |candidate: &ScopeKey| {
             candidate.crate_key == scope.crate_key
                 && candidate.owner.is_some_and(|owner| {
@@ -326,7 +333,10 @@ impl GeneratedHeaderPlan {
                 })
         };
         let mut routes = Vec::new();
-        let mut bytes = impl_scope_bytes;
+        let mut bytes = impl_scope_bytes
+            .checked_add(impl_projection.metadata_bytes())
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "impl projection metadata limit"))?;
         for members in outline.scopes.values() {
             for b in &members.blockers {
                 let id = items.frontier_identity(b.syntax);
@@ -633,9 +643,7 @@ impl GeneratedHeaderPlan {
             routes,
             blocked,
             impl_frontier,
-            impl_ranges,
-            cfg: cfg.fingerprint(),
-            epoch,
+            impl_projection,
             attributes,
             guard: items.record().descriptor().fingerprint(),
             imports,
@@ -665,18 +673,14 @@ impl GeneratedHeaderPlan {
         scope: &ScopeKey,
         epoch: u64,
     ) -> Result<&[crate::syntax::spans::SourceRange], Diagnostic> {
-        if self.guard != items.record().descriptor().fingerprint()
-            || self.cfg != cfg.fingerprint()
-            || &self.scope != scope
-            || self.epoch != epoch
-            || items.epoch() != epoch
-        {
-            return Err(fault(
-                "LRR-E-EXPANSION-INPUT",
-                "active impl projection owner differs",
-            ));
-        }
-        Ok(&self.impl_ranges)
+        self.impl_projection
+            .active_impl_ranges(items, cfg, scope, epoch)
+    }
+    pub(crate) fn impl_projection(&self) -> &ActiveImplProjection {
+        &self.impl_projection
+    }
+    pub(crate) fn retained_impl_projection(&self) -> Arc<ActiveImplProjection> {
+        self.impl_projection.clone()
     }
     pub fn publish(self, graph: &mut NameNamespaces) -> Result<(), Diagnostic> {
         // Import frontiers are installed at their actual lexical module by

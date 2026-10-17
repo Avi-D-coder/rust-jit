@@ -1,0 +1,57 @@
+{
+  "schema": "lrr/source-review/v10-frozen-canonical-child-dependency/v1",
+  "status": "Exact frozen4leaf independent source rebind, no code edits or Cargo/compiler/tests; runtimeclosure held",
+  "source_member": "7afabcb7d051962effaf0a6061bd85987a80f30847d5f2beb0c27f1e639cb23c",
+  "baseline_source": "9f0a2a5f120d347c0ba88ac1f13c1773891b8106ec418cd03dff6456d19bdc72",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "87800a93035da868ff453339f6c28182dc086d46648edfad6686eb5d19049b7e",
+      "bytes": 520721,
+      "before_sha256": "124dca52fae0e125daa02b5a4f912b44a276cfbb0a23338bf45cbf76a87d8e3d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "2d9ff06f9176d604cfac2b5906386cb31ba05cdd1e9c1f780071e70c21b2c504",
+      "bytes": 7463,
+      "before_sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "sha256": "3235064cb35714815c7834021f70de1d5c2accc2839e9d75293c48a2ec5a9398",
+      "bytes": 9391,
+      "before_sha256": "4b0056db1c09f4ed603dfb356d3a7b96911b86edeb75b57bfe95696dfe1911a5"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_child_tests.rs",
+      "sha256": "7a481964bbc6926033780dcd41b3d27a485ee4623950dbbc52a4e44179b117c7",
+      "bytes": 7078,
+      "before_sha256": null
+    }
+  ],
+  "verified": "All4 frozen overlay hashes/bytes + actualV9 beforehashes checked. Root87800a93 matches independently reviewed exact minimal correction excluding unrelated impl_catalog hook. Complete child2d9ff06f resolve+parentwalk unchanged byteforbyte fromV9. StrictDB97c9396b/commoncompletiond5b unchanged. Unused waiter fingerprint production removed; cached cfg fingerprint remains required.",
+  "review_base": "2026-10-16-v10-canonical-child-dependency-independent-delta-review.json SHA2d780e49c0df9026802be3f6d6d5d8acb0d41a80c82364acc3e941cc0230608a. Preserves V9 failurediagnosis e694ad41 and review52a03443 limitation.",
+  "conclusion": "No concrete source blocker found in exact4leaf canonical dependency correction and controls. Independently reconstructed DB dependency is same published actual rootfragment pair. Actual source/epoch/scope/selectedparent/record/parentchain/canonicalheader/current completedArc guards preserved. Actual validator terminals required.",
+  "preparation_once": "Uses prepared.completed actual root after sameArc guard+waiter.resolve. GeneratedDeclarations fingerprint encodes parentinventory/invocation, descriptor, epoch only; no syntax/bodywalk. Child has no syntax_outputs/list/indexsort/rootinventory scan. Once cached ancestor preparation, bounded actual parentchain and canonicaljoin remain. Existing strict DB validation once perpublication cold, not perchild execution.",
+  "tests_source_review_not_execution": [
+    "item_boundary_tests only childmodule registration added.",
+    "New fullunchanged stockwrapper expands genuine original/generated requests and seals actualdiscovery. Waiter built from real completed catalogs, actual parent/child and commonHeaderPlan; no fabricated selected rows/body.",
+    "Actual positive requires nonempty canonicalheaders. Negative genuinechildrecord as wrongselectedparent expects exact refusal; changedepoch/wrongancestor exactrefusals.",
+    "Second independent equal-selection sourcecapture has different realpublication/CompletedArc. Cached originalcompletion injection isolates negativeauthority mutation; current genuinejobs continue, exactowner refusal, waiter+producer remain, childjob incomplete, sealabsent; repeatedpoll same refusal. No arbitraryjob completion or catch-all success."
+  ],
+  "all8": {
+    "1": "No evaluator.",
+    "2": "Sameactual generated source engine.",
+    "3": "No macro/name/numeric profile.",
+    "4": "Preserves genuine generated-child authority, no originalgate.",
+    "5": "No executablebody/unselectedarm preparation.",
+    "6": "Uses cached actual root, no parser/reconstruction.",
+    "7": "Keeps strict relevant canonical dependency equality; no fullworld scan or uncheckedabsence.",
+    "8": "Retains same Arcs, no deepbody copy/search."
+  },
+  "remaining": [
+    "Validator frozen build/exactwrapper all4/authority controls/regression terminals.",
+    "Two siblingwaiters one cachecreation and broader missing/ambiguousrecord/scope/cfg/header/chain/cycle controls not supplied by these2 tests.",
+    "Standardmacro/exactonce/suspension/cleanup/invalidation matrix/currentmilestone/obsolete-route removal remainheld. No feature/JIT closure."
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "task": "WT08-02 M013/M014 common generated child declaration completion; wider gates incomplete",
+  "source_member": "7afabcb7d051962effaf0a6061bd85987a80f30847d5f2beb0c27f1e639cb23c",
+  "receipt": {
+    "path": "artifacts/macos-first/root-common-entered-call-validation-v10/RELEASE.json",
+    "sha256": "5edbcdd7c9bbda210caba4c90456fdc398133bed3925fc2330b557e8eada5354"
+  },
+  "platform": "macOS aarch64-apple-darwin, Rust1.99.0",
+  "compile": "98513a/0; no-run build only",
+  "runtime_terminals": [
+    "d3cf43/0 whole wrapper first",
+    "7c4db5/0 remaining authorized sequence"
+  ],
+  "passed_scopes": 13,
+  "failed_scopes": 0,
+  "unexecuted_scopes": 0,
+  "runtime_scope": {
+    "official_original": "fixtures/upstream/rustc-checkout/tests/ui/resolve/type-param-local-var-shadowing.rs",
+    "sha256": "c90c918b7d21b237f7137bd8a744022bf5b63c5fd61253b30fd7d893ad259d23",
+    "unchanged_original": true,
+    "programs": [
+      "entire unchanged stock shadowing main",
+      "same items/main emitted by arbitrary user macro, actual inner attrs preserved at crate root",
+      "same items/main emitted through wrapper",
+      "prior entire suffix program emitted by user macro"
+    ],
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "ordinary_calls": 84,
+    "stock_shadowing_calls": 12,
+    "suffix_regression_calls": 72,
+    "exact_route": "ordinary source/index/query44/VM CallSeal, actual local shadowing, cold generic impl bodies, exact-once and cleanup assertions"
+  },
+  "authority_scope": {
+    "bodies": 9,
+    "four_edition": [
+      "pending boundary waits for actual declaration jobs then completes provider exactly once",
+      "distinct impl-only frontier",
+      "mixed unrelated owner remains independently blocked",
+      "actual active/cfg-disabled impl projection and wrong epoch refusal"
+    ],
+    "edition2024": [
+      "actual selected parent/epoch/ancestor refusals",
+      "equal metadata cannot replace actual completed Arc",
+      "pending epoch/source/cfg/current publication refusals",
+      "wrong typed prerequisite cannot hide behind worklist seal"
+    ],
+    "other": "selected source revocation refuses before child BodyStructure query; see exact owning control receipt"
+  },
+  "previous_failure_preserved": {
+    "V8": "8cf446/1 generated child declaration connection missing;5pass1fail2unexecuted",
+    "V9": "6590cf/1 internal waiter fingerprint was not independently publishable dependency;0pass1fail10unexecuted",
+    "fix": "use same actual canonical completed-fragment dependency as direct impl completion and strict DB reconstruction; all actual child authority checks preserved, no DB/schema/equality relaxation"
+  },
+  "independent_review": "worktracks/evidence/2026-10-16-v10-frozen-canonical-child-dependency-independent-review.json",
+  "source_review": "worktracks/evidence/2026-10-16-generated-child-publication-source-review.json",
+  "distinct_upstream_increment": 0,
+  "full_fixture_increment": 0,
+  "count_scope": "Same stock shadowing program already added one distinct runtime contract on V3; source contexts/editions are not new original cases. No cumulative upstream suite total measured.",
+  "holds": [
+    "applicable standard-macro and suspension matrix",
+    "remaining legacy alternate production routes",
+    "complete current milestone and interpreter runtime prerequisite",
+    "guest JIT",
+    "full-fixture and diagnostic/compiler-tooling/full-suite compatibility"
+  ]
+}

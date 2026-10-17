@@ -36,6 +36,10 @@ mod original_modules;
 use original_modules::{OrdinaryModuleOwner, OriginalModuleDeclaration};
 #[path = "source_discovery/item_boundaries.rs"]
 mod item_boundaries;
+#[path = "source_discovery/item_impl_children.rs"]
+mod item_impl_children;
+#[path = "source_discovery/item_impl_completion.rs"]
+mod item_impl_completion;
 #[path = "source_discovery/original_inert.rs"]
 mod original_inert;
 #[path = "source_discovery/source_syntax.rs"]
@@ -498,6 +502,10 @@ pub struct SourceDiscovery {
     replaced_source_producers:
         BTreeMap<Digest, std::sync::Arc<super::source_replacement::SourceReplacementProof>>,
     item_impl_jobs: BTreeMap<Digest, (Digest, Vec<Digest>, crate::syntax::outline::ScopeKey)>,
+    item_root_declarations: BTreeMap<Digest, Digest>,
+    child_impl_frontiers: BTreeMap<Digest, item_impl_children::ChildImplFrontier>,
+    item_impl_completions:
+        BTreeMap<Digest, std::sync::Arc<item_impl_completion::AncestorImplCompletion>>,
     item_declaration_inputs:
         BTreeMap<Digest, std::sync::Arc<super::generated_declarations::GeneratedDeclarations>>,
     nested_fragments: BTreeMap<Digest, super::declaration_fragment::DeclarationFragment>,
@@ -1044,6 +1052,9 @@ impl SourceDiscovery {
             source_replacements: BTreeMap::new(),
             replaced_source_producers: BTreeMap::new(),
             item_impl_jobs: BTreeMap::new(),
+            item_root_declarations: BTreeMap::new(),
+            child_impl_frontiers: BTreeMap::new(),
+            item_impl_completions: BTreeMap::new(),
             item_declaration_inputs: BTreeMap::new(),
             nested_fragments: BTreeMap::new(),
             nested_completed: BTreeMap::new(),
@@ -2473,6 +2484,7 @@ impl SourceDiscovery {
         if self.item_declaration_inputs.len() >= 4096
             || self.nested_jobs.contains_key(&declaration_job)
             || self.item_declaration_inputs.contains_key(&declaration_job)
+            || self.item_root_declarations.contains_key(&id)
         {
             return Err(fault(
                 "source derive declaration inventory conflict or limit",
@@ -2482,7 +2494,7 @@ impl SourceDiscovery {
             .nested_bytes
             .checked_add(declaration.metadata_bytes()?)
             .and_then(|n| n.checked_add(impl_headers.len().checked_mul(256)?))
-            .and_then(|n| n.checked_add(128))
+            .and_then(|n| n.checked_add(256))
             .and_then(|n| n.checked_add(call.scope.heap_bytes()))
             .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(|| fault("source derive declaration metadata limit"))?;
@@ -2636,6 +2648,7 @@ impl SourceDiscovery {
             self.nested_jobs.insert(declaration_job, ordinal);
             self.item_declaration_inputs
                 .insert(declaration_job, declaration);
+            self.item_root_declarations.insert(id, declaration_job);
             if let Some(frontier) = impl_frontier {
                 self.item_impl_jobs.insert(
                     frontier,
@@ -3053,7 +3066,7 @@ impl SourceDiscovery {
                     call.scope.heap_bytes()
                 })
             })
-            .and_then(|n| n.checked_add(128))
+            .and_then(|n| n.checked_add(256))
             .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(|| fault("item declaration metadata limit"))?;
         if self.item_declaration_inputs.len() >= 4096 {
@@ -3065,7 +3078,9 @@ impl SourceDiscovery {
             e.finish()
         });
         if declaration_identity.is_some_and(|job| {
-            self.nested_jobs.contains_key(&job) || self.item_declaration_inputs.contains_key(&job)
+            self.nested_jobs.contains_key(&job)
+                || self.item_declaration_inputs.contains_key(&job)
+                || self.item_root_declarations.contains_key(&identity)
         }) {
             return Err(fault("item declaration job conflict"));
         }
@@ -3439,6 +3454,7 @@ impl SourceDiscovery {
             {
                 return Err(fault("item declaration job conflict"));
             }
+            self.item_root_declarations.insert(identity, job);
             if let Some(frontier) = impl_frontier {
                 self.item_impl_jobs
                     .insert(frontier, (job, bound_impl_headers, impl_scope));
@@ -3691,10 +3707,48 @@ impl SourceDiscovery {
             .unresolved_module_sources()
             .map(|d| d.producer())
             .collect::<BTreeSet<_>>();
-        if plan
-            .blocked()
-            .any(|id| !release.contains(id) && !imports.contains(id) && !modules.contains(id))
-        {
+        let impl_frontier = plan.impl_frontier();
+        let child_impl = if let Some(frontier) = impl_frontier {
+            if self.child_impl_frontiers.len() >= 100_000
+                || self.child_impl_frontiers.contains_key(&frontier)
+                || self.item_impl_jobs.contains_key(&frontier)
+            {
+                return Err(fault("generated child impl frontier conflict or limit"));
+            }
+            let ancestor_job = self
+                .item_root_declarations
+                .get(&ticket.job().identity)
+                .copied()
+                .ok_or_else(|| fault("generated child declaration ancestor absent"))?;
+            Some(item_impl_children::ChildImplFrontier::prepare(
+                ancestor_job,
+                child.retained_items().clone(),
+                parent.retained_items().clone(),
+                plan.retained_impl_projection(),
+                child.owner().clone(),
+                child.cfg().clone(),
+                self.epoch,
+            )?)
+        } else {
+            None
+        };
+        let nested_bytes = self
+            .nested_bytes
+            .checked_add(
+                child_impl
+                    .as_ref()
+                    .map(item_impl_children::ChildImplFrontier::metadata_bytes)
+                    .transpose()?
+                    .unwrap_or(0),
+            )
+            .filter(|n| *n <= 512 * 1024 * 1024)
+            .ok_or_else(|| fault("generated child impl retention limit"))?;
+        if plan.blocked().any(|id| {
+            !release.contains(id)
+                && !imports.contains(id)
+                && !modules.contains(id)
+                && Some(*id) != impl_frontier
+        }) {
             return Err(fault(
                 "generated child requires further declaration discovery",
             ));
@@ -3713,12 +3767,17 @@ impl SourceDiscovery {
             .dependencies
             .try_reserve(1)
             .map_err(|_| fault("fragment dependency allocation"))?;
+        let job_count = imports
+            .len()
+            .checked_add(usize::from(child_impl.is_some()))
+            .filter(|count| *count <= 100_000)
+            .ok_or_else(|| fault("generated child job count limit"))?;
         fragment
             .jobs
-            .try_reserve(imports.len())
+            .try_reserve(job_count)
             .map_err(|_| fault("fragment import job allocation"))?;
         let mut jobs = Vec::new();
-        jobs.try_reserve_exact(imports.len())
+        jobs.try_reserve_exact(job_count)
             .map_err(|_| fault("generated import job allocation"))?;
         jobs.extend(imports.into_iter().map(|identity| DiscoveryJob {
             module_order: ticket.job().module_order,
@@ -3726,6 +3785,14 @@ impl SourceDiscovery {
             kind: DiscoveryKind::ResolveImport,
             identity,
         }));
+        if let Some(frontier) = impl_frontier {
+            jobs.push(DiscoveryJob {
+                module_order: ticket.job().module_order,
+                source_offset: fragment.call.range.start,
+                kind: DiscoveryKind::ScanNestedDeclarations,
+                identity: frontier,
+            });
+        }
         let mut update = fragment.completion_update(
             items
                 .items()
@@ -3747,66 +3814,77 @@ impl SourceDiscovery {
             .dependencies
             .push((identity, record.descriptor().fingerprint()));
         self.work.preflight_complete(ticket, &mut update)?;
-        retain_module_demands(
-            &mut self.module_sources,
-            &mut self.module_source_bytes,
-            &plan,
-        )?;
-        if let Err(error) = plan.publish(unique_graph(&mut self.graph)?) {
-            self.failed = Some(error.clone());
-            return Err(error);
-        }
-        match parent_id {
-            Some(id) => fragment
-                .children
-                .get_mut(&id)
-                .ok_or_else(|| fault("generated parent parking target absent"))?
-                .catalog
-                .park_child(record.key())?,
-            None => fragment.catalog.park_child(record.key())?,
-        };
-        fragment.child_order.insert(order_index, identity);
-        let child_owner = child.owner().clone();
-        fragment.children.insert(
-            identity,
-            GeneratedChild {
-                parent: parent_id,
-                order,
-                catalog: child,
-                release,
-            },
-        );
-        fragment.jobs.extend(jobs);
-        fragment
-            .members
-            .extend(items.items().iter().map(|h| h.key.fingerprint()));
-        fragment.members.push(record.descriptor().fingerprint());
-        fragment
-            .dependencies
-            .push((identity, record.descriptor().fingerprint()));
-        if let Some(module) = fragment.module {
-            self.generated_source_modules.insert(identity, module);
-        }
-        self.generated_owners
-            .insert(identity, (fragment.ordinal, child_owner));
-        self.source_bases.insert(identity, source_base);
-        self.records.insert(identity, record);
-        if let Some(origin) = producer_origin {
-            self.generated_procedural_origins.insert(identity, origin);
-        }
-        self.generated_procedural_origin_bytes = origin_bytes;
-        self.generated_bytes = wire;
-        self.generated_headers = headers;
-        self.retained_record_bytes = allocated;
-        self.pending_generated = None;
-        match unique_graph(&mut self.graph)?.resolve_imports() {
-            Ok(imports) => self.imports = imports,
-            Err(error) => {
+        let result = (|| {
+            retain_module_demands(
+                &mut self.module_sources,
+                &mut self.module_source_bytes,
+                &plan,
+            )?;
+            if let Err(error) = plan.publish(unique_graph(&mut self.graph)?) {
                 self.failed = Some(error.clone());
                 return Err(error);
             }
+            match parent_id {
+                Some(id) => fragment
+                    .children
+                    .get_mut(&id)
+                    .ok_or_else(|| fault("generated parent parking target absent"))?
+                    .catalog
+                    .park_child(record.key())?,
+                None => fragment.catalog.park_child(record.key())?,
+            };
+            fragment.child_order.insert(order_index, identity);
+            let child_owner = child.owner().clone();
+            fragment.children.insert(
+                identity,
+                GeneratedChild {
+                    parent: parent_id,
+                    order,
+                    catalog: child,
+                    release,
+                },
+            );
+            fragment.jobs.extend(jobs);
+            if let (Some(frontier), Some(waiter)) = (impl_frontier, child_impl) {
+                self.child_impl_frontiers.insert(frontier, waiter);
+                self.producers.insert(frontier);
+            }
+            self.nested_bytes = nested_bytes;
+            fragment
+                .members
+                .extend(items.items().iter().map(|h| h.key.fingerprint()));
+            fragment.members.push(record.descriptor().fingerprint());
+            fragment
+                .dependencies
+                .push((identity, record.descriptor().fingerprint()));
+            if let Some(module) = fragment.module {
+                self.generated_source_modules.insert(identity, module);
+            }
+            self.generated_owners
+                .insert(identity, (fragment.ordinal, child_owner));
+            self.source_bases.insert(identity, source_base);
+            self.records.insert(identity, record);
+            if let Some(origin) = producer_origin {
+                self.generated_procedural_origins.insert(identity, origin);
+            }
+            self.generated_procedural_origin_bytes = origin_bytes;
+            self.generated_bytes = wire;
+            self.generated_headers = headers;
+            self.retained_record_bytes = allocated;
+            self.pending_generated = None;
+            match unique_graph(&mut self.graph)?.resolve_imports() {
+                Ok(imports) => self.imports = imports,
+                Err(error) => {
+                    self.failed = Some(error.clone());
+                    return Err(error);
+                }
+            }
+            Ok(())
+        })();
+        if let Err(error) = &result {
+            self.failed = Some(error.clone());
         }
-        Ok(())
+        result
     }
     pub(crate) fn require_derive_append(
         &self,
@@ -10101,6 +10179,85 @@ impl SourceDiscovery {
                                 continue;
                             }
 
+                            if let Some(waiter) = self.child_impl_frontiers.get(&job.identity) {
+                                let ancestor = waiter.ancestor_job();
+                                let Some(completed) = self.nested_completed.get(&ancestor) else {
+                                    self.work.block(&ticket, vec![ancestor])?;
+                                    continue;
+                                };
+                                if !self.item_impl_completions.contains_key(&ancestor) {
+                                    if self.item_impl_completions.len() >= 4096 {
+                                        return Err(fault("child impl completion cache limit"));
+                                    }
+                                    // Reserve the index's maximum temporary budget before
+                                    // constructing it; retain and charge its actual size once.
+                                    self.nested_bytes
+                                        .checked_add(64 * 1024 * 1024)
+                                        .filter(|bytes| *bytes <= 512 * 1024 * 1024)
+                                        .ok_or_else(|| fault("child impl completion budget"))?;
+                                    let prepared = std::sync::Arc::new(
+                                        item_impl_completion::AncestorImplCompletion::prepare(
+                                            completed.clone(),
+                                            ancestor,
+                                            self.epoch,
+                                            waiter.cfg_fingerprint(),
+                                        )?,
+                                    );
+                                    let bytes = self
+                                        .nested_bytes
+                                        .checked_add(prepared.metadata_bytes())
+                                        .and_then(|bytes| bytes.checked_add(128))
+                                        .filter(|bytes| *bytes <= 512 * 1024 * 1024)
+                                        .ok_or_else(|| fault("child impl completion retention"))?;
+                                    self.item_impl_completions.insert(ancestor, prepared);
+                                    self.nested_bytes = bytes;
+                                }
+                                let prepared = self
+                                    .item_impl_completions
+                                    .get(&ancestor)
+                                    .ok_or_else(|| fault("child impl completion cache absent"))?;
+                                if !std::sync::Arc::ptr_eq(completed, prepared.completed()) {
+                                    return Err(fault("child impl actual completed owner changed"));
+                                }
+                                let headers = waiter.resolve(prepared, self.epoch)?;
+                                let scope = waiter.scope().clone();
+                                // The waiter is a derived coordinator proof. Its
+                                // authority is the same published fragment and
+                                // records validated above, not a new input row.
+                                let output = prepared.completed().index().output();
+                                let dependency =
+                                    (output.record().key().invocation, output.fingerprint());
+                                let mut members = Vec::new();
+                                members
+                                    .try_reserve_exact(
+                                        headers.len().checked_add(1).ok_or_else(|| {
+                                            fault("child impl member count overflow")
+                                        })?,
+                                    )
+                                    .map_err(|_| fault("child impl member allocation"))?;
+                                members.push(job.identity);
+                                members.extend(headers);
+                                let result = (|| {
+                                    self.work.complete(
+                                        &ticket,
+                                        DiscoveryUpdate {
+                                            members,
+                                            dependencies: vec![dependency],
+                                            ..Default::default()
+                                        },
+                                    )?;
+                                    unique_graph(&mut self.graph)?
+                                        .release_generated_frontier(&scope, job.identity);
+                                    self.producers.remove(&job.identity);
+                                    self.child_impl_frontiers.remove(&job.identity);
+                                    Ok::<_, Diagnostic>(())
+                                })();
+                                if let Err(error) = result {
+                                    self.failed = Some(error.clone());
+                                    return Err(error);
+                                }
+                                continue;
+                            }
                             if let Some((declaration_job, header, scope)) =
                                 self.item_impl_jobs.get(&job.identity).cloned()
                             {
@@ -10242,6 +10399,11 @@ impl SourceDiscovery {
                     });
                 }
                 DiscoveryStep::Sealed(seal) => {
+                    if !self.pending_item_boundaries.is_empty() {
+                        let error = fault("scope seal retains pending item boundaries");
+                        self.failed = Some(error.clone());
+                        return Err(error);
+                    }
                     if let Some((_, _, providers)) = &self.declarative {
                         let namespaces = match Self::install_macro_routes_with_modules(
                             unique_graph(&mut self.graph)?,

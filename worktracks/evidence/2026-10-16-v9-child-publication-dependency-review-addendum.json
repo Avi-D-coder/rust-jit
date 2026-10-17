@@ -1,0 +1,64 @@
+{
+  "schema": "lrr/source-review/v9-publication-dependency-addendum/v1",
+  "status": "Read-only diagnosis/proposal, no code edits or Cargo/tests. V9 failed; correction unimplemented/unvalidated by reviewer.",
+  "source_member": "9f0a2a5f120d347c0ba88ac1f13c1773891b8106ec418cd03dff6456d19bdc72",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "124dca52fae0e125daa02b5a4f912b44a276cfbb0a23338bf45cbf76a87d8e3d",
+      "bytes": 520340
+    },
+    {
+      "path": "crates/lrr/src/expand/discovery.rs",
+      "sha256": "986281e7f4c343a8bc36621a4b1fde2338df2a14b25bc0cc422b57ab5013296c",
+      "bytes": 19460
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "97c9396bd0f53510292ce5cf5653e2f07d165d5840a8b3708eae8f34431cd5e3",
+      "bytes": 139566
+    },
+    {
+      "path": "crates/lrr/src/db/seals.rs",
+      "sha256": "67805a037e93effd10c542bd2cc2b3dec45480a8c724dd8ccfd555e90789e9ea",
+      "bytes": 23713
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "28168283f2169f3bb8c0edbe23528eda8df5ca77238cc9c1943492fd166edd66",
+      "bytes": 37698
+    }
+  ],
+  "actual_terminal": {
+    "path": "artifacts/macos-first/root-common-entered-call-validation-v9/stock-wrapper/terminal.json",
+    "sha256": "bcd1f9cc4b83126a673a489d993c0c16622a662e80e8d8b1bd933e742e2d63bc",
+    "exit_code": 101,
+    "passed": 0,
+    "failed": 1,
+    "source_unchanged": true,
+    "stderr_path": "artifacts/macos-first/root-common-entered-call-validation-v9/stock-wrapper/stderr.log",
+    "stderr_sha256": "7ae54021d7529d498deb18fa088df2f44845d80bd67e12157cfd2eeb82028b5e",
+    "diagnostic": "LRR-E-INTERNAL-SNAPSHOT: discovery certificate dependencies differ from complete publication"
+  },
+  "review_correction": "Prior52a03443 V9 review did not trace the newly added scheduler dependency through DB complete-publication reconstruction. Its no-concrete-blocker conclusion is superseded for integrated publication by this concrete mismatch. Preserve old review and failed source/terminal; other authority/ownership findings remain scoped to unchanged code, not acceptance.",
+  "cause": "Child ScanNestedDeclarations completion invents dependency (frontier job.identity,waiter.fingerprint()). Discovery::complete inserts it in its BTreeMap; Seal completed retains exact sorted dependencies. DiscoveryInput publishes no ChildImplFrontier fact/input. Database::publish_discovery reconstructs dependencies from actual sources, record descriptors, compiler inputs, completed declaration fragments and other explicit inputs; it cannot reconstruct invented waiter pair and strict equality correctly refuses publication.",
+  "canonical_owner": {
+    "source": "SourceDiscovery::poll_item_declarations Complete already records (completed.index.output.record.key.invocation, completed.index.output.fingerprint()) and every actual expansionrecord keyfp\u2192descriptorfp. SourceDiscovery publication collects same actual nested_completed Arcs in declaration_fragments.",
+    "database": "memo.rs complete fragment loop requires complete index/currentepoch, actualsource/root parentinventory/sourcelease identity,cfg, current cfginput, intrinsic validation, every actual fragment record descriptor in publication; then pushes same canonical (root invocation,root outputfp). Earlier inventoryscan owner check requires every generated scan owned by an actual completed fragment or argument index.",
+    "published_identity": "DiscoveryInput stableencoding includes rootinvocation, outputfp, actual inventoryfp and intrinsicfp for each declarationfragment. Expansionrecords separately bind actual key+outputwire/descriptor; record source/cfg/epoch authority remains independently checked. Waiter parentchain/projection proof is a derived coordinator fact over these actual published inputs, not an external newinput."
+  },
+  "minimal_proposal": "In child completion DiscoveryUpdate replace new waiter-specific dependency with SAME actual canonical root fragment pair (obtained from prepared.completed()/already Arc-equal nested_completed), following unchanged existing item_impl_jobs completion handler. Keep actual waiter.resolve/currentepoch/projection/selectedparent/complete ancestry/headerinventory proof before retirement. Work dependency BTreeMap deduplicates identical pair already installed by ancestor completion; DB expects exactly one per published fragment. No schema change or new dependency oracle needed. Empty dependency vector would rely on existing mandatory parent pair but explicit canonical pair better mirrors existing ordinary owner contract.",
+  "new_proof_input_alternative": "Only if waiter becomes independent externally supplied/reusable publication authority would it need a new opaque actual publication field, checked stableencoding/metadata/currentness and DB revalidation over genuine fragment/records. No such external authority is needed for the current private derived completion; do not add an unverifiable fingerprint row or relax dependency equality.",
+  "costs": "Canonical GeneratedDeclarations fingerprint encodes actual parentinv/cfg-anchored parentinventory, descriptor and epoch only; no parser/text/body scan. Existing root pair already present so scheduler adds no newdependency entry. No new query, body lowering, contextprofile or runtime preparation.",
+  "all8": {
+    "1": "No evaluator change.",
+    "2": "Same actual generated records and common source publication.",
+    "3": "No macro/name/numeric profile.",
+    "4": "Preserve genuine generated-child proof rather than bypass publication.",
+    "5": "No body/unselected-arm preparation.",
+    "6": "Reuse prepared actual ancestor owner, no reparse/reconstruction.",
+    "7": "Preserve strict exact relevant certificate dependency equality; replace invented dep with existing canonical owner, no global census or unchecked absence.",
+    "8": "Use existing actual Arc root, no immutable syntax/body deep copy."
+  },
+  "required_evidence": "Root exact minimal correction+source review, validator frozen rerun wrapper and authority/regressions; retain failedV9 and unexecuted queue. No runtime/fullfixture/matrix/milestone closure from this diagnosis."
+}

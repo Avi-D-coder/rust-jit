@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-17T00:09:57.050007+00:00",
+  "reviewer": "/root separate source-review pass",
+  "source_member": "9f0a2a5f120d347c0ba88ac1f13c1773891b8106ec418cd03dff6456d19bdc72",
+  "baseline_source": "7d239fbc2bd6235e95942755cedc9f33165f76dd831e3f5aef5372993005b4fd",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "124dca52fae0e125daa02b5a4f912b44a276cfbb0a23338bf45cbf76a87d8e3d",
+      "bytes": 520340,
+      "before_sha256": "96b04b2a8f681c3d635f4ddb409234cf1bf584c3e6942c91db5abed3779ca61d"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "28168283f2169f3bb8c0edbe23528eda8df5ca77238cc9c1943492fd166edd66",
+      "bytes": 37698,
+      "before_sha256": "090573aca19b80d9cddfd5b4bf6622927989e05868c309aaa07bd81fbc1ccaa4"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/frontend/generated_headers.rs",
+      "sha256": "5e315b6701f907f085ce1c4ca6dc79a12cd4a6bf1895d280663cf25c30e53e1d",
+      "bytes": 28220,
+      "before_sha256": "efdb05c89ade07fb95f66ead7906cbc8952bca8d1baeb7893433219636057d56"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_impl_projection.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/frontend/generated_impl_projection.rs",
+      "sha256": "c416dd7857fcdd690cab01f3aa5a79f2a90ad2146ce3b6b9603207fe65f96a56",
+      "bytes": 4464,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/expand/source_discovery/item_impl_children.rs",
+      "sha256": "4198f4ef27c3e482da6832e86f4004825a19f38b0e79a3ac0e5d46721a9eb242",
+      "bytes": 8043,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/expand/source_discovery/item_impl_completion.rs",
+      "sha256": "d5b059acb26d9141682abbb7ec1d55b97a25760876f4714ce99c0cd84ef57746",
+      "bytes": 7985,
+      "before_sha256": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "sha256": "9840b40aee7600c25edfded48cc5fb839caa024b37d3325f26ab4de353bd201c",
+      "bytes": 17394,
+      "before_sha256": "771344b4ae0ed59a3601d1f5a440bd1eed8bfdb87446846b1646610b5d5af82a"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "origin": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-entered-call-validation-v9/packet/overlay/crates/lrr/src/expand/source_discovery/item_boundary_tests.rs",
+      "sha256": "4b0056db1c09f4ed603dfb356d3a7b96911b86edeb75b57bfe95696dfe1911a5",
+      "bytes": 9327,
+      "before_sha256": null
+    }
+  ],
+  "task": "LOCAL-024 WT08-02 M013/M014; actual V8 wrapper failure 8cf446/1",
+  "status": "scoped source review; compilation/runtime pending, no feature or architecture closure",
+  "review": [
+    {
+      "mode": 1,
+      "inspected_symbols": "admit_generated_expansion, ScanNestedDeclarations child handler",
+      "conclusion": "No executable evaluator or assertion-body lane. Same admitted source/index/query44/ordinary VM route follows completed catalog."
+    },
+    {
+      "mode": 2,
+      "inspected_symbols": "ChildImplFrontier::resolve, GeneratedDeclarations::item_impl_headers_from_projection",
+      "conclusion": "Full actual child output/record and canonical impl headers, not literal/break-shaped execution. Generated catalog work carries actual parent syntax."
+    },
+    {
+      "mode": 3,
+      "inspected_symbols": "GeneratedHeaderPlan::retained_impl_projection, ChildImplFrontier::prepare",
+      "conclusion": "No macro name, method whitelist or numeric inference. Actual selected parent/child records, scope, cfg and epoch determine metadata."
+    },
+    {
+      "mode": 4,
+      "inspected_symbols": "admit_generated_expansion, AncestorImplCompletion::unique_output",
+      "conclusion": "Repairs actual stock wrapper refusal by genuine recursive declaration closure; other unsupported owner/import blockers remain. No synthetic original-source parent or descriptor-only source view."
+    },
+    {
+      "mode": 5,
+      "inspected_symbols": "poll_item_declarations, ChildImplFrontier::require_parent_chain",
+      "conclusion": "Declaration closure reads headers without executable lowering of cold impl method. No pattern engine or eager result-arm changes. Same actual shadowing main remains whole witness."
+    },
+    {
+      "mode": 6,
+      "inspected_symbols": "AncestorImplCompletion::prepare, item_impl_completions, item_impl_headers_from_projection",
+      "conclusion": "Once-only recursive syntax_outputs plus immutable record/scan/header indexes per exact ancestor job. Shared projection prepared once before HeaderPlan publication; child resolution borrows same Arc. No source parse/rescan/query-provider expansion. Cache is cold coordinator discovery state before publication; not runtime body-planning memo."
+    },
+    {
+      "mode": 7,
+      "inspected_symbols": "ScanNestedDeclarations child handler, prepare catalog child frontiers",
+      "conclusion": "Relevant completed ancestor Arc, exact generated parent chain and dedicated frontier only; unrelated opaque reasons still refuse. No runtime global namespace walk or census introduced. Existing route installation remains cold."
+    },
+    {
+      "mode": 8,
+      "inspected_symbols": "ActiveImplProjection, AncestorImplCompletion, ChildImplFrontier",
+      "conclusion": "Actual immutable items/records/projection/output handles shared by Arc, no BodyIndex copies. Cached sorted output indexes replace per-child recursive reconstruction; per-child parent producer checks and canonical header joins remain cold bounded list work."
+    }
+  ],
+  "ordering": "Actual rootrecord-to-declaration-job mapping established for ordinary+derive output. Child job is enqueued by fragment completion_update.jobs and never put in child.release or a catalog NeedInput edge. Catalog completes/removes root first; existing ancestor recursive DeclarationFragment adopts real completed child catalog; child waiter then resolves exact unique same_record output/parent scan producer chain and root inventory before release.",
+  "authority": "Parent Items handle captured before parking actual key; child key/cfg/scope/epoch/projection bound once. Ancestor prepare rechecks rootjob source parent inventory and root producer scope; indexed child lookup uses actual same_record, first ancestry edge matches captured actual parent record. Actual nested_completed Arc must equal cache owner. New publication/release mutation closures poison discovery on failure. Defensive pending-boundary seal refuses malformed remaining receipts.",
+  "costs": "Cold per-root maps bounded4096; child waiters bounded100k with checked metadata; same ancestor index prepared once, conservative64MiB construction preflight then actualsize+128 charged within512MiB nested budget. Index prepare O(N logN+I logI), subsequent relevant child locator/scan/header membership indexed, parent chain<=256. Canonical raw/scanned header joins remain cold bounded lists. No measured performance claim. Shared existing catalog payload retained without a second deep clone by new waiters.",
+  "evidence_required": [
+    "complete stock wrapper main allfour editions on ordinary interpreter counters",
+    "pendingboundary exact-once/currentness/wrongtypedjob controls",
+    "existing impl/cfg/mixedowner authority controls",
+    "stockplain/user and prior revocation/suffix regressions"
+  ],
+  "unexecuted_negative_matrix": [
+    "child wrong-parent/ancestor/epoch and cache-owner direct controls not in this freeze",
+    "standard macro nesting",
+    "suspension/resume across all source-context combinations"
+  ],
+  "inherited_separate_risk": "Outer expansion-budget transaction may fail deadline after successful work; recorded source concern, not a new observed child failure or passed check.",
+  "holds": [
+    "obsolete alternate evaluators still present",
+    "full architecture acceptance matrix",
+    "M013/M014 integration gate",
+    "complete interpreter runtime prerequisite",
+    "guest JIT",
+    "full-fixture/diagnostic/compiler-tooling/full-suite compatibility"
+  ]
+}
