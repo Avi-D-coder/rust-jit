@@ -281,6 +281,7 @@ impl Database {
                     QueryValue::Thunk(_)
                     | QueryValue::SourceLocalPlan(_)
                     | QueryValue::QualifiedBodyType(_)
+                    | QueryValue::PreparedExplicitTypeArguments(_)
                     | QueryValue::EnteredCall(_)
                     | QueryValue::EnteredType(_)
                     | QueryValue::PreparedTypePlan(_)

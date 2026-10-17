@@ -1,0 +1,208 @@
+{
+  "schema": "lrr/architecture-source-review/explicit-type-call/v1",
+  "claim": "LOCAL-024",
+  "baseline_commit": "adb43b9b7d",
+  "source_member": "499fb8a6ad809b134cf616579652ccb55286c356e85fa4f7285a7355fae8c9df",
+  "task_scope": [
+    "T032",
+    "M013 prerequisite",
+    "M017",
+    "M018"
+  ],
+  "findings_distinct_from_modes": [
+    "MA003",
+    "MA004",
+    "MA006",
+    "MA008"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_stock_type_argument_tests.rs",
+      "sha256": "b4f4f281f77db01b317c5646b19b2fcaa03cfbf9850cc210977a3dcf17856972",
+      "bytes": 9819
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "94cf9d1018379af5671a1748c57d2686da4cc418bb1b2b90e53bd5d8590e6910",
+      "bytes": 31055
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "7ac9e76ed2e2be6e2db25374420058d44e3ffa2241c8b3507118b5a3eda224f4",
+      "bytes": 83220
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "fb7db5b7d1ce2cbec10a3e72a4431ab1e93044268ceb2668a1bf1e792c98cb64",
+      "bytes": 12058
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "e817484ec324166061edd8e3c99a2c6eeb78b5c520660a8295bee5a7e3a80915",
+      "bytes": 24969
+    },
+    {
+      "path": "crates/lrr/src/frontend/lexical_callables.rs",
+      "sha256": "03906efd97885d3bfe02b79bcbd9577f4a8c4e5d78d5881e8cf9234052bb0c23",
+      "bytes": 12380
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "e89f2f4a9345f800f3b333afbb9318719798e71e0ca0a83c478ed7278e3631aa",
+      "bytes": 12717
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358",
+      "bytes": 28770
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callable_tests.rs",
+      "sha256": "9468315853b4aac6cba62cc7a8f4ae2b84011c3857be0ab6664c7f48c4e61e9d",
+      "bytes": 16936
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "cf1ab99b168126b826140a3b6fa033275ae66400958c7fe54ec2a824620a5c6b",
+      "bytes": 32586
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "67f2de5a7e18170a0312467781ac5ff5d804defa47f444179d299fdcfa8915e6",
+      "bytes": 49539
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_type_goals.rs",
+      "sha256": "f6618aa55f9a3be1bda0f3a870b1e44a9414346d14ca7ccf21c45d1688c26781",
+      "bytes": 8461
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_type_use_tests.rs",
+      "sha256": "a89e91eb2674c1b5b8db62d148fd7b868ea7182875925e81f8f83166c5961516",
+      "bytes": 10301
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "sha256": "d5c1fdefcf31a7daa10a01e95ca49a8a2955ecc5e7aff163e69eff4eb8a69c68",
+      "bytes": 11307
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "b68bfd1653c5b9a80970e6d9769b11d07d0fb255c22dd72a671081b07511972a",
+      "bytes": 2023
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "cb85040a6b4b2526ff6a83f5f4afc2ef2f2d4b26f15f21e0f23b02f5a9966607",
+      "bytes": 14889
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "0289ba4402ec8095dc40a08a0be067759fa564004bb19f43d2664b67c3eb88c7",
+      "bytes": 13123
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "864bb13f0af6cfe6dee89a0feedc885d11d9b047561f49b3ff5bc4148cd5d65f",
+      "bytes": 23549
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "5efa2fb5ac3fd943b987eaa5690ba71fcc55c8e84ca878f007ed9a64cb726e46",
+      "bytes": 60824
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "40ffcd1b192ac981946f27b3195ce93d94a17fde141b841f7cf0d6c74f018288",
+      "bytes": 17835
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "fe0ab7e9445973c1adb7cc48cd2924b66e8e38412e64822ffb662ba78b9c9b0d",
+      "bytes": 139633
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "6d97c11e0e1bbb89769057d89595cd9a057d63815c65e84fcd1f6894fd045def",
+      "bytes": 30550
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_input_join_tests.rs",
+      "sha256": "aa950b48a9be36c7b86c8de2ef13a0ee82e4a38c9cc9d2e22ca8e87376e57b57",
+      "bytes": 7774
+    },
+    {
+      "path": "crates/lrr/src/db/entered_call_thunk.rs",
+      "sha256": "a1050c04267cc0045951058fb4bbdcbe69be25b853d131688da716e1966cfa9d",
+      "bytes": 3979
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "sha256": "8fdd79efa5c41d56b8a1047319309523c399194f1ce9b3f7cf03b47ec57b6649",
+      "bytes": 22925
+    },
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "sha256": "725093771e457492a4d849c3729ec3f51ef44f2964303666947e7b79746ab087",
+      "bytes": 21688
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "5ee7a28fcfa2e9e4ed1461b267a76737cdc133cb9daa9afdf33d9dee7739834c",
+      "bytes": 194025
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "5be8a0d6f0a49ca94f50414d78ce92bca65c615dd715ea9fd765b95d7e50488e",
+      "bytes": 118346
+    }
+  ],
+  "shared_path": [
+    "cli::retained_entry::prepare -> SourceDiscovery::prepare_body_syntax -> actual retained publication",
+    "Value39 -> EnteredCall44 canonical Local/Module admission -> actual indexed Type43 -> PreparedExplicitTypeArguments47",
+    "db::entered_call_thunk::thunk -> ordinary ParsedFile::initial_thunk_with_source_call -> normal verifier -> VerifiedRecipe::with_source_call",
+    "InstalledRecipes::source_call -> RunMachine::select_common_argument_call -> retained target SAME SourceCallable -> SourceType::materialize -> existing call contracts/GenericEnv/frame/cleanup"
+  ],
+  "mode_reviews": [
+    {
+      "mode": 1,
+      "result": "No assertion/expression evaluator introduced. Existing legacy macro evaluators remain named repair debt, not extended."
+    },
+    {
+      "mode": 2,
+      "result": "Completed statement macros attach actual source tree before ordinary body indexing. No literal/break executor extension; V2 harness bypass repaired through existing production entry adapter."
+    },
+    {
+      "mode": 3,
+      "result": "Actual AST GenericArg + actual DefinitionParameter ordinal/kind + common Q43 SourceType. Written strings compare verified operation metadata only. Common Module branch no longer select_argument_call fallback."
+    },
+    {
+      "mode": 4,
+      "result": "Same original/retained source mechanism. Generated scope/origin joins and Alias/Parameter/const/lifetime/composite gaps remain explicit. No new original-only exception."
+    },
+    {
+      "mode": 5,
+      "result": "Pure Q47 uses declaration signatures and nominal schema metadata only, never callee executable body/field layout. Pattern engines unchanged and held."
+    },
+    {
+      "mode": 6,
+      "result": "NEW explicit Type/target planning retained once; recipe clones share rows/target/guard Arcs and own visible parent. Installed common selection has zero fetch/AST planning. Remaining exception: finish_selected_argument_call still uses existing prepare_argument_hint for nonempty value arguments; full call-hint preparation migration not delivered by this zero-value-argument stock witness. Legacy paths remain held."
+    },
+    {
+      "mode": 7,
+      "result": "Cold join of genuine fullQ44/Q43 relevant Input guards; runtime checks cached versions, no new global namespace map/census. Existing legacy namespace witness/census debt remains unremoved and no speed claim."
+    },
+    {
+      "mode": 8,
+      "result": "Actual indexed sites via BodyIndex direct coordinates. Q47/recipes retain parent Arcs and shared immutable target/rows; no BodyIndex deep clone or wholefile Type node search added. Shared target proof parent can conservatively appear externally pinned after Q44 eviction; exact retention accounting needs controls, no precise scaling claim."
+    }
+  ],
+  "remaining_alternate_routes": [
+    "prepare_selected_argument_call legacy spelling resolver retained ONLY unjoined fallback routes",
+    "legacy macro literal/assert/break evaluators not extended or removed in this component",
+    "nonempty value-argument hint preparation remains existing reached-call service",
+    "qualified associated calls remain PathAdjustment prerequisite"
+  ],
+  "metadata": "Q47 100000 argument and 32MiB cold allocations, shared target/rows/guards and explicit parent ownership; recipe aggregate64MiB and existing call budgets. Guard join conflict/derived stamp/visit/transient/owned byte checks. Asymptotic cold union O(D log D), dispatch direct PC lookup plus relevant input version checks, no measured release performance.",
+  "validation": "Frozen source; actual compiler/runtime/authority results pending. V2/V3 failures preserved. No runtime/fullfixture/feature/matrix/milestone/JIT completion claim."
+}

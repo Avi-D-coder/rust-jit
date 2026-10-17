@@ -716,7 +716,7 @@ fn named_return_stock(edition: u16) -> (Database, RunMachine, crate::traits::ter
 fn original_named_primitive_result_context_preserves_rigid_source_identity() {
     use crate::traits::term::TyTerm;
     for edition in [2015, 2018, 2021, 2024] {
-        let (mut db, run, rigid) = named_return_stock(edition);
+        let (mut db, mut run, rigid) = named_return_stock(edition);
         let wrong = ArgumentType {
             source: TyTerm::Param(rigid),
             descriptor: TypeId(8),
@@ -918,7 +918,7 @@ fn original_alias_return_contracts_normalize_in_owning_source_context() {
     use crate::traits::term::TyTerm;
     for &(text, function, primitive, descriptor) in ALIAS_RETURN_STOCK {
         for edition in [2015, 2018, 2021, 2024] {
-            let (mut db, run) = alias_return_stock(text, function, edition);
+            let (mut db, mut run) = alias_return_stock(text, function, edition);
             let actual = ArgumentType {
                 source: TyTerm::Primitive(primitive),
                 descriptor: TypeId(descriptor),
@@ -959,7 +959,7 @@ fn original_alias_return_contracts_preserve_source_identity_at_equal_descriptor(
         for edition in [2015, 2018, 2021, 2024] {
             let (mut binder_db, _, rigid) = named_return_stock(edition);
             binder_db.finish_run().unwrap();
-            let (mut db, run) = alias_return_stock(text, function, edition);
+            let (mut db, mut run) = alias_return_stock(text, function, edition);
             let wrong = ArgumentType {
                 source: TyTerm::Param(rigid),
                 descriptor: TypeId(descriptor),

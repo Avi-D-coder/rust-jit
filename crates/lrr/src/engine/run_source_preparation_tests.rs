@@ -2,6 +2,8 @@
 //! unchanged rustc suffix-inference source, not a selected-body replacement.
 #[path = "run_stock_local_call_tests.rs"]
 mod stock_local_call_tests;
+#[path = "run_stock_type_argument_tests.rs"]
+mod stock_type_argument_tests;
 use super::super::lexical_numeric_callees_tests::{ORIGINAL, setup};
 use super::*;
 use crate::{
@@ -40,6 +42,11 @@ fn start(text: &str, edition: u16, entry: &str) -> Harness {
     let crate::frontend::callables::CallSelection::Source(selected) = selected else {
         panic!("reached source entry did not select an ordinary function: {selected:?}");
     };
+    // Use the production entry adapter: completed macro outputs must join the
+    // ordinary retained source tree before indexing/executing the selected body.
+    let selected = crate::cli::retained_entry::prepare(
+        &mut db, &discovery, &source, entry, selected,
+    ).unwrap();
     selected.revalidate(&mut db).unwrap();
     let body = selected.body().expect("selected source entry body").key();
     let parent = ready(db.prepare_source_local_plan(&discovery, &[&source], &body));

@@ -1,0 +1,106 @@
+{
+  "schema": "lrr/source-review/selected-module-admission-independent/v1",
+  "status": "source-only reviewed current successor after two findings; no compiler/tests/runtime acceptance",
+  "scope": "Read-only production peer review plus this new review artifact; worker goal/type packets unchanged.",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "e817484ec324166061edd8e3c99a2c6eeb78b5c520660a8295bee5a7e3a80915",
+      "bytes": 24969
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "f2d2c5302af7827fe47508eff21b5ff4f84ac74c3f10dea25d85eee6583d1add",
+      "bytes": 28681
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "cf1ab99b168126b826140a3b6fa033275ae66400958c7fe54ec2a824620a5c6b",
+      "bytes": 32586
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callable_tests.rs",
+      "sha256": "9468315853b4aac6cba62cc7a8f4ae2b84011c3857be0ab6664c7f48c4e61e9d",
+      "bytes": 16936
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "ccfd2644459255b445343479bea9e9054cad9aa170f6049f01754483584875f9",
+      "bytes": 35549
+    },
+    {
+      "path": "crates/lrr/src/frontend/declared_item_names.rs",
+      "sha256": "891c78b6128bbed75c679535c0081a55e742b9b71d86c0777719421180dceeae",
+      "bytes": 8930
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "920c02fadac32cb34ba6492865d9c87ca44a47577c79a18b29b6a999ad88ad79",
+      "bytes": 27814
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "e87e0c695de8eacdbccda9a1f0e48f61ba8481de30d974cb617efb207514c9a1",
+      "bytes": 17514
+    },
+    {
+      "path": "crates/lrr/src/db/retained_callables.rs",
+      "sha256": "e082aa4465b2bda803d41fc2af655150e882b537a7069bc7433ab9851528b7f9",
+      "bytes": 6382
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "60172344943ff6c20cd082e589207adcf1ba2d4342e4567b7e98708eb21ac38e",
+      "bytes": 60303
+    }
+  ],
+  "findings": [
+    {
+      "finding": "Generated DeclaredItemName.range was compared to DeclarationContext.range although one is name token and the other full declaration.",
+      "resolution_observed": "Unique GeneratedHeader selected by actual key; full item start/end matched context; declared token range matched header.name and canonical name; require_generated_source proof preserved.",
+      "status": "source fixed; regression controls unexecuted"
+    },
+    {
+      "finding": "New SourceCallable ordinary_module Option Arc fixed handle storage absent from metadata helper.",
+      "resolution_observed": "Unconditional size_of_val ordinary_module added, proof Arc header already accounted.",
+      "status": "source fixed; accounting control unexecuted"
+    }
+  ],
+  "authority_review": {
+    "selection": "Caller Q39 real NameDefinition source/header/context and private selection guard used, no target name resolver. Module canonical metadata helper shared with Value binding kind classification. Nonfunction constructor Struct remains fact/pendingBindingClassification, never function entry.",
+    "original": "Actual completed source scope owner, selected id canonical Outline row, scope, edition, original exact source/declaration/header. Struct dual Value membership checked in actual Outline candidates, not blanket namespace inference.",
+    "generated": "Actual admitted GeneratedSyntax source, canonical unit.definitions id, unique real GeneratedHeader full item range, actual declared-name Value receipt/scope/name span/canonical text, require_generated_source actual output record/epoch/parse and constructor namespace projection, exact canonical Outline source/header/context. GeneratedItemKey identity differs DefKey fingerprint intentionally; selected identity retained and body.def_key canonicalized only after actual row proof.",
+    "retained": "Actual owning original Outline row + original declaration anchor + actual retained Outline kind/name/scope/header/full range; existing retained_original_declaration cold validates real body/publication/lease. Lease retained actual outer input; future projections use cached Outline input closure and actual syntax inner Arc equality, not replay.",
+    "currentness": "Actual Q39 selection + FunctionSignature + canonical Outline input guards, fixed three exact current row values/stamps, actual syntax inner Arc publication and exact body locator/stamp. Outline\u2192ParseFile guard closure includes GeneratedSyntax/RetainedSyntax and discovery/current source authority. Pure revalidate uses published_input only, no queries/planning. SourceCallable original revalidate preserved; retained None intentionally avoids its old per-entry lease replan.",
+    "guard_boundary": "Q39 guard itself only proves selection; goal.require_current module proof and reached SourceCallable checks cover full module authority. Root reached coordinator/normal lowerer/full prepared recipe closure integration remains held."
+  },
+  "retention_review": {
+    "parent": "Admission sole parent Arc; Query44 goal borrows it for existing SourceArtifactRef LocalPlan traversal/SourcePlanPins. Callable shared proof Arc plus explicit ordinary_owner parent clone makes external ownership visible. No duplicate internal parent registry or body/index copy. No admission Clone/public proofArc extraction. SourceCallable Clone clones explicit parent handle.",
+    "inputs": "Canonical source/header/context/syntax outer Arc InputValues are actual db.input allocations registered existing weak input_pins. RetainedSourceLease is another handle to same input allocation; existing input accounting deduplicates outer addresses and charges after replacement. No unaccounted independently copied input graph.",
+    "metadata": "Checked LIMIT32MiB add; module admission size+Arc header, canonical exclusive heap/guard Vec and guard payload+Arc headers, owned FunctionSignature estimate, exact selected metadata heap. Goal aliases selection guard, counts module proof once. New SourceCallable module handle fixed bytes now charged; callable runtime budget conservatively includes retained proof metadata.",
+    "cost": "Cold canonical item/header/Outline row filtering O(target inventory), possible duplicate common projection in Q39 shadow classification and Q44; cached Parse/Outline queries and cold retained lease rows may reconstruct temporary metadata. No installed query/currentness replay/world scan, no measured performance claim."
+  },
+  "all_eight": {
+    "1": "Same SourceCallable, no assertion/expression evaluator.",
+    "2": "Actual original/retained/generated syntax identity/Outline/header, no scalar/break engine.",
+    "3": "No macro/numeric/name profile; generic data not argument semantic permission.",
+    "4": "All origins use actual canonical authority or typed Pending; no original-only gate or span-origin shortcut.",
+    "5": "Only FunctionSignature/Outline/body locator metadata; require_entry reliable boundary check no child BodyStructure/Thunk. No pattern machinery or arm preparation.",
+    "6": "Immutable Q44 admission once; repeated shared callable construction/currentness source paths direct row/guard checks only. Cold duplicate row projection recorded.",
+    "7": "Relevant prepared input closures + fixed target values, no per-entry census; unrelated/relevant invalidation controls unexecuted.",
+    "8": "Arc parser/index/input/parent retention and direct canonical row metadata; target outline cold linear filter not repeated whole-file execution search. BodyHandle/signature metadata clones only, no BodyIndex clone."
+  },
+  "controls_source_reviewed": [
+    "Complete unchanged AUTO all4 ordinary/user/wrapper selected real main; source-aware emit moves actual root attrs outside item macro; zero-query repeated projection and epoch revocation authored.",
+    "Actual AUTO original caller versus retained target lease/source difference; unchanged nested statement macro retained caller selects same original module signature all3calls with memo provider count.",
+    "Generated unit struct constructor remains real Struct canonical fact, module admission typed PendingBindingClassification.",
+    "Wrong source/header/context/namespace cold projection controls added; worker goal inline actual parent/guard alias and external callable parent-handle control authored."
+  ],
+  "unexecuted_or_remaining": [
+    "All tests/compiler/runtime terminals not run by this reviewer; no integration approval/compatibility closure.",
+    "Current tests do not establish full relevant/unrelated namespace mutation matrix, actual target source/header/body/lease replacement after held proof, retirement over source/epoch changes or exact-once runtime/suspension/cleanup.",
+    "Root noarg module normal lowerer/engine/currentness joins and same-runtime trace still pending.",
+    "Explicit generic TypeArg source association/body alias u8 safety, caller GenericEnv source substitution, generated nominal Type args and const75299 runtime remain held separately.",
+    "Applicable standard macro placement and distinct target parse/runtime execution matrix unexecuted."
+  ]
+}

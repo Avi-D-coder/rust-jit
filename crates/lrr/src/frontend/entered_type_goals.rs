@@ -16,8 +16,14 @@ use crate::{
         source_locals::PreparedSourceLocalPlan,
         source_types::{NamedTypePreparation, SourceType},
     },
-    ir::{op::PrimitiveType, pc::PcKey},
-    syntax::{body_index::BodyIndex, spans::SourceRange},
+    ir::{
+        op::PrimitiveType,
+        pc::{NodeId, PcKey},
+    },
+    syntax::{
+        body_index::{BodyIndex, NodeRole},
+        spans::SourceRange,
+    },
 };
 use std::sync::Arc;
 macro_rules! ready {
@@ -63,22 +69,51 @@ impl EnteredTypeGoal {
     pub(crate) fn source_type(&self) -> &SourceType {
         &self.source
     }
+    /// Use an already selected concrete Type at its exact indexed occurrence.
+    /// The owning PreparedTypePlan guard supplies currentness separately.
+    pub(crate) fn source_for(
+        &self,
+        index: &BodyIndex,
+        site: &PcKey,
+        range: SourceRange,
+    ) -> Result<&SourceType, Diagnostic> {
+        let source = self.plan.context().source();
+        if self.key.phase != 0
+            || &self.key != site
+            || index.body() != &site.body
+            || source.body().key() != site.body
+            || index.semantic_identity() != self.structure
+            || source.index().semantic_identity() != self.structure
+            || self.range != range
+            || !source.body().range.contains(range)
+        {
+            return Err(fault("prepared Type use source/body/range differs"));
+        }
+        let node = index
+            .nodes()
+            .get(site.node as usize)
+            .filter(|node| node.id == NodeId(site.node) && node.role == NodeRole::Syntax)
+            .ok_or_else(|| fault("prepared Type use indexed occurrence differs"))?;
+        let start = source.body().range.start;
+        if start.checked_add(node.range.start) != Some(range.start)
+            || start.checked_add(node.range.end) != Some(range.end)
+            || range.start.checked_sub(start) != Some(node.range.start)
+            || range.end.checked_sub(start) != Some(node.range.end)
+        {
+            return Err(fault("prepared Type use indexed range differs"));
+        }
+        Ok(&self.source)
+    }
     pub(crate) fn primitive_for(
         &self,
         index: &BodyIndex,
         body: &PcKey,
         range: SourceRange,
     ) -> Result<PrimitiveType, Diagnostic> {
-        if self.key.phase != 0
-            || self.key.body != body.body
-            || index.body() != &body.body
-            || index.semantic_identity() != self.structure
-            || self.range != range
-            || self.plan.context().source().index().semantic_identity() != self.structure
-        {
+        if self.key.body != body.body {
             return Err(fault("prepared Type use source/body/range differs"));
         }
-        self.source
+        self.source_for(index, &self.key, range)?
             .primitive()
             .ok_or_else(|| fault("selected cast target requires nonprimitive cast integration"))
     }

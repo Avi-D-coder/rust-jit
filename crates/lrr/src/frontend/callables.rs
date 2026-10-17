@@ -29,6 +29,8 @@ pub(crate) use lexical::admit_lexical_function;
 #[path = "ordinary_local_callables.rs"]
 pub(crate) mod ordinary_local;
 pub(crate) use ordinary_local::{EnteredLocalCall, prepare_entered_local_function};
+#[path = "entered_module_callables.rs"]
+pub(crate) mod entered_module;
 
 #[derive(Debug, Clone)]
 pub struct SourceCallable {
@@ -41,6 +43,7 @@ pub struct SourceCallable {
     context: DeclarationContext,
     lexical: Option<Box<lexical::LexicalAdmission>>,
     ordinary_local: Option<std::sync::Arc<ordinary_local::OrdinaryLocalAdmission>>,
+    ordinary_module: Option<std::sync::Arc<entered_module::EnteredModuleAdmission>>,
     // This actual additional handle makes an externally selected callable
     // visible to parent-plan retirement accounting when its proof Arc is also
     // retained by an entered-call memo. It never clones the immutable graph.
@@ -119,6 +122,11 @@ impl SourceCallable {
     ) -> Option<&ordinary_local::OrdinaryLocalAdmission> {
         self.ordinary_local.as_deref()
     }
+    pub(crate) fn ordinary_module_contract(
+        &self,
+    ) -> Option<&entered_module::EnteredModuleAdmission> {
+        self.ordinary_module.as_deref()
+    }
     pub(crate) fn local_source_contract(&self) -> Option<LocalCallableSource<'_>> {
         self.ordinary_local
             .as_deref()
@@ -134,6 +142,12 @@ impl SourceCallable {
                     .as_ref()
                     .map_or(0, |proof| proof.metadata_bytes()),
             )
+            .saturating_add(
+                self.ordinary_module
+                    .as_ref()
+                    .map_or(0, |proof| proof.metadata_bytes()),
+            )
+            .saturating_add(std::mem::size_of_val(&self.ordinary_module))
             .saturating_add(std::mem::size_of_val(&self.ordinary_owner))
             .saturating_add(std::mem::size_of::<Option<RetainedSourceLease>>())
     }
@@ -142,6 +156,9 @@ impl SourceCallable {
             proof.revalidate(db)?;
         }
         if let Some(proof) = &self.ordinary_local {
+            proof.revalidate(db)?;
+        }
+        if let Some(proof) = &self.ordinary_module {
             proof.revalidate(db)?;
         }
         if db.source_revision() != self.revision {
@@ -473,6 +490,7 @@ impl<'a> CallResolver<'a> {
             context: context.clone(),
             lexical: None,
             ordinary_local: None,
+            ordinary_module: None,
             ordinary_owner: None,
             retained: None,
         };
@@ -580,6 +598,7 @@ impl<'a> CallResolver<'a> {
             context,
             lexical: None,
             ordinary_local: None,
+            ordinary_module: None,
             ordinary_owner: None,
             retained: retained.map(RetainedOriginalDeclaration::into_lease),
         };

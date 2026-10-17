@@ -1,0 +1,94 @@
+{
+  "status": "SOURCE-ONLY separate lease consumer review; no Cargo/runtime; root checked readiness certificate dependency not yet reviewed",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "e9a71c16c312d655e78bee141039e12b20808462dfb12e21124c387222610335",
+      "bytes": 12496,
+      "before_sha256": "c12761aa4cd2547c615ec0f12cc9a4c4ab3e403896b845faa4b68fcb8f3b8b9d"
+    },
+    {
+      "path": "crates/lrr/src/db/body_lease_local_readiness_tests.rs",
+      "sha256": "fb2c0b41e2fa56e2ac6b0d591bb3a1c99ae882628e4cd664bdfe5b94bc38da10",
+      "bytes": 8699,
+      "before_sha256": null
+    }
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "Database::pin_guest_body",
+        "BodyExecutionLease::require_current"
+      ],
+      "finding": "Source ownership lease only; no execution/assertion evaluator or alternate operation recipe."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "require_local_environment"
+      ],
+      "finding": "Retains genuine existing BodyEnvironment input; no source replay/normalized display body, synthetic function or output executor."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "Database::pin_guest_body local owner branch"
+      ],
+      "finding": "Exact actual LocalDeclarationOwner selects opaque per-body source receipt. No name/method/numeric profile rule; same branch handles genuine original/retained/generated local receipt."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "retained permits_body checks",
+        "require_local_environment"
+      ],
+      "finding": "Existing nonlocal retained body permits_body checks unchanged. Local child authority comes from genuine private source readiness method, never ancestor permit alone. No generated exclusion or SourceBlob error fallback."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "Database::pin_guest_body"
+      ],
+      "finding": "Consumes already reached/published local BodyEnvironment; no body lowerer/pattern/eager cold code preparation. Missing receipt fails explicitly. Root certificate must separately reject child-owned pending structural calls and ignore cold nested function-owned ones."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "require_local_environment",
+        "BodyExecutionLease::require_current"
+      ],
+      "finding": "Direct published environment identity/body/key checks and one root require_execution_readiness call; no provider/planning/parse/walk introduced by lease. Existing pin ParseFile fetch remains before Frame mutation. Root API must use cached child readiness, bounded opaque parent chain and existing currentness, no per-op AST scan."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "Database::input exact BodyEnvironment key",
+        "existing input_pins/Roots::environment"
+      ],
+      "finding": "No namespace scan or global revision dependency. Lease detects exact envelope and source/owner changes; existing relevant source readiness supplies dependencies."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "BodyExecutionOwner::_source",
+        "metadata",
+        "body_environment_root_bytes"
+      ],
+      "finding": "Existing fixed Arc<InputValue> now can retain actual BodyEnvironment; no extra direct parent handle, BodyIndex copy or search. Current body-environment input/pin/source registry traversal already retains and charges underlying actual source-parent graph. BodyExecutionOwner fixed layout and weak registry accounting unchanged."
+    }
+  ],
+  "proof_boundary": "Root-owned AdmittedBodyContext::require_execution_readiness(db,&BodyKey,&ParseKey) must require genuine LocalBodyContext, exact self body/index/parse, current rows/owner/environment/retained syntax, bounded opaque parent chain and actual child-owned expansion readiness; retained root permits_body unchanged. Consumer has no independent validator or permit constructor.",
+  "controls_authored_unexecuted": [
+    "actual_stock_retained_child_uses_its_opaque_owning_environment_all_editions",
+    "missing_wrong_or_revoked_local_environment_never_falls_back_to_parent_retained_source",
+    "actual_lease_keeps_local_source_charged_and_refuses_changed_rows"
+  ],
+  "remaining": [
+    "Root cold child readiness proof/pending-macro source review+negative controls",
+    "Actual unchanged stock plain shadowing all4 runtime regression and generated/wrapper controls",
+    "Source replacement/epoch/retirement matrix and current milestone gate",
+    "No full architecture repair or runtime acceptance claimed"
+  ],
+  "historical": "V6 edcd actual retained plain f failure preserved. No raw SourceBlob identity collision established; legitimate child DefinitionSource is parent retained parse."
+}

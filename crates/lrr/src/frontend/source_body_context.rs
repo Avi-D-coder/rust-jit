@@ -73,6 +73,64 @@ impl AdmittedBodyContext {
     ) -> Option<&Arc<super::source_locals::PreparedSourceLocalPlan>> {
         self.local_body.as_ref().map(|local| local.parent())
     }
+    /// Execution ownership for an actual local declaration. Immutable child
+    /// closure evidence is minted at capture; this consumes that evidence and
+    /// existing source currentness without parsing or source planning.
+    pub(crate) fn require_execution_readiness(
+        &self,
+        db: &mut Database,
+        body: &crate::source::manifest::BodyKey,
+        parse: &crate::syntax::parse::ParseKey,
+    ) -> QueryPoll<()> {
+        let checked = (|| {
+            if self.body().key() != *body
+                || self.index.body() != body
+                || self.parsed.key() != *parse
+                || self.local_body.is_none()
+            {
+                return Err(fault("local execution body/index/source differs"));
+            }
+            let mut current = self;
+            let mut depth = 0usize;
+            while let Some(local) = &current.local_body {
+                depth += 1;
+                let parent = local.parent().context().source();
+                let same_receipt = match (&current.source_receipt, &parent.source_receipt) {
+                    (None, None) => true,
+                    (Some(child), Some(owner)) => Arc::ptr_eq(child, owner),
+                    _ => false,
+                };
+                if depth > 256
+                    || parent.parsed.key() != *parse
+                    || !same_receipt
+                    || !parent.body().range.contains(current.body().range)
+                    || parent.body().range == current.body().range
+                {
+                    return Err(fault("local execution parent source chain differs"));
+                }
+                if matches!(
+                    current.source_receipt.as_deref(),
+                    Some(InputValue::RetainedSyntax(_))
+                ) && !local.has_retained_readiness()
+                {
+                    return Err(fault("local execution lacks child structural readiness"));
+                }
+                current = parent;
+            }
+            if let Some(InputValue::RetainedSyntax(unit)) = current.source_receipt.as_deref()
+                && (unit.key() != parse || !unit.prepared().permits_body(current.body().def_key))
+            {
+                return Err(fault("local execution root readiness differs"));
+            }
+            Ok(())
+        })();
+        if let Err(error) = checked {
+            return QueryPoll::Ready(Err(error));
+        }
+        // One recursive check covers local owner, source/cfg/epoch and ancestor
+        // dependencies. Do not repeat it for every edge of the walk above.
+        self.require_current(db)
+    }
     pub(crate) fn generated_boundary(
         &self,
     ) -> Option<&Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>> {

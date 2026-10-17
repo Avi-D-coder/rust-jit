@@ -1,0 +1,7 @@
+# Q47 joined guard refinement — LOCAL-024
+
+Before-code addendum to c33be443 precode record. Root approved two boundaries: require_call(db,index,pc,&EnteredCallGoal) checks cached actual goal identity/fullsource proof initially; require_current(db,index,pc) checks retained actual site/index and captured versions after effects without Q44refetch. Goal cachedsemantic fingerprint and wrapped QueryValue observation use different domains and must not be equated. Signaturefp computed oncecold.
+
+Root now supplies PreparedInputGuard::join(&[&PreparedInputGuard])->Result<Self>, pure combination of already certified input stamps with deterministic ordering, conflicts/query-stamp rejection and bounds; no lookup/refresh. ColdQ47 joins actual fullQ44+all actualQ43 guards once. Rows retain certifiedSourceType/ordinal/actualTypePc/range/observation+originalguardfp forstabletrace, without duplicate guard owners afterjoin. self.guard alone retainscompleteunion fornormalrecipe attachment/currentness, exposeguard(). OneexplicitparentArc only.
+
+Checked100000argument count/32MiB row/cloneheap/actualguards/joinedclosure/temporary Arc+ref vectors and Vec+Arc slice arrays, actualretainedmetadata. No strings→Type, parser, publication, fieldlayout/runtimehooks. Sourceonly; original macro-nested_stmt witness currentlyfailsbeforegenericcalls at reachedgrault requestprofilephase; rootownsrepair. All8 review/exactfreeze and validator controls stillrequired.

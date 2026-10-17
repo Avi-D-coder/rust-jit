@@ -308,6 +308,7 @@ pub(crate) fn admit_lexical_function(
         },
         lexical: Some(Box::new(admission)),
         ordinary_local: None,
+        ordinary_module: None,
         ordinary_owner: None,
         retained: None,
     };

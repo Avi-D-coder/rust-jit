@@ -98,10 +98,41 @@ pub struct VerifiedRecipe {
     pub(super) namespace_witness: Option<std::sync::Arc<crate::db::memo::NamespaceWitness>>,
     // Owned relevant input currentness only, never name/type/operation grants.
     pub(super) prepared_inputs: Option<std::sync::Arc<crate::db::memo::PreparedInputGuard>>,
+    // An ordinary call consumes its immutable source/Type selection at runtime;
+    // cache eviction must not cause installed execution to plan source again.
+    pub(super) source_call:
+        Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
 }
 impl VerifiedRecipe {
     pub fn recipe(&self) -> &Recipe {
         &self.recipe
+    }
+    pub(crate) fn source_call(
+        &self,
+    ) -> Option<&crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments> {
+        self.source_call.as_ref()
+    }
+    pub(crate) fn with_source_call(
+        mut self,
+        plan: &crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments,
+    ) -> Result<Self, crate::core::diagnostic::Diagnostic> {
+        if self.source_call.is_some()
+            || plan.key().body != self.recipe.key.body
+            || plan.key().node != self.recipe.key.node
+            || plan.key().phase != 0
+        {
+            return Err(crate::core::diagnostic::Diagnostic::new(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "ordinary recipe source call attachment differs".into(),
+            ));
+        }
+        self.metadata_bytes = self
+            .metadata_bytes
+            .checked_add(plan.metadata_bytes())
+            .filter(|n| *n <= 64 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        self.source_call = Some(plan.clone());
+        Ok(self)
     }
     pub fn metadata_bytes(&self) -> usize {
         self.metadata_bytes

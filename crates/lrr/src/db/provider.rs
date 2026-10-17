@@ -830,6 +830,15 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::PreparedExplicitTypeArguments(key) => {
+                return match crate::frontend::explicit_type_arguments::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::PreparedExplicitTypeArguments(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::EnteredCall(key) => {
                 return match crate::frontend::entered_call_goals::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => {

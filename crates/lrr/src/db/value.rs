@@ -84,6 +84,9 @@ pub struct Bucket {
 }
 #[derive(Debug)]
 pub enum QueryValue {
+    PreparedExplicitTypeArguments(
+        Box<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
+    ),
     EnteredCall(Box<crate::frontend::entered_call_goals::EnteredCallGoal>),
     DeclaredReturnGoal(Box<crate::frontend::source_return_goals::ReturnGoalObservation>),
     PreparedReturnPlan(Box<crate::frontend::source_return_goals::PreparedReturnPlan>),
@@ -132,6 +135,9 @@ impl QueryValue {
             _ => None,
         };
         let local = match self {
+            Self::PreparedExplicitTypeArguments(value) => {
+                Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
+            }
             Self::EnteredCall(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::EnteredType(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::PreparedTypePlan(value) => {
@@ -146,6 +152,12 @@ impl QueryValue {
         };
         local
             .into_iter()
+            .chain(
+                recipe
+                    .into_iter()
+                    .filter_map(|recipe| recipe.source_call())
+                    .map(|plan| SourceArtifactRef::LocalPlan(plan.retained_plan())),
+            )
             .chain(self.product_roots().map(SourceArtifactRef::Pattern))
             .chain(
                 recipe
@@ -178,6 +190,13 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (
+            Self::PreparedExplicitTypeArguments(value),
+            QueryKey::PreparedExplicitTypeArguments(key),
+        ) = (self, key)
+        {
+            return value.key() == key && key.phase == 0;
+        }
         if let (Self::EnteredCall(value), QueryKey::EnteredCall(key)) = (self, key) {
             return value.key() == key && key.phase == 0;
         }
@@ -299,6 +318,10 @@ impl QueryValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/query-value");
         match self {
+            Self::PreparedExplicitTypeArguments(value) => {
+                e.u32(47);
+                e.digest(value.fingerprint());
+            }
             Self::PreparedReturnPlan(value) => {
                 e.u32(46);
                 e.record(value.as_ref());
@@ -382,6 +405,12 @@ impl QueryValue {
                 e.option(&value.prepared_inputs_fingerprint(), |e, fingerprint| {
                     e.digest(*fingerprint)
                 });
+                // Preserve encoding of recipes without this new retained facet;
+                // a present facet has an explicit domain tag and cold identity.
+                if let Some(plan) = value.source_call() {
+                    e.u32(47);
+                    e.digest(plan.fingerprint());
+                }
             }
             Self::ExpansionInput(descriptor) => {
                 e.u32(20);
@@ -459,6 +488,7 @@ impl QueryValue {
     }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(match self {
+            Self::PreparedExplicitTypeArguments(value) => value.metadata_bytes(),
             Self::EnteredCall(value) => value.metadata_bytes(),
             Self::DeclaredReturnGoal(value) => value.estimated_bytes(),
             Self::PreparedReturnPlan(value) => value.metadata_bytes(),

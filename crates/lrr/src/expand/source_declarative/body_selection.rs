@@ -3,6 +3,45 @@
 use super::*;
 use crate::{source::manifest::ItemKind, syntax::parse::ParsedFile};
 
+fn function_owns_call(
+    parsed: &ParsedFile,
+    body: SourceRange,
+    call: &CallCapture,
+) -> Result<bool, Diagnostic> {
+    let call_range = SourceRange::checked(call.start, call.end)?;
+    Ok(body.contains(call_range) && parsed.macro_call_function_body(call_range)? == body)
+}
+
+impl PreparedSourceSyntax {
+    /// Cold structural closure proof for an actually selected local function.
+    /// The caller must separately prove the declaration, source and parent
+    /// authority. This does not broaden the assembly's scoped body permit.
+    pub(crate) fn require_closed_function_body(
+        &self,
+        parsed: &ParsedFile,
+        body: SourceRange,
+    ) -> Result<Digest, Diagnostic> {
+        if parsed.retained_syntax_identity() != Some(Digest(self.syntax.identity().0))
+            || body.is_empty()
+            || body.end as usize > self.syntax.syntax().text.len()
+            || self.syntax.syntax().calls.len() > MAX_CALLS
+        {
+            return Err(fault("local readiness retained tree/body differs"));
+        }
+        for call in &self.syntax.syntax().calls {
+            if function_owns_call(parsed, body, call)? {
+                return Err(fault("local function still has pending expansion calls"));
+            }
+        }
+        let mut identity = StableEncoder::new("lrr/v1/retained-local-function-readiness");
+        identity.digest(self.identity());
+        identity.digest(Digest(self.syntax.identity().0));
+        identity.u32(body.start);
+        identity.u32(body.end);
+        Ok(identity.finish())
+    }
+}
+
 impl SourceSyntaxAssembly {
     /// Calls in nested functions belong to those functions, including generated
     /// functions that have no original declaration anchor. Resolve ownership
@@ -36,12 +75,7 @@ impl SourceSyntaxAssembly {
             self.source.selection().outline.parse.profile.clone(),
         )?;
         for (binding, call) in self.calls.iter().zip(&snapshot.syntax().calls) {
-            let call_range = SourceRange::checked(call.start, call.end)?;
-            if !range.contains(call_range) {
-                continue;
-            }
-            let owner = parsed.macro_call_function_body(call_range)?;
-            if owner != range {
+            if !function_owns_call(&parsed, range, call)? {
                 continue; // A nested function is independently prepared at entry.
             }
             return binding

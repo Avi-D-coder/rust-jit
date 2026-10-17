@@ -1731,6 +1731,7 @@ fn verify_inner(
         shared_string_literal_admission_bytes,
         namespace_witness: None,
         prepared_inputs: None,
+        source_call: None,
     })
 }
 /// Exact reached declarative literal admission. The private witness is created

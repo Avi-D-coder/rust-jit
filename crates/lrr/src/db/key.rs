@@ -86,6 +86,7 @@ impl StableEncode for CurrentModuleNameKey {
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
     EnteredCall(crate::source::manifest::PcKey),
     DeclaredReturnGoal(Digest),
     PreparedReturnPlan(Digest),
@@ -141,7 +142,8 @@ impl QueryKey {
                     + k.module_path.iter().map(String::capacity).sum::<usize>()
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
-            Self::EnteredCall(_)
+            Self::PreparedExplicitTypeArguments(_)
+            | Self::EnteredCall(_)
             | Self::PreparedReturnPlan(_)
             | Self::DeclaredReturnGoal(_)
             | Self::DeclaredParameterGoal { .. }
@@ -168,6 +170,7 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::PreparedExplicitTypeArguments(_) => "PreparedExplicitTypeArguments",
             Self::EnteredCall(_) => "EnteredCall",
             Self::DeclaredReturnGoal(_) => "DeclaredReturnGoal",
             Self::PreparedReturnPlan(_) => "PreparedReturnPlan",
@@ -207,6 +210,10 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::PreparedExplicitTypeArguments(key) => {
+                e.u32(47);
+                e.record(key);
+            }
             Self::PreparedReturnPlan(definition) => {
                 e.u32(46);
                 e.digest(*definition);

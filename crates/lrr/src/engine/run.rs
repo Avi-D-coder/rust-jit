@@ -182,6 +182,7 @@ struct PreparedSourceCall {
 struct SelectedArgumentCall {
     callee: Box<SourceCallable>,
     explicit: Vec<(u32, ArgumentType)>,
+    typed: Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
     hints: Vec<ArgumentHint>,
     argument_slots: Vec<SlotId>,
     result_hint: Option<ArgumentType>,
@@ -564,113 +565,50 @@ impl RunMachine {
     /// Publication is a reached coordinator action; the pure goal never enters
     /// or prepares a callee body. Qualified/value paths remain explicitly held.
     fn select_common_argument_call(
-        &self,
+        &mut self,
         db: &mut Database,
         name: &str,
         syntax: &[String],
         arguments: &[SlotId],
     ) -> QueryPoll<Option<SelectedArgumentCall>> {
-        use crate::{
-            db::dependency::{InputKey, InputValue},
-            frontend::{
-                entered_call_goals::EnteredCallSelection, source_value_goals::ValueGoalDemand,
-            },
-            syntax::body_index::{ExpressionKind, NodeRole},
+        let pc = self.frame.pc().clone();
+        let typed = match self.installed.source_call(db, &pc) {
+            Ok(Some(plan)) => plan.clone(),
+            Ok(None) => return QueryPoll::Ready(Ok(None)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        let pc = self.frame.pc();
-        if !self
-            .frame
-            .body
-            .nodes()
-            .get(pc.node as usize)
-            .is_some_and(|node| node.role == NodeRole::Expression(ExpressionKind::Call))
-            || !matches!(
-                db.input(&InputKey::BodyEnvironment(pc.body.clone()))
-                    .as_deref(),
-                Some(InputValue::BodyEnvironment(_))
-            )
+        if let Err(error) = typed
+            .require_current(db, &self.frame.body, &pc)
+            .and_then(|()| typed.require_written(name, syntax))
         {
-            return QueryPoll::Ready(Ok(None));
-        }
-        let mut entry = pc.clone();
-        entry.phase = 0;
-        let prepared = match db.fetch(&SyntaxProvider, QueryKey::EnteredCall(entry)) {
-            QueryPoll::Ready(Ok(value)) => value,
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        };
-        let QueryValue::EnteredCall(goal) = prepared.value.as_ref() else {
-            return QueryPoll::Ready(Err(call_fault("reached source call goal differs")));
-        };
-        if !prepared.cacheable {
-            return QueryPoll::Ready(Err(call_fault(
-                "reached source call has no retained dependencies",
-            )));
-        }
-        if let Err(error) = goal.require_current(db) {
             return QueryPoll::Ready(Err(error));
         }
-        let callee = match goal.selection() {
-            EnteredCallSelection::Local(proof) => {
-                let target = match goal.local_source_name(db, &self.frame.body, pc) {
-                    Ok(Some(target)) => target,
-                    Ok(None) => {
-                        return QueryPoll::Ready(Err(call_fault(
-                            "reached local call lacks written source proof",
-                        )));
-                    }
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                };
-                if target.name() != name || target.explicit() != syntax {
-                    return QueryPoll::Ready(Err(call_fault(
-                        "reached source call written target differs",
-                    )));
-                }
-                if let Err(error) = db.publish_ordinary_local_function(proof) {
-                    return QueryPoll::Ready(Err(error));
-                }
-                match goal.local_callable(db) {
-                    Ok(callee) => callee,
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                }
-            }
-            EnteredCallSelection::Module(declaration) => {
-                // Retain the existing module resolver only with exact identity
-                // agreement. A local selection never uses this fallback.
-                return match self.select_argument_call(db, name, syntax, arguments) {
-                    QueryPoll::Ready(Ok(selected))
-                        if selected.callee.identity() == declaration.identity() =>
-                    {
-                        QueryPoll::Ready(Ok(Some(selected)))
-                    }
-                    QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Err(call_fault(
-                        "module call selection differs from entered source goal",
-                    ))),
-                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
-                };
-            }
-            EnteredCallSelection::Binding(_) => {
-                return QueryPoll::Ready(Err(call_fault(
-                    "source callee binding awaits function-value integration",
-                )));
-            }
-            // Associated/qualified and explicitly generic path integration is
-            // still held behind its existing lowerer/dispatcher safety checks.
-            EnteredCallSelection::Pending(ValueGoalDemand::PathAdjustment) => {
-                return QueryPoll::Ready(Ok(None));
-            }
-            EnteredCallSelection::Pending(demand) => {
-                return QueryPoll::Ready(Err(call_fault(&format!(
-                    "source call selection is pending: {demand:?}"
-                ))));
-            }
+        let callee = match typed.callable(db) {
+            Ok(callee) => callee,
+            Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        self.prepare_selected_argument_call(db, callee, syntax, arguments)
+        let mut explicit = Vec::new();
+        if explicit.try_reserve_exact(typed.rows().len()).is_err() {
+            return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+        }
+        for row in typed.rows() {
+            let descriptor = match row.source().materialize(&mut self.store) {
+                Ok(descriptor) => descriptor,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            explicit.push((
+                row.ordinal(),
+                ArgumentType {
+                    source: row.source().source().clone(),
+                    descriptor,
+                },
+            ));
+        }
+        self.finish_selected_argument_call(db, callee, explicit, Some(typed), arguments)
             .map(Some)
     }
     fn select_reached_argument_call(
-        &self,
+        &mut self,
         db: &mut Database,
         contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
         site: crate::ir::recipe::CallSiteId,
@@ -879,6 +817,24 @@ impl RunMachine {
                 ));
             }
         }
+        self.finish_selected_argument_call(db, callee, explicit, None, argument_slots)
+    }
+    /// Shared ordinary call context after source Types have been selected.
+    /// Entered calls never pass explicit spellings through the legacy adapter.
+    fn finish_selected_argument_call(
+        &self,
+        db: &mut Database,
+        callee: Box<SourceCallable>,
+        explicit: Vec<(u32, ArgumentType)>,
+        typed: Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
+        argument_slots: &[SlotId],
+    ) -> QueryPoll<SelectedArgumentCall> {
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Err(call_fault(
+                "source calls require a checked source catalogue",
+            )));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
         let mut hints = if argument_slots.is_empty() {
             Vec::new()
         } else {
@@ -923,7 +879,7 @@ impl RunMachine {
                     .and_then(|slots| n.checked_add(slots))
             });
         let Some(mut bytes) = explicit
-            .len()
+            .capacity()
             .checked_mul(std::mem::size_of::<(u32, ArgumentType)>())
             .and_then(|n| n.checked_add(callee.signature().estimated_bytes()))
             .and_then(|n| n.checked_add(callee.retained_lexical_metadata_bytes()))
@@ -938,6 +894,17 @@ impl RunMachine {
             .and_then(|n| n.checked_add(std::mem::size_of::<Vec<SlotId>>()))
         else {
             return QueryPoll::Ready(Err(call_fault("explicit call context size overflow")));
+        };
+        bytes = match explicit
+            .iter()
+            .try_fold(bytes, |bytes, (_, argument)| {
+                bytes.checked_add(argument.source.heap_bytes()?)
+            })
+            .and_then(|bytes| {
+                bytes.checked_add(typed.as_ref().map_or(0, |plan| plan.metadata_bytes()))
+            }) {
+            Some(bytes) => bytes,
+            None => return QueryPoll::Ready(Err(crate::runtime::arena::resource())),
         };
         for hint in &hints {
             bytes = match argument_hints::retained_hint_bytes(hint).and_then(|heap| {
@@ -1000,6 +967,7 @@ impl RunMachine {
         QueryPoll::Ready(Ok(SelectedArgumentCall {
             callee,
             explicit,
+            typed,
             hints,
             argument_slots: slots,
             result_hint,
@@ -1025,7 +993,7 @@ impl RunMachine {
         }
     }
     fn prepare_source_call(
-        &self,
+        &mut self,
         db: &mut Database,
         name: &str,
         selected: Option<SelectedArgumentCall>,
@@ -1033,10 +1001,6 @@ impl RunMachine {
         result_hint: Option<&ArgumentType>,
         syntax: &[String],
     ) -> QueryPoll<PreparedSourceCall> {
-        let Some(graph) = &self.graph else {
-            return QueryPoll::Ready(Err(call_fault("call source catalogue absent")));
-        };
-        let sources: Vec<_> = self.sources.iter().collect();
         let selected = if let Some(selected) = selected {
             selected
         } else {
@@ -1053,6 +1017,15 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         };
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Err(call_fault("call source catalogue absent")));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
+        if let Some(typed) = &selected.typed {
+            if let Err(error) = typed.require_current(db, &self.frame.body, self.frame.pc()) {
+                return QueryPoll::Ready(Err(error));
+            }
+        }
         let callee = selected.callee;
         // An admitted local owner needs its derived environment before revision-
         // bound contracts. Other source calls retain contract-before-body order.
@@ -2316,6 +2289,14 @@ impl RunMachine {
                             .pending
                             .get(&self.frame.call_identity(site.0))
                             .expect("inserted checked selected context");
+                        if let Some(typed) = &selected.typed {
+                            if let Err(error) =
+                                typed.require_current(db, &self.frame.body, self.frame.pc())
+                            {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                        }
                         let ordinary = match selected.callee.ordinary_call_witness(
                             db,
                             self.frame.body.body().clone(),
@@ -2419,6 +2400,18 @@ impl RunMachine {
                                 "evaluated written argument count differs from selected signature"
                                     .into(),
                             ));
+                        }
+                        if let Some(typed) = self
+                            .pending
+                            .get(&self.frame.call_identity(site.0))
+                            .and_then(|selected| selected.typed.as_ref())
+                        {
+                            if let Err(error) =
+                                typed.require_current(db, &self.frame.body, self.frame.pc())
+                            {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
                         }
                         let mut types = Vec::new();
                         let mut cells = Vec::new();

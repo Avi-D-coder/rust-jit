@@ -1,0 +1,61 @@
+{
+  "schema": "lrr/source-review/type-use-call-metadata-independent/v1",
+  "status": "Separate read-only postimplementation review, no edits/Cargo/tests; actual fullnested fixture fails FIRST at grault beforegenericcalls perparent, therefore no Type/runtimeclaim.",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/entered_type_goals.rs",
+      "sha256": "f6618aa55f9a3be1bda0f3a870b1e44a9414346d14ca7ccf21c45d1688c26781",
+      "bytes": 8461
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_type_use_tests.rs",
+      "sha256": "a89e91eb2674c1b5b8db62d148fd7b868ea7182875925e81f8f83166c5961516",
+      "bytes": 10301
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "63cc51a44af28a19109f3a9d3e66ebfbebc03436820ed86634a9fce81a79ba7c",
+      "bytes": 44626
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "e89f2f4a9345f800f3b333afbb9318719798e71e0ca0a83c478ed7278e3631aa",
+      "bytes": 12717
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358",
+      "bytes": 28770
+    },
+    {
+      "path": "crates/lrr/src/frontend/signature_subst.rs",
+      "sha256": "9f921eaa790c657c39773662c5aef71c9aac5e4a8c853259a92f7d156cd363d8",
+      "bytes": 4319
+    },
+    {
+      "path": "crates/lrr/src/syntax/signatures.rs",
+      "sha256": "282b7c551edd7b1942efc24afcf45de83009c51e6c06c7f65dc2ef6a6853a462",
+      "bytes": 23886
+    }
+  ],
+  "source_fingerprint": "df55c823ae9f78fc080d137e4d0ca8f7610d8855a060f6e366fdfcb5cbb7ba53",
+  "type_use": "source_for7def component exactf661 validates storedactualTypePc/node/phase0/body/indexsemantic/sourcebodykey/range/canonicalSyntax and checkedrelativeprojection. BodyHandle.key creates2Digest value, noheap. primitive_for preserves castPc.body +sametype/index/range and sameprimitive-only refusal. Q42 prepare/Q43 suffix unchanged; Alias/Parameter/Name gaps preserved, actualinputguard external. New tests authored notrun; fullnested positive may expose realgenerated declaration prerequisites.",
+  "getters": "Local/Module signature() borrows private admittedFunctionSignature; no allocation/query/body/prep. EnteredCallGoal.signature returnsSome only Local/Module, Binding/Pending None. Actual original local/module constructors validate selecteddefinition/canonical scope/header; signaturegenerics captured from actualsource.",
+  "indexed_call": "Common indexed_source_name onlyLocal/Module, same actualcall/path/body/index/source identity plus actualphase Entry/Operand and direct index.pc validity, exactoperand0/pathparent/range/kind. Local wrapper preserves extra admission.site check; constructor alreadyproves proof.site==key and same environment for immutablegeneral route. No source/name/module lookup or callable/body grant through metadata.",
+  "currentness_risk": "All3 getters/source_for/indexed_source_name are metadata projections, noDB guard. Q44 guard() is Q39selection only; Local revalidate aliases it and doesnot separately guardFunctionSignature. ExternalQ47 must captureFULLsuccessfulQ44queryDAG (signature/header/source/context included), not justgoal.guard. Module require_current also checks actualsignature/canonical/bodyreceipt guards. EveryQ43guard beforeeffect/bodydemand and aftersuspend; samecallee acceptedproof validatedatcallentry.",
+  "ordinal_design_review": "capture_generics enumerates ALL actual GenericParam ASTs inclLifetime/Type/Const and stores thatu32ordinal. Association must inspect realcalleeKind beforeQ42; retainparameter.ordinal, neverfilteredType renumber. ExistingSignatureSubstitution.bind_type_parameter rejectsnon-Type/undeclaredordinals. Lifetimeomission may traverse declaredlifetimes only underactualRustassociation contract; explicitlife/Const/associated/composite remainexacttypedgaps. Partial/default inference notnewlyaccepted by this design.",
+  "q47_boundary": "PureQ47 fetchactualQ44, capture fullQ44guard aftercompletion (no selfcapture), validateindexedsource association and TypeKind\u2192actualTypePc, fetchQ43once, validate sameEnvironment/exactsource_for, copyonlySourceType+Q43guard+ordinal/sourcecoordinates. OneexplicitparentArc inQ47, no hidden retainedQ44/Q43outerQueryValue Arcs. QueryValue source-root traversal/accounting must registerit. Runtimecallseal/descriptorinterning/frame/GenericEnv remaincommon owners.",
+  "cost_risk": "Root Q47draft require_current acceptsFunctionSignature and rehashes fullheader/generics onreuse. Approved repair inNEWleafonly: initial require_call accepts actualEnteredCallGoal cachedidentity, fullguard/site; separate laterrequire_current noQ44refetch and no signaturehash. Signaturefingerprint oncecold. Need distinguishcachedgoal fingerprint fromwrappedQueryValue Outcome fingerprint; they use DIFFERENT domains. RetainactualQ44observation separately ifbothneeded. Boundrowcount/fixedarray/sourceheap/guardheaders andactualpostcloneheap beforeArc conversion.",
+  "all8": {
+    "1": "No evaluator.",
+    "2": "Same indexed generated/original source, no scalar lane.",
+    "3": "No macro/name/numeric profile.",
+    "4": "Generatedprovenance holds retained, nooriginalgate.",
+    "5": "Header/signature/schema metadata only; calleeBodyStructure/layout untouched.",
+    "6": "RetainonceactualQ44/Q43 andparent; no perentrysignaturehash/planning; rootdraft cost repair pending.",
+    "7": "Relevant actualguard closure, no globalcensus oruncheckedTypeabsence.",
+    "8": "Directindex checks/sharedArcs, noBodyIndexdeepcopy orwholefilesearch."
+  },
+  "minimal_stock_expectation": "Full unchangedmacro-nested_stmt_macros actualmain must first pass ordinary grault/fooproducer/retainedbody routing, then3ordinaryModulecalls bind actualgeneratedBar/Baz/Xyzzy to genuineTypeordinal0 viaQ42/Q43. Neednominalsource+deferreddescriptor andunitreturn, nofieldlayout/bodyforcedbecauseunusedT. Currentroot actualmacroentry failure is prerequisite, not diagnosticcompatibility or Typeconsumerpass.",
+  "design_doc": "common-indexed-explicit-type-argument-consumer-design.md SHA26f79589; directionvalid with aboveclarifications. Actual runtime Macroblocker and Q47unhooked remainheld."
+}

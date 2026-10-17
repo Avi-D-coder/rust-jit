@@ -103,3 +103,5 @@ pub mod entered_type_goals;
 
 pub mod entered_call_goals;
 pub mod source_return_goals;
+
+pub(crate) mod explicit_type_arguments;

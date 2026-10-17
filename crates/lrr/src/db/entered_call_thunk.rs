@@ -71,21 +71,40 @@ pub(super) fn thunk(
     if !prepared.cacheable {
         return QueryPoll::Ready(Err(fault("source call dependencies are not retained")));
     }
-    // Module/qualified/value paths keep their existing safety checks until their
-    // exact source-selection receipts join this route. No Local may fall back.
-    if !matches!(goal.selection(), EnteredCallSelection::Local(_)) {
+    // Both admitted declaration kinds use the same indexed source-call path.
+    // Qualified/value/pending paths retain their explicit safety boundaries.
+    if !matches!(
+        goal.selection(),
+        EnteredCallSelection::Local(_) | EnteredCallSelection::Module(_)
+    ) {
         return QueryPoll::Ready(Ok(None));
     }
     if let Err(error) = goal.require_current(db) {
+        return QueryPoll::Ready(Err(error));
+    }
+    let mut entry = pc.clone();
+    entry.phase = 0;
+    let typed = ready!(db.fetch(
+        &SyntaxProvider,
+        QueryKey::PreparedExplicitTypeArguments(entry)
+    ));
+    let QueryValue::PreparedExplicitTypeArguments(typed) = typed.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("source call explicit Type plan differs")));
+    };
+    if let Err(error) = typed.require_call(db, index, pc, goal) {
         return QueryPoll::Ready(Err(error));
     }
     let recipe = match parsed.initial_thunk_with_source_call(body, index, pc, goal) {
         Ok(recipe) => recipe,
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
+    let recipe = match recipe.with_source_call(typed) {
+        Ok(recipe) => recipe,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
     QueryPoll::Ready(
         recipe
-            .with_shared_prepared_inputs(Arc::clone(goal.guard()))
+            .with_shared_prepared_inputs(Arc::clone(typed.guard()))
             .map(|recipe| {
                 Some(Provided {
                     value: QueryValue::Thunk(Box::new(recipe)),

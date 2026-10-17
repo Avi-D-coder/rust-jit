@@ -1,0 +1,58 @@
+{
+  "status": "SOURCE-ONLY separate review; compiler/runtime unexecuted by this worker",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "67f2de5a7e18170a0312467781ac5ff5d804defa47f444179d299fdcfa8915e6",
+      "bytes": 49539,
+      "before_sha256": "7399d14c0305c2c0260f3928f14e01be09344b8a85b3fc1c7556c570b0f55e36"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "cb85040a6b4b2526ff6a83f5f4afc2ef2f2d4b26f15f21e0f23b02f5a9966607",
+      "bytes": 14889,
+      "before_sha256": "a1db2f14bedc5f9b44a25f50fc2f7900c36c523fbf4017fabe5275e2d8fd97a3"
+    }
+  ],
+  "shared_route": "Actual indexed CallExpr -> genuine Q44 Local/Module admission -> cold Q47 full Q44 plus actual Q43 joined input guard -> retained installed plan -> reached exact coordinator publication/SourceCallable -> ordinary call contracts.",
+  "findings": [
+    {
+      "mode": 1,
+      "review": "No expression/assertion evaluator added. EnteredCallTarget::callable projects existing genuine proofs into SAME SourceCallable."
+    },
+    {
+      "mode": 2,
+      "review": "No literal/break output executor or synthetic syntax. Existing immutable selected Local/Module admissions retained."
+    },
+    {
+      "mode": 3,
+      "review": "Actual written strings only require_written equality; no name lookup/Type parse. Q47 rows remain actual indexed Q43 SourceType with real callee GenericKind ordinal."
+    },
+    {
+      "mode": 4,
+      "review": "No original/generated gate introduced. Existing source/scope/header/hygiene/epoch authorities stay in admissions/guards. Pending/Binding cannot construct target."
+    },
+    {
+      "mode": 5,
+      "review": "No pattern or unselected body preparation. Cold retained_target only copies bounded actual written metadata; callable is reached coordinator method."
+    },
+    {
+      "mode": 6,
+      "review": "Target Arc/row Arc/guard Arc shared on Q47 clone. signature fingerprint and Q47 fingerprint computed once cold. callable and require_current have no fetch/provider/capture/parse; joined guard traverses relevant certified Inputs only. Root installed integration separately owned/unreviewed here."
+    },
+    {
+      "mode": 7,
+      "review": "No namespace census. Existing joined Q44+Q43 certified input dependencies/currentness unchanged. Local publisher remains exact existing fixed parent/child rows and coordinator/run authority."
+    },
+    {
+      "mode": 8,
+      "review": "No BodyIndex or parser copy/search added. Q47 keeps one explicit parent Arc per clone; target shares proof Arc with Q44, no new direct parent. Target payload/header/proof metadata conservatively charged per plan; bound and capacities checked before/after cold string allocation."
+    }
+  ],
+  "remaining": [
+    "Root VerifiedRecipe/installed retention and source-pin accounting require separate exact source review.",
+    "Meaningful cached target retirement/stale guard/no-query controls and actual compilation/runtime await sole validator.",
+    "Legacy unjoined string resolver remains held; source alias/Param/const/lifetime pending unaffected.",
+    "Unchanged whole macro-nested_stmt fixture currently has Type namespace prerequisite; no full fixture acceptance."
+  ]
+}

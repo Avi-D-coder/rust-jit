@@ -110,6 +110,28 @@ impl InstalledRecipes {
         }
         Ok(constructor.map(|value| value.source.clone()))
     }
+    /// Borrow retained source-call evidence at the actual installed PC. The
+    /// dispatcher already validated the recipe; this accessor adds no query,
+    /// source planning or historical namespace-census work.
+    pub(crate) fn source_call(
+        &self,
+        db: &Database,
+        pc: &PcKey,
+    ) -> Result<
+        Option<&crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
+        Diagnostic,
+    > {
+        if db.source_revision() != self.source_revision {
+            return Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "installed source call publication differs",
+            ));
+        }
+        let Some(id) = self.by_pc.get(pc) else {
+            return Ok(None);
+        };
+        Ok(self.get(*id)?.source_call())
+    }
     pub(crate) fn contains_pc(&self, key: &PcKey) -> bool {
         self.by_pc.contains_key(key)
     }

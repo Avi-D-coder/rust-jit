@@ -1,0 +1,149 @@
+{
+  "status": "SOURCE-ONLY independent actual root readiness+lease consumer review; no Cargo/runtime executed",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "731fbfe89b7ee8fd247517d7c43835f9a8ff444484c03c8298f07f6ceae2094e",
+      "bytes": 52209
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_body_context.rs",
+      "sha256": "afdbc9aa85d153a9bee2ceb9d9c95237efc9ec527157d9e49677afdb4fe9ef7c",
+      "bytes": 9058
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "c3c6345a937632b32e136a7ddf02fd5064a28f452da9292bc54c44e269f1cf0c",
+      "bytes": 15067
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+      "sha256": "179a703d9f6dc08432c9c86221a4f8cdde20057eaede88a5481bdc6e55aa46c1",
+      "bytes": 4264
+    },
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "67a851663ea57525ed878d2c15d9bbf111c7aa20cf990f9ad2ecae4fcdc79164",
+      "bytes": 12616
+    },
+    {
+      "path": "crates/lrr/src/db/body_lease_local_readiness_tests.rs",
+      "sha256": "fb2c0b41e2fa56e2ac6b0d591bb3a1c99ae882628e4cd664bdfe5b94bc38da10",
+      "bytes": 8699
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup.rs",
+      "sha256": "544d467f2f003fce9a46e1f3034983e1ba863e19fac7d9a54382899710029ece",
+      "bytes": 6455
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs.rs",
+      "sha256": "dfa2ed4b1216da8c00c98d7b21eefdae0471b1572327a4cb4362320e629d6ed8",
+      "bytes": 17170
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "sha256": "08c6b5c658c02fc77bc7caf4780aa4cf46005833e434150c64ef9834a21970c6",
+      "bytes": 21494
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "37f4719011f6538ab872743f5b9d6cfbaa88161bee3417385934a97657b6d1b0",
+      "bytes": 24592
+    }
+  ],
+  "corrected_findings": [
+    {
+      "before": "source_body_context b22958db compared slot5 source stamps even when original local receiptNone uses owner stamp there",
+      "fix": "source_body_context731fbfe8 compares actual None/None or same inherited Some InputValue Arc; mismatches fail. Existing original source capture/currentness supplies authority."
+    },
+    {
+      "before": "lease V1 e9a71c16 only source readiness, not exact child macro envelope",
+      "fix": "lease V2 67a85166 checks source readiness once then actual child macros.require_current. No duplicate source recursion."
+    }
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "Database::pin_guest_body",
+        "AdmittedBodyContext::require_execution_readiness"
+      ],
+      "review": "Execution source ownership only, no evaluator/alternate operation lowering. Same VM frame lease path used by actual original/retained/generated local admissions."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "ParsedFile::retained_syntax_identity",
+        "PreparedSourceSyntax::require_closed_function_body"
+      ],
+      "review": "Actual retained structural snapshot identity and existing parsed AST function owner. No display-text parser/synthetic function/output executor or token-origin provenance grant."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "LocalBodyContext::capture",
+        "require_local_environment"
+      ],
+      "review": "Canonical exact local declaration/source/header/body/scope and privately issued LocalBodyContext/BodyEnvironment; no names, macro identity, methods or primitive profile choose authority."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "AdmittedBodyContext::require_execution_readiness",
+        "retained permits_body unchanged"
+      ],
+      "review": "Existing original None receipts preserved; generated actual receipt remains existing source-capture/currentness route; retained children require genuine cached per-child closure and same actual retained root scoped permit. No BodyKey digest permit or SourceBlob fallback. Retained child-owned pending macro remains explicit missing child assembly prerequisite, not architecture completion."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "function_owns_call",
+        "SourceSyntaxAssembly::next_body_invocation",
+        "PreparedSourceSyntax::require_closed_function_body"
+      ],
+      "review": "One same structural ownership kernel for selected-body expansion and cold local closure. Child f-owned residual macro refuses; nested unentered g-owned macros do not block f. No executable shape check or pattern route. Required positive/negative controls await validator."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "LocalBodyContext::retained_readiness",
+        "AdmittedBodyContext::require_execution_readiness",
+        "BodyExecutionLease::require_current"
+      ],
+      "review": "Only cold local capture scans bounded residual calls using real parsed snapshot; cached proof digest included local identity. Lease validates direct body/index/parse and opaque parent chain at most256, then existing currentness once plus exact child macro receipt. No parse/AST walk/source planning added at lease; existing currentness may fetch seal memo. No measured speed claim."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "require_local_environment",
+        "LocalBodyContext::owner_matches",
+        "AdmittedBodyContext::require_current"
+      ],
+      "review": "Exact current BodyEnvironment envelope/body/key and actual owner/source/header/context/cfg/epoch/receipt dependencies. No namespace census/global revision fallback. Source kind selected through genuine LocalDeclarationOwner input; missing/nonlocal foreign retained body retains original permits_body refusal."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "BodyExecutionOwner::_source",
+        "LocalBodyContext fields",
+        "existing body environment input-pins and Roots::environment"
+      ],
+      "review": "Actual input/environment/parent/index handles shared; no hidden new direct parent Arc or BodyIndex copy/search. Cached readiness is fixed Option<Digest>, embedded size accounted by size_of AdmittedBodyContext and included stable identity. Existing input-pins/root traversal accounts actual retained environment after publication retirement."
+    }
+  ],
+  "authority_detail": {
+    "body": "self.body.key/index.body/parsed.key must equal actual entered body/parse; local_body Some private; canonical local capture already checked exact row/scope/header/range and strict parent nesting.",
+    "chain": "Only opaque local.parent links, same actual ParseKey and inherited source_receipt; strict contained unequal ranges and max256; every retained edge must have cold cached readiness, terminal actual retained body must retain its OWN permits_body.",
+    "cold_child": "Actual PSS retained syntax identity equals parsed retained identity; body nonempty/in snapshot, residual calls bounded MAX_CALLS. function_owns_call filters actual interval and nearest Fn body using common direct AST locator. Cached proof encodes PSS/snapshot identity and exact bodyrange; root local identity includes it.",
+    "currentness": "self.require_current checks real local owner stamps/parent environment and source/header/body/context/cfg plus actual source receipt publication/seal/epoch. Lease separately validates actual child environment publication and macro seal; no refresh."
+  },
+  "test_mechanical_review": "Frozen fb2c0b41 actual assembly world/CLI retained entry/Box admission callable/capture_local/cold coordinator publish APIs match source; SourceDiscoveryStep Debug issue was fixed before freeze. Three tests remain unexecuted.",
+  "remaining": [
+    "Validator pending-child refusal/cold nested function closure controls and direct original receiptNone positive control",
+    "Actual V7 whole stockplain all4, suffix user/wrapper/generated regressions and relevant source/epoch/quota/suspension controls",
+    "Inherited retained child macro expansion assembly join remains missing, source readiness refuses pending body rather than silently permits",
+    "No interpreter milestone/full architecture/JIT closure from source review"
+  ],
+  "blockers_after_fixes": []
+}

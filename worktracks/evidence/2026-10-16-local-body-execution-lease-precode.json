@@ -1,0 +1,42 @@
+{
+  "status": "precode source-only; V6 frozen edcd untouched",
+  "task": "LOCAL-024 common actual local body execution ownership; T032/M013/M017/M018 prerequisite",
+  "violation": "BodyExecutionLease chooses RetainedSyntax solely by parent ParseKey content, then incorrectly requires body-scoped retained readiness for nested local body. Legitimate local DeclarationSource is parent retained parse; no raw SourceBlob identity collision established.",
+  "witness": "Full unchanged official type-param-local-var-shadowing.rs plain main now common CLI retained entry; genuine local f body fails readiness-permits-main. Generated/wrapper neighboring cases passed, not proof of plain acceptance.",
+  "ordinary_route": [
+    "prepare_reached_local_source -> source_body_context::capture_local genuine LocalBodyContext -> BodyEnvironment(f)",
+    "pin_guest_body -> VM Frame creation -> retained lease currentness"
+  ],
+  "shared_extension": "Explicit actual LocalDeclarationOwner plus already published opaque BodyEnvironment(f) selects body-specific execution source authority. New root-owned AdmittedBodyContext::require_execution_readiness validates exactbody/index/parse/current parent chain to actual admitted root readiness. BodyEnvironment input retained as actual lease source.",
+  "preserved_refusals": [
+    "No permits_body weakening or foreignbody permit",
+    "No SourceBlob fallback/error recovery",
+    "No caller-passed digest/body-name authority",
+    "Nonlocal retained bodies retain exact existing permits_body path"
+  ],
+  "authority": "DB coordinator pin, exact DefinitionBody and DefinitionSource, actual published BodyEnvironment envelope, source local_parent and actual LocalOwner join via root checked readiness API. Lease revalidates actual BodyEnvironment publication and same API, no new query provider/publication.",
+  "cold_hot_cost": "Pin reads existing input/parse query and checked retained source receipt; no body parsing/planning/publication added. Existing input-pins/body environment root accounting covers actual retained InputValue::BodyEnvironment and immutable parent handles. Root readiness chain bound/currentness costs must be source-reviewed.",
+  "owned": [
+    "crates/lrr/src/db/body_leases.rs",
+    "new body lease source-control leaf"
+  ],
+  "root_owned": [
+    "source_body_context.rs checked readiness API + child helper/tests if needed",
+    "CLI retained-entry source analysis"
+  ],
+  "before_sha256": "c12761aa4cd2547c615ec0f12cc9a4c4ab3e403896b845faa4b68fcb8f3b8b9d",
+  "required_evidence": [
+    "Actual plain full stock all4 regression terminal",
+    "Source guards wrong owner/body/source/environment/stale epoch/permit foreignbody controls",
+    "Source-aware all8 exact hashes",
+    "Source retention/accounting and no BodyIndex deep clone; generated/wrapper unchanged regression"
+  ],
+  "root_readiness_prerequisite": {
+    "invariant": "Ancestor scoped readiness certifies provenance only; child-owned residual macros, including closure-contained calls, block child execution. Nested cold function calls do not.",
+    "shared_entry": "PreparedSourceSyntax::require_closed_function_body shares macro_call_function_body structural kernel with SourceSyntaxAssembly::next_body_invocation; LocalBodyContext::capture retains one private certificate for exact retained snapshot and actual callee range.",
+    "cost": "One bounded residual CallCapture traversal and direct syntax ownership lookup at cold child capture; cached digest and <=256 parent pointer checks at lease. No parsing, expansion or planning at lease. Existing recursive require_current and retained certificate checks remain potentially O(depth * records log records); no performance claim.",
+    "authority": "Exact child selected local proof, body/index/parse/owner, same retained receipt across parent edges, unchanged terminal root permits_body; require_current once on leaf recursively validates existing dependencies.",
+    "evidence": "Negative f direct/closure pending calls; positive cold nested g; unchanged stock shadowing regression first; unchanged nested statement test all editions; worker lease revocation controls.",
+    "eight_failure_modes": "1-5 no expression/type/member/pattern alternate; 6 cold snapshot closure computed once, installed lease consumes private certificate; 7 no namespace census added, inherited retained currentness cost held; 8 Arc parser/index/parent retained, no BodyIndex cloning or wholefile AST scan."
+  }
+}

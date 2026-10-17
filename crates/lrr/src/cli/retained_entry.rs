@@ -18,10 +18,11 @@ fn ready<T>(poll: QueryPoll<T>) -> Result<T, Diagnostic> {
     }
 }
 
-pub(super) fn prepare(
+pub(crate) fn prepare(
     db: &mut Database,
     discovery: &SourceDiscovery,
     source: &PreparedSourceView,
+    entry: &str,
     callable: Box<SourceCallable>,
 ) -> Result<Box<SourceCallable>, Diagnostic> {
     callable.revalidate(db)?;
@@ -57,7 +58,7 @@ pub(super) fn prepare(
     ))?;
     ready(db.publish_retained_syntax(input.clone()))?;
     let body = ready(db.publish_retained_body(input, definition))?;
-    let selected = ready(discovery.entry_function(db, "main"))?;
+    let selected = ready(discovery.entry_function(db, entry))?;
     let CallSelection::Source(selected) = selected else {
         return Err(Diagnostic::new(
             "LRR-E-CALL-CONTEXT",

@@ -1,0 +1,29 @@
+{
+  "status": "source-only precode; no Cargo/runtime acceptance",
+  "invariant": "Installed ordinary calls consume one retained immutable actual selected Local/Module admission and joined Q44/Q43 input closure, without Q44/Q47 refetch or source replanning.",
+  "witness": "Unchanged official macro-nested_stmt_macros.rs three indexed generic calls; current runtime prerequisite Type namespace remains held.",
+  "shared_entries": [
+    "EnteredCallGoal retained opaque actual admission",
+    "PreparedExplicitTypeArguments cold prepare",
+    "ordinary Local publisher and SourceCallable callable_shared",
+    "Module SourceCallable callable_shared"
+  ],
+  "ownership": "Target Arc shares admission Arc, no extra direct parent handle; each Q47 clone explicitly clones exactly one parent Arc; shared target payload conservatively charged per plan.",
+  "costs": "Cold bounded actual-written metadata copy and stable encoding once; clone shares target/rows/guard Arcs; reached callable checks retained relevant guards then fixed canonical rows and exact publication, no query fetch.",
+  "held_routes": "Legacy unjoined string resolver unchanged; no fallback permission; alias/Param/const/lifetime unsupported remain held.",
+  "required_evidence": [
+    "Exact two-leaf source review all8",
+    "Meaningful stale guard/retirement/installed no-refetch controls",
+    "Unchanged whole official fixture runtime and route matrix by sole validator"
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "7399d14c0305c2c0260f3928f14e01be09344b8a85b3fc1c7556c570b0f55e36"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "a1db2f14bedc5f9b44a25f50fc2f7900c36c523fbf4017fabe5275e2d8fd97a3"
+    }
+  ]
+}

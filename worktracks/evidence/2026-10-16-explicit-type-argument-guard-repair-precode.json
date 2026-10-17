@@ -1,0 +1,11 @@
+{
+  "schema": "lrr/precode/explicit-type-arguments-guards/v1",
+  "owned_leaf": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+  "before_sha256": "0cdf8b39c1b0144ea7cfe4fa08dd574dc94d52f5d74b732da7eb660d1715b3de",
+  "snapshot": "/private/tmp/lrr-explicit-type-arguments-root-draft-before-worker.rs",
+  "authorization": "Root delegated ONLYthisnewunhookedleaf metadata/coldhash/API repair. NoDB/runtimehooks/existingfile edits.",
+  "invariant": "Q47derivedassociation mustretain actualfullQ44+eachQ43guard/realcallerparentArconce, genericordinal andcertifiedSourceType; no perentrysignaturewalk/refetch/reparse.",
+  "witness": "Fullunchanged macro-nested_stmt_macros3calls, currentlyrootmacroentryfailurebeforecalls; rootrepairsthatseparately. Alias/Param/const/mixedgaps held.",
+  "changes": "require_call(actualEnteredCallGoal) checks cachedgoalidentity+directsite/currentactualgoal once; separate require_current(db,index,pc) checksretainedsource/index/phase+fullguardsaftereffectswithoutQ44refetch. Compute signaturefponcecold; storecachedgoalidentity separatelyfromactualQueryValueobservation. Bounded100krows/32MiBcheckedmetadata, clonedSourceTypeheapremeasure, peakVec+Arcslice arraybudget, actualretainedArcslice bytes.",
+  "remains": "Existing source_for/typeoccurrenceauthority, ordinalkindassociation andtypedgaprefusals preserved. Runtime descriptor/suspension/callentry/GenericEnv rootowned. Noquerypublicationnewrow. Sourceall8andexactfreeze required; noCargo/tests."
+}

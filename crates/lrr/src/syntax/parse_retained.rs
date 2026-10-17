@@ -83,6 +83,14 @@ fn snapshot_bytes(snapshot: &SyntaxSnapshot) -> Result<usize, Diagnostic> {
 }
 
 impl ParsedFile {
+    /// Identity of the actual retained structural tree, not its display text.
+    /// This is a pure representation check, never execution authority.
+    pub(crate) fn retained_syntax_identity(&self) -> Option<Digest> {
+        self.retained_syntax
+            .as_ref()
+            .map(|retained| Digest(retained.0.identity().0))
+    }
+
     /// Project diagnostic offsets through the exact retained token origins.
     /// Distinct locations are returned separately, with their complete context,
     /// owning edition and origin keys. This pure projection grants no source,

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17T00:18:26.107225+00:00",
+  "updated_at": "2026-10-17T01:10:24.146891+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -219,8 +219,9 @@
           "id": "WT04-01",
           "title": "Lexical source callable admission",
           "status": "in_progress",
-          "candidate": "worktracks/evidence/2026-10-16-generated-child-impl-runtime.json",
-          "acceptance_scope": "Frozen7afabcb actual13PASS/0FAIL: whole stockshadowing plain/user/wrapper eachall4 plus priorusersuffix regression=84normalcalls; authority9 pass. Source contexts add0distinct originals/fullfixture; priorV3plain+1 preserved. Standardmacro/suspension/fullmatrix/legacyremoval/milestone/JIT gates incomplete."
+          "candidate": "worktracks/evidence/2026-10-16-stock-nested-statement-main-baselines.json",
+          "acceptance_scope": "V5 b4472867 compiled; whole unchanged nested statement main owning2015 test fails body-environment publication, all4 unexecuted; zero new stock/fullfixture passes. Common retained Type/target component source review only; general call planning/body joins/fullmatrix/milestone/JIT held. Separate same-source guard/type-use controls8PASS/0FAIL terminal324d56/0; no runtime count increment.",
+          "status_note": " V6: unchanged nested-statement main all4 runtime pass; +1 distinct witness, no fullfixture. Ordinary shadowing regression blocks integration; actual child source lease/readiness next. V7 b69405c8:20/20focusedPASS including repairedplain, unchangednestedmain all4 and5readiness/lease controls. No architecture/milestone closure; next actualshiftbaseline."
         },
         {
           "id": "WT04-02",

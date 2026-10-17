@@ -1,0 +1,180 @@
+{
+  "status": "SOURCE-ONLY independent review of current integration; no Cargo or runtime executed by reviewer",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "67f2de5a7e18170a0312467781ac5ff5d804defa47f444179d299fdcfa8915e6",
+      "bytes": 49539
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "cb85040a6b4b2526ff6a83f5f4afc2ef2f2d4b26f15f21e0f23b02f5a9966607",
+      "bytes": 14889
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_type_goals.rs",
+      "sha256": "f6618aa55f9a3be1bda0f3a870b1e44a9414346d14ca7ccf21c45d1688c26781",
+      "bytes": 8461
+    },
+    {
+      "path": "crates/lrr/src/db/entered_call_thunk.rs",
+      "sha256": "a1050c04267cc0045951058fb4bbdcbe69be25b853d131688da716e1966cfa9d",
+      "bytes": 3979
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "6d97c11e0e1bbb89769057d89595cd9a057d63815c65e84fcd1f6894fd045def",
+      "bytes": 30550
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "0289ba4402ec8095dc40a08a0be067759fa564004bb19f43d2664b67c3eb88c7",
+      "bytes": 13123
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "864bb13f0af6cfe6dee89a0feedc885d11d9b047561f49b3ff5bc4148cd5d65f",
+      "bytes": 23549
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "5efa2fb5ac3fd943b987eaa5690ba71fcc55c8e84ca878f007ed9a64cb726e46",
+      "bytes": 60824
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "40ffcd1b192ac981946f27b3195ce93d94a17fde141b841f7cf0d6c74f018288",
+      "bytes": 17835
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "fe0ab7e9445973c1adb7cc48cd2924b66e8e38412e64822ffb662ba78b9c9b0d",
+      "bytes": 139633
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "94cf9d1018379af5671a1748c57d2686da4cc418bb1b2b90e53bd5d8590e6910",
+      "bytes": 31055
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "7ac9e76ed2e2be6e2db25374420058d44e3ffa2241c8b3507118b5a3eda224f4",
+      "bytes": 83220
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "fb7db5b7d1ce2cbec10a3e72a4431ab1e93044268ceb2668a1bf1e792c98cb64",
+      "bytes": 12058
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "5be8a0d6f0a49ca94f50414d78ce92bca65c615dd715ea9fd765b95d7e50488e",
+      "bytes": 118346
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "e89f2f4a9345f800f3b333afbb9318719798e71e0ca0a83c478ed7278e3631aa",
+      "bytes": 12717
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "6c10dcdbd3cee869bc6421317defad3c44aee271c82af11282b4e50adcaf1358",
+      "bytes": 28770
+    },
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs.rs",
+      "sha256": "2279c174bd4046cc710fae60cc16fe78abfe29d5b0dd3a0304db858f12d752f5",
+      "bytes": 7062
+    }
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "db::entered_call_thunk::thunk",
+        "RunMachine::select_common_argument_call"
+      ],
+      "finding": "Same parsed.initial_thunk_with_source_call ordinary CallExpr opcode lowering and same SourceCallable/finish_selected_argument_call. No alternate assertion/expression evaluator added."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "EnteredCallGoal::indexed_source_name",
+        "PreparedExplicitTypeArguments::prepare"
+      ],
+      "finding": "Actual indexed owning body/name/Type occurrences only; no literal-only output executor, synthetic body or reparsed display text."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "PreparedExplicitTypeArguments::prepare",
+        "RunMachine::select_common_argument_call"
+      ],
+      "finding": "Actual callee GenericKind ordinal and caller indexed Q43 SourceType. require_written is immutable operation/target equality only, no Type resolution. SourceType::materialize deferred nominal descriptor, no spelling-based primitive fallback. Existing legacy prepare_selected_argument_call string resolver remains only unjoined fallback and is not removed/accepted by this component."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "EnteredCallTarget",
+        "EnteredModuleAdmission::revalidate",
+        "OrdinaryLocalAdmission::revalidate"
+      ],
+      "finding": "No generated/original gate added; actual admitted proof variant preserves source/header/context/scope/hygiene/edition/epoch and guards. Binding/Pending remain unsupported without gaining module fallback."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "PreparedExplicitTypeArguments::prepare",
+        "EnteredCallTarget::callable",
+        "RunMachine::prepare_source_call"
+      ],
+      "finding": "Cold pure provider captures declaration/Type metadata only; selected actual body metadata published only reached coordinator. No pattern changes or cold executable body preparation. FunctionSignature provider now reads DefinitionBody only for aliases, no negative body dependency for ordinary function signatures."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "InstalledRecipes::source_call",
+        "VerifiedRecipe::with_source_call",
+        "RunMachine::select_common_argument_call",
+        "PreparedExplicitTypeArguments::{require_current,callable,fingerprint}",
+        "PreparedInputGuard::join"
+      ],
+      "finding": "Installed common call selection borrows exact by_pc retained plan, no runtime Q44/Q47 fetch. Plan clone shares target/rows/guard Arcs and clones one explicit parent. Q47/signature fingerprint computed cold once, guard joined once; runtime validates relevant published stamps plus fixed callee rows. No query capture/parser/planner in retained APIs. Initial recipe preparation remains cold and may demand missing memo dependencies."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "PreparedInputGuard::{join,require_current}",
+        "QueryValue::source_roots",
+        "SourcePlanPins::{register,count_owners,retain_external}"
+      ],
+      "finding": "join only certified Input stamps, deterministic bounded BTree dedup; conflicting/query stamps refused. Runtime relevant input closure, no namespace census added. Shared admission parent counted physically once while Q44 exists; after Q44 eviction target proof keeps physical parent externally visible versus enumerated explicit Q47/recipe handles, conservatively retaining registry. No duplicate registry."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "PreparedExplicitTypeArguments #[derive(Clone)]",
+        "EnteredCallTarget",
+        "QueryValue::source_roots",
+        "VerifiedRecipe::with_source_call"
+      ],
+      "finding": "No BodyIndex/parser deep clone or whole-file node search introduced. Direct indexed nodes and checked source range retained. Actual one explicit parent per Q47/recipe struct clone enumerated; target shares existing proof parent without per-alias enumeration. Shared payload/header/proof metadata conservatively charged per plan/recipe; checked limits cover cold buffers/joins and runtime selected context."
+    }
+  ],
+  "boundary_reviews": {
+    "phase": "Q47 require_current accepts actual validated Entry/Operand PC for same canonical body/node/index; Type source_for remains exact TypePc/direct Syntax/checked absolute range. Runtime calls guard before selection, CallPrepare pending use, evaluated call effects and prepare_source_call; SourceCallable revalidates independently.",
+    "identity": "Initial require_call binds actual goal cached identity+definition+actual indexed source target; full Q44 outcome closure captured separately. Cached goal identity and wrapped query observation remain distinct.",
+    "ownership": "Recipe retains actual Q47 struct, one parent Arc. Installed and selected context clones share immutable target/rows/guards. Registry conservatively retains shared proof-owned source through Q44 eviction, no unaccounted destruction in hot operation.",
+    "costs": "Cold Q44 canonical selection/signature, each reached explicit Type Q43 and full-closure join bounded. Runtime O(relevant input stamps + explicit argument count + ordinary contract work), direct index checks; no release performance measurements. Signature/header metadata cloning in existing SourceCallable projection remains ordinary small metadata, not body cloning."
+  },
+  "blockers": [],
+  "required_unexecuted_controls": [
+    "Installed retained target still works with Q44/Q47 memos removed: zero source goal/query planning trace",
+    "Joined guard dedup/conflicting stamps/query-stamp rejection and bounded visit/bytes; no refresh",
+    "Relevant caller source/cfg/epoch/type header invalidation blocks before argument/callee effect; unrelated derived publication remains current",
+    "Actual GenericKind ordinal and body-local alias named u8 cannot resolve module primitive; alias/Param/const/lifetime explicit unsupported remains",
+    "Recipe/selected-call parent retirement after memo eviction/last runtime owner, no immutable body copy",
+    "Whole unchanged macro-nested_stmt_macros.rs main all owning editions and ordinary/user/wrapper/applicable std route matrix"
+  ],
+  "acceptance": "No full fixture or architecture closure inferred. Current Type namespace/generated source prerequisites and legacy unjoined call routes remain explicit gaps. Sole validator owns runtime/compilation."
+}

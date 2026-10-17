@@ -1,4 +1,8 @@
 //! Source/authority controls over complete unchanged local-record rustc source.
+#[path = "entered_type_use_tests.rs"]
+mod entered_type_use_tests;
+#[path = "explicit_type_argument_tests.rs"]
+mod explicit_type_argument_tests;
 #[path = "binding_constraint_tests.rs"]
 mod binding_constraint_tests;
 #[path = "ordinary_local_callable_tests.rs"]

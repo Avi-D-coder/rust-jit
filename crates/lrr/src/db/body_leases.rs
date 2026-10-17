@@ -49,6 +49,15 @@ impl BodyExecutionLease {
                 }
                 input.require_current(db)
             }
+            InputValue::BodyEnvironment(_) => {
+                let InputValue::DefinitionSource(parse) = self.0._locator.as_ref() else {
+                    return QueryPoll::Ready(Err(fault(
+                        "LRR-E-INTERNAL-SNAPSHOT",
+                        "local frame source locator differs",
+                    )));
+                };
+                require_local_environment(db, &self.0._source, &self.0.body, parse)
+            }
             InputValue::GeneratedSyntax(input) => match db.fetch(
                 &super::super::provider::SyntaxProvider,
                 QueryKey::DiscoverySeal(input.seal.clone()),
@@ -69,6 +78,42 @@ impl BodyExecutionLease {
                 "retained frame source ownership variant differs",
             ))),
         }
+    }
+}
+/// Body-specific authority for a genuinely admitted local frame. An actual
+/// parent ParseKey is not a retained readiness permit for every nested body.
+fn require_local_environment(
+    db: &mut Database,
+    source: &Arc<InputValue>,
+    body: &BodyKey,
+    parse: &crate::syntax::parse::ParseKey,
+) -> QueryPoll<()> {
+    let key = InputKey::BodyEnvironment(body.clone());
+    let InputValue::BodyEnvironment(environment) = source.as_ref() else {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-INTERNAL-SNAPSHOT",
+            "local frame environment variant differs",
+        )));
+    };
+    if environment.body() != body
+        || !source.matches(&key)
+        || db
+            .input(&key)
+            .is_none_or(|current| current.fingerprint() != source.fingerprint())
+    {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-INTERNAL-SNAPSHOT",
+            "local frame environment publication changed",
+        )));
+    }
+    // This checks exact body/index/parse and the private current LocalBodyContext
+    // chain. Neither an owner digest nor an ancestor retained permit suffices.
+    match environment
+        .source()
+        .require_execution_readiness(db, body, parse)
+    {
+        QueryPoll::Ready(Ok(())) => environment.macros().require_current(db),
+        other => other,
     }
 }
 impl std::fmt::Debug for BodyExecutionLease {
@@ -152,12 +197,33 @@ impl Database {
                 "frame parse key differs",
             )));
         }
-        let mut source = None;
+        // Actual admitted local bodies carry their own opaque source receipt.
+        // Select by the genuine owner input, never by a failed retained permit
+        // or by trying another content namespace after an authority error.
+        let local = self
+            .input(&InputKey::LocalDeclarationOwner(body.definition))
+            .is_some();
+        let mut source = if local {
+            match self.input(&InputKey::BodyEnvironment(body.clone())) {
+                Some(environment) => Some(environment),
+                None => {
+                    return QueryPoll::Ready(Err(fault(
+                        "LRR-E-EXPANSION-INPUT",
+                        "local frame requires its admitted owning body environment",
+                    )));
+                }
+            }
+        } else {
+            None
+        };
         for key in [
             InputKey::RetainedSyntax(parse.content),
             InputKey::GeneratedSyntax(parse.content),
             InputKey::SourceBlob(parse.content),
         ] {
+            if local {
+                break;
+            }
             if let Some(value) = self.input(&key) {
                 if !value.matches(&key) {
                     return QueryPoll::Ready(Err(fault(
@@ -175,6 +241,13 @@ impl Database {
                 "frame source ownership absent",
             )));
         };
+        if local {
+            match require_local_environment(self, &source, body, parse) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
         if let InputValue::RetainedSyntax(input) = source.as_ref()
             && !input.prepared().permits_body(body.definition)
         {
@@ -236,3 +309,7 @@ impl Database {
         QueryPoll::Ready(result)
     }
 }
+
+#[cfg(test)]
+#[path = "body_lease_local_readiness_tests.rs"]
+mod tests;

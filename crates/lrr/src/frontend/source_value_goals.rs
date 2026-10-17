@@ -36,7 +36,7 @@ use crate::{
 };
 use ra_ap_syntax::{
     AstNode,
-    ast::{self, HasGenericArgs, HasName},
+    ast::{self, HasName},
 };
 use std::sync::Arc;
 const LIMIT: usize = 32 * 1024 * 1024;
@@ -384,9 +384,9 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             let Some(segment) = path.segment() else {
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
-            if segment.generic_arg_list().is_some() {
-                return goal.needs(ValueGoalDemand::PathAdjustment);
-            }
+            // This query selects the actual base Value declaration only.
+            // Written generic arguments stay with the normal call/type/const
+            // consumer; they grant no execution or substitution authority here.
             let Some(name) = segment.name_ref() else {
                 return goal.needs(ValueGoalDemand::PathAdjustment);
             };
@@ -719,7 +719,12 @@ pub(super) fn shadowed_definition_binding(
     header: &crate::syntax::outline::HeaderRecipe,
     context: &DeclarationContext,
 ) -> QueryPoll<EnteredValueGoal> {
-    use crate::{expand::source_discovery::SourceScopeOwner, source::manifest::ItemKind};
+    use crate::{
+        frontend::callables::entered_module::{
+            CanonicalModulePreparation, canonical_module_declaration,
+        },
+        source::manifest::ItemKind,
+    };
     let id = selected.identity;
     let canonical_kind = if context.scope.owner.is_some() {
         let Some(row) = goal
@@ -733,84 +738,13 @@ pub(super) fn shadowed_definition_binding(
             return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
         };
         row.item.def_key.item_kind
-    } else if let Some(input) = db.input(&InputKey::GeneratedSyntax(source.content)) {
-        let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
-            return QueryPoll::Ready(Err(error("binding generated source variant differs")));
-        };
-        let Some(definition) = unit.definitions.get(&id) else {
-            return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
-        };
-        if unit.key != *source
-            || definition.crate_key != selected.defining_unit
-            || definition.namespace != Namespace::Value
-            || definition.module_path != context.scope.module_path
-            || !unit.items.items().iter().any(|item| {
-                item.key.fingerprint() == id
-                    && item.start == context.range.start
-                    && item.end == context.range.end
-            })
-        {
-            return QueryPoll::Ready(Err(error(
-                "binding generated declaration attachment differs",
-            )));
-        }
-        definition.item_kind
     } else {
-        let Some(environment) = goal.plan.environment() else {
-            return goal.needs(ValueGoalDemand::ModulePublication);
-        };
-        let environment = environment.macros().source_environment();
-        let SourceScopeOwner::Selected(owner) = environment.scope_owner(&context.scope) else {
-            return goal.needs(ValueGoalDemand::SourceOwner(id));
-        };
-        let outline = polled!(db.fetch(
-            &SyntaxProvider,
-            QueryKey::Outline(owner.selection().outline.clone())
-        ));
-        let QueryValue::Outline(outline) = outline.value.as_ref() else {
-            return QueryPoll::Ready(Err(error("binding declaration outline variant differs")));
-        };
-        let Some(item) = outline
-            .items
-            .iter()
-            .find(|item| item.def_key.fingerprint() == id)
-        else {
-            return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
-        };
-        if item.scope != context.scope || item.def_key.namespace != Namespace::Value {
-            return QueryPoll::Ready(Err(error("binding canonical declaration scope differs")));
+        match polled!(canonical_module_declaration(
+            db, &goal.plan, &selected, source, header, context
+        )) {
+            CanonicalModulePreparation::Ready(actual) => actual.definition().item_kind,
+            CanonicalModulePreparation::Pending(demand) => return goal.needs(demand),
         }
-        if *source == owner.selection().outline.parse {
-            if item.declaration_span != context.range || item.header != *header {
-                return QueryPoll::Ready(Err(error(
-                    "binding original declaration attachment differs",
-                )));
-            }
-        } else {
-            let input = db.input(&InputKey::RetainedSyntax(source.content));
-            let Some(InputValue::RetainedSyntax(input)) = input.as_deref() else {
-                return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
-            };
-            polled!(input.require_current(db));
-            let anchor = input
-                .prepared()
-                .original_declarations()
-                .iter()
-                .find(|anchor| anchor.original_definition() == id);
-            if input.key() != source
-                || input.prepared().source() != owner.selection()
-                || !anchor.is_some_and(|anchor| {
-                    anchor.original_range() == item.declaration_span
-                        && anchor.declaration_range() == context.range
-                })
-                || !item.header.same_semantics(header)
-            {
-                return QueryPoll::Ready(Err(error(
-                    "binding retained declaration attachment differs",
-                )));
-            }
-        }
-        item.def_key.item_kind
     };
     if canonical_kind != ItemKind::Function {
         return goal.needs(ValueGoalDemand::BindingClassification(id));

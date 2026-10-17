@@ -1,0 +1,60 @@
+{
+  "schema": "lrr/source-review/stock-entry-join/v1",
+  "claim": "LOCAL-024",
+  "baseline": "adb43b9b7d",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/mod.rs",
+      "sha256": "4afd16d4dc52367ea1d3780963bfa0fc618d17e70ff8eeb4ae1b7f33c06fe4ca",
+      "bytes": 82602
+    },
+    {
+      "path": "crates/lrr/src/cli/retained_entry.rs",
+      "sha256": "aa096094ffc330711e2617274aa4a4f66338e83aae14874c9e879fe795f1bb0e",
+      "bytes": 3189
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation_tests.rs",
+      "sha256": "464ba357d8bbf6b915a9044ee4a6a69c3082561fa167b9c014e717df2edcb2e2",
+      "bytes": 18696
+    }
+  ],
+  "witness": "tests/ui/macros/macro-nested_stmt_macros.rs unchanged",
+  "failure_receipt": "57a2c9d5816a4a471dd1a0c26b12ac23d4ad175aa7986939ddfdb342cc5b37fe",
+  "source_review": [
+    {
+      "mode": 1,
+      "finding": "Existing CLI adapter shared with harness, no assertion/expression evaluator added."
+    },
+    {
+      "mode": 2,
+      "finding": "Actual retained AST assembly replaces completed macro source before ordinary indexing; old executors unmodified and held."
+    },
+    {
+      "mode": 3,
+      "finding": "No member/numeric/type selection change."
+    },
+    {
+      "mode": 4,
+      "finding": "Same generated entry fallback and explicit source admission gaps preserved."
+    },
+    {
+      "mode": 5,
+      "finding": "Only actual selected function readiness; no pattern/eager executable preparation added."
+    },
+    {
+      "mode": 6,
+      "finding": "Existing cold entry adapter once before RunMachine start; no installed planning added."
+    },
+    {
+      "mode": 7,
+      "finding": "Existing entry source/selection work only, no hot namespace census added."
+    },
+    {
+      "mode": 8,
+      "finding": "Same retained source/index handles; no BodyIndex clone or runtime whole-file search added."
+    }
+  ],
+  "acceptance": "unexecuted; pure source join and next wholemain failure only, not feature/milestone closure",
+  "observer_successor_note": "V5 postcompleted SourceLocalPlan observer was unnecessary for emptyModulecallee. V6 tests inspect actualexecuted body/source/AST; no productionchange. Existing runtime oracles unchanged; actual acceptance pending."
+}

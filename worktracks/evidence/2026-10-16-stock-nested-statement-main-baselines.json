@@ -1,0 +1,109 @@
+{
+  "schema": "lrr/runtime-baselines/v1",
+  "claim": "LOCAL-024",
+  "stock_fixture": "tests/ui/macros/macro-nested_stmt_macros.rs",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "original_sha256": "abef2c55f007cf929838a1cae6e3e329f8bf4747979db3e78b11580d5b86eb49",
+  "owning_edition": 2015,
+  "runtime_contract_passes": 1,
+  "full_fixture_passes": 0,
+  "baselines": [
+    {
+      "version": 2,
+      "source": "3dad94852407264146f0361b19b8ced61f08360b1f6871deec887d3fbf796ada",
+      "receipt": "57a2c9d5816a4a471dd1a0c26b12ac23d4ad175aa7986939ddfdb342cc5b37fe",
+      "compile": "bbbfaf/0",
+      "runtime": "4aae06/1",
+      "failure": "reached declarative expression key/profile/phase differs",
+      "scope": "Actual whole original main, original grault macro site; exact failed conjunct unobserved. Harness bypassed production retained entry. No generic call reached."
+    },
+    {
+      "version": 3,
+      "source": "924ddedac977a979107453832537a0c0c9261bfef439bf44509a47720256c407",
+      "receipt": "f2cb4cdab4d3d70691bd8f9d0f1dc449d2127f3707ef83c2881044a121aac46c",
+      "compile": "fa7dec/0",
+      "runtime": "26e74e/1",
+      "failure": "body-local explicit type requires lexical type namespace integration",
+      "scope": "Same production retained entry adapter, complete actual retainedmain. Three actual call/TypeArg AST observations pass, first call lowering fails; zero generic runtime passes."
+    },
+    {
+      "version": 4,
+      "source": "499fb8a6ad809b134cf616579652ccb55286c356e85fa4f7285a7355fae8c9df",
+      "receipt": "01c7b4f34a82475040be397d38cfc521a1875ca00fde8c80ed92ef36bb34492b",
+      "compile": "bd37cf/1",
+      "runtime_test_bodies": 0,
+      "scope": "Four mechanical hosttest API errors; no guest/runtime/control bodies executed. Production retained source-call/type plan reviewed but unvalidated."
+    },
+    {
+      "version": 5,
+      "source": "b447286727aa7e7d7f0e5fd3e2771b3ae601fee556261be5ab1c1d14d1bd7367",
+      "production_identical_to_version": 4,
+      "compile": "8ff65f/0",
+      "library_sha256": "1958680cf387668c497a674c7cf9d9979ac3c16f16306757794a5e3cc8d055b6",
+      "runtime": "94ccb5/1",
+      "failure": "LRR-E-BODY-ENVIRONMENT owning source environment is not published",
+      "scope": "Whole unchanged owning2015 test fails at shared ready helper, precise demand unprinted; all4 runtime scope not run. Independent guard/type-use controls8PASS/0FAIL. Diagnostic-only same-binary backtrace repeat requested to establish actual failing demand.",
+      "independent_controls": {
+        "terminal": "324d56/0",
+        "passed": 8,
+        "failed": 0,
+        "scope": "Five actual guard-join controls and three exact indexed Type-use controls; same frozen source/library, no whole runtime fixture pass. Complete selected nominal Type contexts all4 where declared in controls; do not count as interpreter main execution."
+      },
+      "release": "235ffbb75f934820734806b7be2f0c5bebd7526d1a70c4b20b345441632bd331",
+      "diagnostic_repeat": {
+        "runtime": "97a111/1",
+        "release": "7b623113836a3b6723bf973b2e9a1e0b121a7de33d778cd46f0b0e7e88455e23",
+        "source_and_binary_unchanged": true,
+        "observation": "Backtrace actual_nested_statement_main -> ready<Outcome>, without start/completed frames: main completed; Unit/3CallSeal/cleanup/0LegacyAssert and42/44provider checks passed before failure. Exact one of two post-completion fetches unprinted."
+      },
+      "observer_review": "Final SourceLocalPlan fetch demanded lexical preparation not needed by empty module body. Correct observer to actual executed BodyStructure/published DefinitionSource+Body/ParseFile AST; preserve all runtime/type-identity oracles. Do not grow production to satisfy this observer. General reached-module namespace preparation remains an independent source-only prerequisite with a future entered-operation witness."
+    },
+    {
+      "version": 6,
+      "source": "edcd7b660f4fd6c5a5385de17b3cd97df30fc1923d78be56698de9e112086ffc",
+      "production_identical_to_version": 5,
+      "compile": "96071e/0",
+      "owning_runtime": "4af982/0",
+      "all4_runtime": "4585f9/0",
+      "q47_controls": [
+        "78f1f6/0",
+        "2d0c90/0"
+      ],
+      "runtime_contract_passes": 1,
+      "full_fixture_passes": 0,
+      "regressions": {
+        "passed": 10,
+        "failed": 1,
+        "terminal": "0cda45/1",
+        "first_failure": "stock-plain shadowing: LRR-E-EXPANSION-INPUT retained syntax readiness belongs to another frame body",
+        "unexecuted": [
+          "pre-body-revocation",
+          "user-suffix"
+        ]
+      },
+      "passed_test_bodies": 14,
+      "failed_test_bodies": 1,
+      "release": "6abb0fec359972bf20dabc1d82dad7e1a668042a2d8a54d8a36299cc11143b40",
+      "scope": "Actual whole unchanged macro-nested_stmt_macros main via common retained-entry and normal three generic calls; one distinct runtime witness, no cumulative suite or full-fixture count. Integration held by genuine ordinary shadowing regression. Prior V5 observer failure retained."
+    },
+    {
+      "version": 7,
+      "source": "b69405c82add8fbe0f727c482a94706bea2721a4722d03902f0dc6bad09454eb",
+      "compile": "acfe25/0",
+      "library_sha256": "9d4142e37d1517354e435ed8f1168495e1a9ab8890bfa77392ead8d37a0cdf4a",
+      "stock_plain_runtime": "e0cee5/0",
+      "remaining_runtime_queue": "a469ba/0",
+      "release": "88bae29bf190230ad488c90379710580a3422e6ed2532d58a839d326a5b6beb4",
+      "passed_bodies": 20,
+      "failed_bodies": 0,
+      "scope": "Both unchanged original nested-macro and shadowing mains pass all4, plus user/wrapper shadowing and existing suffix regressions and authority controls.5new child readiness/lease controls cover scopedpermit, environment/owner/source revocation, activelease, f-owned direct/closure pending and cold g. Original receiptNone added control pending separately.1 distinct new upstream runtime witness retained; zero fullfixture/milestone/architecture closure."
+    }
+  ],
+  "next": "Unchanged shift.rs whole main owning2015 baseline, production identicalV7. Missing reached module source/expansion readiness must be established from actual first failure; held future component cannot count as runtime.",
+  "unexecuted": [
+    "complete current-build upstream inventory",
+    "full architecture matrix",
+    "milestone"
+  ],
+  "compiler_evidence_is_not_interpreter": true
+}

@@ -1,0 +1,130 @@
+{
+  "status": "Independent source-only review; no compilation, Cargo, test execution, runtime acceptance or milestone closure",
+  "date": "2026-10-16",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/local_body_context.rs",
+      "sha256": "afdbc9aa85d153a9bee2ceb9d9c95237efc9ec527157d9e49677afdb4fe9ef7c",
+      "bytes": 9058
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "731fbfe89b7ee8fd247517d7c43835f9a8ff444484c03c8298f07f6ceae2094e",
+      "bytes": 52209
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "c3c6345a937632b32e136a7ddf02fd5064a28f452da9292bc54c44e269f1cf0c",
+      "bytes": 15067
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+      "sha256": "179a703d9f6dc08432c9c86221a4f8cdde20057eaede88a5481bdc6e55aa46c1",
+      "bytes": 4264
+    },
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "67a851663ea57525ed878d2c15d9bbf111c7aa20cf990f9ad2ecae4fcdc79164",
+      "bytes": 12616
+    },
+    {
+      "path": "crates/lrr/src/db/body_lease_local_readiness_tests.rs",
+      "sha256": "fb2c0b41e2fa56e2ac6b0d591bb3a1c99ae882628e4cd664bdfe5b94bc38da10",
+      "bytes": 8699
+    }
+  ],
+  "witness": "Unchanged official resolve/type-param-local-var-shadowing.rs: actually selected inner local f after retained main entry. Local residual-call authority controls remain distinct supplements.",
+  "receipt_fix": "Rechecked source_body_context.rs require_execution_readiness: None/None is valid for original source. Some/Some requires Arc::ptr_eq of the exact privately inherited source_receipt. No receipt stamp slot is interpreted when no receipt exists. capture_local inherits the exact parent Arc; retained closure digest binds actual pinned retained tree/body. Equal ParseKey alone is insufficient.",
+  "authority": [
+    "LocalBodyContext::capture consumes actual selected callable, unique actual parent row/header/scope/body and LocalDeclarationOwner; exact ParseKey, strict containment and depth <=256.",
+    "Cold require_closed_function_body joins ParsedFile retained structural identity with actual PreparedSourceSyntax snapshot, then rejects residual calls owned by this function, including closures; nested function-owned calls remain cold.",
+    "require_execution_readiness consumes cached child proof, verifies same receipt/parse and bounded strict parent chain to actual retained root permit, then performs one recursive require_current. permits_body unchanged.",
+    "BodyExecutionLease retains actual opaque BodyEnvironment and checks exact current publication/body/locator before source readiness and exact child macros.require_current; no fallback after missing/stale local authority.",
+    "New inline cached digest is included in size_of<AdmittedBodyContext>; parent/env/parser/index Arcs remain existing input-pins/Roots owners, no hidden plan clone."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "LocalBodyContext::capture",
+        "Database::pin_guest_body"
+      ],
+      "finding": "Source authority and readiness only; no assertion/expression compiler or evaluator introduced."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "PreparedSourceSyntax::require_closed_function_body",
+        "ParsedFile::retained_syntax_identity"
+      ],
+      "finding": "Uses actual admitted retained tree and actual residual CallCapture markers; no literal/break output executor, display-text replay or synthetic body."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "LocalBodyContext::capture",
+        "require_local_environment"
+      ],
+      "finding": "Consumes actual selected canonical callable/source contract; no method-name or numeric/macro identity selection."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "AdmittedBodyContext::require_execution_readiness"
+      ],
+      "finding": "Original None receipts and actual retained/generated inherited receipt Arcs share the same local chain. Existing retained root permit unchanged. Child macros require genuine closure; no new original-only refusal/fallback."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "function_owns_call",
+        "require_closed_function_body"
+      ],
+      "finding": "Nearest actual Fn owner catches closure calls owned by f and leaves nested g-owned calls cold. No executable arm/pattern/body preparation introduced. Negative controls need actual execution."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "LocalBodyContext::capture",
+        "require_execution_readiness",
+        "BodyExecutionLease::require_current"
+      ],
+      "finding": "Residual-call scan occurs once at actual cold child capture; immutable digest consumed at lease. No parsing/planning/AST walk at lease currentness. Existing pin ParseFile memo fetch retained before mutation."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "require_local_environment",
+        "LocalBodyContext::owner_matches",
+        "AdmittedBodyContext::require_current"
+      ],
+      "finding": "Exact relevant env/owner/source/header/context/body/cfg/epoch/seal dependencies retained; no namespace census/global revision equality added. Inherited certificate rebuild costs remain."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "retained_inputs",
+        "Roots::admitted",
+        "BodyExecutionOwner",
+        "macro_call_function_body"
+      ],
+      "finding": "Shared Arc parser/index/env/parent and fixed cached digest; no BodyIndex copy or whole-file node search. Cold indexed syntax_at plus bounded ancestor walk; existing root accounting includes inline context layout."
+    }
+  ],
+  "costs": {
+    "cold": "For each actual admitted local child, scan all residual calls up to MAX_CALLS, with indexed syntax path and bounded ancestors only for calls in body. Parent row lookup remains bounded cold inventory scan. No scaling claim.",
+    "entry": "<=256 immutable local chain edges plus one recursive currentness invocation. Inherited RetainedSyntaxInput::current rebuilds certificate record index/validates outputs per recursive retained context: potentially O(depth * (R log R + output checks)); source review is not performance measurement.",
+    "allocations": "New readiness digest inline, no parser/index/body deep copy or new registry; existing opaque env/input-pins/Roots retain actual source graph."
+  },
+  "controls": {
+    "authored_unexecuted": [
+      "actual_stock_retained_child_uses_its_opaque_owning_environment_all_editions",
+      "missing_wrong_or_revoked_local_environment_never_falls_back_to_parent_retained_source",
+      "actual_lease_keeps_local_source_charged_and_refuses_changed_rows"
+    ],
+    "additional_pending": "Root pending structural call controls packet is separate; not executed/reviewed by this record. Require actual f-owned macro, closure-owned macro, cold nested g, epoch/seal/env revocation, suspension and unchanged stock runtime before acceptance."
+  },
+  "finding": "No remaining concrete authority defect found in these exact source leaves after actual receipt fix and child macro-currentness fix. This is source review only.",
+  "historical": "Preserve earlier consumer-only review e9a71c16 and prior b22958db context review; this successor supersedes their unreviewed readiness/slot5 conditions only at these exact hashes."
+}

@@ -703,3 +703,6 @@ fn unowned_structural_calls_cannot_disappear_from_the_pending_result() {
         assert!(prepared.outputs().is_empty());
     }
 }
+
+#[path = "retained_child_readiness_tests.rs"]
+mod retained_child_readiness_tests;

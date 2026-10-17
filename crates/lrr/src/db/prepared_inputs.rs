@@ -32,6 +32,72 @@ fn guard_fingerprint(inputs: &[DependencyStamp]) -> Digest {
     e.finish()
 }
 impl PreparedInputGuard {
+    /// Cold composition of actual captured closures. No lookup, stamp refresh,
+    /// provider execution or new authority is granted by combining them.
+    pub(crate) fn join(guards: &[&Self]) -> Result<Self, Diagnostic> {
+        if guards.len() > MAX_DEPENDENCIES {
+            return Err(limit());
+        }
+        let mut inputs = BTreeMap::new();
+        let mut visits = 0usize;
+        let mut temporary_bytes = 0usize;
+        let mut key_bytes = 0usize;
+        for guard in guards {
+            visits = visits
+                .checked_add(guard.inputs.len())
+                .filter(|n| *n <= MAX_DEPENDENCIES)
+                .ok_or_else(limit)?;
+            for dependency in &guard.inputs {
+                let DependencyStamp::Input { key, fingerprint } = dependency else {
+                    return Err(stale("prepared input join contains a derived demand"));
+                };
+                if let Some(previous) = inputs.get(key) {
+                    if previous != fingerprint {
+                        return Err(stale("prepared input join stamps conflict"));
+                    }
+                    continue;
+                }
+                temporary_bytes = temporary_bytes
+                    .checked_add(std::mem::size_of::<(&InputKey, Digest)>() + 64)
+                    .filter(|n| *n <= MAX_BYTES)
+                    .ok_or_else(limit)?;
+                key_bytes = key_bytes
+                    .checked_add(dependency.heap_bytes())
+                    .filter(|n| *n <= MAX_BYTES)
+                    .ok_or_else(limit)?;
+                inputs.insert(key, *fingerprint);
+            }
+        }
+        let mut stamps = Vec::new();
+        stamps
+            .try_reserve_exact(inputs.len())
+            .map_err(|_| limit())?;
+        let bytes = stamps
+            .capacity()
+            .checked_mul(std::mem::size_of::<DependencyStamp>())
+            .and_then(|n| n.checked_add(key_bytes))
+            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
+            .filter(|n| *n <= MAX_BYTES)
+            .ok_or_else(limit)?;
+        // Bound simultaneous transient index and final owned closure too.
+        bytes
+            .checked_add(temporary_bytes)
+            .filter(|n| *n <= MAX_BYTES)
+            .ok_or_else(limit)?;
+        stamps.extend(
+            inputs
+                .into_iter()
+                .map(|(key, fingerprint)| DependencyStamp::Input {
+                    key: key.clone(),
+                    fingerprint,
+                }),
+        );
+        Ok(Self {
+            fingerprint: guard_fingerprint(&stamps),
+            inputs: stamps,
+            bytes,
+        })
+    }
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
     }
@@ -697,3 +763,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "prepared_input_join_tests.rs"]
+mod join_tests;

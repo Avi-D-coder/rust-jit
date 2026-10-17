@@ -1,0 +1,70 @@
+{
+  "schema": "lrr/source-design/indexed-explicit-type-consumer/v1",
+  "status": "read-only design only; no code/tests/imports",
+  "document": "worktracks/04-calls-source-views/common-indexed-explicit-type-argument-consumer-design.md",
+  "document_sha256": "26f79589e78b56ea84b85982398746870756d653a0ed1423005fe8c1c58673e6",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "189258cbea0c5782958522c25ce2d2ffb2cc60f40ba0ccbf0555d9b3bfcd3cf3",
+      "bytes": 43552
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_type_goals.rs",
+      "sha256": "a28ce86d31b9754c0743bb71c21530aa684f865a84a8a0ac2c5c07147d0da2d5",
+      "bytes": 7091
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "f2d2c5302af7827fe47508eff21b5ff4f84ac74c3f10dea25d85eee6583d1add",
+      "bytes": 28681
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "f8fef4c1610ae330cda3a18bcb02281dca558fc967cfde64404b80af8749a491",
+      "bytes": 37585
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_declarations.rs",
+      "sha256": "68c533d0168d9435805073d9a900639cb568f03fad10b94ce9a359f7735d96ea",
+      "bytes": 25773
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "4da2a783184d70adc5a60d5bbf252c8baba3ba379206e5d703a4f9f4bdc2fd55",
+      "bytes": 22880
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "4d9243a43d4e070ac16cb5b263f4b1d6d998b402f5cc50c0c7b304de37fb9e26",
+      "bytes": 63083
+    },
+    {
+      "path": "crates/lrr/src/frontend/signature_subst.rs",
+      "sha256": "9f921eaa790c657c39773662c5aef71c9aac5e4a8c853259a92f7d156cd363d8",
+      "bytes": 4319
+    },
+    {
+      "path": "crates/lrr/src/syntax/signatures.rs",
+      "sha256": "282b7c551edd7b1942efc24afcf45de83009c51e6c06c7f65dc2ef6a6853a462",
+      "bytes": 23886
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "030b5974b77b64ffb7c2b858246424a8dd2182cce1387ac9132e5df4977f09ef",
+      "bytes": 119105
+    },
+    {
+      "path": "crates/lrr/src/runtime/shape.rs",
+      "sha256": "1199ab519b971c3fd7ea3713525986132b25ece7ff06b975c26376dbba615864",
+      "bytes": 20035
+    },
+    {
+      "path": "crates/lrr/src/vm/context.rs",
+      "sha256": "5f284b2d833940da0b7d2f42d34188451419c6489d034538fc773cdbbbb272c7",
+      "bytes": 14361
+    }
+  ],
+  "future_metadata_packet": "35ecb727ff25ce64a5293c90b35311627d1d6c555636da395d250e8f83fef6b7",
+  "source_fingerprint": "31a3bf2378808baf7ed3be3f648c1ebab8fa2365b79dd8ecadc8665a68ff055f"
+}

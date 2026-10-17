@@ -1,0 +1,128 @@
+{
+  "schema": "lrr/source-review/selected-module-admission/v1",
+  "status": "implemented source-only; uncompiled/unexecuted; not integrated/runtime acceptance",
+  "task": "LOCAL-024 T032/T033/T043/T045 common source call admission; M018/M019+ trait obligations remain separate ordered gates",
+  "source_fingerprint": "b17e1cec19c6a53afc46dc2faf95eae449ca28c130e061da20b7f6dc65dd5202",
+  "fingerprint_encoding": "SHA256 sorted path + NUL + source SHA256 + NUL + decimal bytes + LF",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "e817484ec324166061edd8e3c99a2c6eeb78b5c520660a8295bee5a7e3a80915",
+      "bytes": 24969
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callables.rs",
+      "sha256": "f2d2c5302af7827fe47508eff21b5ff4f84ac74c3f10dea25d85eee6583d1add",
+      "bytes": 28681
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_module_callable_tests.rs",
+      "sha256": "9468315853b4aac6cba62cc7a8f4ae2b84011c3857be0ab6664c7f48c4e61e9d",
+      "bytes": 16936
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "cf1ab99b168126b826140a3b6fa033275ae66400958c7fe54ec2a824620a5c6b",
+      "bytes": 32586
+    }
+  ],
+  "witnesses": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
+      "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+      "bytes": 202,
+      "edited": false
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-nested_stmt_macros.rs",
+      "sha256": "abef2c55f007cf929838a1cae6e3e329f8bf4747979db3e78b11580d5b86eb49",
+      "bytes": 344,
+      "edited": false
+    }
+  ],
+  "precode": {
+    "path": "worktracks/evidence/2026-10-16-selected-module-callable-precode.json",
+    "sha256": "a7b0d51f8bb65d83d262443e141e9681149c833105f8f7570dc443a2f47d8f11",
+    "actual_baseline": "Precode Value39 c01d9428 includes root generic-base early-guard removal/comment, preserved exactly. This packet supersedes that full leaf with the common canonical module delegation; apply no earlier Value39 leaf after this one."
+  },
+  "shared_route": {
+    "facts": "source_value_goals::shadowed_definition_binding retains local-owner branch; module branch delegates canonical_module_declaration instead of former inline original/generated/retained canonical-kind join. Root unqualified generic argument guard removal/comment remains.",
+    "canonical": "Actual selected NameDefinition/target ParseKey/header/context match published three input rows. Actual module scope_owner index selects one owning original source; real Outline proves canonical row/body. Generated source requires actual unique GeneratedHeader/item span, actual DeclaredItemName identifier span/definition/scope and require_generated_source record/epoch/parse proof, then actual Outline canonical row. Struct Value-constructor facts use existing actual declared-name source authority or original scope membership, not Function authority.",
+    "retained": "Original retained path requires genuine current RetainedSyntax original anchor, actual target retained Outline row/header/context/body and existing Database::retained_original_declaration/RetainedSourceLease. Namespace selected identity and generated canonical DefKey remain distinct actual identities. Caller and callee parse need not match.",
+    "admission": "prepare_entered_module_function consumes same selected declaration plus private real Value guard, returns Ready Arc or typed Pending. Checks actual canonical Function/body locator and genuine FunctionSignature memo; actual signature/outline input closures privately captured cold. No child BodyStructure/Thunk/type schema/constant planning or execution.",
+    "projection": "EnteredModuleAdmission::callable_shared returns existing SourceCallable; private ordinary_module proof checked in SourceCallable::revalidate. SourceCallable.retained is None on new module route because actual lease and syntax input are owned inside canonical fact and cold closure guards serve currentness. Old constructors set None mechanically, no old resolver removed here.",
+    "integration": "Peer goal packet uses sole parent in Module admission; retained_plan borrows proof.parent, callable ordinary_owner exposes actual external parent handle. Root engine Module fallback and normal lowerer guard join remain separately owned; existing legacy namespace safety checks must stay until those joins land."
+  },
+  "currentness_and_authority": [
+    "Incoming Value guard must be the actual selected Value observation guard issued by existing framework and parent/selection checked by query44 provider; opaque SelectedValueDeclaration cannot be made from a supplied digest. This cold API grants source callable metadata only, not Type/const substitution or call execution.",
+    "Selection, signature and canonical Outline guards check actual published relevant leaf stamps without querying or refreshing. Exact actual source/header/context payloads and cached stamps plus body locator/stamp remain checked. Actual inner GeneratedSyntax/RetainedSyntax Arc publication equality prevents substituting another source authority while keeping an old stamp; pointers enter no semantic key.",
+    "SourceCallable still preserves existing source_revision and exact four-row revalidation. No global db.revision equality or namespace census added. Missing body/source/owner/canonical occurrence stays typed Pending/NeedInput, no alternate resolver fallback.",
+    "Canonical declaration facts include nonfunction kinds. Module admission grants Function only after genuine canonical kind/signature/body correspondence. A generated constructor returns Pending(BindingClassification), never a source callable."
+  ],
+  "accounting": [
+    "New optional ordinary_module handle charged unconditionally in retained_lexical_metadata_bytes, including None; actual module admission Arc header/signature/declaration heap/DefKey heap/guard Vec and allocations accounted with checked32MiB bounds before owning clone.",
+    "Module admission owns sole actual parent Arc. Goal must not keep a second hidden Module plan Arc; SourceCallable ordinary_owner is the explicit additional handle making an external shared admission visible to existing LocalPlan retirement traversal.",
+    "Actual raw input Arcs/retained lease remain existing input pin owners, not copied source/index/parser data or a new source registry. Peer independently reviewed input pin/parent routing; no new SourceArtifactRef introduced. Exhaustive quota/retirement execution matrix remains unexecuted."
+  ],
+  "costs": [
+    "Cold scope owner O(log scopes); one target owning-outline scan O(D), generated header/item and canonical row scans O(G), bounded retained anchor/actual-outline and existing lease rows replay. These run only under source query/admission preparation, not normal projection/currentness.",
+    "Value39 binding classification and query44 module admission may independently demand the shared fact projection once each; existing retained lease also outlines its actual target source. Do not call these cold constructors per dynamic entry/phase or describe this as no cold inventory work.",
+    "Pure revalidate is O(K log I + header/context equality) for relevant guard rows/fixed actual declaration rows, actual syntax publication equality and fixed body locator. No source parsing/query/namespace lookup/whole-world scan in projection or revalidate.",
+    "Existing SourceCallable/GenericEnv signature/source metadata clones remain bounded per call; no deep BodyIndex/parser clone added. No measured performance claim."
+  ],
+  "all_eight": {
+    "1": {
+      "symbols": "canonical_module_declaration, prepare_entered_module_function, SourceCallable",
+      "review": "Metadata feeds existing normal call/frame protocol; no evaluator/compiler/assertion route added. MA001/MA007/MA008 removal not claimed."
+    },
+    "2": {
+      "symbols": "GeneratedHeader + DeclaredItemName::require_generated_source + actual Outline; existing retained_original_declaration",
+      "review": "Real original/generated/retained source admission, no literal/break payload executor or macro-only phase. Existing MA004/MA005 held."
+    },
+    "3": {
+      "symbols": "SelectedValueDeclaration, CanonicalModulePreparation, FunctionSignature",
+      "review": "No macro/method-name whitelist, numeric profile, descriptor/materialization or empty-function special case. Both official names are test witnesses only. MA003/MA006 held."
+    },
+    "4": {
+      "symbols": "canonical_module_declaration branches, actual syntax authority, caller/target source independence",
+      "review": "No new original-only exclusion. Actual generated identifier range is distinct from declaration span; retained target and retained caller cases use real inputs/anchors. Missing genuine receipts remain typed. Mixed-origin full runtime acceptance unexecuted."
+    },
+    "5": {
+      "symbols": "prepare_entered_module_function, source_value_goals::shadowed_definition_binding",
+      "review": "Header/signature/body locator only; no executable child body/type schema/type argument/constant/pattern demand. Local classification branch preserved; no pattern engine added. MA002 held."
+    },
+    "6": {
+      "symbols": "EnteredModuleAdmission stored cold by peer query44; callable_shared/revalidate",
+      "review": "No perentry name/source planning in projection. Source helpers must remain memoized under Value39/query44; cold repeated target inventories explicitly accounted, no performance closure."
+    },
+    "7": {
+      "symbols": "CompletedSourceEnvironment::scope_owner, prepared input guards, exact published rows",
+      "review": "No CallResolver construction, name relookup, allsource/source-world map or global revision guard in new helper. Legacy engine double lookup still held until root normal integration."
+    },
+    "8": {
+      "symbols": "actual input Arcs, RetainedSourceLease, admission.parent, SourceCallable ordinary_owner",
+      "review": "Actual immutable source/plan/input handles retained; body handle cloned as small fixed locator. No BodyIndex clone or repeated complete-file node search on entry. Signature metadata copies and cold Outline work named."
+    }
+  },
+  "independent_review": {
+    "path": "worktracks/evidence/2026-10-16-selected-module-admission-independent-review.json",
+    "sha256": "4296771519369a963ce917282d27a8f375f4123a3c99be6df4336dce2c74c3a9",
+    "outcome": "Two concrete findings corrected before freeze; final source reviewed no further concrete authority blocker. Generated name range formerly incorrectly compared to whole declaration; new Option handle formerly uncharged.",
+    "reviewed_final_hashes_match": true
+  },
+  "authored_source_controls": [
+    "official_auto_module_admission_retains_actual_source_guard_without_second_lookup_all_origins: plain/user/wrapper all4editions, actual module identity/source, projection and repeated currentness0querytrace, exact epoch guard refusal, no body/type/schema/constant/executable preparation",
+    "official_auto_retained_module_target_uses_real_lease_and_original_caller: actual retained target/body rows/lease with different caller parse all4editions",
+    "official_nested_statement_macro_retained_caller_selects_original_module_header_only: actual retained caller outputs nonempty, three original module generic base selections, one FunctionSignature provider, no explicit Type/layout/child body work all4editions",
+    "official_generated_constructor_is_canonical_kind_fact_and_never_function_authority: unchanged original plus appended observation, actual generated unit-struct Value constructor returns Struct facts and typed nonfunction Pending all4editions",
+    "canonical_module_projection_rejects_rebound_source_header_context_and_namespace: actual positive receipt with exact wrong supplied projection arguments, expected diagnostic and no executable demand all4editions"
+  ],
+  "gaps": [
+    "No Cargo/compiler/guest/project tests by worker; rustfmt and git diff --check are source formatting/hygiene only",
+    "Root normal CallExpr lowerer/dispatcher module receipt consumption and full recipe relevant guard integration not in this packet",
+    "Full unchanged official roots runtime/all4origins/macro standard nesting, argument suspension/exactonce/panic/cleanup not validated here",
+    "Nested statement generic explicit Type and nominal layout/return authority remain separate prerequisites; module base admission is not call applicability",
+    "Actual source/header/context/body publication mutation, unrelated publication reuse and exhaustive raw admission/callable retirement/quota matrix still need independent execution",
+    "Historical alternate macro evaluators/module resolvers remain held; no feature/task/milestone/native/JIT completion"
+  ]
+}

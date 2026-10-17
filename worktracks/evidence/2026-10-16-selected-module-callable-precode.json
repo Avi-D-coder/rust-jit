@@ -1,0 +1,75 @@
+{
+  "schema": "lrr/precode/selected-module-callable/v1",
+  "status": "pre-code claim and source/API review; implementation newly authorized; no runtime acceptance",
+  "doc": "worktracks/05-trait-goal-engine/common-selected-module-callable-prerequisite.md",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "475cb20a03a4893da192c03e2d5bac757d8c22c58691158a9100f87906a4e560",
+      "bytes": 118800
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "0def3cc4134fdca3a24f9b315c7a4038176b0aee1a4515aafc597ea32a7cc073",
+      "bytes": 24233
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "8b074f7be3ff19ddf4dd87cf0218b620c77fbd752e6132ec2437290b6f7451ef",
+      "bytes": 32838
+    },
+    {
+      "path": "crates/lrr/src/db/entered_call_thunk.rs",
+      "sha256": "637ec62c05ac85dc8de99293f2834ab13c843f43c77a996a406bbff2f67cdea7",
+      "bytes": 3304
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "c01d9428057c14b67c7419d60ca944292216ac6f635dcf19aa3f29a26d754342",
+      "bytes": 35724
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_declarations.rs",
+      "sha256": "68c533d0168d9435805073d9a900639cb568f03fad10b94ce9a359f7735d96ea",
+      "bytes": 25773
+    },
+    {
+      "path": "crates/lrr/src/db/retained_callables.rs",
+      "sha256": "e082aa4465b2bda803d41fc2af655150e882b537a7069bc7433ab9851528b7f9",
+      "bytes": 6382
+    },
+    {
+      "path": "crates/lrr/src/db/retained_body_inputs.rs",
+      "sha256": "b2719b29ec2ffdc176b29cb5bb46c391ccc04f358d4d457dc27e1b12c9f52062",
+      "bytes": 12672
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "920c02fadac32cb34ba6492865d9c87ca44a47577c79a18b29b6a999ad88ad79",
+      "bytes": 27814
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "b6886e49baae39af4ad9fa6fb55750dd0b7bca511172ca7c74b67ae40010faf1",
+      "bytes": 10933
+    }
+  ],
+  "owned": [
+    "crates/lrr/src/frontend/callables.rs",
+    "crates/lrr/src/frontend/entered_module_callables.rs",
+    "new module admission test leaf"
+  ],
+  "guard_gap": "Module branch is not yet admitted by entered_call_thunk shared prepared guard; retain legacy checks until root normal integration. No runtime counterexample inferred.",
+  "canonical_gap": "SelectedValueDeclaration has no DefKey/canonical source receipt; coordinate common actual declaration factor with root Value39 classification, not a parallel resolver.",
+  "all_eight": {
+    "1": "Same ordinary SourceCallable/call/frame route; no evaluator. Legacy MA001/7/8 held.",
+    "2": "All origins require actual source receipts; no scalar or break payload path. MA004/5 held.",
+    "3": "Exact Value-selected declaration; no spelling or macro identity profile. MA003/6 held.",
+    "4": "Original/generated/retained canonical proof and different target/caller parse preserved, missing remains typed.",
+    "5": "FunctionSignature/header/body locator only; no child executable body or pattern preparation. MA002 held.",
+    "6": "One memoized module admission in existing query44; current retained outline replay and repeated source resolver are not acceptable per-entry work.",
+    "7": "Use actual indexed scope owner and relevant guards, never allsource constructor/namespace census/globalrevision authority.",
+    "8": "Actual source/root/plan Arc retained and accounted; no BodyIndex clone, no repeated whole-file node search."
+  },
+  "execution": "No Cargo/compiler/test/guest execution."
+}

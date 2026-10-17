@@ -194,6 +194,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         | QueryKey::PatternPlan(_)
         | QueryKey::Signature(_)
         | QueryKey::BodyStructure(_)
+        | QueryKey::PreparedExplicitTypeArguments(_)
         | QueryKey::EnteredCall(_)
         | QueryKey::DeclaredReturnGoal(_)
         | QueryKey::PreparedReturnPlan(_)

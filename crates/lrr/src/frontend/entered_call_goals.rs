@@ -14,7 +14,11 @@ use crate::{
     },
     frontend::{
         callables::{
-            EnteredLocalCall, ordinary_local::OrdinaryLocalAdmission,
+            EnteredLocalCall,
+            entered_module::{
+                EnteredModuleAdmission, ModuleFunctionPreparation, prepare_entered_module_function,
+            },
+            ordinary_local::OrdinaryLocalAdmission,
             prepare_entered_local_function,
         },
         source_locals::PreparedSourceLocalPlan,
@@ -62,6 +66,106 @@ fn add(bytes: usize, additional: usize) -> Result<usize, Diagnostic> {
         .ok_or_else(crate::runtime::arena::resource)
 }
 
+/// Syntactic argument kind only, never a callee generic ordinal or Type grant.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum EnteredGenericArgumentKind {
+    Type,
+    Const,
+    Lifetime,
+    AssociatedType,
+}
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum EnteredTypeArgumentDemand {
+    TypeSyntax,
+    IndexedSyntax,
+}
+/// Canonical Syntax location of the actual TypeArg.ty node range. The same
+/// first Syntax node at this range is used by PreparedBodyTypeOccurrences;
+/// several wrapper AST nodes may share that range. No Type is resolved here.
+#[derive(Debug)]
+pub(crate) struct EnteredTypeArgumentSite {
+    key: PcKey,
+    range: SourceRange,
+    indexed_range: SourceRange,
+    path: bool,
+}
+impl EnteredTypeArgumentSite {
+    pub(crate) fn key(&self) -> &PcKey {
+        &self.key
+    }
+    pub(crate) fn range(&self) -> SourceRange {
+        self.range
+    }
+    pub(crate) fn indexed_range(&self) -> SourceRange {
+        self.indexed_range
+    }
+    pub(crate) fn is_path(&self) -> bool {
+        self.path
+    }
+}
+#[derive(Debug)]
+pub(crate) enum EnteredTypeArgument {
+    Indexed(EnteredTypeArgumentSite),
+    Pending {
+        range: Option<SourceRange>,
+        demand: EnteredTypeArgumentDemand,
+    },
+}
+/// An original AST observation in the actual owning source (which may itself
+/// be generated/retained). Diagnostic token origin does not grant provenance.
+#[derive(Debug)]
+pub(crate) struct EnteredGenericArgument {
+    kind: EnteredGenericArgumentKind,
+    range: SourceRange,
+    ty: Option<EnteredTypeArgument>,
+}
+impl EnteredGenericArgument {
+    pub(crate) fn kind(&self) -> EnteredGenericArgumentKind {
+        self.kind
+    }
+    pub(crate) fn range(&self) -> SourceRange {
+        self.range
+    }
+    pub(crate) fn type_argument(&self) -> Option<&EnteredTypeArgument> {
+        self.ty.as_ref()
+    }
+}
+impl StableEncode for EnteredGenericArgument {
+    const DOMAIN: &'static str = "lrr/v1/entered-written-generic-argument";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.u8(match self.kind {
+            EnteredGenericArgumentKind::Type => 0,
+            EnteredGenericArgumentKind::Const => 1,
+            EnteredGenericArgumentKind::Lifetime => 2,
+            EnteredGenericArgumentKind::AssociatedType => 3,
+        });
+        e.u32(self.range.start);
+        e.u32(self.range.end);
+        e.option(&self.ty, |e, ty| match ty {
+            EnteredTypeArgument::Indexed(site) => {
+                e.u8(0);
+                e.record(&site.key);
+                e.u32(site.range.start);
+                e.u32(site.range.end);
+                e.u32(site.indexed_range.start);
+                e.u32(site.indexed_range.end);
+                e.u8(u8::from(site.path));
+            }
+            EnteredTypeArgument::Pending { range, demand } => {
+                e.u8(1);
+                e.option(range, |e, range| {
+                    e.u32(range.start);
+                    e.u32(range.end);
+                });
+                e.u8(match demand {
+                    EnteredTypeArgumentDemand::TypeSyntax => 0,
+                    EnteredTypeArgumentDemand::IndexedSyntax => 1,
+                });
+            }
+        });
+    }
+}
+
 /// Actual written source data, not a name-selection or call-entry authority.
 /// Fields are private; only the indexed immutable PathExpr can construct it.
 #[derive(Debug)]
@@ -73,6 +177,7 @@ pub(crate) struct EnteredSourceName {
     indexed_range: SourceRange,
     name: String,
     explicit: Vec<String>,
+    arguments: Vec<EnteredGenericArgument>,
 }
 impl EnteredSourceName {
     pub(crate) fn node(&self) -> NodeId {
@@ -90,8 +195,11 @@ impl EnteredSourceName {
     pub(crate) fn explicit(&self) -> &[String] {
         &self.explicit
     }
+    pub(crate) fn arguments(&self) -> &[EnteredGenericArgument] {
+        &self.arguments
+    }
     fn heap_bytes(&self) -> Result<usize, Diagnostic> {
-        self.explicit.iter().try_fold(
+        let bytes = self.explicit.iter().try_fold(
             add(
                 self.name.capacity(),
                 self.explicit
@@ -100,11 +208,18 @@ impl EnteredSourceName {
                     .ok_or_else(crate::runtime::arena::resource)?,
             )?,
             |bytes, argument| add(bytes, argument.capacity()),
+        )?;
+        add(
+            bytes,
+            self.arguments
+                .capacity()
+                .checked_mul(std::mem::size_of::<EnteredGenericArgument>())
+                .ok_or_else(crate::runtime::arena::resource)?,
         )
     }
 }
 impl StableEncode for EnteredSourceName {
-    const DOMAIN: &'static str = "lrr/v2/entered-call-written-source-name";
+    const DOMAIN: &'static str = "lrr/v3/entered-call-written-source-name";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.u32(self.node.0);
         e.u32(self.range.start);
@@ -113,14 +228,12 @@ impl StableEncode for EnteredSourceName {
         e.u32(self.indexed_range.end);
         e.string(&self.name);
         e.sequence(&self.explicit, |e, argument| e.string(argument));
+        e.sequence(&self.arguments, |e, argument| e.record(argument));
     }
 }
 enum Selection {
     Local(Arc<OrdinaryLocalAdmission>),
-    Module {
-        plan: Arc<PreparedSourceLocalPlan>,
-        declaration: SelectedValueDeclaration,
-    },
+    Module(Arc<EnteredModuleAdmission>),
     Binding {
         plan: Arc<PreparedSourceLocalPlan>,
         identity: Digest,
@@ -136,8 +249,74 @@ pub(crate) enum EnteredCallSelection<'a> {
     Binding(Digest),
     Pending(ValueGoalDemand),
 }
-/// Not Clone: the single physical parent handle is either the Local proof's
-/// handle or the nonlocal variant's handle. SourceArtifactRef::LocalPlan must
+/// Retained genuine selection for installed ordinary calls. The admission Arc
+/// shares its existing parent handle with Q44; this target adds no parent Arc.
+/// Q47 separately retains one visible parent handle for source-root accounting.
+#[derive(Debug)]
+pub(crate) struct EnteredCallTarget {
+    admission: TargetAdmission,
+    identity: Digest,
+    name: String,
+    explicit: Vec<String>,
+    bytes: usize,
+}
+#[derive(Debug)]
+enum TargetAdmission {
+    Local(Arc<OrdinaryLocalAdmission>),
+    Module(Arc<EnteredModuleAdmission>),
+}
+impl EnteredCallTarget {
+    pub(crate) fn metadata_bytes(&self) -> usize {
+        self.bytes
+    }
+    pub(crate) fn require_written(&self, name: &str, syntax: &[String]) -> Result<(), Diagnostic> {
+        if self.name != name || self.explicit != syntax {
+            return Err(fault("retained call written target differs"));
+        }
+        Ok(())
+    }
+    /// Reached coordinator only; pure preparation never invokes this method.
+    /// No Value/Type goal refetch, name resolution or executable body lowering.
+    pub(super) fn callable(
+        &self,
+        db: &mut Database,
+    ) -> Result<Box<crate::frontend::callables::SourceCallable>, Diagnostic> {
+        match &self.admission {
+            TargetAdmission::Local(proof) => {
+                proof.revalidate(db)?;
+                db.publish_ordinary_local_function(proof)?;
+                proof.callable_shared(db)
+            }
+            TargetAdmission::Module(proof) => {
+                proof.revalidate(db)?;
+                proof.callable_shared(db)
+            }
+        }
+    }
+}
+impl StableEncode for EnteredCallTarget {
+    const DOMAIN: &'static str = "lrr/v1/retained-entered-call-target";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.digest(self.identity);
+        e.u8(match &self.admission {
+            TargetAdmission::Local(_) => 0,
+            TargetAdmission::Module(_) => 1,
+        });
+        e.string(&self.name);
+        e.sequence(&self.explicit, |e, value| e.string(value));
+    }
+}
+fn retained_string(value: &str) -> Result<String, Diagnostic> {
+    add(0, value.len())?;
+    let mut result = String::new();
+    result
+        .try_reserve_exact(value.len())
+        .map_err(|_| crate::runtime::arena::resource())?;
+    result.push_str(value);
+    Ok(result)
+}
+/// Not Clone: the single physical parent handle is in a Local/Module proof
+/// or the Binding/Pending variant. SourceArtifactRef::LocalPlan must
 /// account that actual handle, not a hidden duplicate or extracted proof Arc.
 pub struct EnteredCallGoal {
     key: PcKey,
@@ -170,30 +349,114 @@ impl EnteredCallGoal {
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
     }
+    /// Cold capture only after the owning indexed call has been proved. The
+    /// private variant preserves selection; written strings are comparisons,
+    /// never a source-name resolution or Type authority.
+    pub(crate) fn retained_target(&self) -> Result<Arc<EnteredCallTarget>, Diagnostic> {
+        let (admission, proof_bytes) = match &self.selection {
+            Selection::Local(proof) => (
+                TargetAdmission::Local(Arc::clone(proof)),
+                proof.metadata_bytes(),
+            ),
+            Selection::Module(proof) => (
+                TargetAdmission::Module(Arc::clone(proof)),
+                proof.metadata_bytes(),
+            ),
+            Selection::Binding { .. } | Selection::Pending { .. } => {
+                return Err(fault(
+                    "retained call target requires an admitted declaration",
+                ));
+            }
+        };
+        let written = self
+            .target
+            .as_ref()
+            .ok_or_else(|| fault("retained call target source absent"))?;
+        let mut bytes = add(std::mem::size_of::<EnteredCallTarget>(), ARC_HEADER)?;
+        bytes = add(bytes, proof_bytes)?;
+        let vector_bytes = written
+            .explicit
+            .len()
+            .checked_mul(std::mem::size_of::<String>())
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let mut preflight = add(add(bytes, written.name.len())?, vector_bytes)?;
+        for value in &written.explicit {
+            preflight = add(preflight, value.len())?;
+        }
+        add(0, preflight)?;
+        let name = retained_string(&written.name)?;
+        bytes = add(bytes, name.capacity())?;
+        let mut explicit = Vec::new();
+        explicit
+            .try_reserve_exact(written.explicit.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        bytes = add(
+            bytes,
+            explicit
+                .capacity()
+                .checked_mul(std::mem::size_of::<String>())
+                .ok_or_else(crate::runtime::arena::resource)?,
+        )?;
+        for value in &written.explicit {
+            // Account existing allocations and the next allocation before copy.
+            add(bytes, value.len())?;
+            let value = retained_string(value)?;
+            bytes = add(bytes, value.capacity())?;
+            explicit.push(value);
+        }
+        Ok(Arc::new(EnteredCallTarget {
+            admission,
+            identity: self.fingerprint,
+            name,
+            explicit,
+            bytes,
+        }))
+    }
+    /// Actual Q39 selection closure only. Module canonical/signature/body
+    /// authority additionally requires require_current/callable admission.
     pub(crate) fn guard(&self) -> &Arc<PreparedInputGuard> {
         &self.guard
     }
     pub(crate) fn value_identity(&self) -> Option<Digest> {
         self.value
     }
+    /// Retained written metadata only. Module/Binding/Pending facts do not gain
+    /// lowering, Type/const argument, callable or entry authority through this.
+    /// In particular a body-local Type shadowing a primitive spelling still
+    /// needs its actual occurrence proof, never module string substitution.
+    pub(crate) fn written_source_name(&self) -> Option<&EnteredSourceName> {
+        self.target.as_ref()
+    }
     pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
         match &self.selection {
             Selection::Local(proof) => proof.parent(),
-            Selection::Module { plan, .. }
-            | Selection::Binding { plan, .. }
-            | Selection::Pending { plan, .. } => plan,
+            Selection::Module(proof) => proof.parent(),
+            Selection::Binding { plan, .. } | Selection::Pending { plan, .. } => plan,
         }
     }
     pub(crate) fn selection(&self) -> EnteredCallSelection<'_> {
         match &self.selection {
             Selection::Local(proof) => EnteredCallSelection::Local(proof),
-            Selection::Module { declaration, .. } => EnteredCallSelection::Module(declaration),
+            Selection::Module(proof) => EnteredCallSelection::Module(proof.declaration()),
             Selection::Binding { identity, .. } => EnteredCallSelection::Binding(*identity),
             Selection::Pending { demand, .. } => EnteredCallSelection::Pending(*demand),
         }
     }
+    /// Declaration-only facts for caller Type arguments. No body locator
+    /// publication, SourceCallable construction or executable preparation.
+    pub(crate) fn signature(&self) -> Option<&crate::syntax::signatures::FunctionSignature> {
+        match &self.selection {
+            Selection::Local(proof) => Some(proof.signature()),
+            Selection::Module(proof) => Some(proof.signature()),
+            Selection::Binding { .. } | Selection::Pending { .. } => None,
+        }
+    }
     pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
-        self.guard.require_current(db)
+        self.guard.require_current(db)?;
+        if let Selection::Module(proof) = &self.selection {
+            proof.revalidate(db)?;
+        }
+        Ok(())
     }
     /// The reached coordinator must publish the missing exact body locator
     /// first. This reuses the immutable proof without moving it out of a memo;
@@ -207,6 +470,21 @@ impl EnteredCallGoal {
             Selection::Local(proof) => proof.callable_shared(db),
             _ => Err(fault(
                 "entered call is not an admitted local source function",
+            )),
+        }
+    }
+    /// Reached coordinator projection only. The Q39 guard proves selection;
+    /// the module admission separately checks actual canonical/signature/body
+    /// authority before constructing the SAME SourceCallable as other calls.
+    pub(crate) fn module_callable(
+        &self,
+        db: &mut Database,
+    ) -> Result<Box<crate::frontend::callables::SourceCallable>, Diagnostic> {
+        self.require_current(db)?;
+        match &self.selection {
+            Selection::Module(proof) => proof.callable_shared(db),
+            _ => Err(fault(
+                "entered call is not an admitted module source function",
             )),
         }
     }
@@ -232,6 +510,24 @@ impl EnteredCallGoal {
         let Selection::Local(proof) = &self.selection else {
             return Ok(None);
         };
+        if proof.site() != &self.key {
+            return Err(fault("entered local admission site differs"));
+        }
+        self.indexed_source_name(index, phase)
+    }
+    /// One actual ordinary call/path proof for admitted Local and Module
+    /// declarations. Metadata never upgrades a Binding or Pending selection.
+    pub(crate) fn indexed_source_name(
+        &self,
+        index: &BodyIndex,
+        phase: &PcKey,
+    ) -> Result<Option<&EnteredSourceName>, Diagnostic> {
+        if matches!(
+            &self.selection,
+            Selection::Binding { .. } | Selection::Pending { .. }
+        ) {
+            return Ok(None);
+        }
         if self.key.phase != 0
             || phase.body != self.key.body
             || phase.node != self.key.node
@@ -245,7 +541,6 @@ impl EnteredCallGoal {
                 .index()
                 .semantic_identity()
                 != self.structure
-            || proof.site() != &self.key
             || !matches!(
                 Phase::from_code(phase.phase),
                 Phase::Entry | Phase::Operand(_)
@@ -288,11 +583,9 @@ impl EnteredCallGoal {
             // Includes the admission Arc header and the guard allocation/header;
             // self.guard aliases that existing allocation, not another payload.
             Selection::Local(proof) => bytes = add(bytes, proof.metadata_bytes())?,
-            Selection::Module { declaration, .. } => {
-                bytes = add(bytes, declaration.source().profile.semantics.capacity())?;
-                bytes = add(bytes, declaration.context().scope.heap_bytes())?;
-                bytes = add(bytes, add(self.guard.metadata_bytes(), ARC_HEADER)?)?;
-            }
+            // Admission metadata includes its Arc header and selection guard;
+            // self.guard aliases that allocation, never another parent handle.
+            Selection::Module(proof) => bytes = add(bytes, proof.metadata_bytes())?,
             Selection::Binding { .. } | Selection::Pending { .. } => {
                 bytes = add(bytes, add(self.guard.metadata_bytes(), ARC_HEADER)?)?;
             }
@@ -351,7 +644,7 @@ fn encode_demand(demand: ValueGoalDemand, e: &mut StableEncoder) {
     }
 }
 impl StableEncode for EnteredCallGoal {
-    const DOMAIN: &'static str = "lrr/v2/entered-ordinary-source-call-goal";
+    const DOMAIN: &'static str = "lrr/v4/entered-ordinary-source-call-goal";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.structure);
@@ -373,13 +666,9 @@ impl StableEncode for EnteredCallGoal {
                 e.u32(proof.item().declaration_span.start);
                 e.u32(proof.item().declaration_span.end);
             }
-            Selection::Module { declaration, .. } => {
+            Selection::Module(proof) => {
                 e.u8(1);
-                e.record(declaration.definition());
-                e.record(declaration.source());
-                e.digest(declaration.header());
-                e.record(declaration.context());
-                e.option(&declaration.owner(), |e, owner| e.record(*owner));
+                e.record(proof.as_ref());
             }
             Selection::Binding { identity, .. } => {
                 e.u8(2);
@@ -391,6 +680,89 @@ impl StableEncode for EnteredCallGoal {
             }
         }
     }
+}
+
+fn written_argument(
+    plan: &PreparedSourceLocalPlan,
+    argument: ast::GenericArg,
+) -> Result<EnteredGenericArgument, Diagnostic> {
+    let source = plan.context().source();
+    let argument_range = range(argument.syntax().text_range());
+    if !source.body().range.contains(argument_range) {
+        return Err(fault("written generic argument escapes actual body"));
+    }
+    let (kind, ty) = match argument {
+        ast::GenericArg::TypeArg(argument) => {
+            let observation = match argument.ty() {
+                None => EnteredTypeArgument::Pending {
+                    range: None,
+                    demand: EnteredTypeArgumentDemand::TypeSyntax,
+                },
+                Some(ty) => {
+                    let actual = range(ty.syntax().text_range());
+                    if !argument_range.contains(actual) || !source.body().range.contains(actual) {
+                        return Err(fault("written Type argument escapes actual argument/body"));
+                    }
+                    let relative = SourceRange::checked(
+                        actual
+                            .start
+                            .checked_sub(source.body().range.start)
+                            .ok_or_else(crate::runtime::arena::resource)?,
+                        actual
+                            .end
+                            .checked_sub(source.body().range.start)
+                            .ok_or_else(crate::runtime::arena::resource)?,
+                    )?;
+                    let canonical = source
+                        .index()
+                        .nodes_at_range(relative)
+                        .find(|node| node.role == NodeRole::Syntax);
+                    match canonical {
+                        None => EnteredTypeArgument::Pending {
+                            range: Some(actual),
+                            demand: EnteredTypeArgumentDemand::IndexedSyntax,
+                        },
+                        Some(node) => {
+                            let projected = SourceRange::checked(
+                                source
+                                    .body()
+                                    .range
+                                    .start
+                                    .checked_add(node.range.start)
+                                    .ok_or_else(crate::runtime::arena::resource)?,
+                                source
+                                    .body()
+                                    .range
+                                    .start
+                                    .checked_add(node.range.end)
+                                    .ok_or_else(crate::runtime::arena::resource)?,
+                            )?;
+                            if projected != actual || node.range != relative {
+                                return Err(fault(
+                                    "written Type argument indexed projection differs",
+                                ));
+                            }
+                            EnteredTypeArgument::Indexed(EnteredTypeArgumentSite {
+                                key: source.index().pc(node.id, Phase::Entry)?,
+                                range: actual,
+                                indexed_range: relative,
+                                path: matches!(ty, ast::Type::PathType(_)),
+                            })
+                        }
+                    }
+                }
+            };
+            (EnteredGenericArgumentKind::Type, Some(observation))
+        }
+        ast::GenericArg::ConstArg(_) => (EnteredGenericArgumentKind::Const, None),
+        ast::GenericArg::LifetimeArg(_) => (EnteredGenericArgumentKind::Lifetime, None),
+        ast::GenericArg::AssocTypeArg(_) => (EnteredGenericArgumentKind::AssociatedType, None),
+    };
+    Ok(EnteredGenericArgument {
+        kind,
+        range: argument_range,
+        ty,
+    })
 }
 
 fn written_target(
@@ -431,6 +803,16 @@ fn written_target(
             .checked_mul(std::mem::size_of::<String>())
             .ok_or_else(crate::runtime::arena::resource)?,
     )?;
+    bytes = add(
+        bytes,
+        count
+            .checked_mul(std::mem::size_of::<EnteredGenericArgument>())
+            .ok_or_else(crate::runtime::arena::resource)?,
+    )?;
+    let mut arguments = Vec::new();
+    arguments
+        .try_reserve_exact(count)
+        .map_err(|_| crate::runtime::arena::resource())?;
     let mut explicit = Vec::new();
     explicit
         .try_reserve_exact(count)
@@ -439,6 +821,7 @@ fn written_target(
         for argument in list.generic_args() {
             bytes = add(bytes, usize::from(argument.syntax().text_range().len()))?;
             explicit.push(argument.syntax().text().to_string());
+            arguments.push(written_argument(plan, argument)?);
         }
     }
     let actual_range = range(expression.syntax().text_range());
@@ -473,6 +856,7 @@ fn written_target(
         indexed_range,
         name: name.text().to_string(),
         explicit,
+        arguments,
     };
     target.heap_bytes()?;
     Ok(Some(target))
@@ -555,18 +939,43 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGo
         Some(path) => checked!(written_target(&parent, path)),
         None => None,
     };
-    if matches!(selected, EnteredLocalCall::Local(_)) && target.is_none() {
-        return QueryPoll::Ready(Err(fault("entered local call exact written name absent")));
+    if matches!(
+        selected,
+        EnteredLocalCall::Local(_) | EnteredLocalCall::Module(_)
+    ) && target.is_none()
+    {
+        return QueryPoll::Ready(Err(fault("entered source call exact written name absent")));
     }
     let call_range = call.range;
     let structure = index.semantic_identity();
     let source = parent.context().source().identity();
     let selection = match selected {
         EnteredLocalCall::Local(proof) => Selection::Local(Arc::from(proof)),
-        EnteredLocalCall::Module(declaration) => Selection::Module {
-            plan: parent,
-            declaration,
-        },
+        EnteredLocalCall::Module(declaration) => {
+            match ready!(prepare_entered_module_function(
+                db,
+                Arc::clone(&parent),
+                &declaration,
+                Arc::clone(&guard)
+            )) {
+                ModuleFunctionPreparation::Ready(proof) => {
+                    if !Arc::ptr_eq(proof.parent(), &parent)
+                        || !Arc::ptr_eq(proof.selection_guard(), &guard)
+                        || proof.declaration().identity() != declaration.identity()
+                    {
+                        return QueryPoll::Ready(Err(fault(
+                            "entered module admission owner/selection differs",
+                        )));
+                    }
+                    checked!(proof.revalidate(db));
+                    Selection::Module(proof)
+                }
+                ModuleFunctionPreparation::Pending(demand) => Selection::Pending {
+                    plan: parent,
+                    demand,
+                },
+            }
+        }
         EnteredLocalCall::Binding(identity) => Selection::Binding {
             plan: parent,
             identity,
@@ -783,7 +1192,7 @@ mod tests {
             binding.selection(),
             EnteredCallSelection::Binding(_)
         ));
-        for site in &sites[2..] {
+        for site in &sites[2..3] {
             let pending = ready(prepare(&mut db, site));
             assert!(matches!(
                 pending.selection(),
@@ -796,6 +1205,7 @@ mod tests {
                     .is_none()
             );
             assert!(pending.local_callable(&mut db).is_err());
+            assert!(pending.module_callable(&mut db).is_err());
         }
         assert!(
             module
@@ -811,6 +1221,39 @@ mod tests {
         );
         assert!(module.local_callable(&mut db).is_err());
         assert!(binding.local_callable(&mut db).is_err());
+        assert!(binding.module_callable(&mut db).is_err());
+        let Selection::Module(proof) = &module.selection else {
+            panic!()
+        };
+        assert!(Arc::ptr_eq(module.retained_plan(), proof.parent()));
+        assert!(Arc::ptr_eq(module.guard(), proof.selection_guard()));
+        let parent_handles = Arc::strong_count(module.retained_plan());
+        let before_projection = db.trace.events.len();
+        let callable = module.module_callable(&mut db).unwrap();
+        assert_eq!(callable.identity(), proof.declaration().identity());
+        assert_eq!(
+            Arc::strong_count(module.retained_plan()),
+            parent_handles + 1
+        );
+        assert_eq!(db.trace.events.len(), before_projection);
+        drop(callable);
+        assert_eq!(Arc::strong_count(module.retained_plan()), parent_handles);
+        // Explicit syntax no longer blocks the SAME Q39 base-name fact. This
+        // is a module declaration observation, not permission to resolve its
+        // written generic argument or execute it through a name fallback.
+        let generic = ready(prepare(&mut db, &sites[3]));
+        assert!(matches!(
+            generic.selection(),
+            EnteredCallSelection::Module(_)
+        ));
+        assert_eq!(generic.written_source_name().unwrap().explicit(), ["u8"]);
+        assert!(
+            generic
+                .local_source_name(&db, index, &sites[3])
+                .unwrap()
+                .is_none()
+        );
+        assert!(generic.local_callable(&mut db).is_err());
         no_child_code(&db, start);
     }
     #[test]

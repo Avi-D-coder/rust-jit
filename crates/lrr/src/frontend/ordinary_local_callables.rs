@@ -84,6 +84,9 @@ impl OrdinaryLocalAdmission {
     pub(crate) fn source(&self) -> &ParseKey {
         &self.source
     }
+    pub(crate) fn signature(&self) -> &FunctionSignature {
+        &self.signature
+    }
     pub(crate) fn query_revision(&self) -> u64 {
         self.query_revision
     }
@@ -172,6 +175,7 @@ impl OrdinaryLocalAdmission {
             },
             lexical: None,
             ordinary_local: Some(Arc::clone(self)),
+            ordinary_module: None,
             ordinary_owner: Some(Arc::clone(self.parent())),
             retained: None,
         };

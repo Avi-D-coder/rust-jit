@@ -13,6 +13,7 @@ pub(super) struct LocalBodyContext {
     owner_stamp: Digest,
     definition: Digest,
     depth: u16,
+    retained_readiness: Option<Digest>,
     identity: Digest,
 }
 impl LocalBodyContext {
@@ -24,6 +25,9 @@ impl LocalBodyContext {
     }
     pub(super) fn identity(&self) -> Digest {
         self.identity
+    }
+    pub(super) fn has_retained_readiness(&self) -> bool {
+        self.retained_readiness.is_some()
     }
     fn owner_matches(&self, db: &mut Database) -> bool {
         let key = InputKey::LocalDeclarationOwner(self.definition);
@@ -141,6 +145,21 @@ impl LocalBodyContext {
             {
                 return Err(fault("local body owning declaration fingerprint differs"));
             }
+            // Ancestor entry readiness does not prepare this function's own
+            // pending macros. Inspect the actual residual structural calls
+            // once, at cold admission, and retain the immutable proof.
+            let retained_readiness = match source.source_receipt.as_deref() {
+                Some(InputValue::RetainedSyntax(unit)) => {
+                    if unit.key() != parse {
+                        return Err(fault("local readiness retained source key differs"));
+                    }
+                    Some(
+                        unit.prepared()
+                            .require_closed_function_body(source.parsed(), handle.range)?,
+                    )
+                }
+                _ => None,
+            };
             let mut identity = StableEncoder::new("lrr/v1/entered-local-body-parent");
             identity.digest(environment.identity());
             identity.digest(parent.source_identity());
@@ -152,12 +171,14 @@ impl LocalBodyContext {
             identity.record(parse);
             identity.u32(row.scope);
             identity.record(&handle.key());
+            identity.option(&retained_readiness, |e, proof| e.digest(*proof));
             Ok(Self {
                 parent,
                 owner,
                 owner_stamp,
                 definition,
                 depth,
+                retained_readiness,
                 identity: identity.finish(),
             })
         })())

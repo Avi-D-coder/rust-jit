@@ -1726,8 +1726,8 @@ impl ParsedFile {
         key: &PcKey,
         goal: &crate::frontend::entered_call_goals::EnteredCallGoal,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        goal.indexed_local_source_name(index, key)?
-            .ok_or_else(|| error("source call consumer lacks local target proof"))?;
+        goal.indexed_source_name(index, key)?
+            .ok_or_else(|| error("source call consumer lacks indexed target proof"))?;
         self.initial_thunk_admission(
             body,
             index,
@@ -2570,8 +2570,8 @@ impl ParsedFile {
                     .unwrap_or_default();
                 if let Some(goal) = source_goal {
                     let target = goal
-                        .indexed_local_source_name(index, key)?
-                        .ok_or_else(|| error("source call goal did not admit this local target"))?;
+                        .indexed_source_name(index, key)?
+                        .ok_or_else(|| error("source call goal did not admit this indexed target"))?;
                     if target.node() != id_for(index, body, path.syntax())?
                         || target.range()
                             != crate::syntax::ast_adapter::range(path.syntax().text_range())
