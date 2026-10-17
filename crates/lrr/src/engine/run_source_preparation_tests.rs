@@ -439,3 +439,6 @@ fn retired_local_preparation_roots_are_charged_until_last_raw_source_context_or_
 
 #[path = "run_stock_module_cast_tests.rs"]
 mod stock_module_cast_tests;
+
+#[path = "run_stock_call_observer_tests.rs"]
+mod stock_call_observer_tests;

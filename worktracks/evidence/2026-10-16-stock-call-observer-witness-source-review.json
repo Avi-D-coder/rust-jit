@@ -1,0 +1,93 @@
+{
+  "status": "Source-only self separate static review after implementation; no Cargo/compiler/tests/production edits/runtime acceptance",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/generics/issue-94923.rs",
+      "sha256": "df85ac9c30d908aeabde7e9d015f42ef767852fd72f906fc1089cf19167c3e47",
+      "bytes": 864
+    },
+    {
+      "path": "crates/lrr/src/engine/run_stock_call_observer_tests.rs",
+      "sha256": "cd006dfd25692dd2e498c884a286dde298923492bcbb986bb897f285031d4c38",
+      "bytes": 6076
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation_tests.rs",
+      "sha256": "8e674e308193ad4d9f220a80136007983003d5f39db2c0d12667768434968d4a",
+      "bytes": 18839
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "sha256": "016905e2796814f557a3ddecd5ac111319e8c25c701872b2e5e011f86be6dad5",
+      "bytes": 282135
+    }
+  ],
+  "import": {
+    "command": "python3 tools/import_rustc_tests.py tests/ui/generics/issue-94923.rs",
+    "terminal": "exit0: Copied1case and verified4files at ae0fe511; no execution claimed",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "case_directives": [
+      "//@ run-pass",
+      "//@ compile-flags: -C opt-level=3"
+    ],
+    "siblings_auxiliaries": "No aux/revision directives or expected sibling outputs; importer inventories those automatically. LICENSE-MIT/LICENSE-APACHE/COPYRIGHT recopied identical.",
+    "preservation": "Manifest old860files/338cases all entries identical; exact1newfile/1newcase. No existing acceptance metadata changed; new lrr pending/nativeunexecuted."
+  },
+  "harness": {
+    "entry": "Existing start(COMPOSITION,edition,main) actual canonical entry/common retained source preparation; existing completed helper treats Fault/Panic/NeedInput as failure. No selected-bodyreplacement; original fixturebytes compared before/after actualwholemain.",
+    "source": "Nine actual module f0..f8 definitions from real original Outline exactlyunique; actualbody/index/profileedition, no bodyquery for those before reached runtime. After runtime each canonical current body must have actual provider BodyStructure+Thunk evidence BEFORE any observerquery.",
+    "result": "Full unchanged main computes original y and its own assert_eq(y,348); no output substituted. Actual Unit completed terminal and zero legacy Assert mandated.",
+    "counters": "511 explicit same-target source calls known from original composition tree; aggregate Seal/CheckParameters/Prepare/Advance>=511 permits genuine implicitIterator calls. Peakguestframes>=10; start==complete, returncleanup>=512, paniccleanup0, fullpending/callmetadata/scopesretired. Existing actual RunCapture.complete required.",
+    "quota": "Unstarted actual Frame.set_fuel_limit64m, never replenished duringrun and nestedframes share actual samefuel; fixedbudget needed for256000 unchanged f0loopiterations. No nativeoptimizer execution; opt3 directive preserved original and separate compilercontract.",
+    "editions": "Separate2015baseline selector. Validator instructed only after actual2015PASS run later2018/21/24 selector. No tests run by worker.",
+    "limits": "Aggregate counters do NOT demonstrate per-bodycall multiplicity or each argument effectexactonce; no runtime suspension or deliberate publication observer negative controls. All9 upstream functions are reached so no invented unusedbody. No blanket postrun unrelatedbodyrefusal: genuine Iterator/stdassert preparation may introduce legitimate sourcebodies."
+  },
+  "api_static_review": [
+    "PreparedSourceView::selection and outline actualgetter, module source retainedhandle borrowed only inside preexecution scalarDefKey collection; no borrow retained across mutable execution.",
+    "Frame::set_fuel_limit existing check requires Running/unshared/used0/counters0; called once before execution.",
+    "RunMachine::enable_runtime_capture existing freshzerooperation guard, fixedscalar capture no guest semantic alternative. CaptureFacts::complete callablepubcrate; no directprivatefieldmutation.",
+    "BodyHandle publicdef_key and key returns actual BodyKey; actual inputvariantchecked. No bodyindex clone, no AST reparse in leaf.",
+    "Parenttest change is exactEOF2line hook only, parenthelpers/inheritedrootbegin_epoch1 preserved."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "finding": "No new evaluator/assertoperand compiler. Actual original stdassert must flow ordinary expanded source; zero legacy Assert required."
+    },
+    {
+      "mode": 2,
+      "finding": "Full unchanged source/actual canonical main; no fake body/text expansion/literal executor."
+    },
+    {
+      "mode": 3,
+      "finding": "Real source generic calls with distinct tupleType args and real canonicaldefinitions; no fixture-name method/numericdispatch rule."
+    },
+    {
+      "mode": 4,
+      "finding": "Test-only original witness; no production generatedsource refusal, no generatedcontextmatrixcompletion claim."
+    },
+    {
+      "mode": 5,
+      "finding": "Beforeentry callee executable bodies stay cold; no observer queries populate them early. Runtime normal eager args/sourcecalls; no pattern changes."
+    },
+    {
+      "mode": 6,
+      "finding": "Uses actual existing entry memo/sharedimmutable source route, no perphase planning helper added. Provider trace postrun checked without freshbodyqueries."
+    },
+    {
+      "mode": 7,
+      "finding": "No production world census. Testcold nine-definition Outlinefilter and bounded9body tracing; no installeddispatch scan or invalidation changes."
+    },
+    {
+      "mode": 8,
+      "finding": "Actual source/index/bodyArcs shared; test collects nine scalaridentities, no BodyIndex deepclone or AST wholefilelookup. Existing sourcehelper remains unchanged."
+    }
+  ],
+  "gaps": [
+    "TupleParam symbolicType goals, Range IntoIterator/forloop, compoundmultiply/remainder assignments and actual stdassert outputclosure may expose shared prerequisites. Any missinginput/unsupported is failure, not acceptedpartial.",
+    "No Cargo/native/interpreter terminal on this packet yet; no fixture/runtime/milestone/JIT/pass claim.",
+    "No usermacro/wrapper/stdmacro crosscontextmatrix or observednoargumentreplay control from this single unchangedfile.",
+    "Inherited adapter Salsa arena/aggregate source preparation accounting holds remain."
+  ]
+}

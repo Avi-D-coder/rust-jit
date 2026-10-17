@@ -1,0 +1,58 @@
+{
+  "claim": "LOCAL-024 coordinated root assignment; no shared production ownership",
+  "tasks": [
+    "T032",
+    "M017",
+    "M018"
+  ],
+  "witness": {
+    "path": "tests/ui/generics/issue-94923.rs",
+    "upstream": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "sha256": "df85ac9c30d908aeabde7e9d015f42ef767852fd72f906fc1089cf19167c3e47",
+    "directives": [
+      "run-pass",
+      "compile-flags: -C opt-level=3"
+    ],
+    "auxiliaries": "No aux-build/proc-macro/revision directives or sibling expected outputs observed; importer checks automatically.",
+    "license": "Existing original MIT OR Apache-2.0/COPYRIGHT retained unchanged."
+  },
+  "invariant": "Full unchanged runtime main must evaluate repeated same-target nested argument calls through ordinary source/Type/call/body/continuation/cleanup pipeline. Outer selected-call proof may outlive inner target publication; no name relookup or argument replay shortcut. Unsupported startup/runtime is failure, never acceptance.",
+  "ordinary_route": [
+    "existing test setup + common SourceDiscovery actual compiler/catalog",
+    "cli::retained_entry::prepare actual completed input34/Query48/admit/publish",
+    "RunMachine::start_with_discovery",
+    "normal indexed CallPrepare/CallAdvance/CallSeal +Q44/Q47",
+    "ordinary interpreter action/frame/argumentpacket",
+    "SuspendedCall.pending/return cleanup ownership"
+  ],
+  "changes": [
+    "Use tools/import_rustc_tests.py tests/ui/generics/issue-94923.rs, preserving ALL old manifest entries/metadata.",
+    "NEW engine/run_stock_call_observer_tests.rs only +EOF2line hook under existing run_source_preparation_tests.",
+    "Bounded evidence/handoff/frozen packet. No production or imported original edits."
+  ],
+  "authority": "Actual original main selected by canonical entry; true module f0..f8 DefKeys/headers/body locators; real indexed runtime and whole upstream assert_eq(y,348). No selected body replacement, native execution or synthetic root. Required legacy Assert count0.",
+  "cold_hot_cost": "Test-only assertions inspect actual source/index/counters. No queries for callee executable bodies before entry; signatures may stay cold metadata. Existing start fuel1m raised via existing frame.set_fuel_limit before any execution to64m fixed cap for256000 actual f0 iterations; no fuel replenishment or guest source mutation. No perf/scaling claim.",
+  "arithmetic_oracles": "Full main original ordinary assertion validates348. Actual source calls count2^9-1=511; f8..f0 call entries count1,2,...256. Each has1runtime arg: expect CallSeal/Prepare/Advance/CheckParameters511, subject to actual shared ordinary AST opcode semantics; no assert-specific expectedoutput hardcoding.",
+  "acceptance": "Run independent2015 baseline first; only after terminalPASS run separately exposed remaining2018/2021/2024 selector. No Cargo by worker. Any actual missing tuplegeneric/foriteration/compoundoperation/commonassert source prerequisite remains failure and next commonmechanism, not skipped fixture.",
+  "all8_precode": [
+    "No assertion operand compiler/evaluator; actual original assert uses ordinary expansion.",
+    "No syntheticbody/literalexecutor; unchangedfullsource.",
+    "Real canonical signatures/tupleType rows, not name/numeric whitelist.",
+    "No new generatedsource refusal; this initial original witness does not close contextmatrix.",
+    "No early executable callee/argument branch preparation; assert preentry cold.",
+    "Existing common source memo; test observes counters after fullrun, no installedsourceplanning introduced.",
+    "No production source/globalnamespace census; tests only bounded9 actualdefinitions.",
+    "Share real Arc source/index; no immutableBodyIndex copies."
+  ],
+  "before": {
+    "manifest_sha256": "e743843c9d3ac2480bd2b272356000b0475274660b601f9bc7670678c5acb306",
+    "files": 860,
+    "cases": 338,
+    "parent_hook_sha256": "1571e688744ddd7032fd305a679ac07d475f81a8a63c51c458091301a9285d17"
+  },
+  "holds": [
+    "No runtime featurecompletion/no currentmilestone/JIT acceptance.",
+    "Tuple sourceTypes/forloop/mulassign/remainderassign/ordinarycoreassert readiness may expose genuine missing shared prerequisites.",
+    "Argumenteffects/panic/NeedInput observer negative controls remain separate from unchanged original runtime contract."
+  ]
+}

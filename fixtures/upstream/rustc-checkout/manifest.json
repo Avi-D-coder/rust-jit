@@ -3084,6 +3084,12 @@
       "bytes": 324
     },
     {
+      "path": "tests/ui/generics/issue-94923.rs",
+      "git_blob": "686725dfe3ba63378a199a768b4fa9cbe15d5529",
+      "sha256": "df85ac9c30d908aeabde7e9d015f42ef767852fd72f906fc1089cf19167c3e47",
+      "bytes": 864
+    },
+    {
       "path": "tests/ui/higher-ranked/anonymous-higher-ranked-lifetime.rs",
       "git_blob": "8d8d0e710674154f8a58f5dbcec4d2bc54db6e38",
       "sha256": "6530c1c166d6304c4b62a32adf185f0646598c9b876b17893fdd1832e42bc032",
@@ -6106,6 +6112,15 @@
       "path": "tests/ui/generics/generic-temporary.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/generics/issue-94923.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ compile-flags: -C opt-level=3"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

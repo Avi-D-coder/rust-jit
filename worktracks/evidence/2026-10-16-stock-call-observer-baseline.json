@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "task": "T032/M017/M018 runtime continuation witness",
+  "source_member": "454cbbf571b5a55059acf1e811a619397c0d0e0c47dbb928aeac1f06560db68f",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "path": "tests/ui/generics/issue-94923.rs",
+    "sha256": "df85ac9c30d908aeabde7e9d015f42ef767852fd72f906fc1089cf19167c3e47",
+    "owning_edition": 2015,
+    "directives": [
+      "//@ run-pass",
+      "//@ compile-flags: -C opt-level=3"
+    ],
+    "runtime_scope": "Unchanged whole main; compiler optimization assertions/opt3 acceptance separate. No auxiliaries or expectedoutput files exist."
+  },
+  "compile_terminal": "6de9a4/0",
+  "failure_terminal": "416d6c/1",
+  "passed_bodies": 0,
+  "failed_bodies": 1,
+  "failure": {
+    "code": "LRR-E-CATALOG-INCOMPLETE",
+    "producer": "1373f0f7d4a62b04419a43f58e1372634a9725ea2c87ff23547479a0f064a40a",
+    "parent": "96e6b7b74eac0b7ed76e0e8dfd03f841f646a8f9d539704967062a78673eda05",
+    "callsite": "run_source_preparation_tests.rs48 retained_entry::prepare unwrap before RunMachine::start_with_discovery55",
+    "source_error_origin": "completed_source_syntax.rs122 actual replies map key lookup missing; no diagnosticinstrumented macro name or reached call PC"
+  },
+  "unexecuted_authorized": [
+    "stock-later"
+  ],
+  "release_sha256": "96f28106243e8c7739d51f073f200f56fef5de3aa4a25219e899a6e8e09afc7a",
+  "all8_review_sha256": "eeaf7262ff0d052c1c7348861a8ecf39abf817e69e17e49830d0afdc61ca95f1",
+  "scope": "Import/test-only source checkpoint. Production byte-identical V7. Actual main source assembly cannot find issued expansion reply before RunMachine starts; macro name not printed so not inferred. Zero interpreter runtime/fullfixture/native/compiler acceptance. Other editions unexecuted. Missing actual macro output/common owning source graph transport is next prerequisite, no assertion evaluator workaround. Prior V7 22PASS1CLI discoveryFAIL stays separate."
+}

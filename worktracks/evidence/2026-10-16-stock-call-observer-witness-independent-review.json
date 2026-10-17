@@ -1,0 +1,19 @@
+{
+  "status": "Independent narrow static review message recorded; no compilation/execution",
+  "reviewer": "runtime_validation_next",
+  "recorder": "drop_catalog_next",
+  "component_sha256": "8c75e7bd81e093b9d534c388b3cecfaa0c00cec55b887cf29bcbbba46baffc6f",
+  "leaf": {
+    "path": "crates/lrr/src/engine/run_stock_call_observer_tests.rs",
+    "sha256": "cd006dfd25692dd2e498c884a286dde298923492bcbb986bb897f285031d4c38"
+  },
+  "finding": "No concrete API/oracle mismatch found in narrow static pass.",
+  "observations": [
+    "Parent imports Action/InputKey/InputValue; private RunMachine fields accessible descendant child.",
+    "Fuel setter valid beforeoperations; originalf8..f0 explicitcalls511, peakdepth10 and expected348 align actualfixture.",
+    "Tracecap100000 explicit: no performance/inferredtracecompleteness claim.",
+    "Wholemain unexecuted; latereditions selector must wait owning2015terminal.",
+    "Original compile-flags -Copt-level3 retained compiler/toolingdirective, not runtimeacceptance."
+  ],
+  "limits": "Only narrow leafAPI/oracle pass; exact all8 implementation source review87708108 remains separate selfreview. Historical frozen packet unchanged."
+}
