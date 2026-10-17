@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17T01:10:24.146891+00:00",
+  "updated_at": "2026-10-17T01:57:08.697087+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -710,11 +710,11 @@
     }
   ],
   "current_private_checkpoint": {
-    "at": "2026-10-16T22:12:16.752788+00:00",
-    "root": "worktracks/evidence/2026-10-16-common-entered-type-runtime.json",
+    "at": "2026-10-17T01:57:08.697087+00:00",
+    "root": "worktracks/evidence/2026-10-16-common-reached-body-components-validation.json",
     "integrated_MAIN_changed": false,
-    "upstream_runtime_contract_passes": 1,
+    "upstream_runtime_contract_passes": 0,
     "full_fixture_passes": 0,
-    "scope": "Selected unchanged AUTO contract only, owning2015 +3supplemental editions. Existing plain suffix regression also passes. Not cumulative-suite counts. Source WIP, generated-call/macro-producer/Type-controls holds; no integration/milestone/JIT."
+    "scope": "Current component delta only,15focusedPASS+6earliercomponents separate; no cumulative-suite counts. Whole stock nested macro regression preserved; shift stillFAIL. Runtime/module/memo/renewal integration andarchitecture/milestone/JIT held."
   }
 }

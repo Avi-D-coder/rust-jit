@@ -1,0 +1,137 @@
+{
+  "status": "Independent exact-source review of live assembly/completed transport component; source-only, no Cargo/compiler/tests/runtime/Section32.2 acceptance",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "933cf66b9c098b3d0cde914ccfc231c7e6efb7ccd065d5dd6f84ed8a22172159",
+      "bytes": 24878
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_seed.rs",
+      "sha256": "f3958dff23f6f378d176ef4d4a842010331d0b9f6abbc1a459e51d1d56a12bfb",
+      "bytes": 5985
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "973411f77e80c3e62ff0138a4bbdda000eb66afd52ea8569d64de45cbad2bebf",
+      "bytes": 8783
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "3aa2bb458f38a39a6cc88908b18547d15e003771c15301a24bc1626ec37c0477",
+      "bytes": 11135
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_syntax.rs",
+      "sha256": "de8f8b72d844f757109ec8868cc8ad32ab35038a9ef5d7812858478404295ebb",
+      "bytes": 6162
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "64e8920be3b5756bed3fb38411f310052333afe2f95d1d51ff5487504bf1f3c3",
+      "bytes": 20507
+    }
+  ],
+  "adapter_dependency": {
+    "packet": "/private/tmp/lrr-pinned-attachment-seed-v1/COMPONENT.json",
+    "sha256": "ab10c720ae757c7901ce6b11ec17f0a7506be4272224d9364e94a7ef143c9981",
+    "independent_review": "/private/tmp/lrr-pinned-attachment-seed-independent-review-v1/REVIEW.json",
+    "independent_review_sha256": "ab67f272a7dcf936eabad6431d7eff848becb63dba37620ecf9c25577a3e8e88"
+  },
+  "finding": "No concrete source/receipt/grammar/parent authority defect found in these exact observed leaves. Final worker freeze/API compile/tests pending. Resource/currentness/runtime holds explicitly remain.",
+  "actual_route": [
+    "SourceSyntaxAssembly::new delegates to same from_scan kernel; exact actual provider source forest + scan parse/path/cfg/root scope/epoch checks and original source anchors unchanged.",
+    "SourceAssemblySeed::from_scan consumes only actual initial common assembly, rejects attached outputs/expansion definitions, freezes genuine adaptertree, validates original occurrence ledger, encodes actual source selection/epoch/tree/call parent and original/macro anchors.",
+    "Fork copies bounded mutable CallBinding/anchor scalar tables, shares scanArcs/source state/pinned tree seed, reconstructs actual one-interval original ledger with exact existing treeidentity/length; no source parse or macro resolver.",
+    "prepare_completed_source_syntax builds per-root source_scan producer-output map once from actual direct outputs and completed nested/argument syntax_outputs. Actual epoch and record key+descriptor must be in real seal dependency list; conflicting same producer replies refused. Issued SyntaxRequestReceipt Arcs deduplicated by real expansion key, missing staysNone.",
+    "Original and actually complete staged-module seeds join actual source/scan; map keyed real Outline request fingerprint with exact SourceSelection equality at lookup. No new full-world source map constructed at reached factory.",
+    "CompletedSourceSyntax::prepare forks seed, follows actual next selected-body producer chain, requires actual receipt only if reached/demanded, prevents reply consumption twice and invokes existing attach_receipt. Fullsource requires all indexed replies reconciled; selectedbody preserves cold pending markers and existing finish_for_body permit."
+  ],
+  "authority": [
+    "This source transport supplies no currentness/namespace completeness/member/guest execution authority. Completed environment real seal lease and RetainedSyntaxInput admission remain mandatory.",
+    "Actual source/profile/edition/cfg/path/root scope/epoch captured in seed and validated against scan; initial grammar Items unchanged. Real generated attachment follows existing issued key/site/inputroots/grammar/record/parent chain.",
+    "Missing output/receipt remains explicit error; no spelling/count/empty inventory substitute or legacy runtime fallback.",
+    "SourceDiscovery::prepare_syntax checks failed/sealed/current key and actual retained completed plan seal key/publication binding. A future runtime caller must also require real database seal/source/epoch authority before publication.",
+    "Generated selected declarations without real original anchor still require separate source/parent/boundary join; this component cannot broaden canonical owner authority."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "SourceAssemblySeed",
+        "CompletedSourceSyntax::prepare"
+      ],
+      "finding": "Pure ordinary structural syntax preparation; no assertion/expression evaluator. Legacy runtime/declarative assertion routes remain held/removal unproved."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "seed.tree.fork",
+        "assembly.attach_receipt"
+      ],
+      "finding": "Genuine pinned green tree plus actual issued output receipts, not text replay/literal/break executor or synthetic body. Common structural grouping preserved."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "SourceSelection",
+        "SyntaxReply",
+        "SyntaxRequestReceipt"
+      ],
+      "finding": "Actual source/producer identities only; no method/numeric/name whitelist. Namespace/Type/member services remain independent."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "from_scan",
+        "prepare_completed_source_syntax staged module branch"
+      ],
+      "finding": "Uses same original/generated output attachment mechanism and exact source owner. Existing original-anchor selected-body limit is explicit prerequisite, no new generated-only runtime exclusion claimed."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "next_body_invocation",
+        "finish_for_body"
+      ],
+      "finding": "Seed creation captures syntax/declaration anchors but never prepares executable bodies. Selected driver demands actual function-owned calls, leaves unrelated cold function markers. Missing cold receipt allowed until demanded."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "SourceAssemblySeed::prepare/fork",
+        "prepare_completed_source_syntax",
+        "CompletedSourceSyntax::prepare"
+      ],
+      "finding": "Original full tokenization/parse and reply/receipt indexing once per completed actual source; forks share immutable seed. Each selected driver is still preparation, not memoized here. Repeated prepare_body can rebuild an assembly: root must own query/memo retention and ensure installed operations never invoke it. Existing snapshot/parse per structural edit remains inherited cost."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "CompletedSourceEnvironment::source_syntax"
+      ],
+      "finding": "Direct immutable owner map lookup and exact selection validation. Cold completion aggregates genuine source inputs; no per-call world namespace/source census or global revision guard introduced."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "Arc<[CallBinding]>",
+        "SyntaxAttachmentSeed",
+        "CompletedSourceSyntax::replies"
+      ],
+      "finding": "Pinned tree/origin/store/scan/output/receipt/source state shared. Only mutable attachment bookkeeping tables copied at fork; no BodyIndex copy or whole-file node lookup added. Existing next-body attachment scan cost remains cold."
+    }
+  ],
+  "costs_and_bounds": {
+    "cold": "Each actual runtime source initial assembly tokenize/parse/materialize/anchor capture/hash once; aggregate actual output listing/index once. Source assembly original anchor capture uses existing normalized Outline replay, not an executable plan. Completion may be substantial for many source files: no measurement/scaling claim.",
+    "fork": "O(calls+original anchors+macro anchors) scalar/Arc table copies with preflight/capacity checks; pinned tree/origins/store fork fixed handles. PreparedSourceView.share still owns actual selection metadata under retained_bytes.",
+    "selected": "O(actual demanded producer attachments + current existing snapshot/nearest-Fn work), map O(log replies), used-set bounded. No actual query/memo provider integration implemented here.",
+    "accounting": "Source seed checks128MiB existing charge; completed per-source128MiB and aggregate512MiB logical retained estimates, index transient32MiB, replies100k. Shared payload conservatively charged in completed environment exclusivebytes while parent lives; no body preparation.",
+    "peak_hold": "prepare_completed_source_syntax constructs next SourceAssemblySeed before insert_plan checks aggregate512MiB. Individual128MiB seed cap bounds candidate but aggregate limit is not512MiB peak; simultaneous seed preparation transient/old discovery ownership must be accounted or remainingbudget preflight added before claiming full resource acceptance.",
+    "external_owner_hold": "source_syntax returns borrowed Arc; any future independently retained plan/seed Arc outliving completed environment must enter actual query/input/source root accounting. Current environment coarse payload charge only proves ownership while parent remains retained.",
+    "salsa_hold": "Adapter seed excludes opaque pinned shared Salsa arena size. No fork arena growth, but full Section32.2 integration remains held as root instructed."
+  },
+  "controls": "Worker test/compile packet pending; reviewer did not author/run/read final source tests. Need actual sourceidentity/all editions/duplicate receipts/cold missing receipts/repeated same producer/hygiene/module context and common source output equality controls, source epoch/seal invalidation, then actual unchanged runtime witness.",
+  "changes": "No production edits or tests executed by reviewer; this evidence only."
+}

@@ -1,0 +1,42 @@
+{
+  "claim": "LOCAL-024",
+  "task": "T032/M013/M017/M018; E-R5-005 MA001/MA006/MA008; bounded reached-call body publication/currentness transition component",
+  "invariant": "Actual target-only retained publication intentionally stales old canonical Q44/Q47 proof. An opaque coordinator-issued transition may preserve old argument/source evidence only across its exact four authorized target row replacements. Fresh ordinary Q47/callable must select the same declaration/signature/source arguments and actual newbody; never refresh old guard or accept other changed dependencies.",
+  "witness": "Unchanged shift main failure e94ed7 via legacy assertion/static binding. Authority control uses unchanged macro-nested_stmt_macros main actual Bar Type argument and empty static_assert_exists target so genuine bodypublication can be exercised without fabricating missing assert outputs.",
+  "shared_entry": "Database::publish_retained_body actual anchor/source/seal/epoch/unowned-target transaction; PreparedInputGuard actual memo input closure; PreparedExplicitTypeArguments actual source/call signature and nominal Type rows. Root adds opaque transition around this existing publisher and cold checked fresh-proof association.",
+  "alternate_routes": "No old assertion binding logic changed. Legacy runtime_macro_binding_operation, runtime_macro_plan and raw module body entry remain held; replacement/removal requires common prepared sourceplan + runtime continuation/installed recipe integration.",
+  "authority": "Before publication require actual Q47/index/PC/current caller execution lease and callable; retain actual before/after target stamps only from publisher. Currentness preserves source revision, caller lease source, all non-target dependency stamps and actual new syntax/body row. Token grants no recipe execution or arbitrary guard exclusion.",
+  "cost": "Cold publication and guard fence O(relevant dependencies + explicit Type args), fixed four row probes and cached stamps; no namespace census added, no BodyIndex clone, no parser/planner added to installed execution. Existing callee projection/currentness and publisher retained outline costs remain debt. Token shares old certified input guard; checked metadata includes retained guard.",
+  "integration_holds": [
+    "Common source seed/issued output closure still being factored by workers",
+    "Installed caller recipe replacement must preserve actual runtime operation/continuation shape",
+    "Suspend/resume state must retain checked transition without argument replay",
+    "Generated body publication remains subject to actual existing generated boundary authority",
+    "No architecture/milestone/new stock pass from component alone"
+  ],
+  "acceptance": [
+    "Actual unchanged nested fixture target-only publication; old canonical/call/Q47 proofs stale",
+    "Actual caller source rows/lease unchanged/current",
+    "Fresh Q47 same real DefKey/signature/Bar nominal and actual retained body",
+    "Unrelated/foreign target/epoch/seal/source/owner changes refuse, wrong freshplan refuses",
+    "All8 source review exact hashes and soleasyncvalidation terminals"
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/db/retained_body_inputs.rs",
+      "sha256": "b2719b29ec2ffdc176b29cb5bb46c391ccc04f358d4d457dc27e1b12c9f52062"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "6d97c11e0e1bbb89769057d89595cd9a057d63815c65e84fcd1f6894fd045def"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "cb85040a6b4b2526ff6a83f5f4afc2ef2f2d4b26f15f21e0f23b02f5a9966607"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "fe0ab7e9445973c1adb7cc48cd2924b66e8e38412e64822ffb662ba78b9c9b0d"
+    }
+  ]
+}

@@ -27,6 +27,46 @@ fn error(message: &str) -> AdapterError {
     }
 }
 impl SpanStore {
+    /// Checked owned-table estimate, including reserved hash capacity and path
+    /// allocations. The shared pinned Salsa arena is explicitly excluded by
+    /// HygieneStore::metadata_bytes; no unstable cancelling introspection runs.
+    pub(crate) fn metadata_bytes(&self) -> Result<usize, AdapterError> {
+        let overflow = || error("attachment span store metadata overflow");
+        let table =
+            |len: usize, size: usize| len.checked_mul(size.checked_mul(16)?.checked_add(256)?);
+        let mut bytes = std::mem::size_of::<Self>();
+        for size in [
+            table(
+                self.contexts.len(),
+                std::mem::size_of::<(Key, ContextRecord)>(),
+            ),
+            table(self.records.len(), std::mem::size_of::<(Key, SpanRecord)>()),
+            table(self.slots.len(), std::mem::size_of::<(Key, Span)>()),
+            self.reverse
+                .capacity()
+                .checked_mul(std::mem::size_of::<(Span, Key)>() + 16),
+            self.anchors
+                .capacity()
+                .checked_mul(std::mem::size_of::<(SpanAnchor, Key)>() + 16),
+            self.proc_contexts.as_ref().map_or(Some(0), |rows| {
+                table(
+                    rows.len(),
+                    std::mem::size_of::<(Key, span::SyntaxContext)>(),
+                )
+            }),
+            Some(self.hygiene.metadata_bytes()?),
+        ] {
+            bytes = bytes
+                .checked_add(size.ok_or_else(overflow)?)
+                .ok_or_else(overflow)?;
+        }
+        for record in self.records.values() {
+            bytes = bytes
+                .checked_add(record.source.path.capacity())
+                .ok_or_else(overflow)?;
+        }
+        Ok(bytes)
+    }
     pub(crate) fn owned_span_key(&self, span: Span) -> Result<Key, AdapterError> {
         self.reverse
             .get(&span)

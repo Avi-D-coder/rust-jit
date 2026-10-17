@@ -7,6 +7,7 @@ use crate::{
     token_wire::{Key, TokenForest},
 };
 use span::{SpanMap, TextRange};
+use std::sync::{Arc, Mutex};
 use syntax::{AstNode, SyntaxNode, WalkEvent, ast};
 mod lists;
 pub use lists::ListSlot;
@@ -14,6 +15,8 @@ mod snapshot;
 pub use snapshot::SyntaxSnapshot;
 mod edit;
 pub use edit::SyntaxEdit;
+mod seed;
+pub use seed::SyntaxAttachmentSeed;
 
 const MAX_TEXT: u32 = 32 * 1024 * 1024;
 const MAX_NODES: usize = 2_000_000;
@@ -57,8 +60,8 @@ impl FragmentSlot {
 pub struct SyntaxAttachment {
     root: SyntaxNode,
     grammar: DeclarationGrammar,
-    origins: SpanMap,
-    store: SpanStore,
+    origins: Arc<SpanMap>,
+    store: Arc<Mutex<SpanStore>>,
     // Conservative cumulative charge, including superseded records. Admission
     // happens before cloning the span store, not after retaining another input.
     retained_input_bytes: usize,
@@ -198,8 +201,8 @@ impl SyntaxAttachment {
         Ok(Self {
             root,
             grammar,
-            origins,
-            store,
+            origins: Arc::new(origins),
+            store: Arc::new(Mutex::new(store)),
             retained_input_bytes,
         })
     }
@@ -264,7 +267,13 @@ impl SyntaxAttachment {
             .checked_add(output.allocated_bytes()?)
             .filter(|bytes| *bytes <= MAX_RETAINED_INPUT)
             .ok_or_else(|| error("attachment retained input budget"))?;
-        let mut store = self.store.clone();
+        // A fork shares the original store. Only importing an actual new
+        // output needs the existing transaction's private mutable copy.
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| error("attachment span store lock poisoned"))?
+            .clone();
         let (root, origins) = declaration_output::parse_root(output, grammar, &mut store)?;
         check_tree(&root)?;
         check_origins(&origins, u32::from(root.text_range().len()))?;
@@ -307,8 +316,8 @@ impl SyntaxAttachment {
         }
         let edit = SyntaxEdit::new(range, replacement_len, old_len, final_len)?;
         self.root = root;
-        self.origins = origins;
-        self.store = prepared.store;
+        self.origins = Arc::new(origins);
+        self.store = Arc::new(Mutex::new(prepared.store));
         self.retained_input_bytes = prepared.retained_input_bytes;
         Ok(edit)
     }
@@ -317,6 +326,10 @@ impl SyntaxAttachment {
     /// structure and origin keys: display text alone does not identify a tree
     /// after fragment attachment. Pin syntax kinds to the adapter revision.
     pub fn syntax_identity(&self) -> Result<Key, AdapterError> {
+        let store = self
+            .store
+            .lock()
+            .map_err(|_| error("attachment span store lock poisoned"))?;
         let mut hash = blake3::Hasher::new();
         hash.update(b"lrr/v2/attached-syntax\0");
         hash.update(crate::UPSTREAM_COMMIT.as_bytes());
@@ -352,7 +365,7 @@ impl SyntaxAttachment {
         for (end, origin) in self.origins.iter() {
             hash.update(&u32::from(end).to_le_bytes());
             // Encode semantic coordinates/context, never a private slot ID.
-            hash.update(&self.store.key(origin)?.0);
+            hash.update(&store.key(origin)?.0);
         }
         Ok(Key(*hash.finalize().as_bytes()))
     }
@@ -360,7 +373,11 @@ impl SyntaxAttachment {
     /// Replay these owned events; `text` is for display, not reparsing or body
     /// cache identity. Source publication must also retain admission/epoch proof.
     pub fn materialize(&self) -> Result<DeclarationSyntax, AdapterError> {
-        declaration_output::materialize_root(&self.root, &self.origins, &self.store)
+        let store = self
+            .store
+            .lock()
+            .map_err(|_| error("attachment span store lock poisoned"))?;
+        declaration_output::materialize_root(&self.root, &self.origins, &store)
     }
 }
 

@@ -1,0 +1,11 @@
+# Pinned attachment seed — source component
+
+LOCAL-024 / T032/M013/M017/M018 common reached-module source prerequisite. Exact API: `SyntaxAttachment::into_seed(self) -> Result<SyntaxAttachmentSeed, AdapterError>`, `seed.fork() -> Result<SyntaxAttachment, AdapterError>`, cached `identity() -> Key`, `text_len() -> u32`, `metadata_bytes() -> usize`. Identity is exactly the prior `syntax_identity()` domain, not a snapshot or new source authority key.
+
+Seed owns the actual pinned green tree and shared origins/store. Fork creates a local red root with shared Arc handles; it performs no parse/hash/walk, materialization, or full SpanStore clone. The actual Send-only Salsa-backed store is protected by std Mutex without unsafe. Existing real-output preparation clones it under a short lock, then imports/commits privately; that cold edit cost remains. Poison is a typed adapter error. No seed identity grants source, macro, namespace, currentness or VM entry authority.
+
+Checked owned metadata estimates include tree/origin representation, conservative BTree tables, reserved HashMap capacities, source paths, owned hygiene maps, fixed storage handles and shared Arc headers. The private shared Salsa arena has no stable non-cancelling size API. Its allocation bound remains explicitly unproved: this source component does not establish full Section32.2 acceptance. Fork adds no arena entries; actual edit growth remains inherited debt. The owning assembly wrapper charges seed payload once and its own Arc handle separately.
+
+Four source-only controls include the unchanged official macro-as-fn-body all-edition real associated expansions, pointer sharing/independence, attached precedence and exact mixed-edition origins, failed edits and poison/bounds. No Cargo/compiler/tests executed. Existing adapter regressions and independent source pass remain pending. Root/peer own common assembly/completed source facts and reached-call authority integration; this overlay has no runtime hook and does not close shift or any architecture/task/milestone gate.
+
+Exact all-eight review and file hashes: `worktracks/evidence/2026-10-16-pinned-attachment-seed-source-review.json`; bounded precode: matching `-precode.json`. Inherited declaration_output/item_output WIP is neither edited nor bundled.

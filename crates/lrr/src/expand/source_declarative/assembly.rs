@@ -43,6 +43,10 @@ mod source_occurrences;
 pub use source_occurrences::SourceOccurrence;
 use source_occurrences::SourceOccurrences;
 
+#[path = "assembly_seed.rs"]
+mod seed;
+pub(crate) use seed::SourceAssemblySeed;
+
 const MAX_CALLS: usize = 100_000;
 const MAX_METADATA: usize = 128 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
@@ -67,6 +71,7 @@ fn anchor(call: &CallCapture) -> Result<Digest, Diagnostic> {
     e.digest(Digest::of_bytes(&call.input.encode().map_err(adapter)?));
     Ok(e.finish())
 }
+#[derive(Clone)]
 struct CallBinding {
     // Positions in this vector follow actual AST preorder. Origin keys alone
     // cannot distinguish repeated copies of an invocation in one expansion.
@@ -192,9 +197,15 @@ impl SourceSyntaxAssembly {
         index: &DeclarationMacroIndex,
         epoch: u64,
     ) -> Result<Self, Diagnostic> {
+        Self::from_scan(provider, index.scan_handle(), epoch)
+    }
+    pub(crate) fn from_scan(
+        provider: &SourceDeclarative,
+        scan: &Arc<DeclarationScan>,
+        epoch: u64,
+    ) -> Result<Self, Diagnostic> {
         let source = &provider.source;
         let selection = source.selection();
-        let scan = index.scan_handle();
         if epoch == 0
             || scan.parse() != &selection.outline.parse
             || scan.path() != &selection.path

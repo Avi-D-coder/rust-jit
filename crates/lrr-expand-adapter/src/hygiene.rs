@@ -78,6 +78,37 @@ fn owned_edition(value: span::Edition) -> Edition {
     }
 }
 impl HygieneStore {
+    /// Owned tables and fixed Storage handle only. Salsa's shared internal arena
+    /// is not observable through its pinned stable API. Its unstable memory
+    /// counter cancels/drains handles and must not run on shared seed stores.
+    pub(crate) fn metadata_bytes(&self) -> Result<usize, AdapterError> {
+        let overflow = || error("attachment hygiene metadata overflow");
+        let table =
+            |len: usize, size: usize| len.checked_mul(size.checked_mul(16)?.checked_add(256)?);
+        let mut bytes = std::mem::size_of::<Self>();
+        for size in [
+            table(
+                self.records.len(),
+                std::mem::size_of::<(Key, ContextRecord)>(),
+            ),
+            table(
+                self.contexts.len(),
+                std::mem::size_of::<(Key, SyntaxContext)>(),
+            ),
+            table(
+                self.marks.len(),
+                std::mem::size_of::<(Key, (MarkIdentity, Key))>(),
+            ),
+            self.reverse_marks
+                .capacity()
+                .checked_mul(std::mem::size_of::<(span::MacroCallId, Key)>() + 16),
+        ] {
+            bytes = bytes
+                .checked_add(size.ok_or_else(overflow)?)
+                .ok_or_else(overflow)?;
+        }
+        Ok(bytes)
+    }
     /// Normalize only demanded contexts through the actual pinned machinery.
     /// The caller transports these rows together with `records()` afterward,
     /// which includes any normalized ancestor records created here.

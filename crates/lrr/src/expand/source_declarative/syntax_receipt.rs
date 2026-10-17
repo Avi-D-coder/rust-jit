@@ -213,3 +213,22 @@ pub(super) fn roots_identity(roots: &[TokenTree]) -> Result<Digest, Diagnostic> 
     }
     Ok(e.finish())
 }
+
+impl crate::core::digest::StableEncode for SyntaxRequestReceipt {
+    const DOMAIN: &'static str = "lrr/v1/issued-syntax-request-receipt";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.record(&self.key);
+        e.digest(Digest(self.site.0));
+        e.digest(self.roots);
+        e.option(&self.definition, |e, definition| {
+            e.digest(definition.identity);
+            e.digest(definition.defining_unit);
+            e.u16(definition.definition_edition);
+        });
+        e.u8(match self.input {
+            SyntaxInput::DelimitedCall => 0,
+            SyntaxInput::FunctionArguments => 1,
+            SyntaxInput::ItemTransform => 2,
+        });
+    }
+}

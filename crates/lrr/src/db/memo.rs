@@ -46,6 +46,9 @@ pub(crate) use prepared_inputs::PreparedInputGuard;
 #[path = "retained_body_inputs.rs"]
 mod retained_body_inputs;
 pub(crate) use retained_body_inputs::{RetainedOriginalDeclaration, RetainedSourceLease};
+#[path = "retained_call_transition.rs"]
+mod retained_call_transition;
+pub(crate) use retained_call_transition::RetainedCallBodyTransition;
 #[path = "body_environment_inputs.rs"]
 pub(crate) mod body_environment_inputs;
 #[path = "local_declaration_inputs.rs"]

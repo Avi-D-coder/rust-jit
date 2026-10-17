@@ -1,0 +1,50 @@
+{
+  "status": "PRECODE source-only common pinned seed/fork prerequisite; no Cargo/compiler/tests",
+  "claim": "LOCAL-024 T032/M013/M017/M018 reached-module shared source preparation; E-R5-005, MA001/MA006/MA008 distinct from modes1-8",
+  "witness": "Unchanged numbers-arithmetic/shift.rs (actual parent-reported e94ed7 legacy assertion/static route failure); adapter unchanged upstream macro-as-fn-body and existing syntax-attachment/declarative fixture controls are structural witnesses, no interpreter pass.",
+  "files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+      "before_sha256": "125bce096ace0912c76247032ac88dba987138e8b84eb918931305f1afda3788"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/snapshot.rs",
+      "before_sha256": "c87d853243ce54ffddc3f68304313122f4b9dd12abe73e6565713a5443f31165"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/span_store.rs",
+      "before_sha256": "5a76899334c68f1ffaee0528cc9e91aeff016e3bc4650a9576ba2586890a9dc1"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/hygiene.rs",
+      "before_sha256": "6ae776422d9b4f415f664b51e791e082548951f753bbf5338c9e05744ca1960f"
+    }
+  ],
+  "new_files": [
+    "crates/lrr-expand-adapter/src/syntax_attachment/seed.rs",
+    "crates/lrr-expand-adapter/src/syntax_attachment/seed_tests.rs"
+  ],
+  "invariant": "A genuine admitted pinned attachment tree may be frozen and forked without parsing/replaying display text, full-span-store copy or loss of grammar/grouping/origins/edition/hygiene. Seed is representation only, no macro/source/VM authority.",
+  "symbols": [
+    "SyntaxAttachment::into_seed",
+    "SyntaxAttachmentSeed::{fork,identity,text_len,metadata_bytes}",
+    "SyntaxAttachment::{prepare,apply,syntax_identity,materialize}",
+    "SyntaxAttachment::snapshot",
+    "SpanStore::metadata_bytes",
+    "HygieneStore::metadata_bytes"
+  ],
+  "design": "Retain actual GreenNode plus shared Arc<SpanMap> and Arc<Mutex<SpanStore>>. Mutex is necessary because pinned Salsa Database per-thread Storage is Send, not Sync. Fork creates local red root and shared Arc handles; no parser/hash/walk/store clone. Existing real output prepare still clones SpanStore under short lock, imports real output, and commits a new store only after success.",
+  "bounds": "Existing 32MiB text,2m node/origin,4096 depth,64MiB cumulative input caps preserved. Checked owned-map/reserved-capacity/tree estimates at freeze; hard seed metadata cap. Poison produces typed AdapterError. No unsafe, new dependency, private arena IDs/addresses in stable identity.",
+  "accounting_hold": "Salsa private shared intern arena memory is not exposed by stable pinned API; owned map/Storage-handle estimate cannot establish full32.2 acceptance. Do not enable unstable memory_usage (cancels/drains clones). No new arena growth on fork, shared actualstore. Real output clone/import is existing cold edit debt. Component and full retention-bound integration remain held.",
+  "all8_precode": [
+    "No assertion evaluator",
+    "No literal/break output executor",
+    "No contextual member/numeric rule",
+    "Same arbitrary original/generated pinned grammar representation, authority separate",
+    "No pattern/arm/body lowering or eager cold executable prep",
+    "Parse once, cached seedidentity/length, no fork planning",
+    "No world namespace/source census or global revision dependency",
+    "Green/origin/store sharing, no BodyIndex clone/fullfile node search"
+  ],
+  "acceptance": "Source tests for actual unchanged fixture headers/real expansions/all editions, grouping-vs-displaytext, independent forks/failed edit/poison/bounds/Arc sharing; sole validator later. Root and peer own source assembly/completed facts/call authority integration, not this worker."
+}

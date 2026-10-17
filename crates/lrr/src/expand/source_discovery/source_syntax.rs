@@ -4,13 +4,15 @@ use super::*;
 use crate::{
     expand::{
         generated_declarations::GeneratedDeclarations,
-        source_declarative::assembly::{
-            PreparedSourceSyntax, SourceSyntaxAssembly, SyntaxRequestReceipt,
-        },
+        source_declarative::assembly::{PreparedSourceSyntax, SyntaxRequestReceipt},
     },
     source::changes::SourceSelection,
 };
 use std::sync::Arc;
+#[path = "completed_source_syntax.rs"]
+mod completed;
+pub(crate) use completed::CompletedSourceSyntax;
+
 impl SourceDiscovery {
     pub(super) fn remember_syntax_request(
         &mut self,
@@ -84,32 +86,45 @@ impl SourceDiscovery {
         if seal.unresolved_frontiers() != 0 || seal.key() != self.key {
             return Err(fault("source syntax preparation discovery context differs"));
         }
-        let (_, _, providers) = self
-            .declarative
+        let environment = self
+            .completed_source_environment
             .as_ref()
-            .ok_or_else(|| fault("source syntax preparation requires captured macro providers"))?;
-        let mut owners = self
-            .sources
-            .iter()
-            .enumerate()
-            .filter(|(_, selected)| selected.selection() == source);
-        let (ordinal, _) = owners
-            .next()
-            .ok_or_else(|| fault("source syntax captured owner absent"))?;
-        if owners.next().is_some() {
-            return Err(fault("source syntax captured owner ambiguous"));
+            .ok_or_else(|| fault("completed source syntax environment absent"))?;
+        let plan = environment.source_syntax(source)?;
+        if plan.seal() != &self.key
+            || Some(plan.seal_value()) != self.body_boundary_seal_fingerprint
+        {
+            return Err(fault("source syntax retained seal differs"));
         }
-        let provider = providers
-            .get(ordinal)
-            .ok_or_else(|| fault("source syntax captured provider absent"))?;
-        let index = self
-            .nested_sources
-            .get(&ordinal)
-            .ok_or_else(|| fault("source syntax declaration inventory absent"))?;
-        // The issued expansion key and the declaration producer are distinct
-        // identities. The admitted output binds the exact edge between them.
-        let mut outputs = BTreeMap::<(Digest, Digest), Arc<GeneratedDeclarations>>::new();
-        let mut collect = |output: &Arc<GeneratedDeclarations>| -> Result<(), Diagnostic> {
+        match definition {
+            Some(definition) => plan.prepare_body(definition),
+            None => plan.prepare_source(),
+        }
+    }
+    /// Capture actual immutable assembly source/issued reply inputs once. No
+    /// executable function body plan is prepared by discovery completion.
+    pub(super) fn prepare_completed_source_syntax(
+        &self,
+        seal: &crate::db::seals::Seal,
+    ) -> Result<BTreeMap<Digest, Arc<CompletedSourceSyntax>>, Diagnostic> {
+        use crate::expand::source_declarative::assembly::SourceAssemblySeed;
+        let Some((_, _, providers)) = &self.declarative else {
+            return Ok(BTreeMap::new());
+        };
+        if seal.key() != self.key || seal.unresolved_frontiers() != 0 {
+            return Err(fault("completed syntax inputs seal differs"));
+        }
+        let seal_value = self
+            .body_boundary_seal_fingerprint
+            .ok_or_else(|| fault("completed syntax seal identity absent"))?;
+        let mut by_source =
+            BTreeMap::<Digest, BTreeMap<(Digest, Digest), completed::SyntaxReply>>::new();
+        let mut receipts = BTreeMap::<Digest, Arc<SyntaxRequestReceipt>>::new();
+        let mut count = 0usize;
+        let mut bytes = 0usize;
+        let mut collect = |source_scan: Digest,
+                           output: &Arc<GeneratedDeclarations>|
+         -> Result<(), Diagnostic> {
             let key = output.record().key();
             if output.epoch() != self.epoch
                 || seal
@@ -125,88 +140,125 @@ impl SourceDiscovery {
                 ));
             }
             let parent = (output.parent_inventory(), output.parent_invocation());
-            if let Some(prior) = outputs.get(&parent) {
-                if prior.fingerprint() != output.fingerprint() {
+            if let Some(prior) = by_source
+                .get(&source_scan)
+                .and_then(|rows| rows.get(&parent))
+            {
+                if prior.output.fingerprint() != output.fingerprint() {
                     return Err(fault(
                         "source syntax producer has conflicting admitted outputs",
                     ));
                 }
                 return Ok(());
             }
-            if outputs.len() >= 100_000 {
-                return Err(fault("source syntax output handle count budget"));
-            }
-            outputs
-                .len()
+            count = count
                 .checked_add(1)
-                .and_then(|count| {
-                    count.checked_mul(
-                        128 + std::mem::size_of::<((Digest, Digest), Arc<GeneratedDeclarations>)>(),
-                    )
-                })
-                .filter(|bytes| *bytes <= 32 * 1024 * 1024)
-                .ok_or_else(|| fault("source syntax output index metadata budget"))?;
-            outputs.insert(parent, output.clone());
+                .filter(|n| *n <= 100_000)
+                .ok_or_else(crate::runtime::arena::resource)?;
+            bytes = bytes
+                .checked_add(
+                    512 + 16 * std::mem::size_of::<((Digest, Digest), completed::SyntaxReply)>(),
+                )
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(crate::runtime::arena::resource)?;
+            let receipt_key = key.fingerprint();
+            let receipt = match receipts.get(&receipt_key) {
+                Some(receipt) => Some(Arc::clone(receipt)),
+                None => match self.syntax_requests.get(&receipt_key) {
+                    None => None, // Explicit missing attachment evidence, refused only if demanded.
+                    Some(actual) => {
+                        bytes = bytes
+                            .checked_add(actual.metadata_bytes()?)
+                            .and_then(|n| n.checked_add(256))
+                            .filter(|n| *n <= 32 * 1024 * 1024)
+                            .ok_or_else(crate::runtime::arena::resource)?;
+                        let receipt = Arc::new(actual.clone());
+                        receipts.insert(receipt_key, Arc::clone(&receipt));
+                        Some(receipt)
+                    }
+                },
+            };
+            if receipt.as_ref().is_some_and(|receipt| receipt.key() != key) {
+                return Err(fault("source syntax issued key differs"));
+            }
+            by_source.entry(source_scan).or_default().insert(
+                parent,
+                completed::SyntaxReply {
+                    output: Arc::clone(output),
+                    receipt,
+                },
+            );
             Ok(())
         };
-        for output in self
-            .item_declaration_inputs
-            .values()
-            .filter(|output| output.parent_inventory() == index.scan().fingerprint())
-        {
-            collect(output)?;
+        for output in self.item_declaration_inputs.values() {
+            collect(output.parent_inventory(), output)?;
         }
         for fragment in self
             .nested_completed
             .values()
             .chain(&self.completed_argument_fragments)
         {
-            if fragment.source_scan().fingerprint() != index.scan().fingerprint() {
-                continue;
-            }
+            let source_scan = fragment.source_scan().fingerprint();
             for output in fragment.syntax_outputs()? {
-                collect(&output)?;
+                collect(source_scan, &output)?;
             }
         }
-        let mut assembly = SourceSyntaxAssembly::new(provider, index, self.epoch)?;
-        loop {
-            let pending = match definition {
-                Some(definition) => assembly.next_body_invocation(definition)?,
-                None => assembly.next_pending_invocation()?,
-            };
-            let Some((parent, invocation)) = pending else {
-                break;
-            };
-            let output = match outputs.remove(&(parent, invocation)) {
-                Some(output) => output,
-                None => {
-                    return Err(fault(&format!(
-                        "source syntax call requires an actual expansion output: producer={invocation}, parent={parent}, remaining_outputs={}, inventory={}",
-                        outputs.len(),
-                        index.scan().fingerprint(),
-                    )));
-                }
-            };
-            let receipt = self
-                .syntax_requests
-                .get(&output.record().key().fingerprint())
-                .ok_or_else(|| {
-                    fault("source syntax output requires its actual issued request receipt")
-                })?;
-            assembly = assembly.attach_receipt(receipt, output)?;
+        drop(collect);
+        drop(receipts);
+        let mut plans = BTreeMap::new();
+        let mut retained = 0usize;
+        for (ordinal, provider) in providers
+            .iter()
+            .enumerate()
+            .filter(|(_, provider)| provider.macro_export_source_role().is_none())
+        {
+            let index = self
+                .nested_sources
+                .get(&ordinal)
+                .ok_or_else(|| fault("source syntax declaration inventory absent"))?;
+            let seed = SourceAssemblySeed::prepare(provider, index, self.epoch)?;
+            let replies = by_source
+                .remove(&index.scan().fingerprint())
+                .unwrap_or_default();
+            let plan = CompletedSourceSyntax::capture(seed, replies, self.key.clone(), seal_value)?;
+            insert_plan(&mut plans, &mut retained, plan)?;
         }
-        if definition.is_none() && !outputs.is_empty() {
-            return Err(fault(
-                "source syntax output requires further structural reconciliation",
-            ));
+        for module in self.staged_modules.values().filter(|module| {
+            module.namespace_complete && module.provider.macro_export_source_role().is_none()
+        }) {
+            let scan = match &module.annotation_plan {
+                Some(plan) => Arc::clone(plan.scan()),
+                None => module
+                    .syntax
+                    .prepared_source()
+                    .declaration_inventory(Default::default())?,
+            };
+            let seed = SourceAssemblySeed::from_scan(&module.provider, &scan, self.epoch)?;
+            let replies = by_source.remove(&scan.fingerprint()).unwrap_or_default();
+            let plan = CompletedSourceSyntax::capture(seed, replies, self.key.clone(), seal_value)?;
+            insert_plan(&mut plans, &mut retained, plan)?;
         }
-        let prepared = match definition {
-            Some(definition) => assembly.finish_for_body(definition)?,
-            None => assembly.finish()?,
-        };
-        if !prepared.ready_for_admission() {
-            return Err(fault("source syntax preparation left pending calls"));
-        }
-        Ok(Arc::new(prepared))
+        Ok(plans)
     }
+}
+fn insert_plan(
+    plans: &mut BTreeMap<Digest, Arc<CompletedSourceSyntax>>,
+    retained: &mut usize,
+    plan: Arc<CompletedSourceSyntax>,
+) -> Result<(), Diagnostic> {
+    if plans.len() >= 100_000 {
+        return Err(fault("completed source syntax owner limit"));
+    }
+    *retained = retained
+        .checked_add(plan.metadata_bytes())
+        .and_then(|n| {
+            n.checked_add(256 + 16 * std::mem::size_of::<(Digest, Arc<CompletedSourceSyntax>)>())
+        })
+        .filter(|n| *n <= 512 * 1024 * 1024)
+        .ok_or_else(crate::runtime::arena::resource)?;
+    let key = crate::db::key::QueryKey::Outline(plan.source().outline.clone()).fingerprint();
+    if plans.insert(key, plan).is_some() {
+        return Err(fault("completed source syntax owner duplicated"));
+    }
+    Ok(())
 }

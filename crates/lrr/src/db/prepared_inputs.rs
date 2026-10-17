@@ -120,6 +120,28 @@ impl PreparedInputGuard {
         }
         Ok(())
     }
+    /// Cold continuation check, only with the opaque receipt minted by the
+    /// existing checked target-body publisher. This does not update this guard
+    /// or authorize execution: a fresh ordinary call proof is still required.
+    pub(super) fn require_current_across_call_body(
+        &self,
+        db: &Database,
+        transition: &super::RetainedCallBodyTransition,
+    ) -> Result<(), Diagnostic> {
+        for dependency in &self.inputs {
+            let DependencyStamp::Input { key, fingerprint } = dependency else {
+                return Err(stale("call body transition contains a derived demand"));
+            };
+            let actual = db
+                .published_input(key)
+                .map_or_else(missing_fingerprint, |(_, stamp)| stamp);
+            if actual != *fingerprint && !transition.permits_replacement(key, *fingerprint, actual)
+            {
+                return Err(stale("call body transition changed another dependency"));
+            }
+        }
+        Ok(())
+    }
 }
 fn stale(message: &str) -> Diagnostic {
     fault("LRR-E-INTERNAL-SNAPSHOT", message)

@@ -1,0 +1,150 @@
+{
+  "status": "SOURCE-ONLY common pinned adapter seed/fork component; uncompiled/unexecuted. Full32.2 and common runtime integration HELD.",
+  "claim": "LOCAL-024 / T032/M013/M017/M018 prerequisite; E-R5-005; MA001/MA006/MA008 distinct from recurring modes1-8",
+  "files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+      "sha256": "42fea0380ad500bf74498b20a42f9e42d63b1c461408a284731d1f1c5dd0f12a",
+      "bytes": 17834
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/seed.rs",
+      "sha256": "1d1bf63443d4a1fd765d41d3f88fdf97179f888f52245281dbfc1e0c39e170c7",
+      "bytes": 4556
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/seed_tests.rs",
+      "sha256": "343800a1692dc8a5e95629da3733efa2c9b04bc857079b87dacf175dc393ff8e",
+      "bytes": 7191
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/snapshot.rs",
+      "sha256": "c30c00f9b3aba371b2cf124724d2cd0e70546af37d97f1d87abb30022af8b749",
+      "bytes": 1643
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/span_store.rs",
+      "sha256": "93257800e10f59d090ca98609ef3dc057d25bbb8691cc3f530b161a1bad430ff",
+      "bytes": 16361
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/hygiene.rs",
+      "sha256": "e608f458b96cdb1f223df5fe7724bc4f7b164d70cf10bebb950ec6597a81a281",
+      "bytes": 20341
+    }
+  ],
+  "witnesses": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-as-fn-body.rs",
+      "sha256": "6ae5e64fd603f1817e3e5a8b69c09b7b72cf39ab8ecc8d58df6706c3b9bf3797",
+      "scope": "unchanged actual file parsed then genuine captured def_fn rules expanded into real trait/impl/module slots; adapter-only all4 editions authored, unexecuted"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/shift.rs",
+      "scope": "Parent-reported actual legacy assertion/static failure e94ed7 motivates common reached-body prerequisite; no new guest execution by worker."
+    }
+  ],
+  "api": {
+    "SyntaxAttachment::into_seed(self)": "Result<SyntaxAttachmentSeed,AdapterError>; cold check_tree/check_origins/hash/checked owned metadata pass once; consumes actual pinned tree.",
+    "SyntaxAttachmentSeed::fork(&self)": "Result<SyntaxAttachment,AdapterError>; checks poison, makes local red root over shared genuine GreenNode and clones origin/store Arc handles only. No parser/hash/walk/full store copy.",
+    "identity()": "Key cached EXACT existing lrr/v2/attached-syntax identity, same grammar/green tokens/origin semantic key encoding. No pointer/Salsa slot enters key.",
+    "text_len()": "u32 cached actual pinned root extent.",
+    "metadata_bytes()": "usize cached shared seed payload estimate; external seed Arc header charged by owning common wrapper. Excludes opaque Salsa arena as documented, not full32.2 bound."
+  },
+  "ownership": "actual pinned GreenNode + Arc<SpanMap> + Arc<Mutex<SpanStore>>. Mutex protects actual Send-only HygieneDb Salsa Storage; pinned salsa::Database trait requires Send. No unsafe or fake serialization hygiene. Materialize/hash/snapshot read locks; snapshot exports records then drops lock before its materialize/hash calls. Genuine edit preparation clones SpanStore under short lock only when importing real output, preserving existing transactional semantics; successful commit owns new store/origins Arc.",
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "into_seed",
+        "fork"
+      ],
+      "finding": "Pure syntax representation transport. No assertion/expression evaluator, runtime recipe or source permission."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "SyntaxAttachmentSeed::root",
+        "SyntaxNode::new_root"
+      ],
+      "finding": "Uses genuine pinned green tree and exact origins; preserves attached grouping where display text reparses differently. No output-shape-specific executor/synthetic function."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "identity",
+        "grammar",
+        "store"
+      ],
+      "finding": "No method/numeric/macro spelling rule. Existing semantic span/context/edition keys preserved; namespace/type/member authority stays external."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "into_seed",
+        "fork",
+        "prepare"
+      ],
+      "finding": "Same arbitrary original/attached/generated structural tree API and grammar checks. No original-only runtime semantic refusal. This transport cannot create generated parent/call/source authority."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "check_tree",
+        "check_origins",
+        "fork"
+      ],
+      "finding": "Cold structural syntax validation only, no executable body/pattern/arm/type preparation. Fork reuses actual prepared structure without traversing cold declarations."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "into_seed",
+        "fork",
+        "prepare",
+        "snapshot"
+      ],
+      "finding": "One cold seed identity/metadata pass. Fork does no tokenization/parse/hash/materialize/full walk; parser only for actual new output edit as existing semantics. Installed runtime operations gain no source planning. Existing per-edit SpanStore clone and adapter select_call descendant scan remain inherited cold debt."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "SyntaxAttachmentSeed"
+      ],
+      "finding": "No name/source world census, namespace map or revision invalidation. Mutex is private representation sharing, not authority or query publication."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "Arc<SpanMap>",
+        "Arc<Mutex<SpanStore>>",
+        "GreenNode"
+      ],
+      "finding": "Green/origin/store allocations shared across forks; fixed red root/Arc handles only, no BodyIndex/declaration/parser deep copy. Real edit detaches store/origin after checked input budget. Metadata estimates include reserved hash capacities, owned paths/hygiene tables and bounded tree/origin estimates."
+    }
+  ],
+  "costs": {
+    "freeze": "O(tree nodes/tokens + origin intervals + owned store records), existing structural validation and hash; no output expansion.",
+    "fork": "O(1) cached fields+Arc/green refcounts and red-root handle allocation. No new span/Salsa record or map allocation.",
+    "edit": "Existing cold SpanStore clone/import and structural replacement cost remains; now protected read clone under short mutex then lock released. No improved edit complexity claim.",
+    "metadata": "256MiB checked seed estimate cap; existing32MiB text,2m nodes/origins,4096depth,64MiB cumulative input bounds unchanged. BTree owned nodes conservatively estimated; HashMap reserved capacities and source path capacities charged. Two shared allocation Arc headers accounted; external seed Arc separate. No addresses used semantically.",
+    "exclusion": "Private shared Salsa intern arena not visible through stable API. salsa_unstable memory_usage cancels/drains handles and can deadlock while clones exist; no new feature/dependency/counter used. Actual fixed Storage handles and owned maps charged but cannot certify full Section32.2. Root explicitly holds full retention-bound integration. Fork adds no arena growth; edit imports retain inherited shared-arena debt.",
+    "performance": "No measured speed/scaling acceptance."
+  },
+  "controls_authored_unexecuted": [
+    "actual_upstream_associated_headers_survive_shared_forks_all_editions: Send+Sync compile bound, exact cached identity/text length, actual pointer-sharing, actual three def_fn expansions, seed/otherfork immutability and reseed",
+    "fork_preserves_attached_grouping_and_mixed_origin_records: structural precedence, exact origin closed forest, mixed2015/2024 editions; explicit flattenedtext comparison is negative test only",
+    "failed_real_output_edit_preserves_seed_and_other_forks: malformed real output parse leaves source identity/shared store unchanged",
+    "seed_limit_and_poison_are_typed_errors: cumulative input overflow and poisoned actual shared mutex refused"
+  ],
+  "checks": "Only rustfmt --edition2024 --config skip_children=true on owned exact leaves and separate source/API/diff inspection. No Cargo/compiler/test/native/guest execution.",
+  "independent_review": "Requested validator source pass; pending at freeze.",
+  "remaining": [
+    "Sole validator compile/API/all adapter regressions and four new controls pending.",
+    "Assembly/completed owner seed+output/receipt sharing and real source/epoch/seal authority integration owned by peer/root.",
+    "Reached module authority rejoin after target retained publication remains separate prerequisite.",
+    "No legacy runtime/assert evaluator removed, no full unchanged shift or macro-as-fn-body runtime pass.",
+    "Opaque Salsa arena bound/charging unproved; full32.2/task/milestone/JIT acceptance held."
+  ],
+  "preservation": "Inherited declaration_output.rs and item_output.rs WIP untouched; neither included in this overlay."
+}

@@ -1,0 +1,96 @@
+{
+  "status": "SOURCE-ONLY separate source-aware review; no Cargo/compile/runtime pass; integration and architecture closure held",
+  "claim": "LOCAL-024 WT04 T032/M013/M017/M018 common source admission prerequisite; E-R5-005, MA001/MA006/MA008 are distinct from the eight modes",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "933cf66b9c098b3d0cde914ccfc231c7e6efb7ccd065d5dd6f84ed8a22172159",
+      "bytes": 24878
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_seed.rs",
+      "sha256": "f3958dff23f6f378d176ef4d4a842010331d0b9f6abbc1a459e51d1d56a12bfb",
+      "bytes": 5985
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "973411f77e80c3e62ff0138a4bbdda000eb66afd52ea8569d64de45cbad2bebf",
+      "bytes": 8783
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "3aa2bb458f38a39a6cc88908b18547d15e003771c15301a24bc1626ec37c0477",
+      "bytes": 11135
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_syntax.rs",
+      "sha256": "de8f8b72d844f757109ec8868cc8ad32ab35038a9ef5d7812858478404295ebb",
+      "bytes": 6162
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "64e8920be3b5756bed3fb38411f310052333afe2f95d1d51ff5487504bf1f3c3",
+      "bytes": 20507
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_syntax_tests.rs",
+      "sha256": "25814d220277b1456b5d92c0e3f4af3d9b3cf7fd5f67b22454b2c6e714b4bf43",
+      "bytes": 6371
+    }
+  ],
+  "invariant": "Completed actual source retains initial structural seed, actual issued private receipts and sealed producer output index once; no new body or namespace authority. Original/generated output attachment stays the same SourceSyntaxAssembly kernel.",
+  "authority": [
+    "SourceSyntaxAssembly::from_scan checks actual provider selection parse/path/cfg/root scope and nonzero epoch before capturing actual forest/call origins/anchors. Seed identity retains exact prior adapter syntax identity and immutable checked scan-backed call parents.",
+    "SourceDiscovery::prepare_completed_source_syntax checks actual completed Seal key, no unresolved frontiers, actual output epoch and canonical record-key/descriptor dependency pair. Groups each fragment output once by its actual source scan; conflicting parent/producer outputs refuse.",
+    "SyntaxRequestReceipt stable encoding retains full actual ExpansionKey, token-root identity, exact site, actual macro definition unit/edition and private input form. Optional absence is pending data, never a receipt grant. Demanded attach still requires genuine receipt and same existing attach_receipt key/grammar/site/root checks.",
+    "CompletedSourceEnvironment::source_syntax uses exact Outline query key plus exact SourceSelection; plan binds actual source seed/epoch/seal and cached actual seal-value fingerprint. No full Discovery retention/backreference or fabricated generated context."
+  ],
+  "ownership_and_cost": [
+    "Completion: bounded once-source owned_forest/parse/capture+seed freeze; once-completion output and receipt maps. Global reply count100000/temp32MiB, perplan128MiB, aggregate512MiB checked. Seed row conversion and combined mutable fork tables peak-checked.",
+    "Fork: shared pinned GreenNode/origin map/store handles; bounded copies of mutable call/original/macro-anchor bookkeeping. No BodyIndex clone, provider forest, token text parse, or global output-index reconstruction per selected body.",
+    "Attachment still inherits materialize/snapshot/origin and anchor validation work, including original outline validation after edits. No speed/performance closure claim. Root owns pure body memo and preventing installed execution replanning.",
+    "Completed environment exclusive bytes conservatively include full plan/seed/reply payload and map rows, often overcounting shared source/output Arcs. No cycle, no hidden registry. External query retention/accounting must charge plan metadata or retain completed root; root integration pending.",
+    "Pinned adapter seed opaque Salsa arena sizing remains unavailable/excluded; full Section32.2 retention acceptance held.",
+    "Aggregate512MiB is retained total, not peak: candidate seed/plan capture occurs before insertion and may temporarily retain one additional <=128MiB candidate plus existing Discovery owners. Peer independent read found no concrete source/receipt authority defect; future external memo lifetime must account retained plan roots."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "result": "No new evaluator. Existing SourceSyntaxAssembly attach/finish and ordinary retained-syntax publication remain sole route. Legacy assertion route remains held, unchanged."
+    },
+    {
+      "mode": 2,
+      "result": "Actual structural generated declarations attached with real receipts; no literal/break executor or macro phase namespace."
+    },
+    {
+      "mode": 3,
+      "result": "No macro/name/method/numeric selection logic introduced; receipts retain semantics identity only."
+    },
+    {
+      "mode": 4,
+      "result": "No original/generated semantic gate added. Real staged module scans accepted through same from_scan kernel. Missing actual generated body boundary/export remains explicit existing gap."
+    },
+    {
+      "mode": 5,
+      "result": "Completion captures source structure, never executable body plans; selected next_body_invocation owner kernel and finish_for_body readiness unchanged. Cold missing output/receipt controls authored, unexecuted."
+    },
+    {
+      "mode": 6,
+      "result": "Replaces prepare_syntax percallee provider ownership search, owned_forest/initial parse and complete output-map reconstruction with retained source plan and seed fork. Actual selected attachment repeated costs and root body memo integration remain named holds."
+    },
+    {
+      "mode": 7,
+      "result": "Exact direct source-map and parent/producer index lookup; no perentry global namespace census. Completion scans actual captured source/output inventories once."
+    },
+    {
+      "mode": 8,
+      "result": "Shares pinned green syntax/store/origins plus actual scan/source/output Arcs. Fork copies only bounded mutable attachment tables. Existing selected tree traversal/snapshot cost remains; no BodyIndex deep clone."
+    }
+  ],
+  "controls": {
+    "authored": "completed_source_syntax_tests.rs: unchanged whole macro-nested_stmt_macros source all4 owning editions, actual outer/inner requests+outputs, equivalence to old checked assembly identity, twice independent replay, missing output/receipt and epoch, cold main vs missing macro output/receipt. Private constructor tests are structural controls, not genuine discovery certificate acceptance.",
+    "executed": false,
+    "remaining": "Solevalidator compile + actual completion seal/cfg/source/grammar mutation controls; real CLI/body equivalence; unchanged shift route matrix; runtime publication/fresh proof transition and installed preparation-once evidence."
+  },
+  "witness": "Whole unchanged shift baseline e94ed7 fails inherited legacy assert nonlocal-static route; this component is not claimed as that fix. Nested statement fixture is source-structural control only."
+}

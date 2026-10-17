@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "M013",
+    "M017",
+    "M018"
+  ],
+  "status": "Scoped source component checkpoint; runtime migration and architecture gate incomplete",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "primary": "tests/ui/macros/macro-nested_stmt_macros.rs",
+    "next_failure": "tests/ui/numbers-arithmetic/shift.rs remains runtime FAIL at legacy assertion nonlocal binding; no runtime module hook added"
+  },
+  "current": {
+    "source_member": "fdec9bb3a915d006f206c5027af1f5530449f3bdfd67a59547d4835924a31f41",
+    "source_unchanged": true,
+    "compile_terminal": "09e6f8/0",
+    "publication_terminal": "04abbd/0",
+    "regression_queue_terminal": "b4f767/0",
+    "passed_bodies": 15,
+    "failed_bodies": 0,
+    "scopes": {
+      "boundary-exact-once": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "23a7e2b166495d269a46b32086a34bd9b23d538a432272ee548a1c9449481820"
+      },
+      "target-publication": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "aedf78585106064ceef35362c4008f6528a1d15443aaa20b40172f719b182062"
+      },
+      "child-parent-authority": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "f6973de07782e7275188cfa6d2d5f0689dae2d49d68ea1e69f75c2ace24159fd"
+      },
+      "boundary-wrong-job": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "318506e38ab0cf576af2f08d17391d2b2846f42da41356d8b10e1e4a3ced730e"
+      },
+      "user-suffix": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "d19ff5826e0e9867bc42c6915736cc626a2b2cc2c7d1323312a3ab736fbe9686"
+      },
+      "boundary-currentness": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "b53165bf396de7f055940d5c4b3383dadf274da224fc6e12598b9fd1cbecf553"
+      },
+      "stock-wrapper": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "95eeb313ec3987c60dbc4b3255442344326602a887794bae5bb553aa4be0e2e3"
+      },
+      "stock-typearg-all4": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "0608b66740c42c801c327a48a3ec995c5ccbc9ba141918df984a997f8fb7942f"
+      },
+      "compile-library": {
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "sha256": "e697292c12eff8f1579b5beed3dc0e0d2999d141f031a38c5bf0dda7a3e7949b"
+      },
+      "child-cache-owner": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "c9b98393adda5367ebc7d29919693854581c595688f5fbf70c4765ca58542d64"
+      },
+      "stock-plain": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "b6e29a1cab581cd8b63c55191d091f60946b7dfbafff1b29957bed2ee3310050"
+      },
+      "authority-impl-only": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "1f66420c2d23b29498bd19cb94eb51f956073e805fcde629e17e1f2dd22b7a56"
+      },
+      "pre-body-revocation": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "21f57e47d5575543816caf5d51597d6e86991bca768635ee15f5fbd3dbe1006e"
+      },
+      "stock-user": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "eca197f57d9a6b87453e34e43cc1234f116fbeda56f027c6d4345ffb6982ddec"
+      },
+      "authority-cfg-active": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "7324ec67b82e391cadba57389695b493a1f5e254102f68f28b7ac2463b51d3fa"
+      },
+      "authority-mixed-owner": {
+        "exit_code": 0,
+        "passed": 1,
+        "failed": 0,
+        "sha256": "4fc86f88f48a4291d57b13f12ec76b454a5473df85a1163dd63d19df4ab37949"
+      }
+    },
+    "library": {
+      "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/deps/lrr-613ddfd4d90d020a",
+      "bytes": 118905232,
+      "sha256": "1ed1f2948cbdd815fe8beb62d7bdd1001f014aea864970152f850b58de2488f6",
+      "source_member": "fdec9bb3a915d006f206c5027af1f5530449f3bdfd67a59547d4835924a31f41",
+      "compile_terminal": "09e6f8/0",
+      "compile_only": true
+    },
+    "release_sha256": "e7e673721a18871b22fc4037cdf536ec081177fa784538233cbe7086728834da",
+    "all8_review_sha256": "b75f336bf221acff29f5fc043f5988d952d152809b798c110193feb8c5ac90ef",
+    "release_path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-common-reached-body-components-v4/RELEASE.json"
+  },
+  "separate_prior_component_evidence": {
+    "source_member": "1c31d8abc1f383b64d61d221908416813a66b0f925eea2edd05fd4187954987d",
+    "passed_bodies": 6,
+    "seed": 4,
+    "source_transport": 2,
+    "full_queue_failed": true,
+    "release_sha256": "e1cec49189ef8635a32ef6aa65e86f7392a2fc82311406567e890bed82336ddf",
+    "production_projection": "Production byte-identical through V4; test oracle delta only. Not rerun at V4 and not counted as additional runtime programs."
+  },
+  "failed_attempts": [
+    {
+      "version": 1,
+      "source": "c5af2daa45a9cc7f4d2505d780c3327769756e2174b0736a2af3d66a2477cfe8",
+      "terminal": "9717d0/1",
+      "reason": "New structural test incorrectly parsed display-only full snapshot text as Items; changed only negative reference to actual initializer expression syntax."
+    },
+    {
+      "version": 2,
+      "source": "1c31d8abc1f383b64d61d221908416813a66b0f925eea2edd05fd4187954987d",
+      "terminal": "7f1ab6/1",
+      "reason": "Overbroad no-trace-events oracle rejected ordinary pure memo validation; production unchanged."
+    },
+    {
+      "version": 3,
+      "source": "10822a992263dc33b39157daf17804aceb224650feb5e558d5ad2e48c693fbbe",
+      "terminal": "d1a485/1",
+      "reason": "Exact-seal-only oracle rejected actual transitive ParseFile and Outline ValidatedReuse; exact six events observed, no ProviderRun. V4 allows only exact captured ParseFile/Outline/seal keys with MemoHit/ValidatedReuse and untruncated trace."
+    }
+  ],
+  "shared_mechanisms": [
+    "Pinned SyntaxAttachmentSeed shares actual retained tree, origin array and safe synchronized SpanStore; fork avoids parse/hash/walk.",
+    "CompletedSourceSyntax retains actual SourceAssemblySeed and actual issued expansion replies; selected source preparation delegates that plan.",
+    "Opaque RetainedCallBodyTransition certifies only actual four target row replacements; old call guards remain stale; fresh ordinary Q44/Q47 same declaration/type arguments required."
+  ],
+  "acceptance": {
+    "new_distinct_upstream_runtime_passes": 0,
+    "new_full_fixture_passes": 0,
+    "interpreter_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "not established by this checkpoint",
+    "compiler_tooling_compatibility": "not established by this checkpoint",
+    "full_suite_compatibility": "incomplete",
+    "architecture_matrix": "incomplete",
+    "current_milestone": "not run for this component; not integrated",
+    "guest_jit": "blocked"
+  },
+  "holds": [
+    "Actual reached-module common syntax publication/installed renewal/resume hook pending.",
+    "Pure memo48 and installed recipe renewal are separate future source candidate, excluded from V4.",
+    "Legacy macro-specific production routes remain held; no shortcut vocabulary expanded.",
+    "Opaque Salsa interner memory accounting incomplete; retained owned maps/capacities bounded but not complete Section32.2 acceptance.",
+    "No measured speed/scaling claims or global namespace dependency replacement claim."
+  ]
+}

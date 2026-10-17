@@ -441,3 +441,6 @@ fn official_nested_statement_macro_retained_caller_selects_original_module_heade
         );
     }
 }
+
+#[path = "module_target_publication_tests.rs"]
+mod module_target_publication_tests;

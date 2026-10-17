@@ -13,6 +13,9 @@ pub struct CompletedSourceEnvironment {
     names: Arc<NameNamespaces>,
     sources: Arc<Vec<PreparedSourceView>>,
     scope_owners: BTreeMap<ScopeKey, Vec<u32>>,
+    body_macros: BTreeMap<Digest, (u32, super::body_macro_environment::CompletedBodyMacroFacts)>,
+    macro_admission_bytes: usize,
+    source_syntax: BTreeMap<Digest, Arc<super::source_syntax::CompletedSourceSyntax>>,
     seal_dependency: DependencyStamp,
     bytes: usize,
     names_bytes: usize,
@@ -54,6 +57,46 @@ impl CompletedSourceEnvironment {
             None => SourceScopeOwner::Missing,
         }
     }
+    pub(crate) fn macro_index_roots(
+        &self,
+    ) -> impl Iterator<Item = &Arc<crate::frontend::source_macros::PublishedMacroIndex>> {
+        self.body_macros.values().map(|(_, fact)| fact.index())
+    }
+    pub(super) fn source_for_macro_fact(
+        &self,
+        selection: &crate::source::changes::SourceSelection,
+    ) -> Result<&PreparedSourceView, Diagnostic> {
+        let key = QueryKey::Outline(selection.outline.clone()).fingerprint();
+        let (ordinal, _) = self
+            .body_macros
+            .get(&key)
+            .ok_or_else(|| fault("completed module macro provider absent"))?;
+        self.sources
+            .get(*ordinal as usize)
+            .filter(|source| source.selection() == selection)
+            .ok_or_else(|| fault("completed module macro source selection differs"))
+    }
+    pub(super) fn body_macro_fact(
+        &self,
+        selection: &crate::source::changes::SourceSelection,
+    ) -> Result<&super::body_macro_environment::CompletedBodyMacroFacts, Diagnostic> {
+        self.source_for_macro_fact(selection)?;
+        let key = QueryKey::Outline(selection.outline.clone()).fingerprint();
+        self.body_macros
+            .get(&key)
+            .map(|(_, fact)| fact)
+            .ok_or_else(|| fault("completed module macro provider absent"))
+    }
+    pub(crate) fn source_syntax(
+        &self,
+        selection: &crate::source::changes::SourceSelection,
+    ) -> Result<&Arc<super::source_syntax::CompletedSourceSyntax>, Diagnostic> {
+        let key = QueryKey::Outline(selection.outline.clone()).fingerprint();
+        self.source_syntax
+            .get(&key)
+            .filter(|plan| plan.source() == selection)
+            .ok_or_else(|| fault("completed source syntax owner absent or differs"))
+    }
     pub fn dependency(&self) -> &DependencyStamp {
         &self.seal_dependency
     }
@@ -70,6 +113,7 @@ impl CompletedSourceEnvironment {
         self.bytes
             .checked_add(self.names_bytes)
             .and_then(|n| n.checked_add(self.sources_bytes))
+            .and_then(|n| n.checked_add(self.macro_admission_bytes))
             .and_then(|n| n.checked_add(6 * std::mem::size_of::<usize>()))
             .ok_or_else(crate::runtime::arena::resource)
     }
@@ -150,6 +194,17 @@ impl SourceDiscovery {
         }
         for module in self.staged_modules.values() {
             if module.namespace_complete && module.provider.macro_export_source_role().is_none() {
+                if module
+                    .provider
+                    .macro_index()
+                    .pending_producers()
+                    .next()
+                    .is_some()
+                {
+                    return Err(fault(
+                        "completed runtime module macro provider remains pending",
+                    ));
+                }
                 let source = module.syntax.prepared_source();
                 self.graph
                     .require_source(source.selection(), source.outline())?;
@@ -225,6 +280,106 @@ impl SourceDiscovery {
                 .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
+        // Required module/source macro closure only; no executable body is
+        // parsed/lowered here. Runtime factories share these immutable indexes.
+        let macro_source_bytes = sources
+            .len()
+            .checked_mul(256 + 16 * std::mem::size_of::<(Digest, u32)>())
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let mut macro_sources = BTreeMap::new();
+        for (ordinal, source) in sources.iter().enumerate() {
+            let key = QueryKey::Outline(source.selection().outline.clone()).fingerprint();
+            if macro_sources
+                .insert(
+                    key,
+                    u32::try_from(ordinal).map_err(|_| crate::runtime::arena::resource())?,
+                )
+                .is_some()
+            {
+                return Err(fault("completed macro source inventory key duplicated"));
+            }
+        }
+        let mut body_macros = BTreeMap::new();
+        let mut macro_admission_bytes = 0usize;
+        let mut macro_map_bytes = 0usize;
+        if let Some(providers) = providers {
+            let mut remaining = 64usize * 1024 * 1024;
+            for provider in providers
+                .iter()
+                .filter(|p| p.macro_export_source_role().is_none())
+            {
+                if provider.macro_index().pending_producers().next().is_some() {
+                    return Err(fault(
+                        "completed runtime module macro provider remains pending",
+                    ));
+                }
+                let source = provider.module_source();
+                let index = provider.completed_runtime_index(providers, None, remaining)?;
+                remaining = remaining
+                    .checked_sub(index.runtime_bytes())
+                    .ok_or_else(crate::runtime::arena::resource)?;
+                let compiler = provider
+                    .compiler
+                    .as_ref()
+                    .map(|catalog| catalog.owning_profile_identity())
+                    .transpose()?;
+                let fact = super::body_macro_environment::CompletedBodyMacroFacts::prepare(
+                    source, index, compiler,
+                )?;
+                insert_macro_fact(
+                    &sources,
+                    &macro_sources,
+                    &mut body_macros,
+                    &mut macro_map_bytes,
+                    &mut macro_admission_bytes,
+                    source,
+                    fact,
+                )?;
+            }
+            for module in self
+                .staged_modules
+                .values()
+                .filter(|m| m.namespace_complete && m.provider.macro_export_source_role().is_none())
+            {
+                let source = module.syntax.prepared_source();
+                let inherited = self.module_projection_inherited(&module.syntax)?;
+                let index = module.provider.completed_runtime_index(
+                    providers,
+                    Some(&inherited),
+                    remaining,
+                )?;
+                remaining = remaining
+                    .checked_sub(index.runtime_bytes())
+                    .ok_or_else(crate::runtime::arena::resource)?;
+                let compiler = module
+                    .provider
+                    .compiler
+                    .as_ref()
+                    .map(|catalog| catalog.owning_profile_identity())
+                    .transpose()?;
+                let fact = super::body_macro_environment::CompletedBodyMacroFacts::prepare(
+                    source, index, compiler,
+                )?;
+                insert_macro_fact(
+                    &sources,
+                    &macro_sources,
+                    &mut body_macros,
+                    &mut macro_map_bytes,
+                    &mut macro_admission_bytes,
+                    source,
+                    fact,
+                )?;
+            }
+            if body_macros.len() != sources.len() {
+                return Err(fault("completed module macro ownership count differs"));
+            }
+        }
+        macro_source_bytes
+            .checked_add(macro_map_bytes)
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        drop(macro_sources);
         let fingerprint = self
             .body_boundary_seal_fingerprint
             .ok_or_else(|| fault("completed source environment seal identity absent"))?;
@@ -235,6 +390,26 @@ impl SourceDiscovery {
         let bytes = std::mem::size_of::<CompletedSourceEnvironment>()
             .checked_add(seal_dependency.heap_bytes())
             .and_then(|n| n.checked_add(owner_bytes))
+            .and_then(|n| n.checked_add(macro_map_bytes))
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let source_syntax = self.prepare_completed_source_syntax(seal)?;
+        let syntax_bytes = source_syntax.values().try_fold(0usize, |bytes, plan| {
+            bytes
+                .checked_add(plan.metadata_bytes())
+                .and_then(|n| {
+                    n.checked_add(
+                        256 + 16
+                            * std::mem::size_of::<(
+                                Digest,
+                                Arc<super::source_syntax::CompletedSourceSyntax>,
+                            )>(),
+                    )
+                })
+                .ok_or_else(crate::runtime::arena::resource)
+        })?;
+        let bytes = bytes
+            .checked_add(syntax_bytes)
+            .filter(|n| *n <= 512 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         let names_bytes = self.graph.exclusive_retained_bytes()?;
         // Share only after all fallible preparation has passed. Subsequent
@@ -243,6 +418,9 @@ impl SourceDiscovery {
             names: Arc::clone(&self.graph),
             sources: Arc::new(sources),
             scope_owners,
+            body_macros,
+            macro_admission_bytes,
+            source_syntax,
             seal_dependency,
             bytes,
             names_bytes,
@@ -250,4 +428,49 @@ impl SourceDiscovery {
         }));
         Ok(())
     }
+}
+
+fn insert_macro_fact(
+    sources: &[PreparedSourceView],
+    owners: &BTreeMap<Digest, u32>,
+    facts: &mut BTreeMap<Digest, (u32, super::body_macro_environment::CompletedBodyMacroFacts)>,
+    map_bytes: &mut usize,
+    admission_bytes: &mut usize,
+    source: &PreparedSourceView,
+    fact: super::body_macro_environment::CompletedBodyMacroFacts,
+) -> Result<(), Diagnostic> {
+    // Deterministic direct source inventory join; publication equality remains
+    // actual authority rather than the locator digest alone.
+    let key = QueryKey::Outline(source.selection().outline.clone()).fingerprint();
+    let ordinal = *owners
+        .get(&key)
+        .ok_or_else(|| fault("completed macro source owner absent"))?;
+    if !sources
+        .get(ordinal as usize)
+        .is_some_and(|owner| owner.same_publication(source))
+    {
+        return Err(fault("completed macro source publication differs"));
+    }
+    if facts.contains_key(&key) {
+        return Err(fault("completed macro source key duplicated"));
+    }
+    *map_bytes = map_bytes
+        .checked_add(
+            256 + 16
+                * std::mem::size_of::<(
+                    Digest,
+                    (u32, super::body_macro_environment::CompletedBodyMacroFacts),
+                )>(),
+        )
+        .filter(|n| *n <= 32 * 1024 * 1024)
+        .ok_or_else(crate::runtime::arena::resource)?;
+    *admission_bytes = admission_bytes
+        .checked_add(fact.index().runtime_bytes())
+        .and_then(|n| n.checked_add(fact.index().exclusive_metadata_bytes().ok()?))
+        .and_then(|n| n.checked_add(16 * std::mem::size_of::<usize>()))
+        .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
+        .filter(|n| *n <= 64 * 1024 * 1024)
+        .ok_or_else(crate::runtime::arena::resource)?;
+    facts.insert(key, (ordinal, fact));
+    Ok(())
 }

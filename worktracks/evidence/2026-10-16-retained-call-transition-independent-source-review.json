@@ -1,0 +1,125 @@
+{
+  "status": "Independent exact-source component review only; no Cargo/compiler/tests/runtime integration acceptance",
+  "reviewer": "drop_catalog_next",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/retained_call_transition.rs",
+      "sha256": "fa7c0e712afcbd91af09d116d619a373f5be2ef6905163a20ff7692ae2760127",
+      "bytes": 8242
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "c49d1030cc3f7c92ed387ec9ba6a52fc02e12eae9136874f0adb4b3811579a97",
+      "bytes": 31568
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "77917d36f5953158fe075e6787cbd06a64564a7aac033261c7c432a4a10c8504",
+      "bytes": 15701
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "6fbd48ece2f766b88bd839178ec98b819eb1646e11d70c0c0e960b429ce4e509",
+      "bytes": 139772
+    }
+  ],
+  "witness": "Actual unchanged macro-nested_stmt_macros.rs target transition control planned by validator; earlier unchanged shift baseline e94ed7 legacy route failure is preserved. No terminal inferred by reviewer.",
+  "finding": "No remaining concrete authority defect found at these exact hashes after checked Arc-header accounting fix. Component is a continuation fence, not executable authority.",
+  "fixed_finding": "Initial transition metadata included guard payload but omitted its shared Arc allocation header if retained after original Q47 dropped. Root added checked2*usize; repinned fa7c0e71. Root also replaced unreachable Poll map with explicit Err/NeedInput propagation.",
+  "authority": [
+    "publish_retained_call_body checks coordinator, exact current Q47/index/site, actual caller lease body and currentness, then actual selected callable before four original published target stamps.",
+    "Existing publish_retained_body remains sole target-row writer: actual retained syntax/seal/epoch/source/current prior original/retained anchors, target unowned, resource/overflow preflight, target-only atomic four-row publication. No caller row rewriting or source_revision change.",
+    "Private transition stores exact target definition/before+after4stamps/newBodyHandle/new syntax stamp, captured caller PcKey/old Q47 fingerprint/source_revision and same guard Arc. Cannot mint from arbitrary replacement tuple externally.",
+    "PreparedInputGuard::require_current_across_call_body preserves every old input stamp including positive/negative dependencies. Only exact four target keys with captured old and witnessed new stamp can differ; no mutation, query/provider, guard refresh or global revision check.",
+    "require_rebound first checks transition fence then exact captured pc and old Q47 fingerprint. same_call_contract checks actual key/selecteddefinition/full cached FunctionSignature fingerprint/caller source-plan identity and every explicit row ordinal/site/range/SourceType Eq. SourceType includes real symbolic/nominal TypeKey identity, not token spelling.",
+    "Fresh Q47.require_current verifies caller body/index/site/guard; fresh.callable revalidates its actual canonical ordinary admission, signature and body. New callee must be exact same definition and actual newly published body. Oldguard remains stale; this does not authorize old installed recipe."
+  ],
+  "important_limits": [
+    "Transition.require_current validates new syntax stamp and scoped permit but does not itself traverse new unit current epoch/seal/source closure. It is ONLY a continuation fence; executable admission must consume require_rebound fresh ordinary Q47/callee closure or equivalent genuine new parse guard. Root confirms this mandatory boundary.",
+    "Caller BodyExecutionLease proves actual active/suspended source body, not independently that runtime currently reaches captured PC. Root engine must bind exact actual frame/site/continuation and preserve evaluated arguments; component alone supplies no such executable continuation.",
+    "Successful target publication followed by later validation failure can leave authorized derived target rows published; no guest argument/frame transfer occurs here. Engine must not mistake failed continuation for rollback/execution success.",
+    "No engine/InstalledPcTable/recipe/arguments/suspension/resume integration exists. Never refresh old installed guard or reuse old callable after publication.",
+    "Runtime owner must charge returned transition metadata and guard while retained; no runtime storage/accounting hook exists yet."
+  ],
+  "retention_and_costs": {
+    "retained": "Fixed scalar target stamps/site/body/syntax metadata plus one Arc<PreparedInputGuard>. No parser/index/source plan/body graph clone or hidden parent Arc. Metadata includes guard payload and2usize Arc header with checked32MiB cap. Existing guard cap100k inputdeps/32MiB remains.",
+    "cold": "Capture4old/newstamps, existing body publisher/source projection/parse currentness, one oldguard traversal. same_call_contract O(explicit rows+SourceType structuralEq), not per installed phase.",
+    "checks": "Fence O(old relevant inputs) direct published stamps plus4 fixedrows. require_rebound additionally genuine fresh guard/callee checks. No namespace/source world census or global revision equality added.",
+    "limits": "Existing body publication/canonical header/currentness costs retained; no measured speed/scaling claim."
+  },
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "publish_retained_call_body",
+        "require_rebound"
+      ],
+      "finding": "Source-authority transition only; no assertion/expression evaluator or LRIR recipe."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "publish_retained_body",
+        "RetainedCallBodyTransition::body"
+      ],
+      "finding": "Uses actual retained input/body anchor from common publisher, no literal/break executor, text replay or fabricated BodyKey."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "same_call_contract"
+      ],
+      "finding": "Full source signature/actual explicit Type equality, no macro/method/numeric spelling exception."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "publish_retained_call_body"
+      ],
+      "finding": "No context-only generated/original language route introduced. Existing original-anchor retained publisher authority remains; generated-parent readiness still separate genuine prerequisite."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "publish_retained_call_body"
+      ],
+      "finding": "No guest entry/pattern/arm/type-body scan added. Component consumes selected actual call and existing caller lease; root must bind reached continuation. Unentered code is not executable-prepared here."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "require_current_across_call_body",
+        "same_call_contract"
+      ],
+      "finding": "Direct captured stamps and cached identities, no source parse/provider/plan rebuild in transition fence. Body publisher remains explicit cold authorized preparation. Fresh ordinary proof preparation is required once after actual rebind, never installed guard refresh."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "target_keys",
+        "permits_replacement",
+        "require_current_across_call_body"
+      ],
+      "finding": "Exact target-only dependency exception, all other relevant old positive/negative stamps preserved. Unrelated derived publication is allowed; source_revision still protects real source-universe replacement. No world census."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "RetainedCallBodyTransition::guard",
+        "metadata_bytes"
+      ],
+      "finding": "One shared guard Arc, no BodyIndex/source/parser deep copy or full-file node search. Actual input guard payload bounded and allocation header charged. Runtime owner traversal/budget integration pending."
+    }
+  ],
+  "controls_required_pending": [
+    "Actual old Q47/current caller lease -> real retained syntax publication -> checked target transition -> fresh same ordinary Q47 accepted; old guard/callable still stale.",
+    "Wrong caller body/index/PC, wrong selected plan, alternate same-name declaration, changed nominal/explicit row/fullsignature refused.",
+    "Changed old non-target positive/negative namespace/source/context/body/cfg dependency refused; unrelated derived publication allowed.",
+    "Changed target4row/newsyntax/epoch/seal or source-universe publication refused through appropriate fence plus freshproof layer.",
+    "Active target refusal before mutation; repeated current publication/rebound behavior.",
+    "NeedInput before/after publisher handled explicitly with no guest frame/argument mutation; suspension/resume and exactly-once effects still root runtime controls.",
+    "Retained metadata budget/cap/overflow and guard lifetime after original plan retired."
+  ],
+  "execution": "No Cargo/compiler/tests invoked by reviewer. Validator owns separate new controls; not read/executed in this exact production review.",
+  "historical": "Initial889907c7 transition accounting finding preserved in collaboration; this record pins fixedfa7c0e71, not original candidate."
+}

@@ -1,0 +1,45 @@
+{
+  "status": "precode source-only; no Cargo/runtime/commit",
+  "design": "worktracks/evidence/2026-10-16-reached-module-retained-publication-source-design.json SHA cb2568270bccc9ced8eeec71c7568a283dad97e88e38847af54ed5cd6e189cff",
+  "witness": "Whole unchanged shift actual baseline e94ed7 fails legacy runtime assert route nonlocal static; no module Type firstfailure claim.",
+  "invariant": "Retain one real-source structural assembly seed and exact sealed output/issued receipt indices; same common selected-body preparation consumes only needed output chain without owned_forest/fullparse/global output reconstruction per callee.",
+  "api": "SourceAssemblySeed::prepare/fork; CompletedSourceSyntax source/epoch/seal/fingerprint/metadata+prepare_body/prepare_source; CompletedSourceEnvironment::source_syntax actual selection; SourceDiscovery existing prepare_body_syntax/source delegates same retained plan.",
+  "authority": "Existing real provider source+DeclarationMacroIndex scan, actual pinned seed identity, original anchors/call bindings, actual issued private request key/site/root/form/definition, exact GeneratedDeclarations parent/producer/epoch and actual seal pair. No namespace/body execution grant. Missing replies stay errors.",
+  "cost": "Once-source tokenization/parser/capture and once-completion output/receipt indexing; selected pure body prep forks bounded mutable tables and structural adapter handles, attaches needed outputs. Existing snapshot/parser per structural edit remains named inherited cost, no installed execution planning.",
+  "ownership": "Immutable Arc source/scan/seed/reply/receipt roots, no full Discovery/Completed-root backreference or cycle. Root owns memo/runtime publication/rejoin; adapter worker owns structural seed/fork payload and accounting.",
+  "all8_plan": [
+    "Same SourceSyntaxAssembly no alternate evaluator",
+    "Actual structural outputs no literal/break lane",
+    "No macro/name/numeric profiles",
+    "No generated/original semantic gate; staged module source readiness gaps explicit",
+    "No cold function executable preparation; selected-body function owner kernel unchanged",
+    "Seed/index once and shared; pure selected body memo owned root",
+    "Direct source selection map not world dispatch census",
+    "Pinned seed and Arc metadata; no immutable BodyIndex clone/text reparse; mutable fork table cost bounded"
+  ],
+  "required_evidence": [
+    "Exact source all8 review and bounded ownership",
+    "Adapter sharing/bounds structural controls by peer",
+    "Shared CLI/body prepare equivalence vs old source baseline",
+    "Missing/wrong outputs/receipts/source/cfg/epoch/grammar/seal refusal controls",
+    "Actual unchanged shift and route matrix via solevalidator; runtime rejoin remains required"
+  ],
+  "before": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "37f4719011f6538ab872743f5b9d6cfbaa88161bee3417385934a97657b6d1b0"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "cf72e8c621d7a33ec2f60e52d1f2dabb868043d5867830293e1098b3e31726c3"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "fda30cd63d08f3ae49b6069c8490ba31e24b0756922369ce10c92158f32c82ad"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "28a237edb99ac30eac55c23b2b051f69b60fa67cbcfa6c1f1a649fb4d84ed9cb"
+    }
+  ]
+}

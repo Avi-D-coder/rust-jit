@@ -232,6 +232,9 @@ impl Roots {
             environment.sources_root(),
             environment.sources_metadata_bytes(),
         )?;
+        for index in environment.macro_index_roots() {
+            self.published(index)?;
+        }
         // All retained views are actual live-runtime source publications. Their
         // state/parser/input allocations remain in the existing prepared-source
         // weak pool; this traversal neither registers nor republishes them.

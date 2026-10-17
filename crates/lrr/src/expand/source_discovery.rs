@@ -44,6 +44,7 @@ mod item_impl_completion;
 mod original_inert;
 #[path = "source_discovery/source_syntax.rs"]
 mod source_syntax;
+pub(crate) use source_syntax::CompletedSourceSyntax;
 #[path = "source_discovery/type_scope_receipts.rs"]
 mod type_scope_receipts;
 pub(crate) use type_scope_receipts::TypeScopeReceipt;

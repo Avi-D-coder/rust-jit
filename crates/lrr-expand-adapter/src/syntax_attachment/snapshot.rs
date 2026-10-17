@@ -27,11 +27,17 @@ impl SyntaxSnapshot {
 }
 impl SyntaxAttachment {
     pub fn snapshot(&self) -> Result<SyntaxSnapshot, AdapterError> {
-        let mut used = BTreeSet::new();
-        for (_, origin) in self.origins.iter() {
-            used.insert(self.store.key(origin)?);
-        }
-        let origins = self.store.export_records(vec![], used)?;
+        let origins = {
+            let store = self
+                .store
+                .lock()
+                .map_err(|_| error("attachment span store lock poisoned"))?;
+            let mut used = BTreeSet::new();
+            for (_, origin) in self.origins.iter() {
+                used.insert(store.key(origin)?);
+            }
+            store.export_records(vec![], used)?
+        };
         if origins.allocated_bytes()? > MAX_RETAINED_INPUT {
             return Err(error("syntax snapshot origin retention budget"));
         }

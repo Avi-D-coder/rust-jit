@@ -87,172 +87,114 @@ impl SealedBodyMacroEnvironment {
         }
     }
 }
+/// Prepared once from an actual completed source provider and its inherited
+/// context. It owns no CompletedSourceEnvironment Arc, avoiding a parent cycle.
+pub(super) struct CompletedBodyMacroFacts {
+    index: Arc<PublishedMacroIndex>,
+    identity: Digest,
+    receipt_bytes: usize,
+}
+impl CompletedBodyMacroFacts {
+    pub(super) fn prepare(
+        source: &PreparedSourceView,
+        index: PublishedMacroIndex,
+        compiler_identity: Option<Digest>,
+    ) -> Result<Self, Diagnostic> {
+        index.require_publication(source)?;
+        let mut identity = StableEncoder::new("lrr/v1/selected-sealed-body-macro-environment");
+        identity.record(&source.selection().outline);
+        identity.string(source.selection().path.as_str());
+        identity.digest(index.prepare_semantic_identity()?);
+        identity.digest(super::super::source_declarative::engine_version());
+        identity.option(&compiler_identity, |identity, compiler| {
+            identity.digest(*compiler)
+        });
+        let receipt_bytes = std::mem::size_of::<SealedBodyMacroEnvironment>()
+            .checked_add(2 * std::mem::size_of::<usize>())
+            .and_then(|n| {
+                n.checked_add(
+                    source
+                        .exclusive_metadata_bytes()
+                        .ok()?
+                        .checked_sub(std::mem::size_of::<PreparedSourceView>())?,
+                )
+            })
+            .filter(|n| *n <= 1024 * 1024)
+            .ok_or_else(|| fault("body environment receipt metadata limit"))?;
+        Ok(Self {
+            index: Arc::new(index),
+            identity: identity.finish(),
+            receipt_bytes,
+        })
+    }
+    pub(super) fn index(&self) -> &Arc<PublishedMacroIndex> {
+        &self.index
+    }
+}
+impl CompletedSourceEnvironment {
+    /// Selected owning-module envelope from immutable completed provider facts.
+    /// The actual published seal is required; no provider/index reconstruction.
+    pub(crate) fn sealed_body_macro_environment(
+        self: &Arc<Self>,
+        db: &mut Database,
+        selection: &SourceSelection,
+    ) -> QueryPoll<Arc<SealedBodyMacroEnvironment>> {
+        let fact = match self.body_macro_fact(selection) {
+            Ok(fact) => fact,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let DependencyStamp::Query {
+            key: QueryKey::DiscoverySeal(seal_key),
+            fingerprint,
+        } = self.dependency()
+        else {
+            return QueryPoll::Ready(Err(fault(
+                "completed body environment seal dependency differs",
+            )));
+        };
+        match db.fetch(&SyntaxProvider, QueryKey::DiscoverySeal(seal_key.clone())) {
+            QueryPoll::Ready(Ok(outcome))
+                if matches!(outcome.value.as_ref(), QueryValue::DiscoverySeal(seal)
+                if seal.key() == *seal_key && outcome.fingerprint == *fingerprint) => {}
+            QueryPoll::Ready(Ok(_)) => {
+                return QueryPoll::Ready(Err(fault(
+                    "body environment current published discovery seal differs",
+                )));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        QueryPoll::Ready((|| {
+            let source = self.source_for_macro_fact(selection)?;
+            fact.index.require_publication(source)?;
+            let bytes = fact
+                .receipt_bytes
+                .checked_add(self.dependency().heap_bytes())
+                .filter(|n| *n <= 1024 * 1024)
+                .ok_or_else(|| fault("body environment receipt metadata limit"))?;
+            Ok(Arc::new(SealedBodyMacroEnvironment {
+                source: source.share(),
+                index: Arc::clone(&fact.index),
+                source_environment: Arc::clone(self),
+                seal_dependency: self.dependency().clone(),
+                identity: fact.identity,
+                bytes,
+            }))
+        })())
+    }
+}
 impl SourceDiscovery {
-    /// Preparation only: select one genuinely completed provider/index. A
-    /// generated body's actual boundary is joined separately by its owner.
+    /// Same completed-fact factory used by reached ordinary module bodies.
     pub fn sealed_body_macro_environment(
         &self,
         db: &mut Database,
         selection: &SourceSelection,
     ) -> QueryPoll<Arc<SealedBodyMacroEnvironment>> {
-        let prepared = (|| {
-            let _ = self.sealed_expansions()?;
-            let seal = self
-                .seal
-                .as_ref()
-                .ok_or_else(|| fault("body environment discovery is unsealed"))?;
-            let fingerprint = self
-                .body_boundary_seal_fingerprint
-                .ok_or_else(|| fault("body environment completed seal identity is absent"))?;
-            let providers = &self
-                .declarative
-                .as_ref()
-                .ok_or_else(|| fault("body environment source providers absent"))?
-                .2;
-            let source_key = QueryKey::Outline(selection.outline.clone()).fingerprint();
-            let original = self.source_jobs.get(&source_key).copied();
-            let module = self.module_parse_jobs.get(&source_key).copied();
-            if original.is_some() && module.is_some() {
-                return Err(fault(
-                    "body environment selected source has duplicate owners",
-                ));
-            }
-            // Delay the selected index construction until after the genuine
-            // published seal query below; this first pass only identifies owner.
-            if let Some(ordinal) = original {
-                let source = self
-                    .sources
-                    .get(ordinal)
-                    .ok_or_else(|| fault("body environment source owner absent"))?;
-                let provider = providers
-                    .get(ordinal)
-                    .ok_or_else(|| fault("body environment provider absent"))?;
-                if source.selection() != selection
-                    || provider.module_source().selection() != selection
-                    || !source.same_publication(provider.module_source())
-                    || provider.macro_export_source_role().is_some()
-                    || provider.macro_index().pending_producers().next().is_some()
-                {
-                    return Err(fault(
-                        "body environment exact selected runtime source differs",
-                    ));
-                }
-            } else if let Some(producer) = module {
-                let staged = self
-                    .staged_modules
-                    .get(&producer)
-                    .ok_or_else(|| fault("body environment module owner absent"))?;
-                if !staged.namespace_complete
-                    || staged.syntax.prepared_source().selection() != selection
-                    || staged.provider.module_source().selection() != selection
-                    || !staged
-                        .syntax
-                        .prepared_source()
-                        .same_publication(staged.provider.module_source())
-                    || staged.provider.macro_export_source_role().is_some()
-                    || staged
-                        .provider
-                        .macro_index()
-                        .pending_producers()
-                        .next()
-                        .is_some()
-                {
-                    return Err(fault(
-                        "body environment exact selected module is incomplete",
-                    ));
-                }
-            } else {
-                return Err(fault(
-                    "body environment selected source was not admitted by discovery",
-                ));
-            }
-            Ok((seal, fingerprint, providers, original, module))
-        })();
-        let (seal, fingerprint, providers, original, module) = match prepared {
-            Ok(prepared) => prepared,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let key = QueryKey::DiscoverySeal(self.key.clone());
-        let outcome = match db.fetch(&SyntaxProvider, key.clone()) {
-            QueryPoll::Ready(Ok(outcome)) => outcome,
+        let environment = match self.completed_source_environment(db) {
+            QueryPoll::Ready(Ok(environment)) => environment,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        if !matches!(outcome.value.as_ref(), QueryValue::DiscoverySeal(current)
-            if current.key() == seal.key() && outcome.fingerprint == fingerprint)
-        {
-            return QueryPoll::Ready(Err(fault(
-                "body environment current published discovery seal differs",
-            )));
-        }
-        QueryPoll::Ready((|| {
-            let (source, provider, inherited) = if let Some(ordinal) = original {
-                let provider = &providers[ordinal];
-                (provider.module_source(), provider, None)
-            } else {
-                let staged = self
-                    .staged_modules
-                    .get(&module.ok_or_else(|| fault("body environment owner disappeared"))?)
-                    .ok_or_else(|| fault("body environment selected module disappeared"))?;
-                (
-                    staged.syntax.prepared_source(),
-                    &staged.provider,
-                    Some(self.module_projection_inherited(&staged.syntax)?),
-                )
-            };
-            let source_environment = self
-                .completed_source_environment
-                .as_ref()
-                .ok_or_else(|| fault("completed source environment absent"))?;
-            if source_environment.dependency()
-                != &(DependencyStamp::Query {
-                    key: key.clone(),
-                    fingerprint,
-                })
-            {
-                return Err(fault("completed source environment seal differs"));
-            }
-            let index = provider.completed_runtime_index(
-                providers,
-                inherited.as_ref(),
-                64 * 1024 * 1024,
-            )?;
-            let index_identity = index.prepare_semantic_identity()?;
-            let mut identity = StableEncoder::new("lrr/v1/selected-sealed-body-macro-environment");
-            identity.record(&selection.outline);
-            identity.string(selection.path.as_str());
-            identity.digest(index_identity);
-            identity.digest(super::super::source_declarative::engine_version());
-            let compiler_identity = provider
-                .compiler
-                .as_ref()
-                .map(|catalog| catalog.owning_profile_identity())
-                .transpose()?;
-            identity.option(&compiler_identity, |identity, compiler| {
-                identity.digest(*compiler)
-            });
-            let seal_dependency = DependencyStamp::Query { key, fingerprint };
-            let bytes = std::mem::size_of::<SealedBodyMacroEnvironment>()
-                .checked_add(2 * std::mem::size_of::<usize>())
-                .and_then(|bytes| {
-                    bytes.checked_add(
-                        source
-                            .exclusive_metadata_bytes()
-                            .ok()?
-                            .checked_sub(std::mem::size_of::<PreparedSourceView>())?,
-                    )
-                })
-                .and_then(|bytes| bytes.checked_add(seal_dependency.heap_bytes()))
-                .filter(|bytes| *bytes <= 1024 * 1024)
-                .ok_or_else(|| fault("body environment receipt metadata limit"))?;
-            Ok(Arc::new(SealedBodyMacroEnvironment {
-                source: source.share(),
-                index: Arc::new(index),
-                source_environment: Arc::clone(source_environment),
-                seal_dependency,
-                identity: identity.finish(),
-                bytes,
-            }))
-        })())
+        environment.sealed_body_macro_environment(db, selection)
     }
 }

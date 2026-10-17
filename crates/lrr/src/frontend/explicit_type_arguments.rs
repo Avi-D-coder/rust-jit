@@ -128,6 +128,22 @@ impl PreparedExplicitTypeArguments {
     pub(crate) fn fingerprint(&self) -> Digest {
         self.fingerprint
     }
+    /// Cold proof renewal after an authorized executable-body publication.
+    /// Guard/observation identities may change; source argument semantics and
+    /// the selected declaration's complete signature must remain identical.
+    pub(crate) fn same_call_contract(&self, other: &Self) -> bool {
+        self.key == other.key
+            && self.definition == other.definition
+            && self.signature == other.signature
+            && self.plan.source_identity() == other.plan.source_identity()
+            && self.rows.len() == other.rows.len()
+            && self.rows.iter().zip(other.rows.iter()).all(|(a, b)| {
+                a.ordinal == b.ordinal
+                    && a.site == b.site
+                    && a.range == b.range
+                    && a.source == b.source
+            })
+    }
     pub(crate) fn require_written(&self, name: &str, syntax: &[String]) -> Result<(), Diagnostic> {
         self.target.require_written(name, syntax)
     }
