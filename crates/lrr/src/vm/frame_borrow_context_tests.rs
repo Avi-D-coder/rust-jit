@@ -190,8 +190,6 @@ fn check(mutable: bool) {
     complete(&mut c);
     let node = &c.frame.body.nodes()[c.operand.0 as usize];
     let scope = node.extended_to.as_ref().unwrap().scope;
-    let target = c.frame.cell(node.value.unwrap()).unwrap();
-    assert_eq!(c.frame.slots[node.value.unwrap().0 as usize].scope, scope);
     assert!(matches!(&c.frame.binding_sources[c.binding.0 as usize],
             Some(crate::traits::term::TyTerm::Ref(_, access, target))
             if *access == mutable && target.as_ref() == &crate::traits::term::TyTerm::Primitive(crate::ir::op::PrimitiveType::U32)));
@@ -204,10 +202,22 @@ fn check(mutable: bool) {
     assert_eq!(value.payload, c.expected);
     assert_eq!(c.frame.counters.started_by_opcode[0], 1);
     assert_eq!(c.frame.counters.started_by_opcode[31], 1);
-    assert_eq!(c.store.read_scalar(target).unwrap(), value);
-    c.frame.leave(scope, &mut c.store).unwrap();
-    assert_eq!(c.store.state(target).unwrap(), CellState::Dropped);
-    assert!(c.store.read_reference(reference).is_err());
+    if mutable {
+        // A mutable borrow of a literal is a block-extended frame temporary.
+        let target = c.frame.cell(node.value.unwrap()).unwrap();
+        assert_eq!(c.frame.slots[node.value.unwrap().0 as usize].scope, scope);
+        assert_eq!(c.store.read_scalar(target).unwrap(), value);
+        c.frame.leave(scope, &mut c.store).unwrap();
+        assert_eq!(c.store.state(target).unwrap(), CellState::Dropped);
+        assert!(c.store.read_reference(reference).is_err());
+    } else {
+        // A shared borrow of a constant expression is rvalue-promoted: the
+        // operand is published once as run-long storage, owned by no scope,
+        // so the reference outlives the block (`&'static`).
+        assert_eq!(c.frame.counters.started_by_opcode[66], 1);
+        c.frame.leave(scope, &mut c.store).unwrap();
+        assert_eq!(c.store.read_reference(reference).unwrap(), value);
+    }
 }
 #[test]
 fn rustc_explicit_shared_borrow_context_materializes_original_unsuffixed_operand() {

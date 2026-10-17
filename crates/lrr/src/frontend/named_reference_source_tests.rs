@@ -170,7 +170,10 @@ fn exact_positive_type_bucket_never_relaxes_primitive_absence_or_ambiguity() {
 }
 
 #[test]
-fn nominal_reference_parameter_cannot_install_without_the_actual_context_certificate() {
+fn nominal_reference_parameter_installs_in_a_context_free_closure_frame() {
+    // A frame with no definition environment is a closure frame: its
+    // parameters' views are the reached closed Types of the call, so the
+    // template installs without a certificate.
     let (mut db, source, graph) = prepare_source(POINT, 2024);
     let callee = callable(&mut db, &source, &graph, "x_coord");
     let proof = ClosedReferenceParameter::capture(&mut db, &callee, &graph, &[&source], 0)
@@ -199,7 +202,7 @@ fn nominal_reference_parameter_cannot_install_without_the_actual_context_certifi
     assert!(
         frame
             .install_parameter_sources(vec![proof.source_template().clone()])
-            .is_err()
+            .is_ok()
     );
     assert_eq!(frame.counters.operations_started, 0);
     assert!(frame.active_scopes().is_empty());

@@ -8,6 +8,12 @@ pub(crate) use test_owners::OwnerInventory;
 pub(crate) mod aggregate_copy;
 #[path = "cell_boxes.rs"]
 mod boxes;
+#[path = "cell_vecs.rs"]
+mod vecs;
+#[path = "cell_interior.rs"]
+mod interior;
+#[path = "cell_promoted.rs"]
+mod promoted;
 #[path = "cell_constant_instantiation.rs"]
 pub mod constant_instantiation;
 #[path = "cell_construction_cleanup.rs"]
@@ -250,6 +256,18 @@ pub struct GuestStore {
     /// The `owned_box` lang item (the alloc facade's `Box` declaration),
     /// whose places dereference through the builtin box projection.
     owned_box: Option<crate::core::digest::Digest>,
+    /// The growable-array lang item (the alloc facade's `Vec` declaration),
+    /// whose objects own a variable number of element cells.
+    owned_vec: Option<crate::core::digest::Digest>,
+    /// The `unsafe_cell` lang item (the core facade's `UnsafeCell`): a value
+    /// containing one has interior mutability and is never promoted.
+    unsafe_cell: Option<crate::core::digest::Digest>,
+    /// The never-retired frame anchor owning leaked allocations (`Box::leak`).
+    leak_anchor: Option<FrameId>,
+    /// Slots handed out under the leak anchor.
+    leaked: u32,
+    /// Run-long promoted constant temporaries (`&[1, 2]`, byte strings).
+    promoted: promoted::PromotedStorage,
 }
 impl GuestStore {
     // E-R5-006: ignored, remove at callers (`_max_handles`, `_max_bytes`).
@@ -275,6 +293,11 @@ impl GuestStore {
             user_drop_types: None,
             user_copy_types: None,
             owned_box: None,
+            owned_vec: None,
+            unsafe_cell: None,
+            leak_anchor: None,
+            leaked: 0,
+            promoted: promoted::PromotedStorage::default(),
         })
     }
     pub(crate) fn drop_inventory_installed(&self) -> bool {
@@ -1218,16 +1241,15 @@ impl GuestStore {
                 // length, and the reference names exactly its `[T]` view.
                 let base = &elements.base;
                 let array = self.place_type(base.final_cell.cell)?;
-                let TypeKey::Array { element, len } = self.types.descriptor(array)?.key.as_ref()
+                let Some((element, len)) = self.sequence_shape(base.final_cell.cell, array)?
                 else {
                     return Err(lease_fault());
                 };
                 if elements
                     .start
                     .checked_add(elements.len)
-                    .is_none_or(|end| end > *len)
-                    || self.types.find(&TypeKey::Slice { element: *element })
-                        != Some(reference.target)
+                    .is_none_or(|end| end > len)
+                    || self.types.find(&TypeKey::Slice { element }) != Some(reference.target)
                 {
                     return Err(lease_fault());
                 }
@@ -1444,7 +1466,7 @@ impl GuestStore {
         place: &Place,
         usage: PlaceUse,
     ) -> Result<ResolvedPlace, PlaceFailure> {
-        let (root, mut target, writable, prefix, mut source_projections, mut window) = match place
+        let (root, mut target, writable, prefix, mut source_projections, mut window, interior) = match place
             .root
         {
             PlaceRoot::Cell(id) => {
@@ -1460,7 +1482,7 @@ impl GuestStore {
                     .checked_add(place.projections.len())
                     .ok_or_else(resource)?;
                 checked_chain_bytes(count)?;
-                (root, id, writable, enclosing, Vec::new(), None)
+                (root, id, writable, enclosing, Vec::new(), None, false)
             }
             PlaceRoot::Deref(id) => {
                 let reference = self.references.get(id)?;
@@ -1477,7 +1499,7 @@ impl GuestStore {
                     location.root,
                     location.final_cell.cell,
                     reference.access == Access::Mutable
-                        && self.cells.get(location.root.cell)?.writable,
+                        && (reference.interior || self.cells.get(location.root.cell)?.writable),
                     {
                         let mut prefix = Vec::new();
                         checked_chain_bytes(location.enclosing.len())?;
@@ -1497,6 +1519,7 @@ impl GuestStore {
                         sources
                     },
                     window,
+                    reference.interior,
                 )
             }
         };
@@ -1526,10 +1549,18 @@ impl GuestStore {
             let parent = self.place_stamp(target)?;
             let ty = self.place_type(target)?;
             let key = self.types.descriptor(ty)?.key.as_ref();
+            // An array, or a vector's element cells, is a sequence place.
+            let sequence = match projection {
+                Projection::Range { .. } | Projection::Index(_) => {
+                    self.sequence_shape(target, ty)?
+                }
+                _ => None,
+            };
             let field = match (projection, key, window) {
                 // A range narrows the element window of the same array cell.
-                (Projection::Range { start, end }, TypeKey::Array { len, .. }, current) => {
-                    let (base, available) = current.unwrap_or((0, *len));
+                (Projection::Range { start, end }, _, current) if sequence.is_some() => {
+                    let (_, len) = sequence.ok_or_else(invalid)?;
+                    let (base, available) = current.unwrap_or((0, len));
                     if start > end || *end > available {
                         return Err(PlaceFailure::GuestPanic(PlacePanic::RangeEndOutOfBounds {
                             end: u64::from(*end),
@@ -1543,7 +1574,7 @@ impl GuestStore {
                     continue;
                 }
                 // An index into a window is relative to its first element.
-                (Projection::Index(index), TypeKey::Array { .. }, Some((start, len))) => {
+                (Projection::Index(index), _, Some((start, len))) if sequence.is_some() => {
                     if *index >= len {
                         return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds {
                             len: u64::from(len),
@@ -1568,7 +1599,7 @@ impl GuestStore {
                 (Projection::Tuple(field), TypeKey::Tuple(_) | TypeKey::Callable { .. }, None) => {
                     *field
                 }
-                (Projection::Index(index), TypeKey::Array { .. }, None) => *index,
+                (Projection::Index(index), _, None) if sequence.is_some() => *index,
                 _ => return Err(invalid().into()),
             };
             let (object, storage) = self.place_object(target)?;
@@ -1634,12 +1665,12 @@ impl GuestStore {
         };
         // A window's Type is its array's `[T]` view, interned with the array.
         let ty = match window {
-            Some(_) => match self.types.descriptor(ty)?.key.as_ref() {
-                TypeKey::Array { element, .. } => self
+            Some(_) => match self.sequence_shape(target, ty)? {
+                Some((element, _)) => self
                     .types
-                    .find(&TypeKey::Slice { element: *element })
+                    .find(&TypeKey::Slice { element })
                     .ok_or_else(invalid)?,
-                _ => return Err(invalid().into()),
+                None => return Err(invalid().into()),
             },
             None => ty,
         };
@@ -1655,6 +1686,7 @@ impl GuestStore {
             writable,
             source_projections,
             window,
+            interior,
         })
     }
     /// Publish a checked run-owned lease only after validation and quota reservation.
@@ -1678,9 +1710,11 @@ impl GuestStore {
         self.admit_copy(resolved.target.cell)
             .map_err(PlaceFailure::RuntimeFault)
     }
-    /// Pure owning-read admission checks the full ancestry. Structural tuples
-    /// cannot have a user destructor, but a nominal enclosing owner needs its
-    /// source-selected Drop policy; absence of a cached witness is not NoDrop.
+    /// Pure owning-read admission. A field moves out of its enclosing owner
+    /// (`self.value`, `pair.0`): rustc rejects moving out of a type with a
+    /// `Drop` impl (E0509) before a program runs, so a checked program's
+    /// enclosing nominal has no destructor of its own; its remaining fields
+    /// still drop individually through ordinary drop glue.
     pub(crate) fn admit_owning_place_read(
         &self,
         place: &Place,
@@ -1689,25 +1723,8 @@ impl GuestStore {
         let cell = resolved.target.cell;
         let value = self.admit_move(cell)?;
         let mode = self.intrinsic_read_mode(cell)?;
-        if mode == IntrinsicRead::Move {
-            if matches!(place.root, PlaceRoot::Deref(_)) {
-                return Err(access_fault().into());
-            }
-            for link in &resolved.enclosing {
-                let parent = self.place_type(link.parent.cell)?;
-                if !matches!(
-                    self.types.descriptor(parent)?.key.as_ref(),
-                    TypeKey::Tuple(_) | TypeKey::Callable { .. }
-                ) && !self.box_parent(parent)?
-                {
-                    return Err(Diagnostic::new(
-                        "LRR-E-UNSUPPORTED",
-                        "partial field move requires the enclosing source-selected Drop policy"
-                            .into(),
-                    )
-                    .into());
-                }
-            }
+        if mode == IntrinsicRead::Move && matches!(place.root, PlaceRoot::Deref(_)) {
+            return Err(access_fault().into());
         }
         Ok((cell, value, mode))
     }
@@ -1717,7 +1734,7 @@ impl GuestStore {
         let (cell, _, mode) = self.admit_owning_place_read(place)?;
         match mode {
             IntrinsicRead::CopyScalar => self.copy_from(cell),
-            IntrinsicRead::CopyAggregate => Err(aggregate_copy::requires_activation()),
+            IntrinsicRead::CopyAggregate => self.copy_aggregate(cell),
             IntrinsicRead::Move => self.move_from(cell),
         }
         .map_err(PlaceFailure::RuntimeFault)
@@ -1881,6 +1898,12 @@ impl GuestStore {
             TypeKey::Array { len, .. } => *len,
             // A slice window indexes relative to its first element.
             TypeKey::Slice { .. } => resolved.window.ok_or_else(invalid)?.1,
+            // A vector place indexes its element cells like an array's.
+            TypeKey::Nominal { .. } if self.is_vec_type(ty)? => {
+                self.sequence_shape(resolved.target.cell, ty)?
+                    .ok_or_else(invalid)?
+                    .1
+            }
             TypeKey::Tuple(_) | TypeKey::Primitive(_) => {
                 return Err(Diagnostic::new(
                     "LRR-E-OP-TYPE",
@@ -2054,11 +2077,35 @@ impl GuestStore {
         self.replace(resolved.target.cell, incoming)
             .map_err(PlaceFailure::RuntimeFault)
     }
+    /// `&*r` of a `&str` buffer reference: the `str` referent has no cells, so
+    /// its reborrow is the same immutable byte range.
+    fn str_reborrow(&self, place: &Place) -> Result<Option<super::reference::BufferLease>, Diagnostic> {
+        let PlaceRoot::Deref(id) = place.root else {
+            return Ok(None);
+        };
+        if !place.projections.is_empty() {
+            return Ok(None);
+        }
+        let record = self.references.get(id)?;
+        match &record.lease {
+            ReferenceLease::Buffer(buffer) => {
+                self.validate_reference_record(record)?;
+                Ok(Some(*buffer))
+            }
+            _ => Ok(None),
+        }
+    }
     pub(crate) fn admit_place_borrow(
         &self,
         place: &Place,
         access: Access,
     ) -> Result<TypeId, PlaceFailure> {
+        if self.str_reborrow(place)?.is_some() {
+            if access == Access::Mutable {
+                return Err(access_fault().into());
+            }
+            return Ok(TypeId(16));
+        }
         let resolved = self.resolve_place_windowed(place, PlaceUse::Value)?;
         if access == Access::Mutable && !resolved.writable {
             return Err(access_fault().into());
@@ -2072,7 +2119,9 @@ impl GuestStore {
         place: &Place,
         needs_cell: bool,
     ) -> Result<(), PlaceFailure> {
-        self.resolve_place_windowed(place, PlaceUse::Value)?;
+        if self.str_reborrow(place)?.is_none() {
+            self.resolve_place_windowed(place, PlaceUse::Value)?;
+        }
         if needs_cell {
             self.cells.reserve(1, &mut self.budget)?;
         }
@@ -2086,15 +2135,26 @@ impl GuestStore {
         place: &Place,
         access: Access,
     ) -> Result<TicketId, PlaceFailure> {
-        let resolved = self.resolve_place_windowed(place, PlaceUse::Value)?;
-        if access == Access::Mutable && !resolved.writable {
-            return Err(access_fault().into());
-        }
-        let ty = self.types.intern(TypeKey::Ref {
-            mutable: access == Access::Mutable,
-            target: resolved.ty,
-        })?;
-        let record = ReferenceRecord::from_place(resolved, access);
+        let (ty, record) = if let Some(buffer) = self.str_reborrow(place)? {
+            if access == Access::Mutable {
+                return Err(access_fault().into());
+            }
+            let ty = self.types.intern(TypeKey::Ref {
+                mutable: false,
+                target: TypeId(16),
+            })?;
+            (ty, ReferenceRecord::from_immutable_buffer(buffer))
+        } else {
+            let resolved = self.resolve_place_windowed(place, PlaceUse::Value)?;
+            if access == Access::Mutable && !resolved.writable {
+                return Err(access_fault().into());
+            }
+            let ty = self.types.intern(TypeKey::Ref {
+                mutable: access == Access::Mutable,
+                target: resolved.ty,
+            })?;
+            (ty, ReferenceRecord::from_place(resolved, access))
+        };
         let bytes = record.owned_bytes()?;
         self.references.reserve(1, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
@@ -2534,6 +2594,19 @@ impl GuestStore {
                 &mut self.budget,
             )
             .map(CellId::from)
+    }
+    /// A moved-out temporary takes its next value's contract afresh (a
+    /// location the dispatcher reuses for values of several Types).
+    pub(crate) fn reset_moved_contract(&mut self, id: CellId) -> Result<(), Diagnostic> {
+        let cell = self.cells.get_mut(id)?;
+        if cell.retired || !matches!(cell.state, CellState::Moved | CellState::Uninit) {
+            return Err(ownership());
+        }
+        if matches!(cell.declared, StorageContract::Exact(_) | StorageContract::NumericLiteral) {
+            cell.declared = StorageContract::Unbound;
+        }
+        cell.numeric_record = None;
+        Ok(())
     }
     pub fn state(&self, id: CellId) -> Result<CellState, Diagnostic> {
         Ok(self.cells.get(id)?.state)
@@ -3113,10 +3186,18 @@ impl GuestStore {
         Ok(())
     }
     pub(crate) fn admit_replacement(&self, id: CellId, value: ValueRepr) -> Result<(), Diagnostic> {
+        self.admit_replacement_with(id, value, true)
+    }
+    fn admit_replacement_with(
+        &self,
+        id: CellId,
+        value: ValueRepr,
+        checked: bool,
+    ) -> Result<(), Diagnostic> {
         self.validate_value(value)?;
         self.require_initialized_value(value)?;
         let cell = self.cells.get(id)?;
-        if cell.retired || !cell.writable {
+        if cell.retired || (checked && !cell.writable) {
             return Err(ownership());
         }
         let CellState::Live(old) = cell.state else {
@@ -3349,8 +3430,19 @@ impl GuestStore {
     pub(crate) fn read_owning(&mut self, id: CellId) -> Result<TicketId, Diagnostic> {
         match self.admit_owning_read(id)? {
             IntrinsicRead::CopyScalar => self.copy_from(id),
-            IntrinsicRead::CopyAggregate => Err(aggregate_copy::requires_activation()),
+            IntrinsicRead::CopyAggregate => self.copy_aggregate(id),
             IntrinsicRead::Move => self.move_from(id),
+        }
+    }
+    /// A Copy aggregate read outside a frame's resumable copy activation (a
+    /// by-value method receiver, a call argument): the same structural copy,
+    /// run to completion.
+    pub(crate) fn copy_aggregate(&mut self, id: CellId) -> Result<TicketId, Diagnostic> {
+        let mut copy = aggregate_copy::AggregateCopy::begin(self, id)?;
+        loop {
+            if let aggregate_copy::CopyProgress::Complete(ticket) = copy.advance(self)? {
+                return Ok(ticket);
+            }
         }
     }
     pub fn copy_from(&mut self, id: CellId) -> Result<TicketId, Diagnostic> {
@@ -3559,9 +3651,19 @@ impl GuestStore {
         Ok(())
     }
     pub fn replace(&mut self, id: CellId, incoming: TicketId) -> Result<TicketId, Diagnostic> {
+        self.replace_with(id, incoming, true)
+    }
+    /// `replace`; `checked` requires a writable cell (interior-mutable storage
+    /// is replaced through a shared reference and does not).
+    pub(crate) fn replace_with(
+        &mut self,
+        id: CellId,
+        incoming: TicketId,
+        checked: bool,
+    ) -> Result<TicketId, Diagnostic> {
         let value = self.peek_ticket(incoming)?;
         self.object_owner(value, ValueOwner::Ticket(incoming))?;
-        self.admit_replacement(id, value)?;
+        self.admit_replacement_with(id, value, checked)?;
         let cell = self.cells.get(id)?;
         let CellState::Live(old) = cell.state else {
             return Err(ownership());
@@ -3901,6 +4003,8 @@ impl GuestStore {
         self.frames.reset(new_epoch)?;
         self.constructions.reset(new_epoch)?;
         self.references.reset(new_epoch)?;
+        self.leak_anchor = None;
+        self.leaked = 0;
         self.budget = RunBudget::for_epoch(new_epoch)?;
         Ok(())
     }

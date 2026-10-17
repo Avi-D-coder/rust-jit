@@ -2,7 +2,8 @@
 //! placeholder whose value is not a native scalar/str calls its trait's
 //! `fmt` impl (`vm/frame_format_calls.rs`, `engine/run_format_calls.rs`),
 //! handwritten or emitted by a user macro, nested inside another impl's
-//! `write!`, through the `Formatter` options and the `Debug` builders.
+//! `write!`, through the `Formatter` options and the `Debug` builders; plus
+//! the field, cast and coercion shapes those impls rely on.
 use super::capture_with;
 use crate::{
     cli::{StandaloneOutcome, runtime_capture::Request, standalone_captured},
@@ -29,7 +30,7 @@ impl Drop for Temp {
     }
 }
 
-fn run(
+pub(super) fn run(
     label: &str,
     source: &str,
     edition: u16,
@@ -66,7 +67,7 @@ fn run(
     )
 }
 
-fn prints(label: &str, source: &str, expected: &str) {
+pub(super) fn prints(label: &str, source: &str, expected: &str) {
     for edition in [2015, 2018, 2021, 2024] {
         match run(label, source, edition) {
             Ok(StandaloneOutcome::Completed(report)) => {
@@ -195,5 +196,28 @@ fn main() {
 }
 ",
         "true true false x\n",
+    );
+}
+
+#[test]
+fn reference_unsizing_casts_coerce_like_annotations() {
+    // `&arr as &[i32]` is rustc's unsizing coercion cast, the same coercion
+    // a `let x: &[i32] = &arr;` annotation performs.
+    prints(
+        "unsizing-cast",
+        "fn total(xs: &[i32]) -> i32 {
+    let mut t = 0;
+    let mut i = 0;
+    while i < xs.len() { t += xs[i]; i += 1; }
+    t
+}
+fn main() {
+    let arr = [1, 2, 3];
+    let a = &arr as &[i32];
+    let m = &[4u8, 5] as &[u8];
+    println!(\"{} {} {}\", a.len(), total(a), m[1]);
+}
+",
+        "3 6 5\n",
     );
 }

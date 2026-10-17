@@ -192,7 +192,16 @@ impl RunMachine {
                 // Runtime shape alone cannot erase a retained rigid source
                 // requirement. Composite source-view binding is still pending.
                 if let Some(written) = self.frame.source_view(result)? {
-                    let exact = self.store.descriptor_source_term(ty).as_ref() == Some(&written);
+                    // Regions are not data: the descriptor's `'static`-erased
+                    // references meet the source's own regions.
+                    let same_type = |reached: Option<crate::traits::term::TyTerm>,
+                                     written: &crate::traits::term::TyTerm| {
+                        reached.is_some_and(|reached| {
+                            crate::frontend::signature_subst::erase_regions(&reached)
+                                == crate::frontend::signature_subst::erase_regions(written)
+                        })
+                    };
+                    let exact = same_type(self.store.descriptor_source_term(ty), &written);
                     let matches = match written {
                         crate::traits::term::TyTerm::Primitive(primitive) => {
                             crate::frontend::call_contracts::primitive_runtime_id(primitive)? == ty
@@ -220,7 +229,7 @@ impl RunMachine {
                         // source type exactly.
                         written @ (crate::traits::term::TyTerm::Tuple(_)
                         | crate::traits::term::TyTerm::Array(..)) => {
-                            self.store.descriptor_source_term(ty).as_ref() == Some(&written)
+                            same_type(self.store.descriptor_source_term(ty), &written)
                         }
                         _ => false,
                     };

@@ -185,10 +185,4 @@ impl GuestStore {
             const_args: const_args.clone(),
         }))
     }
-    /// Whether moving out of a field of this enclosing parent is admitted:
-    /// a box's heap cell can be moved out of (`let x = *b;`), which leaves
-    /// the box owning only its allocation.
-    pub(super) fn box_parent(&self, parent: TypeId) -> Result<bool, Diagnostic> {
-        Ok(self.box_contents_type(parent)?.is_some())
-    }
 }

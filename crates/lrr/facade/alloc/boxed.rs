@@ -10,12 +10,19 @@ use core::ops::{Deref, DerefMut};
 
 pub struct Box<T: ?Sized>(T);
 
+// An allocation whose contents are not written yet (see `Box::new_uninit`).
+pub struct UninitBox;
+
 impl<T> Box<T> {
     pub fn new(x: T) -> Box<T> {
         Box(x)
     }
-    pub fn new_uninit() -> Box<core::mem::MaybeUninit<T>> {
-        core::intrinsics::lrr_unsupported("alloc::boxed::Box::new_uninit")
+    // The allocation `vec![a, b, ..]` writes its array into. Its element
+    // type is only fixed by the value written (`write_box_via_move`), which
+    // the call `Box::new_uninit()` cannot know when it runs, so the
+    // allocation is the untyped `UninitBox`.
+    pub fn new_uninit() -> UninitBox {
+        UninitBox
     }
     pub fn into_inner(boxed: Box<T>) -> T {
         *boxed
@@ -27,7 +34,7 @@ impl<T> Box<T> {
 
 impl<T: ?Sized> Box<T> {
     pub fn leak<'a>(b: Box<T>) -> &'a mut T {
-        core::intrinsics::lrr_unsupported("alloc::boxed::Box::leak")
+        core::intrinsics::lrr_shared_to_mut(core::intrinsics::lrr_box_leak(b))
     }
 }
 
@@ -73,9 +80,10 @@ impl<T: ?Sized + core::fmt::Display> core::fmt::Display for Box<T> {
     }
 }
 
-// `vec![a, b, ..]` support: converts the initialized boxed array to a `Vec`.
+// `vec![a, b, ..]` support: converts the initialized boxed array to a `Vec`
+// by moving its elements into the vector's element cells.
 pub fn box_assume_init_into_vec_unsafe<T, const N: usize>(
-    b: Box<core::mem::MaybeUninit<[T; N]>>,
+    b: Box<[T; N]>,
 ) -> crate::vec::Vec<T> {
-    core::intrinsics::lrr_unsupported("alloc::boxed::box_assume_init_into_vec_unsafe")
+    crate::vec::lrr_vec_from_array(*b, crate::vec::Vec::new())
 }

@@ -154,3 +154,141 @@ fn main() {
         "true false\n",
     );
 }
+
+#[test]
+fn impls_differing_by_trait_arguments_are_selected_by_the_argument_types() {
+    // `Scale<i32>`, `Scale<f64>` and `Scale<&str>` of one type provide
+    // `scale`: the evaluated argument selects the impl (an unresolved
+    // literal by its integer/float family), also inside the trait's provided
+    // `twice`, whose `self.scale(by)` has only the bound `T`.
+    prints(
+        "trait-arg-impls",
+        r#"
+trait Scale<T> {
+    fn scale(&self, by: T) -> i32;
+    fn twice(&self, by: T) -> i32 { self.scale(by) * 2 }
+}
+struct S(i32);
+impl Scale<i32> for S { fn scale(&self, by: i32) -> i32 { self.0 * by } }
+impl Scale<f64> for S { fn scale(&self, by: f64) -> i32 { (self.0 as f64 * by) as i32 } }
+impl Scale<&str> for S { fn scale(&self, by: &str) -> i32 { self.0 + by.len() as i32 } }
+fn main() {
+    let s = S(3);
+    println!("{} {} {}", s.scale(2), s.scale(1.5), s.scale("abcd"));
+    println!("{} {}", s.twice(2), s.twice(2.0f64));
+    let x: i32 = 5;
+    let y = 2.5f64;
+    println!("{} {}", s.scale(x), s.scale(y));
+}
+"#,
+        "6 4 7\n12 12\n15 7\n",
+    );
+}
+
+#[test]
+fn owner_type_arguments_bind_the_impl_parameters() {
+    // `W::<u8>::n()` has no argument or expected result to fix `T`: the
+    // Type argument written on the owner segment does, through the same
+    // explicit-Type selection a call's own arguments use. The owner's
+    // written structure (`P::<_, u64>` hole, `Cell2::<Cell2<u16>>` nested
+    // against an impl self Type `Cell2<Cell2<T>>`) binds the impl's `T`
+    // too; a caller's own parameter is its reached instantiation.
+    prints(
+        "owner-args",
+        r#"
+struct W<T> { v: T }
+impl<T: Default> W<T> {
+    fn unit() -> W<T> { W { v: T::default() } }
+    fn get(&self) -> &T { &self.v }
+}
+trait Name { fn name() -> i32; }
+impl Name for u8 { fn name() -> i32 { 8 } }
+impl Name for u32 { fn name() -> i32 { 32 } }
+impl<T: Name> W<T> { fn n() -> i32 { T::name() } }
+struct P<A, B> { a: A, b: B }
+impl<A: Default, B: Default> P<A, B> {
+    fn make() -> P<A, B> { P { a: A::default(), b: B::default() } }
+}
+struct Cell2<T>(T);
+impl<T: Default> Cell2<Cell2<T>> {
+    fn deep() -> Cell2<Cell2<T>> { Cell2(Cell2(T::default())) }
+}
+fn through<T: Name>() -> i32 { W::<T>::n() }
+fn main() {
+    println!("{} {}", W::<u8>::n(), W::<u32>::n());
+    println!("{} {}", through::<u8>(), through::<u32>());
+    let w = W::<u64>::unit();
+    println!("{}", *w.get());
+    let p = P::<u8, i16>::make();
+    println!("{} {}", p.a, p.b);
+    let q: P<i8, u64> = P::<_, u64>::make();
+    println!("{}", q.b);
+    let d = Cell2::<Cell2<u16>>::deep();
+    println!("{}", (d.0).0);
+    let b = Box::<u8>::new(7);
+    println!("{} {}", *b, Vec::<u8>::new().len());
+}
+"#,
+        "8 32\n8 32\n0\n0 0\n0\n0\n7 0\n",
+    );
+}
+
+#[test]
+fn owner_type_arguments_in_macro_generated_bodies_use_the_declaring_context() {
+    // A macro-generated function has no published body environment: the
+    // owner argument resolves in the declaration's own signature context,
+    // including the generated function's own parameter.
+    prints(
+        "owner-args-generated",
+        r#"
+struct W<T>(T);
+impl<T: Default> W<T> {
+    fn make() -> W<T> { W(T::default()) }
+    fn get(&self) -> &T { &self.0 }
+}
+macro_rules! gen {
+    ($name:ident, $t:ty) => {
+        fn $name() -> u8 { let w = W::<$t>::make(); let _ = w.get(); 1 }
+    };
+}
+gen!(g8, u8);
+macro_rules! gen_generic {
+    ($name:ident) => {
+        fn $name<T: Default>() -> u8 { let w = W::<T>::make(); let _ = w; 6 }
+    };
+}
+gen_generic!(gg);
+#[derive(Debug)]
+struct D { x: i32 }
+fn main() {
+    println!("{} {} {:?}", g8(), gg::<u16>(), D { x: 1 });
+}
+"#,
+        "1 6 D { x: 1 }\n",
+    );
+}
+
+#[test]
+fn inclusive_ranges_are_the_range_inclusive_new_call() {
+    // `a..=b` is `RangeInclusive::new(a, b)`: ordinary call lowering and
+    // argument typing, so an unsuffixed bound takes its sibling bound's type
+    // (`1..=3u8`, `0..=foo()`, `0_usize..=4 + 4 - 3`), exactly as it does
+    // for any generic call, and the value iterates through the facade's
+    // `Iterator for RangeInclusive`.
+    prints(
+        "range-inclusive",
+        r#"
+fn foo() -> isize { 42 }
+fn main() {
+    let mut total = 0;
+    for i in 1..=3 { total += i; }
+    for i in 0_usize..=2 { total += i * 10; }
+    let r = 0..=foo();
+    let s = 1..=3u8;
+    let t = 0_usize..=4 + 4 - 3;
+    println!("{} {} {} {}", total, r.end(), s.start(), t.end());
+}
+"#,
+        "36 42 1 5\n",
+    );
+}

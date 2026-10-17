@@ -49,6 +49,10 @@ pub struct ReferenceRecord {
     pub(super) owner: Option<super::cell::ValueOwner>,
     pub(crate) target: TypeId,
     pub(crate) lease: ReferenceLease,
+    /// A `&mut` made from a shared reference to interior-mutable storage
+    /// (`UnsafeCell`'s contents): writes through it do not require a
+    /// writable root, as the shared reference they came from did not.
+    pub(crate) interior: bool,
 }
 impl ReferenceRecord {
     pub(crate) fn from_place(place: ResolvedPlace, access: Access) -> Self {
@@ -61,6 +65,7 @@ impl ReferenceRecord {
         Self {
             access,
             owner: None,
+            interior: place.interior && access == Access::Mutable,
             target: place.ty,
             // A resolved element window (`&a[1..3]`, `&*s`) borrows exactly
             // those elements of its array location.
@@ -92,6 +97,7 @@ impl ReferenceRecord {
         Ok(Self {
             access,
             owner: None,
+            interior: self.interior,
             target: slice,
             lease: ReferenceLease::Elements(ElementsLease {
                 base: LocationLease {
@@ -116,6 +122,7 @@ impl ReferenceRecord {
         Self {
             access: Access::Shared,
             owner: None,
+            interior: false,
             target: TypeId(16),
             lease: ReferenceLease::Buffer(lease),
         }

@@ -41,25 +41,41 @@ impl RunMachine {
         id: super::super::install::RecipeId,
     ) -> QueryPoll<()> {
         let operation = match self.installed.get_current(db, id) {
-            Ok(recipe) => recipe
-                .recipe()
-                .operations
-                .iter()
-                .skip(self.frame.resume_operation_index())
-                .find_map(|op| match op {
-                    Op::ValuePath { path, .. } => Some(Ok(path.clone())),
-                    Op::ProjectTuple {
-                        base,
-                        field,
-                        destination,
-                    } => Some(Err((*base, *field, *destination))),
-                    _ => None,
-                }),
+            Ok(recipe) => {
+                let operations = &recipe.recipe().operations;
+                let resume = self.frame.resume_operation_index().min(operations.len());
+                operations[resume..]
+                    .iter()
+                    .enumerate()
+                    .find_map(|(position, op)| match op {
+                        // The Type the recipe itself states for the value
+                        // before the path is read (`SetHint` of its own
+                        // result, ahead of this operation) is its context.
+                        Op::ValuePath { path, destination } => Some(Ok((
+                            path.clone(),
+                            operations[resume..resume + position]
+                                .iter()
+                                .find_map(|earlier| match earlier {
+                                    Op::SetHint {
+                                        child,
+                                        hint: crate::ir::op::HintRecipe::Written(written),
+                                    } if child == destination => Some(Arc::clone(written)),
+                                    _ => None,
+                                }),
+                        ))),
+                        Op::ProjectTuple {
+                            base,
+                            field,
+                            destination,
+                        } => Some(Err((*base, *field, *destination))),
+                        _ => None,
+                    })
+            }
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         match operation {
             None => QueryPoll::Ready(Ok(())),
-            Some(Ok(path)) => self.prepare_value_path(db, &path),
+            Some(Ok((path, stated))) => self.prepare_value_path(db, &path, stated.as_deref()),
             Some(Err((base, field, destination))) => {
                 // A box's own field is its heap cell, reached only by the
                 // builtin deref: `b.0` autoderefs through the box.
@@ -205,15 +221,20 @@ impl RunMachine {
         bind_constructor(db, graph, &sources, &target).map(Some)
     }
     /// Install the unit constructor selected for the `ValuePath` at this PC.
-    pub(super) fn prepare_value_path(&mut self, db: &mut Database, path: &str) -> QueryPoll<()> {
+    pub(super) fn prepare_value_path(
+        &mut self,
+        db: &mut Database,
+        path: &str,
+        stated: Option<&crate::ir::written_type::WrittenType>,
+    ) -> QueryPoll<()> {
         let pc = self.frame.pc().clone();
         if self.item_values.contains_key(&pc) {
             return self.prepare_item_value_path(db, path);
         }
         // A static read by value: its selection is cached per PC; only the
         // cell's current contents are read on each execution.
-        if let Some(cell) = self.static_reads.get(&pc).copied() {
-            return QueryPoll::Ready(self.read_static_value(cell));
+        if let Some((cell, view)) = self.static_reads.get(&pc).cloned() {
+            return QueryPoll::Ready(self.read_static_value(cell, view));
         }
         // Lexical (body-local) scope precedes the module graph.
         match self.prepare_lexical_value_path(db, path) {
@@ -251,10 +272,11 @@ impl RunMachine {
             self.nominal.values.insert(pc, Arc::clone(&bound));
             bound
         };
-        QueryPoll::Ready(
-            self.frame
-                .prepare_nominal_value(Arc::clone(bound.variant()), &mut self.store),
-        )
+        QueryPoll::Ready(self.frame.prepare_nominal_value(
+            Arc::clone(bound.variant()),
+            stated,
+            &mut self.store,
+        ))
     }
     /// Select (once per call site) whether this call names a tuple struct or
     /// tuple variant constructor. An unqualified callee that requires its

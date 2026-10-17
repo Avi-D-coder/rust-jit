@@ -1069,6 +1069,19 @@ impl Debug for () {
     }
 }
 
+// `ToString::to_string`: a formatter with no options over a fresh buffer; the
+// caller reads the buffer's text back with `lrr_fmt_take(f.lrr_sink())`.
+#[doc(hidden)]
+pub fn lrr_formatter() -> Formatter<'static> {
+    Formatter { sink: core::intrinsics::lrr_fmt_sink(), spec: 0, fill: ' ', width: 0, precision: 0 }
+}
+impl<'a> Formatter<'a> {
+    #[doc(hidden)]
+    pub fn lrr_sink(&self) -> usize {
+        self.sink
+    }
+}
+
 // Interpreter entries: a `format_args!` placeholder whose argument is not a
 // natively rendered value calls its trait's `fmt` with a fresh formatter.
 #[doc(hidden)]
@@ -1180,6 +1193,18 @@ pub fn lrr_format_pointer<T: ?Sized + Pointer>(
     Pointer::fmt(value, &mut f)
 }
 
+impl<T: Debug> Debug for [T] {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut list = f.debug_list();
+        let mut i: usize = 0;
+        while i < self.len() {
+            list.entry(&self[i]);
+            i += 1;
+        }
+        list.finish()
+    }
+}
+
 impl<T: ?Sized + Debug> Debug for &T {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         Debug::fmt(&**self, f)
@@ -1198,5 +1223,169 @@ impl<T: ?Sized + Display> Display for &T {
 impl<T: ?Sized + Display> Display for &mut T {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         Display::fmt(&**self, f)
+    }
+}
+
+// core's tuple impls: `debug_tuple("")`, so a 1-tuple prints `(x,)`.
+impl<A: Debug> Debug for (A,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug> Debug for (A, B,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug> Debug for (A, B, C,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug> Debug for (A, B, C, D,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug> Debug for (A, B, C, D, E,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug> Debug for (A, B, C, D, E, F,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.field(&self.5);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug> Debug for (A, B, C, D, E, F, G,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.field(&self.5);
+        builder.field(&self.6);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug> Debug for (A, B, C, D, E, F, G, H,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.field(&self.5);
+        builder.field(&self.6);
+        builder.field(&self.7);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug> Debug for (A, B, C, D, E, F, G, H, I,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.field(&self.5);
+        builder.field(&self.6);
+        builder.field(&self.7);
+        builder.field(&self.8);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug, J: Debug> Debug for (A, B, C, D, E, F, G, H, I, J,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.field(&self.5);
+        builder.field(&self.6);
+        builder.field(&self.7);
+        builder.field(&self.8);
+        builder.field(&self.9);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug, J: Debug, K: Debug> Debug for (A, B, C, D, E, F, G, H, I, J, K,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.field(&self.5);
+        builder.field(&self.6);
+        builder.field(&self.7);
+        builder.field(&self.8);
+        builder.field(&self.9);
+        builder.field(&self.10);
+        builder.finish()
+    }
+}
+impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug, J: Debug, K: Debug, L: Debug> Debug for (A, B, C, D, E, F, G, H, I, J, K, L,) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut builder = f.debug_tuple("");
+        builder.field(&self.0);
+        builder.field(&self.1);
+        builder.field(&self.2);
+        builder.field(&self.3);
+        builder.field(&self.4);
+        builder.field(&self.5);
+        builder.field(&self.6);
+        builder.field(&self.7);
+        builder.field(&self.8);
+        builder.field(&self.9);
+        builder.field(&self.10);
+        builder.field(&self.11);
+        builder.finish()
+    }
+}
+
+impl<T: Debug, const N: usize> Debug for [T; N] {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut list = f.debug_list();
+        let mut i: usize = 0;
+        while i < self.len() {
+            list.entry(&self[i]);
+            i += 1;
+        }
+        list.finish()
     }
 }

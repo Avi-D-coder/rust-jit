@@ -42,6 +42,13 @@ pub(super) enum ItemAnswer {
     Concrete(TyTerm),
     /// The part of `T` these projection steps select.
     Part(Vec<Step>),
+    /// A Type built around parts of `T` (`&T`'s `Item` for `&[T; N]`,
+    /// `(&K, &V)` for `&HashMap<K, V>`): `item` with its numbered holes
+    /// standing for the parts of `T` at `paths`.
+    Structured {
+        item: TyTerm,
+        paths: Vec<Vec<Step>>,
+    },
     Unknown,
 }
 
@@ -53,7 +60,9 @@ fn hole_transaction() -> Digest {
 /// (projection steps from `ty`) is recorded in `paths`.
 fn with_holes(ty: &TyTerm, at: &mut Vec<Step>, paths: &mut Vec<Vec<Step>>) -> TyTerm {
     match ty {
-        TyTerm::Infer(_) => {
+        // A callee's still-unfixed parameter is as unknown as an inference
+        // variable: it stands for a part of the head.
+        TyTerm::Infer(_) | TyTerm::Param(_) => {
             let ordinal = u32::try_from(paths.len()).unwrap_or(u32::MAX);
             paths.push(at.clone());
             TyTerm::Infer(InferVarKey {
@@ -102,8 +111,134 @@ fn with_holes(ty: &TyTerm, at: &mut Vec<Step>, paths: &mut Vec<Vec<Step>>) -> Ty
                 })
                 .collect(),
         ),
-        // References are not part of a for head's own selection here.
+        TyTerm::Ref(region, mutable, inner) => {
+            at.push(Step::Deref);
+            let inner = with_holes(inner, at, paths);
+            at.pop();
+            TyTerm::Ref(region.clone(), *mutable, Box::new(inner))
+        }
         other => other.clone(),
+    }
+}
+/// The numbered holes of an `Item` Type with the projection steps from the
+/// `Item` to each occurrence.
+fn item_holes(term: &TyTerm, at: &mut Vec<Step>, out: &mut Vec<(u32, Vec<Step>)>) {
+    match term {
+        TyTerm::Infer(key) if key.transaction == hole_transaction() => {
+            out.push((key.ordinal, at.clone()))
+        }
+        TyTerm::Ref(_, _, inner) => {
+            at.push(Step::Deref);
+            item_holes(inner, at, out);
+            at.pop();
+        }
+        TyTerm::Slice(inner) | TyTerm::Array(inner, _) => {
+            at.push(Step::Element);
+            item_holes(inner, at, out);
+            at.pop();
+        }
+        TyTerm::Tuple(items) => {
+            for (position, item) in items.iter().enumerate() {
+                let Ok(position) = u32::try_from(position) else {
+                    return;
+                };
+                at.push(Step::Field(position));
+                item_holes(item, at, out);
+                at.pop();
+            }
+        }
+        TyTerm::Nominal(_, args) => {
+            let types = args.iter().filter_map(|arg| match arg {
+                GenericArg::Type(inner) => Some(inner),
+                _ => None,
+            });
+            for (position, inner) in types.enumerate() {
+                let Ok(position) = u32::try_from(position) else {
+                    return;
+                };
+                at.push(Step::TypeArgument(position));
+                item_holes(inner, at, out);
+                at.pop();
+            }
+        }
+        _ => {}
+    }
+}
+/// `term` with each numbered hole replaced by its Type.
+pub(super) fn fill_holes(term: &TyTerm, parts: &[TyTerm]) -> TyTerm {
+    match term {
+        TyTerm::Infer(key) if key.transaction == hole_transaction() => parts
+            .get(key.ordinal as usize)
+            .cloned()
+            .unwrap_or_else(|| term.clone()),
+        TyTerm::Ref(region, mutable, inner) => {
+            TyTerm::Ref(region.clone(), *mutable, Box::new(fill_holes(inner, parts)))
+        }
+        TyTerm::Slice(inner) => TyTerm::Slice(Box::new(fill_holes(inner, parts))),
+        TyTerm::Array(inner, length) => {
+            TyTerm::Array(Box::new(fill_holes(inner, parts)), length.clone())
+        }
+        TyTerm::Tuple(items) => {
+            TyTerm::Tuple(items.iter().map(|item| fill_holes(item, parts)).collect())
+        }
+        TyTerm::Nominal(identity, args) => TyTerm::Nominal(
+            *identity,
+            args.iter()
+                .map(|arg| match arg {
+                    GenericArg::Type(inner) => GenericArg::Type(fill_holes(inner, parts)),
+                    other => other.clone(),
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+/// Where `steps` lead inside an `Item` Type that still has holes: a hole
+/// (and the steps remaining below it) or a closed Type.
+enum ItemProjection {
+    Hole(u32, Vec<Step>),
+    Concrete(TyTerm),
+    Unknown,
+}
+fn project_item(item: &TyTerm, steps: &[Step]) -> ItemProjection {
+    let mut term = item.clone();
+    for (index, step) in steps.iter().enumerate() {
+        if let TyTerm::Infer(key) = &term
+            && key.transaction == hole_transaction()
+        {
+            return ItemProjection::Hole(key.ordinal, steps[index..].to_vec());
+        }
+        if *step == Step::AutoDeref {
+            while let TyTerm::Ref(_, _, inner) = term {
+                term = *inner;
+            }
+            continue;
+        }
+        term = match (step, term) {
+            (Step::Deref, TyTerm::Ref(_, _, inner)) => *inner,
+            (Step::Field(position), TyTerm::Tuple(mut members)) => {
+                if (*position as usize) < members.len() {
+                    members.swap_remove(*position as usize)
+                } else {
+                    return ItemProjection::Unknown;
+                }
+            }
+            (Step::Element, TyTerm::Array(inner, _) | TyTerm::Slice(inner)) => *inner,
+            (Step::TypeArgument(position), TyTerm::Nominal(_, args)) => {
+                match super::type_argument(&args, *position) {
+                    Some(inner) => inner,
+                    None => return ItemProjection::Unknown,
+                }
+            }
+            _ => return ItemProjection::Unknown,
+        };
+    }
+    match term {
+        TyTerm::Infer(key) if key.transaction == hole_transaction() => {
+            ItemProjection::Hole(key.ordinal, Vec::new())
+        }
+        term if !mentions_hole(&term) => ItemProjection::Concrete(term),
+        _ => ItemProjection::Unknown,
     }
 }
 /// Whether `term` still mentions an inference hole.
@@ -208,6 +343,7 @@ impl<'a> Component<'a> {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
+        self.note_depth(super::term_depth(ty).max(super::term_depth(&item)));
         QueryPoll::Ready(Ok(match item {
             TyTerm::Infer(key) if key.transaction == hole_transaction() => {
                 match paths.get(key.ordinal as usize) {
@@ -216,6 +352,9 @@ impl<'a> Component<'a> {
                 }
             }
             item if !mentions_hole(&item) => ItemAnswer::Concrete(item),
+            // Not a bare hole, but only holes of the head are open: a Type
+            // built around the head's parts.
+            item if !paths.is_empty() => ItemAnswer::Structured { item, paths },
             _ => ItemAnswer::Unknown,
         }))
     }
@@ -245,6 +384,40 @@ impl<'a> Component<'a> {
                 ready!(result);
                 true
             }
+            // A Type built around the head's parts: the rest of the
+            // projection either reaches one of those parts or a closed Type.
+            ItemAnswer::Structured { item, paths } => match project_item(&item, &rest.steps) {
+                ItemProjection::Hole(hole, remaining) => match paths.get(hole as usize) {
+                    Some(path) => {
+                        let mut steps = path.clone();
+                        steps.extend(remaining);
+                        self.expression_via(
+                            Some(node),
+                            Via {
+                                steps,
+                                strict: false,
+                            },
+                        );
+                        true
+                    }
+                    None => false,
+                },
+                ItemProjection::Concrete(term) => {
+                    let current = std::mem::replace(
+                        &mut self.via,
+                        Via {
+                            steps: Vec::new(),
+                            strict: rest.strict,
+                        },
+                    );
+                    let result =
+                        self.constrain_term(db, node, &term, ConstraintDemand::ResultType);
+                    self.via = current;
+                    ready!(result);
+                    true
+                }
+                ItemProjection::Unknown => false,
+            },
             ItemAnswer::Unknown => false,
         }))
     }
@@ -309,6 +482,37 @@ impl<'a> Component<'a> {
                         if !path.is_empty() && self.via.steps.starts_with(&path) =>
                     {
                         Some(path.len())
+                    }
+                    // The head's part that a Type built around the head's
+                    // parts holds: the pattern's matching position.
+                    ItemAnswer::Structured { item, paths } => {
+                        let Some(some) = ready!(self.for_some_step(db, root)) else {
+                            self.defer(looped, ConstraintDemand::Binding);
+                            return QueryPoll::Ready(Ok(()));
+                        };
+                        let mut holes = Vec::new();
+                        item_holes(&item, &mut Vec::new(), &mut holes);
+                        for (hole, path) in paths.iter().enumerate() {
+                            if path.is_empty() || !self.via.steps.starts_with(path) {
+                                continue;
+                            }
+                            for (occurrence, within) in &holes {
+                                if *occurrence as usize != hole {
+                                    continue;
+                                }
+                                let mut steps = vec![some];
+                                steps.extend(within.iter().copied());
+                                steps.extend_from_slice(&self.via.steps[path.len()..]);
+                                self.pattern_via(
+                                    Some(root),
+                                    Via {
+                                        steps,
+                                        strict: false,
+                                    },
+                                );
+                            }
+                        }
+                        return QueryPoll::Ready(Ok(()));
                     }
                     // Another part of the head's selected Type relates to
                     // nothing through the loop.

@@ -66,7 +66,10 @@ impl GenericEnv {
                 true
             } else {
                 match signature.result_symbolic.as_ref() {
-                    Some(source) => contracts.source_result.as_ref() == Some(source),
+                    Some(source) => {
+                        contracts.source_result.as_ref() == Some(source)
+                            || Self::instantiates(source, contracts)
+                    }
                     None => match (
                         contracts.source_result.as_ref(),
                         contracts.result_descriptor,
@@ -127,9 +130,18 @@ impl GenericEnv {
             || !result_matches
             || contracts.source_substitution.len() != contracts.runtime_substitution.len()
         {
-            return Err(invalid(
-                "definition/call environment identity or arity mismatch",
-            ));
+            return Err(invalid(&format!(
+                "definition/call environment identity or arity mismatch (definition {}, parameters {}/{}/{}, result {} [{:?} vs {:?}], substitution {}/{})",
+                signature.definition == contracts.definition,
+                signature.parameters.len(),
+                contracts.source_parameters.len(),
+                contracts.parameter_descriptors.len(),
+                result_matches,
+                contracts.source_result,
+                signature.result_symbolic,
+                contracts.source_substitution.len(),
+                contracts.runtime_substitution.len(),
+            )));
         }
         if let Some(proof) = &contracts.normalized_deferred_return {
             proof.validate_packet(signature, contracts)?;
@@ -245,6 +257,23 @@ impl GenericEnv {
         }
         Ok(bytes)
     }
+    /// Whether the call's source result is the declared symbolic result
+    /// under the call's source bindings (`-> &mut T` with `T = S`).
+    fn instantiates(declared: &TyTerm, contracts: &PreparedCallContracts) -> bool {
+        let mut substitution = crate::traits::subst::Substitution::default();
+        for (key, bound) in &contracts.source_substitution {
+            if substitution
+                .insert(*key, crate::traits::term::GenericArg::Type(bound.clone()))
+                .is_err()
+            {
+                return false;
+            }
+        }
+        substitution
+            .apply(declared)
+            .ok()
+            .is_some_and(|applied| contracts.source_result.as_ref() == Some(&applied))
+    }
     pub fn capture(
         signature: &FunctionSignature,
         contracts: &PreparedCallContracts,
@@ -295,6 +324,9 @@ impl GenericEnv {
                 .clone()
                 .filter(|term| {
                     (matches!(term, TyTerm::Tuple(_) | TyTerm::Array(..))
+                        // A reference bound structurally from generic arguments
+                        // (`-> &'a mut V` with `V` the reached value type).
+                        || (contracts.structural_references && matches!(term, TyTerm::Ref(..)))
                         || matches!(term, TyTerm::Ref(_, _, pointee)
                             if matches!(pointee.as_ref(), TyTerm::Slice(_) | TyTerm::Str))
                         || matches!(
@@ -365,6 +397,88 @@ impl GenericEnv {
             .filter(|proof| proof.has_result())
             .and_then(|proof| proof.result_source())
             .ok_or_else(|| invalid("reference result requires its admitted source certificate"))
+    }
+    /// The runtime descriptor of the declared result when it is built from
+    /// this call's generic bindings and structural constructors (`&mut V`
+    /// with `V` bound), if the store already has it.
+    pub(crate) fn bound_result_descriptor_find(
+        &self,
+        store: &crate::runtime::cell::GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        Ok(self
+            .definition
+            .result_symbolic
+            .as_ref()
+            .and_then(|term| self.bound_find(term, store)))
+    }
+    /// `bound_result_descriptor_find`, interning the descriptor.
+    pub(crate) fn bound_result_descriptor_intern(
+        &self,
+        store: &mut crate::runtime::cell::GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        match self.definition.result_symbolic.as_ref() {
+            Some(term) => self.bound_intern(term, store),
+            None => Ok(None),
+        }
+    }
+    fn bound_find(
+        &self,
+        term: &TyTerm,
+        store: &crate::runtime::cell::GuestStore,
+    ) -> Option<TypeId> {
+        use crate::runtime::shape::TypeKey;
+        match term {
+            TyTerm::Param(key) => self.runtime_binding(*key),
+            TyTerm::Ref(_, mutable, inner) => {
+                let target = self.bound_find(inner, store)?;
+                store.find_type(&TypeKey::Ref { mutable: *mutable, target })
+            }
+            TyTerm::Slice(element) => {
+                let element = self.bound_find(element, store)?;
+                store.find_type(&TypeKey::Slice { element })
+            }
+            TyTerm::Tuple(fields) if !fields.is_empty() => {
+                let ids = fields
+                    .iter()
+                    .map(|field| self.bound_find(field, store))
+                    .collect::<Option<Vec<_>>>()?;
+                store.find_type(&TypeKey::Tuple(ids.into_boxed_slice()))
+            }
+            other => store.find_structural_term(other),
+        }
+    }
+    fn bound_intern(
+        &self,
+        term: &TyTerm,
+        store: &mut crate::runtime::cell::GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        use crate::runtime::shape::TypeKey;
+        Ok(match term {
+            TyTerm::Param(key) => self.runtime_binding(*key),
+            TyTerm::Ref(_, mutable, inner) => {
+                let Some(target) = self.bound_intern(inner, store)? else {
+                    return Ok(None);
+                };
+                Some(store.intern_type(TypeKey::Ref { mutable: *mutable, target })?)
+            }
+            TyTerm::Slice(element) => {
+                let Some(element) = self.bound_intern(element, store)? else {
+                    return Ok(None);
+                };
+                Some(store.intern_type(TypeKey::Slice { element })?)
+            }
+            TyTerm::Tuple(fields) if !fields.is_empty() => {
+                let mut ids = Vec::with_capacity(fields.len());
+                for field in fields {
+                    let Some(id) = self.bound_intern(field, store)? else {
+                        return Ok(None);
+                    };
+                    ids.push(id);
+                }
+                Some(store.intern_type(TypeKey::Tuple(ids.into_boxed_slice()))?)
+            }
+            other => store.intern_structural_term(other)?,
+        })
     }
     /// Parameters bound structurally from reached arguments.
     pub(crate) fn structural_references(&self) -> bool {

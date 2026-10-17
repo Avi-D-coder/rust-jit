@@ -98,6 +98,21 @@ pub(super) fn thunk(
         Ok(recipe) => recipe,
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
+    // Open type arguments of the result that later code decides: stated
+    // first, as a parent's `SetHint` of the call's result would.
+    let recipe = match typed
+        .inferred_result()
+        .filter(|_| crate::ir::pc::Phase::Entry.code().ok() == Some(pc.phase))
+    {
+        Some(written) => match recipe.with_entry_hint(
+            index,
+            crate::ir::op::HintRecipe::Written(Arc::clone(written)),
+        ) {
+            Ok(recipe) => recipe,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        },
+        None => recipe,
+    };
     let recipe = match recipe.with_source_call(typed) {
         Ok(recipe) => recipe,
         Err(error) => return QueryPoll::Ready(Err(error)),

@@ -589,7 +589,9 @@ impl<'a> CallResolver<'a> {
                     return Ok(None);
                 }
                 let (absolute, segments) = segments_of(prefix)?;
-                let Some(ty) = resolve_type(&segments, absolute, false)? else {
+                // An unshadowed primitive name is a type prefix too
+                // (`u8::MAX`, `f64::EPSILON`), as for associated functions.
+                let Some(ty) = resolve_type(&segments, absolute, true)? else {
                     return Ok(None);
                 };
                 (ty, None, name)
@@ -1178,6 +1180,26 @@ impl<'a> CallResolver<'a> {
         }
     }
     fn select_generated(&self, db: &mut Database, identity: Digest) -> QueryPoll<CallSelection> {
+        match self.generated_callable(db, identity, &[ItemKind::Function]) {
+            QueryPoll::Ready(Ok(Ok(callee))) => {
+                QueryPoll::Ready(Ok(CallSelection::Source(Box::new(callee))))
+            }
+            QueryPoll::Ready(Ok(Err(definition))) => {
+                QueryPoll::Ready(Ok(CallSelection::NeedValue(definition)))
+            }
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    /// A macro-generated declaration of one of `kinds` as an ordinary source
+    /// callable from its published inputs; `Err(definition)` for another
+    /// kind of declaration.
+    fn generated_callable(
+        &self,
+        db: &mut Database,
+        identity: Digest,
+        kinds: &[ItemKind],
+    ) -> QueryPoll<Result<SourceCallable, DefKey>> {
         let source = match db.input(&InputKey::DefinitionSource(identity)) {
             Some(input) => input,
             None => return QueryPoll::Ready(Err(fault("selected generated source absent"))),
@@ -1189,8 +1211,8 @@ impl<'a> CallResolver<'a> {
             return QueryPoll::Ready(Err(fault("selected generated syntax absent")));
         };
         let definition = &owner.def_key;
-        if definition.item_kind != ItemKind::Function {
-            return QueryPoll::Ready(Ok(CallSelection::NeedValue(definition.clone())));
+        if !kinds.contains(&definition.item_kind) {
+            return QueryPoll::Ready(Ok(Err(definition.clone())));
         }
         let outcome = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(identity)) {
             QueryPoll::Ready(Ok(value)) => value,
@@ -1257,7 +1279,7 @@ impl<'a> CallResolver<'a> {
         if let Err(e) = callee.revalidate(db) {
             return QueryPoll::Ready(Err(e));
         }
-        QueryPoll::Ready(Ok(CallSelection::Source(Box::new(callee))))
+        QueryPoll::Ready(Ok(Ok(callee)))
     }
     fn item(
         &self,
@@ -1276,6 +1298,101 @@ impl<'a> CallResolver<'a> {
         definition: Digest,
     ) -> QueryPoll<Option<RetainedOriginalDeclaration>> {
         db.retained_original_declaration(source, definition)
+    }
+    /// A reached `const` or `static` item's initializer as an ordinary
+    /// zero-parameter callable whose result is the declared type (E-R5-007):
+    /// the interpreter runs the item's own initializer body through the
+    /// common call route. `None` when the item has no source initializer.
+    pub(crate) fn initializer(
+        &self,
+        db: &mut Database,
+        identity: Digest,
+    ) -> QueryPoll<Option<SourceCallable>> {
+        let Some((source, item)) = self.item(identity) else {
+            // A body-local item publishes its header only; its initializer
+            // needs the local declaration body route (not yet available).
+            if db
+                .input(&InputKey::LocalDeclarationOwner(identity))
+                .is_some()
+            {
+                return QueryPoll::Ready(Ok(None));
+            }
+            // A macro-emitted item's initializer joins the same route through
+            // its published generated inputs.
+            return match self.generated_callable(
+                db,
+                identity,
+                &[ItemKind::Constant, ItemKind::Static],
+            ) {
+                QueryPoll::Ready(Ok(Ok(callee))) => QueryPoll::Ready(Ok(Some(callee))),
+                QueryPoll::Ready(Ok(Err(_))) => QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            };
+        };
+        if !matches!(item.def_key.item_kind, ItemKind::Constant | ItemKind::Static) {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let retained = match self.current(db, source, identity) {
+            QueryPoll::Ready(Ok(current)) => current,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+        };
+        let header = retained
+            .as_ref()
+            .map_or(&item.header, |current| current.header())
+            .clone();
+        let context = retained.as_ref().map_or_else(
+            || DeclarationContext {
+                scope: item.scope.clone(),
+                range: item.declaration_span,
+            },
+            |current| current.context().clone(),
+        );
+        let Some(body) = retained
+            .as_ref()
+            .map_or_else(|| item.body.clone(), |current| Some(current.body().clone()))
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let parse = retained.as_ref().map_or_else(
+            || source.selection().outline.parse.clone(),
+            |current| current.parse().clone(),
+        );
+        // The same initializer signature the signature query serves to
+        // every consumer of this definition (`ParsedFile::initializer_signature`).
+        let outcome = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(identity)) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::FunctionSignature(signature) = outcome.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("initializer signature query result mismatch")));
+        };
+        if signature.scope != context.scope || signature.header.fingerprint() != header.fingerprint()
+        {
+            return QueryPoll::Ready(Err(fault("initializer signature source declaration mismatch")));
+        }
+        let mut signature = signature.clone();
+        signature.header = header;
+        let callee = SourceCallable {
+            definition: item.def_key.clone(),
+            identity,
+            signature,
+            body: Some(body),
+            source: parse,
+            revision: db.source_revision(),
+            context,
+            lexical: None,
+            ordinary_local: None,
+            ordinary_module: None,
+            ordinary_owner: None,
+            retained: retained.map(RetainedOriginalDeclaration::into_lease),
+        };
+        if let Err(error) = callee.revalidate(db) {
+            return QueryPoll::Ready(Err(error));
+        }
+        QueryPoll::Ready(Ok(Some(callee)))
     }
     pub(crate) fn select(&self, db: &mut Database, found: NameLookup) -> QueryPoll<CallSelection> {
         let selected = match found {

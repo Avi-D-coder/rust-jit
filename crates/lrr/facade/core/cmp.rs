@@ -81,6 +81,15 @@ impl PartialEq for Ordering {
     }
 }
 impl Eq for Ordering {}
+impl crate::fmt::Debug for Ordering {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        match self {
+            Ordering::Less => f.write_str("Less"),
+            Ordering::Equal => f.write_str("Equal"),
+            Ordering::Greater => f.write_str("Greater"),
+        }
+    }
+}
 
 pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     fn partial_cmp(&self, other: &Rhs) -> Option<Ordering>;

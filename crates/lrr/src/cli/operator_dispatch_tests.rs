@@ -293,3 +293,94 @@ fn main() {
         "true true\n",
     );
 }
+
+#[test]
+fn operator_impls_are_selected_by_the_right_operand() {
+    // Several impls of one operator trait for one self type differ only by
+    // the trait's `Rhs` argument: `PartialEq<i32>`/`PartialEq<M>` and
+    // `Add<i32>`/`Add<M>`. The right operand's reached type (or an
+    // unresolved integer literal) selects among them, for comparisons and
+    // by-value arithmetic alike.
+    prints(
+        "rhs",
+        "use std::ops::Add;
+struct M(i32);
+impl PartialEq<i32> for M { fn eq(&self, o: &i32) -> bool { self.0 == *o } }
+impl PartialEq<M> for M { fn eq(&self, o: &M) -> bool { self.0 == o.0 } }
+impl Add<i32> for M { type Output = i32; fn add(self, o: i32) -> i32 { self.0 + o } }
+impl Add<M> for M { type Output = i32; fn add(self, o: M) -> i32 { self.0 + o.0 * 2 } }
+fn main() {
+    println!(\"{} {} {} {}\", M(3) == 3, M(3) == M(3), M(3) == 4, M(3) == M(3));
+    println!(\"{} {} {}\", M(1) + 2, M(1) + M(2), M(4) + 1);
+}
+",
+        "true true false true\n3 5 5\n",
+    );
+}
+
+#[test]
+fn provided_ne_selects_the_impl_by_the_trait_arguments() {
+    // `ne` is not defined by either impl: both share `PartialEq::ne`, whose
+    // `!self.eq(other)` selects `PartialEq<i32>` or `PartialEq<M>` from the
+    // reached type of `other`, not from the method's signature.
+    prints(
+        "provided-ne",
+        "struct M(i32);
+impl PartialEq<i32> for M { fn eq(&self, o: &i32) -> bool { self.0 == *o } }
+impl PartialEq<M> for M { fn eq(&self, o: &M) -> bool { self.0 == o.0 } }
+fn main() {
+    let a = M(3);
+    println!(\"{} {} {} {}\", a != M(4), a != M(3), a != 3, a != 4);
+    println!(\"{} {}\", a.ne(&M(4)), a.ne(&3));
+}
+",
+        "true false false true\ntrue false\n",
+    );
+}
+
+#[test]
+fn unresolved_literal_right_operand_takes_the_selected_impls_parameter_type() {
+    // The only `PartialEq` impl compares with `u8`: the literal `3` is
+    // that `u8`, not the integer fallback.
+    prints(
+        "literal-rhs",
+        "struct M(i32);
+impl PartialEq<u8> for M { fn eq(&self, o: &u8) -> bool { self.0 == *o as i32 } }
+fn main() {
+    let a = M(3);
+    println!(\"{} {}\", a == 3, a == 4);
+}
+",
+        "true false\n",
+    );
+}
+
+#[test]
+fn operands_bound_by_patterns_from_references_compare_through_the_impl() {
+    // `assert_eq!` expands to `match (&left, &right) { (l, r) => *l == *r }`:
+    // the pattern bindings hold references with no retained source view, so
+    // the operator's autoref'd operands state their own reached reference
+    // Types. A derived `PartialEq` and a manual one select the same way.
+    prints(
+        "pattern-refs",
+        "#[derive(PartialEq, Debug)]
+struct P { x: i32 }
+#[derive(PartialEq, Debug)]
+enum E { A(i32), B }
+struct Q(i32);
+impl PartialEq for Q { fn eq(&self, o: &Q) -> bool { self.0 == o.0 } }
+fn main() {
+    let a = P { x: 1 };
+    let b = P { x: 1 };
+    assert_eq!(a, b);
+    assert_ne!(E::A(1), E::B);
+    let (q1, q2) = (Q(3), Q(3));
+    let t = (&q1, &q2);
+    let (l, r) = t;
+    println!(\"{} {}\", *l == *r, *l != *r);
+    match (&a, &b) { (l, r) => println!(\"{}\", *l == *r) }
+}
+",
+        "true false\ntrue\n",
+    );
+}

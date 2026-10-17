@@ -66,6 +66,21 @@ pub(crate) struct PrimitiveCandidates {
     pub(crate) blankets: Vec<Vec<Option<Digest>>>,
     pub(crate) unresolved: bool,
 }
+/// `MemberIndex::method_alternatives`.
+#[derive(Debug, Clone)]
+pub(crate) struct MethodAlternatives {
+    /// The distinct functions of the winning probe tier.
+    pub(crate) functions: Vec<Digest>,
+    /// The trait every alternative implements, when they are impls of one
+    /// trait that differ by the trait's arguments.
+    pub(crate) same_trait: Option<Digest>,
+    /// The alternatives are inherent functions of impls for different
+    /// instantiations of one type (`impl Foo<u8> { fn bar }` beside
+    /// `impl Foo<u16> { fn bar }`): the receiver's type arguments select.
+    pub(crate) inherent: bool,
+    /// The probe took the array-to-slice unsizing step.
+    pub(crate) unsize: bool,
+}
 /// One impl block.
 #[derive(Debug, Clone)]
 pub struct ImplMembers {
@@ -74,6 +89,10 @@ pub struct ImplMembers {
     pub self_nominal: Option<Digest>,
     /// The builtin self type, when the self type is one.
     pub self_builtin: Option<BuiltinSelf>,
+    /// For a reference self type (`impl .. for &A`, `&mut A`): what its
+    /// referent names, when that is a declaration or a builtin type (a
+    /// generic referent `&'a A` names none and matches any referent).
+    pub self_pointee: Option<Result<Digest, BuiltinSelf>>,
     /// The implemented trait's path as written, when this is a trait impl.
     pub trait_path: Option<Vec<ImportSegment>>,
     /// The trait's resolved definition, when it resolves to a source trait.
@@ -126,6 +145,10 @@ pub struct MemberIndex {
     /// The alloc facade's `boxed::Box` declaration (rustc's `owned_box`
     /// lang item), when the run's world includes it.
     lang_box: Option<Digest>,
+    lang_unsafe_cell: Option<Digest>,
+    /// The alloc facade's `vec::Vec` declaration (the growable-array lang
+    /// item), when the run's world includes it.
+    lang_vec: Option<Digest>,
 }
 /// Stable key of an associated type name in a shorthand projection
 /// (`T::Name` whose trait is selected from the bound type's impls).
@@ -325,10 +348,18 @@ impl MemberIndex {
                 .map(|item| (published(item.def_key.fingerprint()), item))
                 .collect();
             let owned_box = crate::facade::owned_box(&outline.profile);
+            let owned_vec = crate::facade::owned_vec(&outline.profile);
+            let unsafe_cell = crate::facade::unsafe_cell(&outline.profile);
             let mut traits = BTreeSet::new();
             for item in &outline.items {
                 if item.def_key.fingerprint() == owned_box {
                     index.lang_box = Some(published(owned_box));
+                }
+                if item.def_key.fingerprint() == owned_vec {
+                    index.lang_vec = Some(published(owned_vec));
+                }
+                if item.def_key.fingerprint() == unsafe_cell {
+                    index.lang_unsafe_cell = Some(published(unsafe_cell));
                 }
                 if item.def_key.item_kind != ItemKind::Trait {
                     continue;
@@ -615,6 +646,26 @@ impl MemberIndex {
                     }
                     _ => None,
                 };
+                let self_pointee = match &implementation.self_ty() {
+                    Some(ast::Type::RefType(reference)) if self_nominal.is_none() => {
+                        match reference.ty() {
+                            Some(ast::Type::PathType(path)) => match resolve(path.path())? {
+                                Some(nominal) => Some(Ok(nominal)),
+                                None => path
+                                    .path()
+                                    .filter(|path| path.qualifier().is_none())
+                                    .and_then(|path| path.segment())
+                                    .and_then(|segment| segment.name_ref())
+                                    .and_then(|name| BuiltinSelf::named(&name.text()))
+                                    .map(Err),
+                            },
+                            Some(ast::Type::SliceType(_)) => Some(Err(BuiltinSelf::Slice)),
+                            Some(ast::Type::ArrayType(_)) => Some(Err(BuiltinSelf::Array)),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
                 let blanket = blanket_bounds(&implementation, &resolve)?;
                 let ordinal = index.impls.len();
                 let functions = functions.remove(&identity).unwrap_or_default();
@@ -641,6 +692,7 @@ impl MemberIndex {
                     identity: published(identity),
                     self_nominal,
                     self_builtin,
+                    self_pointee,
                     trait_path,
                     trait_definition,
                     functions,
@@ -681,34 +733,99 @@ impl MemberIndex {
     }
     /// Inherent associated functions named `name` of a builtin self type.
     pub fn builtin_inherent(&self, ty: BuiltinSelf, name: &str) -> Vec<Digest> {
-        self.by_builtin
-            .get(&ty)
-            .into_iter()
-            .flatten()
-            .map(|ordinal| &self.impls[*ordinal])
-            .filter(|members| members.trait_path.is_none())
-            .filter_map(|members| members.functions.get(name).copied())
-            .collect()
+        self.builtin_inherent_of(ty, None, name)
+    }
+    fn builtin_inherent_of(
+        &self,
+        ty: BuiltinSelf,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        name: &str,
+    ) -> Vec<Digest> {
+        for tier in self.pointee_tiers(ty, pointee) {
+            let found: Vec<Digest> = tier
+                .into_iter()
+                .filter(|members| members.trait_path.is_none())
+                .filter_map(|members| members.functions.get(name).copied())
+                .collect();
+            if !found.is_empty() {
+                return found;
+            }
+        }
+        Vec::new()
     }
     /// Trait-impl functions named `name` of a builtin self type (own
     /// definition, else the trait's provided body).
     pub fn builtin_trait_functions(&self, ty: BuiltinSelf, name: &str) -> Vec<Digest> {
-        self.by_builtin
+        self.builtin_trait_impl_functions(ty, name)
+            .into_iter()
+            .map(|(_, function)| function)
+            .collect()
+    }
+    /// `builtin_trait_functions` with the implemented trait of each impl.
+    fn builtin_trait_impl_functions(
+        &self,
+        ty: BuiltinSelf,
+        name: &str,
+    ) -> Vec<(Option<Digest>, Digest)> {
+        self.builtin_trait_impl_functions_of(ty, None, name)
+    }
+    /// The impls of a reference self type, in the tiers a referent selects
+    /// among: those naming `pointee`, then those generic in it (one tier of
+    /// every impl when no referent is given).
+    fn pointee_tiers<'a>(
+        &'a self,
+        ty: BuiltinSelf,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+    ) -> Vec<Vec<&'a ImplMembers>> {
+        let impls: Vec<&ImplMembers> = self
+            .by_builtin
             .get(&ty)
             .into_iter()
             .flatten()
             .map(|ordinal| &self.impls[*ordinal])
-            .filter(|members| members.trait_path.is_some())
-            .filter_map(|members| {
-                members.functions.get(name).or_else(|| {
-                    members
-                        .trait_definition
-                        .and_then(|definition| self.trait_defaults.get(&definition))
-                        .and_then(|defaults| defaults.get(name))
-                })
-            })
+            .collect();
+        let Some(pointee) = pointee else {
+            return vec![impls];
+        };
+        let named: Vec<&ImplMembers> = impls
+            .iter()
             .copied()
-            .collect()
+            .filter(|members| members.self_pointee == Some(pointee))
+            .collect();
+        let generic: Vec<&ImplMembers> = impls
+            .into_iter()
+            .filter(|members| members.self_pointee.is_none())
+            .collect();
+        vec![named, generic]
+    }
+    fn builtin_trait_impl_functions_of(
+        &self,
+        ty: BuiltinSelf,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        name: &str,
+    ) -> Vec<(Option<Digest>, Digest)> {
+        for tier in self.pointee_tiers(ty, pointee) {
+            let found: Vec<(Option<Digest>, Digest)> = tier
+                .into_iter()
+                .filter(|members| members.trait_path.is_some())
+                .filter_map(|members| {
+                    members
+                        .functions
+                        .get(name)
+                        .or_else(|| {
+                            members
+                                .trait_definition
+                                .and_then(|definition| self.trait_defaults.get(&definition))
+                                .and_then(|defaults| defaults.get(name))
+                        })
+                        .map(|function| (members.trait_definition, *function))
+                })
+                .collect();
+            if !found.is_empty() {
+                return found;
+            }
+        }
+        Vec::new()
     }
     /// `<ty as Trait>::name` for the trait whose definition is `trait_key`:
     /// each impl of that trait for `ty` (its own definition, else the trait's
@@ -795,6 +912,46 @@ impl MemberIndex {
             direct
         }
     }
+    /// `trait_candidates` where the self type is a reference: the impls for
+    /// `&U` are indexed together, so the referent `pointee` selects among
+    /// them (an impl naming it, else one generic in it).
+    pub fn trait_candidates_of(
+        &self,
+        ty: Result<Digest, BuiltinSelf>,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        name: &str,
+    ) -> Vec<Digest> {
+        match (ty, pointee) {
+            (Err(builtin @ BuiltinSelf::Reference(_)), Some(_)) => {
+                let direct: Vec<Digest> = self
+                    .builtin_trait_impl_functions_of(builtin, pointee, name)
+                    .into_iter()
+                    .map(|(_, function)| function)
+                    .collect();
+                if direct.is_empty() {
+                    self.blanket_functions(ty, name)
+                } else {
+                    direct
+                }
+            }
+            _ => self.trait_candidates(ty, name),
+        }
+    }
+    /// The trait every one of `functions` implements, when they are impls of
+    /// one trait (differing by the trait's arguments).
+    pub fn same_trait_of(&self, functions: &[Digest]) -> Option<Digest> {
+        let trait_of = |function: &Digest| {
+            self.impls
+                .iter()
+                .find(|members| members.functions.values().any(|f| f == function))
+                .and_then(|members| members.trait_definition)
+        };
+        let first = trait_of(functions.first()?)?;
+        functions
+            .iter()
+            .all(|function| trait_of(function) == Some(first))
+            .then_some(first)
+    }
     pub fn impls_of(&self, ty: Digest) -> impl Iterator<Item = &ImplMembers> {
         self.by_nominal
             .get(&ty)
@@ -866,24 +1023,64 @@ impl MemberIndex {
         self_type: Result<Digest, BuiltinSelf>,
         method: &str,
     ) -> Result<(Digest, bool), Diagnostic> {
+        let alternatives = self.method_alternatives(self_type, method)?;
+        match alternatives.functions.as_slice() {
+            [function] => Ok((*function, alternatives.unsize)),
+            _ if alternatives.inherent => Err(Diagnostic::new(
+                "LRR-E-NAME-AMBIGUOUS",
+                format!("method `{method}` has several inherent definitions"),
+            )),
+            _ => Err(Diagnostic::new(
+                "LRR-E-NAME-AMBIGUOUS",
+                format!("method `{method}` is provided by several trait impls"),
+            )),
+        }
+    }
+    /// The probe of `select_method`, keeping every distinct trait-impl
+    /// function of the winning tier. Several impls of one trait that differ
+    /// only by the trait's arguments (`PartialEq<i32>` and `PartialEq<M>`)
+    /// are one method rustc selects by the call's argument types: they are
+    /// `same_trait` alternatives. Impls sharing the trait's provided body
+    /// are one function.
+    pub(crate) fn method_alternatives(
+        &self,
+        self_type: Result<Digest, BuiltinSelf>,
+        method: &str,
+    ) -> Result<MethodAlternatives, Diagnostic> {
+        self.method_alternatives_of(self_type, None, method)
+    }
+    /// `method_alternatives` for a reference self type, selecting among the
+    /// reference impls by the referent they name.
+    pub(crate) fn method_alternatives_of(
+        &self,
+        self_type: Result<Digest, BuiltinSelf>,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        method: &str,
+    ) -> Result<MethodAlternatives, Diagnostic> {
         let candidates = |self_type| {
             let (inherent, traits) = match self_type {
                 Ok(nominal) => (
                     self.inherent(nominal, method),
                     self.trait_functions(nominal, method)
                         .into_iter()
-                        .map(|(_, function)| function)
+                        .map(|(members, function)| (members.trait_definition, function))
                         .collect::<Vec<_>>(),
                 ),
                 Err(builtin) => (
-                    self.builtin_inherent(builtin, method),
-                    self.builtin_trait_functions(builtin, method),
+                    self.builtin_inherent_of(builtin, pointee, method),
+                    self.builtin_trait_impl_functions_of(builtin, pointee, method),
                 ),
             };
             // Blanket impls (`impl<T: Bound> Trait for T`) apply when no impl
             // of the receiver's own type provides the method.
             if inherent.is_empty() && traits.is_empty() {
-                (inherent, self.blanket_functions(self_type, method))
+                (
+                    inherent,
+                    self.blanket_functions(self_type, method)
+                        .into_iter()
+                        .map(|function| (None, function))
+                        .collect(),
+                )
             } else {
                 (inherent, traits)
             }
@@ -896,31 +1093,47 @@ impl MemberIndex {
             (inherent, traits) = candidates(Err(BuiltinSelf::Slice));
             unsize = true;
         }
-        let function = match inherent.as_slice() {
-            [function] => *function,
-            [] => match traits.as_slice() {
-                [function] => *function,
-                [] => {
+        match inherent.as_slice() {
+            [function] => Ok(MethodAlternatives {
+                functions: vec![*function],
+                same_trait: None,
+                inherent: false,
+                unsize,
+            }),
+            [] => {
+                if traits.is_empty() {
                     return Err(Diagnostic::new(
                         "LRR-E-NAME-MISSING",
                         format!("no method `{method}` for the receiver's type"),
                     ));
                 }
-                _ => {
-                    return Err(Diagnostic::new(
-                        "LRR-E-NAME-AMBIGUOUS",
-                        format!("method `{method}` is provided by several trait impls"),
-                    ));
+                let mut functions = Vec::new();
+                for (_, function) in &traits {
+                    if !functions.contains(function) {
+                        functions.push(*function);
+                    }
                 }
-            },
-            _ => {
-                return Err(Diagnostic::new(
-                    "LRR-E-NAME-AMBIGUOUS",
-                    format!("method `{method}` has several inherent definitions"),
-                ));
+                let same_trait = traits
+                    .first()
+                    .and_then(|(trait_key, _)| *trait_key)
+                    .filter(|first| traits.iter().all(|(key, _)| *key == Some(*first)));
+                Ok(MethodAlternatives {
+                    functions,
+                    same_trait,
+                    inherent: false,
+                    unsize,
+                })
             }
-        };
-        Ok((function, unsize))
+            // Several inherent definitions are the impls of different
+            // instantiations of the type (rustc rejects duplicates of one
+            // instantiation): the receiver's type arguments select.
+            _ => Ok(MethodAlternatives {
+                functions: inherent,
+                same_trait: None,
+                inherent: true,
+                unsize,
+            }),
+        }
     }
     /// The associated type alias named `name` that a trait impl for nominal
     /// `ty` (or builtin self `builtin`) declares; `trait_key` selects the trait
@@ -931,7 +1144,20 @@ impl MemberIndex {
         trait_key: Option<Digest>,
         name: &str,
     ) -> Result<Option<(Digest, &AssociatedTypeAlias)>, Diagnostic> {
-        let impls: Vec<&ImplMembers> = match ty {
+        self.associated_type_of(ty, None, trait_key, name)
+    }
+    /// `associated_type` for a reference self type, whose `pointee` (the
+    /// referent a `&A` names) selects among the reference impls the index
+    /// buckets together; an impl naming the referent wins over one generic
+    /// in it.
+    pub fn associated_type_of(
+        &self,
+        ty: Result<Digest, BuiltinSelf>,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        trait_key: Option<Digest>,
+        name: &str,
+    ) -> Result<Option<(Digest, &AssociatedTypeAlias)>, Diagnostic> {
+        let mut impls: Vec<&ImplMembers> = match ty {
             Ok(nominal) => self.impls_of(nominal).collect(),
             Err(builtin) => self
                 .by_builtin
@@ -941,6 +1167,18 @@ impl MemberIndex {
                 .map(|ordinal| &self.impls[*ordinal])
                 .collect(),
         };
+        if let Some(pointee) = pointee {
+            let named = impls
+                .iter()
+                .any(|members| members.self_pointee == Some(pointee));
+            impls.retain(|members| {
+                if named {
+                    members.self_pointee == Some(pointee)
+                } else {
+                    members.self_pointee.is_none()
+                }
+            });
+        }
         let mut found = impls.into_iter().filter(|members| {
             members.trait_path.is_some()
                 && trait_key.is_none_or(|key| members.trait_definition == Some(key))
@@ -1156,6 +1394,14 @@ impl MemberIndex {
     /// The `owned_box` lang item: the alloc facade's `Box` declaration.
     pub fn owned_box(&self) -> Option<Digest> {
         self.lang_box
+    }
+    /// The `unsafe_cell` lang item: the core facade's `UnsafeCell`.
+    pub fn unsafe_cell(&self) -> Option<Digest> {
+        self.lang_unsafe_cell
+    }
+    /// The growable-array lang item: the alloc facade's `Vec` declaration.
+    pub fn owned_vec(&self) -> Option<Digest> {
+        self.lang_vec
     }
     /// Nominal declarations with a `Copy` impl. `None` when some trait impl's
     /// self type is unresolved and could be such an impl. The impl's own

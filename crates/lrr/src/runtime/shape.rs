@@ -184,6 +184,9 @@ pub struct TypeRegistry {
     by_key: BTreeMap<Arc<TypeKey>, TypeId>,
     /// Owned keys and index nodes; vector allocation is measured separately.
     owned_bytes: usize,
+    /// The run's growable-array lang item: its `Vec<T>` Types have the same
+    /// `[T]` element-window views as arrays.
+    vec_lang: Option<Digest>,
 }
 /// Reserved primitive descriptors have no source or worker-dependent state.
 fn primitive_descriptors() -> &'static [TypeDescriptor; 16] {
@@ -214,6 +217,10 @@ fn primitive_descriptors() -> &'static [TypeDescriptor; 16] {
 /// Deterministic metadata estimate, including ordered-index node overhead.
 const TYPE_ENTRY_OVERHEAD: usize = 128;
 impl TypeRegistry {
+    /// Install the growable-array lang item before any `Vec<T>` is interned.
+    pub(crate) fn set_vec_lang(&mut self, identity: Option<Digest>) {
+        self.vec_lang = identity;
+    }
     pub fn metadata_bytes(&self) -> usize {
         self.descriptors
             .capacity()
@@ -403,6 +410,11 @@ impl TypeRegistry {
         self.by_key.insert(key.clone(), id);
         let array_element = match key.as_ref() {
             TypeKey::Array { element, .. } => Some(*element),
+            TypeKey::Nominal { identity, args, .. }
+                if self.vec_lang == Some(*identity) && args.len() == 1 =>
+            {
+                Some(args[0])
+            }
             _ => None,
         };
         self.descriptors.push(TypeDescriptor {

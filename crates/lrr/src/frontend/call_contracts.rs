@@ -1817,7 +1817,10 @@ fn bind(
     }
     if source
         .get(&key)
-        .is_some_and(|prior| prior != &actual.source)
+        .is_some_and(|prior| {
+            super::signature_subst::erase_regions(prior)
+                != super::signature_subst::erase_regions(&actual.source)
+        })
     {
         return Err(fault(
             "LRR-E-GENERIC-BINDING",

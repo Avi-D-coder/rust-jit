@@ -12,8 +12,11 @@ impl Frame {
     }
     fn structural_source_shape(source: &TyTerm) -> bool {
         match source {
-            TyTerm::Primitive(_) => true,
+            TyTerm::Primitive(_) | TyTerm::Str => true,
             TyTerm::Tuple(members) => members.iter().all(Self::structural_source_shape),
+            // A reference member (`(&K, &V)`): regions are not data.
+            TyTerm::Ref(_, _, inner) => Self::structural_source_shape(inner),
+            TyTerm::Slice(element) => Self::structural_source_shape(element),
             TyTerm::Array(element, ConstTerm::Value(length)) => {
                 u32::try_from(*length).is_ok() && Self::structural_source_shape(element)
             }
@@ -51,6 +54,30 @@ impl Frame {
                 {
                     return Err(mismatch());
                 }
+            }
+            TyTerm::Str => {
+                if target != TypeId(16) {
+                    return Err(mismatch());
+                }
+            }
+            TyTerm::Slice(element) => {
+                let TypeKey::Slice { element: actual_element } = actual.key.as_ref() else {
+                    return Err(mismatch());
+                };
+                Self::structural_source_target(element, *actual_element, store)?;
+            }
+            TyTerm::Ref(_, mutable, inner) => {
+                let TypeKey::Ref {
+                    mutable: actual_mutable,
+                    target: actual_target,
+                } = actual.key.as_ref()
+                else {
+                    return Err(mismatch());
+                };
+                if actual_mutable != mutable {
+                    return Err(mismatch());
+                }
+                Self::structural_source_target(inner, *actual_target, store)?;
             }
             TyTerm::Tuple(members) if members.is_empty() => {
                 if target != TypeId(1) {

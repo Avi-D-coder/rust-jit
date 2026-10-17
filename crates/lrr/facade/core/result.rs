@@ -202,6 +202,15 @@ impl<T: crate::cmp::PartialEq, E: crate::cmp::PartialEq> crate::cmp::PartialEq f
 }
 impl<T: crate::cmp::Eq, E: crate::cmp::Eq> crate::cmp::Eq for Result<T, E> {}
 
+impl<T: crate::fmt::Debug, E: crate::fmt::Debug> crate::fmt::Debug for Result<T, E> {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        match self {
+            Result::Ok(value) => f.debug_tuple("Ok").field(value).finish(),
+            Result::Err(error) => f.debug_tuple("Err").field(error).finish(),
+        }
+    }
+}
+
 impl<T: crate::cmp::PartialOrd, E: crate::cmp::PartialOrd> crate::cmp::PartialOrd for Result<T, E> {
     fn partial_cmp(&self, other: &Self) -> Option<crate::cmp::Ordering> {
         match (self, other) {

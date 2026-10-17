@@ -333,6 +333,10 @@ pub(crate) fn verify_runtime_scalar_borrow(
         Op::ValuePlace {
             source,
             destination,
+        }
+        | Op::PromotedPlace {
+            source,
+            destination,
         } => {
             borrow.place_key() == &draft.key
                 && borrow.temporary() == Some(*source)
@@ -786,6 +790,10 @@ fn verify_inner(
             Op::ValuePlace {
                 source,
                 destination,
+            }
+            | Op::PromotedPlace {
+                source,
+                destination,
             } => {
                 slot(body, *source, SlotKind::Value)?;
                 slot(body, *destination, SlotKind::Place)?;
@@ -1148,6 +1156,9 @@ fn verify_inner(
                     }
                     (LiteralKind::Char, Some(DecodedLiteral::Char(_)))
                     | (LiteralKind::Byte, Some(DecodedLiteral::Byte(_))) => {}
+                    (LiteralKind::ByteString, Some(DecodedLiteral::ByteString(value))) => {
+                        charge(&mut bytes, value.len())?;
+                    }
                     (LiteralKind::Float, Some(DecodedLiteral::Float { decimal, suffix })) => {
                         if decimal.is_empty()
                             || suffix.is_some_and(|ty| {
@@ -1565,7 +1576,14 @@ fn verify_inner(
                             == crate::syntax::body_index::NodeRole::Expression(
                                 crate::syntax::body_index::ExpressionKind::MethodCall,
                             )
-                            && name.starts_with('.')))
+                            && name.starts_with('.'))
+                        // A language-item call (`a..=b`): the call of its
+                        // item's path.
+                        && !(node.role
+                            == crate::syntax::body_index::NodeRole::Expression(
+                                crate::syntax::body_index::ExpressionKind::LangCall,
+                            )
+                            && *name == crate::syntax::constructors::range_inclusive_new_path(body.profile())))
                 {
                     return Err(invalid(
                         "call seal requires its selected call node and name",
@@ -2027,7 +2045,9 @@ mod tests {
                         hint: super::super::op::HintRecipe::BorrowTarget { reference },
                         ..
                     } => *reference = SlotId(0),
-                    Op::ValuePlace { destination, .. } | Op::Borrow { destination, .. } => {
+                    Op::ValuePlace { destination, .. }
+                    | Op::PromotedPlace { destination, .. }
+                    | Op::Borrow { destination, .. } => {
                         *destination = SlotId(0)
                     }
                     _ => panic!("original temporary borrow phase differs"),

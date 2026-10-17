@@ -7,8 +7,10 @@ Specification: [LRR revision 5](lrr_rust2024_macros_traits_implementation_spec.m
 Explicit user direction, recorded as [E-R5-006](docs/errata/revision5-no-resource-accounting.md):
 
 - **Only rustc's limits.** A limit is allowed only if it reproduces one the pinned rustc enforces, cited by compiler source location (for example `recursion_limit`, default 128, honoring `#![recursion_limit]`). No memory accounting, no fuel or time counting, no byte budgets, no count caps. The OS bounds resources. When an existing cap blocks a correct program, delete it instead of raising it.
+- **Looser than rustc, never stricter** (user, October 17, 2026). Run the code and produce the same result the compiled program would; do not re-implement rustc's static checks (borrow checking, const-context restrictions, E0106/E0508/E0509-style rejections, privacy or lint enforcement). Users who want those run `rustc`/`cargo check`. Everything rustc compiles must run; being more permissive than rustc is allowed. Delete runtime refusals that only re-enforce a static rule.
 - **No sandbox for now.** The permission broker, IO grants and capability/authority checks on source or runtime access are out of scope. Do not extend them or let them block language work; source reads follow what rustc reads.
 - **Goal.** A simple, correct interpreter tested against unchanged upstream rustc tests, then the JIT. The one-pipeline rules (E-R5-005) still apply.
+- **Constant initializers** (October 17, 2026, [E-R5-007](docs/errata/revision5-const-initializers-vm.md)): reached `const`/`static` initializers with nominal values, references or calls run once through the ordinary interpreter into run-long static storage (also used by byte strings and promoted `'static` data). The pure evaluator stays only for preparation-time values such as array lengths.
 - **Workflow.** Edit and build directly in this checkout (`cargo +1.99.0 test --offline --locked -p lrr --lib --no-run`); no worktrees or frozen copies.
 
 ## Architecture statement of work and implementation gates (October 15, 2026)

@@ -6,6 +6,7 @@
 //! array/slice index Type. An expression whose Type those services do not
 //! state yields no selection, which stays a missing goal.
 use super::{Component, ConstraintDemand, Step, entry, fault};
+use std::collections::BTreeMap;
 use crate::{
     core::digest::Digest,
     db::{
@@ -77,6 +78,85 @@ fn mentions_parameter(term: &TyTerm) -> bool {
         }),
         TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Never => false,
         _ => true,
+    }
+}
+/// Bind each parameter of `definition` that the declared Type `declared`
+/// names to the part of the reached Type `actual` at the same position
+/// (through references: the receiver and arguments auto-ref and auto-deref).
+fn bind_parameters(
+    declared: &TyTerm,
+    actual: &TyTerm,
+    definition: Digest,
+    out: &mut BTreeMap<crate::traits::term::ParamKey, TyTerm>,
+) {
+    use crate::traits::term::GenericArg;
+    match (declared, actual) {
+        (TyTerm::Param(key), actual) if key.definition == definition => {
+            out.entry(*key).or_insert_with(|| actual.clone());
+        }
+        (TyTerm::Ref(_, _, declared), TyTerm::Ref(_, _, actual)) => {
+            bind_parameters(declared, actual, definition, out)
+        }
+        // An auto-ref'd argument or receiver.
+        (TyTerm::Ref(_, _, declared), actual) => {
+            bind_parameters(declared, actual, definition, out)
+        }
+        (declared, TyTerm::Ref(_, _, actual)) => {
+            bind_parameters(declared, actual, definition, out)
+        }
+        (TyTerm::Nominal(left, declared), TyTerm::Nominal(right, actual)) if left == right => {
+            for (declared, actual) in declared.iter().zip(actual) {
+                if let (GenericArg::Type(declared), GenericArg::Type(actual)) = (declared, actual)
+                {
+                    bind_parameters(declared, actual, definition, out);
+                }
+            }
+        }
+        (TyTerm::Tuple(declared), TyTerm::Tuple(actual)) if declared.len() == actual.len() => {
+            for (declared, actual) in declared.iter().zip(actual) {
+                bind_parameters(declared, actual, definition, out);
+            }
+        }
+        (
+            TyTerm::Array(declared, _) | TyTerm::Slice(declared),
+            TyTerm::Array(actual, _) | TyTerm::Slice(actual),
+        ) => bind_parameters(declared, actual, definition, out),
+        _ => {}
+    }
+}
+/// `term` with each bound parameter replaced.
+fn replace_parameters(
+    term: &TyTerm,
+    bound: &BTreeMap<crate::traits::term::ParamKey, TyTerm>,
+) -> TyTerm {
+    use crate::traits::term::GenericArg;
+    match term {
+        TyTerm::Param(key) => bound.get(key).cloned().unwrap_or_else(|| term.clone()),
+        TyTerm::Ref(region, mutable, inner) => TyTerm::Ref(
+            region.clone(),
+            *mutable,
+            Box::new(replace_parameters(inner, bound)),
+        ),
+        TyTerm::Slice(inner) => TyTerm::Slice(Box::new(replace_parameters(inner, bound))),
+        TyTerm::Array(inner, length) => {
+            TyTerm::Array(Box::new(replace_parameters(inner, bound)), length.clone())
+        }
+        TyTerm::Tuple(members) => TyTerm::Tuple(
+            members
+                .iter()
+                .map(|member| replace_parameters(member, bound))
+                .collect(),
+        ),
+        TyTerm::Nominal(identity, args) => TyTerm::Nominal(
+            *identity,
+            args.iter()
+                .map(|arg| match arg {
+                    GenericArg::Type(inner) => GenericArg::Type(replace_parameters(inner, bound)),
+                    other => other.clone(),
+                })
+                .collect(),
+        ),
+        other => other.clone(),
     }
 }
 /// The autoderef'd receiver self type the probe selects from.
@@ -160,13 +240,31 @@ impl<'a> Component<'a> {
             FactKind::SuffixedInteger | FactKind::SuffixedFloat => {
                 fact.suffix().map(TyTerm::Primitive)
             }
+            // `bool`, `char` and byte literals have their lexical Type; a
+            // string literal is `&'static str`.
+            FactKind::Literal => match (fact.suffix(), fact.flag()) {
+                (Some(primitive), _) => Some(TyTerm::Primitive(primitive)),
+                (None, true) => Some(TyTerm::Ref(
+                    RegionTerm::Static,
+                    false,
+                    Box::new(TyTerm::Str),
+                )),
+                (None, false) => None,
+            },
             FactKind::Path => ready!(self.path_type(db, node)),
             FactKind::Record => ready!(self.constructed_type(db, node)),
             FactKind::Call => match ready!(self.constructed_type(db, node)) {
                 Some(term) => Some(term),
                 None => match ready!(self.callee(db, node)) {
                     Some(super::Callee::Source(definition)) => {
-                        ready!(self.result_term(db, node, definition))
+                        match ready!(self.result_term(db, node, definition)) {
+                            Some(result) => {
+                                let result =
+                                    ready!(self.instantiate_result(db, node, definition, result));
+                                Some(ready!(self.decided(db, node, result)))
+                            }
+                            None => None,
+                        }
                     }
                     Some(super::Callee::Facade(LibraryFunction::MustUse)) => {
                         match fact.operand(1) {
@@ -178,9 +276,16 @@ impl<'a> Component<'a> {
                 },
             },
             FactKind::MethodCall => match ready!(self.method_function(db, node)) {
-                Some(function) => ready!(self.result_term(db, node, function)),
+                Some(function) => match ready!(self.result_term(db, node, function)) {
+                    Some(result) => {
+                        let result = ready!(self.instantiate_result(db, node, function, result));
+                        Some(ready!(self.decided(db, node, result)))
+                    }
+                    None => None,
+                },
                 None => None,
             },
+            FactKind::LangCall => ready!(self.lang_type(db, node)),
             FactKind::Field => {
                 let step = match (fact.field(), fact.member()) {
                     (Some(position), _) => Step::Field(position),
@@ -202,6 +307,19 @@ impl<'a> Component<'a> {
                     Some(base) => {
                         ready!(self.project_term(db, &base, &[Step::AutoDeref, Step::Element]))
                     }
+                    None => None,
+                },
+                None => None,
+            },
+            // `base[range]`: the slice of the base's element Type.
+            FactKind::IndexRange => match fact.operand(0) {
+                Some(base) => match ready!(self.expression_type(db, base)) {
+                    Some(base) => ready!(self.project_term(
+                        db,
+                        &base,
+                        &[Step::AutoDeref, Step::Element]
+                    ))
+                    .map(|element| TyTerm::Slice(Box::new(element))),
                     None => None,
                 },
                 None => None,
@@ -243,6 +361,48 @@ impl<'a> Component<'a> {
             _ => None,
         }))
     }
+    /// A selected function's declared result with its own type parameters
+    /// replaced by what the arguments' static Types state: a parameter named
+    /// by a declared parameter Type is the matching part of the reached
+    /// argument's Type (a method's receiver included). Parameters no
+    /// argument states stay open.
+    fn instantiate_result(
+        &mut self,
+        db: &mut Database,
+        call: NodeId,
+        definition: Digest,
+        result: TyTerm,
+    ) -> QueryPoll<TyTerm> {
+        if !mentions_parameter(&result) {
+            return QueryPoll::Ready(Ok(result));
+        }
+        let (operands, offset) = match self.fact(call) {
+            Ok(fact) => (
+                fact.operands().to_vec(),
+                usize::from(fact.kind() != FactKind::MethodCall),
+            ),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut bound = BTreeMap::new();
+        for (position, operand) in operands.iter().enumerate().skip(offset) {
+            let (Some(operand), Ok(ordinal)) = (operand, u32::try_from(position - offset)) else {
+                continue;
+            };
+            let Some(declared) = ready!(self.quiet_parameter_term(db, call, definition, ordinal))
+            else {
+                continue;
+            };
+            let Some(actual) = ready!(self.expression_type(db, *operand)) else {
+                continue;
+            };
+            bind_parameters(&declared, &actual, definition, &mut bound);
+        }
+        QueryPoll::Ready(Ok(if bound.is_empty() {
+            result
+        } else {
+            replace_parameters(&result, &bound)
+        }))
+    }
     /// The written annotation of a fact as its Type term.
     pub(super) fn annotation_term(
         &mut self,
@@ -275,13 +435,20 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Err(fault("binding use query variant differs")));
         };
         if observed.pending().is_some() {
-            return QueryPoll::Ready(Ok(None));
+            // A fieldless constructor named as a value (`None`) has its
+            // nominal Type; any other pending goal states nothing.
+            return self.constructed_type(db, node);
         }
         let Some(identity) = observed.local_binding() else {
             return match observed.declaration() {
                 Some(declaration) => {
                     let identity = declaration.identity();
-                    self.declared_item_type(db, observed, identity)
+                    match ready!(self.declared_item_type(db, observed, identity)) {
+                        Some(term) => QueryPoll::Ready(Ok(Some(term))),
+                        // A unit struct named as a value is a value of its
+                        // own declaration's Type.
+                        None => self.constructed_type(db, node),
+                    }
                 }
                 None => QueryPoll::Ready(Ok(None)),
             };
@@ -366,11 +533,26 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(None));
         };
         let mut matched = None;
+        // A `for` pattern is the loop's `Some(PAT)` test: its first step
+        // selects the `Some` field of the head's `Item`.
+        let mut skipped = 0;
         for edge in plan.uses(occurrence.root) {
             let Some(parent) = plan.fact(edge.parent) else {
                 continue;
             };
             matched = match parent.kind() {
+                FactKind::For if edge.ordinal == 1 => {
+                    skipped = 1;
+                    match parent.operand(0) {
+                        Some(head) => match ready!(self.expression_type(db, head)) {
+                            Some(head) => {
+                                ready!(self.project_term(db, &head, &[Step::Item]))
+                            }
+                            None => None,
+                        },
+                        None => None,
+                    }
+                }
                 FactKind::Let if edge.ordinal == 0 => {
                     match ready!(self.annotation_term(db, edge.parent)) {
                         Some(term) => Some(term),
@@ -393,7 +575,7 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(None));
         };
         let mut steps = Vec::with_capacity(occurrence.steps.len());
-        for step in &occurrence.steps {
+        for step in occurrence.steps.iter().skip(skipped) {
             steps.push(match *step {
                 PatternStep::Deref => Step::Deref,
                 PatternStep::Field(position) => Step::Field(position),
@@ -457,16 +639,60 @@ impl<'a> Component<'a> {
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         // No candidate on the static receiver Type itself (an autoderef or
-        // unindexed trait method) leaves the selection open; an ambiguity is
-        // the dispatcher's own refusal and propagates.
-        match members.select_method(self_type, name) {
-            Ok((function, _)) => QueryPoll::Ready(Ok(Some(function))),
+        // unindexed trait method) leaves the selection open, as do several
+        // candidates (impls of one trait that differ by the trait's
+        // arguments, which rustc selects by the argument types): the
+        // dispatcher selects at the reached call. Ambiguity rustc would
+        // report is not re-enforced here.
+        match members.method_alternatives(self_type, name) {
+            Ok(alternatives) => match alternatives.functions.as_slice() {
+                [function] => QueryPoll::Ready(Ok(Some(*function))),
+                _ => QueryPoll::Ready(Ok(None)),
+            },
+            // No candidate on the static receiver Type: the probe continues
+            // through the receiver's overloaded `Deref` targets, as the
+            // dispatcher's does.
+            Err(error) if super::not_closed(&error) => {
+                self.deref_method(db, &members, &receiver, name)
+            }
+            Err(error) => QueryPoll::Ready(Err(error)),
+        }
+    }
+    /// The method the probe selects after the receiver's overloaded `Deref`:
+    /// the growable-array lang item dereferences to `[T]` with the same
+    /// element projection this service already gives it (`Step::Element`),
+    /// so the receiver relations of the slice method hold on the `Vec`
+    /// receiver. Another type's `Deref` target is not projected by the
+    /// receiver's steps; its selection stays open for the dispatcher.
+    fn deref_method(
+        &mut self,
+        db: &mut Database,
+        members: &crate::frontend::member_index::MemberIndex,
+        receiver: &TyTerm,
+        name: &str,
+    ) -> QueryPoll<Option<Digest>> {
+        let mut term = receiver;
+        while let TyTerm::Ref(_, _, inner) = term {
+            term = inner;
+        }
+        let Some(element) = ready!(self.vec_elements(db, term)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let target = TyTerm::Slice(Box::new(element));
+        let Some(bucket) = probe_self(&target) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        match members.method_alternatives(bucket, name) {
+            Ok(alternatives) => QueryPoll::Ready(Ok(match alternatives.functions.as_slice() {
+                [function] => Some(*function),
+                _ => None,
+            })),
             Err(error) if super::not_closed(&error) => QueryPoll::Ready(Ok(None)),
             Err(error) => QueryPoll::Ready(Err(error)),
         }
     }
     /// The selected method's declared signature.
-    fn method_signature(
+    pub(super) fn method_signature(
         &mut self,
         db: &mut Database,
         function: Digest,
@@ -498,7 +724,7 @@ impl<'a> Component<'a> {
         call: NodeId,
         ordinal: u32,
     ) -> QueryPoll<()> {
-        if ordinal == 0 && self.via.is_scalar() {
+        if ordinal == 0 && self.via.is_scalar() && !self.open {
             // The method selected depends on the variable's own Type: rustc's
             // trait candidates for a numeric inference variable.
             return self.numeric_receiver(db, call);
@@ -537,14 +763,30 @@ impl<'a> Component<'a> {
                 declared = *inner;
             }
             let mut steps: &[Step] = &self.via.steps;
-            while let Some((Step::Deref, rest)) = steps.split_first() {
+            while let Some((Step::Deref | Step::AutoDeref, rest)) = steps.split_first() {
                 steps = rest;
             }
             let steps = steps.to_vec();
-            if let super::generics::TermProjection::Leaf(TyTerm::Primitive(primitive)) =
-                ready!(self.project_parametric(db, &declared, &steps))
-            {
-                return QueryPoll::Ready(self.constrain(call, primitive));
+            match ready!(self.project_parametric(db, &declared, &steps)) {
+                super::generics::TermProjection::Leaf(TyTerm::Primitive(primitive)) => {
+                    return QueryPoll::Ready(self.constrain(call, primitive));
+                }
+                // The impl's self type states the part (`impl W<u8> { .. }`).
+                super::generics::TermProjection::Leaf(term)
+                    if self.open && crate::frontend::call_contracts::closed_term(&term) =>
+                {
+                    self.candidate(call, term);
+                    return QueryPoll::Ready(Ok(()));
+                }
+                // The part is the impl's own type parameter: every other
+                // position of it in the method's signature (the arguments and
+                // the result) holds the same Type.
+                super::generics::TermProjection::Parameter(key, remaining)
+                    if key.definition == function =>
+                {
+                    return self.relate_parameter(db, call, function, key, remaining);
+                }
+                _ => {}
             }
         }
         // The declared goals, read without recording this component's own
@@ -585,8 +827,18 @@ impl<'a> Component<'a> {
         while let Some(TyTerm::Ref(_, _, inner)) = base {
             base = Some(inner);
         }
+        // A `Vec<T>` place indexes its element cells like an array's.
+        let vector = match base {
+            Some(term) => ready!(self.vec_elements(db, term)).is_some(),
+            None => false,
+        };
         match base {
             Some(TyTerm::Array(..) | TyTerm::Slice(_)) if self.via.is_scalar() => {
+                ready!(QueryPoll::Ready(
+                    self.constrain(index, PrimitiveType::Usize)
+                ));
+            }
+            Some(_) if vector && self.via.is_scalar() => {
                 ready!(QueryPoll::Ready(
                     self.constrain(index, PrimitiveType::Usize)
                 ));

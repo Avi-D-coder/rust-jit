@@ -165,6 +165,8 @@ pub enum DecodedLiteral {
     },
     Char(char),
     Byte(u8),
+    /// A byte string literal's decoded bytes (`b"a\n"`).
+    ByteString(std::sync::Arc<[u8]>),
     Float {
         decimal: String,
         suffix: Option<PrimitiveType>,
@@ -312,7 +314,10 @@ pub const ARRAY_REPEAT_OPCODE: u8 = 63;
 pub const COMPARISON_OPERAND_OPCODE: u8 = 64;
 // Tag 65 calls a `for` loop's lang-item iterator method.
 pub const ITERATOR_CALL_OPCODE: u8 = 65;
-pub const OPCODE_COUNT: usize = 66;
+// Tag 66 addresses a promoted constant temporary (rustc's rvalue static
+// promotion of `&<constant expression>`).
+pub const PROMOTED_PLACE_OPCODE: u8 = 66;
+pub const OPCODE_COUNT: usize = 67;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -587,6 +592,14 @@ pub enum Op {
         source: SlotId,
         destination: SlotId,
     },
+    /// `&<constant expression>` (literals, and arrays/tuples of them, under
+    /// a shared borrow): rustc promotes the temporary to a `'static` place.
+    /// The completed operand value moves into the run's one promoted
+    /// location for this site and type; later executions reuse it.
+    PromotedPlace {
+        source: SlotId,
+        destination: SlotId,
+    },
     /// Parentheses carry an existing checked address without reading its value.
     PlaceTransfer {
         source: SlotId,
@@ -824,6 +837,7 @@ impl Op {
             Self::MakePlace { .. } => 30,
             Self::ParameterPlace { .. } => 44,
             Self::ValuePlace { .. } => 38,
+            Self::PromotedPlace { .. } => PROMOTED_PLACE_OPCODE,
             Self::PlaceTransfer { .. } => 39,
             Self::Borrow { .. } => 31,
             Self::PrimitiveFloatingConstant { .. } => 41,
@@ -905,6 +919,7 @@ impl Op {
             | Self::FormatArguments { .. }
             | Self::CheckUnit { .. } => EffectClass::Primitive,
             Self::SourceConstant { .. }
+            | Self::PromotedPlace { .. }
             | Self::Borrow { .. }
             | Self::ReadPlace { .. }
             | Self::AssignPlace { .. }

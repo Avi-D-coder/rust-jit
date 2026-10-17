@@ -143,6 +143,25 @@ fn written_binding_admission(
     ))
 }
 /// Descriptor publication is an executed VM action, never pure preflight work.
+/// An initializer frame's root value takes its declared reference result
+/// as context, as a function body's root block does
+/// (`HintRecipe::DefinitionResult`), so its coercions (`&[u8; 2]` to
+/// `&[u8]`) apply at the root (E-R5-007).
+pub(crate) fn initializer_root_hint(
+    frame: &mut Frame,
+    store: &mut GuestStore,
+) -> Result<(), Diagnostic> {
+    let Some(child) = frame.body.nodes().first().and_then(|root| root.value) else {
+        return Err(invalid("initializer root value absent"));
+    };
+    let hint = HintRecipe::DefinitionResult;
+    frame_hint(frame, &hint, false, store)?;
+    frame.preflight_hint(child)?;
+    let descriptor = materialize_hint(frame, &hint, false, store)?;
+    frame.declared_hint(child, descriptor)?;
+    frame.set_source_view(child, frame.resolved_annotation_source(&hint)?)?;
+    Ok(())
+}
 fn materialize_hint(
     frame: &Frame,
     hint: &HintRecipe,
@@ -185,6 +204,8 @@ fn materialize_hint(
 }
 enum PreparedLiteral {
     String(super::frame::StringLiteralPublication),
+    /// `b"..."`: a shared reference to the site's promoted `[u8; N]`.
+    ByteString,
     Scalar(ValueRepr),
     /// Private immutable admission from the ordinary indexed literal's kind,
     /// source span and destination, never from a runtime descriptor.
@@ -208,7 +229,7 @@ impl PreparedLiteral {
         match self {
             Self::IntrinsicScalar { primitive, .. } => Some(*primitive),
             Self::Integer { source, .. } | Self::Float { source, .. } => *source,
-            Self::Scalar(_) | Self::String(_) => None,
+            Self::Scalar(_) | Self::String(_) | Self::ByteString => None,
         }
     }
     fn ty(&self) -> Option<TypeId> {
@@ -217,7 +238,7 @@ impl PreparedLiteral {
                 Some(TypeId(value.type_id))
             }
             Self::Integer { ty, .. } | Self::Float { ty, .. } => *ty,
-            Self::String(_) => None,
+            Self::String(_) | Self::ByteString => None,
         }
     }
 }
@@ -323,7 +344,7 @@ fn commit_literal(
     store: &mut GuestStore,
 ) -> Result<TicketId, Diagnostic> {
     let (ticket, ty) = match prepared {
-        PreparedLiteral::String(_) => {
+        PreparedLiteral::String(_) | PreparedLiteral::ByteString => {
             return Err(invalid(
                 "string literal requires ordinary source publication",
             ));
@@ -450,7 +471,7 @@ fn intrinsic_literal_preflight(
         PreparedLiteral::IntrinsicScalar { .. } => {
             Err(invalid("intrinsic literal source admission repeated"))
         }
-        PreparedLiteral::String(_) => {
+        PreparedLiteral::String(_) | PreparedLiteral::ByteString => {
             Err(invalid("string literal entered scalar source admission"))
         }
     }
@@ -480,6 +501,12 @@ fn literal_preflight(
         return frame
             .preflight_string_literal(proof, *destination, store)
             .map(|ready| Some(PreparedLiteral::String(ready)));
+    }
+    if literal.kind == LiteralKind::ByteString {
+        let Some(DecodedLiteral::ByteString(_)) = &literal.decoded else {
+            return Err(invalid("byte string literal lacks its decoded bytes"));
+        };
+        return Ok(Some(PreparedLiteral::ByteString));
     }
     let explicit = frame_hint(frame, hint, true, store)?;
     let inherited = frame.hint(*destination)?;
@@ -619,6 +646,10 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             destination,
         } => frame.preflight_primitive_floating_constant(constant, *destination, store),
         Op::ValuePlace {
+            source,
+            destination,
+        }
+        | Op::PromotedPlace {
             source,
             destination,
         } => frame.preflight_value_place(*source, *destination, store),
@@ -1183,6 +1214,10 @@ fn execute(
             source,
             destination,
         } => frame.value_place(*source, *destination, store),
+        Op::PromotedPlace {
+            source,
+            destination,
+        } => frame.promoted_place(*source, *destination, store),
         Op::ArrayRepeat {
             source,
             count,
@@ -1250,6 +1285,12 @@ fn execute(
                         return Err(invalid("prepared string source payload disappeared"));
                     };
                     return frame.publish_string_literal(proof, publication, store);
+                }
+                PreparedLiteral::ByteString => {
+                    let Some(DecodedLiteral::ByteString(bytes)) = &l.decoded else {
+                        return Err(invalid("prepared byte string payload disappeared"));
+                    };
+                    return frame.publish_byte_string(bytes, *destination, store);
                 }
                 other => other,
             };
@@ -1571,6 +1612,35 @@ pub(crate) fn step_with_constant(
             // An operator suspended for its trait method resumes completed:
             // the method's result is already the operation's.
             if frame.has_operator_activation() {
+                // A method receiver walking overloaded `Deref` steps resumes
+                // with the referent of the reference the method returned.
+                if frame.receiver_walk_returned() {
+                    if !frame.resume_receiver_step(index, op, store)? {
+                        return Ok(StepOutcome::Dispatch);
+                    }
+                    increment(&mut frame.counters.operations_completed)?;
+                    continue;
+                }
+                // A place operation's overloaded `Deref` step returned its
+                // reference: `*x` is complete; `x.f` runs again over the
+                // dereferenced base.
+                if frame.place_deref_returned() {
+                    if frame.resume_place_deref(index, op, store)? {
+                        increment(&mut frame.counters.operations_completed)?;
+                        continue;
+                    }
+                    // The operation began once already.
+                    frame.counters.operations_started = frame
+                        .counters
+                        .operations_started
+                        .checked_sub(1)
+                        .ok_or_else(|| invalid("VM counter underflow"))?;
+                    let tag = usize::from(op.opcode_tag());
+                    frame.counters.started_by_opcode[tag] = frame.counters.started_by_opcode[tag]
+                        .checked_sub(1)
+                        .ok_or_else(|| invalid("VM counter underflow"))?;
+                    return Ok(StepOutcome::Dispatch);
+                }
                 frame.complete_operator_operation(index, op)?;
                 increment(&mut frame.counters.operations_completed)?;
                 continue;

@@ -49,10 +49,15 @@ impl Frame {
         mutable: bool,
         store: &GuestStore,
     ) -> Result<Option<TypeId>, Diagnostic> {
-        let TypeKey::Array { element, .. } = store.type_descriptor(target)?.key.as_ref() else {
-            return Ok(None);
+        // An array, or a vector (rustc's deref coercion `&Vec<T>` to `&[T]`).
+        let element = match store.type_descriptor(target)?.key.as_ref() {
+            TypeKey::Array { element, .. } => *element,
+            _ => match store.vec_element_type(target)? {
+                Some(element) => element,
+                None => return Ok(None),
+            },
         };
-        let Some(slice) = store.find_type(&TypeKey::Slice { element: *element }) else {
+        let Some(slice) = store.find_type(&TypeKey::Slice { element }) else {
             return Ok(None);
         };
         let Some(reference) = store.find_type(&TypeKey::Ref {
@@ -116,10 +121,14 @@ impl Frame {
         let TypeKey::Ref { mutable, target } = store.type_descriptor(actual)?.key.as_ref() else {
             return Ok(None);
         };
-        let TypeKey::Array { element, .. } = store.type_descriptor(*target)?.key.as_ref() else {
-            return Ok(None);
+        let element = match store.type_descriptor(*target)?.key.as_ref() {
+            TypeKey::Array { element, .. } => *element,
+            _ => match store.vec_element_type(*target)? {
+                Some(element) => element,
+                None => return Ok(None),
+            },
         };
-        let Some(slice) = store.find_type(&TypeKey::Slice { element: *element }) else {
+        let Some(slice) = store.find_type(&TypeKey::Slice { element }) else {
             return Ok(None);
         };
         // `&mut [T; N]` reaches `&mut [T]` or `&[T]`; `&[T; N]` only `&[T]`.

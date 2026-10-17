@@ -48,6 +48,8 @@ mod pattern_engine_frame;
 mod scope_cleanup_frame;
 #[path = "frame_operator_calls.rs"]
 pub(crate) mod operator_calls_frame;
+#[path = "frame_byte_strings.rs"]
+mod byte_strings;
 #[path = "frame_format_calls.rs"]
 pub(crate) mod format_calls_frame;
 #[path = "frame_temporary_scopes.rs"]
@@ -259,9 +261,19 @@ pub(crate) enum ReceiverMode {
     /// `&mut self`: mutable autoref.
     Mutable,
 }
+/// One autoderef step of a method receiver.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ReceiverStep {
+    /// The builtin dereference of a reference or box.
+    Deref,
+    /// rustc's overloaded step: `Deref::deref` (`DerefMut::deref_mut` when
+    /// `mutable`) called through the ordinary trait-call route; its result
+    /// reference is dereferenced.
+    Overloaded { mutable: bool },
+}
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ReceiverAdjustment {
-    pub(crate) derefs: u32,
+    pub(crate) steps: Vec<ReceiverStep>,
     pub(crate) mode: ReceiverMode,
     /// The autoref'd receiver is unsized from `[T; N]` to `[T]`.
     pub(crate) unsize: bool,
@@ -278,6 +290,11 @@ pub(crate) struct DeferredTraitCall {
     pub(crate) self_reference: bool,
     /// The call's written argument slots.
     pub(crate) arguments: Vec<crate::ir::pc::SlotId>,
+    /// A method call whose impls differ only by the trait's arguments: the
+    /// impls' functions, selected once every argument is evaluated by the
+    /// arguments' reached types (empty for a trait-path call, whose impl is
+    /// selected by its self type).
+    pub(crate) alternatives: Vec<crate::core::digest::Digest>,
 }
 pub struct Frame {
     pub(crate) body: Arc<BodyIndex>,
@@ -330,6 +347,11 @@ pub struct Frame {
     cleanup_activation: Option<scope_cleanup_frame::Activation>,
     /// An operator operation suspended for its trait method.
     operator_activation: Option<operator_calls_frame::OperatorActivation>,
+    /// The base place of the next place operation, which the dispatcher found
+    /// needs an overloaded `Deref` step first, and the references that step's
+    /// calls returned (their places live until their scope ends).
+    place_deref: Option<operator_calls_frame::PlaceDerefDemand>,
+    deref_parked: Vec<(ScopeId, crate::runtime::cell::TicketId)>,
     /// A `FormatArguments` operation suspended for a trait-method `fmt`.
     format_activation: Option<format_calls_frame::FormatActivation>,
     /// Comparison operand slots holding an autoref (`&operand`).
@@ -555,6 +577,8 @@ impl Frame {
             facade_sealed: None,
             method_receivers: std::collections::BTreeMap::new(),
             trait_calls: std::collections::BTreeMap::new(),
+            place_deref: None,
+            deref_parked: Vec::new(),
             nominal: nominal_values_frame::NominalFacts::default(),
             item_values: item_values_frame::ItemValueFacts::default(),
             partial_hints: partial_hints_frame::PartialHints::default(),
@@ -808,7 +832,9 @@ impl Frame {
                         "parameter reference access differs from its source view".into(),
                     ));
                 }
-                if matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty()) {
+                if self.context.is_some()
+                    && matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
+                {
                     self.context
                         .as_ref()
                         .filter(|context| {
@@ -1079,13 +1105,14 @@ impl Frame {
             // An ordinary call starts at its Entry; a method call after its
             // receiver place is published (its Commit phase).
             // A value call starts once its callee operand executed.
-            (node.role
-                == crate::syntax::body_index::NodeRole::Expression(
-                    crate::syntax::body_index::ExpressionKind::Call,
+            (matches!(
+                node.role,
+                crate::syntax::body_index::NodeRole::Expression(
+                    crate::syntax::body_index::ExpressionKind::Call
+                        | crate::syntax::body_index::ExpressionKind::LangCall
                 )
-                && (self.pc.phase == crate::ir::pc::Phase::Entry.code().unwrap_or(u16::MAX)
-                    || self.pc.phase
-                        == crate::ir::pc::Phase::Commit.code().unwrap_or(u16::MAX)))
+            ) && (self.pc.phase == crate::ir::pc::Phase::Entry.code().unwrap_or(u16::MAX)
+                || self.pc.phase == crate::ir::pc::Phase::Commit.code().unwrap_or(u16::MAX)))
                 || (node.role
                     == crate::syntax::body_index::NodeRole::Expression(
                         crate::syntax::body_index::ExpressionKind::MethodCall,
@@ -1375,6 +1402,19 @@ impl Frame {
         self.context = Some(context);
         Ok(())
     }
+    /// Whether a source view may be retained as a parameter's identity.
+    pub(crate) fn admissible_parameter_source(source: &crate::traits::term::TyTerm) -> bool {
+        use crate::traits::term::TyTerm;
+        Self::supported_source(source)
+            && (matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_))
+                || matches!(source, TyTerm::Ref(_, _, target)
+                    if matches!(target.as_ref(), TyTerm::Primitive(_))
+                        || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty()))
+                || (matches!(
+                    source,
+                    TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..) | TyTerm::Ref(..)
+                ) && crate::frontend::call_contracts::closed_term(source)))
+    }
     /// Closed reference views retain their actual caller source; nominal
     /// pointees additionally require the prepared source/schema certificate.
     /// Abstract/composite parameter tables still require later integration.
@@ -1384,30 +1424,19 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         if self.parameters_initialized
             || !self.parameter_sources.is_empty()
-            || sources.iter().any(|source| {
-                !Self::supported_source(source)
-                    || (!matches!(
-                        source,
-                        crate::traits::term::TyTerm::Primitive(_)
-                            | crate::traits::term::TyTerm::Param(_)
-                    ) && !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
-                    if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))
-                        || matches!(target.as_ref(), crate::traits::term::TyTerm::Nominal(_, args) if args.is_empty()))
-                        && !(matches!(
-                            source,
-                            crate::traits::term::TyTerm::Nominal(..)
-                                | crate::traits::term::TyTerm::Tuple(..)
-                                | crate::traits::term::TyTerm::Array(..)
-                                | crate::traits::term::TyTerm::Ref(..)
-                        ) && crate::frontend::call_contracts::closed_term(source)))
-            })
+            || sources
+                .iter()
+                .any(|source| !Self::admissible_parameter_source(source))
         {
             return Err(invalid(
                 "parameter source views require fresh closed-source frame",
             ));
         }
         for (ordinal, source) in sources.iter().enumerate() {
-            if matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
+            // A closure frame has no definition environment of its own; its
+            // parameters' views are the reached closed Types of the call.
+            if self.context.is_some()
+                && matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
                 if matches!(target.as_ref(), crate::traits::term::TyTerm::Nominal(_, args) if args.is_empty()))
                 && self
                     .context
@@ -1526,6 +1555,9 @@ impl Frame {
                         || matches!(ty, TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
                             if Self::supported_element(element) && u32::try_from(*len).is_ok())
                         || matches!(ty, TyTerm::Slice(element) if Self::supported_element(element))
+                        // A reference argument (`U<&str>`, `Option<&P>`) under
+                        // the same rules as a reference view.
+                        || (matches!(ty, TyTerm::Ref(..)) && Self::supported_source(ty))
                         || Self::closed_nominal_source(ty)
                 }
                 _ => false,
@@ -1714,6 +1746,9 @@ impl Frame {
             if let Some(written) = context.written_result() {
                 return written.find_in(store, &[]);
             }
+            if let Some(found) = context.bound_result_descriptor_find(store)? {
+                return Ok(Some(found));
+            }
             return Ok(store.find_structural_term(&source));
         }
         context.reference_result_descriptor(store)
@@ -1751,6 +1786,9 @@ impl Frame {
                 return written
                     .materialize_in(store, &[])?
                     .ok_or_else(|| invalid("structural result descriptor is not closed"));
+            }
+            if let Some(bound) = context.bound_result_descriptor_intern(store)? {
+                return Ok(bound);
             }
             return store
                 .intern_structural_term(&source)?
@@ -1989,26 +2027,33 @@ impl Frame {
         if self.place_slot(destination)?.place.is_some() {
             return Err(invalid("place slot already initialized"));
         }
-        if self
-            .binding_sources
-            .get(binding.0 as usize)
-            .and_then(Option::as_ref)
-            .is_some_and(|source| {
-                !Self::supported_source(source)
-                    || matches!(source, crate::traits::term::TyTerm::Param(_))
-            })
-        {
+        // A local typed by this activation's own generic parameter (`let mut
+        // it = self;` in a provided method) has the parameter's bound view.
+        let source = self.make_place_source(binding, store);
+        if source.as_ref().is_some_and(|source| {
+            !Self::supported_source(source)
+                || matches!(source, crate::traits::term::TyTerm::Param(_))
+        }) {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "local borrow requires retained symbolic reference source integration".into(),
             ));
         }
         store.location_epoch(self.binding(binding)?)?;
-        self.preflight_source_view(
-            destination,
-            self.binding_sources[binding.0 as usize].as_ref(),
-        )?;
+        self.preflight_source_view(destination, source.as_ref())?;
         Ok(())
+    }
+    /// The retained source of a local, with this activation's bound generic
+    /// parameters replaced by their runtime types.
+    fn make_place_source(
+        &self,
+        binding: NodeId,
+        store: &GuestStore,
+    ) -> Option<crate::traits::term::TyTerm> {
+        self.binding_sources
+            .get(binding.0 as usize)
+            .and_then(Option::as_ref)
+            .map(|source| self.bound_view(source, store))
     }
     pub(crate) fn make_place(
         &mut self,
@@ -2017,7 +2062,8 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_make_place(binding, destination, store)?;
-        let source = self.clone_source(self.binding_sources[binding.0 as usize].as_ref())?;
+        let source = self.make_place_source(binding, store);
+        let source = self.clone_source(source.as_ref())?;
         self.set_source_view(destination, source)?;
         self.slots[destination.0 as usize].place =
             Some(crate::runtime::place::Place::cell(self.binding(binding)?));
@@ -2078,6 +2124,45 @@ impl Frame {
         let cell = self.cell(source)?;
         self.set_source_view(destination, self.source_view(source)?)?;
         self.slots[destination.0 as usize].place = Some(crate::runtime::place::Place::cell(cell));
+        Ok(())
+    }
+    /// `&<constant expression>`: the completed operand moves into the run's
+    /// promoted location for this site (installed by its first execution);
+    /// a later execution leaves its equal fresh value to ordinary temporary
+    /// cleanup and addresses the installed location.
+    pub(crate) fn promoted_place(
+        &mut self,
+        source: SlotId,
+        destination: SlotId,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        self.preflight_value_place(source, destination, store)?;
+        let cell = self.cell(source)?;
+        let crate::runtime::cell::CellState::Live(value) = store.state(cell)? else {
+            return Err(invalid("promoted operand value absent"));
+        };
+        let ty = store.effective_type(value)?.ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "promoted constant requires its reached concrete type".into(),
+            )
+        })?;
+        // rustc does not promote a value with drop glue or interior
+        // mutability: it stays an ordinary temporary.
+        if !store.value_promotable(value)? {
+            return self.value_place(source, destination, store);
+        }
+        let site = self.pc.fingerprint();
+        let promoted = match store.promoted_cell(site, ty) {
+            Some(promoted) => promoted,
+            None => {
+                let ticket = store.move_from(cell)?;
+                store.install_promoted(site, ty, ticket)?
+            }
+        };
+        self.set_source_view(destination, self.source_view(source)?)?;
+        self.slots[destination.0 as usize].place =
+            Some(crate::runtime::place::Place::cell(promoted));
         Ok(())
     }
     pub(crate) fn preflight_place_transfer(
@@ -2355,6 +2440,20 @@ impl Frame {
                             .descriptor_source_term(*element)
                             .filter(crate::frontend::call_contracts::closed_term)
                             .filter(Self::supported_element),
+                        // A vector's element place carries its element view.
+                        crate::runtime::shape::TypeKey::Nominal { args, .. }
+                            if store.owned_vec().is_some()
+                                && store
+                                    .vec_element_type(store.place_type_id(base_place)?)?
+                                    .is_some() =>
+                        {
+                            args.first().and_then(|element| {
+                                store
+                                    .descriptor_source_term(*element)
+                                    .filter(crate::frontend::call_contracts::closed_term)
+                                    .filter(Self::supported_element)
+                            })
+                        }
                         _ => None,
                     }
                 }
@@ -2421,6 +2520,30 @@ impl Frame {
                         Some(crate::traits::term::TyTerm::Slice(element.clone()))
                     } else {
                         self.clone_source(Some(element.as_ref()))?
+                    }
+                }
+                // A retained `Vec<T>` view: its element places are typed `T`
+                // (a range index keeps the `[T]` view), exactly like an
+                // array's.
+                (
+                    Op::ProjectIndex { index, .. },
+                    Some(
+                        view @ crate::traits::term::TyTerm::Nominal(definition, arguments),
+                    ),
+                ) if store.owned_vec() == Some(*definition) => {
+                    let element = arguments
+                        .iter()
+                        .find_map(|argument| match argument {
+                            crate::traits::term::GenericArg::Type(ty) => Some(ty),
+                            _ => None,
+                        })
+                        .ok_or_else(|| invalid("vector source view lacks its element Type"))?;
+                    let actual = store.place_type_id(base_place)?;
+                    Self::require_borrow_source_target(Some(view), actual, store)?;
+                    if self.range_index(*index, store)?.is_some() {
+                        Some(crate::traits::term::TyTerm::Slice(Box::new(element.clone())))
+                    } else {
+                        self.clone_source(Some(element))?
                     }
                 }
                 _ => {
@@ -2641,8 +2764,11 @@ impl Frame {
                 }
             })
     }
-    /// `Op::MethodReceiver`: autoderef the receiver place `derefs` times
-    /// (alternating with the scratch place), then autoref or read by value.
+    /// `Op::MethodReceiver`: autoderef the receiver place through its
+    /// builtin steps (alternating with the scratch place), then autoref or
+    /// read by value. A receiver with an overloaded `Deref` step never gets
+    /// here: its operation suspends for the trait method first
+    /// (`begin_operator_call` / `resume_receiver_step`).
     pub(crate) fn method_receiver(
         &mut self,
         site: u32,
@@ -2656,16 +2782,30 @@ impl Frame {
             .remove(&self.call_identity(site))
             .ok_or_else(|| invalid("method receiver adjustment was not selected"))?;
         let (mut current, mut other) = (place, scratch);
-        for _ in 0..adjustment.derefs {
+        for step in &adjustment.steps {
+            if *step != ReceiverStep::Deref {
+                return Err(invalid("overloaded receiver step bypassed its trait method").into());
+            }
             self.deref_place(current, other, store)?;
             std::mem::swap(&mut current, &mut other);
         }
-        let access = match adjustment.mode {
+        self.form_receiver(current, destination, adjustment.mode, adjustment.unsize, store)
+    }
+    /// The receiver argument from the fully dereferenced place `current`.
+    pub(crate) fn form_receiver(
+        &mut self,
+        current: SlotId,
+        destination: SlotId,
+        mode: ReceiverMode,
+        unsize: bool,
+        store: &mut GuestStore,
+    ) -> Result<(), crate::runtime::place::PlaceFailure> {
+        let access = match mode {
             ReceiverMode::Value => return self.read_place(current, destination, store),
             ReceiverMode::Shared => crate::ir::op::BorrowAccess::Shared,
             ReceiverMode::Mutable => crate::ir::op::BorrowAccess::Mutable,
         };
-        let slice_reference = if adjustment.unsize {
+        let slice_reference = if unsize {
             Some(self.receiver_slice_reference(current, access, store)?)
         } else {
             None
@@ -3852,10 +3992,13 @@ impl Frame {
         self.preflight_constructor_tuple_source(&active, destination, store)?;
         match active.result {
             ConstructionResult::Bound(ty) => {
+                // The bound descriptor proves the nominal identity; a result
+                // without a retained source view (a reference type argument,
+                // `U<&str>`) keeps that descriptor's own view.
                 if let crate::runtime::shape::TypeKey::Nominal { identity, .. } =
                     store.type_descriptor(ty)?.key.as_ref()
                 {
-                    self.require_nominal_result_source(id, *identity, false)?;
+                    self.require_nominal_result_source(id, *identity, true)?;
                 }
                 self.preflight_write_type(destination, ty, store)?;
                 if let Some(cell) = self.slot(destination)?.cell {
@@ -5237,6 +5380,26 @@ impl Frame {
         self.active_scopes.push(scope);
         Ok(())
     }
+    /// A `const`/`static` initializer body's root expression runs in the
+    /// body's root initializer scope, entered with the frame (E-R5-007);
+    /// return cleanup leaves it.
+    pub(crate) fn enter_initializer_root(&mut self) -> Result<(), Diagnostic> {
+        let root = self
+            .body
+            .scopes()
+            .first()
+            .ok_or_else(|| invalid("initializer root scope absent"))?;
+        // A block-bodied initializer (`static X: T = { .. }`) is rooted at
+        // its block like a function body: the block enters its own scope.
+        if root.kind != crate::syntax::body_index::ScopeKind::Initializer {
+            return Ok(());
+        }
+        if !self.active_scopes.is_empty() {
+            return Err(invalid("initializer frame requires its root initializer scope"));
+        }
+        self.active_scopes.push(ScopeId(0));
+        Ok(())
+    }
     fn retire_bindings(
         &mut self,
         scope: ScopeId,
@@ -5326,6 +5489,7 @@ impl Frame {
             slot.hint = None;
             slot.strict_hint = true;
         }
+        self.release_parked_derefs(scope, store)?;
         if !bindings_first {
             self.retire_bindings(scope, store)?;
         }

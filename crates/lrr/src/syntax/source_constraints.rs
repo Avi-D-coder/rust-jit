@@ -23,7 +23,7 @@ use ra_ap_syntax::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 7;
+pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 11;
 fn overflow() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-METADATA-LIMIT",
@@ -90,6 +90,13 @@ pub(crate) enum FactKind {
     /// `for PAT in HEAD BODY`: operands are the head, the pattern root (whose
     /// retained tree is the loop's `Some(PAT)` test) and the body.
     For,
+    /// `base[a..b]` (a written range index): operands are the base and the
+    /// range; its Type is the slice of the base's element Type.
+    IndexRange,
+    /// A language-item call (`a..=b` is `RangeInclusive::new(a, b)`):
+    /// operands are the call's arguments in order; there is no callee
+    /// operand.
+    LangCall,
 }
 impl FactKind {
     fn tag(self) -> u8 {
@@ -123,6 +130,8 @@ impl FactKind {
             Self::Index => 27,
             Self::Record => 28,
             Self::For => 29,
+            Self::LangCall => 30,
+            Self::IndexRange => 31,
         }
     }
 }
@@ -307,8 +316,9 @@ impl SourceFact {
         self.member
     }
     /// An `Index` whose index is an integer literal, a `Record` with a
-    /// trailing `..base` operand, a repeat `Array`, or a `Call` whose callee
-    /// path writes explicit generic arguments.
+    /// trailing `..base` operand, a repeat `Array`, a `Call` whose callee
+    /// path writes explicit generic arguments, a string `Literal`, or a
+    /// `&mut` `Borrow`.
     pub(crate) fn flag(&self) -> bool {
         self.flag
     }
@@ -381,9 +391,11 @@ pub(crate) struct SourceConstraintPlan {
     members: Vec<String>,
     // Each record expression's written field names, in operand order.
     record_fields: BTreeMap<NodeId, Box<[u32]>>,
-    // Count of structural constructors (borrows, dereferences, tuples and
-    // tuple/reference patterns): a finite Type projected through this
-    // body's syntax never nests deeper than this.
+    // Count of the expressions and patterns that each add one level of
+    // nesting to a Type (borrows, dereferences, tuples, constructor and
+    // method calls, loop heads, tuple/reference patterns): a finite Type
+    // built by this body's syntax, projected to a part, has fewer levels
+    // than this times the nesting of the declared Types those sites relate.
     structural: usize,
     bytes: usize,
 }
@@ -628,9 +640,17 @@ impl SourceConstraintPlan {
                     || fact.kind == FactKind::Array
                     || fact.kind == FactKind::Field
                     || fact.kind == FactKind::Index
+                    || fact.kind == FactKind::IndexRange
                     || fact.kind == FactKind::Record
                     // A call may construct a tuple struct or variant.
                     || fact.kind == FactKind::Call
+                    // A method call, a loop head's `Item`, a closure and a
+                    // `match` each add the nesting of the declared Type they
+                    // relate.
+                    || fact.kind == FactKind::MethodCall
+                    || fact.kind == FactKind::For
+                    || fact.kind == FactKind::Closure
+                    || fact.kind == FactKind::Match
                     || fact.operation == Some(SourceOperator::Deref)
             })
             .count();
@@ -1167,6 +1187,24 @@ fn classify(
                     },
                     None => FactKind::Literal,
                 },
+                // A non-numeric literal has a fixed lexical Type: `bool`,
+                // `char`, `u8` (a byte), or `&'static str` (`flag`).
+                SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW => {
+                    fact.suffix = Some(PrimitiveType::Bool);
+                    FactKind::Literal
+                }
+                SyntaxKind::CHAR => {
+                    fact.suffix = Some(PrimitiveType::Char);
+                    FactKind::Literal
+                }
+                SyntaxKind::BYTE => {
+                    fact.suffix = Some(PrimitiveType::U8);
+                    FactKind::Literal
+                }
+                SyntaxKind::STRING => {
+                    fact.flag = true;
+                    FactKind::Literal
+                }
                 _ => FactKind::Literal,
             }
         }
@@ -1338,7 +1376,11 @@ fn classify(
                 Some(ast::Expr::Literal(literal))
                     if literal.token().kind() == SyntaxKind::INT_NUMBER
             );
-            fact.kind = FactKind::Index;
+            fact.kind = if matches!(access.index(), Some(ast::Expr::RangeExpr(_))) {
+                FactKind::IndexRange
+            } else {
+                FactKind::Index
+            };
             expr_edge(body, index, access.base(), fact)?;
             expr_edge(body, index, access.index(), fact)?;
         }
@@ -1353,6 +1395,14 @@ fn classify(
                 edge(body, index, arm.pat().map(|p| p.syntax().clone()), fact)?;
                 expr_edge(body, index, arm.expr(), fact)?;
             }
+        }
+        // An `if let` / `while let` / let-chain clause: the scrutinee is
+        // matched against the pattern as a `let` statement's initializer is
+        // (the shared pattern plan's transactional test).
+        ast::Expr::LetExpr(clause) => {
+            fact.kind = FactKind::Let;
+            edge(body, index, clause.pat().map(|p| p.syntax().clone()), fact)?;
+            expr_edge(body, index, clause.expr(), fact)?;
         }
         ast::Expr::ForExpr(looped) => {
             fact.kind = FactKind::For;
@@ -1375,6 +1425,11 @@ fn classify(
                 }
                 fact.kind = FactKind::Record;
                 written.records.push((node, names));
+            } else if let Some((start, end)) = super::constructors::range_inclusive_bounds(&range) {
+                // `a..=b` is the call `RangeInclusive::new(a, b)`.
+                fact.kind = FactKind::LangCall;
+                expr_edge(body, index, Some(start), fact)?;
+                expr_edge(body, index, Some(end), fact)?;
             }
         }
         ast::Expr::ReturnExpr(ret) => {
@@ -1388,6 +1443,8 @@ fn classify(
         }
         ast::Expr::RefExpr(reference) => {
             fact.kind = FactKind::Borrow;
+            // `&mut e`: the operand place is used mutably.
+            fact.flag = reference.mut_token().is_some();
             expr_edge(body, index, reference.expr(), fact)?;
         }
         ast::Expr::FormatArgsExpr(format) => {

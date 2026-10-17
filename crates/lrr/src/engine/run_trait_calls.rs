@@ -22,6 +22,19 @@ use crate::{
     vm::frame::DeferredTraitCall,
 };
 
+/// An evaluated argument, as selecting among impls by the trait's arguments
+/// sees it.
+pub(super) enum SelectionArgument {
+    /// Its reached source Type.
+    Type(crate::traits::term::TyTerm),
+    /// An unresolved numeric literal: rustc's integer (float) variable;
+    /// `behind_reference` when the parameter takes it by shared reference
+    /// (a comparison's `&Rhs`).
+    Literal { integer: bool, behind_reference: bool },
+    /// No closed Type: the argument does not discriminate.
+    Unknown,
+}
+
 /// How a trait-path call proceeds at its first call opcode.
 pub(super) enum TraitPathCall {
     /// The self type is known: the selected impl function.
@@ -258,7 +271,21 @@ impl RunMachine {
             }
             // `T::f` / `<T>::f`: the trait impls of the binding (a generic
             // parameter has no inherent functions of its reached type).
-            None => members.trait_candidates(self_type, function),
+            None => {
+                // A reference self type: the referent selects among the
+                // impls indexed together for `&U`.
+                let pointee = match self.store.type_descriptor(binding).map(|d| d.key.clone()) {
+                    Ok(key) => match key.as_ref() {
+                        TypeKey::Ref { target, .. } => match self.reached_self_type(*target) {
+                            Ok(pointee) => Some(pointee),
+                            Err(_) => None,
+                        },
+                        _ => None,
+                    },
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                members.trait_candidates_of(self_type, pointee, function)
+            }
         };
         let selected = match candidates.as_slice() {
             [function] => *function,
@@ -267,6 +294,38 @@ impl RunMachine {
                     "LRR-E-NAME-MISSING",
                     format!("no impl provides `{function}` for the call's self type (`{name}`)"),
                 )));
+            }
+            // Impls of one trait that differ by its arguments (`Join<&str>`,
+            // `Join<&[T]>`): the call starts against the trait's declaration
+            // and the evaluated arguments select the impl.
+            _ if arguments.len() > 1
+                && members.same_trait_of(&candidates).is_some_and(|trait_key| {
+                    members.trait_declaration(trait_key, function).is_some()
+                }) =>
+            {
+                let trait_key = members.same_trait_of(&candidates).expect("checked");
+                let declaration = members
+                    .trait_declaration(trait_key, function)
+                    .expect("checked");
+                return QueryPoll::Ready(Ok(Some(TraitPathCall::Deferred {
+                    declaration,
+                    call: DeferredTraitCall {
+                        trait_key,
+                        name: function.to_owned(),
+                        // Selected once the last argument is evaluated.
+                        self_ordinal: match u32::try_from(arguments.len() - 1) {
+                            Ok(ordinal) => ordinal,
+                            Err(_) => {
+                                return QueryPoll::Ready(Err(call_fault(
+                                    "argument ordinal overflow",
+                                )));
+                            }
+                        },
+                        self_reference: false,
+                        arguments: arguments.to_vec(),
+                        alternatives: candidates,
+                    },
+                })));
             }
             _ => {
                 return QueryPoll::Ready(Err(Diagnostic::new(
@@ -330,6 +389,7 @@ impl RunMachine {
                     },
                     self_reference: reference,
                     arguments: slots,
+                    alternatives: Vec::new(),
                 },
             })));
         }
@@ -423,51 +483,165 @@ impl RunMachine {
         let Some(deferred) = self.frame.trait_calls.get(&identity).cloned() else {
             return QueryPoll::Ready(Err(call_fault("deferred trait call record absent")));
         };
-        let ordinal = deferred.self_ordinal as usize;
-        let reached = (|| -> Result<TypeId, Diagnostic> {
-            let slot = *deferred
-                .arguments
-                .get(ordinal)
-                .ok_or_else(|| call_fault("trait call self argument is outside the written call"))?;
-            let cell = self.frame.cell(slot)?;
-            // An unsuffixed literal self argument takes rustc's fallback.
-            self.store.bind_literal_fallback(cell)?;
-            let value = self.store.admit_move(cell)?;
-            let ty = self.store.effective_type(value)?.ok_or_else(|| {
-                Diagnostic::new(
-                    "LRR-E-TYPE-CONTEXT",
-                    "trait call self argument requires its reached concrete type".into(),
-                )
-            })?;
-            if !deferred.self_reference {
-                return Ok(ty);
+        let callee = if deferred.alternatives.is_empty() {
+            let ordinal = deferred.self_ordinal as usize;
+            let reached = (|| -> Result<TypeId, Diagnostic> {
+                let slot = *deferred.arguments.get(ordinal).ok_or_else(|| {
+                    call_fault("trait call self argument is outside the written call")
+                })?;
+                let cell = self.frame.cell(slot)?;
+                // An unsuffixed literal self argument takes rustc's fallback.
+                self.store.bind_literal_fallback(cell)?;
+                let value = self.store.admit_move(cell)?;
+                let ty = self.store.effective_type(value)?.ok_or_else(|| {
+                    Diagnostic::new(
+                        "LRR-E-TYPE-CONTEXT",
+                        "trait call self argument requires its reached concrete type".into(),
+                    )
+                })?;
+                if !deferred.self_reference {
+                    return Ok(ty);
+                }
+                match self.store.type_descriptor(ty)?.key.as_ref() {
+                    TypeKey::Ref { target, .. } => Ok(*target),
+                    _ => Err(Diagnostic::new(
+                        "LRR-E-CALL-ARG-TYPE",
+                        "trait call self argument is not the declared reference to `Self`".into(),
+                    )),
+                }
+            })();
+            let reached = match reached {
+                Ok(reached) => reached,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let self_type = match self.reached_self_type(reached) {
+                Ok(self_type) => self_type,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            // Several impls of the trait for the self type, differing by the
+            // trait's arguments (`PartialEq<[U]>` and `PartialEq<Vec<U>>` of
+            // `[T]`): the later arguments select once they are evaluated.
+            let several = match &self.members {
+                Some(members) => {
+                    let mut functions = Vec::new();
+                    for (_, function) in
+                        members.trait_method(self_type, deferred.trait_key, &deferred.name)
+                    {
+                        if !functions.contains(&function) {
+                            functions.push(function);
+                        }
+                    }
+                    (functions.len() > 1).then_some(functions)
+                }
+                None => None,
+            };
+            if let Some(functions) = several {
+                if evaluated < deferred.arguments.len() {
+                    // Not selectable yet: wait for the last argument.
+                    let record = self
+                        .frame
+                        .trait_calls
+                        .get_mut(&identity)
+                        .ok_or_else(|| call_fault("deferred trait call record absent"));
+                    match record {
+                        Ok(record) => {
+                            record.alternatives = functions;
+                            record.self_ordinal = match u32::try_from(deferred.arguments.len() - 1) {
+                                Ok(ordinal) => ordinal,
+                                Err(_) => {
+                                    return QueryPoll::Ready(Err(call_fault(
+                                        "argument ordinal overflow",
+                                    )));
+                                }
+                            };
+                        }
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                    return QueryPoll::Ready(Ok(()));
+                }
+                let mut views = Vec::with_capacity(deferred.arguments.len());
+                for slot in &deferred.arguments {
+                    match self.selection_argument(*slot) {
+                        Ok(view) => views.push(view),
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                }
+                let function = match self.select_by_arguments(db, &functions, 1, &views) {
+                    QueryPoll::Ready(Ok(Some(function))) => function,
+                    QueryPoll::Ready(Ok(None)) => {
+                        return QueryPoll::Ready(Err(Diagnostic::new(
+                            "LRR-E-NAME-AMBIGUOUS",
+                            format!(
+                                "several impls provide `{}` for the receiver and its argument types",
+                                deferred.name
+                            ),
+                        )));
+                    }
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                match self.member_callee(db, function) {
+                    QueryPoll::Ready(Ok(callee)) => callee,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            } else {
+                match self.select_trait_impl_function(
+                    db,
+                    self_type,
+                    deferred.trait_key,
+                    &deferred.name,
+                    &deferred.name,
+                ) {
+                    QueryPoll::Ready(Ok(callee)) => callee,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
             }
-            match self.store.type_descriptor(ty)?.key.as_ref() {
-                TypeKey::Ref { target, .. } => Ok(*target),
-                _ => Err(Diagnostic::new(
-                    "LRR-E-CALL-ARG-TYPE",
-                    "trait call self argument is not the declared reference to `Self`".into(),
-                )),
+        } else {
+            // Impls of one trait differing by its arguments: every argument
+            // is evaluated; their reached types select the impl.
+            let mut views = Vec::with_capacity(deferred.arguments.len());
+            let mut types = Vec::with_capacity(deferred.arguments.len());
+            for slot in &deferred.arguments {
+                match self.selection_argument_typed(*slot) {
+                    Ok((view, ty)) => {
+                        views.push(view);
+                        types.push(ty);
+                    }
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
             }
-        })();
-        let reached = match reached {
-            Ok(reached) => reached,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let self_type = match self.reached_self_type(reached) {
-            Ok(self_type) => self_type,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let callee = match self.select_trait_impl_function(
-            db,
-            self_type,
-            deferred.trait_key,
-            &deferred.name,
-            &deferred.name,
-        ) {
-            QueryPoll::Ready(Ok(callee)) => callee,
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            // The selection is fixed per (site, reached argument Types);
+            // an unresolved literal argument is part of the key as `None`.
+            let key = (self.frame.pc().clone(), types);
+            let function = match self.argument_selections.get(&key) {
+                Some(function) => *function,
+                None => {
+                    let function =
+                        match self.select_by_arguments(db, &deferred.alternatives, 1, &views) {
+                            QueryPoll::Ready(Ok(Some(function))) => function,
+                            QueryPoll::Ready(Ok(None)) => {
+                                return QueryPoll::Ready(Err(Diagnostic::new(
+                                    "LRR-E-NAME-AMBIGUOUS",
+                                    format!(
+                                        "several impls provide `{}` for the receiver and its argument types",
+                                        deferred.name
+                                    ),
+                                )));
+                            }
+                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                        };
+                    self.argument_selections.insert(key, function);
+                    function
+                }
+            };
+            match self.member_callee(db, function) {
+                QueryPoll::Ready(Ok(callee)) => callee,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
         };
         let selected =
             match self.selected_after_arguments(db, callee, &deferred.arguments, evaluated) {
@@ -479,6 +653,163 @@ impl RunMachine {
         self.pending.insert(identity, selected);
         self.frame.trait_calls.remove(&identity);
         QueryPoll::Ready(Ok(()))
+    }
+    /// An evaluated call argument as impl selection sees it.
+    pub(super) fn selection_argument(
+        &mut self,
+        slot: SlotId,
+    ) -> Result<SelectionArgument, Diagnostic> {
+        self.selection_argument_typed(slot).map(|(argument, _)| argument)
+    }
+    /// `selection_argument` with the argument's reached runtime Type (`None`
+    /// for an unresolved literal), which keys the selection.
+    fn selection_argument_typed(
+        &mut self,
+        slot: SlotId,
+    ) -> Result<(SelectionArgument, Option<TypeId>), Diagnostic> {
+        let cell = self.frame.cell(slot)?;
+        let value = self.store.admit_move(cell)?;
+        Ok(match self.store.effective_type(value)? {
+            Some(descriptor) => {
+                let view = match self.frame.source_view(slot)? {
+                    Some(view) => Some(self.frame.bound_view(&view, &self.store)),
+                    None => self.store.descriptor_source_term(descriptor),
+                };
+                (
+                    view.map_or(SelectionArgument::Unknown, SelectionArgument::Type),
+                    Some(descriptor),
+                )
+            }
+            // An unresolved literal is rustc's integer (float) variable.
+            None if matches!(value.kind, 11 | 12) => (
+                SelectionArgument::Literal {
+                    integer: value.kind == 11,
+                    behind_reference: false,
+                },
+                None,
+            ),
+            None => (SelectionArgument::Unknown, None),
+        })
+    }
+    /// rustc's impl selection by the trait's arguments: of several impls
+    /// for one self type (`impl PartialEq<i32> for M` beside
+    /// `impl PartialEq<M> for M`), the one whose parameters (from `first`)
+    /// accept the arguments, through the shared signature substitution's
+    /// unification. An unresolved literal unifies only with an integer
+    /// (float) type or a parameter, and, when several still accept it,
+    /// rustc's `i32`/`f64` fallback decides. `None` when no single impl
+    /// accepts the arguments.
+    pub(super) fn select_by_arguments(
+        &mut self,
+        db: &mut Database,
+        candidates: &[crate::core::digest::Digest],
+        first: usize,
+        arguments: &[SelectionArgument],
+    ) -> QueryPoll<Option<crate::core::digest::Digest>> {
+        use crate::{ir::op::PrimitiveType as P, traits::term::TyTerm};
+        // Each accepting impl, and whether every unresolved literal it
+        // accepts takes exactly rustc's fallback type there.
+        let mut accepted: Vec<(crate::core::digest::Digest, bool)> = Vec::new();
+        for function in candidates {
+            let callee = match self.member_callee(db, *function) {
+                QueryPoll::Ready(Ok(callee)) => callee,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let hints = match self.operator_parameter_hints(db, &callee) {
+                QueryPoll::Ready(Ok(hints)) => hints,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let mut signature = callee.signature().clone();
+            let mut compared = Vec::new();
+            let mut fallback = true;
+            let mut fits = true;
+            for (ordinal, argument) in arguments.iter().enumerate().skip(first) {
+                // A parameter without a source template cannot be compared.
+                let Some(Some(hint)) = hints.get(ordinal) else {
+                    continue;
+                };
+                match argument {
+                    SelectionArgument::Unknown => {}
+                    SelectionArgument::Type(view) => {
+                        let Some(parameter) = signature.parameters.get_mut(ordinal) else {
+                            continue;
+                        };
+                        parameter.symbolic = Some(hint.source.clone());
+                        compared.push((ordinal, view));
+                    }
+                    SelectionArgument::Literal {
+                        integer,
+                        behind_reference,
+                    } => {
+                        let parameter = match (&hint.source, behind_reference) {
+                            (TyTerm::Ref(_, false, referent), true) => referent.as_ref(),
+                            (parameter, false) => parameter,
+                            _ => {
+                                fits = false;
+                                break;
+                            }
+                        };
+                        match (parameter, integer) {
+                            (TyTerm::Param(_) | TyTerm::Infer(_), _) => {}
+                            (TyTerm::Primitive(P::F32 | P::F64), false) => {
+                                fallback &= *parameter == TyTerm::Primitive(P::F64);
+                            }
+                            (
+                                TyTerm::Primitive(
+                                    P::Unit | P::Bool | P::Char | P::F32 | P::F64,
+                                ),
+                                _,
+                            ) => {
+                                fits = false;
+                                break;
+                            }
+                            (TyTerm::Primitive(_), true) => {
+                                fallback &= *parameter == TyTerm::Primitive(P::I32);
+                            }
+                            _ => {
+                                fits = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if !fits {
+                continue;
+            }
+            let accepts = crate::frontend::signature_subst::SignatureSubstitution::new(
+                &signature, *function,
+            )
+            .and_then(|mut substitution| {
+                for (ordinal, view) in &compared {
+                    substitution.constrain_argument_erased(*ordinal, view)?;
+                }
+                Ok(())
+            })
+            .is_ok();
+            if accepts {
+                accepted.push((*function, fallback));
+            }
+        }
+        QueryPoll::Ready(Ok(match accepted.as_slice() {
+            [(function, _)] => Some(*function),
+            // Several accept an unresolved literal: the fallback type's.
+            several => {
+                let mut by_fallback = several.iter().filter(|(_, fallback)| *fallback);
+                match (by_fallback.next(), by_fallback.next()) {
+                    (Some((function, _)), None)
+                        if arguments
+                            .iter()
+                            .any(|argument| matches!(argument, SelectionArgument::Literal { .. })) =>
+                    {
+                        Some(*function)
+                    }
+                    _ => None,
+                }
+            }
+        }))
     }
     /// A source call selected after `evaluated` of its written arguments:
     /// those arguments keep their reached types (a parameter whose written
@@ -576,7 +907,6 @@ impl RunMachine {
             result_hint,
             expected: std::collections::BTreeMap::new(),
             bytes,
-            monomorphic: true,
         }))
     }
 }

@@ -218,6 +218,165 @@ pub trait RangeBounds<T: ?Sized> {
     }
 }
 
+impl<T> RangeBounds<T> for Range<T> {
+    fn start_bound(&self) -> Bound<&T> {
+        Bound::Included(&self.start)
+    }
+    fn end_bound(&self) -> Bound<&T> {
+        Bound::Excluded(&self.end)
+    }
+}
+impl<T> RangeBounds<T> for RangeFrom<T> {
+    fn start_bound(&self) -> Bound<&T> {
+        Bound::Included(&self.start)
+    }
+    fn end_bound(&self) -> Bound<&T> {
+        Bound::Unbounded
+    }
+}
+impl<T> RangeBounds<T> for RangeTo<T> {
+    fn start_bound(&self) -> Bound<&T> {
+        Bound::Unbounded
+    }
+    fn end_bound(&self) -> Bound<&T> {
+        Bound::Excluded(&self.end)
+    }
+}
+impl<T> RangeBounds<T> for RangeInclusive<T> {
+    fn start_bound(&self) -> Bound<&T> {
+        Bound::Included(&self.start)
+    }
+    fn end_bound(&self) -> Bound<&T> {
+        Bound::Included(&self.end)
+    }
+}
+impl<T> RangeBounds<T> for RangeToInclusive<T> {
+    fn start_bound(&self) -> Bound<&T> {
+        Bound::Unbounded
+    }
+    fn end_bound(&self) -> Bound<&T> {
+        Bound::Included(&self.end)
+    }
+}
+impl<T: ?Sized> RangeBounds<T> for RangeFull {
+    fn start_bound(&self) -> Bound<&T> {
+        Bound::Unbounded
+    }
+    fn end_bound(&self) -> Bound<&T> {
+        Bound::Unbounded
+    }
+}
+
+// The bounds of a range of indices into a sequence of `len` elements
+// (`Vec::drain`'s `RangeBounds<usize>`).
+pub trait LrrIndexRange {
+    fn lrr_start(&self) -> usize;
+    fn lrr_end(&self, len: usize) -> usize;
+}
+// The integer types an unsuffixed range literal may take: one blanket impl
+// per range shape, so the literal's fallback type meets a single impl.
+pub trait LrrIndex {
+    fn lrr_index(&self) -> usize;
+}
+impl LrrIndex for usize {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for u8 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for u16 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for u32 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for u64 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for i8 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for i16 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for i32 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for i64 {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndex for isize {
+    fn lrr_index(&self) -> usize {
+        *self as usize
+    }
+}
+impl LrrIndexRange for RangeFull {
+    fn lrr_start(&self) -> usize {
+        0
+    }
+    fn lrr_end(&self, len: usize) -> usize {
+        len
+    }
+}
+impl<I: LrrIndex> LrrIndexRange for Range<I> {
+    fn lrr_start(&self) -> usize {
+        self.start.lrr_index()
+    }
+    fn lrr_end(&self, len: usize) -> usize {
+        self.end.lrr_index()
+    }
+}
+impl<I: LrrIndex> LrrIndexRange for RangeFrom<I> {
+    fn lrr_start(&self) -> usize {
+        self.start.lrr_index()
+    }
+    fn lrr_end(&self, len: usize) -> usize {
+        len
+    }
+}
+impl<I: LrrIndex> LrrIndexRange for RangeTo<I> {
+    fn lrr_start(&self) -> usize {
+        0
+    }
+    fn lrr_end(&self, len: usize) -> usize {
+        self.end.lrr_index()
+    }
+}
+impl<I: LrrIndex> LrrIndexRange for RangeInclusive<I> {
+    fn lrr_start(&self) -> usize {
+        self.start.lrr_index()
+    }
+    fn lrr_end(&self, len: usize) -> usize {
+        self.end.lrr_index() + 1
+    }
+}
+impl<I: LrrIndex> LrrIndexRange for RangeToInclusive<I> {
+    fn lrr_start(&self) -> usize {
+        0
+    }
+    fn lrr_end(&self, len: usize) -> usize {
+        self.end.lrr_index() + 1
+    }
+}
+
 impl<Idx: crate::cmp::PartialOrd<Idx>> Range<Idx> {
     pub fn contains<U>(&self, item: &U) -> bool
     where

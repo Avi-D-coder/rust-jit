@@ -294,6 +294,11 @@ impl ClosedReferenceArgument {
         };
         if !matches!(target.as_ref(), TyTerm::Primitive(_))
             && !matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
+            // An instantiated generic nominal (`W<i32>`): its callee parameter
+            // is bound structurally, so this evidence names only the caller's
+            // reached closed Type.
+            && !(matches!(target.as_ref(), TyTerm::Nominal(..))
+                && crate::frontend::call_contracts::closed_term(target))
             || matches!(
                 region,
                 RegionTerm::Placeholder(_) | RegionTerm::Bound { .. }
@@ -380,10 +385,20 @@ fn validate_value(
                 ..
             },
         ) => {
-            args.is_empty()
-                && runtime_args.is_empty()
+            // An instantiated generic nominal matches when each reached
+            // argument descriptor is the argument's closed source Type.
+            actual == identity
                 && const_args.is_empty()
-                && actual == identity
+                && args.len() == runtime_args.len()
+                && args.iter().zip(runtime_args.iter()).all(|(arg, ty)| match arg {
+                    crate::traits::term::GenericArg::Type(term) => store
+                        .descriptor_source_term(*ty)
+                        .is_some_and(|reached| {
+                            crate::frontend::signature_subst::erase_regions(&reached)
+                                == crate::frontend::signature_subst::erase_regions(term)
+                        }),
+                    _ => false,
+                })
         }
         _ => false,
     };

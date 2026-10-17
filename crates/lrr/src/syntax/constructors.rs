@@ -140,6 +140,25 @@ impl LangRecord {
         Some((item, start, end))
     }
 }
+/// `a..=b` is rustc's `RangeInclusive::new(a, b)` (the type has private
+/// fields, so it is not a record construction): the written bounds, when
+/// both are present. Its callee is a language item resolved through the
+/// profile's own `core` crate, never through the caller's names.
+pub(crate) fn range_inclusive_bounds(range: &ast::RangeExpr) -> Option<(ast::Expr, ast::Expr)> {
+    use ast::RangeItem;
+    if range.op_kind()? != ast::RangeOp::Inclusive {
+        return None;
+    }
+    Some((range.start()?, range.end()?))
+}
+/// The call path of `RangeInclusive::new` in the profile's `core` crate (a
+/// `$crate`-rooted path, as a macro-emitted call names the crate defining it).
+pub(crate) fn range_inclusive_new_path(profile: &ProfileIdentity) -> String {
+    format!(
+        "{}::ops::RangeInclusive::new",
+        crate::frontend::callables::dollar_crate_segment(crate::facade::unit(profile, "core"))
+    )
+}
 /// Sealed source/index pairing. Consumers resolve types and evaluate child PCs
 /// later; capture performs neither operation, including for a zero-length repeat.
 #[derive(Debug, Clone, Eq, PartialEq)]

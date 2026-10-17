@@ -35,7 +35,8 @@ impl RunMachine {
                 )),
                 CallContinuation::DropWitness(_)
                 | CallContinuation::Operator
-                | CallContinuation::Format { .. } => None,
+                | CallContinuation::Format { .. }
+                | CallContinuation::Initializer { .. } => None,
             };
             // Borrow the last frame context for validation, restore it on every
             // outcome, and keep its metadata charged throughout cleanup.
@@ -45,6 +46,13 @@ impl RunMachine {
                 }
                 None if matches!(suspended.continuation, CallContinuation::Format { .. }) => {
                     self.admit_format_return(db, &suspended, ticket)
+                }
+                None if matches!(
+                    suspended.continuation,
+                    CallContinuation::Initializer { .. }
+                ) =>
+                {
+                    self.admit_initializer_return(db, &suspended, ticket)
                 }
                 None => self.admit_drop_witness_return(db, &suspended, ticket),
                 Some((site_action, same_body, resume, result)) => (|| {
@@ -132,6 +140,11 @@ impl RunMachine {
             if matches!(suspended.continuation, CallContinuation::Format { .. }) {
                 return self
                     .resume_format_call(suspended, active.ticket)
+                    .map(|()| None);
+            }
+            if matches!(suspended.continuation, CallContinuation::Initializer { .. }) {
+                return self
+                    .resume_initializer(suspended, active.ticket)
                     .map(|()| None);
             }
             let (continuation, source_result) = self.restore_caller(suspended, active.ticket)?;
@@ -273,9 +286,19 @@ impl RunMachine {
         let concrete = source_result
             .filter(|term| crate::frontend::call_contracts::contains_object(term))
             .map(|_| self.store.descriptor_source_term(actual));
-        let source_result = match &concrete {
-            Some(view) => view.as_ref(),
-            None => source_result,
+        // A closure declares no result Type: its call result is viewed as the
+        // returned value's reached closed Type.
+        let reached = if source_result.is_none() && suspended.call.closure.is_some() {
+            self.store
+                .descriptor_source_term(actual)
+                .filter(crate::vm::frame::Frame::admissible_parameter_source)
+        } else {
+            None
+        };
+        let source_result = match (&concrete, &reached) {
+            (Some(view), _) => view.as_ref(),
+            (None, Some(view)) => Some(view),
+            (None, None) => source_result,
         };
         suspended
             .caller
@@ -339,6 +362,18 @@ impl RunMachine {
                 };
                 self.store
                     .descriptor_source_term(crate::runtime::shape::TypeId(value.type_id))
+            }
+            None if suspended.call.closure.is_some() => {
+                let value = match self.store.peek_ticket(ticket) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        self.calls.push(suspended);
+                        return Err(error);
+                    }
+                };
+                self.store
+                    .descriptor_source_term(crate::runtime::shape::TypeId(value.type_id))
+                    .filter(crate::vm::frame::Frame::admissible_parameter_source)
             }
             other => other,
         };

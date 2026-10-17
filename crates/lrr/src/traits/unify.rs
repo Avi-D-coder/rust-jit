@@ -174,6 +174,9 @@ impl Unifier {
                     for (a, b) in x.into_iter().zip(y) {
                         match (a, b) {
                             (GenericArg::Type(a), GenericArg::Type(b)) => work.push((a, b)),
+                            // Regions are checked by rustc, never by the
+                            // interpreter: two reached regions always agree.
+                            (GenericArg::Region(_), GenericArg::Region(_)) => {}
                             (a, b) if a == b => {}
                             _ => {
                                 return Err(fault(
@@ -191,9 +194,10 @@ impl Unifier {
                 | (TyTerm::Array(a, _), TyTerm::Array(b, ConstTerm::Param(_))) => {
                     work.push((*a, *b))
                 }
-                (TyTerm::Ref(r, m, a), TyTerm::Ref(s, n, b)) if r == s && m == n => {
-                    work.push((*a, *b))
-                }
+                // The pointees unify; the regions are rustc's concern (a
+                // reference reached from a descriptor is `'static`-erased,
+                // an argument's carries its local region).
+                (TyTerm::Ref(_, m, a), TyTerm::Ref(_, n, b)) if m == n => work.push((*a, *b)),
                 _ => return Err(fault("reached structural type contracts disagree")),
             }
         }

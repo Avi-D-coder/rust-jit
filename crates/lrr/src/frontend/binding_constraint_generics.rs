@@ -48,7 +48,7 @@ pub(super) enum TermProjection {
 }
 /// Projection paths from a declared Type term to type parameter `key`
 /// (through references, tuples, arrays, slices and nominal type arguments).
-fn parameter_paths(term: &TyTerm, key: &ParamKey) -> Vec<Vec<Step>> {
+pub(super) fn parameter_paths(term: &TyTerm, key: &ParamKey) -> Vec<Vec<Step>> {
     fn walk(term: &TyTerm, key: &ParamKey, prefix: &mut Vec<Step>, out: &mut Vec<Vec<Step>>) {
         match term {
             TyTerm::Param(found) if found == key => out.push(prefix.clone()),
@@ -277,6 +277,7 @@ impl<'a> Component<'a> {
         term: &TyTerm,
         steps: &[Step],
     ) -> QueryPoll<TermProjection> {
+        self.note_depth(super::term_depth(term));
         let mut term = term.clone();
         for (index, step) in steps.iter().enumerate() {
             // Indexing and field access auto-deref through references and
@@ -318,7 +319,7 @@ impl<'a> Component<'a> {
     }
     /// The declared goals of a selected function, read without recording
     /// this component's own pending demands.
-    fn quiet_parameter_term(
+    pub(super) fn quiet_parameter_term(
         &mut self,
         db: &mut Database,
         node: NodeId,
@@ -330,7 +331,7 @@ impl<'a> Component<'a> {
         (self.pending, self.unrecorded) = saved;
         term
     }
-    fn quiet_result_term(
+    pub(super) fn quiet_result_term(
         &mut self,
         db: &mut Database,
         node: NodeId,
@@ -366,14 +367,21 @@ impl<'a> Component<'a> {
         }
         let (arguments, offset) = match self.fact(call) {
             // A method call's operands are its receiver and arguments, in
-            // parameter order; a call's first operand is its callee.
+            // parameter order, as a language-item call's are its arguments;
+            // a call's first operand is its callee.
             Ok(fact) => (
                 fact.operands().to_vec(),
-                usize::from(fact.kind() != crate::syntax::source_constraints::FactKind::MethodCall),
+                usize::from(!matches!(
+                    fact.kind(),
+                    FactKind::MethodCall | FactKind::LangCall
+                )),
             ),
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         let strict = self.via.strict;
+        let method = self
+            .fact(call)
+            .is_ok_and(|fact| fact.kind() == FactKind::MethodCall);
         let related = |component: &mut Self, node: NodeId, path: Vec<Step>| {
             let scalar = path.is_empty();
             let mut steps = path;
@@ -391,7 +399,47 @@ impl<'a> Component<'a> {
                 continue;
             };
             if let Some(term) = ready!(self.quiet_parameter_term(db, call, definition, ordinal)) {
+                // A method receiver expression is adjusted (auto-ref and
+                // auto-deref) to the declared `self` Type: the part sits
+                // behind exactly the references of the receiver's own static
+                // Type (the probe strips references, never a box), which the
+                // declared Type's leading `&` only restates. A receiver whose
+                // Type the services do not state keeps `AutoDeref`.
+                let references = if method && position == 0 {
+                    match ready!(self.expression_type(db, *argument)) {
+                        Some(mut receiver) => {
+                            let mut references = 0usize;
+                            while let TyTerm::Ref(_, _, inner) = receiver {
+                                references += 1;
+                                receiver = *inner;
+                            }
+                            Some(references)
+                        }
+                        None => None,
+                    }
+                } else {
+                    None
+                };
                 for path in parameter_paths(&term, &key) {
+                    let path = if method && position == 0 {
+                        let rest = path
+                            .iter()
+                            .position(|step| *step != Step::Deref)
+                            .unwrap_or(path.len());
+                        let mut adjusted = Vec::with_capacity(path.len() - rest + 1);
+                        match references {
+                            Some(references) => {
+                                adjusted.extend(std::iter::repeat_n(Step::Deref, references))
+                            }
+                            // The receiver is the parameter itself, auto-ref'd.
+                            None if rest == path.len() => {}
+                            None => adjusted.push(Step::AutoDeref),
+                        }
+                        adjusted.extend_from_slice(&path[rest..]);
+                        adjusted
+                    } else {
+                        path
+                    };
                     related(self, *argument, path);
                 }
             }

@@ -56,7 +56,10 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
             "prepared binding source query variant differs".into(),
         )));
     };
-    let guard = if matches!(constraints.state(), BindingConstraintState::Resolved(_)) {
+    let guard = if matches!(
+        constraints.state(),
+        BindingConstraintState::Resolved(_) | BindingConstraintState::ResolvedType
+    ) {
         if !value.cacheable {
             return QueryPoll::Ready(Err(Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",

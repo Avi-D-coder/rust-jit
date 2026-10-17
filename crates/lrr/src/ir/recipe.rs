@@ -163,6 +163,47 @@ impl VerifiedRecipe {
         self.source_call = Some(plan.clone());
         Ok(self)
     }
+    /// This Entry recipe with the reached Type of its own result stated
+    /// first: the same `SetHint` a parent writes for a child, here for a
+    /// node whose Type the common source constraints decided from its later
+    /// uses (`None`, `W::new()`). Verified again as an ordinary recipe; the
+    /// cold attachments of the original are kept.
+    pub(crate) fn with_entry_hint(
+        self,
+        index: &crate::syntax::body_index::BodyIndex,
+        hint: HintRecipe,
+    ) -> Result<Self, crate::core::diagnostic::Diagnostic> {
+        let invalid = |message: &str| {
+            crate::core::diagnostic::Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
+        };
+        let key = self.recipe.key.clone();
+        if key.phase != super::pc::Phase::Entry.code()? {
+            return Err(invalid("entry hint requires an entry phase recipe"));
+        }
+        let child = index
+            .nodes()
+            .get(key.node as usize)
+            .and_then(|node| node.value)
+            .ok_or_else(|| invalid("entry hint node has no value slot"))?;
+        let mut operations = Vec::with_capacity(self.recipe.operations.len() + 1);
+        operations.push(Op::SetHint { child, hint });
+        operations.extend(self.recipe.operations.iter().cloned());
+        let draft = RecipeDraft {
+            key,
+            origin: self.recipe.origin.clone(),
+            operations,
+            exits: vec![self.recipe.exit.clone()],
+            dependencies: self.recipe.dependencies.to_vec(),
+        };
+        let mut verified = super::validate::verify(draft, index)?;
+        verified.namespace_witness = self.namespace_witness;
+        verified.prepared_inputs = self.prepared_inputs;
+        verified.source_call = self.source_call;
+        // Everything the original accounted beyond its verified core stays
+        // accounted: keep the larger bound.
+        verified.metadata_bytes = verified.metadata_bytes.max(self.metadata_bytes);
+        Ok(verified)
+    }
     pub fn metadata_bytes(&self) -> usize {
         self.metadata_bytes
     }
@@ -424,6 +465,14 @@ impl StableEncode for Recipe {
                 e.u32(source.0);
                 e.u32(destination.0);
             }
+            Op::PromotedPlace {
+                source,
+                destination,
+            } => {
+                e.u32(u32::from(super::op::PROMOTED_PLACE_OPCODE));
+                e.u32(source.0);
+                e.u32(destination.0);
+            }
             Op::PlaceTransfer {
                 source,
                 destination,
@@ -617,6 +666,10 @@ impl StableEncode for Recipe {
                     super::op::DecodedLiteral::Byte(value) => {
                         e.u32(2);
                         e.u32(u32::from(*value));
+                    }
+                    super::op::DecodedLiteral::ByteString(bytes) => {
+                        e.u32(7);
+                        e.bytes(bytes);
                     }
                     super::op::DecodedLiteral::Float { decimal, suffix } => {
                         e.u32(3);

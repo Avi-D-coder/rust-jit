@@ -1,6 +1,6 @@
 // LRR-provided `alloc` facade (Section 17). See `core/lib.rs`; the closed
-// facade functions `alloc::fmt::format` and `alloc::__export::must_use` are
-// installed separately and not redeclared here.
+// facade function `alloc::__export::must_use` is installed separately and not
+// redeclared here.
 #![no_std]
 
 

@@ -25,7 +25,7 @@ pub(super) struct OperatorMethod {
 }
 
 impl RunMachine {
-    fn operator_parameter_hints(
+    pub(super) fn operator_parameter_hints(
         &self,
         db: &mut Database,
         callee: &SourceCallable,
@@ -84,9 +84,11 @@ impl RunMachine {
                 "an operator method cannot interleave a sealed call",
             )));
         }
-        let key = (self.frame.pc().clone(), demand.kind.key(), demand.self_type);
+        let right = ready!(self.frame.operator_right_type(&self.store));
+        let key = (self.frame.pc().clone(), demand.kind.key(), demand.self_type, right);
         // The selection and its parameter hints are fixed per (site,
-        // operator, self type); later executions share them.
+        // operator, self type, right operand type); later executions share
+        // them.
         let method = match self.operator_methods.get(&key) {
             Some(method) => {
                 ready!(method.callee.revalidate(db));
@@ -101,10 +103,17 @@ impl RunMachine {
             }
         };
         let hints = &method.hints;
-        let expected: Vec<_> = hints
-            .iter()
-            .map(|hint| hint.as_ref().and_then(|hint| hint.descriptor))
-            .collect();
+        // A closed parameter Type types an unresolved literal operand.
+        let mut expected = Vec::with_capacity(hints.len());
+        for hint in hints {
+            expected.push(match hint {
+                Some(hint) => match hint.descriptor {
+                    Some(descriptor) => Some(descriptor),
+                    None => ready!(self.store.intern_structural_term(&hint.source)),
+                },
+                None => None,
+            });
+        }
         let formed = ready!(self
             .frame
             .form_operator_arguments(&expected, &mut self.store));
@@ -136,13 +145,22 @@ impl RunMachine {
                 references.push(
                     if closed && matches!(argument.source, crate::traits::term::TyTerm::Ref(..)) {
                         Some(ready!(match argument.slot {
-                            Some(slot) => ClosedReferenceArgument::capture_budgeted(
-                                &self.frame,
-                                slot,
-                                &self.store,
-                                usize::MAX,
-                            ),
-                            None => ClosedReferenceArgument::capture_formed(
+                            // An operand slot retains its reference's source
+                            // view; one bound by a pattern from a tuple of
+                            // references may not, and then the operand's own
+                            // reached type states it, as for a formed reference.
+                            Some(slot)
+                                if self
+                                    .frame
+                                    .source_view_ref(slot)
+                                    .is_ok_and(|view| view.is_some()) =>
+                                ClosedReferenceArgument::capture_budgeted(
+                                    &self.frame,
+                                    slot,
+                                    &self.store,
+                                    usize::MAX,
+                                ),
+                            _ => ClosedReferenceArgument::capture_formed(
                                 &self.store,
                                 argument.cell,
                                 &argument.source,
@@ -187,7 +205,7 @@ impl RunMachine {
     }
     /// The lang-item trait's definition, as the operator's own frame names
     /// `core::<module>::<Trait>` (through `std` where `core` is not in scope).
-    fn operator_trait(
+    pub(super) fn operator_trait(
         &mut self,
         db: &mut Database,
         module: &str,
@@ -246,7 +264,56 @@ impl RunMachine {
         let Some(members) = self.members.clone() else {
             return QueryPoll::Ready(Err(call_fault("operator selection requires the impl index")));
         };
-        let function = match members.trait_method(self_type, trait_key, method).as_slice() {
+        let mut candidates = members.trait_method(self_type, trait_key, method);
+        // `impl Trait for &Vec<T>` vs `&[T]` vs a generic `&A`: reference self
+        // types are indexed together, so the referent selects among them. An
+        // impl naming the referent wins over one generic in it.
+        let referent = match self.store.type_descriptor(demand.self_type) {
+            Ok(descriptor) => match descriptor.key.as_ref() {
+                crate::runtime::shape::TypeKey::Ref { target, .. } => Some(*target),
+                _ => None,
+            },
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        if candidates.len() > 1
+            && let Some(target) = referent
+            && let Ok(pointee) = self.reached_self_type(target)
+        {
+            let exact: Vec<_> = candidates
+                .iter()
+                .filter(|(members, _)| members.self_pointee == Some(pointee))
+                .cloned()
+                .collect();
+            let generic: Vec<_> = candidates
+                .iter()
+                .filter(|(members, _)| members.self_pointee.is_none())
+                .cloned()
+                .collect();
+            // An impl naming the referent wins over one generic in it, when
+            // its `Rhs` accepts the right operand (`impl PartialEq<Vec<U>>
+            // for &[T]` does not select `&[T] == &[T]`).
+            let exact_accepts = if exact.is_empty() || generic.is_empty() {
+                true
+            } else {
+                let mut functions = Vec::new();
+                for (_, function) in &exact {
+                    if !functions.contains(function) {
+                        functions.push(*function);
+                    }
+                }
+                match self.select_by_right_operand(db, &functions) {
+                    QueryPoll::Ready(Ok(accepted)) => accepted.is_some(),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+            candidates = if exact.is_empty() || !exact_accepts {
+                generic
+            } else {
+                exact
+            };
+        }
+        let function = match candidates.as_slice() {
             [(_, function)] => *function,
             [] => {
                 return QueryPoll::Ready(Err(Diagnostic::new(
@@ -254,13 +321,34 @@ impl RunMachine {
                     format!("no `{trait_name}` impl provides `{method}` for the operand's type"),
                 )));
             }
-            _ => {
-                return QueryPoll::Ready(Err(Diagnostic::new(
-                    "LRR-E-NAME-AMBIGUOUS",
-                    format!(
-                        "several `{trait_name}` impls provide `{method}` for the operand's type; selection by the right operand's type awaits impl argument matching"
-                    ),
-                )));
+            several => {
+                // Impls that differ only by the trait's arguments share the
+                // trait's provided body (`PartialEq::ne` of `PartialEq<i32>`
+                // and `PartialEq<M>`): one function, whose own calls select
+                // their impls by the reached argument types.
+                let mut functions = Vec::new();
+                for (_, function) in several {
+                    if !functions.contains(function) {
+                        functions.push(*function);
+                    }
+                }
+                let chosen = match functions.as_slice() {
+                    [function] => QueryPoll::Ready(Ok(Some(*function))),
+                    _ => self.select_by_right_operand(db, &functions),
+                };
+                match chosen {
+                    QueryPoll::Ready(Ok(Some(function))) => function,
+                    QueryPoll::Ready(Ok(None)) => {
+                        return QueryPoll::Ready(Err(Diagnostic::new(
+                            "LRR-E-NAME-AMBIGUOUS",
+                            format!(
+                                "several `{trait_name}` impls provide `{method}` for the operand's type and its right operand"
+                            ),
+                        )));
+                    }
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
             }
         };
         let callee = match self.member_callee(db, function) {
@@ -280,6 +368,34 @@ impl RunMachine {
             )));
         }
         QueryPoll::Ready(Ok(callee))
+    }
+    /// rustc's impl selection by the trait's argument: of several impls for
+    /// the self type (`impl PartialEq<String> for &str` beside
+    /// `impl PartialEq<&B> for &A`), the one whose `Rhs` parameter accepts
+    /// the right operand's argument (`select_by_arguments`). `None` when no
+    /// single impl accepts it.
+    fn select_by_right_operand(
+        &mut self,
+        db: &mut Database,
+        candidates: &[crate::core::digest::Digest],
+    ) -> QueryPoll<Option<crate::core::digest::Digest>> {
+        use super::trait_calls::SelectionArgument;
+        let right = match self.frame.operator_right_view(&self.store) {
+            Ok(view) => view.map(|view| self.frame.bound_view(&view, &self.store)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let right = match right {
+            Some(view) => SelectionArgument::Type(view),
+            None => match self.frame.operator_right_literal(&self.store) {
+                Ok(Some(integer)) => SelectionArgument::Literal {
+                    integer,
+                    behind_reference: self.frame.operator_comparison(),
+                },
+                Ok(None) => return QueryPoll::Ready(Ok(None)),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            },
+        };
+        self.select_by_arguments(db, candidates, 1, &[SelectionArgument::Unknown, right])
     }
     /// The returned value is admitted as any source call's result, at the
     /// suspended operation's destination.

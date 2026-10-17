@@ -32,6 +32,23 @@ pub(crate) enum ItemValue {
         cell: crate::runtime::cell::CellId,
         view: Option<TyTerm>,
     },
+    /// A constant whose initializer ran through the interpreter and whose
+    /// value is copied intrinsically (a scalar or shared reference): its one
+    /// run-long cell, copied at each read (E-R5-007).
+    ConstCell {
+        cell: crate::runtime::cell::CellId,
+        view: Option<TyTerm>,
+    },
+    /// A constant value its initializer produced for this one read.
+    Ticket {
+        ticket: crate::runtime::cell::TicketId,
+        view: Option<TyTerm>,
+    },
+    /// A constant read in place context (`&CONST`): rustc promotes a borrow
+    /// of plain-data constants to a `'static` location, one per site, and
+    /// gives any other (interior-mutable, dropping) constant a fresh
+    /// temporary per use. The inner value is that fresh use.
+    Promotable(Box<ItemValue>),
     /// An aggregate (array) constant: its immutable evaluated value and
     /// selected layout, instantiated into a fresh value at each read.
     Aggregate {
@@ -67,7 +84,18 @@ impl Frame {
         destination: SlotId,
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
-        match self.selected_item_value() {
+        self.preflight_item_value(self.selected_item_value(), destination, store)
+    }
+    fn preflight_item_value(
+        &self,
+        value: Option<&ItemValue>,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        match value {
+            Some(ItemValue::Promotable(inner)) => {
+                self.preflight_item_value(Some(inner), destination, store)
+            }
             Some(ItemValue::Scalar { value, .. }) => self.preflight_literal(
                 destination,
                 Some(TypeId(value.type_id)),
@@ -88,6 +116,18 @@ impl Frame {
             Some(ItemValue::Aggregate { ty, view, .. }) => {
                 self.preflight_source_view(destination, view.as_ref())?;
                 self.preflight_write_type(destination, *ty, store)
+            }
+            Some(ItemValue::ConstCell { cell, view }) => {
+                let crate::runtime::cell::CellState::Live(value) = store.state(*cell)? else {
+                    return Err(invalid("evaluated constant storage is not live"));
+                };
+                self.preflight_source_view(destination, view.as_ref())?;
+                self.preflight_write_type(destination, TypeId(value.type_id), store)
+            }
+            Some(ItemValue::Ticket { ticket, view }) => {
+                let value = store.peek_ticket(*ticket)?;
+                self.preflight_source_view(destination, view.as_ref())?;
+                self.preflight_write_type(destination, TypeId(value.type_id), store)
             }
             None => self.preflight_nominal_value(destination, store),
         }
@@ -147,6 +187,61 @@ impl Frame {
             }
             ItemValue::Static { cell, view } => {
                 self.item_values.static_place = Some((destination, cell, view));
+                Ok(())
+            }
+            ItemValue::ConstCell { cell, view } => {
+                let ticket = store.copy_from(cell)?;
+                self.write(destination, ticket, store)?;
+                self.set_source_view(destination, view)
+            }
+            ItemValue::Ticket { ticket, view } => {
+                self.write(destination, ticket, store)?;
+                self.set_source_view(destination, view)
+            }
+            ItemValue::Promotable(inner) => {
+                let (ticket, view) = match *inner {
+                    ItemValue::Scalar { value, view } => {
+                        (store.ticket(value)?, view.map(TyTerm::Primitive))
+                    }
+                    ItemValue::ConstCell { cell, view } => (store.copy_from(cell)?, view),
+                    ItemValue::Ticket { ticket, view } => (ticket, view),
+                    ItemValue::Aggregate {
+                        value,
+                        wire,
+                        ty,
+                        view,
+                    } => {
+                        let plan = store.prepare_constant_instantiation(&value, &wire, ty)?;
+                        (store.instantiate_constant_value(plan, &mut self.fuel)?, view)
+                    }
+                    other => {
+                        self.item_values.value = Some((self.pc.clone(), other));
+                        return self.write_value_path(destination, store);
+                    }
+                };
+                let value = store.peek_ticket(ticket)?;
+                let ty = if store.value_promotable(value)? {
+                    store.effective_type(value)?
+                } else {
+                    None
+                };
+                let Some(ty) = ty else {
+                    // A fresh temporary for this use.
+                    self.write(destination, ticket, store)?;
+                    return self.set_source_view(destination, view);
+                };
+                let site = crate::core::digest::StableEncode::fingerprint(&self.pc);
+                let promoted = match store.promoted_cell(site, ty) {
+                    Some(promoted) => {
+                        // Later executions address the installed location; the
+                        // equal fresh value is an ordinary temporary.
+                        self.write(destination, ticket, store)?;
+                        self.set_source_view(destination, view.clone())?;
+                        promoted
+                    }
+                    None => store.install_promoted(site, ty, ticket)?,
+                };
+                self.item_values.static_place = Some((destination, promoted, view));
                 Ok(())
             }
             ItemValue::Aggregate {

@@ -26,6 +26,8 @@ use ra_ap_syntax::{
 mod format_args_thunk;
 #[path = "method_call_thunk.rs"]
 pub(crate) mod method_call_thunk;
+#[path = "lang_call_thunk.rs"]
+mod lang_call_thunk;
 #[path = "value_call_thunk.rs"]
 pub(crate) mod value_call_thunk;
 #[path = "closure_thunk.rs"]
@@ -376,6 +378,56 @@ fn compound_local_definition_context(
 }
 /// Retain the actual outer shared borrow; nested or modified borrows are not
 /// primitive forwarding. This never reads or executes the borrowed expression.
+/// A constant expression rustc promotes under a shared borrow
+/// (`rustc_const_eval`'s promotion of rvalues): literals, and parentheses,
+/// negation, arrays (listed or repeated by a literal count), tuples and
+/// record literals of them. No call or path appears, so evaluating it is
+/// pure and one shared `'static` location is unobservable; a record's
+/// declaration may still have drop glue, which `Frame::promoted_place`
+/// checks on the completed value.
+fn promotable_constant(expression: &ast::Expr) -> bool {
+    match expression {
+        ast::Expr::Literal(_) => true,
+        ast::Expr::ParenExpr(inner) => inner.expr().is_some_and(|inner| promotable_constant(&inner)),
+        ast::Expr::PrefixExpr(prefix) => {
+            matches!(prefix.op_kind(), Some(ast::UnaryOp::Neg | ast::UnaryOp::Not))
+                && prefix.expr().is_some_and(|inner| promotable_constant(&inner))
+        }
+        ast::Expr::TupleExpr(tuple) => tuple.fields().all(|field| promotable_constant(&field)),
+        // A record literal of promotable fields (`P { x: 3 }`); the runtime
+        // refuses one with drop glue or interior mutability.
+        ast::Expr::RecordExpr(record) => record.record_expr_field_list().is_some_and(|list| {
+            list.spread().is_none()
+                && list
+                    .fields()
+                    .all(|field| field.expr().is_some_and(|value| promotable_constant(&value)))
+        }),
+        ast::Expr::ArrayExpr(array) => match array.kind() {
+            ast::ArrayExprKind::ElementList(mut elements) => {
+                elements.all(|element| promotable_constant(&element))
+            }
+            ast::ArrayExprKind::Repeat { initializer, repeat } => {
+                initializer.is_some_and(|initializer| promotable_constant(&initializer))
+                    && matches!(repeat, Some(ast::Expr::Literal(_)))
+            }
+        },
+        _ => false,
+    }
+}
+/// A temporary of a `const`/`static` initializer whose lifetime extends to
+/// the item's own root scope: the item's value borrows it, and rustc gives it
+/// `'static` storage (const evaluation interns the final value's
+/// allocations; nothing drops them).
+fn extended_to_initializer_root(index: &BodyIndex, operand: NodeId) -> bool {
+    index
+        .scopes()
+        .first()
+        .is_some_and(|scope| scope.kind == super::body_index::ScopeKind::Initializer)
+        && index.nodes()[operand.0 as usize]
+            .extended_to
+            .as_ref()
+            .is_some_and(|target| target.scope == super::body_index::ScopeId(0))
+}
 fn compound_shared_rhs(mut expression: ast::Expr) -> Result<Option<ast::RefExpr>, Diagnostic> {
     for _ in 0usize.. {
         if expression
@@ -1218,7 +1270,20 @@ pub(super) fn literal_recipe(
         }
         SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW => (LiteralKind::Bool, None),
         SyntaxKind::STRING => (LiteralKind::String, None),
-        SyntaxKind::BYTE_STRING => (LiteralKind::ByteString, None),
+        SyntaxKind::BYTE_STRING => {
+            let token = ast::ByteString::cast(token)
+                .ok_or_else(|| error("byte string token cast failed"))?;
+            let Ok(value) = token.value() else {
+                return Err(Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "invalid byte string escape".into(),
+                ));
+            };
+            (
+                LiteralKind::ByteString,
+                Some(DecodedLiteral::ByteString(std::sync::Arc::from(value.as_ref()))),
+            )
+        }
         _ => {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
@@ -2300,6 +2365,9 @@ impl ParsedFile {
             SyntaxKind::METHOD_CALL_EXPR => {
                 self.initial_method_call_thunk(body, index, key, syntax)
             }
+            // `a..=b` is `RangeInclusive::new(a, b)`: an ordinary call of the
+            // language-item function.
+            SyntaxKind::RANGE_EXPR => self.initial_lang_call_thunk(body, index, key, syntax),
             SyntaxKind::RETURN_EXPR
             | SyntaxKind::LOOP_EXPR
             | SyntaxKind::BREAK_EXPR
@@ -2955,11 +3023,11 @@ impl ParsedFile {
                     let Some(part) = cursor.segment() else {
                         return unsupported("callee path segment absent");
                     };
-                    if !components.is_empty() && part.generic_arg_list().is_some() {
-                        return unsupported(
-                            "generic path owner requires associated-call integration",
-                        );
-                    }
+                    // Type arguments written on the owner segment
+                    // (`Vec::<T>::new()`) are selected at their indexed Type
+                    // occurrences by the dispatcher (`engine/run_owner_arguments.rs`)
+                    // and bind the owner impl's parameters. No other segment
+                    // of a path takes arguments in a program rustc accepts.
                     let text = match part.kind() {
                         Some(ast::PathSegmentKind::Name(name)) if name.text() == "$crate" => {
                             // `$crate` is the macro's defining crate. Within the
@@ -4553,6 +4621,28 @@ impl ParsedFile {
                             },
                             RecipeExit::Next(index.pc(child, Phase::Entry)?),
                         ),
+                        // rustc promotes a shared borrow of a constant
+                        // expression to a `'static` place; any other
+                        // temporary keeps its one owning cell in its exact
+                        // annotated scope.
+                        Phase::Operand(0)
+                            if !operand_is_place
+                                && matches!(access, crate::ir::op::BorrowAccess::Shared)
+                                && (promotable_constant(&operand)
+                                    || extended_to_initializer_root(index, child)) =>
+                        {
+                            draft(
+                                index,
+                                key,
+                                vec![Op::PromotedPlace {
+                                    source: index.nodes()[child.0 as usize]
+                                        .value
+                                        .ok_or_else(|| error("temporary borrow value absent"))?,
+                                    destination: place,
+                                }],
+                                RecipeExit::Next(index.pc(node.id, Phase::Commit)?),
+                            )
+                        }
                         // Preserve the completed operand's one owning cell.
                         // The annotation pass already assigns its exact scope;
                         // forming this checked address changes no ownership.

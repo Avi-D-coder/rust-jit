@@ -70,6 +70,10 @@ mod methods;
 mod operator_calls;
 #[path = "run_format_calls.rs"]
 mod format_calls;
+#[path = "run_initializers.rs"]
+mod initializers;
+#[path = "run_owner_arguments.rs"]
+mod owner_arguments;
 #[path = "run_trait_calls.rs"]
 mod trait_calls;
 #[path = "run_fields.rs"]
@@ -244,10 +248,6 @@ struct SelectedArgumentCall {
     /// declared result: the expectation its arguments evaluate under.
     expected: BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
     bytes: usize,
-    /// Selected for the call's reached types (a method, trait-path or
-    /// generic-owner impl): its arguments and result context cross the
-    /// boundary in their monomorphic views (`Frame::bound_view`).
-    monomorphic: bool,
 }
 struct SuspendedCall {
     continuation: CallContinuation,
@@ -274,6 +274,12 @@ enum CallContinuation {
     /// A `format_args!` placeholder's trait `fmt`: its output buffer becomes
     /// the placeholder's text in the caller's suspended format operation.
     Format { sink: usize },
+    /// A `const`/`static` initializer demanded by the caller's `ValuePath`.
+    Initializer {
+        identity: crate::core::digest::Digest,
+        is_static: bool,
+        writable: bool,
+    },
 }
 impl SuspendedCall {
     fn action(&self) -> Option<crate::vm::action::ActionId> {
@@ -281,7 +287,8 @@ impl SuspendedCall {
             CallContinuation::Site { action, .. } => Some(*action),
             CallContinuation::DropWitness(_)
             | CallContinuation::Operator
-            | CallContinuation::Format { .. } => None,
+            | CallContinuation::Format { .. }
+            | CallContinuation::Initializer { .. } => None,
         }
     }
     #[cfg(test)]
@@ -402,7 +409,10 @@ pub struct RunMachine {
     /// The entered lexical selection of each single-name `ValuePath` PC a
     /// body-local item may bind (`None`: the module route), selected once.
     /// The selected static cell of each by-value static read PC.
-    static_reads: BTreeMap<PcKey, crate::runtime::cell::CellId>,
+    static_reads: BTreeMap<
+        PcKey,
+        (crate::runtime::cell::CellId, Option<crate::traits::term::TyTerm>),
+    >,
     /// Body-local function items used as values: their entered admission
     /// (the same proof a direct call of the path consumes), by identity.
     local_function_values: BTreeMap<
@@ -429,12 +439,16 @@ pub struct RunMachine {
     /// `<T as Drop>::drop` selected once per nominal declaration; each
     /// witness entry revalidates it and prepares its own call contracts.
     drop_witnesses: BTreeMap<crate::core::digest::Digest, Box<SourceCallable>>,
-    /// Operator trait methods selected per operator PC, operator and self
-    /// type; each entry revalidates and prepares its own call contracts.
-    /// Operator methods selected per (site, operator, self type): the shared
-    /// callee and its per-parameter hints.
+    /// Operator methods selected per (site, operator, self type, right
+    /// operand type): the shared callee and its per-parameter hints; each
+    /// use revalidates the callee and prepares its own call contracts.
     operator_methods: BTreeMap<
-        (PcKey, u32, crate::runtime::shape::TypeId),
+        (
+            PcKey,
+            u32,
+            crate::runtime::shape::TypeId,
+            Option<crate::runtime::shape::TypeId>,
+        ),
         Arc<operator_calls::OperatorMethod>,
     >,
     /// Lang-item trait definitions of operators, by trait name, for the run.
@@ -443,9 +457,32 @@ pub struct RunMachine {
     format_entries: BTreeMap<&'static str, Arc<SourceCallable>>,
     /// Output buffers of in-progress trait-method formatting calls.
     format_sinks: format_calls::FormatSinks,
+    /// A `ValuePath`'s demanded `const`/`static` initializer (E-R5-007).
+    initializer_demand: Option<initializers::InitializerDemand>,
+    /// Evaluated constants copied on each use, with their returned views.
+    const_cells: BTreeMap<
+        crate::core::digest::Digest,
+        (crate::runtime::cell::CellId, Option<crate::traits::term::TyTerm>),
+    >,
+    /// A constant's value evaluated for the one use at this PC.
+    initialized_values: BTreeMap<
+        PcKey,
+        (crate::runtime::cell::TicketId, Option<crate::traits::term::TyTerm>),
+    >,
+    /// Slots allocated under the run's static anchor.
+    static_slots: u32,
+    /// Source views of statics whose initializer ran in the interpreter.
+    static_views: BTreeMap<crate::core::digest::Digest, crate::traits::term::TyTerm>,
     /// Call sites (PC and call node) whose written qualified path is not a
     /// trait path.
     ordinary_call_paths: std::collections::BTreeSet<(PcKey, u32)>,
+    /// Type arguments written on a call path's owner segment, selected once
+    /// per call site (`None`: the site writes none).
+    owner_arguments: BTreeMap<PcKey, Option<Arc<owner_arguments::OwnerArguments>>>,
+    /// The impl function selected among impls of one trait that differ by
+    /// the trait's arguments, per (call site, reached argument Types).
+    argument_selections:
+        BTreeMap<(PcKey, Vec<Option<crate::runtime::shape::TypeId>>), crate::core::digest::Digest>,
     /// Source callables of member functions the impl index selected
     /// (methods, trait-path and operator impls), by definition identity.
     member_callees: BTreeMap<crate::core::digest::Digest, Arc<SourceCallable>>,
@@ -535,7 +572,14 @@ impl RunMachine {
                 operator_traits: BTreeMap::new(),
                 format_entries: BTreeMap::new(),
                 format_sinks: Default::default(),
+                initializer_demand: None,
+                const_cells: BTreeMap::new(),
+                initialized_values: BTreeMap::new(),
+                static_slots: 0,
+                static_views: BTreeMap::new(),
                 ordinary_call_paths: std::collections::BTreeSet::new(),
+                owner_arguments: BTreeMap::new(),
+                argument_selections: BTreeMap::new(),
                 member_callees: BTreeMap::new(),
                 nominal: Default::default(),
                 closures: Default::default(),
@@ -670,6 +714,20 @@ impl RunMachine {
         syntax: &[String],
         argument_slots: &[SlotId],
     ) -> QueryPoll<SelectedArgumentCall> {
+        let callee = match self.select_named_callee(db, name) {
+            QueryPoll::Ready(Ok(callee)) => callee,
+            QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+            QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+        };
+        self.prepare_selected_argument_call(db, callee, syntax, argument_slots)
+    }
+    /// The source function a written call path names, through the ordinary
+    /// call resolver.
+    fn select_named_callee(
+        &self,
+        db: &mut Database,
+        name: &str,
+    ) -> QueryPoll<Arc<SourceCallable>> {
         let Some(graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(
                 "source calls require a checked source catalogue",
@@ -680,17 +738,16 @@ impl RunMachine {
             Ok(r) => r.with_members(self.members.as_deref()),
             Err(e) => return QueryPoll::Ready(Err(e)),
         };
-        let callee = match resolver.source_function(db, self.frame.pc().body.definition, name) {
-            QueryPoll::Ready(Ok(CallSelection::Source(callee))) => callee,
-            QueryPoll::Ready(Ok(_)) => {
-                return QueryPoll::Ready(Err(call_fault(
-                    "callee classification requires later call context integration",
-                )));
+        match resolver.source_function(db, self.frame.pc().body.definition, name) {
+            QueryPoll::Ready(Ok(CallSelection::Source(callee))) => {
+                QueryPoll::Ready(Ok(Arc::from(callee)))
             }
-            QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
-            QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
-        };
-        self.prepare_selected_argument_call(db, Arc::from(callee), syntax, argument_slots)
+            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Err(call_fault(
+                "callee classification requires later call context integration",
+            ))),
+            QueryPoll::Ready(Err(e)) => QueryPoll::Ready(Err(e)),
+            QueryPoll::NeedInput(i) => QueryPoll::NeedInput(i),
+        }
     }
     /// Consume the same immutable source selection used by ordinary lowering.
     /// Publication is a reached coordinator action; the pure goal never enters
@@ -723,14 +780,14 @@ impl RunMachine {
             return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
         }
         for row in typed.rows() {
-            let descriptor = match row.source().materialize(&mut self.store) {
+            let descriptor = match row.source().descriptor(&self.frame, &mut self.store) {
                 Ok(descriptor) => descriptor,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
             explicit.push((
                 row.ordinal(),
                 ArgumentType {
-                    source: row.source().source().clone(),
+                    source: self.frame.bound_view(row.source().source(), &self.store),
                     descriptor,
                 },
             ));
@@ -811,13 +868,33 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         }
-        self.select_argument_call(db, name, syntax, arguments)
+        match self.owner_arguments(db) {
+            QueryPoll::Ready(Ok(Some(owner))) => {
+                self.select_owner_argument_call(db, name, syntax, &owner, arguments)
+            }
+            QueryPoll::Ready(Ok(None)) => self.select_argument_call(db, name, syntax, arguments),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
     }
     fn prepare_selected_argument_call(
         &self,
         db: &mut Database,
         callee: Arc<SourceCallable>,
         syntax: &[String],
+        argument_slots: &[SlotId],
+    ) -> QueryPoll<SelectedArgumentCall> {
+        self.prepare_selected_argument_call_with(db, callee, syntax, Vec::new(), argument_slots)
+    }
+    /// `prepare_selected_argument_call` with Type arguments already selected
+    /// by other means (`extra`: the owner segment's arguments bound to the
+    /// callee's impl parameters).
+    fn prepare_selected_argument_call_with(
+        &self,
+        db: &mut Database,
+        callee: Arc<SourceCallable>,
+        syntax: &[String],
+        extra: Vec<(u32, ArgumentType)>,
         argument_slots: &[SlotId],
     ) -> QueryPoll<SelectedArgumentCall> {
         let Some(graph) = &self.graph else {
@@ -923,6 +1000,7 @@ impl RunMachine {
                 ));
             }
         }
+        explicit.extend(extra);
         self.finish_selected_argument_call(db, callee, explicit, None, argument_slots)
     }
     /// Shared ordinary call context after source Types have been selected.
@@ -1066,7 +1144,6 @@ impl RunMachine {
             result_hint,
             expected,
             bytes,
-            monomorphic: false,
         }))
     }
     /// The callee type parameters the reached result context fixes through
@@ -1143,16 +1220,23 @@ impl RunMachine {
         // A written nominal/tuple/array context (`let v: Option<u16> = ..`)
         // materialized its closed descriptor: its structure is the source.
         // References carry no region here and supply no source authority.
-        fn reference_free(term: &crate::traits::term::TyTerm) -> bool {
+        // A reference that is a type argument of the context's own nominal
+        // (`Vec<&str>`, `Option<&T>`) is part of that Type's structure: the
+        // descriptor records its pointee exactly and its region is erased
+        // like every runtime reference's (`descriptor_source_term`), so it
+        // supplies the argument's identity but no region authority. A
+        // top-level reference context still supplies none.
+        fn reference_free(term: &crate::traits::term::TyTerm, nested: bool) -> bool {
             use crate::traits::term::{GenericArg, TyTerm};
             match term {
                 TyTerm::Primitive(_) | TyTerm::Str => true,
                 TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
-                    GenericArg::Type(ty) => reference_free(ty),
+                    GenericArg::Type(ty) => reference_free(ty, true),
                     _ => true,
                 }),
-                TyTerm::Tuple(items) => items.iter().all(reference_free),
-                TyTerm::Array(item, _) | TyTerm::Slice(item) => reference_free(item),
+                TyTerm::Tuple(items) => items.iter().all(|item| reference_free(item, nested)),
+                TyTerm::Array(item, _) | TyTerm::Slice(item) => reference_free(item, nested),
+                TyTerm::Ref(_, _, target) => nested && reference_free(target, true),
                 _ => false,
             }
         }
@@ -1165,7 +1249,7 @@ impl RunMachine {
                     crate::traits::term::TyTerm::Nominal(..)
                         | crate::traits::term::TyTerm::Tuple(_)
                         | crate::traits::term::TyTerm::Array(..)
-                ) && reference_free(source)
+                ) && reference_free(source, false)
             })
             .map(|source| ArgumentType { source, descriptor }))
     }
@@ -1373,6 +1457,28 @@ impl RunMachine {
             QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
             QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
         };
+        // A generic result mentioning an associated type of its bound
+        // parameters (`-> Result<F, F::Err>`) is normalized with them.
+        if let Some(result) = contracts.source_result.as_ref()
+            && crate::frontend::associated_types::contains_projection(result)
+            && !crate::frontend::call_contracts::closed_term(result)
+            && let Some(members) = self.members.clone()
+        {
+            let bindings = contracts
+                .runtime_substitution
+                .iter()
+                .filter_map(|(key, ty)| {
+                    self.store.descriptor_source_term(*ty).map(|term| (*key, term))
+                })
+                .collect();
+            let bound = crate::frontend::associated_types::substitute(result, &bindings);
+            if let QueryPoll::Ready(Ok(Some(normalized))) =
+                crate::frontend::associated_types::normalize(db, graph, &sources, &members, &bound)
+                && crate::frontend::call_contracts::closed_term(&normalized)
+            {
+                contracts.source_result = Some(normalized);
+            }
+        }
         // An associated-type result (`-> T::V`) is normalized with the bound
         // generics; when it cannot be yet, the returned value supplies it.
         let mut projection_result = false;
@@ -2576,6 +2682,18 @@ impl RunMachine {
                 }
                 QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
             }
+            // A `ValuePath` naming a constant or static whose value is not
+            // yet evaluated enters its initializer first.
+            if self.initializer_demand.is_some() {
+                match self.enter_initializer(db) {
+                    QueryPoll::Ready(Ok(())) => continue,
+                    QueryPoll::Ready(Err(error)) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                }
+            }
             match self.prepare_pattern_names(db, id) {
                 QueryPoll::Ready(Ok(())) => {}
                 QueryPoll::Ready(Err(error)) => {
@@ -2604,8 +2722,10 @@ impl RunMachine {
                             .find_map(|op| match op {
                                 Op::SetHint {
                                     child,
-                                    hint: crate::ir::op::HintRecipe::Primitive(p),
-                                } if Some(*child) == result => Some(*p),
+                                    hint:
+                                        hint @ (crate::ir::op::HintRecipe::Primitive(_)
+                                        | crate::ir::op::HintRecipe::Written(_)),
+                                } if Some(*child) == result => Some(hint.clone()),
                                 _ => None,
                             });
                         (
@@ -2722,10 +2842,22 @@ impl RunMachine {
                             match self.select_method_call(
                                 db, site.0, &name, &explicit, &arguments, place,
                             ) {
-                                QueryPoll::Ready(Ok(call)) => {
+                                QueryPoll::Ready(Ok(methods::MethodCall::Selected(call))) => {
                                     self.pending_bytes =
                                         self.pending_bytes.saturating_add(call.bytes);
                                     self.pending.insert(self.frame.call_identity(site.0), call);
+                                }
+                                QueryPoll::Ready(Ok(methods::MethodCall::Deferred {
+                                    declaration,
+                                    call,
+                                })) => {
+                                    self.start_deferred_trait_call(
+                                        site.0,
+                                        declaration,
+                                        call,
+                                        &arguments,
+                                    );
+                                    continue;
                                 }
                                 QueryPoll::Ready(Err(error)) => {
                                     self.terminal = true;
@@ -2758,8 +2890,7 @@ impl RunMachine {
                                 )))) => match self.prepare_selected_argument_call(
                                     db, callee, &explicit, &arguments,
                                 ) {
-                                    QueryPoll::Ready(Ok(mut call)) => {
-                                        call.monomorphic = true;
+                                    QueryPoll::Ready(Ok(call)) => {
                                         self.pending_bytes =
                                             self.pending_bytes.saturating_add(call.bytes);
                                         self.pending.insert(self.frame.call_identity(site.0), call);
@@ -2921,6 +3052,11 @@ impl RunMachine {
                             }
                             QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
                         }
+                        // Impls differing by the trait's arguments wait for
+                        // the last argument: no selected call to hint from.
+                        if !self.pending.contains_key(&self.frame.call_identity(site.0)) {
+                            continue;
+                        }
                         if let Some(next) = call_next.as_ref() {
                             match self.prepare_later_argument_hint(db, site.0, argument, next) {
                                 QueryPoll::Ready(Ok(())) => {}
@@ -3042,8 +3178,7 @@ impl RunMachine {
                                     ))) => match self.prepare_selected_argument_call(
                                         db, callee, &explicit, &arguments,
                                     ) {
-                                        QueryPoll::Ready(Ok(mut call)) => {
-                                            call.monomorphic = true;
+                                        QueryPoll::Ready(Ok(call)) => {
                                             self.pending_bytes =
                                                 self.pending_bytes.saturating_add(call.bytes);
                                             self.pending
@@ -3125,10 +3260,6 @@ impl RunMachine {
                                 return RunPoll::Fault(error);
                             }
                         }
-                        let monomorphic = self
-                            .pending
-                            .get(&self.frame.call_identity(site.0))
-                            .is_some_and(|selected| selected.monomorphic);
                         let mut types = Vec::new();
                         let mut cells = Vec::new();
                         for slot in arguments {
@@ -3150,12 +3281,10 @@ impl RunMachine {
                                     Some(view) => Some(view),
                                     None => self.store.descriptor_source_term(descriptor),
                                 };
-                                let view = match view {
-                                    Some(view) if monomorphic => {
-                                        Some(self.frame.bound_view(&view, &self.store))
-                                    }
-                                    view => view,
-                                };
+                                // The caller's own generic parameters are
+                                // its runtime instantiation at the boundary:
+                                // a callee contract never sees them rigid.
+                                let view = view.map(|view| self.frame.bound_view(&view, &self.store));
                                 let argument = reached_argument_type(descriptor, view)?;
                                 Ok((cell, argument))
                             })();
@@ -3200,19 +3329,33 @@ impl RunMachine {
                             match self.call_result_source_hint(result_slot) {
                                 Ok(Some(hint)) => Some(hint),
                                 Ok(None) => {
-                                    match call_result_hint {
-                                        Some(primitive) => {
-                                            let hinted = crate::frontend::call_contracts::primitive_runtime_id(primitive)
-                                            .and_then(primitive_argument_type);
-                                            match hinted {
-                                                Ok(hint) => Some(hint),
-                                                Err(error) => {
-                                                    self.terminal = true;
-                                                    return RunPoll::Fault(error);
+                                    // The Type the call recipe itself states for
+                                    // its result ahead of the call (a primitive,
+                                    // or a written Type decided by the common
+                                    // source constraints from the value's uses).
+                                    let hinted = match &call_result_hint {
+                                        Some(crate::ir::op::HintRecipe::Primitive(primitive)) => {
+                                            crate::frontend::call_contracts::primitive_runtime_id(*primitive)
+                                                .and_then(primitive_argument_type)
+                                                .map(Some)
+                                        }
+                                        Some(crate::ir::op::HintRecipe::Written(written)) => {
+                                            match (written.source(), written.materialize(&mut self.store)) {
+                                                (Some(source), Ok(Some(descriptor))) => {
+                                                    Ok(Some(ArgumentType { source, descriptor }))
                                                 }
+                                                (_, Err(error)) => Err(error),
+                                                _ => Ok(None),
                                             }
                                         }
-                                        None => None,
+                                        _ => Ok(None),
+                                    };
+                                    match hinted {
+                                        Ok(hint) => hint,
+                                        Err(error) => {
+                                            self.terminal = true;
+                                            return RunPoll::Fault(error);
+                                        }
                                     }
                                 }
                                 Err(e) => {
@@ -3221,13 +3364,10 @@ impl RunMachine {
                                 }
                             }
                         };
-                        let result_hint = match result_hint {
-                            Some(mut hint) if monomorphic => {
-                                hint.source = self.frame.bound_view(&hint.source, &self.store);
-                                Some(hint)
-                            }
-                            hint => hint,
-                        };
+                        let result_hint = result_hint.map(|mut hint| {
+                            hint.source = self.frame.bound_view(&hint.source, &self.store);
+                            hint
+                        });
                         match self.prepare_source_call(
                             db,
                             &name,

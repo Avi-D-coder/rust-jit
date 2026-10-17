@@ -318,6 +318,15 @@ impl<T: crate::cmp::PartialEq> crate::cmp::PartialEq for Option<T> {
 }
 impl<T: crate::cmp::Eq> crate::cmp::Eq for Option<T> {}
 
+impl<T: crate::fmt::Debug> crate::fmt::Debug for Option<T> {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        match self {
+            Option::Some(value) => f.debug_tuple("Some").field(value).finish(),
+            Option::None => f.write_str("None"),
+        }
+    }
+}
+
 impl<T> crate::convert::From<T> for Option<T> {
     fn from(val: T) -> Option<T> {
         Option::Some(val)

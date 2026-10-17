@@ -432,9 +432,20 @@ fn unanswerable_numeric_relations_stay_explicit_and_never_guess() {
             BindingConstraintState::Resolved(PrimitiveType::Usize),
             "{edition}"
         );
+        // A generic callee's result takes the Type its arguments state
+        // (`T` is `[u8; 2]` here); a result no argument fixes states none.
         assert_eq!(
             first_literal_let(
                 "fn f<T>(t: T) -> T { t }\nfn main() { let n = 3; let v = f([1u8, 2]); let x = v[n]; }",
+                edition,
+                false
+            ),
+            BindingConstraintState::Resolved(PrimitiveType::Usize),
+            "{edition}"
+        );
+        assert_eq!(
+            first_literal_let(
+                "fn f<T>() -> T { loop {} }\nfn main() { let n = 3; let v = f(); let x = v[n]; }",
                 edition,
                 false
             ),
@@ -758,10 +769,15 @@ fn structural_relations_project_the_component_variable() {
             "fn main() { let n = 3; let a: [u32; 2] = [n, 1]; }",
             Resolved(PrimitiveType::U32),
         ),
-        // A range index reads a slice, not an element: the held route.
+        // A range index reads a slice of the base's elements: they share the
+        // array's one Type, fixed by a later use or by the i32 fallback.
         (
             "fn main() { let n = 3; let arr = [n, 2]; let s = &arr[..]; }",
-            Unconstrained,
+            Resolved(PrimitiveType::I32),
+        ),
+        (
+            "fn main() { let n = 3; let arr = [n, 2]; let s: &[u8] = &arr[1..]; }",
+            Resolved(PrimitiveType::U8),
         ),
         // A position after `..` needs the matched arity: the held route.
         (
@@ -1169,3 +1185,247 @@ fn callee_type_parameters_relate_their_positions_and_bounds() {
     }
 }
 
+/// An `if let` / `while let` clause matches its scrutinee against its pattern
+/// as a `let` statement does: a binding of the clause relates the scrutinee.
+#[test]
+fn let_clauses_relate_their_scrutinee_and_pattern() {
+    use BindingConstraintState::Resolved;
+    use PrimitiveType::*;
+    for edition in [2015, 2018, 2021, 2024] {
+        for (text, expected) in [
+            (
+                "fn main() { let xs = [13, 1, 5]; if let [a, ..] = xs { let b: u8 = a; } }",
+                U8,
+            ),
+            (
+                "fn main() { let p = (1, 2); while let (a, _) = p { let b: i64 = a; break; } }",
+                I64,
+            ),
+        ] {
+            let goals = literal_goals(text, edition, false);
+            assert_eq!(goals.first(), Some(&Resolved(expected)), "{edition}: {text} {goals:?}");
+        }
+    }
+}
+
+/// The type arguments of every call, method call and value path whose open
+/// type arguments the common source constraints decided from later uses, in
+/// source order (`None` for an argument the hint leaves to inference).
+fn open_arguments(
+    text: &str,
+    edition: u16,
+    retained: bool,
+) -> Vec<Vec<Option<crate::traits::term::TyTerm>>> {
+    let (mut db, local) = world(text, edition, retained);
+    let body = local.context().source().index().body().clone();
+    let graph = ready(db.fetch(&SyntaxProvider, QueryKey::SourceConstraints(body.clone())));
+    let QueryValue::SourceConstraints(graph) = graph.value.as_ref() else {
+        panic!();
+    };
+    let nodes: Vec<_> = graph
+        .facts()
+        .iter()
+        .enumerate()
+        .filter(|(_, fact)| {
+            matches!(
+                fact.kind(),
+                FactKind::Call | FactKind::MethodCall | FactKind::Path
+            )
+        })
+        .map(|(id, _)| u32::try_from(id).unwrap())
+        .collect();
+    let mut resolved = Vec::new();
+    let start = db.trace.events.len();
+    for node in nodes {
+        let value = ready(db.fetch(
+            &SyntaxProvider,
+            QueryKey::BindingConstraints(crate::ir::pc::PcKey {
+                body: body.clone(),
+                node,
+                phase: 0,
+            }),
+        ));
+        let QueryValue::BindingConstraints(source) = value.value.as_ref() else {
+            panic!();
+        };
+        if source.state() != BindingConstraintState::ResolvedType {
+            continue;
+        }
+        let written = source.written().expect("resolved Type has its written form");
+        let crate::ir::written_type::WrittenType::Generic { args, .. } = written else {
+            panic!("expected a generic nominal hint: {written:?}");
+        };
+        resolved.push(args.iter().map(|arg| arg.source()).collect());
+    }
+    // Demand-driven source facts only: no executable thunk, pattern plan or
+    // another body's structure is prepared to decide a Type.
+    assert!(
+        !db.trace.events[start..].iter().any(|event| matches!(
+            &event.key,
+            QueryKey::Thunk(_) | QueryKey::PatternPlan(_)
+        ) || matches!(&event.key, QueryKey::BodyStructure(other) if other != &body)),
+        "{text}"
+    );
+    resolved
+}
+
+#[test]
+fn open_type_arguments_are_decided_by_later_uses() {
+    use crate::traits::term::TyTerm::Primitive as P;
+    use PrimitiveType::*;
+    const DECLARATIONS: &str = "enum Maybe<T> { No, Yes(T) }\n\
+        struct W<T> { a: Maybe<T>, n: u32 }\n\
+        impl<T> W<T> {\n\
+            fn new() -> W<T> { W { a: Maybe::No, n: 0 } }\n\
+            fn set(&mut self, x: T) {}\n\
+            fn count(&self) -> u32 { self.n }\n\
+        }\n\
+        fn takes(w: &W<i64>) {}\n\
+        fn takes_mut(w: &mut W<u32>) {}\n\
+        fn id<T>(t: T) -> W<T> { W { a: Maybe::No, n: 0 } }\n";
+    let cases: &[(&str, &[&[Option<crate::traits::term::TyTerm>]])] = &[
+        // A method whose declared signature relates the receiver's argument.
+        ("let mut w = W::new(); w.set(7u8);", &[&[Some(P(U8))]]),
+        // An unsuffixed literal beside no other relation takes the fallback.
+        ("let mut w = W::new(); w.set(1);", &[&[Some(P(I32))]]),
+        ("let mut w = W::new(); w.set(1); w.set(2u16);", &[&[Some(P(U16))]]),
+        // Typed parameters, through a shared and a mutable borrow.
+        ("let w = W::new(); takes(&w);", &[&[Some(P(I64))]]),
+        ("let mut w = W::new(); takes_mut(&mut w);", &[&[Some(P(U32))]]),
+        // An assignment gives both places one Type.
+        (
+            "let mut x = Maybe::No; x = Maybe::Yes(3u16);",
+            &[&[Some(P(U16))]],
+        ),
+        // A comparison of two values of one nominal Type.
+        (
+            "let a = Maybe::No; let b = Maybe::Yes(5i64); let c = a == b;",
+            &[&[Some(P(I64))]],
+        ),
+        // A field of another Type states nothing; the literal still falls back.
+        (
+            "let mut w = W::new(); w.set(2); let k = w.n + 1;",
+            &[&[Some(P(I32))]],
+        ),
+        // The argument fixes the parameter: nothing is open.
+        ("let w = id(7u8);", &[]),
+        // No later use decides it: the explicit diagnostic stays.
+        ("let w: W<u8> = W::new(); let n = w.count();", &[&[Some(P(U8))]]),
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for (body, expected) in cases {
+            let text = format!("{DECLARATIONS}fn main() {{ {body} }}");
+            let mut found = open_arguments(&text, edition, false);
+            // The annotated case also resolves its own call; ignore order.
+            found.retain(|args| !args.is_empty());
+            assert_eq!(&found[..], *expected, "{edition}: {body}");
+        }
+        // Undecided: no relation states the Type, so no hint is published.
+        let text = format!("{DECLARATIONS}fn main() {{ let w: W<_> = W::new(); }}");
+        assert!(open_arguments(&text, edition, false).iter().all(|args| args.iter().all(|arg| arg.is_some())));
+        let text = format!("{DECLARATIONS}fn main() {{ let w = W::new(); }}");
+        assert_eq!(open_arguments(&text, edition, false), Vec::<Vec<_>>::new(), "{edition}");
+        let text = format!("{DECLARATIONS}fn main() {{ let w = W::new(); let n = w.count(); }}");
+        assert_eq!(open_arguments(&text, edition, false), Vec::<Vec<_>>::new(), "{edition}");
+    }
+}
+
+/// The same open type argument is decided identically when the call or the
+/// deciding use is written by hand, emitted by a user macro, emitted through
+/// a wrapper macro, or built inside a standard macro's expansion: the joined
+/// published body is one ordinary source route.
+#[test]
+fn generated_and_handwritten_open_arguments_share_one_route() {
+    use crate::traits::term::TyTerm::Primitive as P;
+    const DECLARATIONS: &str = "enum Maybe<T> { No, Yes(T) }\n\
+        struct W<T> { a: Maybe<T>, n: u32 }\n\
+        impl<T> W<T> {\n\
+            fn new() -> W<T> { W { a: Maybe::No, n: 0 } }\n\
+            fn set(&mut self, x: T) {}\n\
+        }\n";
+    let bodies = [
+        "let mut w = W::new(); w.set(7u8);",
+        "macro_rules! make { () => { W::new() } }\n\
+         fn main() { let mut w = make!(); w.set(7u8); }",
+        "macro_rules! put { ($w:ident, $x:expr) => { $w.set($x) } }\n\
+         fn main() { let mut w = W::new(); put!(w, 7u8); }",
+        "macro_rules! make { () => { W::new() } }\n\
+         macro_rules! outer { () => { make!() } }\n\
+         fn main() { let mut w = outer!(); w.set(7u8); }",
+        "macro_rules! both { ($x:expr) => { { let mut w = W::new(); w.set($x); } } }\n\
+         fn main() { both!(7u8); }",
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for body in bodies {
+            let text = if body.starts_with("let ") {
+                format!("{DECLARATIONS}fn main() {{ {body} }}")
+            } else {
+                format!("{DECLARATIONS}{body}")
+            };
+            for retained in [false, true] {
+                if retained == false && !body.starts_with("let ") {
+                    continue;
+                }
+                let found = open_arguments(&text, edition, retained);
+                assert_eq!(found, vec![vec![Some(P(PrimitiveType::U8))]], "{edition} {retained}: {text}");
+            }
+        }
+    }
+}
+
+/// Typed literals and tuples state their own Type; a value built from a
+/// field Type that names the constructed value's parameters is decided by
+/// that value's other relations.
+#[test]
+fn open_arguments_take_literal_tuple_and_dependent_types() {
+    use crate::traits::term::{GenericArg, RegionTerm, TyTerm, TyTerm::Primitive as P};
+    use PrimitiveType::*;
+    const DECLARATIONS: &str = "enum Maybe<T> { No, Yes(T) }\n\
+        struct Boxed<T>(T);\n\
+        struct W<T> { a: Maybe<T>, n: u32 }\n\
+        impl<T> W<T> {\n\
+            fn new() -> W<T> { W { a: Maybe::No, n: 0 } }\n\
+            fn set(&mut self, x: T) {}\n\
+        }\n\
+        struct List<T> { value: T, next: Maybe<Boxed<List<T>>> }\n";
+    let text = |body: &str| format!("{DECLARATIONS}fn main() {{ {body} }}");
+    for edition in [2015, 2018, 2021, 2024] {
+        let found = open_arguments(&text("let mut w = W::new(); w.set(\"a\");"), edition, false);
+        assert_eq!(
+            found,
+            vec![vec![Some(TyTerm::Ref(RegionTerm::Static, false, Box::new(TyTerm::Str)))]],
+            "{edition}"
+        );
+        let found = open_arguments(&text("let mut w = W::new(); w.set((1u8, true));"), edition, false);
+        assert_eq!(
+            found,
+            vec![vec![Some(TyTerm::Tuple(vec![P(U8), P(Bool)]))]],
+            "{edition}"
+        );
+        // `next` holds a `Maybe<Boxed<List<T>>>`, where `T` is the type of
+        // the literal `1` beside it: the placeholder is decided by the
+        // constructed value's own relations (the integer fallback).
+        let found = open_arguments(
+            &text("let list = List { value: 1, next: Maybe::No }; let n = list.value;"),
+            edition,
+            false,
+        );
+        let [args] = &found[..] else {
+            panic!("{edition} {found:?}");
+        };
+        let [Some(TyTerm::Nominal(_, boxed))] = &args[..] else {
+            panic!("{edition} {args:?}");
+        };
+        let [GenericArg::Type(TyTerm::Nominal(_, list))] = &boxed[..] else {
+            panic!("{edition} {boxed:?}");
+        };
+        assert_eq!(&list[..], &[GenericArg::Type(P(I32))], "{edition}");
+        // The same field decided by a later method call.
+        let found = open_arguments(
+            &text("let mut a = W::new(); a.set(2u16); let list = List { value: 1u16, next: Maybe::No };"),
+            edition,
+            false,
+        );
+        assert!(found.len() == 2, "{edition} {found:?}");
+    }
+}

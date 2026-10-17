@@ -61,6 +61,10 @@ pub enum ExpressionKind {
     Macro,
     Other,
     Borrow,
+    /// An expression rustc lowers to a call of a language-item function
+    /// (`a..=b` is `RangeInclusive::new(a, b)`), lowered as an ordinary
+    /// call of that function.
+    LangCall,
 }
 impl ExpressionKind {
     fn tag(self) -> u32 {
@@ -85,6 +89,7 @@ impl ExpressionKind {
             Self::Macro => 17,
             Self::Other => 18,
             Self::Borrow => 19,
+            Self::LangCall => 20,
         }
     }
 }
@@ -495,6 +500,9 @@ fn expression_kind(expr: &ast::Expr) -> ExpressionKind {
         ast::Expr::PathExpr(_) => ExpressionKind::Path,
         ast::Expr::ClosureExpr(_) => ExpressionKind::Closure,
         ast::Expr::MacroExpr(_) => ExpressionKind::Macro,
+        ast::Expr::RangeExpr(range) if super::constructors::range_inclusive_bounds(range).is_some() => {
+            ExpressionKind::LangCall
+        }
         _ => ExpressionKind::Other,
     }
 }

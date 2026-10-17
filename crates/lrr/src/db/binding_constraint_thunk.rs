@@ -73,6 +73,18 @@ pub(super) fn thunk(
                     Some(node) => Consumer::Literal(node.id),
                     None => return QueryPoll::Ready(Ok(None)),
                 }
+            } else if matches!(
+                syntax.kind(),
+                ra_ap_syntax::SyntaxKind::PATH_EXPR
+                    | ra_ap_syntax::SyntaxKind::CALL_EXPR
+                    | ra_ap_syntax::SyntaxKind::METHOD_CALL_EXPR
+            ) {
+                // A call or fieldless constructor whose type arguments later
+                // code decides: its own result Type, stated at its Entry.
+                if crate::ir::pc::Phase::Entry.code().ok() != Some(pc.phase) {
+                    return QueryPoll::Ready(Ok(None));
+                }
+                Consumer::Open
             } else if ast::BinExpr::cast(syntax)
                 .and_then(|binary| binary.op_kind())
                 .is_some_and(|op| matches!(op, ast::BinaryOp::Assignment { op: Some(_) }))
@@ -94,11 +106,13 @@ pub(super) fn thunk(
         Consumer::Statement => statement(db, parsed, body, index, pc),
         Consumer::Compound => compound_assignment(db, parsed, body, index, pc),
         Consumer::Literal(node) => literal(db, parsed, body, index, pc, node),
+        Consumer::Open => open_expression(db, parsed, body, index, pc),
     }
 }
 enum Consumer {
     Statement,
     Compound,
+    Open,
     // The literal's own goal node (itself, or the literal a negation wraps).
     Literal(NodeId),
 }
@@ -176,6 +190,72 @@ fn literal(
             }),
     )
 }
+/// A call or fieldless constructor whose open type arguments the common
+/// source constraints decided from its later uses. The ordinary recipe is
+/// kept; only the reached result Type is stated first, as a parent's
+/// `SetHint` would. Anything unresolved keeps the ordinary route untouched.
+fn open_expression(
+    db: &mut Database,
+    parsed: &ParsedFile,
+    body: &BodyHandle,
+    index: &BodyIndex,
+    pc: &PcKey,
+) -> QueryPoll<Option<Provided>> {
+    let key = PcKey {
+        body: pc.body.clone(),
+        node: pc.node,
+        phase: 0,
+    };
+    let prepared = ready!(db.fetch(&SyntaxProvider, QueryKey::PreparedBindingPlan(key)));
+    let QueryValue::PreparedBindingPlan(plan) = prepared.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("binding constraint query variant differs")));
+    };
+    let proof = plan.constraints();
+    if !matches!(proof.state(), BindingConstraintState::ResolvedType) {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let Some(guard) = plan.guard().filter(|_| prepared.cacheable) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let Some(hint) = (match proof.hint_for(index, pc) {
+        Ok(hint) => hint,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    }) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    // Only a node with a value of its own states a result Type.
+    if index
+        .nodes()
+        .get(pc.node as usize)
+        .is_none_or(|node| node.value.is_none())
+    {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let recipe = match parsed.initial_thunk(body, index, pc) {
+        Ok(recipe) => recipe,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    if matches!(
+        recipe.recipe().exit,
+        crate::ir::recipe::RecipeExit::Fault(_)
+    ) {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let recipe = match recipe.with_entry_hint(index, hint) {
+        Ok(recipe) => recipe,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    QueryPoll::Ready(
+        recipe
+            .with_shared_prepared_inputs(std::sync::Arc::clone(guard))
+            .map(|recipe| {
+                Some(Provided {
+                    value: QueryValue::Thunk(Box::new(recipe)),
+                    cacheable: true,
+                })
+            }),
+    )
+}
 /// A `let` statement's own binding goal.
 fn statement(
     db: &mut Database,
@@ -195,7 +275,10 @@ fn statement(
     };
     let proof = plan.constraints();
     match proof.state() {
-        BindingConstraintState::NoNumericDemand | BindingConstraintState::Unconstrained => {
+        // A `let` statement never carries an open expression's answer.
+        BindingConstraintState::NoNumericDemand
+        | BindingConstraintState::Unconstrained
+        | BindingConstraintState::ResolvedType => {
             return QueryPoll::Ready(Ok(None));
         }
         BindingConstraintState::Pending { node, demand } => {

@@ -102,6 +102,9 @@ enum FieldProjection {
     Concrete(TyTerm, Vec<Step>),
     /// The declaration's type parameter and the steps that remain below it.
     Parameter(u32, Vec<Step>),
+    /// A written structure around the declaration's type parameters, reached
+    /// with no steps remaining (`Box<List<T>>`).
+    Structured(WrittenType),
     Unknown,
 }
 impl FieldType {
@@ -135,6 +138,17 @@ impl FieldType {
                     prefix.push(Step::Deref);
                     walk(target, parameter, prefix, out);
                     prefix.pop();
+                }
+                // A nominal's own type arguments (`Option<T>`, `Box<List<T>>`).
+                WrittenType::Generic { args, .. } => {
+                    for (position, arg) in args.iter().enumerate() {
+                        let Ok(position) = u32::try_from(position) else {
+                            return;
+                        };
+                        prefix.push(Step::TypeArgument(position));
+                        walk(arg, parameter, prefix, out);
+                        prefix.pop();
+                    }
                 }
                 _ => {}
             }
@@ -174,6 +188,16 @@ impl FieldType {
                     walk(target, prefix, out);
                     prefix.pop();
                 }
+                WrittenType::Generic { args, .. } => {
+                    for (position, arg) in args.iter().enumerate() {
+                        let Ok(position) = u32::try_from(position) else {
+                            return;
+                        };
+                        prefix.push(Step::TypeArgument(position));
+                        walk(arg, prefix, out);
+                        prefix.pop();
+                    }
+                }
                 _ => {}
             }
         }
@@ -207,7 +231,7 @@ impl FieldType {
                 };
             }
             let Some(step) = rest.first() else {
-                return FieldProjection::Unknown;
+                return FieldProjection::Structured(written.clone());
             };
             written = match (step, written) {
                 (Step::AutoDeref, WrittenType::Ref { target, .. }) => target,
@@ -224,6 +248,12 @@ impl FieldType {
                 }
                 (Step::Element, WrittenType::Array(element, _) | WrittenType::Slice(element)) => {
                     element
+                }
+                (Step::TypeArgument(position), WrittenType::Generic { args, .. }) => {
+                    match args.get(*position as usize) {
+                        Some(arg) => arg,
+                        None => return FieldProjection::Unknown,
+                    }
                 }
                 _ => return FieldProjection::Unknown,
             };
@@ -278,6 +308,43 @@ impl Constructed {
     pub(super) fn arity(&self) -> usize {
         self.names.len()
     }
+    /// How deeply the declared fields' Types nest.
+    pub(super) fn depth(&self) -> usize {
+        fn written(written: &WrittenType) -> usize {
+            1 + match written {
+                WrittenType::Tuple(members) => members.iter().map(written_depth).max().unwrap_or(0),
+                WrittenType::Array(inner, _) | WrittenType::Slice(inner) => written_depth(inner),
+                WrittenType::Ref { target, .. } => written_depth(target),
+                WrittenType::Generic { args, .. } => {
+                    args.iter().map(written_depth).max().unwrap_or(0)
+                }
+                _ => 0,
+            }
+        }
+        fn written_depth(inner: &WrittenType) -> usize {
+            written(inner)
+        }
+        self.fields
+            .iter()
+            .map(|field| match field {
+                FieldType::Written(inner) => written(inner),
+                FieldType::Concrete(term) => super::term_depth(term),
+                FieldType::Parameter(_) => 1,
+            })
+            .max()
+            .unwrap_or(0)
+    }
+    /// The declaration's own type parameter count.
+    pub(super) fn type_parameter_count(&self) -> usize {
+        self.type_parameters
+    }
+    /// Whether some declared field of this constructor names type parameter
+    /// `ordinal`.
+    pub(super) fn names_parameter(&self, ordinal: u32) -> bool {
+        self.fields
+            .iter()
+            .any(|field| field.parameters().iter().any(|(index, _)| *index == ordinal))
+    }
     /// The type-parameter positions inside declaration field `field`.
     pub(super) fn field_parameters(&self, field: u32) -> Vec<(u32, Vec<Step>)> {
         self.fields
@@ -293,6 +360,25 @@ impl Constructed {
             (0..self.type_parameters)
                 .map(|_| GenericArg::Type(super::methods::open()))
                 .collect(),
+        )
+    }
+    /// The constructed value's nominal Type with each type argument a
+    /// distinct variable of this declaration (position order), for a
+    /// constructor whose arguments do not decide them.
+    pub(super) fn open_type(&self) -> (TyTerm, Vec<crate::traits::term::ParamKey>) {
+        let keys: Vec<_> = (0..self.type_parameters)
+            .filter_map(|ordinal| u32::try_from(ordinal).ok())
+            .map(|ordinal| crate::traits::term::ParamKey {
+                definition: self.definition,
+                ordinal,
+            })
+            .collect();
+        (
+            TyTerm::Nominal(
+                self.definition,
+                keys.iter().map(|key| GenericArg::Type(TyTerm::Param(*key))).collect(),
+            ),
+            keys,
         )
     }
 }
@@ -439,6 +525,11 @@ impl<'a> Component<'a> {
                     crate::syntax::source_constraints::FactKind::Call => {
                         ready!(self.call_constructor(db, node))
                     }
+                    // A fieldless constructor named as a value (`None`).
+                    crate::syntax::source_constraints::FactKind::Path => {
+                        ready!(self.selected_constructor(db, node))
+                            .filter(|constructed| constructed.arity() == 0)
+                    }
                     _ => None,
                 }
             }
@@ -446,6 +537,9 @@ impl<'a> Component<'a> {
                 ready!(self.pattern_constructor(db, root, slot))
             }
         };
+        if let Some(constructed) = &found {
+            self.note_depth(constructed.depth());
+        }
         self.constructors.insert(site, found.clone());
         QueryPoll::Ready(Ok(found))
     }
@@ -492,6 +586,14 @@ impl<'a> Component<'a> {
         ) {
             return QueryPoll::Ready(Ok(None));
         }
+        self.selected_constructor(db, callee)
+    }
+    /// The constructor a value path selects through the ordinary Value goal.
+    fn selected_constructor(
+        &mut self,
+        db: &mut Database,
+        callee: NodeId,
+    ) -> QueryPoll<Option<Arc<Constructed>>> {
         let selected = ready!(db.fetch(
             &SyntaxProvider,
             QueryKey::EnteredValue(entry(self.key, callee))
@@ -648,6 +750,25 @@ impl<'a> Component<'a> {
         }
     }
 
+    /// The constructed value's own type arguments as placeholders: each is
+    /// decided by this same demand started at the value's type argument.
+    fn dependent_arguments(&mut self, node: NodeId, constructed: &Constructed) -> Vec<GenericArg> {
+        let definition = Digest::of_bytes(
+            &[b"lrr/open-dependent".as_slice(), &node.0.to_le_bytes()].concat(),
+        );
+        (0..constructed.type_parameters)
+            .filter_map(|ordinal| u32::try_from(ordinal).ok())
+            .map(|ordinal| {
+                let key = crate::traits::term::ParamKey {
+                    definition,
+                    ordinal,
+                };
+                self.dependents.insert(key, (node, ordinal));
+                GenericArg::Type(TyTerm::Param(key))
+            })
+            .collect()
+    }
+
     /// `node` constructs `constructed` from `operands` (declaration field,
     /// operand expression) and the current member is `node` itself: the
     /// selected field's operand and its declared Type relate to the rest of
@@ -666,7 +787,14 @@ impl<'a> Component<'a> {
             via = via.unwrap(Step::AutoDeref).expect("checked autoderef step");
         }
         let Some(first) = via.steps.first().copied() else {
-            self.defer(node, ConstraintDemand::NumericFamily);
+            // The whole constructed value is an open variable: its Type is
+            // the declaration applied to its own type arguments.
+            if self.open {
+                let args = self.dependent_arguments(node, constructed);
+                self.candidate(node, TyTerm::Nominal(constructed.definition, args));
+            } else {
+                self.defer(node, ConstraintDemand::NumericFamily);
+            }
             return QueryPoll::Ready(Ok(()));
         };
         match first {
@@ -745,7 +873,21 @@ impl<'a> Component<'a> {
                     }
                 }
             }
-            FieldProjection::Unknown => self.defer(node, ConstraintDemand::ExpressionRelation),
+            // An open variable that is a Type built around the constructed
+            // value's own parameters (`next: Option<Box<List<T>>>` of
+            // `List { value: 1, next: None }`): the parameters are decided
+            // by the constructed value's other relations.
+            FieldProjection::Structured(written) if self.open => {
+                let args = self.dependent_arguments(node, constructed);
+                if let Some(term) = instantiate(&written, &args) {
+                    self.candidate(node, term);
+                } else {
+                    self.defer(node, ConstraintDemand::ExpressionRelation);
+                }
+            }
+            FieldProjection::Structured(_) | FieldProjection::Unknown => {
+                self.defer(node, ConstraintDemand::ExpressionRelation)
+            }
         }
         QueryPoll::Ready(Ok(()))
     }
@@ -834,13 +976,21 @@ impl<'a> Component<'a> {
             QueryPoll::Ready(Ok(NominalFieldBinding::Deferred { .. })) => {
                 return QueryPoll::Ready(Ok(None));
             }
-            QueryPoll::Ready(Err(error)) if super::not_closed(&error) => {
+            // A member this Type does not declare (or does not expose here)
+            // is not one of its fields: the access lies elsewhere.
+            QueryPoll::Ready(Err(error))
+                if super::not_closed(&error) || error.code == "LRR-E-TYPE-SCHEMA" =>
+            {
                 return QueryPoll::Ready(Ok(None));
             }
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        QueryPoll::Ready(Ok(FieldType::of(bound.field_type()).under(args)))
+        let field = FieldType::of(bound.field_type()).under(args);
+        if let Some(field) = &field {
+            self.note_depth(super::term_depth(field));
+        }
+        QueryPoll::Ready(Ok(field))
     }
 
     /// The written field pattern of a constructor pattern for declaration
@@ -911,6 +1061,71 @@ impl<'a> Component<'a> {
             field.and_then(|field| self.field_step(&constructed, field))
         ))
     }
+    /// `access` is `base.f`, the variable is the base's nominal Type
+    /// `definition<args>` own type argument `position` (the projection
+    /// `rest` below it): the declared Type of field `f` under the base's
+    /// static nominal Type holds the variable wherever it names that type
+    /// parameter; another field relates nothing.
+    pub(super) fn type_argument_field(
+        &mut self,
+        db: &mut Database,
+        access: NodeId,
+        base: TyTerm,
+        position: u32,
+        rest: Vec<Step>,
+    ) -> QueryPoll<()> {
+        let step = match self
+            .fact(access)
+            .map(|fact| (fact.field(), fact.member()))
+        {
+            Ok((Some(position), _)) => Step::Field(position),
+            Ok((None, Some(row))) => Step::Named(row),
+            _ => {
+                self.defer(access, ConstraintDemand::ExpressionRelation);
+                return QueryPoll::Ready(Ok(()));
+            }
+        };
+        let TyTerm::Nominal(definition, args) = base else {
+            self.defer(access, ConstraintDemand::ExpressionRelation);
+            return QueryPoll::Ready(Ok(()));
+        };
+        // The variable's position is a marker parameter; every other
+        // position is whatever inference decides.
+        let marker = crate::traits::term::ParamKey {
+            definition: Digest::default(),
+            ordinal: u32::MAX,
+        };
+        let mut seen = 0usize;
+        let args: Vec<GenericArg> = args
+            .iter()
+            .map(|arg| match arg {
+                GenericArg::Type(_) => {
+                    seen += 1;
+                    GenericArg::Type(if seen - 1 == position as usize {
+                        TyTerm::Param(marker)
+                    } else {
+                        super::methods::open()
+                    })
+                }
+                other => other.clone(),
+            })
+            .collect();
+        let Some(field) = ready!(self.nominal_field(db, definition, &args, &step)) else {
+            self.defer(access, ConstraintDemand::ExpressionRelation);
+            return QueryPoll::Ready(Ok(()));
+        };
+        for mut path in super::generics::parameter_paths(&field, &marker) {
+            path.extend_from_slice(&rest);
+            self.expression_via(
+                Some(access),
+                super::Via {
+                    steps: path,
+                    strict: false,
+                },
+            );
+        }
+        QueryPoll::Ready(Ok(()))
+    }
     /// The written record names of a pattern's resolution slot.
     pub(super) fn pattern_record_names(&self, root: NodeId, slot: u32) -> Option<&'a [String]> {
         let plan: &'a crate::syntax::source_constraints::SourceConstraintPlan = self.plan;
@@ -969,6 +1184,36 @@ impl<'a> Component<'a> {
             self.defer(root, ConstraintDemand::Binding);
             return QueryPoll::Ready(Ok(()));
         };
+        // The variable is one of the matched Type's own type arguments: every
+        // field pattern whose declared Type names that parameter matches it.
+        if let Step::TypeArgument(parameter) = first {
+            let rest = self.via.unwrap(first).expect("checked first step");
+            let written = self.pattern_record_names(root, slot);
+            for field in 0..constructed.arity() {
+                let Ok(field_number) = u32::try_from(field) else {
+                    break;
+                };
+                let Some(item) =
+                    self.constructor_subpattern(&constructed, form, field_number, written)
+                else {
+                    continue;
+                };
+                for mut path in constructed.fields[field].parameter_paths(parameter) {
+                    path.extend_from_slice(&rest.steps);
+                    let current = std::mem::replace(
+                        &mut self.via,
+                        super::Via {
+                            steps: path,
+                            strict: false,
+                        },
+                    );
+                    let result = self.walk_current(db, root, item);
+                    self.via = current;
+                    ready!(result);
+                }
+            }
+            return QueryPoll::Ready(Ok(()));
+        }
         match self.field_match(&constructed, &first) {
             FieldMatch::Field(field) => {
                 let rest = self.via.unwrap(first).expect("checked first step");

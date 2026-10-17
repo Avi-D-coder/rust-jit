@@ -77,18 +77,42 @@ pub(crate) enum ExplicitType {
         term: TyTerm,
         written: Arc<WrittenType>,
     },
+    /// The caller's own generic Type parameter (`TyTerm::Param`): its runtime
+    /// instantiation is the reached frame's binding, read at the call.
+    Parameter(TyTerm),
 }
 impl ExplicitType {
     pub(crate) fn source(&self) -> &TyTerm {
         match self {
             Self::Selected(source) => source.source(),
-            Self::Written { term, .. } => term,
+            Self::Written { term, .. } | Self::Parameter(term) => term,
+        }
+    }
+    /// The run-local descriptor under the calling frame: a caller generic
+    /// parameter takes the frame's reached binding.
+    pub(crate) fn descriptor(
+        &self,
+        frame: &crate::vm::frame::Frame,
+        store: &mut GuestStore,
+    ) -> Result<TypeId, Diagnostic> {
+        match self {
+            Self::Parameter(TyTerm::Param(key)) => frame.parameter_hint(*key)?.ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "explicit caller parameter has no reached runtime binding".into(),
+                )
+            }),
+            _ => self.materialize(store),
         }
     }
     /// The run-local descriptor; a structure naming no single runtime Type
     /// (a trait object or slice pointee) has none.
     pub(crate) fn materialize(&self, store: &mut GuestStore) -> Result<TypeId, Diagnostic> {
         match self {
+            Self::Parameter(_) => Err(Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "explicit caller parameter needs its calling frame's binding".into(),
+            )),
             Self::Selected(source) => source.materialize(store),
             Self::Written { written, .. } => written.materialize(store)?.ok_or_else(|| {
                 Diagnostic::new(
@@ -105,6 +129,7 @@ impl ExplicitType {
                 .heap_bytes()
                 .and_then(|bytes| bytes.checked_add(std::mem::size_of::<WrittenType>()))
                 .ok_or_else(crate::runtime::arena::resource),
+            Self::Parameter(term) => term.heap_bytes().ok_or_else(crate::runtime::arena::resource),
         }
     }
 }
@@ -120,6 +145,10 @@ impl StableEncode for ExplicitType {
                 e.u8(1);
                 e.record(term);
                 e.record(written.as_ref());
+            }
+            Self::Parameter(term) => {
+                e.u8(2);
+                e.record(term);
             }
         }
     }
@@ -166,10 +195,19 @@ pub struct PreparedExplicitTypeArguments {
     call_observation: Digest,
     guard: Arc<PreparedInputGuard>,
     rows: Arc<[ExplicitTypeArgument]>,
+    /// The call result's written Type when its open type arguments are
+    /// decided by later code (the common source constraints); its inputs are
+    /// part of `guard`.
+    inferred: Option<Arc<WrittenType>>,
     bytes: usize,
     fingerprint: Digest,
 }
 impl PreparedExplicitTypeArguments {
+    /// The call result's Type decided from the value's later uses, stated
+    /// first by the call's recipe as a parent's `SetHint` would.
+    pub(crate) fn inferred_result(&self) -> Option<&Arc<WrittenType>> {
+        self.inferred.as_ref()
+    }
     pub(crate) fn key(&self) -> &PcKey {
         &self.key
     }
@@ -200,6 +238,7 @@ impl PreparedExplicitTypeArguments {
             && self.definition == other.definition
             && self.signature == other.signature
             && self.plan.source_identity() == other.plan.source_identity()
+            && self.inferred == other.inferred
             && self.rows.len() == other.rows.len()
             && self.rows.iter().zip(other.rows.iter()).all(|(a, b)| {
                 a.ordinal == b.ordinal
@@ -289,8 +328,99 @@ impl StableEncode for PreparedExplicitTypeArguments {
         e.digest(self.call_observation);
         e.record(self.target.as_ref());
         e.digest(self.guard.fingerprint());
+        e.option(&self.inferred, |e, written| e.record(written.as_ref()));
         e.sequence(&self.rows, |e, row| e.record(row));
     }
+}
+/// One written Type argument selected at its indexed occurrence.
+pub(crate) struct SelectedTypeArgument {
+    pub(crate) source: ExplicitType,
+    /// The certified inputs the selection depends on.
+    pub(crate) guards: Vec<Arc<PreparedInputGuard>>,
+    /// The Type plan's observation, for a plain named leaf.
+    pub(crate) observation: Option<Digest>,
+}
+/// A written Type argument at the indexed Type occurrence `site` (`range`) of
+/// the body `plan` owns, selected as a `let` annotation's written Type is:
+/// each named leaf at its own indexed occurrence, with the written structure
+/// (`()`, `&str`, `[u8; 2]`) around it. `key` is the owning call's entry PC.
+/// `None` for the inference hole `_`. Shared by a call's own Type arguments
+/// and by the arguments written on a path's owner segment
+/// (`Vec::<T>::new()`), which bind the owner impl's parameters.
+pub(crate) fn select_argument(
+    db: &mut Database,
+    plan: &Arc<PreparedSourceLocalPlan>,
+    key: &PcKey,
+    site: &PcKey,
+    range: SourceRange,
+) -> QueryPoll<Option<SelectedTypeArgument>> {
+    let owner = plan.context().source();
+    let index = owner.index();
+    let Some(written) = checked!(owner.parsed().syntax_at(range, |node| {
+        ast::Type::can_cast(node.kind())
+    }))
+    .and_then(ast::Type::cast) else {
+        return QueryPoll::Ready(Err(fault("explicit Type argument syntax absent")));
+    };
+    match checked!(owner.parsed().annotation_shape(
+        owner.body(),
+        index,
+        key.body.definition,
+        &written
+    )) {
+        Some(AnnotationShape::Infer) => return QueryPoll::Ready(Ok(None)),
+        Some(shape)
+            if !matches!(&shape, AnnotationShape::Leaf(node) if node.0 == site.node) =>
+        {
+            let mut selected = Vec::new();
+            let written = ready!(crate::db::let_annotation_thunk::select(
+                db,
+                key,
+                &shape,
+                &mut selected
+            ));
+            let Some(term) = written.source() else {
+                return QueryPoll::Ready(Err(Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "explicit Type argument with an inference hole requires inference".into(),
+                )));
+            };
+            return QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
+                source: ExplicitType::Written {
+                    term,
+                    written: Arc::new(written),
+                },
+                guards: selected,
+                observation: None,
+            })));
+        }
+        _ => {}
+    }
+    // A leaf naming the caller's own generic parameter has no source
+    // descriptor of its own: the calling frame's binding instantiates it.
+    if let crate::frontend::source_types::NamedTypePreparation::Parameter(key) =
+        ready!(plan.prepare_named_body_type(db, NodeId(site.node)))
+    {
+        return QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
+            source: ExplicitType::Parameter(TyTerm::Param(key)),
+            guards: Vec::new(),
+            observation: None,
+        })));
+    }
+    let value = ready!(db.fetch(&SyntaxProvider, QueryKey::PreparedTypePlan(site.clone())));
+    let QueryValue::PreparedTypePlan(ty) = value.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("explicit Type plan query variant differs")));
+    };
+    if !value.cacheable || !plan.same_environment(ty.retained_plan()) {
+        return QueryPoll::Ready(Err(fault("explicit Type argument owning source differs")));
+    }
+    checked!(ty.guard().require_current(db));
+    let source = checked!(ty.goal().source_for(index, site, range));
+    QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
+        source: ExplicitType::Selected(source.clone()),
+        guards: vec![Arc::clone(ty.guard())],
+        observation: Some(value.fingerprint),
+    })))
 }
 pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedExplicitTypeArguments> {
     if key.phase != 0 {
@@ -401,108 +531,70 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedExpli
         };
         // The argument's written structure, selected exactly as a `let`
         // annotation's: each named leaf at its own indexed Type occurrence.
-        let owner = plan.context().source();
-        let Some(written) = checked!(owner.parsed().syntax_at(site.range(), |node| {
-            ast::Type::can_cast(node.kind())
-        }))
-        .and_then(ast::Type::cast) else {
-            return QueryPoll::Ready(Err(fault("explicit Type argument syntax absent")));
-        };
-        match checked!(owner.parsed().annotation_shape(
-            owner.body(),
-            index,
-            key.body.definition,
-            &written
-        )) {
+        let Some(selected) = ready!(select_argument(db, plan, key, site.key(), site.range()))
+        else {
             // `_` is an inference hole: the parameter is inferred as if the
             // argument were not written.
-            Some(AnnotationShape::Infer) => continue,
-            Some(shape)
-                if !matches!(&shape, AnnotationShape::Leaf(node) if node.0 == site.key().node) =>
-            {
-                let mut selected = Vec::new();
-                let written = ready!(crate::db::let_annotation_thunk::select(
-                    db,
-                    key,
-                    &shape,
-                    &mut selected
-                ));
-                let Some(term) = written.source() else {
-                    return QueryPoll::Ready(Err(Diagnostic::new(
-                        "LRR-E-UNSUPPORTED",
-                        "explicit Type argument with an inference hole requires inference"
-                            .into(),
-                    )));
-                };
-                let mut fingerprint = StableEncoder::new("lrr/v1/explicit-written-type-guards");
-                for guard in &selected {
-                    checked!(guard.require_current(db));
-                    fingerprint.digest(guard.fingerprint());
-                    guard_bytes = checked!(add(
-                        guard_bytes,
-                        checked!(add(guard.metadata_bytes(), ARC_HEADER))
-                    ));
-                }
-                let source = ExplicitType::Written {
-                    term,
-                    written: Arc::new(written),
-                };
-                bytes = checked!(add(bytes, checked!(source.heap_bytes())));
-                if guards.try_reserve(selected.len()).is_err() {
-                    return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-                }
-                guards.extend(selected);
-                rows.push(ExplicitTypeArgument {
-                    ordinal: parameter.ordinal,
-                    site: site.key().clone(),
-                    range: site.range(),
-                    observation: StableEncode::fingerprint(&source),
-                    source,
-                    guard_fingerprint: fingerprint.finish(),
-                });
-                continue;
-            }
-            _ => {}
-        }
-        let value = ready!(db.fetch(
-            &SyntaxProvider,
-            QueryKey::PreparedTypePlan(site.key().clone())
-        ));
-        let QueryValue::PreparedTypePlan(ty) = value.value.as_ref() else {
-            return QueryPoll::Ready(Err(fault("explicit Type plan query variant differs")));
+            continue;
         };
-        if !value.cacheable || !plan.same_environment(ty.retained_plan()) {
-            return QueryPoll::Ready(Err(fault("explicit Type argument owning source differs")));
+        let SelectedTypeArgument {
+            source,
+            guards: selected,
+            observation,
+        } = selected;
+        let mut fingerprint = StableEncoder::new("lrr/v1/explicit-written-type-guards");
+        for guard in &selected {
+            checked!(guard.require_current(db));
+            fingerprint.digest(guard.fingerprint());
+            guard_bytes = checked!(add(
+                guard_bytes,
+                checked!(add(guard.metadata_bytes(), ARC_HEADER))
+            ));
         }
-        checked!(ty.guard().require_current(db));
-        let source = checked!(ty.goal().source_for(index, site.key(), site.range()));
-        let reserved = checked!(source.heap_bytes());
-        bytes = checked!(add(bytes, reserved));
-        checked!(add(checked!(add(bytes, guard_bytes)), buffers));
-        let owned = source.clone();
-        bytes = checked!(add(
-            checked!(
-                bytes
-                    .checked_sub(reserved)
-                    .ok_or_else(crate::runtime::arena::resource)
-            ),
-            checked!(owned.heap_bytes())
-        ));
-        guard_bytes = checked!(add(
-            guard_bytes,
-            checked!(add(ty.guard().metadata_bytes(), ARC_HEADER))
-        ));
-        checked!(add(checked!(add(bytes, guard_bytes)), buffers));
-        guards.push(Arc::clone(ty.guard()));
+        bytes = checked!(add(bytes, checked!(source.heap_bytes())));
+        let guard_fingerprint = match (&source, selected.first()) {
+            (ExplicitType::Selected(_), Some(guard)) => guard.fingerprint(),
+            _ => fingerprint.finish(),
+        };
+        if guards.try_reserve(selected.len()).is_err() {
+            return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+        }
+        guards.extend(selected);
         rows.push(ExplicitTypeArgument {
             ordinal: parameter.ordinal,
             site: site.key().clone(),
             range: site.range(),
-            source: ExplicitType::Selected(owned),
-            guard_fingerprint: ty.guard().fingerprint(),
-            observation: value.fingerprint,
+            guard_fingerprint,
+            observation: observation.unwrap_or_else(|| StableEncode::fingerprint(&source)),
+            source,
         });
     }
+    // The Type later code decides for the call's open type arguments. A
+    // plan that cannot state it leaves the explicit route unchanged.
+    let inferred = match db.fetch(&SyntaxProvider, QueryKey::PreparedBindingPlan(key.clone())) {
+        QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+            QueryValue::PreparedBindingPlan(binding) if value.cacheable => {
+                match (
+                    binding.constraints().state(),
+                    binding.guard(),
+                    binding.constraints().written(),
+                ) {
+                    (
+                        crate::frontend::binding_constraints::BindingConstraintState::ResolvedType,
+                        Some(guard),
+                        Some(written),
+                    ) => {
+                        guards.push(Arc::clone(guard));
+                        Some(Arc::new(written.clone()))
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
+        QueryPoll::Ready(Err(_)) => None,
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
     let mut references = Vec::new();
     checked!(add(
         bytes,
@@ -540,6 +632,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedExpli
         call: call_identity,
         call_observation: call.fingerprint,
         guard: Arc::new(joined),
+        inferred,
         rows: Arc::from(rows.into_boxed_slice()),
         bytes,
         fingerprint: Digest([0; 32]),

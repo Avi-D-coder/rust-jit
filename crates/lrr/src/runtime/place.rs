@@ -238,6 +238,9 @@ pub(crate) struct ResolvedPlace {
     /// `Some((start, len))`: the place is the unsized element window of the
     /// array at `target`, and `ty` is its `[T]` descriptor.
     pub window: Option<(u32, u32)>,
+    /// The place was reached through an interior-mutable `&mut` (see
+    /// `ReferenceRecord::interior`): reborrows of it keep that writability.
+    pub interior: bool,
 }
 pub(crate) fn checked_chain_bytes(count: usize) -> Result<usize, Diagnostic> {
     count

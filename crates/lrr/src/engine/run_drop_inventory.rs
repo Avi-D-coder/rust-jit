@@ -33,6 +33,8 @@ impl RunMachine {
             self.store.install_copy_inventory(types);
         }
         self.store.install_owned_box(members.owned_box());
+        self.store.install_owned_vec(members.owned_vec());
+        self.store.install_unsafe_cell(members.unsafe_cell());
         self.members = Some(members);
         Ok(())
     }

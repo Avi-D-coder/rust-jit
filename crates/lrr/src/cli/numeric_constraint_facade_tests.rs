@@ -327,3 +327,195 @@ fn main() {
         "1\n",
     );
 }
+
+const GENERIC_WRAPPER: &str = "struct W<T> { a: Option<T>, n: u32 }
+impl<T> W<T> {
+    fn new() -> W<T> { W { a: None, n: 0 } }
+    fn set(&mut self, x: T) { self.a = Some(x); self.n += 1; }
+    fn count(&self) -> u32 { self.n }
+}
+fn make<T>() -> W<T> { W { a: None, n: 0 } }
+fn takes(w: &W<i64>) -> u32 { w.count() }
+fn make2<T>(n: u32, m: u32) -> W<T> { W { a: None, n: n + m } }
+struct M;
+impl M { fn build<T>(&self, n: u32) -> W<T> { W { a: None, n } } }
+enum Either<T> { Left(T), Right(u8) }
+struct List<T> { value: T, next: Option<Box<List<T>>> }
+";
+
+/// A call whose result names type parameters no argument fixes (`W::new()`,
+/// `Vec::new()`, `None`) takes them from the code that uses the value: the
+/// declared signature of a method called on it, an assignment, a typed
+/// parameter, a comparison. One shared constraint service answers all of
+/// them, so the same program text runs whether the value is bound by a
+/// `let`, passed on directly or built inside `assert_ne!`.
+#[test]
+fn open_type_arguments_are_fixed_by_later_uses() {
+    for (label, body, expected) in [
+        // A method whose parameter relates the receiver's argument.
+        (
+            "method",
+            "let mut w = W::new(); w.set(7u8); println!(\"{}\", w.count());",
+            "1\n",
+        ),
+        // The declared parameter of a free function.
+        (
+            "parameter",
+            "let w = W::new(); println!(\"{}\", takes(&w));",
+            "0\n",
+        ),
+        // A free generic function whose result names its parameter.
+        (
+            "free-fn",
+            "let mut w = make(); w.set(7u8); println!(\"{}\", w.count());",
+            "1\n",
+        ),
+        // Only unsuffixed literals reach the variable: rustc's fallback.
+        (
+            "fallback",
+            "let mut w = W::new(); w.set(1); w.set(2); println!(\"{}\", w.count());",
+            "2\n",
+        ),
+        // A fieldless generic variant assigned a value later.
+        (
+            "variant",
+            "let mut x = None; if w_flag() { x = Some(1u8); } println!(\"{}\", x.is_some());",
+            "true\n",
+        ),
+        (
+            "typed-binding",
+            "let x = None; let y: Option<u8> = x; println!(\"{}\", y.is_none());",
+            "true\n",
+        ),
+        // A variant built inside the standard macro's own expansion.
+        (
+            "assert-ne",
+            "assert_ne!(Some(1), None); println!(\"ok\");",
+            "ok\n",
+        ),
+        // The standard library's own `Vec<T>` is ordinary source.
+        (
+            "vec-strings",
+            "let mut v = Vec::new(); v.push(\"a\"); v.push(\"b\"); println!(\"{}\", v.len());",
+            "2\n",
+        ),
+        (
+            "vec-range",
+            "let mut v = Vec::new(); for i in 0..3u8 { v.push(i); } println!(\"{}\", v.len());",
+            "3\n",
+        ),
+        (
+            "vec-parameter",
+            "let mut a = Vec::new(); a.push(1); println!(\"{}\", sum(a));",
+            "1\n",
+        ),
+        // A `for` loop over a reference reads its elements' Type.
+        (
+            "vec-for-ref",
+            "let v = vec![1u8, 2, 3]; let mut out = Vec::new(); for x in &v { out.push(*x); } \
+             let mut total = 0; for x in &out { total += *x; } println!(\"{} {}\", out.len(), total);",
+            "3 6\n",
+        ),
+        // Patterns match the variable through the constructor's fields.
+        (
+            "match-pattern",
+            "let mut x = None; match x { None => { x = Some(0u8); } Some(_) => {} } \
+             println!(\"{}\", x.is_some());",
+            "true\n",
+        ),
+        (
+            "if-let",
+            "let y = None; if let Some(v) = y { let z: u16 = v; println!(\"{}\", z); } \
+             println!(\"{}\", y.is_none());",
+            "true\n",
+        ),
+        // A constructor call whose fields do not name the type parameter.
+        (
+            "ctor-open",
+            "let e = Either::Right(3); match e { Either::Left(x) => { let k: u32 = x; \
+             println!(\"{}\", k); } Either::Right(n) => println!(\"{}\", n), }",
+            "3\n",
+        ),
+        // A field Type built around the constructed value's own parameter.
+        (
+            "dependent",
+            "let list = List { value: 1, next: None }; println!(\"{}\", list.value);",
+            "1\n",
+        ),
+        (
+            "tuple",
+            "let mut v = Vec::new(); v.push((1u8, true)); println!(\"{}\", v.len());",
+            "1\n",
+        ),
+        // The Type of one open value decided through another's elements.
+        (
+            "chained",
+            "let mut names = Vec::new(); names.push(String::from(\"a\")); \
+             let mut lens = Vec::new(); for n in &names { lens.push(n.len()); } \
+             println!(\"{}\", lens.len());",
+            "1\n",
+        ),
+        (
+            "enumerate",
+            "let mut s = Vec::new(); for (i, c) in \"ab\".chars().enumerate() { s.push((i, c)); } \
+             println!(\"{}\", s.len());",
+            "2\n",
+        ),
+        (
+            "builder-chain",
+            "let mut w = W::new(); w.set(5u8); w.set(6); println!(\"{}\", w.count());",
+            "2\n",
+        ),
+        // A call with arguments, and a method call, whose results name
+        // parameters their arguments do not fix.
+        (
+            "arguments",
+            "let mut w = make2(3, 4); w.set(5u8); println!(\"{}\", w.count());",
+            "8\n",
+        ),
+        (
+            "method-result",
+            "let m = M; let mut x = m.build(9); x.set(\"s\"); println!(\"{}\", x.count());",
+            "10\n",
+        ),
+    ] {
+        let source = format!(
+            "{GENERIC_WRAPPER}fn w_flag() -> bool {{ true }}
+fn sum(v: Vec<u8>) -> usize {{ v.len() }}
+fn main() {{ {body} }}
+"
+        );
+        prints(label, &source, expected);
+    }
+}
+
+/// A literal inside a `Box` reaches its uses through the box: a method
+/// receiver is stripped of references only (never of a box, which a box
+/// method such as `deref` takes itself), so a chain of box methods relates
+/// each level once and ends; a field access dereferences the box to its
+/// content before selecting the field.
+#[test]
+fn numeric_demand_through_boxes_terminates_and_selects_content_fields() {
+    prints(
+        "box-deref-chain",
+        "use std::ops::Deref;
+fn main() {
+    let c = Box::new(Box::new(4));
+    println!(\"{}\", *c.deref().deref());
+}
+",
+        "4\n",
+    );
+    prints(
+        "box-fields",
+        "struct P { x: i32 }
+struct Q(i32);
+fn main() {
+    let b = Box::new(P { x: 4 });
+    let q = Box::new(Q(5));
+    println!(\"{} {}\", b.x, q.0);
+}
+",
+        "4 5\n",
+    );
+}

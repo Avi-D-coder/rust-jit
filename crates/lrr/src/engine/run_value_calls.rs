@@ -354,10 +354,22 @@ impl RunMachine {
             Ok(entry) => entry,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
+        // The closure's parameters take the reached closed Types of the
+        // call's arguments as their source views (every parameter or none),
+        // so a forwarded reference keeps its source identity in the body.
+        let source_parameters = types
+            .iter()
+            .map(|ty| {
+                self.store
+                    .descriptor_source_term(*ty)
+                    .filter(crate::vm::frame::Frame::admissible_parameter_source)
+            })
+            .collect::<Option<Vec<_>>>()
+            .unwrap_or_default();
         let contracts = crate::frontend::call_contracts::PreparedCallContracts {
             closed_references: None,
             definition: owner.identity(),
-            source_parameters: Vec::new(),
+            source_parameters,
             parameter_descriptors: types.clone(),
             source_substitution: BTreeMap::new(),
             runtime_substitution: BTreeMap::new(),

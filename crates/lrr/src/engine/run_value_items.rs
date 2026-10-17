@@ -85,10 +85,12 @@ impl RunMachine {
             .map(|()| true)
     }
     /// A static read by value at an already selected PC: only the cell's
-    /// current state is read (no name selection or source work).
+    /// current state is read (no name selection or source work). A Copy
+    /// aggregate is copied out of the static's storage.
     pub(super) fn read_static_value(
         &mut self,
         cell: crate::runtime::cell::CellId,
+        view: Option<crate::traits::term::TyTerm>,
     ) -> Result<(), Diagnostic> {
         let value = match self.store.state(cell)? {
             crate::runtime::cell::CellState::Live(value) if (1..=7).contains(&value.kind) => {
@@ -97,11 +99,10 @@ impl RunMachine {
                     value,
                 }
             }
-            _ => {
-                return Err(unsupported(
-                    "static read by value requires an aggregate copy of its storage".into(),
-                ));
-            }
+            _ => ItemValue::Ticket {
+                ticket: self.store.read_owning(cell)?,
+                view,
+            },
         };
         self.frame.prepare_item_value(value);
         Ok(())
@@ -309,6 +310,71 @@ impl RunMachine {
             Err(error) => QueryPoll::Ready(Err(error)),
         }
     }
+    /// Whether the written path at `pc` is in place context: its own Exit
+    /// recipe addresses its value as a place (`ValuePlace`), as a borrow,
+    /// projection or method autoref of the path does.
+    fn path_forms_place(&self, db: &mut Database, pc: &PcKey) -> QueryPoll<bool> {
+        let exit = match Phase::Exit.code() {
+            Ok(phase) => PcKey {
+                body: pc.body.clone(),
+                node: pc.node,
+                phase,
+            },
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        match db.fetch(&SyntaxProvider, QueryKey::Thunk(exit)) {
+            QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
+                QueryValue::Thunk(recipe) => QueryPoll::Ready(Ok(recipe
+                    .recipe()
+                    .operations
+                    .iter()
+                    .any(|op| matches!(op, Op::ValuePlace { .. })))),
+                _ => QueryPoll::Ready(Err(call_fault("value path exit recipe differs"))),
+            },
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    /// Whether the written path at `pc` is the operand of an explicit shared
+    /// borrow (`&PATH`): its parent's operand recipe forms `Borrow` with
+    /// shared access directly from the path's place.
+    fn path_is_shared_borrow_operand(&self, db: &mut Database, pc: &PcKey) -> QueryPoll<bool> {
+        let body = &self.frame.body;
+        let Some(parent) = body.nodes()[pc.node as usize].parent else {
+            return QueryPoll::Ready(Ok(false));
+        };
+        if body.nodes()[parent.0 as usize].role
+            != crate::syntax::body_index::NodeRole::Expression(
+                crate::syntax::body_index::ExpressionKind::Borrow,
+            )
+        {
+            return QueryPoll::Ready(Ok(false));
+        }
+        let key = match body.pc(parent, Phase::Operand(0)) {
+            Ok(key) => key,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        match db.fetch(&SyntaxProvider, QueryKey::Thunk(key)) {
+            QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
+                QueryValue::Thunk(recipe) => QueryPoll::Ready(Ok(recipe
+                    .recipe()
+                    .operations
+                    .iter()
+                    .any(|op| {
+                        matches!(
+                            op,
+                            Op::Borrow {
+                                access: crate::ir::op::BorrowAccess::Shared,
+                                ..
+                            }
+                        )
+                    }))),
+                _ => QueryPoll::Ready(Err(call_fault("borrow operand recipe differs"))),
+            },
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
     /// The value of the Value item `identity` (a module item, or a body-local
     /// item selected by the entered lexical scope) read by this `ValuePath`.
     pub(super) fn prepare_selected_item_value(
@@ -326,47 +392,70 @@ impl RunMachine {
             definition_edition: 0,
         };
         let value = match item_kind {
-            Some(ItemKind::Constant) => match self.constant_item(db, definition.identity) {
-                QueryPoll::Ready(Ok(value)) => value,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            },
+            // E-R5-007: a constant the pure evaluator does not produce runs
+            // its initializer through the interpreter (demanded here, entered
+            // by the dispatcher, then prepared again at this PC).
+            Some(ItemKind::Constant) => {
+                // `&CONST` is rustc's promotable borrow of an rvalue; any other
+                // use of the constant as a place (a `&mut`, a method autoref)
+                // addresses a fresh temporary.
+                let place = match self.path_is_shared_borrow_operand(db, &pc) {
+                    QueryPoll::Ready(Ok(place)) => place,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let promote = |value: ItemValue| {
+                    if place {
+                        ItemValue::Promotable(Box::new(value))
+                    } else {
+                        value
+                    }
+                };
+                if let Some((ticket, view)) = self.initialized_values.remove(&pc) {
+                    self.frame
+                        .prepare_item_value(promote(ItemValue::Ticket { ticket, view }));
+                    return QueryPoll::Ready(Ok(()));
+                }
+                if let Some((cell, view)) = self.const_cells.get(&definition.identity).cloned() {
+                    promote(ItemValue::ConstCell { cell, view })
+                } else {
+                    match self.constant_item(db, definition.identity) {
+                        QueryPoll::Ready(Ok(value)) => promote(value),
+                        QueryPoll::Ready(Err(_)) => {
+                            self.demand_initializer(definition.identity, false);
+                            return QueryPoll::Ready(Ok(()));
+                        }
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                }
+            }
             // An immutable static read by value observes its initializer's
             // const-evaluated value. Its place (a borrow, projection or a
             // `static mut` access) has an address identity this copy lacks.
             Some(ItemKind::Static) => {
-                // The path's own Exit recipe addresses its value as a place
-                // exactly when the written path is in place context.
-                let exit = match Phase::Exit.code() {
-                    Ok(phase) => PcKey {
-                        body: pc.body.clone(),
-                        node: pc.node,
-                        phase,
-                    },
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                };
-                let place = match db.fetch(&SyntaxProvider, QueryKey::Thunk(exit)) {
-                    QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
-                        QueryValue::Thunk(recipe) => recipe
-                            .recipe()
-                            .operations
-                            .iter()
-                            .any(|op| matches!(op, Op::ValuePlace { .. })),
-                        _ => return QueryPoll::Ready(Err(call_fault("static path exit recipe differs"))),
-                    },
+                let place = match self.path_forms_place(db, &pc) {
+                    QueryPoll::Ready(Ok(place)) => place,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 };
                 let cell = match self.static_cell(db, definition.identity) {
                     QueryPoll::Ready(Ok(cell)) => cell,
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    // E-R5-007: its initializer runs through the interpreter.
+                    QueryPoll::Ready(Err(_)) => {
+                        self.demand_initializer(definition.identity, true);
+                        return QueryPoll::Ready(Ok(()));
+                    }
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 };
                 if place {
                     let view = match self.store.state(cell) {
-                        Ok(crate::runtime::cell::CellState::Live(value)) => {
-                            primitive_view(&value).map(crate::traits::term::TyTerm::Primitive)
-                        }
+                        Ok(crate::runtime::cell::CellState::Live(value)) => self
+                            .static_views
+                            .get(&definition.identity)
+                            .cloned()
+                            .or_else(|| {
+                                primitive_view(&value).map(crate::traits::term::TyTerm::Primitive)
+                            }),
                         Ok(_) => None,
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     };
@@ -378,8 +467,9 @@ impl RunMachine {
                 // A value read observes the static's current contents (a
                 // `static mut` may have been written): the selected cell is
                 // cached per PC, and each execution reads only its state.
-                self.static_reads.insert(pc, cell);
-                return QueryPoll::Ready(self.read_static_value(cell));
+                let view = self.static_views.get(&definition.identity).cloned();
+                self.static_reads.insert(pc, (cell, view.clone()));
+                return QueryPoll::Ready(self.read_static_value(cell, view));
             }
             // A function item is a zero-sized value of its own callable
             // type; calling it selects the same source function a direct
@@ -496,8 +586,7 @@ impl RunMachine {
                     anchor
                 }
             };
-            let slot = u32::try_from(self.static_cells.len())
-                .map_err(|_| Diagnostic::new("LRR-E-INTERNAL-IR", "static slot overflow".into()))?;
+            let slot = self.next_static_slot()?;
             let (ty, _) = constant_layout(&mut self.store, &wire)?;
             let cell = self.store.new_cell(
                 crate::runtime::cell::StorageContract::Exact(ty),

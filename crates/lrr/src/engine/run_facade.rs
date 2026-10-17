@@ -159,26 +159,43 @@ impl RunMachine {
         let identity = self.frame.call_identity(site.0);
         self.frame.facade_calls.remove(&identity);
         let tickets = packet.take_tickets(&mut self.store)?;
+        let mut moved_in = Vec::new();
         let outcome = execute(
             function,
             &tickets,
             &mut self.store,
             &mut self.output,
             &mut self.format_sinks,
+            &mut moved_in,
         );
         let keep = match &outcome {
             Ok(FacadeOutcome::Value(ticket)) => Some(*ticket),
             _ => None,
         };
         for ticket in tickets {
-            if Some(ticket) != keep {
+            if Some(ticket) != keep && !moved_in.contains(&ticket) {
                 self.store.discard(ticket)?;
             }
         }
         match outcome? {
             FacadeOutcome::Value(ticket) => {
+                // An owning or reference result keeps its closed source view
+                // (the descriptor records it exactly), as a constructed
+                // nominal value does; scalars need none.
+                let value = self.store.peek_ticket(ticket)?;
+                let view = match value.kind {
+                    8 | 9 => self
+                        .store
+                        .effective_type(value)?
+                        .and_then(|ty| self.frame.constructed_source(ty, &self.store)),
+                    _ => None,
+                };
                 self.frame
-                    .resume_call(consumed.resume, consumed.result, ticket, &mut self.store)
+                    .resume_call(consumed.resume, consumed.result, ticket, &mut self.store)?;
+                match view {
+                    Some(view) => self.frame.set_source_view(consumed.result, Some(view)),
+                    None => Ok(()),
+                }
             }
             FacadeOutcome::Panic(message) => {
                 self.frame.panic_in_suspended_call()?;
@@ -193,12 +210,60 @@ impl RunMachine {
     }
 }
 
+/// The host libm/IEEE operation a `core::intrinsics::lrr_f{32,64}_math` code
+/// names, for both float widths (the bodies of `f32`/`f64` `sqrt`, `sin`,
+/// `floor`, ...). The codes are the constants of `facade/core/float_impls.rs`.
+macro_rules! host_float_math {
+    ($op:expr, $a:expr, $b:expr, $c:expr) => {
+        match $op {
+            0 => Some($a.sqrt()),
+            1 => Some($a.floor()),
+            2 => Some($a.ceil()),
+            3 => Some($a.round()),
+            4 => Some($a.trunc()),
+            5 => Some($a.round_ties_even()),
+            6 => Some($a.exp()),
+            7 => Some($a.exp2()),
+            8 => Some($a.ln()),
+            9 => Some($a.log10()),
+            10 => Some($a.log2()),
+            11 => Some($a.sin()),
+            12 => Some($a.cos()),
+            13 => Some($a.tan()),
+            14 => Some($a.asin()),
+            15 => Some($a.acos()),
+            16 => Some($a.atan()),
+            17 => Some($a.sinh()),
+            18 => Some($a.cosh()),
+            19 => Some($a.tanh()),
+            20 => Some($a.asinh()),
+            21 => Some($a.acosh()),
+            22 => Some($a.atanh()),
+            23 => Some($a.cbrt()),
+            24 => Some($a.exp_m1()),
+            25 => Some($a.ln_1p()),
+            26 => Some($a.powf($b)),
+            27 => Some($a.atan2($b)),
+            28 => Some($a.hypot($b)),
+            29 => Some($a.mul_add($b, $c)),
+            30 => Some($a.min($b)),
+            31 => Some($a.max($b)),
+            32 => Some($a.copysign($b)),
+            33 => Some($a.abs()),
+            _ => None,
+        }
+    };
+}
+
+/// `moved_in` collects argument tickets the intrinsic moved into the store
+/// itself (a value pushed into a vector); the caller discards the rest.
 fn execute(
     function: LibraryFunction,
     tickets: &[TicketId],
     store: &mut GuestStore,
     output: &mut GuestOutput,
     sinks: &mut super::format_calls::FormatSinks,
+    moved_in: &mut Vec<TicketId>,
 ) -> Result<FacadeOutcome, Diagnostic> {
     let argument = || {
         tickets
@@ -248,9 +313,6 @@ fn execute(
             }
             Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
         }
-        LibraryFunction::Format => Err(facade_fault(
-            "alloc::fmt::format awaits the String library facade",
-        )),
         LibraryFunction::AssertFailed => {
             // core::panicking::assert_failed_inner's message.
             let [kind, left, right, arguments] = tickets else {
@@ -382,6 +444,221 @@ fn execute(
             }
             sinks.append(parent, &padded)?;
             Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
+        }
+        // The text a formatting request's output buffer holds (`to_string`).
+        LibraryFunction::FmtTake => {
+            let sink = store.peek_ticket(argument()?)?.payload;
+            let text = sinks.take(sink)?;
+            Ok(FacadeOutcome::Value(store.immutable_str_ticket(text.as_bytes())?))
+        }
+        // One byte of a str referent.
+        LibraryFunction::StrByte => {
+            let [text, index] = tickets else {
+                return Err(facade_fault("str byte arguments differ"));
+            };
+            let index = usize::try_from(store.peek_ticket(*index)?.payload)
+                .map_err(|_| facade_fault("str byte index overflow"))?;
+            let byte = *store
+                .str_reference_contents(*text)?
+                .as_bytes()
+                .get(index)
+                .ok_or_else(|| facade_fault("str byte index is out of range"))?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unsigned(
+                crate::runtime::shape::TypeId(9),
+                u64::from(byte),
+            )?)?))
+        }
+        LibraryFunction::VecLen => {
+            let vector = store.peek_ticket(argument()?)?;
+            let len = store.vec_len(vector)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unsigned(
+                crate::runtime::shape::TypeId(13),
+                len,
+            )?)?))
+        }
+        LibraryFunction::VecPush | LibraryFunction::VecInsert => {
+            let (vector, index, element) = match tickets {
+                [vector, element] if function == LibraryFunction::VecPush => {
+                    (*vector, None, *element)
+                }
+                [vector, index, element] if function == LibraryFunction::VecInsert => {
+                    (*vector, Some(store.peek_ticket(*index)?.payload), *element)
+                }
+                _ => return Err(facade_fault("vector insertion arguments differ")),
+            };
+            let reference = store.peek_ticket(vector)?;
+            store.vec_insert(reference, index, element)?;
+            moved_in.push(element);
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
+        }
+        LibraryFunction::VecRemove => {
+            let [vector, index] = tickets else {
+                return Err(facade_fault("vector removal arguments differ"));
+            };
+            let reference = store.peek_ticket(*vector)?;
+            let index = store.peek_ticket(*index)?.payload;
+            Ok(FacadeOutcome::Value(store.vec_remove(reference, index)?))
+        }
+        LibraryFunction::VecAsSlice | LibraryFunction::VecAsMutSlice => {
+            let reference = store.peek_ticket(argument()?)?;
+            Ok(FacadeOutcome::Value(store.vec_slice(
+                reference,
+                function == LibraryFunction::VecAsMutSlice,
+            )?))
+        }
+        LibraryFunction::SliceSwap => {
+            let [slice, a, b] = tickets else {
+                return Err(facade_fault("slice swap arguments differ"));
+            };
+            let slice = store.peek_ticket(*slice)?;
+            let (a, b) = (store.peek_ticket(*a)?.payload, store.peek_ticket(*b)?.payload);
+            store.slice_swap(slice, a, b)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
+        }
+        LibraryFunction::VecAppendArray => {
+            let [vector, array] = tickets else {
+                return Err(facade_fault("vector append arguments differ"));
+            };
+            let reference = store.peek_ticket(*vector)?;
+            store.vec_append_array(reference, *array)?;
+            moved_in.push(*array);
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
+        }
+        LibraryFunction::CharFromU32 => {
+            let code = u32::try_from(store.peek_ticket(argument()?)?.payload)
+                .ok()
+                .and_then(char::from_u32)
+                .ok_or_else(|| facade_fault("value is not a Unicode scalar value"))?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::character(code))?))
+        }
+        LibraryFunction::StrSlice => {
+            let [text, start, end] = tickets else {
+                return Err(facade_fault("str slice arguments differ"));
+            };
+            let (start, end) = (store.peek_ticket(*start)?.payload, store.peek_ticket(*end)?.payload);
+            Ok(match store.str_slice_ticket(*text, start, end)? {
+                Ok(slice) => FacadeOutcome::Value(slice),
+                Err(message) => FacadeOutcome::Panic(message),
+            })
+        }
+        LibraryFunction::BytesAsStr => {
+            let reference = store.peek_ticket(argument()?)?;
+            Ok(FacadeOutcome::Value(store.bytes_as_str(reference)?))
+        }
+        LibraryFunction::MemReplace | LibraryFunction::CellReplace => {
+            let [place, incoming] = tickets else {
+                return Err(facade_fault("replacement arguments differ"));
+            };
+            let reference = store.peek_ticket(*place)?;
+            moved_in.push(*incoming);
+            Ok(FacadeOutcome::Value(if function == LibraryFunction::MemReplace {
+                store.mem_replace(reference, *incoming)?
+            } else {
+                store.cell_replace(reference, *incoming)?
+            }))
+        }
+        LibraryFunction::MemSwap => {
+            let [a, b] = tickets else {
+                return Err(facade_fault("swap arguments differ"));
+            };
+            let (a, b) = (store.peek_ticket(*a)?, store.peek_ticket(*b)?);
+            store.mem_swap(a, b)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
+        }
+        LibraryFunction::CellTake => {
+            let reference = store.peek_ticket(argument()?)?;
+            Ok(FacadeOutcome::Value(store.cell_take(reference)?))
+        }
+        LibraryFunction::SharedToMut => {
+            let reference = store.peek_ticket(argument()?)?;
+            Ok(FacadeOutcome::Value(store.shared_to_mut(reference)?))
+        }
+        LibraryFunction::BoxLeak => {
+            let boxed = argument()?;
+            moved_in.push(boxed);
+            Ok(FacadeOutcome::Value(store.leak_box(boxed)?))
+        }
+        LibraryFunction::Forget => {
+            let value = argument()?;
+            moved_in.push(value);
+            Ok(FacadeOutcome::Value(store.forget_value(value)?))
+        }
+        // The IEEE bit pattern of a float and back (`to_bits`/`from_bits`).
+        LibraryFunction::F64Bits | LibraryFunction::F32Bits => {
+            let value = store.peek_ticket(argument()?)?;
+            let (kind, result) = if function == LibraryFunction::F64Bits {
+                (7, crate::runtime::shape::TypeId(12))
+            } else {
+                (6, crate::runtime::shape::TypeId(11))
+            };
+            if value.kind != kind {
+                return Err(facade_fault("float bits argument is not the expected float"));
+            }
+            Ok(FacadeOutcome::Value(
+                store.ticket(ValueRepr::unsigned(result, value.payload)?)?,
+            ))
+        }
+        LibraryFunction::F64FromBits | LibraryFunction::F32FromBits => {
+            let value = store.peek_ticket(argument()?)?;
+            if value.kind != 5 {
+                return Err(facade_fault("float from_bits argument is not an unsigned integer"));
+            }
+            Ok(FacadeOutcome::Value(store.ticket(
+                if function == LibraryFunction::F64FromBits {
+                    ValueRepr::f64(f64::from_bits(value.payload))
+                } else {
+                    ValueRepr::f32(f32::from_bits(
+                        u32::try_from(value.payload)
+                            .map_err(|_| facade_fault("f32 bit pattern exceeds 32 bits"))?,
+                    ))
+                },
+            )?))
+        }
+        LibraryFunction::F64Math | LibraryFunction::F32Math => {
+            let [op, a, b, c] = tickets else {
+                return Err(facade_fault("float operation arguments differ"));
+            };
+            let op = u32::try_from(store.peek_ticket(*op)?.payload)
+                .map_err(|_| facade_fault("float operation code overflow"))?;
+            let (a, b, c) = (
+                store.peek_ticket(*a)?,
+                store.peek_ticket(*b)?,
+                store.peek_ticket(*c)?,
+            );
+            let value = if function == LibraryFunction::F64Math {
+                if [a.kind, b.kind, c.kind] != [7, 7, 7] {
+                    return Err(facade_fault("f64 operation operands are not f64"));
+                }
+                let (a, b, c) = (
+                    f64::from_bits(a.payload),
+                    f64::from_bits(b.payload),
+                    f64::from_bits(c.payload),
+                );
+                host_float_math!(op, a, b, c).map(ValueRepr::f64)
+            } else {
+                if [a.kind, b.kind, c.kind] != [6, 6, 6] {
+                    return Err(facade_fault("f32 operation operands are not f32"));
+                }
+                let (a, b, c) = (
+                    f32::from_bits(a.payload as u32),
+                    f32::from_bits(b.payload as u32),
+                    f32::from_bits(c.payload as u32),
+                );
+                host_float_math!(op, a, b, c).map(ValueRepr::f32)
+            };
+            let value = value.ok_or_else(|| facade_fault("unknown float operation code"))?;
+            Ok(FacadeOutcome::Value(store.ticket(value)?))
+        }
+        LibraryFunction::RefEq => {
+            let [a, b] = tickets else {
+                return Err(facade_fault("reference comparison arguments differ"));
+            };
+            let (a, b) = (store.peek_ticket(*a)?, store.peek_ticket(*b)?);
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::boolean(store.ref_eq(a, b)?))?))
+        }
+        LibraryFunction::VecAsStr => {
+            let reference = store.peek_ticket(argument()?)?;
+            Ok(FacadeOutcome::Value(store.vec_str(reference)?))
         }
         LibraryFunction::Unsupported => Err(Diagnostic::new(
             "LRR-E-FACADE-MISSING",

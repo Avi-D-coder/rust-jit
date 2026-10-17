@@ -273,6 +273,32 @@ pub(super) fn annotations(
         maximum,
     };
     let mut indexed = false;
+    // A `const`/`static` initializer is itself an extending context: the
+    // temporaries its value borrows extend to the item's root scope.
+    if index
+        .scopes()
+        .first()
+        .is_some_and(|scope| scope.kind == ScopeKind::Initializer)
+        && let Some(expression) = ast::Expr::cast(root.clone())
+    {
+        for node in index
+            .nodes()
+            .iter()
+            .filter(|n| matches!(n.role, NodeRole::Expression(_)))
+        {
+            planner.charge(128)?;
+            if planner
+                .ids
+                .insert((node.range.start, node.range.end), node.id)
+                .is_some()
+            {
+                return Err(invalid("duplicate extension expression identity"));
+            }
+        }
+        indexed = true;
+        planner.push(Some(expression), ScopeId(0), &[], Mode::Frontier)?;
+        planner.finish()?;
+    }
     for node in index
         .nodes()
         .iter()

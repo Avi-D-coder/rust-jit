@@ -33,6 +33,9 @@ pub(crate) enum OperatorKind {
     Compound(NumericBinary),
     /// A `for` loop's `IntoIterator::into_iter` / `Iterator::next`.
     Iterator(crate::ir::op::IteratorCall),
+    /// A method receiver's overloaded autoderef step: `Deref::deref`, or
+    /// `DerefMut::deref_mut` when `true`.
+    Deref(bool),
 }
 impl OperatorKind {
     /// The lang-item trait (`core::<module>::<Trait>`) and its method.
@@ -77,6 +80,8 @@ impl OperatorKind {
                 ("iter", "IntoIterator", "into_iter")
             }
             Self::Iterator(crate::ir::op::IteratorCall::Next) => ("iter", "Iterator", "next"),
+            Self::Deref(false) => ("ops", "Deref", "deref"),
+            Self::Deref(true) => ("ops", "DerefMut", "deref_mut"),
         }
     }
     /// Stable key of the operator (selection cache identity).
@@ -86,6 +91,7 @@ impl OperatorKind {
             Self::Unary(operator) => 32 + operator.tag(),
             Self::Compound(operator) => 64 + operator.tag(),
             Self::Iterator(call) => 96 + call.tag(),
+            Self::Deref(mutable) => 128 + u32::from(mutable),
         }
     }
     fn comparison(self) -> bool {
@@ -126,6 +132,38 @@ pub(super) struct OperatorActivation {
     arguments: Option<Vec<OperatorArgument>>,
     /// Dispatcher-owned reference locations, retired after the call.
     owned: Vec<CellId>,
+    /// A method receiver forming itself through overloaded `Deref` steps.
+    receiver: Option<ReceiverProgress>,
+    /// A place operation whose base place takes an overloaded `Deref` step
+    /// first: the base place slot.
+    place_deref: Option<SlotId>,
+}
+/// The dispatcher's finding that the next place operation's base place needs
+/// an overloaded `Deref` step (`DerefMut` when `mutable`) before the
+/// operation itself: `*rc`, `rc.field`, `rc.0`, `guard[i]`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct PlaceDerefDemand {
+    pub(crate) base: SlotId,
+    pub(crate) mutable: bool,
+}
+/// A method receiver's autoderef steps, applied in order; an overloaded step
+/// suspends the receiver operation for its `Deref` call, whose returned
+/// reference continues the walk.
+struct ReceiverProgress {
+    /// Steps not yet applied; the next is last.
+    remaining: Vec<ReceiverStep>,
+    mode: ReceiverMode,
+    unsize: bool,
+    /// The place being dereferenced and the free place slot.
+    current: SlotId,
+    other: SlotId,
+    /// References the walk went through, kept alive until the receiver is
+    /// formed (places derived from them name their referents).
+    parked: Vec<TicketId>,
+    /// The destination's reached expectation (the method's receiver type):
+    /// it constrains the formed receiver, not the intermediate references
+    /// the walk's `Deref` calls return.
+    hint: Option<TypeId>,
 }
 /// The dispatcher's view of a demanded operator method.
 pub(crate) struct OperatorDemand {
@@ -290,6 +328,25 @@ impl Frame {
                     .then_some(OperatorKind::Compound(*operator))
             }
             Op::IteratorCall { call, .. } => Some(OperatorKind::Iterator(*call)),
+            // A place operation whose base takes an overloaded `Deref` step.
+            Op::DerefPlace { reference: base, .. }
+            | Op::ProjectField { base, .. }
+            | Op::ProjectTuple { base, .. }
+            | Op::ProjectIndex { base, .. } => self
+                .place_deref
+                .filter(|demand| demand.base == *base)
+                .map(|demand| OperatorKind::Deref(demand.mutable)),
+            // A receiver with an overloaded autoderef step demands its
+            // `Deref` method before the receiver can be formed.
+            Op::MethodReceiver { site, .. } => self
+                .method_receivers
+                .get(&self.call_identity(site.0))
+                .and_then(|adjustment| {
+                    adjustment.steps.iter().find_map(|step| match step {
+                        ReceiverStep::Overloaded { mutable } => Some(OperatorKind::Deref(*mutable)),
+                        ReceiverStep::Deref => None,
+                    })
+                }),
             _ => None,
         })
     }
@@ -307,11 +364,40 @@ impl Frame {
         {
             return Err(invalid("operator call overlaps another activation"));
         }
+        if let Op::MethodReceiver {
+            site,
+            place,
+            scratch,
+            destination,
+        } = op
+        {
+            return self.begin_receiver_overload(index, op, (site.0, *place, *scratch, *destination), store);
+        }
+        let mut place_deref = None;
         let destination = match op {
             Op::NumericBinary { destination, .. }
             | Op::NumericUnary { destination, .. }
             | Op::CompoundAssignPlace { destination, .. }
             | Op::IteratorCall { destination, .. } => *destination,
+            // The returned reference is held in the operation's node value
+            // slot, which no value of this operation has used yet.
+            Op::DerefPlace { reference: base, .. }
+            | Op::ProjectField { base, .. }
+            | Op::ProjectTuple { base, .. }
+            | Op::ProjectIndex { base, .. } => {
+                place_deref = Some(*base);
+                self.place_deref = None;
+                self.body
+                    .nodes()
+                    .get(self.pc.node as usize)
+                    .and_then(|node| node.value)
+                    .ok_or_else(|| {
+                        Diagnostic::new(
+                            "LRR-E-UNSUPPORTED",
+                            "overloaded place dereference lacks a node value slot".into(),
+                        )
+                    })?
+            }
             _ => return Err(invalid("operator call requires an operator operation")),
         };
         let self_type = self.operator_self_type(op, kind, store)?;
@@ -326,8 +412,186 @@ impl Frame {
             stage: Stage::Demanded,
             arguments: None,
             owned: Vec::new(),
+            receiver: None,
+            place_deref,
         });
         Ok(())
+    }
+    /// Begin forming a method receiver whose adjustment has an overloaded
+    /// step: apply the builtin steps before it, then demand its `Deref`.
+    fn begin_receiver_overload(
+        &mut self,
+        index: usize,
+        op: &Op,
+        (site, place, scratch, destination): (u32, SlotId, SlotId, SlotId),
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        let adjustment = self
+            .method_receivers
+            .remove(&self.call_identity(site))
+            .ok_or_else(|| invalid("method receiver adjustment was not selected"))?;
+        let progress = ReceiverProgress {
+            remaining: adjustment.steps.into_iter().rev().collect(),
+            mode: adjustment.mode,
+            unsize: adjustment.unsize,
+            current: place,
+            other: scratch,
+            parked: Vec::new(),
+            hint: self.slot(destination)?.hint,
+        };
+        self.slots[destination.0 as usize].hint = None;
+        self.walk_receiver(index, op, destination, progress, store)?;
+        Ok(())
+    }
+    /// Apply `progress`'s builtin steps up to the next overloaded one and
+    /// suspend for it (`true`), or form the receiver when none remains
+    /// (`false`).
+    fn walk_receiver(
+        &mut self,
+        index: usize,
+        op: &Op,
+        destination: SlotId,
+        mut progress: ReceiverProgress,
+        store: &GuestStore,
+    ) -> Result<bool, Diagnostic> {
+        while let Some(step) = progress.remaining.pop() {
+            match step {
+                ReceiverStep::Deref => {
+                    self.deref_place(progress.current, progress.other, store)
+                        .map_err(place_error)?;
+                    std::mem::swap(&mut progress.current, &mut progress.other);
+                }
+                ReceiverStep::Overloaded { mutable } => {
+                    let self_type = store
+                        .place_type_id(self.executed_place(progress.current)?)
+                        .map_err(place_error)?;
+                    self.operator_activation = Some(OperatorActivation {
+                        pc: self.pc.fingerprint(),
+                        operation_index: u32::try_from(index)
+                            .map_err(|_| invalid("operator operation index overflow"))?,
+                        expected: op.clone(),
+                        kind: OperatorKind::Deref(mutable),
+                        self_type,
+                        destination,
+                        stage: Stage::Demanded,
+                        arguments: None,
+                        owned: Vec::new(),
+                        receiver: Some(progress),
+                        place_deref: None,
+                    });
+                    return Ok(true);
+                }
+            }
+        }
+        Err(invalid("receiver walk found no overloaded step"))
+    }
+    /// A receiver's `Deref` method returned its reference (written to the
+    /// operation's destination): continue the walk from its referent. `true`
+    /// when the receiver is formed, `false` when another overloaded step
+    /// suspended it again.
+    pub(crate) fn resume_receiver_step(
+        &mut self,
+        index: usize,
+        op: &Op,
+        store: &mut GuestStore,
+    ) -> Result<bool, Diagnostic> {
+        let Op::MethodReceiver { destination, .. } = op else {
+            return Err(invalid("receiver resumed at a different operation"));
+        };
+        let destination = *destination;
+        let activation = self
+            .operator_activation
+            .take()
+            .ok_or_else(|| invalid("receiver activation absent"))?;
+        if activation.pc != self.pc.fingerprint()
+            || activation.operation_index as usize != index
+            || activation.expected != *op
+            || activation.stage != Stage::Returned
+        {
+            return Err(invalid("receiver resumed before its Deref method returned"));
+        }
+        let mut progress = activation
+            .receiver
+            .ok_or_else(|| invalid("receiver progress absent"))?;
+        let cell = self.cell(destination)?;
+        let view = self.source_view(destination)?;
+        let ticket = store.move_from(cell)?;
+        store.reset_moved_contract(cell)?;
+        let value = store.peek_ticket(ticket)?;
+        if value.kind != 9 {
+            return Err(invalid("a Deref method returned a non-reference"));
+        }
+        let reference = crate::runtime::cell::RefId::from_bits(value.payload);
+        progress.parked.push(ticket);
+        if progress.remaining.is_empty()
+            && progress.mode != ReceiverMode::Value
+            && !progress.unsize
+        {
+            // `&*reference` is the reference itself.
+            let ticket = progress
+                .parked
+                .pop()
+                .ok_or_else(|| invalid("parked receiver reference absent"))?;
+            self.slots[destination.0 as usize].hint = progress.hint;
+            self.write(destination, ticket, store)?;
+            self.set_source_view(destination, view)?;
+            self.finish_receiver(progress, store)?;
+            return Ok(true);
+        }
+        // The referent becomes the place the remaining steps walk.
+        let pointee = match view {
+            Some(TyTerm::Ref(_, _, pointee)) => Some(*pointee),
+            _ => None,
+        };
+        let place = Place::deref(reference);
+        let bytes = place.projection_bytes()?;
+        self.projection_bytes = self
+            .projection_bytes
+            .checked_add(bytes)
+            .ok_or_else(|| invalid("place projection accounting overflow"))?;
+        self.slots[progress.other.0 as usize].place = Some(place);
+        self.set_source_view(progress.other, pointee)?;
+        std::mem::swap(&mut progress.current, &mut progress.other);
+        if progress.remaining.iter().any(|step| matches!(step, ReceiverStep::Overloaded { .. })) {
+            // Walk to the next overloaded step.
+            return Ok(!self.walk_receiver(index, op, destination, progress, store)?);
+        }
+        while let Some(step) = progress.remaining.pop() {
+            debug_assert!(step == ReceiverStep::Deref);
+            self.deref_place(progress.current, progress.other, store)
+                .map_err(place_error)?;
+            std::mem::swap(&mut progress.current, &mut progress.other);
+        }
+        self.slots[destination.0 as usize].hint = progress.hint;
+        self.form_receiver(
+            progress.current,
+            destination,
+            progress.mode,
+            progress.unsize,
+            store,
+        )
+        .map_err(place_error)?;
+        self.finish_receiver(progress, store)?;
+        Ok(true)
+    }
+    /// The receiver is formed: the references its walk went through are no
+    /// longer named by any place.
+    fn finish_receiver(
+        &mut self,
+        progress: ReceiverProgress,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        for ticket in progress.parked {
+            store.discard(ticket)?;
+        }
+        Ok(())
+    }
+    /// Whether an operator activation is a receiver walk resumed after its
+    /// `Deref` method returned.
+    pub(crate) fn receiver_walk_returned(&self) -> bool {
+        self.operator_activation.as_ref().is_some_and(|activation| {
+            activation.receiver.is_some() && activation.stage == Stage::Returned
+        })
     }
     pub(crate) fn has_operator_activation(&self) -> bool {
         self.operator_activation.is_some()
@@ -398,6 +662,12 @@ impl Frame {
             Op::CompoundAssignPlace { place, .. } => store
                 .place_type_id(self.executed_place(*place)?)
                 .map_err(place_error)?,
+            Op::DerefPlace { reference: base, .. }
+            | Op::ProjectField { base, .. }
+            | Op::ProjectTuple { base, .. }
+            | Op::ProjectIndex { base, .. } => store
+                .place_type_id(self.executed_place(*base)?)
+                .map_err(place_error)?,
             // The evaluated `for` head's type, or the loop's iterator's.
             Op::IteratorCall { source, .. } => {
                 let CellState::Live(value) = store.state(self.cell(*source)?)? else {
@@ -429,6 +699,77 @@ impl Frame {
             .as_ref()
             .is_some_and(|activation| activation.stage == Stage::Demanded)
     }
+    /// The demanded binary method's right operand (`Rhs`) slot and its
+    /// reached type; `None` for unary/iterator methods and an unresolved
+    /// literal operand (its type is fixed by the selected parameter).
+    fn operator_right(&self, store: &GuestStore) -> Result<Option<(SlotId, TypeId)>, Diagnostic> {
+        let Some(activation) = self
+            .operator_activation
+            .as_ref()
+            .filter(|activation| activation.stage == Stage::Demanded)
+        else {
+            return Ok(None);
+        };
+        let right = match activation.expected {
+            Op::NumericBinary { right, .. } | Op::CompoundAssignPlace { right, .. } => right,
+            _ => return Ok(None),
+        };
+        let CellState::Live(value) = store.state(self.cell(right)?)? else {
+            return Err(invalid("operator operand not live"));
+        };
+        Ok(store.effective_type(value)?.map(|ty| (right, ty)))
+    }
+    /// An unresolved numeric literal right operand: `Some(true)` for an
+    /// integer literal, `Some(false)` for a float literal.
+    pub(crate) fn operator_right_literal(&self, store: &GuestStore) -> Result<Option<bool>, Diagnostic> {
+        let Some(activation) = self
+            .operator_activation
+            .as_ref()
+            .filter(|activation| activation.stage == Stage::Demanded)
+        else {
+            return Ok(None);
+        };
+        let right = match activation.expected {
+            Op::NumericBinary { right, .. } | Op::CompoundAssignPlace { right, .. } => right,
+            _ => return Ok(None),
+        };
+        let CellState::Live(value) = store.state(self.cell(right)?)? else {
+            return Err(invalid("operator operand not live"));
+        };
+        Ok((matches!(value.kind, 11 | 12) && store.effective_type(value)?.is_none())
+            .then_some(value.kind == 11))
+    }
+    /// Whether the demanded method is a comparison (its `Rhs` is passed by
+    /// reference).
+    pub(crate) fn operator_comparison(&self) -> bool {
+        self.operator_activation
+            .as_ref()
+            .is_some_and(|activation| activation.kind.comparison())
+    }
+    /// The right operand's reached type, which (with the self type) fixes
+    /// the impl selected at a site.
+    pub(crate) fn operator_right_type(&self, store: &GuestStore) -> Result<Option<TypeId>, Diagnostic> {
+        Ok(self.operator_right(store)?.map(|(_, ty)| ty))
+    }
+    /// The source view of the argument the right operand becomes, exactly
+    /// as `form_operator_arguments` forms it (a comparison passes `&Rhs`:
+    /// an autoref'd operand already holds it, any other is borrowed), for
+    /// selecting among several impls by their `Rhs`.
+    pub(crate) fn operator_right_view(&self, store: &GuestStore) -> Result<Option<TyTerm>, Diagnostic> {
+        let Some((slot, ty)) = self.operator_right(store)? else {
+            return Ok(None);
+        };
+        let comparison = self
+            .operator_activation
+            .as_ref()
+            .is_some_and(|activation| activation.kind.comparison());
+        let view = self.value_view(slot, ty, store)?;
+        Ok(Some(if comparison && !self.autoref_operands.contains(&slot) {
+            self.formed_reference_source(false, view)?
+        } else {
+            view
+        }))
+    }
     /// Reference source of a location this operation forms: its pointee's
     /// view, under this operator node's local region.
     fn formed_reference_source(&self, mutable: bool, pointee: TyTerm) -> Result<TyTerm, Diagnostic> {
@@ -448,6 +789,20 @@ impl Frame {
             Box::new(pointee),
         ))
     }
+    /// The operand's source view; a literal operand typed here by its
+    /// parameter has the Type's own view, not the stale literal view.
+    fn operand_view(
+        &self,
+        slot: SlotId,
+        ty: TypeId,
+        typed: bool,
+        store: &GuestStore,
+    ) -> Result<TyTerm, Diagnostic> {
+        if typed && let Some(view) = store.descriptor_source_term(ty) {
+            return Ok(view);
+        }
+        self.value_view(slot, ty, store)
+    }
     fn value_view(&self, slot: SlotId, ty: TypeId, store: &GuestStore) -> Result<TyTerm, Diagnostic> {
         match self.source_view(slot)? {
             Some(view) => Ok(view),
@@ -459,19 +814,16 @@ impl Frame {
             }),
         }
     }
-    /// An operand slot passed by value (moved or copied by the packet).
-    fn value_argument(
-        &mut self,
-        slot: SlotId,
+    /// An unresolved literal operand takes its parameter's type, as an
+    /// ordinary call argument does; without a closed parameter type it takes
+    /// rustc's integer/float fallback.
+    fn type_literal_operand(
+        cell: CellId,
         expected: Option<TypeId>,
         store: &mut GuestStore,
-    ) -> Result<OperatorArgument, Diagnostic> {
-        let cell = self.cell(slot)?;
+    ) -> Result<bool, Diagnostic> {
         let value = store.admit_move(cell)?;
-        // An unresolved literal operand takes its parameter's type, as an
-        // ordinary call argument does.
         if matches!(value.kind, 11 | 12) && store.effective_type(value)?.is_none() {
-            // Without a closed parameter type, rustc's integer/float fallback.
             let expected = expected.unwrap_or(if value.kind == 11 {
                 TypeId(6)
             } else {
@@ -481,7 +833,19 @@ impl Frame {
             let concrete = store.materialize_ticket(ticket, expected)?;
             store.discard(ticket)?;
             store.initialize(cell, concrete)?;
+            return Ok(true);
         }
+        Ok(false)
+    }
+    /// An operand slot passed by value (moved or copied by the packet).
+    fn value_argument(
+        &mut self,
+        slot: SlotId,
+        expected: Option<TypeId>,
+        store: &mut GuestStore,
+    ) -> Result<OperatorArgument, Diagnostic> {
+        let cell = self.cell(slot)?;
+        let typed = Self::type_literal_operand(cell, expected, store)?;
         let value = store.admit_move(cell)?;
         let descriptor = store.effective_type(value)?.ok_or_else(|| {
             Diagnostic::new(
@@ -491,7 +855,7 @@ impl Frame {
         })?;
         Ok(OperatorArgument {
             cell,
-            source: self.value_view(slot, descriptor, store)?,
+            source: self.operand_view(slot, descriptor, typed, store)?,
             descriptor,
             slot: Some(slot),
         })
@@ -537,9 +901,20 @@ impl Frame {
         &mut self,
         slot: SlotId,
         ordinal: u32,
+        expected: Option<TypeId>,
         store: &mut GuestStore,
     ) -> Result<OperatorArgument, Diagnostic> {
         let cell = self.cell(slot)?;
+        // The parameter is `&Rhs`: an unresolved literal operand takes the
+        // referent's type.
+        let pointee = match expected {
+            Some(reference) => match store.type_descriptor(reference)?.key.as_ref() {
+                TypeKey::Ref { target, .. } => Some(*target),
+                _ => None,
+            },
+            None => None,
+        };
+        let typed = Self::type_literal_operand(cell, pointee, store)?;
         let value = store.admit_move(cell)?;
         let ty = store.effective_type(value)?.ok_or_else(|| {
             Diagnostic::new(
@@ -556,7 +931,7 @@ impl Frame {
                 slot: Some(slot),
             });
         }
-        let pointee = self.value_view(slot, ty, store)?;
+        let pointee = self.operand_view(slot, ty, typed, store)?;
         self.formed_reference(&Place::cell(cell), Access::Shared, pointee, ordinal, store)
     }
     /// Form the demanded method's arguments in parameter order (once; a
@@ -580,8 +955,8 @@ impl Frame {
         let expected = |ordinal: usize| expected.get(ordinal).copied().flatten();
         let arguments = match op {
             Op::NumericBinary { left, right, .. } if kind.comparison() => vec![
-                self.reference_argument(left, 0, store)?,
-                self.reference_argument(right, 1, store)?,
+                self.reference_argument(left, 0, expected(0), store)?,
+                self.reference_argument(right, 1, expected(1), store)?,
             ],
             Op::NumericBinary { left, right, .. } => vec![
                 self.value_argument(left, expected(0), store)?,
@@ -615,6 +990,50 @@ impl Frame {
                 source,
                 ..
             } => vec![self.value_argument(source, expected(0), store)?],
+            // `Deref::deref(&place)` / `DerefMut::deref_mut(&mut place)` of the
+            // receiver walk's current place.
+            Op::MethodReceiver { .. }
+            | Op::DerefPlace { .. }
+            | Op::ProjectField { .. }
+            | Op::ProjectTuple { .. }
+            | Op::ProjectIndex { .. } => {
+                let current = self
+                    .operator_activation
+                    .as_ref()
+                    .and_then(|activation| {
+                        activation
+                            .receiver
+                            .as_ref()
+                            .map(|progress| progress.current)
+                            .or(activation.place_deref)
+                    })
+                    .ok_or_else(|| invalid("receiver walk lost its place"))?;
+                let executed = {
+                    let executed = self.executed_place(current)?;
+                    Place {
+                        root: executed.root,
+                        projections: executed.projections.clone(),
+                    }
+                };
+                let ty = store.place_type_id(&executed).map_err(place_error)?;
+                let pointee = match self.place_slot(current)?.source.clone() {
+                    Some(view) => view,
+                    None => store.descriptor_source_term(ty).ok_or_else(|| {
+                        Diagnostic::new(
+                            "LRR-E-UNSUPPORTED",
+                            "autoderef receiver requires its closed source type".into(),
+                        )
+                    })?,
+                };
+                let access = if matches!(kind, OperatorKind::Deref(true)) {
+                    Access::Mutable
+                } else {
+                    Access::Shared
+                };
+                let reference = self.formed_reference(&executed, access, pointee, 0, store)?;
+                self.clear_place(current)?;
+                vec![reference]
+            }
             // `Iterator::next(&mut iter)`: the loop-owned iterator in place.
             Op::IteratorCall {
                 call: crate::ir::op::IteratorCall::Next,
@@ -723,6 +1142,127 @@ impl Frame {
             store.retire_cell(cell)?;
         }
         self.status = FrameStatus::Panicked;
+        Ok(())
+    }
+}
+
+impl Frame {
+    /// The dispatcher found that `base`'s place needs an overloaded `Deref`
+    /// step before the next place operation (`DerefMut` when `mutable`).
+    pub(crate) fn demand_place_deref(&mut self, base: SlotId, mutable: bool) {
+        self.place_deref = Some(PlaceDerefDemand { base, mutable });
+    }
+    pub(crate) fn has_place_deref_demand(&self) -> bool {
+        self.place_deref.is_some()
+    }
+    /// The reached type of the place `slot` holds, `None` while that place
+    /// has not executed.
+    pub(crate) fn place_type_if_executed(
+        &self,
+        slot: SlotId,
+        store: &GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        match self.place_slot(slot) {
+            Ok(place_slot) => match &place_slot.place {
+                Some(place) => Ok(Some(store.place_type_id(place).map_err(place_error)?)),
+                None => Ok(None),
+            },
+            Err(_) => Ok(None),
+        }
+    }
+    /// Whether an operator activation is a place operation's overloaded
+    /// `Deref` step whose method returned.
+    pub(crate) fn place_deref_returned(&self) -> bool {
+        self.operator_activation.as_ref().is_some_and(|activation| {
+            activation.place_deref.is_some() && activation.stage == Stage::Returned
+        })
+    }
+    /// The place operation's `Deref` method returned its reference (held in
+    /// the node value slot): the reference becomes a temporary of the
+    /// operation's scope and its referent the place the operation proceeds
+    /// from. `true` when the operation itself is complete (`*x`), `false`
+    /// when it must run again over the dereferenced base (`x.f`).
+    pub(crate) fn resume_place_deref(
+        &mut self,
+        index: usize,
+        op: &Op,
+        store: &mut GuestStore,
+    ) -> Result<bool, Diagnostic> {
+        let activation = self
+            .operator_activation
+            .take()
+            .ok_or_else(|| invalid("place dereference activation absent"))?;
+        if activation.pc != self.pc.fingerprint()
+            || activation.operation_index as usize != index
+            || activation.expected != *op
+            || activation.stage != Stage::Returned
+        {
+            return Err(invalid("place dereference resumed before its method returned"));
+        }
+        let base = activation
+            .place_deref
+            .ok_or_else(|| invalid("place dereference base absent"))?;
+        let holder = activation.destination;
+        let cell = self.cell(holder)?;
+        let view = self.source_view(holder)?;
+        let ticket = store.move_from(cell)?;
+        store.reset_moved_contract(cell)?;
+        let value = store.peek_ticket(ticket)?;
+        if value.kind != 9 {
+            return Err(invalid("a Deref method returned a non-reference"));
+        }
+        let reference = crate::runtime::cell::RefId::from_bits(value.payload);
+        let scope = self.slot(holder)?.scope;
+        self.deref_parked.push((scope, ticket));
+        let pointee = match view {
+            Some(TyTerm::Ref(_, _, pointee)) => Some(*pointee),
+            _ => None,
+        };
+        let place = Place::deref(reference);
+        let bytes = place.projection_bytes()?;
+        match op {
+            Op::DerefPlace { destination, .. } => {
+                self.projection_bytes = self
+                    .projection_bytes
+                    .checked_add(bytes)
+                    .ok_or_else(|| invalid("place projection accounting overflow"))?;
+                self.set_source_view(*destination, pointee)?;
+                self.slots[destination.0 as usize].place = Some(place);
+                self.clear_place(base)?;
+                Ok(true)
+            }
+            _ => {
+                let old = self
+                    .place_slot(base)?
+                    .place
+                    .as_ref()
+                    .map_or(Ok(0), |old| old.projection_bytes())?;
+                self.projection_bytes = self
+                    .projection_bytes
+                    .checked_sub(old)
+                    .and_then(|total| total.checked_add(bytes))
+                    .ok_or_else(|| invalid("place projection accounting underflow"))?;
+                self.set_source_view(base, pointee)?;
+                self.slots[base.0 as usize].place = Some(place);
+                Ok(false)
+            }
+        }
+    }
+    /// The references overloaded place dereferences returned end with their
+    /// scope, as the temporaries they are.
+    pub(crate) fn release_parked_derefs(
+        &mut self,
+        scope: ScopeId,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        let mut index = self.deref_parked.len();
+        while index > 0 {
+            index -= 1;
+            if self.deref_parked[index].0 == scope {
+                let (_, ticket) = self.deref_parked.remove(index);
+                store.discard(ticket)?;
+            }
+        }
         Ok(())
     }
 }

@@ -117,7 +117,7 @@ Open next: operator trait dispatch; macros inside generated bodies; slices/range
 
 ## Update — midday October 17 (third lead session)
 
-Nothing in this section is committed: the checkpoint commit attempted earlier failed because the SSH signing agent refused (`agent refused operation`), and signing was not bypassed. Pushed branch state is still `edd99619e3`.
+Committed later as unsigned checkpoint `8f5507a926` (user: "do unsigned commits") and pushed to `codex/lrr-implementation`.
 
 **Harness fix.** `artifacts/runs/inventory/run_inventory.py` required the capture packet's guest streams to be empty (`closed_no_external_effects_observed`). Guests that print now close with `closed_managed_output_observed`; the check accepts that status and adds `guest_output_matches_plain` (captured guest stdout/stderr bytes equal the plain run's `output`). Under the old check, ~70 correct printing runs were filed as `completed_incomplete_evidence` (raw-v8: 559 pass + 78 incomplete). Rows recorded before this fix are not directly comparable: count pass + incomplete when comparing.
 
@@ -140,3 +140,48 @@ Nothing in this section is committed: the checkpoint commit attempted earlier fa
 **Open decision for the user.** Constant initializers of nominal/reference/method-call form (47 upstream cases, all `consts/const-enum-*`, `const-int-*-rpass`): evaluate through ordinary VM initializer frames (one pipeline; departs from spec §18.3's pure evaluator) versus extending the pure evaluator (a second evaluator, failure mode 1). Held until the user decides.
 
 **Lib suite:** 1,367 passed / 61 failed (lead run, ~09:00). `engine::run::namespace_tests::{genuine_same_epoch_namespace_addition_…, actual_nonzero_cleanup_resume_…}` fail with or without the new per-revision stamp cache (old stamps change on a same-epoch seal publication), so they are not caused by it; root cause not yet traced.
+
+## Update — late morning October 17 (third lead session, continued)
+
+**Inventory v9** (`artifacts/runs/inventory/raw-v9-facade.json`, `LRR_EMBEDDED_FACADE=1`, binary built 07:54, 6 jobs, 7,496 s wall): run-pass fixtures 752 / 2,624 runtime-contract passes (29%), 1,798 faults, 73 timeouts; 716 full-fixture passes overall; run-fail 14 / 16. Facade-off at a similar source (`raw-numeric-r5-base.json`): 654 / 2,624. The 73 timeouts come from the then-slow facade preparation, since cut ~3x by the facade agent. Inventory v10 (current binary, after trait formatting, Box and the facade perf round) is running.
+
+**Lead changes:**
+- Trait-method formatting completed: user and builtin-derived `Display`/`Debug` (incl. `{:#?}`, builders, nested impls, `Formatter` options) run through `core::fmt::lrr_format_<trait>` as ordinary source calls. Fixes: the returned `fmt::Result` drops through the ordinary cleanup machine (`Frame::drop_format_result`); the suspended operation resumes at its own index (`Frame::format_operation_index` in `resume_operation_index`).
+- Generated `$crate` in function signature types is spelled `__lrr_dollar_crate_root_<unit hex>` at signature extraction (`ParsedFile::type_tokens`, from the token's hygiene context), and the shared path route (`source_segments_route_optional_observed`) resolves that root in the named crate; another agent extended it to generic bounds (`spell_generic_bounds`). `#[derive(Debug)]`/`#[derive(Clone)]` impls now resolve `$crate::fmt::Formatter` etc.
+- Alias-typed record fields (`result: fmt::Result`) bind as their target's written structure (`frontend/types.rs` `current_name` → `written`); `type X = str` aliases resolve in signatures.
+- Reference receivers projected through fields (`d.f.n` with `f: &mut F`) are admitted; the static permission path is rustc's borrow check.
+- `x as &[T]` / `&W<[T]>` casts take the same unsizing coercion as annotations (`db/entered_type_thunk.rs` `unsizing`).
+- Every ordinary call binds the caller's own generic parameters to their runtime instantiation at the boundary (`Frame::bound_view`); the `monomorphic` flag (methods/trait paths only) is removed. Fixes generic-calls-generic shapes such as `Cell::new` → `UnsafeCell::new`.
+- Partial moves out of nominal owners and array elements are admitted (rustc's E0509/E0508 are static); remaining fields drop in declaration order (matches rustc output).
+- Reference type arguments in frame source views (`U<&str>`, `Option<&i32>`), and bound constructor results without a retained view.
+- Tests: `format_trait_facade_tests` (4 → 5 tests incl. derived Debug, field kinds, unsizing casts), new `generic_boundary_tests`; reference-contract tests updated to the structural `&str` route and E0106-is-static policy.
+
+**Largest remaining run-pass fault buckets (v9):** numeric literal inference (118); argument source hints for unsupported parameter types (106); missing methods (103, many Vec/String); CALL-CONTEXT result-only generics (97 → most remaining are `Vec::new()`/`HashMap::new()` whose `T` is fixed by later uses — needs body-level inference in the shared constraint service); blocked imports (71); facade-missing items (57, Vec/String/Cell); coroutines (36); pointer/fn-pointer casts (35); byte-string literals and `'static` reference constants (need static storage; tied to the open constant-initializer decision).
+
+**Agents:** Box<T> (done: owned_box lang item, heap-cell representation, unsizing, deref coercion; 10/39 Box witnesses), facade perf (done: hello world 36.7 G → 13.3 G instructions), nominal round 4 (stopped by the user mid-edit). Per the user, new agents are Sonnet only; the remaining Opus agents (numeric, operators) were asked to hand off. A Sonnet agent is implementing runtime `Vec<T>`/`String`/`format!`/`to_string`.
+
+## Update — afternoon October 17 (third lead session, const/static initializers)
+
+**Design decision (user, recorded as [E-R5-007](../errata/revision5-const-initializers-vm.md)):** reached `const`/`static` initializers run through the ordinary interpreter ("Normal interpreter (A)"); the pure evaluator stays only for preparation-time values (array lengths, discriminants). Standing principle from the user: be looser than rustc, never stricter; the program only has to run and give the compiled result (AGENTS.md "Looser than rustc, never stricter").
+
+**Lead changes (working tree, not yet committed unless the checkpoint below says so):**
+- Initializer frames: `engine/run_initializers.rs` (`demand_initializer`, `enter_initializer`, `resume_initializer`), `CallResolver::initializer`/`generated_callable` (macro-emitted consts and statics join the same published-inputs route as generated functions), `ParsedFile::initializer_signature`, `Frame::enter_initializer_root` (no-op for block-bodied initializers), statics in run-long cells with `static_views`, by-value aggregate static reads copy the storage.
+- `'static` storage: `Op::PromotedPlace` (opcode 66), `runtime/cell_promoted.rs`, byte-string literals (`vm/frame_byte_strings.rs`, `DecodedLiteral::ByteString`), `&CONST` through `ItemValue::Promotable`, a `GuestStore::value_promotable` check (no drop glue, no `UnsafeCell` lang item, no owning heap, no `&mut`) used by both promotion routes, temporary-extension seeding of const/static initializer roots (`syntax/temporary_extensions.rs`), record literals promotable. Three existing tests were updated to the promoted route (`temporary_borrow_tests`, `borrow_context_tests`, `parameter_place_wire_tests` opcode count 67) and one to the closure-frame policy (`named_reference_source_tests`).
+- By-value reads of a Copy aggregate outside a frame activation complete inline (`GuestStore::copy_aggregate`): `Some(5).unwrap()`, `CONST_OPTION.unwrap()`, by-value `self` on a Copy struct.
+- Static constraint service: `FactKind::IndexRange` (`base[a..b]` is the slice of the base's elements; `let a = [1, 2, 3]; &a[..]` types its literals again; fixes four v10 regressions). Facade: tuple `Debug` impls (arity 1–12, hand-expanded: `macro_rules!` at module level in a facade file blocks core's fixed point) and `Debug for [T; N]`.
+- Non-generic nominal borrow targets need no descriptor hint (`fn get() -> &'static P { &Q }`).
+
+**Sonnet agent results integrated this session:**
+- ops2 (done): `Rhs`-based impl selection for operators and provided methods (`select_by_arguments`), owner turbofish (`W::<u8>::f()`) via the shared explicit-type route, `a..=b` as a `RangeInclusive::new` call (`ExpressionKind::LangCall`), operands bound by patterns from tuples of references. Its owner-argument lookup initially fetched the frame's `SourceLocalPlan` on every call, which broke every derive-generated body; it now reads the cached parse first. Gaps it recorded: const owner args, trait owners, anchor forms, `Foo::<usize>(5)`, literal right operand with a provided body, where-clause selection (`traits/multidispatch1.rs`).
+- infer (done): open type arguments of call results and fieldless constructors are solved from later uses in the shared constraint service (`frontend/binding_constraint_open.rs`), delivered as an ordinary `SetHint`. After the lead reported two regressions, it fixed a constraint-solver non-termination on `Box<Box<_>>` deref chains (a finiteness bound on the via length, memoized goals) and field access through `Box`. Gaps: `Default::default()` and other trait-path calls, closure-bound sugar, constructors with explicit generic arguments, `vec![..]` elements.
+- Still running when this was written: Vec/String runtime agent (`ad34b208e23e69d17`) and a new integer/float inherent-method agent (`a45daffedc7d78eb7`, `wrapping_*`/`saturating_*`/`rotate_*`/`pow`/`abs`/…).
+
+**State of the const fixtures:** the 63 upstream cases that stopped at the const-evaluation hold: 28 now pass (0 before). Remaining stops: integer methods (agent running), body-local `const`/`static` items that need the VM (`const-enum-cast.rs` and others: explicit unsupported), `Self::A` associated-const paths in array types, `[u8; S::N]` symbolic returns, a few reference/lease shapes.
+
+**Lib suite:** 1,428 passed / 55 failed (lead run, after the changes above). All 55 are in the baseline set that also fails with the new constraint demand switched off (e.g. `concat requires its builtin expander`, `unchanged_full_core_macro_source…`, namespace-publication tests); no failure is attributed to this session's changes.
+
+**Known regressions / gaps found, not fixed:**
+- `issue-16602-1.rs` (`assert_eq!(&t[..], &[2, 2])`): needs `PartialEq<[U; N]> for [T]` and friends. Adding them to the facade makes `slice == slice` ambiguous because the operator selector does not yet pick by the right operand type for these impls; held until Rhs selection covers it.
+- `async-await/context-is-sorta-unwindsafe.rs`: a lifetime-only generic argument (`Context<'_>`) is counted as a type argument ("type arguments written for a non-generic Type", `explicit_type_arguments.rs`).
+- A tuple promoted under a function-return `&'static` context.
+- `Iterator::sum`, `AtomicUsize::fetch_add`, `HashMap::new` are facade stubs/missing.

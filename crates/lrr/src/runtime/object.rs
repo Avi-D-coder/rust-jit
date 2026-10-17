@@ -150,6 +150,64 @@ impl InitializedFields {
     pub fn complete_value(&self) -> bool {
         self.live == self.fields
     }
+    /// A growable aggregate's new field slot at `index` (shifting later
+    /// fields up), initialized or not.
+    pub fn insert_field(&mut self, index: usize, initialized: bool) -> Result<(), Diagnostic> {
+        if index > self.fields {
+            return Err(super::value::invalid());
+        }
+        if index == self.fields {
+            if self.fields % 64 == 0 {
+                self.bits.push(0);
+            }
+            if initialized {
+                self.bits[index / 64] |= 1_u64 << (index % 64);
+                self.live += 1;
+            }
+            self.fields += 1;
+            return Ok(());
+        }
+        let mut flags: Vec<bool> = (0..self.fields).map(|i| self.bit(i)).collect();
+        flags.insert(index, initialized);
+        self.rebuild(&flags);
+        Ok(())
+    }
+    /// Remove the field slot at `index` (shifting later fields down). A
+    /// removed initialized field no longer counts as live.
+    pub fn remove_field(&mut self, index: usize) -> Result<(), Diagnostic> {
+        if index >= self.fields {
+            return Err(super::value::invalid());
+        }
+        if index + 1 == self.fields {
+            if self.bit(index) {
+                self.live -= 1;
+                self.bits[index / 64] &= !(1_u64 << (index % 64));
+            }
+            self.fields -= 1;
+            if self.fields % 64 == 0 {
+                self.bits.pop();
+            }
+            return Ok(());
+        }
+        let mut flags: Vec<bool> = (0..self.fields).map(|i| self.bit(i)).collect();
+        flags.remove(index);
+        self.rebuild(&flags);
+        Ok(())
+    }
+    fn bit(&self, index: usize) -> bool {
+        self.bits[index / 64] & (1_u64 << (index % 64)) != 0
+    }
+    fn rebuild(&mut self, flags: &[bool]) {
+        self.fields = flags.len();
+        self.live = flags.iter().filter(|set| **set).count();
+        self.bits.clear();
+        self.bits.resize(flags.len().div_ceil(64), 0);
+        for (index, set) in flags.iter().enumerate() {
+            if *set {
+                self.bits[index / 64] |= 1_u64 << (index % 64);
+            }
+        }
+    }
     pub fn field(&self, index: usize) -> Result<bool, Diagnostic> {
         if index >= self.fields || self.live > self.fields {
             return Err(super::value::invalid());
@@ -191,5 +249,40 @@ impl InitializedFields {
         }
         self.live = live;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::InitializedFields;
+
+    /// A growable aggregate's summary tracks insertions and removals at the
+    /// end and in the middle across word boundaries.
+    #[test]
+    fn initialized_fields_grow_and_shrink_with_the_live_count() {
+        let mut fields = InitializedFields::complete(0).unwrap();
+        for index in 0..130 {
+            fields.insert_field(index, true).unwrap();
+            assert!(fields.complete_value());
+        }
+        fields.insert_field(64, false).unwrap();
+        assert!(!fields.complete_value());
+        assert!(!fields.field(64).unwrap());
+        assert!(fields.field(65).unwrap());
+        assert!(fields.field(130).unwrap());
+        fields.set(64, true).unwrap();
+        assert!(fields.complete_value());
+        fields.remove_field(10).unwrap();
+        assert!(fields.complete_value());
+        assert!(fields.field(129).unwrap());
+        assert!(fields.field(130).is_err());
+        while fields.remove_field(0).is_ok() {
+            assert!(fields.complete_value());
+        }
+        assert!(fields.field(0).is_err());
+        fields.insert_field(0, false).unwrap();
+        assert!(!fields.complete_value());
+        fields.remove_field(0).unwrap();
+        assert!(fields.complete_value());
     }
 }

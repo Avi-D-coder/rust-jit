@@ -59,13 +59,27 @@ pub(crate) fn normalize(
                 TyTerm::Str => Err(BuiltinSelf::Str),
                 TyTerm::Slice(_) => Err(BuiltinSelf::Slice),
                 TyTerm::Array(..) => Err(BuiltinSelf::Array),
+                // A reference self type (`&Vec<T>`, `&[T]`): the reference
+                // impls are indexed together, the referent selects.
+                TyTerm::Ref(_, mutable, _) => Err(BuiltinSelf::Reference(*mutable)),
                 _ => return QueryPoll::Ready(Ok(None)),
+            };
+            let pointee: Option<Result<Digest, BuiltinSelf>> = match &self_ty {
+                TyTerm::Ref(_, _, inner) => match inner.as_ref() {
+                    TyTerm::Nominal(nominal, _) => Some(Ok(*nominal)),
+                    TyTerm::Primitive(primitive) => Some(Err(BuiltinSelf::Primitive(*primitive))),
+                    TyTerm::Str => Some(Err(BuiltinSelf::Str)),
+                    TyTerm::Slice(_) => Some(Err(BuiltinSelf::Slice)),
+                    TyTerm::Array(..) => Some(Err(BuiltinSelf::Array)),
+                    _ => None,
+                },
+                _ => None,
             };
             let trait_key = Some(key.trait_ref.trait_key).filter(|key| key.0 != [0; 32]);
             let Some(name) = members.associated_type_name(key.item) else {
                 return QueryPoll::Ready(Ok(None));
             };
-            let (alias, row) = match members.associated_type(selected, trait_key, name) {
+            let (alias, row) = match members.associated_type_of(selected, pointee, trait_key, name) {
                 Ok(Some(found)) => found,
                 Ok(None) => return QueryPoll::Ready(Ok(None)),
                 Err(error) => return QueryPoll::Ready(Err(error)),

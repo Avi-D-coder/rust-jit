@@ -61,7 +61,7 @@ impl ParsedFile {
     /// value-path lowering spells it, so the ordinary source Type service
     /// resolves it in that crate (`&mut $crate::fmt::Formatter` of a
     /// builtin derive names core's `Formatter`).
-    fn type_tokens(
+    pub(crate) fn type_tokens(
         &self,
         node: Option<ra_ap_syntax::SyntaxNode>,
     ) -> Result<Vec<TokenRecipe>, Diagnostic> {
@@ -152,6 +152,38 @@ impl ParsedFile {
         }
         capture_generics(item.children().find_map(ast::GenericParamList::cast))
     }
+    /// A `const`/`static` item's initializer as a call signature: no
+    /// parameters, its declared type the result (E-R5-007). `None` when the
+    /// declaration is not a constant or static.
+    fn initializer_signature(
+        &self,
+        definition: Digest,
+        header: &HeaderRecipe,
+        context: &DeclarationContext,
+    ) -> Result<Option<FunctionSignature>, Diagnostic> {
+        let Ok(Some(item)) = self.syntax_at(context.range, |node| {
+            ast::Const::can_cast(node.kind()) || ast::Static::can_cast(node.kind())
+        }) else {
+            return Ok(None);
+        };
+        let ty = ast::Const::cast(item.clone())
+            .and_then(|item| item.ty())
+            .or_else(|| ast::Static::cast(item.clone()).and_then(|item| item.ty()));
+        let Some(ty) = ty else {
+            return Err(fault("constant declaration lacks its declared type"));
+        };
+        let generics = capture_generics(item.children().find_map(ast::GenericParamList::cast))?;
+        Ok(Some(FunctionSignature {
+            definition,
+            scope: context.scope.clone(),
+            header: header.clone(),
+            result_symbolic: lower_type(&ty, definition, &generics, 0)?,
+            result: self.type_tokens(Some(ty.syntax().clone()))?,
+            generics,
+            parameters: Vec::new(),
+            predicates: Vec::new(),
+        }))
+    }
     pub fn function_signature(
         &self,
         definition: Digest,
@@ -164,6 +196,9 @@ impl ParsedFile {
         }
         if body.is_some_and(|b| b.def_key != definition) {
             return Err(fault("signature/body definition mismatch"));
+        }
+        if let Some(signature) = self.initializer_signature(definition, header, context)? {
+            return Ok(signature);
         }
         let function = self
             .syntax_at(context.range, |node| ast::Fn::can_cast(node.kind()))

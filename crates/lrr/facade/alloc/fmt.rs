@@ -4,3 +4,9 @@ pub use core::fmt::{
     DebugTuple, Display, Error, Formatter, LowerExp, LowerHex, Octal, Pointer, Result, UpperExp,
     UpperHex, Write,
 };
+
+// `format!` renders its template eagerly (`Arguments` is the rendered text),
+// so the owned string is that text.
+pub fn format(args: Arguments<'_>) -> crate::string::String {
+    crate::string::String::from(args)
+}

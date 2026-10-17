@@ -85,7 +85,10 @@ fn rustc_noncopy_tuple_whole_read_through_shared_reference_refuses_without_trans
     assert_eq!(snapshot(&store, root, field, sibling), before);
 }
 #[test]
-fn rustc_noncopy_array_whole_transfer_keeps_element_move_restriction() {
+fn rustc_noncopy_array_element_and_whole_transfers_move_exact_owners() {
+    // rustc rejects `arr[i]` moves statically (E0508); an array pattern
+    // (`let [a] = arr;`) moves the element through the same projection. The
+    // runtime moves exactly the selected element owner.
     let (mut store, tuple, field, sibling, lease) = tests::stock_tuple_reference_owner();
     let tuple_ty = TypeId(store.admit_move(tuple).unwrap().type_id);
     let array_ty = store
@@ -119,16 +122,14 @@ fn rustc_noncopy_array_whole_transfer_keeps_element_move_restriction() {
         )
         .unwrap();
     let before = snapshot(&store, root, field, sibling);
-    let PlaceFailure::RuntimeFault(error) = store.read_owning_place(&place).unwrap_err() else {
-        panic!("unexpected bounds panic")
-    };
-    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-    assert_eq!(snapshot(&store, root, field, sibling), before);
-    let whole = store.read_owning(root).unwrap();
-    assert_eq!(store.peek_ticket(whole).unwrap().type_id, array_ty.0);
+    let element = store.read_owning_place(&place).unwrap();
+    assert_eq!(store.peek_ticket(element).unwrap().type_id, tuple_ty.0);
+    // The element's own children keep their owners and the reference lease.
     assert_eq!(store.state(field).unwrap(), before.2);
     assert_eq!(store.state(sibling).unwrap(), before.4);
     assert_eq!(store.read_reference(lease).unwrap(), ValueRepr::unit());
+    // A partially moved array is no longer readable as a whole.
+    assert!(store.read_owning(root).is_err());
 }
 #[test]
 fn rustc_cold_nominal_tuple_policy_remains_deferred_without_intrinsic_noncopy_member() {

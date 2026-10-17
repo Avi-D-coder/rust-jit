@@ -246,6 +246,76 @@ impl GuestStore {
         self.set_owner(value, ValueOwner::Ticket(ticket))?;
         Ok(ticket)
     }
+    /// `&text[start..end]` of a `&str` buffer reference: the same immutable
+    /// backing, narrowed to the byte range. An invalid range is the guest
+    /// panic message rustc's `str` indexing raises.
+    pub(crate) fn str_slice_ticket(
+        &mut self,
+        reference: TicketId,
+        start: u64,
+        end: u64,
+    ) -> Result<Result<TicketId, String>, Diagnostic> {
+        let value = self.peek_ticket(reference)?;
+        self.object_owner(value, ValueOwner::Ticket(reference))?;
+        if value.kind != 9 {
+            return Err(invalid());
+        }
+        let record = self.references.get(RefId::from_bits(value.payload))?;
+        self.validate_reference_record(record)?;
+        let ReferenceLease::Buffer(buffer) = &record.lease else {
+            return Err(invalid());
+        };
+        let buffer = *buffer;
+        let text = self.strings.resolve(buffer)?;
+        let (start, end) = (start as usize, end as usize);
+        if start > end {
+            return Ok(Err(format!(
+                "begin <= end ({start} <= {end}) when slicing `{text}`"
+            )));
+        }
+        for index in [start, end] {
+            if index > text.len() {
+                return Ok(Err(format!(
+                    "byte index {index} is out of bounds of `{text}`"
+                )));
+            }
+            if !text.is_char_boundary(index) {
+                let begin = (0..index).rev().find(|i| text.is_char_boundary(*i)).unwrap_or(0);
+                let after = (index + 1..=text.len())
+                    .find(|i| text.is_char_boundary(*i))
+                    .unwrap_or(text.len());
+                let ch = text[begin..].chars().next().unwrap_or('\u{fffd}');
+                return Ok(Err(format!(
+                    "byte index {index} is not a char boundary; it is inside {ch:?} (bytes {begin}..{after}) of `{text}`"
+                )));
+            }
+        }
+        let narrowed = BufferLease {
+            backing: buffer.backing,
+            start: buffer.start + start,
+            end: buffer.start + end,
+        };
+        let ty = self.types.intern(TypeKey::Ref {
+            mutable: false,
+            target: TypeId(16),
+        })?;
+        self.references.reserve_atomic(1, &mut self.budget)?;
+        self.tickets.reserve_atomic(1, &mut self.budget)?;
+        let reference = self
+            .references
+            .allocate(ReferenceRecord::from_immutable_buffer(narrowed), 0, &mut self.budget)?;
+        let value = ValueRepr {
+            kind: 9,
+            type_id: ty.0,
+            payload: reference.bits(),
+        };
+        let ticket = self
+            .tickets
+            .allocate(TransferTicket { value }, 0, &mut self.budget)?
+            .into();
+        self.set_owner(value, ValueOwner::Ticket(ticket))?;
+        Ok(Ok(ticket))
+    }
     /// Resolve the actual current shared buffer lease. Ordinary locations,
     /// owned String tickets and forged descriptors are not byte views.
     pub fn str_reference_contents(&self, ticket: TicketId) -> Result<&str, Diagnostic> {

@@ -92,6 +92,10 @@ impl RunMachine {
                 CallContinuation::Format { sink } => {
                     self.unwind_format_call(sink)?;
                 }
+                // The demanding `ValuePath` becomes the panicking operation.
+                CallContinuation::Initializer { .. } => {
+                    self.frame.status = crate::vm::frame::FrameStatus::Panicked;
+                }
             }
             let active = self
                 .unwinding

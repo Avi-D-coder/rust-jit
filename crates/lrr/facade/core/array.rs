@@ -28,3 +28,18 @@ impl<T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<[U; N
     }
 }
 impl<T: crate::cmp::Eq, const N: usize> crate::cmp::Eq for [T; N] {}
+
+impl<'a, T, const N: usize> crate::iter::IntoIterator for &'a [T; N] {
+    type Item = &'a T;
+    type IntoIter = crate::slice::Iter<'a, T>;
+    fn into_iter(self) -> crate::slice::Iter<'a, T> {
+        self.iter()
+    }
+}
+impl<'a, T, const N: usize> crate::iter::IntoIterator for &'a mut [T; N] {
+    type Item = &'a mut T;
+    type IntoIter = crate::slice::IterMut<'a, T>;
+    fn into_iter(self) -> crate::slice::IterMut<'a, T> {
+        self.iter_mut()
+    }
+}

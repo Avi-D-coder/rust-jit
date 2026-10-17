@@ -6,15 +6,15 @@ use crate::marker::Sized;
 pub fn drop<T>(_x: T) {}
 
 pub fn forget<T>(t: T) {
-    core::intrinsics::lrr_unsupported("core::mem::forget")
+    core::intrinsics::lrr_forget(t)
 }
 
 pub fn replace<T>(dest: &mut T, src: T) -> T {
-    core::intrinsics::lrr_unsupported("core::mem::replace")
+    core::intrinsics::lrr_mem_replace(dest, src)
 }
 
 pub fn swap<T>(x: &mut T, y: &mut T) {
-    core::intrinsics::lrr_unsupported("core::mem::swap")
+    core::intrinsics::lrr_mem_swap(x, y)
 }
 
 pub fn take<T: Default>(dest: &mut T) -> T {

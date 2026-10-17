@@ -103,26 +103,21 @@ fn reach_borrow(c: &mut Context) -> VerifiedRecipe {
     }
     panic!("original initializer did not reach its borrow")
 }
-fn target(c: &Context) -> CellId {
-    c.frame
-        .cell(c.frame.body.nodes()[c.operand.0 as usize].value.unwrap())
-        .unwrap()
-}
 #[test]
-fn rustc_literal_temporary_borrow_evaluates_once_and_survives_statement_cleanup() {
+fn rustc_literal_temporary_borrow_is_promoted_once_and_survives_statement_and_block_cleanup() {
     let mut c = context();
     let r = reach_borrow(&mut c);
-    let target = target(&c);
-    let original = c.store.read_scalar(target).unwrap();
-    let epoch = c.store.location_epoch(target).unwrap();
+    // `&1u32` borrows a constant expression: rvalue static promotion
+    // publishes the literal once as the site's run-long place, and the
+    // borrow addresses that place instead of a frame temporary.
     assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-    assert_eq!(c.frame.counters.started_by_opcode[38], 1);
+    assert_eq!(c.frame.counters.started_by_opcode[66], 1);
+    assert_eq!(c.frame.counters.started_by_opcode[38], 0);
     assert_eq!(c.frame.counters.started_by_opcode[31], 0);
     let node = &c.frame.body.nodes()[c.operand.0 as usize];
     let extension = node.extended_to.as_ref().unwrap();
     assert!(extension.constructors.is_empty());
     let block = extension.scope;
-    assert_eq!(c.frame.slots[node.value.unwrap().0 as usize].scope, block);
     let statement_scope = c.frame.body.nodes()[c.statement.0 as usize]
         .statement_scope
         .unwrap();
@@ -134,16 +129,17 @@ fn rustc_literal_temporary_borrow_evaluates_once_and_survives_statement_cleanup(
     assert!(!c.frame.active_scopes().contains(&statement_scope));
     let owner = c.frame.binding(c.binding).unwrap();
     let reference = c.store.reference_from_cell(owner).unwrap();
-    assert_eq!(c.store.read_reference(reference).unwrap(), original);
-    assert_eq!(c.store.location_epoch(target).unwrap(), epoch);
+    let value = c.store.read_reference(reference).unwrap();
+    assert_eq!((value.type_id, value.payload), (11, 1));
     assert_eq!(c.frame.counters.started_by_opcode[0], 1);
-    assert_eq!(c.frame.counters.started_by_opcode[38], 1);
+    assert_eq!(c.frame.counters.started_by_opcode[66], 1);
     assert_eq!(c.frame.counters.started_by_opcode[31], 1);
     assert_eq!(c.frame.counters.started_by_opcode[7], 1);
     assert_eq!(c.frame.counters.started_by_opcode[8], 0);
-    // The actual block teardown retires its extended temporary and binding.
+    // The block teardown retires the binding; the promoted place is
+    // run-long storage no frame scope owns, so the reference stays valid
+    // (`&'static`).
     c.frame.leave(block, &mut c.store).unwrap();
-    assert_eq!(c.store.state(target).unwrap(), CellState::Dropped);
     assert_eq!(c.store.state(owner).unwrap(), CellState::Dropped);
-    assert!(c.store.read_reference(reference).is_err());
+    assert_eq!(c.store.read_reference(reference).unwrap(), value);
 }

@@ -249,7 +249,11 @@ pub(super) fn runtime_hint(
             .get(frame.pc().node as usize)
             .ok_or_else(|| call_fault("reference caller absent"))?;
         let method = call.role == NodeRole::Expression(ExpressionKind::MethodCall);
-        if call.role != NodeRole::Expression(ExpressionKind::Call) && !method {
+        if !matches!(
+            call.role,
+            NodeRole::Expression(ExpressionKind::Call | ExpressionKind::LangCall)
+        ) && !method
+        {
             return Err(call_fault(
                 "reference hint requires its indexed ordinary call",
             ));

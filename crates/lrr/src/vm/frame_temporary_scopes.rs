@@ -137,6 +137,9 @@ impl Frame {
                         )
                     })
             }
+            // A non-generic nominal target: its own constructor or value
+            // fixes its Type; the retained view carries the identity.
+            Some(TyTerm::Nominal(_, arguments)) if arguments.is_empty() => Ok(None),
             _ => Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "borrow target requires its retained symbolic descriptor binding".into(),

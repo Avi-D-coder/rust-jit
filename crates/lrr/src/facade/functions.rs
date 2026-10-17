@@ -37,8 +37,6 @@ pub enum LibraryFunction {
     Print,
     /// `std::io::_eprint(fmt::Arguments)`
     Eprint,
-    /// `alloc::fmt::format(fmt::Arguments) -> String`
-    Format,
     /// `alloc::__export::must_use<T>(T) -> T`
     MustUse,
     /// `core::intrinsics::lrr_unsupported(&'static str) -> !`: the body of an
@@ -70,6 +68,77 @@ pub enum LibraryFunction {
     /// `core::intrinsics::lrr_fmt_pad_adapter(parent: usize, nested: usize)`:
     /// append the nested buffer through core's `PadAdapter` (`{:#?}`).
     FmtPadAdapter,
+    /// `core::intrinsics::lrr_fmt_take(sink: usize) -> &'static str`: the
+    /// text a formatting request's output buffer holds.
+    FmtTake,
+    /// `core::intrinsics::lrr_str_byte(&str, usize) -> u8`: one byte of a
+    /// str reference.
+    StrByte,
+    /// `core::intrinsics::lrr_vec_len<T>(&Vec<T>) -> usize`.
+    VecLen,
+    /// `core::intrinsics::lrr_vec_push<T>(&mut Vec<T>, T)`: move a value into
+    /// a new last element cell of the vector.
+    VecPush,
+    /// `core::intrinsics::lrr_vec_insert<T>(&mut Vec<T>, usize, T)`.
+    VecInsert,
+    /// `core::intrinsics::lrr_vec_remove<T>(&mut Vec<T>, usize) -> T`: move
+    /// an element out of the vector, retiring its cell.
+    VecRemove,
+    /// `core::intrinsics::lrr_vec_as_slice<T>(&Vec<T>) -> &[T]`.
+    VecAsSlice,
+    /// `core::intrinsics::lrr_vec_as_mut_slice<T>(&mut Vec<T>) -> &mut [T]`.
+    VecAsMutSlice,
+    /// `core::intrinsics::lrr_vec_as_str(&Vec<u8>) -> &str`.
+    VecAsStr,
+    /// `core::intrinsics::lrr_slice_swap<T>(&mut [T], usize, usize)`: exchange
+    /// the values of two element cells of a slice window.
+    SliceSwap,
+    /// `core::intrinsics::lrr_vec_append_array<T, const N: usize>(&mut Vec<T>,
+    /// [T; N])`: move every element of an array value into the vector.
+    VecAppendArray,
+    /// `core::intrinsics::lrr_char_from_u32(u32) -> char`: the char of a
+    /// value the caller has checked to be a Unicode scalar value.
+    CharFromU32,
+    /// `core::intrinsics::lrr_str_slice(&str, usize, usize) -> &str`:
+    /// `&text[start..end]`, panicking like `str` indexing.
+    StrSlice,
+    /// `core::intrinsics::lrr_bytes_as_str(&[u8]) -> &str`: the text of a byte
+    /// slice the caller has validated as UTF-8.
+    BytesAsStr,
+    /// `core::intrinsics::lrr_mem_replace<T>(&mut T, T) -> T`.
+    MemReplace,
+    /// `core::intrinsics::lrr_mem_swap<T>(&mut T, &mut T)`.
+    MemSwap,
+    /// `core::intrinsics::lrr_cell_replace<T>(&T, T) -> T`: replace the value
+    /// at a shared reference's location (interior mutability).
+    CellReplace,
+    /// `core::intrinsics::lrr_cell_take<T>(&T) -> T`: move the value out of a
+    /// shared reference's location.
+    CellTake,
+    /// `core::intrinsics::lrr_shared_to_mut<T>(&T) -> &mut T`: `&mut` access to
+    /// interior-mutable storage.
+    SharedToMut,
+    /// `core::intrinsics::lrr_box_leak<T>(Box<T>) -> &'static T`.
+    BoxLeak,
+    /// `core::intrinsics::lrr_ref_eq<T>(&T, &T) -> bool`: same location.
+    RefEq,
+    /// `core::intrinsics::lrr_forget<T>(T)`: move a value into a
+    /// never-retired location, so no destructor runs (`mem::forget`).
+    Forget,
+    /// `core::intrinsics::lrr_f64_bits(f64) -> u64`: the IEEE bit pattern.
+    F64Bits,
+    /// `core::intrinsics::lrr_f64_from_bits(u64) -> f64`.
+    F64FromBits,
+    /// `core::intrinsics::lrr_f32_bits(f32) -> u32`.
+    F32Bits,
+    /// `core::intrinsics::lrr_f32_from_bits(u32) -> f32`.
+    F32FromBits,
+    /// `core::intrinsics::lrr_f64_math(op: u32, a: f64, b: f64, c: f64) -> f64`:
+    /// the host libm/IEEE operation `op` names (`f64::sqrt`, `f64::sin`, ...);
+    /// operands an operation does not use are ignored.
+    F64Math,
+    /// `core::intrinsics::lrr_f32_math(op: u32, a: f32, b: f32, c: f32) -> f32`.
+    F32Math,
 }
 
 /// (function, owning library crate, path within that crate).
@@ -89,7 +158,6 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
     (LibraryFunction::BeginPanic, "std", &["rt", "begin_panic"]),
     (LibraryFunction::Print, "std", &["io", "_print"]),
     (LibraryFunction::Eprint, "std", &["io", "_eprint"]),
-    (LibraryFunction::Format, "alloc", &["fmt", "format"]),
     (LibraryFunction::MustUse, "alloc", &["__export", "must_use"]),
     (
         LibraryFunction::Unsupported,
@@ -112,6 +180,46 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
         "core",
         &["intrinsics", "lrr_fmt_pad_adapter"],
     ),
+    (LibraryFunction::FmtTake, "core", &["intrinsics", "lrr_fmt_take"]),
+    (LibraryFunction::StrByte, "core", &["intrinsics", "lrr_str_byte"]),
+    (LibraryFunction::VecLen, "core", &["intrinsics", "lrr_vec_len"]),
+    (LibraryFunction::VecPush, "core", &["intrinsics", "lrr_vec_push"]),
+    (LibraryFunction::VecInsert, "core", &["intrinsics", "lrr_vec_insert"]),
+    (LibraryFunction::VecRemove, "core", &["intrinsics", "lrr_vec_remove"]),
+    (LibraryFunction::VecAsSlice, "core", &["intrinsics", "lrr_vec_as_slice"]),
+    (
+        LibraryFunction::VecAsMutSlice,
+        "core",
+        &["intrinsics", "lrr_vec_as_mut_slice"],
+    ),
+    (LibraryFunction::VecAsStr, "core", &["intrinsics", "lrr_vec_as_str"]),
+    (LibraryFunction::SliceSwap, "core", &["intrinsics", "lrr_slice_swap"]),
+    (
+        LibraryFunction::VecAppendArray,
+        "core",
+        &["intrinsics", "lrr_vec_append_array"],
+    ),
+    (
+        LibraryFunction::CharFromU32,
+        "core",
+        &["intrinsics", "lrr_char_from_u32"],
+    ),
+    (LibraryFunction::StrSlice, "core", &["intrinsics", "lrr_str_slice"]),
+    (LibraryFunction::BytesAsStr, "core", &["intrinsics", "lrr_bytes_as_str"]),
+    (LibraryFunction::MemReplace, "core", &["intrinsics", "lrr_mem_replace"]),
+    (LibraryFunction::MemSwap, "core", &["intrinsics", "lrr_mem_swap"]),
+    (LibraryFunction::CellReplace, "core", &["intrinsics", "lrr_cell_replace"]),
+    (LibraryFunction::CellTake, "core", &["intrinsics", "lrr_cell_take"]),
+    (LibraryFunction::SharedToMut, "core", &["intrinsics", "lrr_shared_to_mut"]),
+    (LibraryFunction::BoxLeak, "core", &["intrinsics", "lrr_box_leak"]),
+    (LibraryFunction::RefEq, "core", &["intrinsics", "lrr_ref_eq"]),
+    (LibraryFunction::Forget, "core", &["intrinsics", "lrr_forget"]),
+    (LibraryFunction::F64Bits, "core", &["intrinsics", "lrr_f64_bits"]),
+    (LibraryFunction::F64FromBits, "core", &["intrinsics", "lrr_f64_from_bits"]),
+    (LibraryFunction::F32Bits, "core", &["intrinsics", "lrr_f32_bits"]),
+    (LibraryFunction::F32FromBits, "core", &["intrinsics", "lrr_f32_from_bits"]),
+    (LibraryFunction::F64Math, "core", &["intrinsics", "lrr_f64_math"]),
+    (LibraryFunction::F32Math, "core", &["intrinsics", "lrr_f32_math"]),
 ];
 
 const LIBRARY_EDITION: u16 = 2024;
@@ -127,7 +235,6 @@ impl LibraryFunction {
             Self::BeginPanic => 5,
             Self::Print => 6,
             Self::Eprint => 7,
-            Self::Format => 8,
             Self::MustUse => 9,
             Self::Unsupported => 10,
             Self::AssertFailed => 11,
@@ -138,9 +245,37 @@ impl LibraryFunction {
             Self::FmtValue => 16,
             Self::FmtSink => 17,
             Self::FmtPadAdapter => 18,
+            Self::FmtTake => 19,
+            Self::StrByte => 20,
+            Self::VecLen => 21,
+            Self::VecPush => 22,
+            Self::VecInsert => 23,
+            Self::VecRemove => 24,
+            Self::VecAsSlice => 25,
+            Self::VecAsMutSlice => 26,
+            Self::VecAsStr => 27,
+            Self::SliceSwap => 28,
+            Self::VecAppendArray => 29,
+            Self::CharFromU32 => 30,
+            Self::StrSlice => 31,
+            Self::BytesAsStr => 32,
+            Self::MemReplace => 33,
+            Self::MemSwap => 34,
+            Self::CellReplace => 35,
+            Self::CellTake => 36,
+            Self::SharedToMut => 37,
+            Self::BoxLeak => 38,
+            Self::RefEq => 39,
+            Self::Forget => 40,
+            Self::F64Bits => 100,
+            Self::F64FromBits => 101,
+            Self::F32Bits => 102,
+            Self::F32FromBits => 103,
+            Self::F64Math => 104,
+            Self::F32Math => 105,
         }
     }
-    const ALL: [Self; 19] = [
+    const ALL: [Self; 46] = [
         Self::Panic,
         Self::PanicFmt,
         Self::PanicDisplay,
@@ -149,7 +284,6 @@ impl LibraryFunction {
         Self::BeginPanic,
         Self::Print,
         Self::Eprint,
-        Self::Format,
         Self::MustUse,
         Self::Unsupported,
         Self::AssertFailed,
@@ -160,12 +294,52 @@ impl LibraryFunction {
         Self::FmtValue,
         Self::FmtSink,
         Self::FmtPadAdapter,
+        Self::FmtTake,
+        Self::StrByte,
+        Self::VecLen,
+        Self::VecPush,
+        Self::VecInsert,
+        Self::VecRemove,
+        Self::VecAsSlice,
+        Self::VecAsMutSlice,
+        Self::VecAsStr,
+        Self::SliceSwap,
+        Self::VecAppendArray,
+        Self::CharFromU32,
+        Self::StrSlice,
+        Self::BytesAsStr,
+        Self::MemReplace,
+        Self::MemSwap,
+        Self::CellReplace,
+        Self::CellTake,
+        Self::SharedToMut,
+        Self::BoxLeak,
+        Self::RefEq,
+        Self::Forget,
+        Self::F64Bits,
+        Self::F64FromBits,
+        Self::F32Bits,
+        Self::F32FromBits,
+        Self::F64Math,
+        Self::F32Math,
     ];
     /// Number of written arguments of the library signature.
     pub(crate) fn arity(self) -> usize {
         match self {
             Self::AssertFailed => 4,
-            Self::StrEq | Self::FmtWrite | Self::FmtPadAdapter => 2,
+            Self::StrEq
+            | Self::FmtWrite
+            | Self::FmtPadAdapter
+            | Self::StrByte
+            | Self::VecPush
+            | Self::VecRemove
+            | Self::VecAppendArray
+            | Self::MemReplace
+            | Self::MemSwap
+            | Self::CellReplace
+            | Self::RefEq => 2,
+            Self::F64Math | Self::F32Math => 4,
+            Self::VecInsert | Self::SliceSwap | Self::StrSlice => 3,
             Self::FmtValue => 7,
             Self::FmtSink => 0,
             _ => 1,
@@ -177,7 +351,6 @@ impl LibraryFunction {
             self,
             Self::Print
                 | Self::Eprint
-                | Self::Format
                 | Self::MustUse
                 | Self::SliceLen
                 | Self::StrLen
@@ -186,6 +359,34 @@ impl LibraryFunction {
                 | Self::FmtValue
                 | Self::FmtSink
                 | Self::FmtPadAdapter
+                | Self::FmtTake
+                | Self::StrByte
+                | Self::VecLen
+                | Self::VecPush
+                | Self::VecInsert
+                | Self::VecRemove
+                | Self::VecAsSlice
+                | Self::VecAsMutSlice
+                | Self::VecAsStr
+                | Self::SliceSwap
+                | Self::VecAppendArray
+                | Self::CharFromU32
+                | Self::StrSlice
+                | Self::BytesAsStr
+                | Self::MemReplace
+                | Self::MemSwap
+                | Self::CellReplace
+                | Self::CellTake
+                | Self::SharedToMut
+                | Self::BoxLeak
+                | Self::RefEq
+                | Self::Forget
+                | Self::F64Bits
+                | Self::F64FromBits
+                | Self::F32Bits
+                | Self::F32FromBits
+                | Self::F64Math
+                | Self::F32Math
         )
     }
     /// Identity of this function as defined in `unit`. A reexport (e.g.

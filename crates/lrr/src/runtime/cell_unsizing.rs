@@ -55,16 +55,27 @@ impl GuestStore {
         if *to_mutable && !*from_mutable {
             return Ok(None);
         }
-        let (TypeKey::Slice { element }, TypeKey::Array { element: actual, len }) = (
-            self.types.descriptor(*slice)?.key.as_ref(),
-            self.types.descriptor(*array)?.key.as_ref(),
-        ) else {
+        let TypeKey::Slice { element } = self.types.descriptor(*slice)?.key.as_ref() else {
             return Ok(None);
         };
-        if element != actual {
+        let record = self.references.get(RefId::from_bits(value.payload))?;
+        // `&[T; N]` windows its array; `&Vec<T>` (deref coercion) windows the
+        // vector's current elements.
+        let (actual, len) = match self.types.descriptor(*array)?.key.as_ref() {
+            TypeKey::Array { element: actual, len } => (*actual, *len),
+            _ => match self.vec_element_type(*array)? {
+                Some(actual) if actual == *element => {
+                    self.validate_reference_record(record)?;
+                    let cell = record.location()?.final_cell.cell;
+                    let (_, len) = self.sequence_shape(cell, *array)?.ok_or_else(invalid)?;
+                    (actual, len)
+                }
+                _ => return Ok(None),
+            },
+        };
+        if *element != actual {
             return Ok(None);
         }
-        let record = self.references.get(RefId::from_bits(value.payload))?;
         self.validate_reference_record(record)?;
         record.location()?;
         Ok(Some(UnsizeCoercion {
@@ -74,7 +85,7 @@ impl GuestStore {
                 Access::Shared
             },
             slice: *slice,
-            len: *len,
+            len,
         }))
     }
     /// Consume an owned reference value and publish its coerced `[T]` view.
@@ -280,16 +291,18 @@ impl GuestStore {
         range: crate::runtime::place::SliceRange,
     ) -> Result<Place, PlaceFailure> {
         let resolved = self.resolve_place_windowed(base, PlaceUse::Address)?;
-        let available = match (resolved.window, self.types.descriptor(resolved.ty)?.key.as_ref()) {
-            (Some((_, len)), _) => len,
-            (None, TypeKey::Array { len, .. }) => *len,
-            _ => {
-                return Err(Diagnostic::new(
-                    "LRR-E-OP-TYPE",
-                    "range indexing requires an array or slice place".into(),
-                )
-                .into());
-            }
+        let available = match resolved.window {
+            Some((_, len)) => len,
+            None => match self.sequence_shape(resolved.target.cell, resolved.ty)? {
+                Some((_, len)) => len,
+                None => {
+                    return Err(Diagnostic::new(
+                        "LRR-E-OP-TYPE",
+                        "range indexing requires an array, vector or slice place".into(),
+                    )
+                    .into());
+                }
+            },
         };
         let (start, end) = crate::runtime::place::checked_slice_range(range, u64::from(available))
             .map_err(PlaceFailure::GuestPanic)?;

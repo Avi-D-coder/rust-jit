@@ -51,7 +51,16 @@ impl Frame {
         let Some(hint) = self.hint(slot)? else {
             return Ok(None);
         };
-        Ok(match store.type_descriptor(hint)?.key.as_ref() {
+        Self::nominal_descriptor_args(hint, bound, store)
+    }
+    /// The type arguments of `descriptor` when it is the bound declaration's
+    /// nominal Type.
+    fn nominal_descriptor_args(
+        descriptor: TypeId,
+        bound: &BoundNominalVariant,
+        store: &GuestStore,
+    ) -> Result<Option<Vec<TypeId>>, Diagnostic> {
+        Ok(match store.type_descriptor(descriptor)?.key.as_ref() {
             crate::runtime::shape::TypeKey::Nominal { identity, args, .. }
                 if *identity == bound.identity()
                     && args.len() == bound.type_parameters() as usize =>
@@ -63,7 +72,7 @@ impl Frame {
     }
     /// The source view of a constructed nominal value: its descriptor's closed
     /// term (`W<i32>`), or the bare declaration when it has no arguments.
-    pub(super) fn constructed_source(&self, ty: TypeId, store: &GuestStore) -> Option<TyTerm> {
+    pub(crate) fn constructed_source(&self, ty: TypeId, store: &GuestStore) -> Option<TyTerm> {
         store
             .descriptor_source_term(ty)
             .filter(|term| Self::supported_source(term))
@@ -74,6 +83,7 @@ impl Frame {
     pub(crate) fn prepare_nominal_value(
         &mut self,
         bound: Arc<BoundNominalVariant>,
+        stated: Option<&crate::ir::written_type::WrittenType>,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         if !bound.fields().is_empty() {
@@ -85,7 +95,19 @@ impl Frame {
             .get(self.pc.node as usize)
             .and_then(|node| node.value)
             .ok_or_else(|| invalid("value path result slot absent"))?;
-        let args = self.nominal_hint_args(result, &bound, store)?.ok_or_else(|| {
+        let args = match self.nominal_hint_args(result, &bound, store)? {
+            Some(args) => Some(args),
+            // The context the value's own recipe states ahead of this
+            // operation (a Type decided from the value's later uses).
+            None => match stated {
+                Some(written) => match written.materialize(store)? {
+                    Some(descriptor) => Self::nominal_descriptor_args(descriptor, &bound, store)?,
+                    None => None,
+                },
+                None => None,
+            },
+        }
+        .ok_or_else(|| {
             Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",
                 "generic unit variant requires its type context".into(),

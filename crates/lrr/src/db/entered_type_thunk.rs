@@ -33,13 +33,17 @@ fn object(shape: &AnnotationShape) -> bool {
         AnnotationShape::Ref { target, .. } => object(target),
     }
 }
-/// A generic target with an unsized slice argument (`Box<[T]>`): rustc's
-/// unsizing coercion cast (`CoerceUnsized`), like a trait-object target.
+/// A generic target with an unsized slice argument (`Box<[T]>`) or a
+/// reference to a slice (`&[u8]`, `&W<[T]>`): rustc's unsizing coercion cast
+/// (`CoerceUnsized`), like a trait-object target.
 fn unsizing(shape: &AnnotationShape) -> bool {
     match shape {
         AnnotationShape::Generic(_, arguments) => arguments
             .iter()
             .any(|argument| matches!(argument, AnnotationShape::Slice(_)) || unsizing(argument)),
+        AnnotationShape::Ref { target, .. } => {
+            matches!(target.as_ref(), AnnotationShape::Slice(_)) || unsizing(target)
+        }
         _ => false,
     }
 }

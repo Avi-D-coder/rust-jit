@@ -552,3 +552,15 @@ mod builtin_derive_tests;
 #[cfg(test)]
 #[path = "format_trait_facade_tests.rs"]
 mod format_trait_facade_tests;
+#[cfg(test)]
+#[path = "vec_string_tests.rs"]
+mod vec_string_tests;
+#[cfg(test)]
+#[path = "generic_boundary_tests.rs"]
+mod generic_boundary_tests;
+#[cfg(test)]
+#[path = "initializer_tests.rs"]
+mod initializer_tests;
+#[cfg(test)]
+#[path = "int_method_tests.rs"]
+mod int_method_tests;
