@@ -37,7 +37,10 @@ pub(crate) struct PartialHints(BTreeMap<SlotId, PartialHint>);
 impl Frame {
     /// Definition-result hints keep the admitted written coercion structure,
     /// even when the reference result itself has a concrete descriptor.
-    pub(crate) fn definition_result_partial_hint(&mut self, slot: SlotId) -> Result<(), Diagnostic> {
+    pub(crate) fn definition_result_partial_hint(
+        &mut self,
+        slot: SlotId,
+    ) -> Result<(), Diagnostic> {
         let Some(context) = self.context.as_ref() else {
             return Ok(());
         };
@@ -172,6 +175,38 @@ impl Frame {
             seeded.push(Self::partial_exact(arg, &fixed, store)?);
         }
         Ok(Some(seeded))
+    }
+    /// The already prepared reference target, including unknown leaves. This
+    /// carries source-selected structure, never a descriptor-invented source.
+    pub(super) fn partial_reference_target(
+        &self,
+        slot: SlotId,
+        store: &GuestStore,
+    ) -> Result<Option<(bool, super::deref_coercion_frame::CoercionTarget)>, Diagnostic> {
+        let Some(hint) = self.partial_hints.0.get(&slot) else {
+            return Ok(None);
+        };
+        let WrittenType::Ref {
+            mutable, target, ..
+        } = hint.written.as_ref()
+        else {
+            return Ok(None);
+        };
+        // A bare unknown already accepts the nominal value; it must not
+        // speculate a Deref call. A dyn conversion likewise is not Deref.
+        if matches!(
+            target.as_ref(),
+            WrittenType::Infer | WrittenType::Parameter(_) | WrittenType::Dyn(_)
+        ) {
+            return Ok(None);
+        }
+        Ok(Some((
+            *mutable,
+            super::deref_coercion_frame::CoercionTarget::Written {
+                reference: Arc::clone(&hint.written),
+                fixed: self.partial_arguments(hint, store)?.into(),
+            },
+        )))
     }
     /// A borrow's operand under its result's partial reference hint
     /// (`&[u8]`, `&(_, u8)`): the pointee's exact Type as the operand hint,

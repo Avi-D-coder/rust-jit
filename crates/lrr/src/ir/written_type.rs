@@ -181,15 +181,13 @@ impl WrittenType {
             Self::Ptr { mutable, target } => {
                 crate::traits::pointer_terms::raw_pointer(*mutable, target.source_in(store, args)?)
             }
-            Self::FnPtr { params, result } => {
-                crate::traits::pointer_terms::fn_pointer(
-                    params
-                        .iter()
-                        .map(|param| param.source_in(store, args))
-                        .collect::<Option<Vec<_>>>()?,
-                    result.source_in(store, args)?,
-                )
-            }
+            Self::FnPtr { params, result } => crate::traits::pointer_terms::fn_pointer(
+                params
+                    .iter()
+                    .map(|param| param.source_in(store, args))
+                    .collect::<Option<Vec<_>>>()?,
+                result.source_in(store, args)?,
+            ),
         })
     }
     /// Every written region, for recipe verification.
@@ -457,10 +455,10 @@ impl WrittenType {
         store: &GuestStore,
         args: &mut [Option<TypeId>],
     ) -> Result<bool, Diagnostic> {
-        let key = std::sync::Arc::clone(&store.type_descriptor(ty)?.key);
-        Ok(match (self, key.as_ref()) {
-            (Self::Infer | Self::Dyn(_), _) => true,
-            (Self::Parameter(index), _) => match args.get_mut(*index as usize) {
+        self.bind_with(
+            ty,
+            store,
+            &mut |index, ty| match args.get_mut(index as usize) {
                 Some(Some(fixed)) => {
                     *fixed == ty || store.dyn_admits(*fixed, ty) || store.dyn_admits(ty, *fixed)
                 }
@@ -470,6 +468,47 @@ impl WrittenType {
                 }
                 None => false,
             },
+        )
+    }
+    /// Test an open written coercion target against one reached Type. Unknown
+    /// declaration parameters bind transactionally for this comparison only;
+    /// fixed parameters and repeated occurrences must agree. The ordinary call
+    /// contract still owns the actual inference/substitution publication.
+    pub(crate) fn admits_partial(
+        &self,
+        ty: TypeId,
+        store: &GuestStore,
+        fixed: &[Option<TypeId>],
+    ) -> Result<bool, Diagnostic> {
+        let mut bindings = std::collections::BTreeMap::new();
+        self.bind_with(ty, store, &mut |ordinal, ty| {
+            if let Some(Some(fixed)) = fixed.get(ordinal as usize) {
+                return *fixed == ty
+                    || store.dyn_admits(*fixed, ty)
+                    || store.dyn_admits(ty, *fixed);
+            }
+            match bindings.entry(ordinal) {
+                std::collections::btree_map::Entry::Occupied(entry) => {
+                    let fixed = *entry.get();
+                    fixed == ty || store.dyn_admits(fixed, ty) || store.dyn_admits(ty, fixed)
+                }
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(ty);
+                    true
+                }
+            }
+        })
+    }
+    fn bind_with(
+        &self,
+        ty: TypeId,
+        store: &GuestStore,
+        bind_parameter: &mut dyn FnMut(u32, TypeId) -> bool,
+    ) -> Result<bool, Diagnostic> {
+        let key = std::sync::Arc::clone(&store.type_descriptor(ty)?.key);
+        Ok(match (self, key.as_ref()) {
+            (Self::Infer | Self::Dyn(_), _) => true,
+            (Self::Parameter(index), _) => bind_parameter(*index, ty),
             (Self::Primitive(primitive), _) => {
                 PrimitiveIdentity::from_recipe(*primitive)?.id() == ty
             }
@@ -481,7 +520,7 @@ impl WrittenType {
                     return Ok(false);
                 }
                 for (member, id) in members.iter().zip(ids.iter()) {
-                    if !member.bind(*id, store, args)? {
+                    if !member.bind_with(*id, store, bind_parameter)? {
                         return Ok(false);
                     }
                 }
@@ -493,9 +532,9 @@ impl WrittenType {
                     element: id,
                     len: actual,
                 },
-            ) => len == actual && element.bind(*id, store, args)?,
+            ) => len == actual && element.bind_with(*id, store, bind_parameter)?,
             (Self::Slice(element), TypeKey::Slice { element: id }) => {
-                element.bind(*id, store, args)?
+                element.bind_with(*id, store, bind_parameter)?
             }
             (
                 Self::Ref {
@@ -505,7 +544,7 @@ impl WrittenType {
                     mutable: actual,
                     target: id,
                 },
-            ) => mutable == actual && target.bind(*id, store, args)?,
+            ) => mutable == actual && target.bind_with(*id, store, bind_parameter)?,
             (
                 Self::Ptr {
                     mutable, target, ..
@@ -514,7 +553,7 @@ impl WrittenType {
                     mutable: actual,
                     target: id,
                 },
-            ) => mutable == actual && target.bind(*id, store, args)?,
+            ) => mutable == actual && target.bind_with(*id, store, bind_parameter)?,
             (
                 Self::FnPtr { params, result },
                 TypeKey::Function {
@@ -526,11 +565,11 @@ impl WrittenType {
                     return Ok(false);
                 }
                 for (param, id) in params.iter().zip(ids.iter()) {
-                    if !param.bind(*id, store, args)? {
+                    if !param.bind_with(*id, store, bind_parameter)? {
                         return Ok(false);
                     }
                 }
-                result.bind(*actual, store, args)?
+                result.bind_with(*actual, store, bind_parameter)?
             }
             (
                 Self::Generic {
@@ -548,7 +587,7 @@ impl WrittenType {
                     return Ok(false);
                 }
                 for (arg, id) in written.iter().zip(ids.iter()) {
-                    if !arg.bind(*id, store, args)? {
+                    if !arg.bind_with(*id, store, bind_parameter)? {
                         return Ok(false);
                     }
                 }

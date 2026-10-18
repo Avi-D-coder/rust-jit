@@ -34,13 +34,56 @@ struct ExpectedPointee {
     descriptor: Option<TypeId>,
     /// The pointee's retained source view.
     source: Option<TyTerm>,
+    partial: Option<CoercionTarget>,
+}
+/// One admitted target for both coercion-chain selection and continuation.
+/// Written targets keep open declaration parameters separate from runtime
+/// facts; they are checked by the ordinary WrittenType binder.
+#[derive(Clone)]
+pub(crate) enum CoercionTarget {
+    Source(TyTerm),
+    Written {
+        reference: std::sync::Arc<crate::ir::written_type::WrittenType>,
+        fixed: std::sync::Arc<[Option<TypeId>]>,
+    },
+}
+impl CoercionTarget {
+    pub(crate) fn admits_source(
+        &self,
+        source: &TyTerm,
+        store: &GuestStore,
+    ) -> Result<bool, Diagnostic> {
+        match self {
+            Self::Source(expected) => Ok(crate::frontend::signature_subst::erase_regions(source)
+                == crate::frontend::signature_subst::erase_regions(expected)),
+            Self::Written { .. } => match store.find_structural_term(source) {
+                Some(ty) => self.admits_type(ty, store),
+                None => Ok(false),
+            },
+        }
+    }
+    pub(crate) fn admits_type(&self, ty: TypeId, store: &GuestStore) -> Result<bool, Diagnostic> {
+        match self {
+            Self::Source(expected) => Ok(store.descriptor_source_term(ty).is_some_and(|source| {
+                crate::frontend::signature_subst::erase_regions(&source)
+                    == crate::frontend::signature_subst::erase_regions(expected)
+            })),
+            Self::Written { reference, fixed } => {
+                let crate::ir::written_type::WrittenType::Ref { target, .. } = reference.as_ref()
+                else {
+                    return Err(invalid("written coercion goal is not a reference"));
+                };
+                target.admits_partial(ty, store, fixed)
+            }
+        }
+    }
 }
 
 /// A borrow's deref coercion goal: the borrowed nominal Type and the closed
 /// Type its result expects a reference to.
 pub(crate) struct BorrowCoercionGoal {
     pub(crate) place_type: TypeId,
-    pub(crate) expected: TyTerm,
+    pub(crate) expected: CoercionTarget,
 }
 
 /// Where a reference value is read from.
@@ -57,18 +100,29 @@ pub(crate) struct ValueCoercionGoal {
     pub(crate) referent: Place,
     pub(crate) referent_type: TypeId,
     pub(crate) mutable: bool,
-    pub(crate) expected: TyTerm,
+    pub(crate) expected: CoercionTarget,
 }
 
 impl Frame {
-    fn expected_pointee(&self, destination: SlotId, store: &GuestStore) -> Option<ExpectedPointee> {
-        let result = self.slot(destination).ok()?;
-        if result.source.is_none() && result.hint.is_none() && result.cell.is_none() {
-            return None;
+    fn expected_pointee(
+        &self,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<Option<ExpectedPointee>, Diagnostic> {
+        let result = self.slot(destination)?;
+        let partial = self.partial_reference_target(destination, store)?;
+        if result.source.is_none()
+            && result.hint.is_none()
+            && result.cell.is_none()
+            && partial.is_none()
+        {
+            return Ok(None);
         }
         let (mut mutable, source) = match result.source.as_ref() {
-            Some(TyTerm::Ref(_, mutable, pointee)) => (Some(*mutable), Some(pointee.as_ref().clone())),
-            _ => (None, None),
+            Some(TyTerm::Ref(_, mutable, pointee)) => {
+                (Some(*mutable), Some(pointee.as_ref().clone()))
+            }
+            _ => (partial.as_ref().map(|(mutable, _)| *mutable), None),
         };
         let contract = match result.cell {
             Some(cell) => match store.declared(cell) {
@@ -79,19 +133,24 @@ impl Frame {
         };
         let mut descriptor = None;
         if let Some(descriptor_key) = contract.and_then(|ty| store.type_descriptor(ty).ok()) {
-            if let TypeKey::Ref { mutable: hinted, target } = descriptor_key.key.as_ref() {
+            if let TypeKey::Ref {
+                mutable: hinted,
+                target,
+            } = descriptor_key.key.as_ref()
+            {
                 descriptor = Some(*target);
                 mutable = mutable.or(Some(*hinted));
             }
         }
-        if source.is_none() && descriptor.is_none() {
-            return None;
+        if source.is_none() && descriptor.is_none() && partial.is_none() {
+            return Ok(None);
         }
-        Some(ExpectedPointee {
+        Ok(Some(ExpectedPointee {
             mutable,
             descriptor,
             source,
-        })
+            partial: partial.map(|(_, target)| target),
+        }))
     }
     /// The closed Type a reference to the nominal `ty` is expected to become,
     /// or `None` when no deref step is called for: an exact match, an open
@@ -102,7 +161,7 @@ impl Frame {
         ty: TypeId,
         expected: ExpectedPointee,
         store: &GuestStore,
-    ) -> Result<Option<TyTerm>, Diagnostic> {
+    ) -> Result<Option<CoercionTarget>, Diagnostic> {
         if expected.descriptor == Some(ty)
             || expected
                 .descriptor
@@ -110,25 +169,40 @@ impl Frame {
         {
             return Ok(None);
         }
-        if let Some(pointee) = expected.source.as_ref() {
-            if !crate::frontend::call_contracts::closed_term(pointee) {
-                return Ok(None);
-            }
-            if self.require_borrow_source_target(Some(pointee), ty, store).is_ok() {
+        if let Some(pointee) = expected
+            .source
+            .as_ref()
+            .filter(|term| crate::frontend::call_contracts::closed_term(term))
+        {
+            if self
+                .require_borrow_source_target(Some(pointee), ty, store)
+                .is_ok()
+            {
                 return Ok(None);
             }
         }
-        Ok(match expected.source {
-            Some(pointee) => Some(pointee),
-            None => expected
-                .descriptor
-                .and_then(|ty| store.descriptor_source_term(ty))
-                .filter(crate::frontend::call_contracts::closed_term),
-        })
+        let target = expected
+            .source
+            .filter(crate::frontend::call_contracts::closed_term)
+            .map(CoercionTarget::Source)
+            .or(expected.partial)
+            .or_else(|| {
+                expected
+                    .descriptor
+                    .and_then(|ty| store.descriptor_source_term(ty))
+                    .filter(crate::frontend::call_contracts::closed_term)
+                    .map(CoercionTarget::Source)
+            });
+        match target {
+            Some(target) if !target.admits_type(ty, store)? => Ok(Some(target)),
+            _ => Ok(None),
+        }
     }
     fn is_overloaded_nominal(ty: TypeId, store: &GuestStore) -> Result<bool, Diagnostic> {
-        Ok(matches!(store.type_descriptor(ty)?.key.as_ref(), TypeKey::Nominal { .. })
-            && store.box_contents_type(ty)?.is_none())
+        Ok(matches!(
+            store.type_descriptor(ty)?.key.as_ref(),
+            TypeKey::Nominal { .. }
+        ) && store.box_contents_type(ty)?.is_none())
     }
     /// A borrow whose result expects a reference to another Type than the
     /// nominal value it borrows (`&v` of a `Vec` expected as `&[T]`): the
@@ -140,7 +214,10 @@ impl Frame {
         destination: SlotId,
         store: &GuestStore,
     ) -> Result<Option<BorrowCoercionGoal>, Diagnostic> {
-        if !(self.body.slot_kind(place).is_ok_and(|kind| kind == SlotKind::Place)
+        if !(self
+            .body
+            .slot_kind(place)
+            .is_ok_and(|kind| kind == SlotKind::Place)
             && self.slots.get(place.0 as usize).is_some_and(|slot| {
                 slot.place.is_some() && self.active_scopes.contains(&slot.scope)
             }))
@@ -156,13 +233,15 @@ impl Frame {
         if !Self::is_overloaded_nominal(ty, store)? {
             return Ok(None);
         }
-        let Some(expected) = self.expected_pointee(destination, store) else {
+        let Some(expected) = self.expected_pointee(destination, store)? else {
             return Ok(None);
         };
-        Ok(self.coercion_target(ty, expected, store)?.map(|expected| BorrowCoercionGoal {
-            place_type: ty,
-            expected,
-        }))
+        Ok(self
+            .coercion_target(ty, expected, store)?
+            .map(|expected| BorrowCoercionGoal {
+                place_type: ty,
+                expected,
+            }))
     }
     /// A read of a reference value (`s: &String` read into a `&str` slot):
     /// the referent place and Type when the destination expects a reference
@@ -174,7 +253,7 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<Option<ValueCoercionGoal>, Diagnostic> {
         // Most reads have no reference expectation at all.
-        let Some(expected) = self.expected_pointee(destination, store) else {
+        let Some(expected) = self.expected_pointee(destination, store)? else {
             return Ok(None);
         };
         let Some(expected_mutable) = expected.mutable else {

@@ -482,13 +482,13 @@ impl RunMachine {
     /// Whether `Deref` steps from the nominal Type `ty` reach `expected`
     /// (the pointee a borrow's result expects), each target normalized by the
     /// shared associated-type normalizer over the impl index; for a mutable
-    /// borrow every step must also be a `DerefMut` impl. Bounded by rustc's
-    /// autoderef recursion limit.
+    /// borrow every step must also be a `DerefMut` impl. Repeated normalized
+    /// source Types terminate an impossible chain without an arbitrary cap.
     pub(super) fn deref_chain_reaches(
         &mut self,
         db: &mut Database,
         ty: crate::runtime::shape::TypeId,
-        expected: &crate::traits::term::TyTerm,
+        expected: &crate::vm::frame::CoercionTarget,
         mutable: bool,
     ) -> QueryPoll<bool> {
         use crate::traits::term::{ProjectionKey, TraitRef, TyTerm};
@@ -522,8 +522,8 @@ impl RunMachine {
             return QueryPoll::Ready(Ok(false));
         };
         let sources: Vec<_> = self.sources.iter().collect();
-        let wanted = crate::frontend::signature_subst::erase_regions(expected);
-        for _ in 0..128 {
+        let mut visited = std::collections::BTreeSet::new();
+        while visited.insert(term.clone()) {
             let TyTerm::Nominal(head, _) = &term else {
                 return QueryPoll::Ready(Ok(false));
             };
@@ -554,8 +554,10 @@ impl RunMachine {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-            if crate::frontend::signature_subst::erase_regions(&target) == wanted {
-                return QueryPoll::Ready(Ok(true));
+            match expected.admits_source(&target, &self.store) {
+                Ok(true) => return QueryPoll::Ready(Ok(true)),
+                Ok(false) => {},
+                Err(error) => return QueryPoll::Ready(Err(error)),
             }
             term = target;
         }

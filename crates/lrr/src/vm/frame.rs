@@ -19,6 +19,7 @@ mod coercions_frame;
 mod constant_array_frame;
 #[path = "frame_deref_coercion.rs"]
 pub(crate) mod deref_coercion_frame;
+pub(crate) use deref_coercion_frame::CoercionTarget;
 #[path = "frame_item_values.rs"]
 pub(crate) mod item_values_frame;
 #[path = "frame_nominal_values.rs"]

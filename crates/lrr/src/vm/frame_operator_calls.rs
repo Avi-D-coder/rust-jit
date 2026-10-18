@@ -13,7 +13,7 @@
 //! dispatcher selects that method from the left operand's reached type
 //! through the run's member index and enters it as an ordinary source call
 //! (`engine/run_operator_calls.rs`); its result resumes the operation.
-use super::deref_coercion_frame::{ValueCoercionGoal, ValueRead};
+use super::deref_coercion_frame::{CoercionTarget, ValueCoercionGoal, ValueRead};
 use super::*;
 use crate::{
     ir::op::{BorrowAccess, NumericBinary, NumericUnary, Op, OperandRead},
@@ -162,7 +162,7 @@ struct ValueCoercion {
     current: Place,
     referent_type: TypeId,
     mutable: bool,
-    expected: TyTerm,
+    expected: CoercionTarget,
 }
 impl ValueCoercion {
     fn duplicate(&self) -> ValueCoercion {
@@ -1617,7 +1617,7 @@ impl Frame {
     pub(crate) fn pending_coercion_goal(
         &self,
         store: &GuestStore,
-    ) -> Result<Option<(TypeId, TyTerm, bool)>, Diagnostic> {
+    ) -> Result<Option<(TypeId, CoercionTarget, bool)>, Diagnostic> {
         let Some(activation) = self
             .operator_activation
             .as_ref()
@@ -1763,11 +1763,7 @@ impl Frame {
             return Err(invalid("a Deref method returned a non-reference"));
         };
         let target = *target;
-        let reached = store
-            .descriptor_source_term(target)
-            .map(|term| crate::frontend::signature_subst::erase_regions(&term));
-        let wanted = crate::frontend::signature_subst::erase_regions(&coercion.expected);
-        if reached.as_ref() == Some(&wanted) {
+        if coercion.expected.admits_type(target, store)? {
             // The chain ends: the reference is the read's value.
             self.preflight_write_value(destination, value, store)?;
             self.prepare_write(destination, store)?;
