@@ -134,6 +134,41 @@ pub struct ImplMembers {
     /// definitions bounding its self parameter (unresolved bounds are `None`).
     pub blanket: Option<Vec<Option<Digest>>>,
 }
+/// The member row selected by the existing associated-constant candidate
+/// loop. This retains provider identity; it is not a closed generic
+/// application or authority to enter its initializer.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct AssociatedConstSelection {
+    definition: Digest,
+    implementation: Digest,
+    trait_definition: Option<Digest>,
+    provided_default: bool,
+}
+impl AssociatedConstSelection {
+    pub(crate) fn definition(&self) -> Digest {
+        self.definition
+    }
+    pub(crate) fn implementation(&self) -> Digest {
+        self.implementation
+    }
+    pub(crate) fn trait_definition(&self) -> Option<Digest> {
+        self.trait_definition
+    }
+    pub(crate) fn is_provided_default(&self) -> bool {
+        self.provided_default
+    }
+}
+impl StableEncode for AssociatedConstSelection {
+    const DOMAIN: &'static str = "lrr/v1/selected-associated-constant-provider";
+    fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
+        e.digest(self.definition);
+        e.digest(self.implementation);
+        e.option(&self.trait_definition, |e, definition| {
+            e.digest(*definition)
+        });
+        e.bool(self.provided_default);
+    }
+}
 /// An associated type alias of a trait impl: its written target in its
 /// impl-owned scope, and the impl's generic parameter count.
 #[derive(Debug, Clone)]
@@ -1363,6 +1398,17 @@ impl MemberIndex {
         trait_key: Option<Digest>,
         name: &str,
     ) -> Result<Option<Digest>, Diagnostic> {
+        self.associated_const_selection(ty, trait_key, name)
+            .map(|selection| selection.map(|selection| selection.definition()))
+    }
+    /// Same selection as `associated_const`, retaining the actual provider
+    /// needed to bind an impl's parameters or a trait default's `Self`.
+    pub(crate) fn associated_const_selection(
+        &self,
+        ty: Result<Digest, BuiltinSelf>,
+        trait_key: Option<Digest>,
+        name: &str,
+    ) -> Result<Option<AssociatedConstSelection>, Diagnostic> {
         let impls: Vec<&ImplMembers> = match ty {
             Ok(nominal) => self.impls_of(nominal).collect(),
             Err(builtin) => self.builtin_impls(builtin).collect(),
@@ -1371,9 +1417,19 @@ impl MemberIndex {
             && let Some(found) = impls
                 .iter()
                 .filter(|members| members.trait_path.is_none())
-                .find_map(|members| members.consts.get(name))
+                .find_map(|members| {
+                    members
+                        .consts
+                        .get(name)
+                        .map(|definition| AssociatedConstSelection {
+                            definition: *definition,
+                            implementation: members.identity,
+                            trait_definition: None,
+                            provided_default: false,
+                        })
+                })
         {
-            return Ok(Some(*found));
+            return Ok(Some(found));
         }
         let applicable = |members: &&ImplMembers| {
             members.trait_path.is_some()
@@ -1392,11 +1448,17 @@ impl MemberIndex {
                 members
                     .trait_definition
                     .and_then(|definition| {
-                        self.layers().find_map(|layer| layer.trait_consts.get(&definition))
+                        self.layers()
+                            .find_map(|layer| layer.trait_consts.get(&definition))
                     })
                     .and_then(|defaults| defaults.get(name))
             }) {
-                found.push(*constant);
+                found.push(AssociatedConstSelection {
+                    definition: *constant,
+                    implementation: members.identity,
+                    trait_definition: members.trait_definition,
+                    provided_default: !members.consts.contains_key(name),
+                });
             }
         }
         match found.as_slice() {

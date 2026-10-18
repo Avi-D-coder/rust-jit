@@ -754,7 +754,7 @@ impl StableEncode for EnteredCallGoal {
     }
 }
 
-fn written_argument(
+pub(super) fn written_argument(
     plan: &PreparedSourceLocalPlan,
     argument: ast::GenericArg,
 ) -> Result<EnteredGenericArgument, Diagnostic> {

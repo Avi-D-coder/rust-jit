@@ -66,6 +66,7 @@ impl ConstantQueryFailure {
             || diagnostic.guest_stack.is_some()
             || diagnostic.rendered_guest_stack.is_some()
             || diagnostic.origin_attachment_failure.is_some()
+            || diagnostic.prepared_input_change.is_some()
             || diagnostic.failure_context.is_some()
         {
             return Err(invalid(

@@ -110,7 +110,15 @@ impl PreparedInputGuard {
                 .published_input(key)
                 .map_or_else(missing_fingerprint, |(_, fingerprint)| fingerprint);
             if actual != *fingerprint {
-                return Err(stale("prepared operation input changed"));
+                let mut error = stale("prepared operation input changed");
+                error.prepared_input_change = Some(Box::new(
+                    crate::core::diagnostic::PreparedInputChange {
+                        key: key.clone(),
+                        expected: *fingerprint,
+                        actual,
+                    },
+                ));
+                return Err(error);
             }
         }
         self.checked.record(db);

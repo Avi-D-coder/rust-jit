@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T13:42:59.269705+00:00",
+  "updated_at": "2026-10-18T13:53:01.490921+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -727,12 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V27 exactcd6f8e7e bothbuildsPASS;primary3/3runtime1new;controls10/11,sourcegoal/global-localruntime+ancestrypass. Supplementaltrait1/2 currentstaleinputregression;application0/1SelfX. Lifecycleclassificationheld,nofreshsuitecount/gateclosure.",
+    "validation": "V28 exact9b9bdb78 bothbuildsPASS;4/5retainedruntime+12/12controlsPASS,no newstock; CopycommonConstructionId controls8/8. SameformattingfaultactualVecnewBodyEnvabsencepublication. Lifecycleproductiondoublecompletionfix reviewed/unexecuted;Selfsourceapplicationongoing. Fulltemplate/cache/architecture/JITheld.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 25,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "68195da3483d755478002f67c9eb8304c32787d6",
+    "source_checkpoint_pushed": "4ad527499a6dd5e23752476669c2c7a9eb4b7eef",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

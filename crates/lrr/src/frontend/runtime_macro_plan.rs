@@ -687,6 +687,7 @@ impl RuntimeIntrinsicPlan {
                                 guest_stack: None,
                                 rendered_guest_stack: None,
                                 origin_attachment_failure: None,
+                                prepared_input_change: None,
                                 failure_context: None,
                             }
                         ) {

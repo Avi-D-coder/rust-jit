@@ -10,12 +10,11 @@ pub(crate) fn requires_activation() -> Diagnostic {
     )
 }
 struct CopyDestination {
-    object: ObjectId,
+    guard: ConstructionId,
     ty: TypeId,
     count: usize,
     /// A nominal Copy value's active variant and its fields' exact Types.
     variant: Option<u32>,
-    members: Vec<TypeId>,
 }
 struct CopyFrame {
     source: CellStamp,
@@ -69,7 +68,10 @@ impl GuestStore {
             return Err(requires_activation());
         }
         let count = match descriptor.key.as_ref() {
-            TypeKey::Tuple(fields) | TypeKey::Callable { captures: fields, .. } => fields.len(),
+            TypeKey::Tuple(fields)
+            | TypeKey::Callable {
+                captures: fields, ..
+            } => fields.len(),
             TypeKey::Array { len, .. } => usize::try_from(*len).map_err(|_| resource())?,
             _ => return Err(requires_activation()),
         };
@@ -84,152 +86,87 @@ impl GuestStore {
     }
     fn begin_copy_destination(&mut self, source: CellId) -> Result<CopyDestination, Diagnostic> {
         let (ty, count, variant) = self.copy_layout(source)?;
+        // The source is already an owning, fully initialized value admitted by
+        // the same Copy rule above. Its real field contracts, rather than an
+        // invented source constructor, determine this physical replica guard.
         let mut members = Vec::new();
+        members.try_reserve_exact(count).map_err(|_| resource())?;
         if variant.is_some() {
             let (_, storage) = self.place_object(source)?;
-            members.try_reserve_exact(count).map_err(|_| resource())?;
             for field in &storage.fields {
                 members.push(TypeId(self.admit_move(*field)?.type_id));
             }
+        } else {
+            match self.types.descriptor(ty)?.key.as_ref() {
+                TypeKey::Tuple(fields)
+                | TypeKey::Callable {
+                    captures: fields, ..
+                } => {
+                    members.extend(fields.iter().copied());
+                }
+                TypeKey::Array { element, .. } => members.resize(count, *element),
+                _ => return Err(ownership()),
+            }
         }
-        self.objects.reserve(1, &mut self.budget)?;
-        let mut fields = Vec::new();
-        fields.try_reserve_exact(count).map_err(|_| resource())?;
-        let initialized = InitializedFields::empty(count)?;
-        let owned = fields
-            .capacity()
-            .checked_mul(std::mem::size_of::<CellId>())
-            .and_then(|n| n.checked_add(initialized.owned_bytes()?))
-            .ok_or_else(resource)?;
-        let object = ObjectId::from(self.objects.allocate(
-            ObjectRecord {
-                type_id: ty,
-                owner: None,
-                storage: ObjectStorage::Aggregate(AggregateStorage {
-                    fields,
-                    initialized,
-                    next_cleanup: 0,
-                    pending_cleanup: None,
-                    variant,
-                }),
-            },
-            owned,
-            &mut self.budget,
-        )?);
+        let guard = self.begin_construction(&members)?;
+        if let Some(variant) = variant {
+            self.constructions.get_mut(guard)?.nominal = Some((ty, variant));
+        }
         Ok(CopyDestination {
-            object,
+            guard,
             ty,
             count,
             variant,
-            members,
         })
+    }
+    fn copy_destination(
+        &self,
+        destination: &CopyDestination,
+    ) -> Result<&ConstructionRecord, Diagnostic> {
+        let record = self.constructions.get(destination.guard)?;
+        if record.state != ConstructionState::Building
+            || record.expected.len() != destination.count
+            || record.fields.len() != destination.count
+            || record.nominal != destination.variant.map(|variant| (destination.ty, variant))
+            || record.observed_kind.is_some()
+            || record.pending_nominal.is_some()
+        {
+            return Err(ownership());
+        }
+        Ok(record)
     }
     fn copy_member_type(
         &self,
         destination: &CopyDestination,
         index: usize,
     ) -> Result<TypeId, Diagnostic> {
-        if index >= destination.count {
-            return Err(ownership());
-        }
-        if destination.variant.is_some() {
-            return destination.members.get(index).copied().ok_or_else(ownership);
-        }
-        match self.types.descriptor(destination.ty)?.key.as_ref() {
-            TypeKey::Tuple(fields) | TypeKey::Callable { captures: fields, .. } => {
-                fields.get(index).copied().ok_or_else(ownership)
-            }
-            TypeKey::Array { element, len }
-                if usize::try_from(*len).ok() == Some(destination.count) =>
-            {
-                Ok(*element)
-            }
-            _ => Err(ownership()),
-        }
+        self.copy_destination(destination)?
+            .expected
+            .get(index)
+            .copied()
+            .flatten()
+            .ok_or_else(ownership)
     }
     fn append_copy_field(
         &mut self,
         destination: &CopyDestination,
         ticket: TicketId,
     ) -> Result<(), Diagnostic> {
-        let object = self.objects.get(destination.object)?;
-        let ObjectStorage::Aggregate(storage) = &object.storage else {
-            return Err(ownership());
-        };
-        if object.owner.is_some()
-            || object.type_id != destination.ty
-            || storage.next_cleanup != 0
-            || storage.variant != destination.variant
-            || storage.fields.len() >= destination.count
-            || storage.fields.capacity() < destination.count
-        {
+        let index = self.copy_destination(destination)?.completed.len();
+        if index >= destination.count {
             return Err(ownership());
         }
-        let index = storage.fields.len();
-        if storage.initialized.field(index)? {
-            return Err(ownership());
-        }
-        let expected = self.copy_member_type(destination, index)?;
-        let value = self.peek_ticket(ticket)?;
-        self.require_initialized_value(value)?;
-        self.object_owner(value, ValueOwner::Ticket(ticket))?;
-        if TypeId(value.type_id) != expected
-            && !self.contract_admits(Some(expected), Some(TypeId(value.type_id)))
-        {
-            return Err(ownership());
-        }
-        self.cells.reserve(1, &mut self.budget)?;
-        let cell = self.new_cell(
-            StorageContract::Exact(expected),
-            true,
-            CellOwner::Field {
-                object: destination.object,
-                index: u32::try_from(index).map_err(|_| resource())?,
-            },
-        )?;
-        // Owner=None is a private guard, so ordinary parent initialization is
-        // intentionally unavailable. Publish exactly this prevalidated child.
-        self.tickets.take(ticket, &mut self.budget)?;
-        self.set_owner(value, ValueOwner::Cell(cell))?;
-        self.cells.get_mut(cell)?.state = CellState::Live(value);
-        let ObjectStorage::Aggregate(storage) =
-            &mut self.objects.get_mut(destination.object)?.storage
-        else {
-            return Err(ownership());
-        };
-        storage.fields.push(cell);
-        storage.initialized.set(index, true)?;
-        Ok(())
+        let field = u32::try_from(index).map_err(|_| resource())?;
+        self.construction_push(destination.guard, field, ticket)
     }
     fn finish_copy_destination(
         &mut self,
-        destination: CopyDestination,
+        destination: &CopyDestination,
     ) -> Result<TicketId, Diagnostic> {
-        let object = self.objects.get(destination.object)?;
-        let ObjectStorage::Aggregate(storage) = &object.storage else {
-            return Err(ownership());
-        };
-        if object.owner.is_some()
-            || object.type_id != destination.ty
-            || storage.next_cleanup != 0
-            || storage.variant != destination.variant
-            || storage.fields.len() != destination.count
-            || !storage.initialized.complete_value()
-        {
-            return Err(ownership());
-        }
-        let value = ValueRepr {
-            kind: 8,
-            type_id: destination.ty.0,
-            payload: destination.object.bits(),
-        };
-        let ticket = TicketId::from(self.tickets.allocate(
-            TransferTicket { value },
-            0,
-            &mut self.budget,
-        )?);
-        self.set_owner(value, ValueOwner::Ticket(ticket))?;
-        Ok(ticket)
+        self.copy_destination(destination)?;
+        // The common commit validates every field/owner and reserves all
+        // destination storage before consuming the actual construction guard.
+        self.commit_construction(destination.guard, destination.ty)
     }
 }
 impl AggregateCopy {
@@ -307,7 +244,6 @@ impl AggregateCopy {
                     });
                 } else {
                     store.tickets.reserve(1, &mut store.budget)?;
-                    store.cells.reserve(1, &mut store.budget)?;
                     let ticket = store.copy_from(source)?;
                     let frame = self.stack.last_mut().ok_or_else(ownership)?;
                     store.append_copy_field(&frame.destination, ticket)?;
@@ -316,13 +252,12 @@ impl AggregateCopy {
                 Ok(CopyProgress::Pending)
             }
             CopyWork::Finish => {
-                let nested = self.stack.len() > 1;
                 store.tickets.reserve(1, &mut store.budget)?;
-                if nested {
-                    store.cells.reserve(1, &mut store.budget)?;
-                }
-                let frame = self.stack.pop().ok_or_else(ownership)?;
-                let ticket = store.finish_copy_destination(frame.destination)?;
+                // A failed common commit leaves the exact live guard reachable
+                // in this activation rather than losing it by popping first.
+                let frame = self.stack.last().ok_or_else(ownership)?;
+                let ticket = store.finish_copy_destination(&frame.destination)?;
+                self.stack.pop().ok_or_else(ownership)?;
                 if let Some(parent) = self.stack.last_mut() {
                     store.append_copy_field(&parent.destination, ticket)?;
                     parent.next = parent.next.checked_add(1).ok_or_else(resource)?;

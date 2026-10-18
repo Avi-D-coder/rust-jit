@@ -1,5 +1,14 @@
 use serde::Serialize;
 
+/// Actual retained dependency mismatch. Constructed only on a failed guard;
+/// this evidence never refreshes the guard or grants execution authority.
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct PreparedInputChange {
+    pub(crate) key: crate::db::dependency::InputKey,
+    pub(crate) expected: crate::core::digest::Digest,
+    pub(crate) actual: crate::core::digest::Digest,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Diagnostic {
     pub code: &'static str,
@@ -11,6 +20,8 @@ pub struct Diagnostic {
     pub guest_stack: Option<Box<crate::syntax::origin::GuestStackOrigin>>,
     pub rendered_guest_stack: Option<Box<crate::syntax::origin::RenderedGuestStack>>,
     pub origin_attachment_failure: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) prepared_input_change: Option<Box<PreparedInputChange>>,
     /// Dispatcher facts stay local; query errors construct this as absent. Wire
     /// forwarding and the full worker diagnostic protocol have separate gates.
     #[serde(skip)]
@@ -19,6 +30,11 @@ pub struct Diagnostic {
 impl Diagnostic {
     pub fn heap_bytes(&self) -> Option<usize> {
         let mut bytes = self.message.capacity();
+        if let Some(change) = &self.prepared_input_change {
+            bytes = bytes
+                .checked_add(std::mem::size_of::<PreparedInputChange>())?
+                .checked_add(change.key.heap_bytes())?;
+        }
         if let Some(stack) = &self.guest_stack {
             bytes = bytes.checked_add(stack.heap_bytes()?)?;
         }
@@ -98,6 +114,7 @@ impl Diagnostic {
             guest_stack: None,
             rendered_guest_stack: None,
             origin_attachment_failure: None,
+            prepared_input_change: None,
             failure_context: None,
         }
     }
@@ -261,6 +278,13 @@ impl std::fmt::Display for Diagnostic {
                     stack.omitted_frames, stack.omitted_locations
                 )?;
             }
+        }
+        if let Some(change) = &self.prepared_input_change {
+            write!(
+                f,
+                "\n  = prepared input {:?}: expected {}, actual {}",
+                change.key, change.expected, change.actual
+            )?;
         }
         if let Some(code) = self.origin_attachment_failure {
             write!(f, "\n  = generated origin attachment unavailable: {code}")?;

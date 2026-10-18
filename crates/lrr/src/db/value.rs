@@ -528,6 +528,13 @@ impl QueryValue {
                 e.option(&v.generated_origin, |e, origin| e.record(origin.as_ref()));
                 e.option(&v.guest_stack, |e, stack| e.record(stack.as_ref()));
                 e.option(&v.origin_attachment_failure, |e, code| e.string(code));
+                if let Some(change) = &v.prepared_input_change {
+                    // Preserve existing error encodings when evidence is absent.
+                    e.string("lrr/v1/diagnostic-prepared-input-change");
+                    e.record(&change.key);
+                    e.digest(change.expected);
+                    e.digest(change.actual);
+                }
             }
         };
         e.finish()

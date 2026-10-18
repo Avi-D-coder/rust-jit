@@ -1,3 +1,4 @@
+pub(crate) mod associated_constant_applications;
 pub(crate) mod associated_types;
 pub mod builtin_attributes;
 pub mod compile_input_catalog;

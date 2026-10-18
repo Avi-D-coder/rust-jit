@@ -552,3 +552,36 @@ is counted. Failure-only key/stamp diagnostic candidate is source-only next.
 Root common Copy guard and worker source application carrier are also separate
 uncompiled successors, with explicit full-template/application/cache holds.
 No full-fixture/architecture/interpreter/JIT gate closes. [Exact V27 receipt](../../worktracks/evidence/2026-10-18-interpreter-v27-validation.json).
+
+## V28 common Copy guard and actual stale-input evidence
+
+Exact source9b9bdb78711adc79375259d4a0c3de41ac052eda1cae889b5d1dc25bbc374493
+(3331leaves) compiled unchanged at4ad527499a6dd5e23752476669c2c7a9eb4b7eef:
+lib177c3a/0,CLIa28f47/0. Exact10sourceleaves staged before writer release.
+All12controls pass: eight existing Copy ownership/resume/source-epoch controls,
+three prepared-input guards and the cached numeric pure-failure control.
+The physical Copy engine now uses real common ConstructionId guards and common
+field transfer/commit, removing its separate ownerless-object publication path.
+Public Copy admission/source stamps remain; no non-Copy template purpose is
+enabled, and full E007 cleanup/application/runonce integration remains held.
+The new associated-constant occurrence/provider carrier is source-only and
+keeps semantic application Pending until genuine Type/substitution evidence.
+
+Four of five affected originals retain complete runtime captures; zero new
+stock passes. Default-method/macro still fails, now with an exact changed
+InputKey: Vec::new BodyEnvironment92f6561ef805853a1b50cb026ad1efac8cccfb8b34fbae3c84225a90ea28de3d
+for bodyfeb51f1b9a1fea793ae4c5813055829c2cc92c7c984687197632fa8d7600e72c,
+expected missing stamp1cc671930104d41f2e86a825a1705770517814e6f8af0e195fa095bf0c3d2d12
+to publishedf2546ba072a00618a88f93f5d553f54516b1b0543e8ea54be6d67e6b89f16092.
+Actual declaration-only empty-bound preparation is a separate successor; no
+blanket renewal or weakening of currentness guards is authorized.
+
+The V27 lifecycle failure is now source-confirmed as production double
+completion: no-catalog pending output retired its macro producer early then
+attempted another completion after declaration work. The one-branch successor
+delays no-catalog completion until the real pending receipt completes, retaining
+early known-catalog publication. Existing assertions stay unchanged; source
+review is clear, runtime validation pending. Self::X requires actual implicit
+Self qualifier binding through ordinary source/type/member services, with its
+new memo/consumer work separately reserved. No full-suite/architecture/JIT gate
+closes from these components. [Exact V28 receipt](../../worktracks/evidence/2026-10-18-interpreter-v28-validation.json).

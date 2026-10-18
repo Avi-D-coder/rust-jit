@@ -1,0 +1,73 @@
+{
+  "status": "READY source-only; successor compile/runtime unexecuted",
+  "source": {
+    "path": "crates/lrr/src/expand/source_discovery.rs",
+    "sha256": "fb1ef28e3d2a91c8e9987140f45ad5421636285a6527fafd9163c4f343cd195c"
+  },
+  "baseline": "exact V28 index preserved; source successor unstaged",
+  "actual_failure": "candidate-v27/control-5.log line95 unexpected producer absence before declaration jobs; subsequent second completion refuses by source review",
+  "change": "admit_expansion_inner None catalog retirement only if pending_item_boundary absent; Some actual catalog branch unchanged",
+  "all8": [
+    {
+      "failure_mode": 1,
+      "name": "Separate assertion/expression evaluator",
+      "inspection": "Only actual source output admission completion branch changes; no executable evaluator."
+    },
+    {
+      "failure_mode": 2,
+      "name": "Literal/break-only macro output execution",
+      "inspection": "GeneratedHeaderPlan/source scan/real declaration jobs remain unchanged; no runtime instruction route."
+    },
+    {
+      "failure_mode": 3,
+      "name": "Context-specific method/numeric selection",
+      "inspection": "Branch depends on actual pending receipt, never a macro/member/fixture spelling or source type."
+    },
+    {
+      "failure_mode": 4,
+      "name": "Generated-source rejection",
+      "inspection": "Known Some catalogs retain prior early publication, preventing prior producer-cycle return. No-catalog output keeps real typed receipt and actual invocation until closure."
+    },
+    {
+      "failure_mode": 5,
+      "name": "Duplicate patterns/eager branches",
+      "inspection": "No pattern/callee/body query preparation. Existing PendingItemBoundary sole completion after exact completed_job(kind,id) set; no unsupported job marked complete."
+    },
+    {
+      "failure_mode": 6,
+      "name": "Repeated source planning",
+      "inspection": "O(1) existing Option state check only at cold admission. Same original capture/retained receipt, no parser/plan reconstruction."
+    },
+    {
+      "failure_mode": 7,
+      "name": "Global scans/unrelated invalidation",
+      "inspection": "No query/cache/namespace dependency changes. Exact retained source/cfg/epoch/record/scope guards and actual graph frontier completion untouched."
+    },
+    {
+      "failure_mode": 8,
+      "name": "Immutable body copies/wholefile search",
+      "inspection": "No indexes/BodyIndex/AST copies or searches added. No new allocation."
+    }
+  ],
+  "inspected_symbols": [
+    "GeneratedHeaderPlan::blocked",
+    "SourceDiscovery::admit_expansion_inner::owned_impl_completion/owned_trait_completion/can_publish_macros/opaque/pending_item_boundary",
+    "PendingItemBoundary::prepare/ready",
+    "SourceDiscovery::complete_ready_item_boundaries_inner",
+    "SourceDeclarative::complete_without_macro_bindings/complete_generated_bindings",
+    "SourceMacroIndex::complete_empty_item_producer/publish_generated_item_producer"
+  ],
+  "oracle": "Existing actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions pending Some/final None and every input unchanged; zero test edits.",
+  "acceptance": {
+    "source_review": "complete separate exact-source pass; independent reviewer requested",
+    "compile": "unexecuted successor",
+    "lifecycle_all_editions": "unexecuted successor",
+    "pending_source_epoch_refusal": "unexecuted successor",
+    "ancestry_known_catalog": "V27 passed all4ed exact older source; successor unexecuted"
+  },
+  "holds": [
+    "No guest runtime/full-fixture/JIT claim from source-only lifecycle repair.",
+    "Nested child trait ancestry remains separate unsupported/unexercised gap.",
+    "Stale String input diagnostic capture/repair remains independent; compiled diagnostic leaves unchanged."
+  ]
+}
