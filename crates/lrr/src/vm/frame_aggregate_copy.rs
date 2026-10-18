@@ -33,6 +33,7 @@ enum CopyOperation {
         source_view: Option<crate::traits::term::TyTerm>,
     },
     RecordRest(super::record_update_frame::RestActivation),
+    Repeat(super::repeat_frame::RepeatActivation),
 }
 fn place_error(error: PlaceFailure) -> Diagnostic {
     match error {
@@ -111,6 +112,24 @@ impl Frame {
                 },
             });
             return Ok(true);
+        }
+        if let Op::ArrayRepeat {
+            source,
+            count,
+            destination,
+        } = op
+        {
+            if let Some(work) = self.begin_repeat_copy(*source, *count, *destination, store)? {
+                self.copy_activation = Some(OpActivation {
+                    pc: self.pc.fingerprint(),
+                    operation_index: u32::try_from(index)
+                        .map_err(|_| invalid("copy operation index overflow"))?,
+                    expected: op.clone(),
+                    work: CopyOperation::Repeat(work),
+                });
+                return Ok(true);
+            }
+            return Ok(false);
         }
         if let Op::ConstructRest { guard, base } = op {
             let work = self.begin_record_rest(*guard, *base, store)?;
@@ -232,6 +251,7 @@ impl Frame {
                     Ok(true)
                 })(),
                 CopyOperation::RecordRest(rest) => self.advance_record_rest(rest, store),
+                CopyOperation::Repeat(repeat) => self.advance_repeat_copy(repeat, store),
                 CopyOperation::Read {
                     copy,
                     source,

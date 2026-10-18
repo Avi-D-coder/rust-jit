@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-044",
+  "baseline": "8bc63bb70f1cf0d4b01f0126f6fd43acded16e94",
+  "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
+      "sha256": "7718efb1d7552b086ce8f8cc546fe3a68ff22e968edaa77930ae0ae2663e3fac"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_repeat.rs",
+      "sha256": "419c4302300655c4f6f0a051f9f10f19bf53b9688284e2cc0d9d1d803530152b"
+    },
+    {
+      "path": "tools/check_aggregate_repeat_origins.py",
+      "sha256": "965e491fd4cc71fc1cc1ff494c67a2e62dd94ad5a9d68f4a41c1b7a757ded1a6"
+    }
+  ],
+  "reviewer": "root separate source pass after implementation",
+  "status": "source reviewed and scoped runtime validated; full feature/milestone acceptance held",
+  "ordinary_route": [
+    "ParsedFile::constructor_thunk",
+    "ParsedFile::repeat_thunk",
+    "Op::ArrayRepeat",
+    "Frame::preflight_array_repeat",
+    "Frame::begin_aggregate_copy",
+    "Frame::begin_repeat_copy",
+    "Frame::advance_repeat_copy",
+    "Frame::advance_copy_work",
+    "AggregateCopy",
+    "GuestStore::construction_push",
+    "Frame::finish_constructor"
+  ],
+  "removed_or_held_routes": [
+    "The existing scalar ArrayRepeat loop explicitly refuses aggregate copying; no shallow object bit-copy fallback is admitted.",
+    "Non-Copy constants/inline-const repetition still require actual source evaluation policy and zero-count coldness; scalar/zero/one-element path is unchanged, including its known cleanup debt.",
+    "No new parser, evaluator, special macro handler or namespace route."
+  ],
+  "review": [
+    {
+      "mode": 1,
+      "finding": "Only ordinary ArrayRepeat runtime ownership changes. No assertion/expression evaluator or synthetic source function is introduced."
+    },
+    {
+      "mode": 2,
+      "finding": "Actual macro output remains ordinary indexed ArrayRepeat, verified/stepped identically. No literal-only/break-only macro executor."
+    },
+    {
+      "mode": 3,
+      "finding": "Actual IntrinsicRead::CopyAggregate admission uses the existing source-installed nominal Copy fact and structural field rules. No macro/name/type-result fixture whitelist; no new inference or member selection."
+    },
+    {
+      "mode": 4,
+      "finding": "No original/generated distinction. Actual selected parent node supplies its indexed constructor guard/result slot. Origin adapters live outside unchanged imports."
+    },
+    {
+      "mode": 5,
+      "finding": "No patterns or cold branch executable shapes are visited. Copy operand is evaluated once, prior replicas are fresh owning graphs, final element takes the original value; non-Copy const-zero behavior is still incomplete."
+    },
+    {
+      "mode": 6,
+      "finding": "Normal execution uses already admitted runtime slots, descriptors and retained operation. No parsing, source traversal or query planning in repeat activation. Re-entered operation uses the existing resume index and opcode charge protocol."
+    },
+    {
+      "mode": 7,
+      "finding": "No namespace census, global map or new invalidation domain. Existing recipe dependency/currentness and AggregateCopy source stamps remain. New outer checks bind count, source cell/epoch/value and exact active construction guard."
+    },
+    {
+      "mode": 8,
+      "finding": "No immutable BodyIndex copy or file search. Direct body.nodes[pc.node] guard access occurs once at activation start; subsequent work retains primitive keys, physical state and source view."
+    }
+  ],
+  "ownership_review": [
+    "Outer destination is a common ConstructionId retained in the indexed frame construction slot. Each child is produced by the same AggregateCopy used by owning reads and templates.",
+    "Completed replica remains in RepeatActivation.pending until construction_push succeeds; source is moved only for the final element, and that ticket is retained before transfer.",
+    "Copy activation is restored on typed failure by the existing advance_aggregate_copy dispatcher. PC/operation identity checked by check_copy_activation on resume; operand epoch guards gaps between copies.",
+    "The direct scalar executor rejects aggregates, preventing accidental shallow duplication through another callsite.",
+    "Full cancellation of in-progress nested copies, a repeat-specific injected parent refusal, and post-consumption failure atomicity have not been established; prior explicit holds remain."
+  ],
+  "costs": {
+    "cold": "Once-per-operation array descriptor/source annotation and existing outer construction field contracts; no executable preparation for other branches.",
+    "hot": "Existing graph-copy transitions plus one common transfer per element. Iterative 256-transition scheduling chunks do not cap total work or resource usage.",
+    "source_annotations": "Existing retained type term is composed once for the destination. No source resolution from runtime descriptors added.",
+    "performance": "No measured speed/scaling claim; reported wall times are validation durations only."
+  },
+  "acceptance_scope": "New ordinary aggregate-Copy repetition integration with scoped controls; not complete array repetition, runtime gate, full milestone or architecture repair.",
+  "pending": [
+    "All three queues have actual successful terminals; individual stock failures remain explicit.",
+    "Original 512 nested arrays: full main runtime and exact stdout controls; four source origins/four editions.",
+    "Original non-Copy const-repeat still fails before zero-repeat Bomb.",
+    "Broader suspension/cancellation/capability/full architecture matrix and interpreter/JIT gate remain open."
+  ],
+  "post_validation": {
+    "exact_source_and_binary_recheck": "3fa58e/0",
+    "evidence": "worktracks/evidence/2026-10-18-interpreter-v42-validation.json",
+    "observations": [
+      "13/13 focused controls, including distinct512 owning element graphs, one opcode across dispatch chunks and unchanged-source-bits/changed-epoch refusal with guard retained.",
+      "All16 origin/edition executions match expected stdout; normal/user/wrapper have2 ArrayRepeat operations, standard probe adds a third.",
+      "Full original repeated-vector main passes after actual prior binary failure; fixed array Copy and scalar const repeat pass.",
+      "Non-Copy const repeat and unobserved type_ascribe producer case fail; no skipped case counted."
+    ],
+    "limits": "No injected repeat parent refusal or full cancellation acceptance; broader current milestone not run."
+  }
+}

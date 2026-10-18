@@ -1,0 +1,1280 @@
+{
+  "schema_version": 1,
+  "candidate": "V42",
+  "head": "8bc63bb70f1cf0d4b01f0126f6fd43acded16e94",
+  "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+  "source_leaves": 3335,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "source_unchanged_through_both_builds": true,
+  "owner": "root solo",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "builds": {
+    "lib": {
+      "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run",
+      "exit": 0,
+      "session_id": 70928,
+      "initial": "816479",
+      "terminal": "944294",
+      "seconds": 13.43,
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24"
+    },
+    "cli": {
+      "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+      "exit": 0,
+      "session_id": 23031,
+      "initial": "f72943",
+      "terminal": "cbf974",
+      "seconds": 9.17,
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7"
+    }
+  },
+  "staged_source": {
+    "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+    "status": "exact-compiled-index",
+    "files": [
+      {
+        "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
+        "sha256": "7718efb1d7552b086ce8f8cc546fe3a68ff22e968edaa77930ae0ae2663e3fac"
+      },
+      {
+        "path": "crates/lrr/src/vm/frame_repeat.rs",
+        "sha256": "419c4302300655c4f6f0a051f9f10f19bf53b9688284e2cc0d9d1d803530152b"
+      },
+      {
+        "path": "tools/check_aggregate_repeat_origins.py",
+        "sha256": "965e491fd4cc71fc1cc1ff494c67a2e62dd94ad5a9d68f4a41c1b7a757ded1a6"
+      }
+    ]
+  },
+  "seal_recheck": "3fa58e/0 verified index, working source, origin harness and binaries unchanged after execution",
+  "queues": {
+    "controls": {
+      "session_id": 27492,
+      "initial": "1b61c7",
+      "terminal": "4d5d81",
+      "exit": 0
+    },
+    "stock": {
+      "session_id": 6217,
+      "initial": "14b90a",
+      "terminal": "67aba8",
+      "exit": 0
+    },
+    "origins": {
+      "session_id": 4548,
+      "initial": "663892",
+      "terminal": "03fb43",
+      "exit": 0,
+      "command": "python3 tools/check_aggregate_repeat_origins.py --output artifacts/validation-resume-2026-10-18/candidate-v42/origins"
+    }
+  },
+  "prior_binary_baseline": {
+    "candidate": "V41",
+    "source_sha256": "d9b3e42ffecbfcbbe3617e9a3acc681daec0966f07cb847e64ce7c5f43252727",
+    "binary_sha256": "9940a530508b558fe1775346c0f9b162446997a085de281325cfae6e1f6b885b",
+    "queue": {
+      "session_id": 61633,
+      "initial": "e27194",
+      "terminal": "0b86f4",
+      "exit": 0
+    },
+    "cases": [
+      {
+        "path": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+        "sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+        "edition": 2015,
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "exit": 2,
+        "seconds": 3.54,
+        "runtime_contract_pass": false,
+        "terminal_status": "fault",
+        "fault_code": "LRR-E-UNSUPPORTED",
+        "fault_message": "repeating a non-scalar element requires its aggregate Copy",
+        "capture_complete": false,
+        "source_calls": 0,
+        "dispatches": 10,
+        "classified_operations": 10,
+        "cleanup_observed": false,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "raw_stdout_sha256": "e3697c8cd30ea99cb814cb68e14538fd165de139cf05d5295a12dec08ffbaf9c"
+      },
+      {
+        "path": "tests/ui/array-slice-vec/fixed_length_copy.rs",
+        "sha256": "243024aa36422b419a3286ee5128bd747b5e35799099d8d941b81fd3069b5073",
+        "edition": 2015,
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "exit": 0,
+        "seconds": 3.67,
+        "runtime_contract_pass": true,
+        "terminal_status": "completed",
+        "fault_code": null,
+        "fault_message": null,
+        "capture_complete": true,
+        "source_calls": 0,
+        "dispatches": 145,
+        "classified_operations": 225,
+        "cleanup_observed": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "raw_stdout_sha256": "e83137eea315c791fc0c4472d54be77c78bec28cd9818c3d71691c6da35537d2"
+      }
+    ]
+  },
+  "controls": [
+    {
+      "selector": "cli::nominal_value_tests::nominal_copy_impls_copy_and_other_nominal_values_move",
+      "exit": 0,
+      "seconds": 0.257,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-0.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::nominal_value_tests::nominal_copy_impls_copy_and_other_nominal_values_move",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "10121b5f8498467094756742d2ea2229e936419bc3e2f9cc0f1e932aa4b4a944"
+    },
+    {
+      "selector": "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+      "exit": 0,
+      "seconds": 0.006,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "85b8a54509be9706b58fc2e78de3ca1f3851698a0573dd1bf625acb5b4c1bbdc"
+    },
+    {
+      "selector": "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_committed_child_ticket_for_retry",
+      "exit": 0,
+      "seconds": 0.006,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_committed_child_ticket_for_retry",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "b974a8111fa69bbd49dee8f453ea70da230193b48d64a10edb3980ec956feb98"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "ff7e81827ce4fefb4489c515ebd79fbac51ed8ff84689205325efdc119261a49"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-4.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "d2b9dd5ca3a89a349d37eeb1a65ee74347feb420d27c432f1c9d1917bfd719bc"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects",
+      "exit": 0,
+      "seconds": 0.13,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "18702aa0b59f3eb0774cd1cab8006ddf6f3d799396bd4380746a0724dba4ef9a"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_copy_place_activation_skips_completed_recipe_prefix_and_clears_place_once",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-6.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_copy_place_activation_skips_completed_recipe_prefix_and_clears_place_once",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "7353b6fa6b35e940171f8040ca9a488f8ec1ac93efc2bd032d1d6740d2564301"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_copy_resume_refuses_changed_bound_pc_without_charging_or_publishing",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-7.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_copy_resume_refuses_changed_bound_pc_without_charging_or_publishing",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "2e5788c2e99176171194b7ae78cad9494b1c1b8b26bdc6594a3722b56c955a11"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells",
+      "exit": 0,
+      "seconds": 0.007,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-8.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "f53e2e51519165a81a5ae6d62b50c5159d5ae6bf08b14128dc9e892741596677"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_original_fixed_array_copy_read_preserves_source_and_allocates_distinct_fields",
+      "exit": 0,
+      "seconds": 0.007,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-9.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_original_fixed_array_copy_read_preserves_source_and_allocates_distinct_fields",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "35efd005c90a16f1a34cb29ce32540ace00661f5ca4fd29fe264d1773ee5fceb"
+    },
+    {
+      "selector": "vm::frame::aggregate_copy_tests::rustc_original_tuple_copy_read_preserves_source_and_allocates_distinct_fields",
+      "exit": 0,
+      "seconds": 0.007,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-10.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::aggregate_copy_tests::rustc_original_tuple_copy_read_preserves_source_and_allocates_distinct_fields",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "5f34bffd44e87acad87c67dc4c12a446eec6241571e4034b8ad6bb7b1a5ede8b"
+    },
+    {
+      "selector": "vm::frame::repeat_frame::tests::official_nested_repeat_resumes_one_opcode_and_owns_distinct_elements",
+      "exit": 0,
+      "seconds": 0.014,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-11.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::repeat_frame::tests::official_nested_repeat_resumes_one_opcode_and_owns_distinct_elements",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "90861eb44d1c951ddf5f2898bb3d6d94ac584668b9309c21ad5ca677879c169b"
+    },
+    {
+      "selector": "vm::frame::repeat_frame::tests::official_repeat_changed_source_epoch_refuses_without_repeating_or_publishing",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-12.log",
+      "argv": [
+        "target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::repeat_frame::tests::official_repeat_changed_source_epoch_refuses_without_repeating_or_publishing",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "3ccc59ae5db878eafa3386d792eaae1c3956fd76892eb8fd09e0b23115ab8f24",
+      "source_sha256": "9224c2e9c146bd243a32216a15f2aefceb89ce175f8ec83e125a47ee6f3e79ca",
+      "log_sha256": "5d5e9665dfcd964e9eb06ba2561d3ff06b9375d555a95b88f4c4f9ae8633554e"
+    }
+  ],
+  "runtime_cases": [
+    {
+      "path": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "edition": 2015,
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 0,
+      "seconds": 8.18,
+      "runtime_contract_pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "capture_complete": true,
+      "source_calls": 1030,
+      "dispatches": 37006,
+      "classified_operations": 50897,
+      "cleanup_observed": true,
+      "stdout_sha256": "54b4e04cfb21a40d68b007e1237ece808fd9dfd19ceeca2027e198f759b1ebcc",
+      "raw_stdout_sha256": "8e1e342fc871a9a5c284be17a29a0392885b51645a889b578793d5732ec5ea48"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/fixed_length_copy.rs",
+      "sha256": "243024aa36422b419a3286ee5128bd747b5e35799099d8d941b81fd3069b5073",
+      "edition": 2015,
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 0,
+      "seconds": 3.839,
+      "runtime_contract_pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "capture_complete": true,
+      "source_calls": 0,
+      "dispatches": 145,
+      "classified_operations": 225,
+      "cleanup_observed": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "raw_stdout_sha256": "28faf8c86dbcadc9f7ec02a32a821060bede55993f620ef27a14e5ea9434329c"
+    },
+    {
+      "path": "tests/ui/consts/const-expr-in-vec-repeat.rs",
+      "sha256": "09957be7bb64fd1f9e5946ef787776bec20835218ec4b85b5a5831824963f404",
+      "edition": 2015,
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 0,
+      "seconds": 3.694,
+      "runtime_contract_pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "capture_complete": true,
+      "source_calls": 0,
+      "dispatches": 25,
+      "classified_operations": 25,
+      "cleanup_observed": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "raw_stdout_sha256": "91dbfb8268cda4fad1b3bfa37cf0f30c8c7791a77ff85343c9b72fbcfb38a5ae"
+    },
+    {
+      "path": "tests/ui/consts/const-blocks/const-repeat.rs",
+      "sha256": "573c88e8d803e952a35eea12b2e846afb59e3f09e65dc4c126c075831e7cd4fb",
+      "edition": 2015,
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 2,
+      "seconds": 3.755,
+      "runtime_contract_pass": false,
+      "terminal_status": "fault",
+      "fault_code": "LRR-E-UNSUPPORTED",
+      "fault_message": "repeating a non-scalar element requires its aggregate Copy",
+      "capture_complete": false,
+      "source_calls": 2,
+      "dispatches": 18,
+      "classified_operations": 22,
+      "cleanup_observed": false,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "raw_stdout_sha256": "76d92c403398fb7c4c87421c3d2e46e5e594dd675c64a75fb8a4c523b5eec82e"
+    },
+    {
+      "path": "tests/ui/consts/const_in_pattern/accept_structural.rs",
+      "sha256": "73f0dae3d55efe4abd030d9ca56e95ad66aa1c6b06f0d42d1e9e3fbdfb13f8c1",
+      "edition": 2015,
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 2,
+      "seconds": 99.511,
+      "runtime_contract_pass": false,
+      "terminal_status": "fault",
+      "fault_code": "LRR-E-CATALOG-INCOMPLETE",
+      "fault_message": "fixed point retains unresolved import or macro producers; blocked macro `type_ascribe`",
+      "capture_complete": false,
+      "source_calls": null,
+      "dispatches": null,
+      "classified_operations": null,
+      "cleanup_observed": null,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "raw_stdout_sha256": "1f002211697f07c77674afb0f89c8dfd70d78bbeaf69fd2cd456eada0c02d27b"
+    }
+  ],
+  "origin_matrix": [
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "handwritten",
+      "edition": 2015,
+      "unchanged_original": true,
+      "adapter_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.268,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "95ece7ee4147644f35f83ea5f2c43f327c3dc5e902e1e25ad67d46c9026ea68c",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "4ba80b9458481b5b8860e6270592858d7974fbbc0328a8160652e058867d1a6c"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "handwritten",
+      "edition": 2018,
+      "unchanged_original": true,
+      "adapter_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.08,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "79d3eaf261524f31f015a583e56dce67a96bd3ff07c42ebf13868fc8d669d2f7",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2018",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "2da70c887b62f56ccc79d25f0fc85cfd62de9e9f44b13f9fc24785a06c62f7b6"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "handwritten",
+      "edition": 2021,
+      "unchanged_original": true,
+      "adapter_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.336,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "66e2ccffd9fa51258f18b16daec67f321e334cf6659cfdad4e2aae4c15f49d81",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2021",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "ced28b16ef1d739ba13d7d48dc3377f130051241f7fe120fd33c697ba666f736"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "handwritten",
+      "edition": 2024,
+      "unchanged_original": true,
+      "adapter_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.216,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "3fa78a53b60a81cfc3f14aaa6f1a6a1d402d2e5fc46990c0fcffd7ed6ef7670d",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "a5cee497af8cc9a4643a91d73d0449fdf3d763fba3367ae24af9cbab129fcd4b"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "user_macro",
+      "edition": 2015,
+      "unchanged_original": false,
+      "adapter_sha256": "dd4f6ff990cbcd2209cc1a6749e742760efa3c1375e4af67267ac3c6ae9957f4",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.312,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "23cedbd1f32e548efbe343d88c7cef2a535b007b008a37b0c8a6d8a47c8ba1ab",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/user_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "a022995b11b669806fe07f046df50ec3169ec09ca9247d4af9d9107c517d7d15"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "user_macro",
+      "edition": 2018,
+      "unchanged_original": false,
+      "adapter_sha256": "dd4f6ff990cbcd2209cc1a6749e742760efa3c1375e4af67267ac3c6ae9957f4",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.082,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "54c758623f75ba5a4cc32a073992ad1f5f4e3f8fc13e015cd5cc9fd6343af85c",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2018",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/user_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "b9bf0ad00cb8ff9880b29f298494595aa7ec68683af3b63f31014d615360b49e"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "user_macro",
+      "edition": 2021,
+      "unchanged_original": false,
+      "adapter_sha256": "dd4f6ff990cbcd2209cc1a6749e742760efa3c1375e4af67267ac3c6ae9957f4",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.359,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "672133c6789cbc47f1e39468abca5ed7a3a73a80d0e0f0596e17ffb38cc16ebb",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2021",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/user_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "966552d81a83bc9be8f1f63f307b76e7e729946db3fa72dc6a3aeb2c42350571"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "user_macro",
+      "edition": 2024,
+      "unchanged_original": false,
+      "adapter_sha256": "dd4f6ff990cbcd2209cc1a6749e742760efa3c1375e4af67267ac3c6ae9957f4",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.217,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "29634f5c08e556f454bfeba54abd777499a2a936d70f51417c84db51140eb839",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/user_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "bab645de1e1cbd0af238413c04675c070db603aab6d7c0ac2f9a38fdabfd23e4"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "wrapper_macro",
+      "edition": 2015,
+      "unchanged_original": false,
+      "adapter_sha256": "96a0596543eca9fa47f56e0cb3c7900da313e7961360c126be216f246a072840",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.257,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "5a516660c422313ccfae2a2ef96ac004ccc1f0019c302b17b33a2d64a99d6144",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/wrapper_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "8bb7918ead56f31b3662bccd813db73f479f9d4c9877d981f13f449dcb0b47eb"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "wrapper_macro",
+      "edition": 2018,
+      "unchanged_original": false,
+      "adapter_sha256": "96a0596543eca9fa47f56e0cb3c7900da313e7961360c126be216f246a072840",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.085,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "9f44fe2a2d67a81de649cdbc5bffa29d6e74f9e7c512e0195d7a7108e0ed4a2e",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2018",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/wrapper_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "b21bacf6b4866fa3b9cc7f10d8e412493c964c34f1eedf5c9a1fcabdc8ca0b57"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "wrapper_macro",
+      "edition": 2021,
+      "unchanged_original": false,
+      "adapter_sha256": "96a0596543eca9fa47f56e0cb3c7900da313e7961360c126be216f246a072840",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.321,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "d0fdb691b3ba70901a6a1dd1f1af82a008e545faa7f68eb0ed639eeb86b0b7e1",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2021",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/wrapper_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "66c7595bb5835baf701aa41c3c36d489d2d5cebba38e509e7a1f0ce9eb3f5151"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "wrapper_macro",
+      "edition": 2024,
+      "unchanged_original": false,
+      "adapter_sha256": "96a0596543eca9fa47f56e0cb3c7900da313e7961360c126be216f246a072840",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.249,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 2,
+      "capture_facts": {
+        "classified_operation_candidates": 50897,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37006,
+        "vm_outcomes": 37006
+      },
+      "raw_stdout_sha256": "a6c4aad0c351a736d8b29386ebac0213e6d276a94ed6fdb864b1b0601b4fa19e",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/wrapper_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "e511e8cc09f81bf34e89408bc6d7b435927728c10b8aab3b228a64c5c8242835"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "standard_macro",
+      "edition": 2015,
+      "unchanged_original": false,
+      "adapter_sha256": "a22b73b8678670a0a03b94380b6a510f49f19e97486003ae8e51d9f4727fd253",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.296,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 3,
+      "capture_facts": {
+        "classified_operation_candidates": 51023,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37074,
+        "vm_outcomes": 37074
+      },
+      "raw_stdout_sha256": "3692004357bd64825ede7d9c3a10315e67b840511b0ef1edc0cd8b9cddc46d7a",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/standard_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "a95dd7e35927f2b43d903f439ccf154bf72850036c86532e726853a9f1a68eb6"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "standard_macro",
+      "edition": 2018,
+      "unchanged_original": false,
+      "adapter_sha256": "a22b73b8678670a0a03b94380b6a510f49f19e97486003ae8e51d9f4727fd253",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.119,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 3,
+      "capture_facts": {
+        "classified_operation_candidates": 51023,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37074,
+        "vm_outcomes": 37074
+      },
+      "raw_stdout_sha256": "b8b51de48ad345f5d99201d6f0025bacd48da79870da9175817391989aa27471",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2018",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/standard_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "a041f83a812fd4cdf6c2f11442f6f3eca0a34c7aca3c71675a6fee8f9613d7b1"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "standard_macro",
+      "edition": 2021,
+      "unchanged_original": false,
+      "adapter_sha256": "a22b73b8678670a0a03b94380b6a510f49f19e97486003ae8e51d9f4727fd253",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.359,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 3,
+      "capture_facts": {
+        "classified_operation_candidates": 51023,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37074,
+        "vm_outcomes": 37074
+      },
+      "raw_stdout_sha256": "86ce2c723794207aa9f0999150d99db2b4da39b2904eda770e2fc8261648c4d8",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2021",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/standard_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "fe1832720ac19400ed5f168192a593f437c4af142c639b8c3ea06f240a2692e8"
+      ]
+    },
+    {
+      "fixture": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "fixture_sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "origin": "standard_macro",
+      "edition": 2024,
+      "unchanged_original": false,
+      "adapter_sha256": "a22b73b8678670a0a03b94380b6a510f49f19e97486003ae8e51d9f4727fd253",
+      "binary_sha256": "420143e45f90f7fbc19ee0bf3529d5987500aa693b3bae3a2de9abf751ad12d7",
+      "exit": 0,
+      "seconds": 7.333,
+      "runtime_contract_pass": true,
+      "expected_effects_match": true,
+      "pass": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "array_repeat_operations": 3,
+      "capture_facts": {
+        "classified_operation_candidates": 51023,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1030,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 37074,
+        "vm_outcomes": 37074
+      },
+      "raw_stdout_sha256": "080194449f7852d7bfdcfd0040fc575822f50748a22aa804dd91f4128fcf47a7",
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "artifacts/validation-resume-2026-10-18/candidate-v42/origins/standard_macro.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "b7cee621b6516c63ad067e520e54e4bf76659fc17d1972a0a4acad217f38dbf6"
+      ]
+    }
+  ],
+  "origin_adapter_scope": "Handwritten rows execute exact unchanged original; user/wrapper/standard macro adaptations are outside imported originals. Standard row intentionally evaluates one extra probe repetition. All16 match exact expected printed effects. Not16 distinct stock fixtures.",
+  "summary": {
+    "focused_controls": {
+      "pass": 13,
+      "fail": 0,
+      "exact_selector_bodies": 13
+    },
+    "selected_upstream_runtime_contracts": {
+      "pass": 3,
+      "fail": 2,
+      "total": 5
+    },
+    "route_matrix": {
+      "pass": 16,
+      "fail": 0,
+      "origins": 4,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    },
+    "newly_passing_against_exact_prior_binary_baseline": [
+      "tests/ui/array-slice-vec/repeated-vector-syntax.rs"
+    ],
+    "full_suite_total": "not refreshed; do not add targeted counts from different binaries",
+    "full_fixture_passes_claimed": 0
+  },
+  "architecture_review": "worktracks/evidence/2026-10-18-aggregate-repeat-source-review.json",
+  "known_failures": [
+    "const-repeat still fails at non-Copy aggregate repetition, before zero-repeat Bomb; no const-zero acceptance.",
+    "accept_structural fails before observation at catalogue fixed point: unresolved type_ascribe macro producer; no guest execution, no repeat-runtime acceptance."
+  ],
+  "holds": [
+    "Source-aware constant/inline-const repetition policy and zero-count const coldness.",
+    "Repeat-specific injected parent-transfer refusal and full cancellation/post-consumption failure atomicity unexecuted.",
+    "Generic owner/application packet, heap constant template classes, relevant invalidation and cold impl completeness.",
+    "Full current interpreter milestone/runtime gate and complete macro architecture matrix not passed; guest JIT remains gated."
+  ],
+  "acceptance": {
+    "upstream_runtime_acceptance": "incomplete; selected3/5 on this binary",
+    "diagnostic_compatibility": "separate and not exercised",
+    "compiler_tooling_compatibility": "separate and not exercised",
+    "full_suite_compatibility": "incomplete",
+    "performance": "no speed/scaling claim",
+    "linux": "not exercised"
+  },
+  "harness_note": "Initial python -m py_compile attempted a disallowed host cache directory; compile(source) succeeded in memory and the exact script completed16 actual executions. No Rust source changed for that host cache issue."
+}
