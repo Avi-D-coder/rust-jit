@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-044",
+  "baseline": "d54389ecd238803bd1ea53acefc4fb59807e1eb1",
+  "source_sha256": "d9b3e42ffecbfcbbe3617e9a3acc681daec0966f07cb847e64ce7c5f43252727",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_aggregate_copy.rs",
+      "sha256": "3fbcc0d2c73df0ec2fb154130a6be42f941bfca5b763052198aa4039d1c6b0b0"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_initializers.rs",
+      "sha256": "e6953b23d86e23d74667817741b5f0a1f27dfb28b18ebb63e7db5f2b1c48c1f2"
+    }
+  ],
+  "reviewer": "root separate source pass after implementation",
+  "status": "source-reviewed-and-focused-runtime-validated; incomplete feature, checkpoint only",
+  "common_route": [
+    "RunMachine::resume_initializer",
+    "GuestStore::prepare_vm_template",
+    "GuestStore::copy_value_layout",
+    "GuestStore::seal_vm_template",
+    "Frame::begin_aggregate_copy",
+    "AggregateCopy::begin_template",
+    "GuestStore::begin_copy_destination",
+    "GuestStore::construction_push",
+    "GuestStore::commit_construction"
+  ],
+  "removed_route": "No new evaluator or dispatch route. Removed static-address value_promotable and unconditional nominal exclusion from private constant-data preparation; common copy_value_layout validates preparation and replication layouts.",
+  "review": [
+    {
+      "mode": 1,
+      "finding": "No assertion/compiler/evaluator change. Reached initializer executes ordinary source call; only physical result preparation changes."
+    },
+    {
+      "mode": 2,
+      "finding": "No generated syntax decoding or payload route. Ordinary and generated const items reach the same VM initializer return and ValuePath."
+    },
+    {
+      "mode": 3,
+      "finding": "No names, macro identities, numeric constraints or member selection added. Ordinary Copy nominal_copy and structural Copy/Deferred fields_copy admission retained. Owned Box/Vec are actual lang-item identities held for incomplete heap reconstruction, not fixture names."
+    },
+    {
+      "mode": 4,
+      "finding": "No generated-source refusal added; actual existing generic owner application hold untouched. No source-origin branch added."
+    },
+    {
+      "mode": 5,
+      "finding": "No pattern engine or branch-preparation changes. Existing same expected-three structural constant-pattern matrix is the exact-once witness. Global Drop completeness is still needed for promotion/cleanup, not replication permission."
+    },
+    {
+      "mode": 6,
+      "finding": "First reached initializer result walks supported owned graph once; no source parsing/planning introduced. Every replica follows existing incremental graph construction activation and source/session/epoch validation."
+    },
+    {
+      "mode": 7,
+      "finding": "No namespace or Drop catalogue scan added. value_promotable remains unchanged for actual promotion. Existing cache invalidation and generic application gaps remain held."
+    },
+    {
+      "mode": 8,
+      "finding": "No BodyIndex copy or AST search. Shared physical layout kernel checks active variant, field count, complete initialization and cleanup state; callers check ticket/cell ownership."
+    }
+  ],
+  "ownership_review": [
+    "Private run-long cell immutable; prepared session/epoch/ticket/value seals and every next source stamp remain checked.",
+    "Each nominal replica gets distinct common construction guards and owning fields; guest Clone/Drop is not invoked during physical instantiation. Normal cleanup invokes Drop on each guest replica; private template is not a guest instance and anchor is never retired.",
+    "Shared-reference leaves preserve existing leases. Mutable-reference, opaque/string storage and owned heap container graphs remain ineligible, not aliased or claimed accepted.",
+    "Ordinary Copy structural admission moved to cell-owned wrapper; nominal Copy still checked in shared value-layout kernel. No global Copy fact weakened.",
+    "Transfer ticket remains retained across refused parent append. Full cancellation/post-consumption failure atomicity remains incomplete; existing targeted controls cover only documented cases."
+  ],
+  "costs": {
+    "preparation": "O(owned graph nodes and fields), iterative; one layout check per aggregate and existing leaf admission.",
+    "replication": "Existing incremental graph construction, one transition per field/aggregate plus existing source/lease/owner checks; no overall linear-time bound claimed. Wrapper adds one constant-time descriptor lookup. No namespace or source preparation scans.",
+    "performance": "No timing or scaling improvement claimed."
+  },
+  "acceptance_holds": [
+    "All targeted queues actually terminated;19/19 controls,10/11 selected runtime cases. Full milestone unexecuted.",
+    "Complete Type/Const/Region initializer application keys and relevant source/member invalidation not delivered.",
+    "Cold global impl completeness and all required promotion/Drop contracts not delivered.",
+    "Owned heap/string/mutable-reference physical replication not delivered.",
+    "Full interpreter milestone and upstream runtime gate not delivered; guest JIT remains gated."
+  ],
+  "post_validation_review": {
+    "source_fingerprints_unchanged": true,
+    "staged_index_and_binaries_rechecked": "45938a/0",
+    "shared_route": "ordinary const ValuePath and pattern ConstantRoot use same retained VM result; actual by-value uses use shared AggregateCopy",
+    "pattern_observation": "19a747/0 reports structural constant-pattern control pass across16 source-origin/edition cases, expected3 unchanged",
+    "drop_observation": "issue-90762 stdout exactly2,1,0 and atomic assertions;10/11 selected runtime cases pass",
+    "remaining_gap": "ArrayRepeat still fails before zero-repeat; global Drop completeness/promotion and generic application are not closed",
+    "evidence": "worktracks/evidence/2026-10-18-interpreter-v41-validation.json"
+  }
+}

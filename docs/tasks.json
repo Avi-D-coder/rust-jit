@@ -6468,7 +6468,7 @@
           "full_stock_fixture_passes": 0
         }
       },
-      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
+      "latest_component_scope": "V41 solo root: private nongeneric constant-data replication uses the ordinary AggregateCopy construction guards independently of static borrow promotion. Ordinary Copy admission remains intact. All 19 focused controls pass, including the unchanged three-call structural pattern retry across four origins and four editions; 10/11 selected unchanged upstream runtime contracts pass. Non-Copy ArrayRepeat, complete generic application/heap/mutable-reference/cancellation, relevant invalidation, cold impl completeness and full milestone remain incomplete. No task completion or JIT status promotion. Evidence: worktracks/evidence/2026-10-18-interpreter-v41-validation.json."
     },
     {
       "id": "T060",

@@ -4,10 +4,11 @@
 //! dispatcher enters its body as a zero-parameter source call
 //! (`CallResolver::initializer`) and the returned value becomes:
 //! - a static's run-long cell, installed once and read or borrowed in place;
-//! - a constant's value: kept in a run-long cell and copied on each use when
-//!   intrinsically, or is a source-checked nongeneric plain-data template
-//!   instantiated through the ordinary aggregate work engine; remaining
-//!   generic/heap/Drop graph classes retain per-use initialization debt.
+//! - a constant's value: kept in a run-long cell when intrinsically Copy,
+//!   or as a source-checked nongeneric constant-data template instantiated
+//!   through the ordinary aggregate work engine. Each replica
+//!   owns its fields and ordinary Drop; unsupported generic/heap/mutable-
+//!   reference graph classes retain per-use initialization debt.
 use super::*;
 use crate::{core::digest::Digest, runtime::cell::TicketId};
 

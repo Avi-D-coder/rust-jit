@@ -1,4 +1,4 @@
-//! Iterative structural Copy. Private destinations never alias an owning source.
+//! Iterative structural replication. Private destinations never alias an owning source.
 //! Each advance installs one leaf, enters one aggregate, or completes one guard.
 use super::super::shape::CopyStatus;
 use super::*;
@@ -67,30 +67,34 @@ impl GuestStore {
     ) -> Result<Option<PreparedVmTemplate>, Diagnostic> {
         let value = self.peek_ticket(ticket)?;
         self.object_owner(value, ValueOwner::Ticket(ticket))?;
-        if value.kind != 8 || !self.value_promotable(value)? {
+        if value.kind != 8 {
             return Ok(None);
         }
-        // The same physical work engine must be able to replicate every
-        // nonaggregate leaf without invoking Clone or guest code.
+        // This is private constant data, not a promoted guest borrow. Each
+        // use gets a fresh owning graph and ordinary cleanup/Drop; neither
+        // Copy nor absence of Drop is an admission fact for replication.
+        // The same physical work engine must replicate every supported leaf
+        // without invoking Clone or guest code.
         let mut pending = vec![value];
         while let Some(value) = pending.pop() {
-            // An unentered function may contain an impl affecting a global
-            // nominal. Published impl rows alone do not prove Drop absence.
-            // Until the common producer/declaration closure supplies that
-            // proof, only intrinsically structural owned graphs qualify.
-            if matches!(
-                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
-                TypeKey::Nominal { .. }
-            ) {
-                return Ok(None);
+            match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
+                TypeKey::Nominal { identity, .. } => {
+                    // Owning heap containers need their allocation/alias
+                    // reconstruction contract, not a shallow field replica.
+                    if self.owned_box == Some(*identity) || self.owned_vec == Some(*identity) {
+                        return Ok(None);
+                    }
+                }
+                TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. } => {}
+                _ => return Ok(None),
             }
+            // Use the same layout admission as actual replication, including
+            // active nominal variant and structural field-count checks.
+            self.copy_value_layout(value, true)?;
             let object = ObjectId::from_bits(value.payload);
             let ObjectStorage::Aggregate(storage) = &self.objects.get(object)?.storage else {
-                return Ok(None);
-            };
-            if !storage.initialized.complete_value() {
                 return Err(ownership());
-            }
+            };
             for (index, field) in storage.fields.iter().enumerate() {
                 if self.cells.get(*field)?.owner
                     != (CellOwner::Field {
@@ -101,10 +105,23 @@ impl GuestStore {
                     return Err(ownership());
                 }
                 let member = self.admit_move(*field)?;
-                if member.kind == 8 {
-                    pending.push(member);
-                } else {
-                    self.admit_copy(*field)?;
+                match member.kind {
+                    8 => pending.push(member),
+                    1..=7 | 11 | 12 => {
+                        self.admit_copy(*field)?;
+                    }
+                    9 => {
+                        if self
+                            .references
+                            .get(RefId::from_bits(member.payload))?
+                            .access
+                            == Access::Mutable
+                        {
+                            return Ok(None);
+                        }
+                        self.admit_copy(*field)?;
+                    }
+                    _ => return Ok(None),
                 }
             }
         }
@@ -162,30 +179,49 @@ impl GuestStore {
         source: CellId,
         template: bool,
     ) -> Result<(TypeId, usize, Option<u32>), Diagnostic> {
+        self.place_stamp(source)?;
         let value = self.admit_move(source)?;
+        let descriptor = self.types.descriptor(TypeId(value.type_id))?;
+        if !template
+            && !matches!(descriptor.key.as_ref(), TypeKey::Nominal { .. })
+            && descriptor.copy != CopyStatus::Copy
+            && !(descriptor.copy == CopyStatus::Deferred && self.fields_copy(source)?)
+        {
+            return Err(requires_activation());
+        }
+        self.copy_value_layout(value, template)
+    }
+    fn copy_value_layout(
+        &self,
+        value: ValueRepr,
+        template: bool,
+    ) -> Result<(TypeId, usize, Option<u32>), Diagnostic> {
         let ty = TypeId(value.type_id);
         let descriptor = self.types.descriptor(ty)?;
         if value.kind != 8 {
             return Err(requires_activation());
         }
+        let ObjectStorage::Aggregate(storage) = &self
+            .objects
+            .get(ObjectId::from_bits(value.payload))?
+            .storage
+        else {
+            return Err(ownership());
+        };
+        if storage.next_cleanup != 0 {
+            return Err(lease_fault());
+        }
         // Ordinary Copy still requires the declaration's real Copy fact.
-        // A private sealed plain-data template permits physical replication
+        // A private sealed constant-data template permits physical replication
         // without changing that trait fact.
         if let TypeKey::Nominal { identity, .. } = descriptor.key.as_ref() {
             if !template && !self.nominal_copy(*identity) {
                 return Err(requires_activation());
             }
-            let (_, storage) = self.place_object(source)?;
             if storage.variant.is_none() || !storage.initialized.complete_value() {
                 return Err(ownership());
             }
             return Ok((ty, storage.fields.len(), storage.variant));
-        }
-        if !template
-            && (descriptor.copy != CopyStatus::Copy
-                && !(descriptor.copy == CopyStatus::Deferred && self.fields_copy(source)?))
-        {
-            return Err(requires_activation());
         }
         let count = match descriptor.key.as_ref() {
             TypeKey::Tuple(fields)
@@ -195,7 +231,6 @@ impl GuestStore {
             TypeKey::Array { len, .. } => usize::try_from(*len).map_err(|_| resource())?,
             _ => return Err(requires_activation()),
         };
-        let (_, storage) = self.place_object(source)?;
         if storage.fields.len() != count
             || storage.variant.is_some()
             || !storage.initialized.complete_value()

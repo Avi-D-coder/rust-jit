@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "candidate": "V40 pre-replication Drop baseline",
+  "head": "53a1246b0c95399dd98046459da0a260e60f3e63",
+  "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111",
+  "cli_binary_sha256": "d8f4fcced29f195a7751639a633f015d29e28ef6a96d805db949b3d301bebdc1",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "queue": {
+    "session_id": 95213,
+    "initial": "bf142e",
+    "terminal": "b67ad2",
+    "exit": 0,
+    "meaning": "queue completed; individual failures preserved"
+  },
+  "command": "python3 artifacts/validation-resume-2026-10-18/run_targeted_snapshot.py artifacts/validation-resume-2026-10-18/candidate-v40-drop-baseline stock artifacts/validation-resume-2026-10-18/candidate-v40-drop-baseline/stock-roots.json",
+  "runtime_cases": [
+    {
+      "path": "tests/ui/consts/issue-90762.rs",
+      "sha256": "644a0326811c7829e5e6299edf0d1bf9238eb3ecd5f1f4752895d30110679829",
+      "edition": 2015,
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 0,
+      "seconds": 7.129,
+      "runtime_contract_pass": true,
+      "capture_complete": true,
+      "terminal_status": "completed",
+      "fault_code": null,
+      "fault_message": null,
+      "output": {
+        "stderr": "",
+        "stdout": "2\n1\n0\n"
+      },
+      "source_calls": 68,
+      "dispatches": 1344,
+      "raw_stdout_sha256": "4905b6e67ec3d74aaea5d14c6d728b1d92ca1f528043bfede46914c80b474338"
+    },
+    {
+      "path": "tests/ui/consts/const-blocks/const-repeat.rs",
+      "sha256": "573c88e8d803e952a35eea12b2e846afb59e3f09e65dc4c126c075831e7cd4fb",
+      "edition": 2015,
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 2,
+      "seconds": 3.576,
+      "runtime_contract_pass": false,
+      "capture_complete": false,
+      "terminal_status": "fault",
+      "fault_code": "LRR-E-UNSUPPORTED",
+      "fault_message": "repeating a non-scalar element requires its aggregate Copy",
+      "output": null,
+      "source_calls": 2,
+      "dispatches": 18,
+      "raw_stdout_sha256": "7ab4a24d2bbb3f3a69a10e1bdc3fea8fe66b57b810c7afd868958c2c909623cc"
+    }
+  ],
+  "summary": {
+    "runtime_contract_passes": 1,
+    "failures": 1,
+    "full_suite_claim": false
+  },
+  "known_gap": "const-repeat stops at aggregate repetition before reaching zero-repeat Bomb; no zero-repeat/cold-constant acceptance."
+}
