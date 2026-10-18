@@ -1,3 +1,4 @@
+pub(crate) mod array_repeats;
 pub(crate) mod associated_constant_applications;
 pub(crate) mod associated_declarations;
 pub(crate) mod initializer_owner_templates;

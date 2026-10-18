@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "candidate": "V49",
+  "source_sha256": "953c562119a1da955dc2b14ebf9475749ae279f78d9cf1cb55fc375cb3ce16ff",
+  "head": "47b09edfc90c6215973413689a1b92eda2ef0c87",
+  "lib_build": {
+    "session_id": 54710,
+    "initial": "68dfba",
+    "terminal": "424a72",
+    "exit": 0,
+    "seconds": 15.33,
+    "binary_sha256": "e8883cbcffaa029cd17f5b362b048759629b1d939c37f8978fea75bc44a05463"
+  },
+  "cli_built": false,
+  "runtime_executed": false,
+  "source_review": "Repeat count/continuation now retained in ConstructorPlan. Correct the V48 negative-control setup before rerunning: moving its owner after borrowing had already staled the lease. Require a valid internal lease before preparation and prove it remains unchanged after refusal."
+}

@@ -50,6 +50,9 @@ impl Frame {
         } else {
             element
         };
+        Ok((element, self.repeat_length(count, store)?))
+    }
+    fn repeat_length(&self, count: SlotId, store: &GuestStore) -> Result<u32, Diagnostic> {
         let CellState::Live(length) = store.state(self.cell(count)?)? else {
             return Err(invalid("repeat count not live"));
         };
@@ -66,7 +69,110 @@ impl Frame {
                 "repeat count exceeds the guest array length representation".into(),
             )
         })?;
-        Ok((element, length))
+        Ok(length)
+    }
+    pub(crate) fn preflight_repeat_element(
+        &self,
+        guard: SlotId,
+        source: SlotId,
+        count: SlotId,
+        more: SlotId,
+        initialize: bool,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        self.preflight_write_type(more, TypeId(2), store)?;
+        let length = self.repeat_length(count, store)?;
+        if initialize {
+            self.preflight_constructor_start(guard)?;
+            if self.hint(source)?.is_none() {
+                return Err(Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "constant repeat element requires its declared source Type".into(),
+                ));
+            }
+        } else {
+            let active = self
+                .constructor_slot(guard)?
+                .construction
+                .as_ref()
+                .filter(|active| !active.cleaning)
+                .ok_or_else(|| invalid("constant repeat guard absent"))?;
+            let super::ConstructionResult::Bound(ty) = active.result else {
+                return Err(invalid("constant repeat requires its bound array guard"));
+            };
+            if !matches!(store.type_descriptor(ty)?.key.as_ref(), TypeKey::Array { len, .. } if *len == length)
+            {
+                return Err(invalid("constant repeat count differs from its guard"));
+            }
+            let field = store
+                .construction_next_field(active.guard)?
+                .ok_or_else(|| invalid("constant repeat is already complete"))?;
+            self.preflight_constructor_field(guard, field, source, store)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn repeat_element(
+        &mut self,
+        guard: SlotId,
+        source: SlotId,
+        count: SlotId,
+        more: SlotId,
+        initialize: bool,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        self.preflight_repeat_element(guard, source, count, more, initialize, store)?;
+        let length = self.repeat_length(count, store)?;
+        let field = if initialize {
+            let element = self
+                .hint(source)?
+                .ok_or_else(|| invalid("repeat source Type hint disappeared"))?;
+            let ty = store.intern_type(TypeKey::Array {
+                element,
+                len: length,
+            })?;
+            let destination = self
+                .body
+                .constructor_node(guard)?
+                .value
+                .ok_or_else(|| invalid("repeat result absent"))?;
+            self.preflight_write_type(destination, ty, store)?;
+            self.begin_structural_constructor(guard, ty, store)?;
+            if let Some(element) = self.source_view(source)? {
+                self.set_source_view(
+                    destination,
+                    Some(crate::traits::term::TyTerm::Array(
+                        Box::new(element),
+                        crate::traits::term::ConstTerm::Value(u64::from(length)),
+                    )),
+                )?;
+            }
+            None
+        } else {
+            let active = self
+                .constructor_slot(guard)?
+                .construction
+                .as_ref()
+                .ok_or_else(|| invalid("repeat guard disappeared"))?;
+            Some(
+                store
+                    .construction_next_field(active.guard)?
+                    .ok_or_else(|| invalid("repeat already complete"))?,
+            )
+        };
+        let next = match field {
+            Some(field) => field
+                .checked_add(1)
+                .ok_or_else(|| invalid("repeat cursor encoding overflow"))?,
+            None => 0,
+        };
+        // Write the private branch test before transferring the child owner.
+        // A refused move cannot leave a consumed value followed by allocation.
+        let test = store.ticket(ValueRepr::boolean(next < length))?;
+        self.write(more, test, store)?;
+        if let Some(field) = field {
+            self.constructor_field(guard, field, source, store)?;
+        }
+        Ok(())
     }
     /// Whether one element value may be duplicated by value (scalars and
     /// shared references); aggregate Copy goes through its resumable copy.

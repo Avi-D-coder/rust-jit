@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "candidate": "V46",
+  "head": "47b09edfc90c6215973413689a1b92eda2ef0c87",
+  "source_sha256": "4d79c49e5a05824dd258b2002449c6a0d4b1f42ae5a01b145a6029ea5a74c6fb",
+  "source_leaves": 3336,
+  "builds": {
+    "lib": {
+      "session_id": 41604,
+      "initial": "c88363",
+      "terminal": "d6cc95",
+      "exit": 0,
+      "seconds": 11.53,
+      "binary_sha256": "e4328e2aeec837c772c3f177c0d93246c88430f81bc3d339bbd773a50ebdf37a"
+    },
+    "cli": {
+      "session_id": 79721,
+      "initial": "79505b",
+      "terminal": "9d4bad",
+      "exit": 0,
+      "seconds": 10.09,
+      "binary_sha256": "58478446209c6ed2e0142e33a19ab8611bbf07bc5e475309dd98eea6c4593f07"
+    }
+  },
+  "queues": {
+    "stock": {
+      "session_id": 81124,
+      "initial": "a0fa02",
+      "terminal": "fab0c4",
+      "exit": 0
+    },
+    "once": {
+      "session_id": 79959,
+      "initial": "c1c758",
+      "terminal": "880dbb",
+      "exit": 1
+    }
+  },
+  "runtime_cases": [
+    {
+      "path": "tests/ui/consts/const-blocks/const-repeat.rs",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "edition": 2015,
+      "sha256": "573c88e8d803e952a35eea12b2e846afb59e3f09e65dc4c126c075831e7cd4fb",
+      "raw_stdout_sha256": "334249a936c174122fe0ee90c371ef4657da704ad79d5ef0dcde9515470dc7cf"
+    },
+    {
+      "path": "tests/ui/consts/const-blocks/run-pass.rs",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "edition": 2015,
+      "sha256": "080846985e99179b76d6bb77071d5427d982a2fab370829e01c6b752910ec0aa",
+      "raw_stdout_sha256": "2b2c1ec1df116e4df3f668953d939902c0fb3e4f709588c1549060a72e82bbf8"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "edition": 2015,
+      "sha256": "a9c60ffba1c605a60e0fae5f85f758f20c1044ad4335be8b40dd49185787433d",
+      "raw_stdout_sha256": "b9e5e3ed859458855a418f2d1b61ea5bd66d8421dd40736c881bfcdde66f0350"
+    }
+  ],
+  "once_control": [
+    {
+      "edition": 2015,
+      "runtime_contract_pass": true,
+      "observed_calls": 2,
+      "pass": false,
+      "no_output": false
+    },
+    {
+      "edition": 2018,
+      "runtime_contract_pass": true,
+      "observed_calls": 2,
+      "pass": false,
+      "no_output": false
+    },
+    {
+      "edition": 2021,
+      "runtime_contract_pass": true,
+      "observed_calls": 2,
+      "pass": false,
+      "no_output": false
+    },
+    {
+      "edition": 2024,
+      "runtime_contract_pass": true,
+      "observed_calls": 2,
+      "pass": false,
+      "no_output": false
+    }
+  ],
+  "summary": "3/3 selected whole-main runtime cases pass. Four owning-edition original const-repeat executions complete with2ordinary calls. The stricter control reports0/4 because it incorrectly requires terminal.output, which is omitted for empty output; actual capture.guest has observed empty byte arrays. Keep original failed control receipt. New successor will inspect actual guest streams and count initializer entry explicitly.",
+  "scope": "Runtime observations only; no retroactive control pass or full feature/milestone/JIT closure."
+}

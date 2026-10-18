@@ -87,7 +87,7 @@ pub enum ItemKind {
     ExternBlock,
 }
 impl ItemKind {
-    fn tag(self) -> u32 {
+    pub(crate) fn tag(self) -> u32 {
         match self {
             Self::Function => 1,
             Self::Struct => 2,

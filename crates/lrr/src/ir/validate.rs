@@ -1354,6 +1354,32 @@ fn verify_inner(
                 }
                 Some(*destination)
             }
+            Op::ArrayRepeatElement {
+                guard,
+                source,
+                count,
+                more,
+                initialize,
+            } => {
+                slot(body, *guard, SlotKind::Guard)?;
+                for value in [source, count, more] {
+                    slot(body, *value, SlotKind::Value)?;
+                }
+                if body.constructor_node(*guard)?.id != node.id
+                    || node.runtime_temporaries[0] != Some(*more)
+                    || source == count
+                    || source == more
+                    || count == more
+                    || !matches!(Phase::from_code(draft.key.phase), Phase::Operand(n)
+                        if node.operands.get(usize::from(n)).and_then(|n| body.nodes()[n.0 as usize].value)
+                            == Some(if *initialize { *count } else { *source }))
+                {
+                    return Err(invalid(
+                        "constant repeat slots/phase differ from indexed source",
+                    ));
+                }
+                Some(*more)
+            }
             Op::ArrayRepeat {
                 source,
                 count,

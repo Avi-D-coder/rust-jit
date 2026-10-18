@@ -1077,6 +1077,19 @@ impl GuestStore {
     /// Move a frame field into a guard only after the target contract accepts it.
     /// A rejected type, occupied field or ticket reservation leaves the source
     /// cell live. No guest callback can run between admission and transfer.
+    /// Next ascending field of an ordinary sequential construction. This
+    /// reads existing guard progress; it grants no source or Copy authority.
+    pub(crate) fn construction_next_field(&self, guard: ConstructionId) -> Result<Option<u32>, Diagnostic> {
+        let record = self.constructions.get(guard)?;
+        if record.state != ConstructionState::Building || record.pending_cleanup.is_some() {
+            return Err(ownership());
+        }
+        let next = record.completed.len();
+        if next > record.fields.len() { return Err(ownership()); }
+        if next == record.fields.len() { return Ok(None); }
+        if record.fields[next].is_some() { return Err(ownership()); }
+        Ok(Some(u32::try_from(next).map_err(|_| resource())?))
+    }
     pub(crate) fn construction_move_from(
         &mut self,
         guard: ConstructionId,

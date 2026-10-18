@@ -802,6 +802,19 @@ impl StableEncode for Recipe {
                 e.u32(source.0);
                 e.u32(destination.0);
             }
+            Op::ArrayRepeatElement {
+                guard,
+                source,
+                count,
+                more,
+                initialize,
+            } => {
+                e.u32(guard.0);
+                e.u32(source.0);
+                e.u32(count.0);
+                e.u32(more.0);
+                e.bool(*initialize);
+            }
             Op::ArrayRepeat {
                 source,
                 count,

@@ -408,7 +408,7 @@ impl BodyIndex {
     }
 }
 impl StableEncode for BodyIndex {
-    const DOMAIN: &'static str = "lrr/v6/original-body-structure";
+    const DOMAIN: &'static str = "lrr/v7/original-body-structure";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.body);
         e.record(&self.profile);
@@ -1255,7 +1255,15 @@ impl ParsedFile {
             } else {
                 (None, None)
             };
-            let runtime_temporaries = if kind == Some(ExpressionKind::For) {
+            let runtime_temporaries = if expr.as_ref().is_some_and(|expr| matches!(expr,
+                ast::Expr::ArrayExpr(array) if matches!(array.kind(), ast::ArrayExprKind::Repeat { .. }))) {
+                // The repeat's own branch condition, never an operand evaluator.
+                let next = index.slots.checked_add(2)
+                    .ok_or_else(|| limit("repeat test slot encoding overflow"))?;
+                let slots = [Some(SlotId(index.slots)), None];
+                index.slots = next;
+                slots
+            } else if kind == Some(ExpressionKind::For) {
                 // The iterator (loop-owned) and each iteration's `next` result.
                 let next = index
                     .slots

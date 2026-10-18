@@ -79,7 +79,9 @@ pub enum ConstructorKind {
     Array(Vec<ConstructorOperand>),
     Repeat {
         element: ConstructorOperand,
+        count: ConstructorOperand,
         length: Vec<ConstructorToken>,
+        continuation: crate::ir::pc::PcKey,
     },
     Record {
         path: Vec<ConstructorToken>,
@@ -485,7 +487,9 @@ impl ParsedFile {
                     let repeat = repeat.ok_or_else(|| fault("repeat length absent"))?;
                     ConstructorKind::Repeat {
                         element: operand(initializer)?,
+                        count: operand(repeat.clone())?,
                         length: self.constructor_tokens(repeat.syntax())?,
+                        continuation: super::thunks::return_pc(index, body, array.syntax())?,
                     }
                 }
             },
@@ -600,7 +604,7 @@ impl ParsedFile {
     }
 }
 impl StableEncode for ConstructorPlan {
-    const DOMAIN: &'static str = "lrr/v3/entered-constructor-plan";
+    const DOMAIN: &'static str = "lrr/v4/entered-constructor-plan";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.origin.body_key);
         e.u32(self.node.0);
@@ -621,10 +625,17 @@ impl StableEncode for ConstructorPlan {
                 e.u32(1);
                 e.sequence(fields, operand);
             }
-            ConstructorKind::Repeat { element, length } => {
+            ConstructorKind::Repeat {
+                element,
+                count,
+                length,
+                continuation,
+            } => {
                 e.u32(2);
                 operand(e, element);
+                operand(e, count);
                 e.sequence(length, |e, token| e.record(token));
+                e.record(continuation);
             }
             ConstructorKind::Record { path, fields, rest } => {
                 e.u32(3);
@@ -888,7 +899,10 @@ mod tests {
         let (parsed, body, index) = source(ZERO_REPEAT);
         let plans = plans(&parsed, &body, &index);
         assert_eq!(plans.len(), 1);
-        let ConstructorKind::Repeat { element, length } = plans[0].kind() else {
+        let ConstructorKind::Repeat {
+            element, length, ..
+        } = plans[0].kind()
+        else {
             panic!("original repeat plan absent");
         };
         assert_eq!(

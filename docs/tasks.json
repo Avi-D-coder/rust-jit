@@ -4430,7 +4430,7 @@
           "evidence_paths": []
         }
       ],
-      "latest_component_scope": "V42 solo root: ordinary aggregate Copy repetition uses shared AggregateCopy and common ConstructionId guards; no scalar bit-copy fallback. 13/13 focused controls and16/16 origin/edition runs pass; unchanged repeated-vector main newly passes against measured V41. Selected stock3/5. Component history/status is preserved; non-Copy const evaluation policy/zero coldness, full cancellation/current milestone and runtime/JIT gates remain incomplete. Evidence worktracks/evidence/2026-10-18-interpreter-v42-validation.json."
+      "latest_component_scope": "V51 solo root: source-selected named non-Copy constant repetition and zero-count coldness use retained ConstructorPlan/Type hints, ordinary child PCs and construction guards. Both exact macOS builds, 38/38 focused controls, 3/3 selected unchanged upstream runtime contracts and all16 origin/edition controls pass. Two whole-main improvements versus measured V44; no refreshed suite total. Inline const/generic/member applications, valid internal-reference relocation/opaque graph storage, full cancellation/failure atomicity and current milestone remain incomplete; no feature/JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v51-validation.json."
     },
     {
       "id": "T041",
@@ -5095,7 +5095,7 @@
           "evidence_paths": []
         }
       ],
-      "latest_component_scope": "V42 solo root: ordinary aggregate Copy repetition uses shared AggregateCopy and common ConstructionId guards; no scalar bit-copy fallback. 13/13 focused controls and16/16 origin/edition runs pass; unchanged repeated-vector main newly passes against measured V41. Selected stock3/5. Component history/status is preserved; non-Copy const evaluation policy/zero coldness, full cancellation/current milestone and runtime/JIT gates remain incomplete. Evidence worktracks/evidence/2026-10-18-interpreter-v42-validation.json."
+      "latest_component_scope": "V51 solo root: source-selected named non-Copy constant repetition and zero-count coldness use retained ConstructorPlan/Type hints, ordinary child PCs and construction guards. Both exact macOS builds, 38/38 focused controls, 3/3 selected unchanged upstream runtime contracts and all16 origin/edition controls pass. Two whole-main improvements versus measured V44; no refreshed suite total. Inline const/generic/member applications, valid internal-reference relocation/opaque graph storage, full cancellation/failure atomicity and current milestone remain incomplete; no feature/JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v51-validation.json."
     },
     {
       "id": "T043",
@@ -6470,7 +6470,7 @@
           "full_stock_fixture_passes": 0
         }
       },
-      "latest_component_scope": "V41 solo root: private nongeneric constant-data replication uses the ordinary AggregateCopy construction guards independently of static borrow promotion. Ordinary Copy admission remains intact. All 19 focused controls pass, including the unchanged three-call structural pattern retry across four origins and four editions; 10/11 selected unchanged upstream runtime contracts pass. Non-Copy ArrayRepeat, complete generic application/heap/mutable-reference/cancellation, relevant invalidation, cold impl completeness and full milestone remain incomplete. No task completion or JIT status promotion. Evidence: worktracks/evidence/2026-10-18-interpreter-v41-validation.json."
+      "latest_component_scope": "V51 solo root: source-selected named non-Copy constant repetition and zero-count coldness use retained ConstructorPlan/Type hints, ordinary child PCs and construction guards. Both exact macOS builds, 38/38 focused controls, 3/3 selected unchanged upstream runtime contracts and all16 origin/edition controls pass. Two whole-main improvements versus measured V44; no refreshed suite total. Inline const/generic/member applications, valid internal-reference relocation/opaque graph storage, full cancellation/failure atomicity and current milestone remain incomplete; no feature/JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v51-validation.json."
     },
     {
       "id": "T060",

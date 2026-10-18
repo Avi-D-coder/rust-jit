@@ -354,7 +354,8 @@ pub const POINTER_CAST_OPCODE: u8 = 67;
 // Tag 68 adjusts a once-evaluated value callee through ordinary Deref calls.
 pub const CALLEE_DEREF_OPCODE: u8 = 68;
 pub const CONSTRUCT_REST_OPCODE: u8 = 69;
-pub const OPCODE_COUNT: usize = 70;
+pub const ARRAY_REPEAT_ELEMENT_OPCODE: u8 = 70;
+pub const OPCODE_COUNT: usize = 71;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -709,6 +710,15 @@ pub enum Op {
         count: SlotId,
         destination: SlotId,
     },
+    /// Source-constant repetition: create the ordinary array guard, or move
+    /// the next ordinary child result into it. `more` selects the next child.
+    ArrayRepeatElement {
+        guard: SlotId,
+        source: SlotId,
+        count: SlotId,
+        more: SlotId,
+        initialize: bool,
+    },
     /// One operand of a comparison operator, evaluated as a place: rustc
     /// autorefs both operands (`a == b` is `PartialEq::eq(&a, &b)`), so a
     /// comparison never moves them. A primitive scalar or shared reference
@@ -924,6 +934,7 @@ impl Op {
             Self::CalleeDeref { .. } => CALLEE_DEREF_OPCODE,
             Self::CompoundAssignPlace { .. } => COMPOUND_ASSIGN_PLACE_OPCODE,
             Self::ArrayRepeat { .. } => ARRAY_REPEAT_OPCODE,
+            Self::ArrayRepeatElement { .. } => ARRAY_REPEAT_ELEMENT_OPCODE,
             Self::ComparisonOperand { .. } => COMPARISON_OPERAND_OPCODE,
             Self::IteratorCall { .. } => ITERATOR_CALL_OPCODE,
             Self::ValuePath { .. } => VALUE_PATH_OPCODE,
@@ -943,7 +954,9 @@ pub enum EffectClass {
 impl Op {
     pub fn effect_class(&self) -> EffectClass {
         match self {
-            Self::Pattern { .. } | Self::ArrayRepeat { .. } => EffectClass::OwnershipTransfer,
+            Self::Pattern { .. } | Self::ArrayRepeat { .. } | Self::ArrayRepeatElement { .. } => {
+                EffectClass::OwnershipTransfer
+            }
             Self::MakePlace { .. }
             | Self::ParameterPlace { .. }
             | Self::ValuePlace { .. }

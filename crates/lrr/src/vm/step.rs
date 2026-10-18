@@ -648,6 +648,13 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             source,
             destination,
         } => frame.preflight_value_place(*source, *destination, store),
+        Op::ArrayRepeatElement {
+            guard,
+            source,
+            count,
+            more,
+            initialize,
+        } => frame.preflight_repeat_element(*guard, *source, *count, *more, *initialize, store),
         Op::ArrayRepeat {
             source,
             count,
@@ -1219,6 +1226,13 @@ fn execute(
             source,
             destination,
         } => frame.promoted_place(*source, *destination, store),
+        Op::ArrayRepeatElement {
+            guard,
+            source,
+            count,
+            more,
+            initialize,
+        } => frame.repeat_element(*guard, *source, *count, *more, *initialize, store),
         Op::ArrayRepeat {
             source,
             count,

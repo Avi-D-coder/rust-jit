@@ -76,15 +76,14 @@ impl GuestStore {
         // The same physical work engine must replicate every supported leaf
         // without invoking Clone or guest code.
         let mut pending = vec![value];
+        let mut owned_cells = std::collections::BTreeSet::new();
+        let mut shared_references = Vec::new();
         while let Some(value) = pending.pop() {
             match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
-                TypeKey::Nominal { identity, .. } => {
-                    // Owning heap containers need their allocation/alias
-                    // reconstruction contract, not a shallow field replica.
-                    if self.owned_box == Some(*identity) || self.owned_vec == Some(*identity) {
-                        return Ok(None);
-                    }
-                }
+                // Owned container allocations are represented by these same
+                // complete objects and field cells. The normal graph worker
+                // allocates a fresh object/fields; no Copy fact is granted.
+                TypeKey::Nominal { .. } => {}
                 TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. } => {}
                 _ => return Ok(None),
             }
@@ -104,25 +103,53 @@ impl GuestStore {
                 {
                     return Err(ownership());
                 }
+                if !owned_cells.insert(*field) {
+                    return Err(ownership());
+                }
                 let member = self.admit_move(*field)?;
                 match member.kind {
                     8 => pending.push(member),
-                    1..=7 | 11 | 12 => {
-                        self.admit_copy(*field)?;
-                    }
                     9 => {
-                        if self
-                            .references
-                            .get(RefId::from_bits(member.payload))?
-                            .access
-                            == Access::Mutable
-                        {
+                        let reference = self.references.get(RefId::from_bits(member.payload))?;
+                        if reference.access == Access::Mutable || reference.raw {
+                            // Pointer/unique-reference rebasing is not a
+                            // shared-lease copy. Keep that physical gap held.
                             return Ok(None);
                         }
                         self.admit_copy(*field)?;
+                        shared_references.push(RefId::from_bits(member.payload));
                     }
-                    _ => return Ok(None),
+                    _ => match self.intrinsic_read_mode(*field) {
+                        Ok(IntrinsicRead::CopyScalar) => {
+                            self.admit_copy(*field)?;
+                        }
+                        Ok(_) => return Ok(None),
+                        Err(error) if error.code == "LRR-E-UNSUPPORTED" => return Ok(None),
+                        Err(error) => return Err(error),
+                    },
                 }
+            }
+        }
+        // An internal reference would still address the template after a
+        // physical copy. Until the common graph worker rebases such edges,
+        // only leases outside the owned tree can be reused faithfully.
+        for id in shared_references {
+            let reference = self.references.get(id)?;
+            let base = match &reference.lease {
+                ReferenceLease::Location(base) => Some(base),
+                ReferenceLease::Elements(elements) => Some(&elements.base),
+                ReferenceLease::Buffer(_) => None,
+                ReferenceLease::Detached(_) => return Ok(None),
+            };
+            if let Some(base) = base
+                && (owned_cells.contains(&base.root.cell)
+                    || owned_cells.contains(&base.final_cell.cell)
+                    || base
+                        .enclosing
+                        .iter()
+                        .any(|link| owned_cells.contains(&link.parent.cell)))
+            {
+                return Ok(None);
             }
         }
         Ok(Some(PreparedVmTemplate {
@@ -521,6 +548,82 @@ mod template_authority_tests {
             "LRR-E-STALE-HANDLE"
         );
         assert_eq!(a.peek_ticket(moved).unwrap(), first.value);
+    }
+    fn tuple_tickets(store: &mut GuestStore, values: Vec<TicketId>) -> TicketId {
+        let types: Vec<_> = values
+            .iter()
+            .map(|ticket| TypeId(store.peek_ticket(*ticket).unwrap().type_id))
+            .collect();
+        let ty = store
+            .intern_type(TypeKey::Tuple(types.clone().into()))
+            .unwrap();
+        let guard = store.begin_construction(&types).unwrap();
+        for (n, value) in values.into_iter().enumerate() {
+            store
+                .construction_push(guard, u32::try_from(n).unwrap(), value)
+                .unwrap();
+        }
+        store.commit_construction(guard, ty).unwrap()
+    }
+    #[test]
+    fn private_template_refuses_reparented_internal_reference_without_consuming_the_graph() {
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let inner = sealed(&mut store);
+        let field = store.place_object(inner.cell()).unwrap().1.fields[0];
+        let lease = store.borrow(&Place::cell(field), Access::Shared).unwrap();
+        assert_eq!(
+            store.read_reference(lease).unwrap(),
+            ValueRepr::signed(TypeId(6), 7).unwrap()
+        );
+        let reference = store.reference_ticket(lease).unwrap();
+        let inner_value = store.move_from(inner.cell()).unwrap();
+        let graph = tuple_tickets(&mut store, vec![inner_value, reference]);
+        // Moving the enclosing owner invalidates the original location lease.
+        // Admission must refuse this internal edge without consuming the tree;
+        // this control does not prove support for rebasing a valid self-reference.
+        assert_eq!(store.read_reference(lease).unwrap_err().code, "LRR-E-STALE-HANDLE");
+        let before = store.peek_ticket(graph).unwrap();
+        assert!(store.prepare_vm_template(graph).unwrap().is_none());
+        assert_eq!(store.peek_ticket(graph).unwrap(), before);
+        assert_eq!(store.read_reference(lease).unwrap_err().code, "LRR-E-STALE-HANDLE");
+    }
+    #[test]
+    fn private_template_preserves_external_shared_lease_in_a_fresh_owning_graph() {
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let external = sealed(&mut store);
+        let field = store.place_object(external.cell()).unwrap().1.fields[0];
+        let lease = store.borrow(&Place::cell(field), Access::Shared).unwrap();
+        let reference = store.reference_ticket(lease).unwrap();
+        let graph = tuple_tickets(&mut store, vec![reference]);
+        let prepared = store.prepare_vm_template(graph).unwrap().unwrap();
+        let ty = TypeId(store.peek_ticket(graph).unwrap().type_id);
+        let anchor = store.new_frame_anchor().unwrap();
+        let cell = store
+            .new_cell(
+                StorageContract::Exact(ty),
+                false,
+                CellOwner::FrameSlot {
+                    frame: anchor,
+                    slot: 0,
+                },
+            )
+            .unwrap();
+        store.initialize(cell, graph).unwrap();
+        let template = store.seal_vm_template(prepared, cell).unwrap();
+        let mut work = AggregateCopy::begin_template(&mut store, template).unwrap();
+        let replica = loop {
+            if let CopyProgress::Complete(ticket) = work.advance(&mut store).unwrap() {
+                break ticket;
+            }
+        };
+        let original = store.admit_move(cell).unwrap();
+        let copied = store.peek_ticket(replica).unwrap();
+        assert_ne!(original.payload, copied.payload);
+        assert_eq!(
+            store.read_reference(lease).unwrap(),
+            ValueRepr::signed(TypeId(6), 7).unwrap()
+        );
+        store.validate_vm_template(&external).unwrap();
     }
     #[test]
     fn refused_copy_parent_retains_committed_child_ticket_for_retry() {

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "candidate": "V45",
+  "source_sha256": "dd9cd14ca7ee0c182c13cb38b88c40ca96760a177e7a5b27a226247076028db4",
+  "head": "47b09edfc90c6215973413689a1b92eda2ef0c87",
+  "builds": {
+    "lib": {
+      "session_id": 47375,
+      "initial": "f18b3e",
+      "terminal": "fb8994",
+      "exit": 0,
+      "seconds": 8.76,
+      "binary_sha256": "5e75c235f7fa289ccca4b11f417d342a8fdf0182909f09b219f897e8e088a454"
+    },
+    "cli": {
+      "session_id": 83919,
+      "initial": "38d2ad",
+      "terminal": "83331d",
+      "exit": 0,
+      "seconds": 5.03,
+      "binary_sha256": "2bd2e43a2493a01c591959605c262f2b63a5680c42affc8e766f3e121c716dfe"
+    }
+  },
+  "runtime_executed": false,
+  "source_review": "The intended Discard was added at commit but missed the per-element push vector. Correct source before executing another redundant failing batch. Parent-kind correction is compiled but unexecuted on this candidate.",
+  "acceptance_claim": false
+}

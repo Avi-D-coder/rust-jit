@@ -147,6 +147,8 @@ pub use crate::frontend::constants::query_identity::ConstQueryIdentity as Consta
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
     PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
+    ArrayRepeatPlan(crate::source::manifest::PcKey),
+    PreparedArrayRepeat(crate::source::manifest::PcKey),
     AssociatedItemQualifier(crate::source::manifest::PcKey),
     InitializerOwnerTemplate(crate::frontend::initializer_owner_templates::InitializerOwnerTemplateKey),
     AssociatedEquations(Box<crate::frontend::associated_equations::AssociatedEquationsKey>),
@@ -214,7 +216,8 @@ impl QueryKey {
                     + k.module_path.iter().map(String::capacity).sum::<usize>()
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
-            Self::InitializerOwnerTemplate(_)
+            Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_)
+            | Self::InitializerOwnerTemplate(_)
             | Self::AssociatedItemQualifier(_)
             | Self::PreparedExplicitTypeArguments(_)
             | Self::EnteredCall(_)
@@ -244,6 +247,8 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::ArrayRepeatPlan(_) => "ArrayRepeatPlan",
+            Self::PreparedArrayRepeat(_) => "PreparedArrayRepeat",
             Self::InitializerOwnerTemplate(_) => "InitializerOwnerTemplate",
             Self::AssociatedItemQualifier(_) => "AssociatedItemQualifier",
             Self::AssociatedEquations(_) => "AssociatedEquations",
@@ -289,6 +294,8 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::ArrayRepeatPlan(key) => { e.u32(54); e.record(key); }
+            Self::PreparedArrayRepeat(key) => { e.u32(55); e.record(key); }
             Self::InitializerOwnerTemplate(key) => { e.u32(53); e.record(key); }
             Self::AssociatedItemQualifier(key) => { e.u32(51); e.record(key); }
             Self::AssociatedEquations(key) => {

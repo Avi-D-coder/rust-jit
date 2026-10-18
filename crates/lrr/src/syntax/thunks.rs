@@ -1915,6 +1915,33 @@ impl ParsedFile {
         key: &PcKey,
         plan: &super::constructors::ConstructorPlan,
     ) -> Result<VerifiedRecipe, Diagnostic> {
+        self.constructor_thunk_policy(body, index, key, plan, None)
+    }
+    pub(crate) fn constructor_thunk_with_repeat(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        plan: &super::constructors::ConstructorPlan,
+        prepared: &crate::frontend::array_repeats::PreparedArrayRepeat,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        use crate::core::digest::StableEncode;
+        if prepared.plan().key().body != key.body
+            || prepared.plan().key().node != key.node
+            || prepared.plan().syntax().fingerprint() != plan.fingerprint()
+        {
+            return Err(error("repeat prepared source identity differs"));
+        }
+        self.constructor_thunk_policy(body, index, key, plan, prepared.plan().written())
+    }
+    fn constructor_thunk_policy(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        plan: &super::constructors::ConstructorPlan,
+        repeated: Option<&std::sync::Arc<crate::ir::written_type::WrittenType>>,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
         use super::constructors::ConstructorKind;
         if body.key() != *index.body()
             || key.body != body.key()
@@ -1934,8 +1961,14 @@ impl ParsedFile {
             .constructor_guard
             .ok_or_else(|| error("constructor guard absent"))?;
         let fallback = index.pc(node.id, Phase::Exit)?;
-        if let ConstructorKind::Repeat { element, .. } = plan.kind() {
-            return self.repeat_thunk(body, index, key, node, element.node, element.value);
+        if let ConstructorKind::Repeat {
+            element,
+            count,
+            continuation,
+            ..
+        } = plan.kind()
+        {
+            return self.repeat_thunk(index, key, node, (element, count), continuation, repeated);
         }
         let start = body
             .range
@@ -2035,42 +2068,92 @@ impl ParsedFile {
     /// expression evaluated as ordinary syntax), then one `ArrayRepeat`.
     fn repeat_thunk(
         &self,
-        body: &BodyHandle,
         index: &BodyIndex,
         key: &PcKey,
         node: &crate::syntax::body_index::StructuralNode,
-        element_node: NodeId,
-        element_value: crate::ir::pc::SlotId,
+        operands: (
+            &super::constructors::ConstructorOperand,
+            &super::constructors::ConstructorOperand,
+        ),
+        continuation: &PcKey,
+        repeated: Option<&std::sync::Arc<crate::ir::written_type::WrittenType>>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        let start = body
-            .range
-            .start
-            .checked_add(node.range.start)
-            .ok_or_else(|| error("repeat syntax range overflow"))?;
-        let end = body
-            .range
-            .start
-            .checked_add(node.range.end)
-            .ok_or_else(|| error("repeat syntax range overflow"))?;
-        let syntax = self
-            .syntax_at(
-                crate::syntax::spans::SourceRange::checked(start, end)?,
-                |syntax| ast::ArrayExpr::can_cast(syntax.kind()),
-            )?
-            .and_then(ast::ArrayExpr::cast)
-            .ok_or_else(|| error("repeat syntax absent"))?;
-        let ast::ArrayExprKind::Repeat {
-            repeat: Some(length),
-            ..
-        } = syntax.kind()
-        else {
-            return Err(error("repeat length absent"));
-        };
-        let count_node = id_for(index, body, length.syntax())?;
-        let count = index.nodes()[count_node.0 as usize]
-            .value
-            .ok_or_else(|| error("repeat count value absent"))?;
+        let (element, count) = operands;
+        let (element_node, element_value) = (element.node, element.value);
+        let (count_node, count) = (count.node, count.value);
         let destination = node.value.ok_or_else(|| error("repeat result absent"))?;
+        if let Some(written) = repeated {
+            let more =
+                node.runtime_temporaries[0].ok_or_else(|| error("repeat branch test absent"))?;
+            let guard = node
+                .constructor_guard
+                .ok_or_else(|| error("repeat constructor guard absent"))?;
+            let element = index.pc(element_node, Phase::Entry)?;
+            let finish = index.pc(node.id, Phase::Commit)?;
+            let branch = RecipeExit::Branch {
+                condition: more,
+                yes: element,
+                no: finish,
+            };
+            return match Phase::from_code(key.phase) {
+                Phase::Entry => draft(
+                    index,
+                    key,
+                    vec![
+                        Op::SetHint {
+                            child: count,
+                            hint: HintRecipe::Primitive(PrimitiveType::Usize),
+                        },
+                        Op::SetHint {
+                            child: element_value,
+                            hint: HintRecipe::Written(std::sync::Arc::clone(written)),
+                        },
+                    ],
+                    RecipeExit::Next(index.pc(count_node, Phase::Entry)?),
+                ),
+                Phase::Operand(n) if node.operands.get(usize::from(n)) == Some(&count_node) => {
+                    draft(
+                        index,
+                        key,
+                        vec![Op::ArrayRepeatElement {
+                            guard,
+                            source: element_value,
+                            count,
+                            more,
+                            initialize: true,
+                        }],
+                        branch,
+                    )
+                }
+                Phase::Operand(n) if node.operands.get(usize::from(n)) == Some(&element_node) => {
+                    draft(
+                        index,
+                        key,
+                        vec![
+                            Op::Discard { source: more },
+                            Op::ArrayRepeatElement {
+                                guard,
+                                source: element_value,
+                                count,
+                                more,
+                                initialize: false,
+                            },
+                        ],
+                        branch,
+                    )
+                }
+                Phase::Commit => draft(
+                    index,
+                    key,
+                    vec![
+                        Op::Discard { source: more },
+                        Op::ConstructFinish { guard, destination },
+                    ],
+                    RecipeExit::Next(continuation.clone()),
+                ),
+                _ => Err(error("constant repeat phase differs")),
+            };
+        }
         match Phase::from_code(key.phase) {
             Phase::Entry => draft(
                 index,
@@ -2095,7 +2178,7 @@ impl ParsedFile {
                     count,
                     destination,
                 }],
-                RecipeExit::Next(return_pc(index, body, syntax.syntax())?),
+                RecipeExit::Next(continuation.clone()),
             ),
             _ => Err(error("invalid array repeat phase")),
         }
@@ -5019,22 +5102,24 @@ impl ParsedFile {
                     Phase::Operand(0) => {
                         let mut ops = Vec::new();
                         if !base_is_place {
-                            let source = index.nodes()[base.0 as usize].value.ok_or_else(|| {
-                                error("temporary index receiver value absent")
-                            })?;
-                            ops.push(if promotable_constant(&base_expression)
-                                && index.shared_borrow_owner(base).is_some()
-                            {
-                                Op::PromotedPlace {
-                                    source,
-                                    destination: base_place,
-                                }
-                            } else {
-                                Op::ValuePlace {
-                                    source,
-                                    destination: base_place,
-                                }
-                            });
+                            let source = index.nodes()[base.0 as usize]
+                                .value
+                                .ok_or_else(|| error("temporary index receiver value absent"))?;
+                            ops.push(
+                                if promotable_constant(&base_expression)
+                                    && index.shared_borrow_owner(base).is_some()
+                                {
+                                    Op::PromotedPlace {
+                                        source,
+                                        destination: base_place,
+                                    }
+                                } else {
+                                    Op::ValuePlace {
+                                        source,
+                                        destination: base_place,
+                                    }
+                                },
+                            );
                         }
                         match &range_bounds {
                             Some(bounds) => {

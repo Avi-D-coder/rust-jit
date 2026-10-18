@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "candidate": "V43",
+  "head": "47b09edfc90c6215973413689a1b92eda2ef0c87",
+  "source_sha256": "995fe0350c5d28bb37656df733760b4512dd80123c2f8d89edad7e15dcb0cf78",
+  "source_leaves": 3336,
+  "build": {
+    "session_id": 47676,
+    "initial": "be267b",
+    "terminal": "05d562",
+    "exit": 101,
+    "seconds": 9.66
+  },
+  "errors": [
+    "ArrayRepeatPlan needs Debug for QueryValue",
+    "PreparedArrayRepeat needs Debug for QueryValue",
+    "run_capture exhaustive Op match needs ArrayRepeatElement internal-operation classification"
+  ],
+  "cli_built": false,
+  "runtime_executed": false,
+  "scope": "Mechanical API coverage failure, not runtime acceptance. Exact failed log remains local."
+}

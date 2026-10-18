@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "candidate": "V44",
+  "head": "47b09edfc90c6215973413689a1b92eda2ef0c87",
+  "source_sha256": "efe19cc66250a8062115768c8db1ae3f0c46832058d1a84aa069fc5301440be0",
+  "source_leaves": 3336,
+  "builds": {
+    "lib": {
+      "session_id": 34816,
+      "initial": "ee1d81",
+      "terminal": "240640",
+      "exit": 0,
+      "seconds": 24.42,
+      "binary_sha256": "2653d92bde3cc174b395ffafeb0fa9c8e37e72057e0bdd2fc9c966b3454da872"
+    },
+    "cli": {
+      "session_id": 11914,
+      "initial": "2a77ef",
+      "terminal": "92f888",
+      "exit": 0,
+      "seconds": 19.55,
+      "binary_sha256": "ae993a6b694727ef060933c30367edc055cbdc57112b8b7645166f50e568c20e"
+    }
+  },
+  "queues": {
+    "stock": {
+      "session_id": 41015,
+      "initial": "6d51ff",
+      "terminal": "067f53",
+      "exit": 0
+    },
+    "once": {
+      "session_id": 8841,
+      "initial": "7241fb",
+      "terminal": "b34f0a",
+      "exit": 1
+    }
+  },
+  "stock": [
+    {
+      "path": "tests/ui/consts/const-blocks/const-repeat.rs",
+      "exit": 2,
+      "runtime_contract_pass": false,
+      "fault_code": "LRR-E-INTERNAL-IR",
+      "fault_message": "numeric result overwrites executed storage",
+      "raw_stdout_sha256": "3a4731ec5fff37735f7ea77baf3ef7492923a987304824d03c14285330849d87"
+    },
+    {
+      "path": "tests/ui/consts/const-blocks/run-pass.rs",
+      "exit": 2,
+      "runtime_contract_pass": false,
+      "fault_code": "LRR-E-UNSUPPORTED",
+      "fault_message": "repeat declaration kind requires its actual source metadata",
+      "raw_stdout_sha256": "3dbfc973072951377ef280fc6f18fd4568f4065794ac13d307f7894e3751ec84"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "fault_code": null,
+      "fault_message": null,
+      "raw_stdout_sha256": "b09b9869c86c0c476212e52dc907457277e6dc23187522574e91f17993ad5ac8"
+    }
+  ],
+  "once": [
+    {
+      "edition": 2015,
+      "exit": 2,
+      "pass": false,
+      "fault_code": "LRR-E-INTERNAL-IR",
+      "fault_message": "numeric result overwrites executed storage",
+      "observed_calls": null
+    },
+    {
+      "edition": 2018,
+      "exit": 2,
+      "pass": false,
+      "fault_code": "LRR-E-INTERNAL-IR",
+      "fault_message": "numeric result overwrites executed storage",
+      "observed_calls": null
+    },
+    {
+      "edition": 2021,
+      "exit": 2,
+      "pass": false,
+      "fault_code": "LRR-E-INTERNAL-IR",
+      "fault_message": "numeric result overwrites executed storage",
+      "observed_calls": null
+    },
+    {
+      "edition": 2024,
+      "exit": 2,
+      "pass": false,
+      "fault_code": "LRR-E-INTERNAL-IR",
+      "fault_message": "numeric result overwrites executed storage",
+      "observed_calls": null
+    }
+  ],
+  "scope": "Both builds pass, but2/3 selected stock roots and4/4 constant once/coldness controls fail. Preserve before correction; no new acceptance."
+}

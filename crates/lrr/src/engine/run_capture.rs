@@ -23,6 +23,7 @@ pub(crate) struct CaptureFacts {
     vm_outcomes: u64,
     classified_operation_candidates: u64,
     source_call_boundaries: u64,
+    initializer_frames_entered: u64,
     effect_recipe_dispatch_attempts: u64,
     unsupported_operation_candidates: u64,
     typed_fault_exit_candidates: u64,
@@ -53,6 +54,11 @@ fn add(value: &mut u64, amount: u64) -> Result<(), Diagnostic> {
 impl RunCapture {
     pub(super) fn facts(&self) -> &CaptureFacts {
         &self.facts
+    }
+    /// Observation only: reached initializer entry never depends on this count.
+    pub(super) fn initializer_frame_entered(&mut self) {
+        self.facts.initializer_frames_entered =
+            self.facts.initializer_frames_entered.saturating_add(1);
     }
     pub(super) fn before_vm_dispatch(
         &mut self,
@@ -104,6 +110,7 @@ impl RunCapture {
                 | Op::IteratorCall { .. }
                 | Op::CompoundAssignPlace { .. }
                 | Op::ArrayRepeat { .. }
+                | Op::ArrayRepeatElement { .. }
                 | Op::Panic { .. }
                 | Op::Declaration
                 | Op::CallPrepare { .. }
@@ -250,6 +257,16 @@ mod tests {
             node: 0,
             phase: 0,
         }
+    }
+    #[test]
+    fn initializer_frame_counter_observes_entry_without_limiting_execution() {
+        let mut capture = RunCapture::default();
+        assert_eq!(capture.facts.initializer_frames_entered, 0);
+        capture.initializer_frame_entered();
+        assert_eq!(capture.facts.initializer_frames_entered, 1);
+        capture.facts.initializer_frames_entered = u64::MAX;
+        capture.initializer_frame_entered();
+        assert_eq!(capture.facts.initializer_frames_entered, u64::MAX);
     }
     #[test]
     fn selected_effect_candidate_is_observed_without_bypassing_vm() {

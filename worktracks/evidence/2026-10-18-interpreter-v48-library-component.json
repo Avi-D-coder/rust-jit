@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "candidate": "V48",
+  "head": "47b09edfc90c6215973413689a1b92eda2ef0c87",
+  "source_sha256": "822067ac3d0cc92d57bcc37f86615b3777db402d98def25e5d300f4d13c7bc4a",
+  "lib_build": {
+    "session_id": 76450,
+    "initial": "6f4cf1",
+    "terminal": "cdf8d9",
+    "exit": 0,
+    "seconds": 14.73,
+    "binary_sha256": "bda5e5246bf037d26166af12c22fefac3e13f1c05a5f9f7fa1c08fa39b66654a"
+  },
+  "cli_built": false,
+  "whole_main_executed": false,
+  "source_review_hold": "Repeat thunk still derives count/continuation through AST per phase; retain those once in ConstructorPlan before further integration. Only3disjoint authority/metadata controls selected on this library component.",
+  "controls": [
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::actual_constant_pattern_is_not_mislabeled_as_a_local_binding_and_bad_pc_is_refused",
+      "exit": 0,
+      "pass": true,
+      "seconds": 0.161,
+      "source_sha256": "822067ac3d0cc92d57bcc37f86615b3777db402d98def25e5d300f4d13c7bc4a",
+      "binary_sha256": "bda5e5246bf037d26166af12c22fefac3e13f1c05a5f9f7fa1c08fa39b66654a",
+      "log_sha256": "a45b118ffe6f95f06fa24400f90215f1d9fdc48087b3ff4620602c7d0545fe59",
+      "log": "control-0.log"
+    },
+    {
+      "selector": "runtime::cell::aggregate_copy::template_authority_tests::private_template_refuses_internal_reference_without_consuming_the_graph",
+      "exit": 101,
+      "pass": false,
+      "seconds": 0.007,
+      "source_sha256": "822067ac3d0cc92d57bcc37f86615b3777db402d98def25e5d300f4d13c7bc4a",
+      "binary_sha256": "bda5e5246bf037d26166af12c22fefac3e13f1c05a5f9f7fa1c08fa39b66654a",
+      "log_sha256": "701171d5d01cd106831b3df9cee95c1c94bd1c2f4dd657a842890f2e51dd1502",
+      "log": "control-1.log"
+    },
+    {
+      "selector": "runtime::cell::aggregate_copy::template_authority_tests::private_template_preserves_external_shared_lease_in_a_fresh_owning_graph",
+      "exit": 0,
+      "pass": true,
+      "seconds": 0.007,
+      "source_sha256": "822067ac3d0cc92d57bcc37f86615b3777db402d98def25e5d300f4d13c7bc4a",
+      "binary_sha256": "bda5e5246bf037d26166af12c22fefac3e13f1c05a5f9f7fa1c08fa39b66654a",
+      "log_sha256": "1a25344d30130b07d1cadcfb402e588affee990a0f4e409d7f23245dbbe71215",
+      "log": "control-2.log"
+    }
+  ],
+  "control_queue": {
+    "session_id": 57330,
+    "initial": "66bb3f",
+    "terminal": "fad88d",
+    "exit": 1
+  },
+  "setup_failure": "Internal-reference control had borrowed before embedding the owner, so its post-refusal read incorrectly expected a lease already made stale by reparenting. Successor constructs the lease after the final ownership layout and checks validity before preparation. Production admission is unchanged for that test correction."
+}

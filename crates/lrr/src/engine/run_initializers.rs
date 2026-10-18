@@ -7,8 +7,9 @@
 //! - a constant's value: kept in a run-long cell when intrinsically Copy,
 //!   or as a source-checked nongeneric constant-data template instantiated
 //!   through the ordinary aggregate work engine. Each replica
-//!   owns its fields and ordinary Drop; unsupported generic/heap/mutable-
-//!   reference graph classes retain per-use initialization debt.
+//!   owns its fields and ordinary Drop, including owned container fields.
+//!   Generic, opaque and reference/pointer-rebasing graph classes retain
+//!   per-use initialization debt.
 use super::*;
 use crate::{core::digest::Digest, runtime::cell::TicketId};
 
@@ -111,6 +112,9 @@ impl RunMachine {
             // including primitive widths, nominal arguments and references.
             self.frame.enter_initializer_root()?;
             crate::vm::step::initializer_root_hint(&mut self.frame, &mut self.store)?;
+            if let Some(capture) = &mut self.runtime_capture {
+                capture.initializer_frame_entered();
+            }
             // Preparation may suspend for source input before entry. Retain
             // the exact demand until the ordinary initializer frame exists.
             self.initializer_demand = None;

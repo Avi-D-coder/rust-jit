@@ -115,6 +115,7 @@ pub(crate) struct SelectedValueDeclaration {
     /// are the owning enum's declaration; `definition.identity` is the
     /// variant's own identity.
     variant: Option<crate::frontend::names::EnumVariantDefinition>,
+    selected_kind: Option<crate::source::manifest::ItemKind>,
 }
 impl SelectedValueDeclaration {
     pub(crate) fn identity(&self) -> Digest {
@@ -204,6 +205,37 @@ impl EnteredValueGoal {
     pub(crate) fn declaration(&self) -> Option<&SelectedValueDeclaration> {
         self.declaration.as_ref()
     }
+    /// Actual source kind, shared with non-binding classification. This reads
+    /// declaration metadata only; it never enters a selected executable body.
+    pub(crate) fn declaration_kind(&self, db: &mut Database) -> QueryPoll<CanonicalValueKind> {
+        let Some(selected) = &self.declaration else {
+            return QueryPoll::Ready(Ok(CanonicalValueKind::Absent));
+        };
+        if let Some(kind) = selected.selected_kind {
+            return QueryPoll::Ready(Ok(CanonicalValueKind::Ready(kind)));
+        }
+        if selected.variant.is_some() {
+            return QueryPoll::Ready(Ok(CanonicalValueKind::Ready(
+                crate::source::manifest::ItemKind::Enum,
+            )));
+        }
+        let Some(header) = db.input(&InputKey::DefinitionHeader(selected.identity())) else {
+            return QueryPoll::Ready(Ok(CanonicalValueKind::Pending(
+                ValueGoalDemand::DeclarationPublication(selected.identity()),
+            )));
+        };
+        let InputValue::DefinitionHeader(header) = header.as_ref() else {
+            return QueryPoll::Ready(Err(error("selected Value header variant differs")));
+        };
+        canonical_value_kind(
+            db,
+            self,
+            &selected.definition,
+            &selected.source,
+            header,
+            &selected.context,
+        )
+    }
     /// A closed library facade function selected by the ordinary lookup, as
     /// `CallResolver::select` selects it for the dispatcher.
     pub(crate) fn facade(&self) -> Option<crate::facade::functions::LibraryFunction> {
@@ -280,6 +312,7 @@ impl StableEncode for EnteredValueGoal {
             e.digest(declaration.header);
             e.record(&declaration.context);
             e.option(&declaration.owner, |e, owner| e.record(owner));
+            e.option(&declaration.selected_kind, |e, kind| e.u32(kind.tag()));
             e.option(&declaration.variant, |e, variant| {
                 e.digest(variant.enumeration);
                 e.string(&variant.name);
@@ -517,13 +550,12 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
                 // any other qualified path keeps the module route.
                 let lexical = match crate::syntax::parse::ParsedFile::lexical_root_name(&path) {
                     Some((root, Some(member))) => {
-                        let binds = checked!(
-                            source.parsed().entered_value_requires_lexical_context(
+                        let binds =
+                            checked!(source.parsed().entered_value_requires_lexical_context(
                                 source.body(),
                                 source.index(),
                                 &goal.key
-                            )
-                        );
+                            ));
                         binds.then_some((root, member))
                     }
                     _ => None,
@@ -676,11 +708,10 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
                 }
                 ModuleRoute::Lexical(_) => {}
             }
-            let request = checked!(plan.lexical_module.request_in_namespace(
-                &name,
-                edition,
-                namespace
-            ));
+            let request = checked!(
+                plan.lexical_module
+                    .request_in_namespace(&name, edition, namespace)
+            );
             let Some(request) = request else {
                 return goal.needs(ValueGoalDemand::ModulePublication);
             };
@@ -863,6 +894,7 @@ fn qualified(
     let caller = goal.key.body.definition;
     let lookup = polled!(resolver.lookup_written(db, caller, &spelled, Namespace::Value));
     let mut impl_owned = false;
+    let mut selected_kind = None;
     let selected = match lookup {
         NameLookup::Defined(selected) => selected,
         // A type-relative associated function (`P::f`, `Self::f`): the
@@ -891,11 +923,12 @@ fn qualified(
                 reads.string(&spelled);
                 reads.record(&selected);
                 goal.reads = reads.finish();
-                return declaration(db, goal, selected, true);
+                return declaration(db, goal, selected, true, Some(definition.item_kind));
             }
             let crate::frontend::callables::CallSelection::Source(callee) = selection else {
                 return goal.needs(ValueGoalDemand::PathAdjustment);
             };
+            selected_kind = Some(callee.definition().item_kind);
             impl_owned = callee.signature().scope.owner.is_some()
                 && callee.definition().enclosing_impl == callee.signature().scope.owner;
             NameDefinition {
@@ -911,7 +944,7 @@ fn qualified(
     reads.string(&spelled);
     reads.record(&selected);
     goal.reads = reads.finish();
-    declaration(db, goal, selected, impl_owned)
+    declaration(db, goal, selected, impl_owned, selected_kind)
 }
 
 fn selected_declaration(
@@ -919,7 +952,7 @@ fn selected_declaration(
     goal: EnteredValueGoal,
     selected: NameDefinition,
 ) -> QueryPoll<EnteredValueGoal> {
-    declaration(db, goal, selected, false)
+    declaration(db, goal, selected, false, None)
 }
 /// `impl_owned`: an associated function selected by its owning impl. An
 /// impl introduces no body or namespace; it has the module's environment.
@@ -928,6 +961,7 @@ fn declaration(
     mut goal: EnteredValueGoal,
     selected: NameDefinition,
     impl_owned: bool,
+    selected_kind: Option<crate::source::manifest::ItemKind>,
 ) -> QueryPoll<EnteredValueGoal> {
     let id = selected.identity;
     let expected = if goal.type_namespace {
@@ -952,18 +986,17 @@ fn declaration(
         return QueryPoll::Ready(goal.finish());
     }
     // A variant owns no declaration inputs: they are its enum's.
-    let enum_variant = goal
-        .plan
-        .environment()
-        .and_then(|environment| {
-            environment
-                .macros()
-                .source_environment()
-                .names()
-                .enum_variant(id)
-                .cloned()
-        });
-    let input_id = enum_variant.as_ref().map_or(id, |variant| variant.enumeration);
+    let enum_variant = goal.plan.environment().and_then(|environment| {
+        environment
+            .macros()
+            .source_environment()
+            .names()
+            .enum_variant(id)
+            .cloned()
+    });
+    let input_id = enum_variant
+        .as_ref()
+        .map_or(id, |variant| variant.enumeration);
     let source = db.input(&InputKey::DefinitionSource(input_id));
     let header = db.input(&InputKey::DefinitionHeader(input_id));
     let context = db.input(&InputKey::DeclarationContext(input_id));
@@ -986,7 +1019,11 @@ fn declaration(
             .map(|(_, stamp)| stamp)
             .ok_or_else(|| error("Value goal actual header stamp absent"))
     );
-    let cached_header = checked!(goal.plan.field_types.header_identity(input_id, header_stamp));
+    let cached_header = checked!(
+        goal.plan
+            .field_types
+            .header_identity(input_id, header_stamp)
+    );
     let owner = if context.scope.owner.is_some() && !impl_owned {
         let owner = db.input(&InputKey::LocalDeclarationOwner(id));
         let Some(owner) = owner else {
@@ -1035,6 +1072,7 @@ fn declaration(
             context: context.clone(),
             owner,
             variant: enum_variant,
+            selected_kind,
         });
         return QueryPoll::Ready(goal.finish());
     }
@@ -1069,8 +1107,80 @@ fn declaration(
         context: context.clone(),
         owner,
         variant: enum_variant,
+        selected_kind,
     });
     QueryPoll::Ready(goal.finish())
+}
+
+pub(crate) enum CanonicalValueKind {
+    Ready(crate::source::manifest::ItemKind),
+    Pending(ValueGoalDemand),
+    Absent,
+}
+fn canonical_value_kind(
+    db: &mut Database,
+    goal: &EnteredValueGoal,
+    selected: &NameDefinition,
+    source: &ParseKey,
+    header: &crate::syntax::outline::HeaderRecipe,
+    context: &DeclarationContext,
+) -> QueryPoll<CanonicalValueKind> {
+    use crate::frontend::callables::entered_module::{
+        CanonicalModulePreparation, canonical_module_declaration,
+    };
+    let id = selected.identity;
+    // A nested function/initializer retains the actual lexical parent plans.
+    // Source ownership comes from the published declaration owner, not the
+    // current executable body's occurrence table or a module spelling.
+    let owner = db.input(&InputKey::LocalDeclarationOwner(id));
+    if let Some(owner) = owner {
+        let InputValue::LocalDeclarationOwner(owner) = owner.as_ref() else {
+            return QueryPoll::Ready(Err(error("Value kind owner input variant differs")));
+        };
+        let mut declaring = goal.plan.context();
+        let mut enclosing = declaring.source().local_parent();
+        while declaring.source().index().body() != owner {
+            let Some(parent) = enclosing else {
+                return QueryPoll::Ready(Ok(CanonicalValueKind::Pending(
+                    ValueGoalDemand::DeclarationOwner(id),
+                )));
+            };
+            declaring = parent.context();
+            enclosing = declaring.source().local_parent();
+        }
+        let Some(row) = declaring
+            .facts()
+            .declarations()
+            .find(|row| row.item.def_key.fingerprint() == id)
+        else {
+            return QueryPoll::Ready(Ok(CanonicalValueKind::Pending(
+                ValueGoalDemand::DeclarationOccurrence(id),
+            )));
+        };
+        if declaring.source().parsed().key() != *source
+            || row.item.scope != context.scope
+            || row.item.declaration_span != context.range
+            || !row.item.header.same_semantics(header)
+        {
+            return QueryPoll::Ready(Err(error("Value kind canonical parent row differs")));
+        }
+        return QueryPoll::Ready(Ok(CanonicalValueKind::Ready(row.item.def_key.item_kind)));
+    }
+    if context.scope.owner.is_some() {
+        return QueryPoll::Ready(Ok(CanonicalValueKind::Pending(
+            ValueGoalDemand::DeclarationOwner(id),
+        )));
+    }
+    match polled!(canonical_module_declaration(
+        db, &goal.plan, selected, source, header, context
+    )) {
+        CanonicalModulePreparation::Ready(actual) => {
+            QueryPoll::Ready(Ok(CanonicalValueKind::Ready(actual.definition().item_kind)))
+        }
+        CanonicalModulePreparation::Pending(demand) => {
+            QueryPoll::Ready(Ok(CanonicalValueKind::Pending(demand)))
+        }
+    }
 }
 
 /// `non_binding`: the cached header identity and local owner of the selected
@@ -1086,31 +1196,15 @@ pub(super) fn shadowed_definition_binding(
     context: &DeclarationContext,
     non_binding: Option<(Option<Digest>, Option<BodyKey>)>,
 ) -> QueryPoll<EnteredValueGoal> {
-    use crate::{
-        frontend::callables::entered_module::{
-            CanonicalModulePreparation, canonical_module_declaration,
-        },
-        source::manifest::ItemKind,
-    };
+    use crate::source::manifest::ItemKind;
     let id = selected.identity;
-    let canonical_kind = if context.scope.owner.is_some() {
-        let Some(row) = goal
-            .plan
-            .context()
-            .facts()
-            .items
-            .iter()
-            .find(|row| row.item.def_key.fingerprint() == id)
-        else {
+    let canonical_kind = match polled!(canonical_value_kind(
+        db, &goal, &selected, source, header, context
+    )) {
+        CanonicalValueKind::Ready(kind) => kind,
+        CanonicalValueKind::Pending(demand) => return goal.needs(demand),
+        CanonicalValueKind::Absent => {
             return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
-        };
-        row.item.def_key.item_kind
-    } else {
-        match polled!(canonical_module_declaration(
-            db, &goal.plan, &selected, source, header, context
-        )) {
-            CanonicalModulePreparation::Ready(actual) => actual.definition().item_kind,
-            CanonicalModulePreparation::Pending(demand) => return goal.needs(demand),
         }
     };
     if canonical_kind != ItemKind::Function {
@@ -1124,6 +1218,7 @@ pub(super) fn shadowed_definition_binding(
             context: context.clone(),
             owner,
             variant: None,
+            selected_kind: Some(canonical_kind),
         });
         return QueryPoll::Ready(goal.finish());
     }

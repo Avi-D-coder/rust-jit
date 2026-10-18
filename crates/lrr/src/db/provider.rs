@@ -896,6 +896,20 @@ impl Provider for SyntaxProvider {
             QueryKey::SourceLocalPlan(body) => {
                 return super::body_environment_provider::source_local_plan(db, body);
             }
+            QueryKey::ArrayRepeatPlan(key) => {
+                return match crate::frontend::array_repeats::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ArrayRepeatPlan(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::PreparedArrayRepeat(key) => {
+                return match crate::frontend::array_repeats::prepare_guarded(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::PreparedArrayRepeat(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::InitializerOwnerTemplate(key) => {
                 return match crate::frontend::initializer_owner_templates::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::InitializerOwnerTemplate(Box::new(value))),
@@ -1130,7 +1144,25 @@ impl Provider for SyntaxProvider {
                             "constructor query result mismatch",
                         );
                     };
-                    match parsed.constructor_thunk(handle, index, pc, plan) {
+                    let repeated = if matches!(plan.kind(), crate::syntax::constructors::ConstructorKind::Repeat { .. })
+                        && matches!(db.input(&InputKey::BodyEnvironment(pc.body.clone())).as_deref(), Some(InputValue::BodyEnvironment(_)))
+                    {
+                        let mut entry = pc.clone(); entry.phase = 0;
+                        match db.fetch(self, QueryKey::PreparedArrayRepeat(entry)) {
+                            QueryPoll::Ready(Ok(prepared)) => Some(prepared),
+                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                        }
+                    } else { None };
+                    let recipe = if let Some(prepared) = repeated {
+                        let QueryValue::PreparedArrayRepeat(prepared) = prepared.value.as_ref() else {
+                            return Provided::error("LRR-E-INTERNAL-SNAPSHOT", "prepared repeat query variant differs");
+                        };
+                        if let Err(error) = prepared.guard().require_current(db) { return QueryPoll::Ready(Err(error)); }
+                        parsed.constructor_thunk_with_repeat(handle, index, pc, plan, prepared)
+                            .and_then(|recipe| recipe.with_shared_prepared_inputs(Arc::clone(prepared.guard())))
+                    } else { parsed.constructor_thunk(handle, index, pc, plan) };
+                    match recipe {
                         Ok(recipe) => {
                             if pc.phase
                                 == crate::ir::pc::Phase::Entry.code().expect("entry encoding")

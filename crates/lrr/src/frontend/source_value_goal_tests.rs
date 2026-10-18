@@ -226,9 +226,10 @@ fn actual_constant_pattern_is_not_mislabeled_as_a_local_binding_and_bad_pc_is_re
     let value = ready(db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key.clone())));
     let goal = observed(value.value.as_ref());
     assert!(goal.local_binding().is_none());
-    // The retained namespace has the actual block-local constant, but its
-    // declaration-name occurrence has not yet joined LocalTypeNames. Demand
-    // that exact declaration; a missing prefix must never become a binding.
+    // This metadata-only world retains the real constant and an unretired
+    // macro producer in the same scope. The producer can still change the
+    // namespace, so its exact frontier precedes declaration selection. A
+    // missing prefix must never become permission to bind the constant name.
     let roots = plan.allocation_roots();
     let facts = roots
         .namespace()
@@ -258,10 +259,39 @@ fn actual_constant_pattern_is_not_mislabeled_as_a_local_binding_and_bad_pc_is_re
         .expect("constant inventory is not attached to its actual source");
     assert_eq!(declaration.name().unwrap().text(), "X");
     assert!(goal.declaration().is_none());
+    let mut producers = facts.events.iter().filter_map(|event| {
+        if event.scope != constant.scope {
+            return None;
+        }
+        let crate::syntax::entered_macros::BodyMacroEventKind::Producer { identity, .. } =
+            event.kind
+        else {
+            return None;
+        };
+        Some((identity, event.range))
+    });
+    let (producer, producer_range) = producers.next().expect("actual fixture producer absent");
+    assert!(
+        producers.next().is_none(),
+        "fixture producer frontier is ambiguous"
+    );
+    let invocation = plan
+        .context()
+        .source()
+        .parsed()
+        .syntax_at(producer_range, |node| ast::MacroCall::can_cast(node.kind()))
+        .unwrap()
+        .and_then(ast::MacroCall::cast)
+        .expect("producer lacks its actual macro invocation");
+    assert_eq!(
+        invocation.path().unwrap().syntax().text().to_string(),
+        "assert_eq"
+    );
+    assert_ne!(producer, constant.item.def_key.fingerprint());
     assert_eq!(
         goal.pending(),
-        Some(ValueGoalDemand::Prefix(constant.item.def_key.fingerprint())),
-        "the valid constant-pattern runtime contract still needs its exact declaration occurrence"
+        Some(ValueGoalDemand::Prefix(producer)),
+        "the unretired source producer must be demanded before choosing a constant or binding"
     );
     key.phase = 1;
     match db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key.clone())) {
