@@ -218,6 +218,48 @@ pub(crate) fn guest_stack(
                         range: SourceRange::checked(span.start, span.end)?,
                     });
                 }
+            } else if let Some(input) = db.input(&InputKey::RetainedSyntax(parse.content)) {
+                let InputValue::RetainedSyntax(unit) = input.as_ref() else {
+                    return Err(invalid());
+                };
+                if unit.key() != parse {
+                    return Err(invalid());
+                }
+                let input = db
+                    .input(&InputKey::DefinitionBody(body.body_key.definition))
+                    .ok_or_else(invalid)?;
+                let InputValue::DefinitionBody(handle) = input.as_ref() else {
+                    return Err(invalid());
+                };
+                if handle.key() != body.body_key
+                    || body.relative_start > body.relative_end
+                    || body.relative_end > handle.range.len()
+                {
+                    return Err(invalid());
+                }
+                let selected = SourceRange::checked(
+                    handle
+                        .range
+                        .start
+                        .checked_add(body.relative_start)
+                        .ok_or_else(invalid)?,
+                    handle
+                        .range
+                        .start
+                        .checked_add(body.relative_end)
+                        .ok_or_else(invalid)?,
+                )?;
+                let spans = crate::syntax::parse::ParsedFile::retained_snapshot_source_spans(
+                    unit.prepared().syntax(),
+                    selected,
+                )?;
+                locations.reserve_exact(spans.len());
+                for span in spans {
+                    locations.push(SourceOrigin {
+                        source: span.source,
+                        range: SourceRange::checked(span.start, span.end)?,
+                    });
+                }
             } else if let Some(at) = run.diagnostic_source_origin(&body)? {
                 if at.source.content.0 != parse.content.0 {
                     return Err(invalid());

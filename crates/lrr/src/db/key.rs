@@ -147,6 +147,7 @@ pub use crate::frontend::constants::query_identity::ConstQueryIdentity as Consta
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
     PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
+    NominalMember(Box<crate::frontend::nominal_member_goals::NominalMemberKey>),
     PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
     EnteredCall(crate::source::manifest::PcKey),
     DeclaredReturnGoal(Digest),
@@ -184,6 +185,8 @@ pub enum QueryKey {
 impl QueryKey {
     pub fn heap_bytes(&self) -> usize {
         match self {
+            Self::NominalMember(key) => std::mem::size_of_val(key.as_ref())
+                .saturating_add(key.heap_bytes().unwrap_or(usize::MAX)),
             Self::PreparedBodySyntax(key) => {
                 std::mem::size_of::<PreparedBodySyntaxKey>().saturating_add(key.heap_bytes())
             }
@@ -234,6 +237,7 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::NominalMember(_) => "NominalMember",
             Self::PreparedBodySyntax(_) => "PreparedBodySyntax",
             Self::PreparedExplicitTypeArguments(_) => "PreparedExplicitTypeArguments",
             Self::EnteredCall(_) => "EnteredCall",
@@ -275,6 +279,10 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::NominalMember(key) => {
+                e.u32(49);
+                e.record(key.as_ref());
+            }
             Self::PreparedBodySyntax(key) => {
                 e.u32(48);
                 e.record(key.as_ref());

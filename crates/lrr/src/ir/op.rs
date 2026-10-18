@@ -4,7 +4,9 @@ use crate::{
     core::diagnostic::Diagnostic,
     syntax::{body_index::ScopeId, spans::BodySpan},
 };
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum PrimitiveType {
     Unit,
     Bool,

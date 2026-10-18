@@ -3,18 +3,24 @@ use crate::{
     core::digest::{Digest, StableEncode, StableEncoder},
     ir::op::PrimitiveType,
 };
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize,
+)]
 pub struct ParamKey {
     pub definition: Digest,
     pub ordinal: u32,
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize,
+)]
 pub struct InferVarKey {
     pub transaction: Digest,
     pub ordinal: u32,
 }
 /// Demand-local placeholder identity; namespace remains in its enclosing term.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize,
+)]
 pub struct PlaceholderKey {
     pub transaction: Digest,
     pub universe: u32,
@@ -29,7 +35,9 @@ impl StableEncode for PlaceholderKey {
     }
 }
 /// One typed position in a source binder. Spelling is not identity.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize,
+)]
 pub enum BoundKind {
     Type,
     Region,
@@ -44,7 +52,7 @@ impl BoundKind {
         }
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct Binder<T> {
     pub variables: Vec<BoundKind>,
     pub value: T,
@@ -56,7 +64,7 @@ impl<T: StableEncode> StableEncode for Binder<T> {
         e.record(&self.value);
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct FunctionSignature {
     pub parameters: Vec<TyTerm>,
     pub result: Box<TyTerm>,
@@ -68,14 +76,14 @@ impl StableEncode for FunctionSignature {
         e.record(self.result.as_ref());
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum ConstTerm {
     Placeholder(PlaceholderKey),
     Bound { depth: u32, index: u32 },
     Value(u64),
     Param(ParamKey),
 }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum RegionTerm {
     Placeholder(PlaceholderKey),
     Static,
@@ -91,13 +99,13 @@ pub enum RegionTerm {
         end: u32,
     },
 }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum GenericArg {
     Type(TyTerm),
     Const(ConstTerm),
     Region(RegionTerm),
 }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum TyTerm {
     Dyn(DynSchemaKey),
     Opaque(OpaqueKey, Vec<GenericArg>),
@@ -123,7 +131,9 @@ pub enum TyTerm {
 }
 /// Source object-schema identity; never a runtime descriptor or dictionary.
 /// The schema is admitted by the ordered source/world/trait integration later.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize,
+)]
 pub struct DynSchemaKey(pub Digest);
 impl StableEncode for DynSchemaKey {
     const DOMAIN: &'static str = "lrr/v2/symbolic-dyn-schema-key";
@@ -134,7 +144,7 @@ impl StableEncode for DynSchemaKey {
 /// Defining return position and typed capture identities, without a hidden type.
 /// Captures are in canonical namespace/key order; opaque arguments use that
 /// same order. Source capture-rule and world admission remain separate.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct OpaqueKey {
     definition: Digest,
     return_position: u32,
@@ -555,7 +565,7 @@ impl TyTerm {
 }
 
 /// Exact source trait identity and typed arguments; never a selected witness.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct TraitRef {
     pub trait_key: Digest,
     pub self_ty: TyTerm,
@@ -572,7 +582,7 @@ impl StableEncode for TraitRef {
 /// A source-associated item identity and its separate use-site arguments.
 /// This record is unnormalized: construction does not select an impl, certify
 /// a dictionary, resolve a source name, or inspect a runtime descriptor.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct ProjectionKey {
     pub trait_ref: TraitRef,
     pub item: Digest,

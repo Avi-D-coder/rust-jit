@@ -153,6 +153,9 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         Ok(())
     };
     match query {
+        QueryKey::NominalMember(_) => {
+            bytes = add(bytes, query.heap_bytes())?;
+        }
         QueryKey::PreparedBodySyntax(_key) => {
             bytes = add(bytes, query.heap_bytes())?;
         }

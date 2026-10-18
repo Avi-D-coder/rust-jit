@@ -98,11 +98,19 @@ impl ParsedFile {
         &self,
         range: SourceRange,
     ) -> Result<Option<Vec<super::super::token_wire::SpanRecord>>, Diagnostic> {
-        use super::super::token_wire::{self as owned, SpanRecord};
         let Some(retained) = &self.retained_syntax else {
             return Ok(None);
         };
-        let snapshot = &retained.0;
+        Self::retained_snapshot_source_spans(&retained.0, range).map(Some)
+    }
+
+    /// Diagnostic projection directly from an actual admitted retained
+    /// snapshot. No parser replay, namespace lookup or source authority grant.
+    pub(crate) fn retained_snapshot_source_spans(
+        snapshot: &SyntaxSnapshot,
+        range: SourceRange,
+    ) -> Result<Vec<super::super::token_wire::SpanRecord>, Diagnostic> {
+        use super::super::token_wire::{self as owned, SpanRecord};
         let syntax = snapshot.syntax();
         let spans = snapshot.origin_records().spans();
         let selected = super::super::spans::project_origin_spans(
@@ -145,9 +153,7 @@ impl ParsedFile {
             path.try_reserve_exact(span.source.path.len())
                 .map_err(|_| limit())?;
             path.push_str(&span.source.path);
-            bytes = bytes
-                .checked_add(path.capacity())
-                .ok_or_else(limit)?;
+            bytes = bytes.checked_add(path.capacity()).ok_or_else(limit)?;
             let projected = SpanRecord {
                 source: owned::SourceIdentity {
                     unit: owned::Key(span.source.unit.0),
@@ -173,7 +179,7 @@ impl ParsedFile {
             }
             output.push(projected);
         }
-        Ok(Some(output))
+        Ok(output)
     }
 
     pub(crate) fn snapshot_metadata_bytes(snapshot: &SyntaxSnapshot) -> Result<usize, Diagnostic> {

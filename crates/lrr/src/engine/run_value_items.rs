@@ -168,8 +168,8 @@ impl RunMachine {
         db: &mut Database,
         selected: &LexicalSelection,
     ) -> QueryPoll<Option<crate::frontend::nominal_constructors::BoundConstructor>> {
-        use crate::frontend::nominal_constructors::{NominalConstructorTarget, bind_constructor};
-        let Some(graph) = &self.graph else {
+        use crate::frontend::nominal_constructors::NominalConstructorTarget;
+        let Some(_graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(
                 "value paths require a checked source catalogue",
             )));
@@ -211,7 +211,7 @@ impl RunMachine {
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 }
             };
-            return bind_constructor(db, graph, &sources, &target).map(Some);
+            return self.bind_selected_constructor(db, &target).map(Some);
         }
         let target = match (&selected.variant, selected.kind) {
             (Some(variant), _) => match NominalConstructorTarget::variant(&sources, variant) {
@@ -237,7 +237,7 @@ impl RunMachine {
             }
             _ => return QueryPoll::Ready(Ok(None)),
         };
-        bind_constructor(db, graph, &sources, &target).map(Some)
+        self.bind_selected_constructor(db, &target).map(Some)
     }
     /// A static read by value at an already selected PC: only the cell's
     /// current state is read (no name selection or source work). A Copy

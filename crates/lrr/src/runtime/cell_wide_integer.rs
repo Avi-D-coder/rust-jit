@@ -3,7 +3,8 @@
 use super::*;
 
 impl GuestStore {
-    /// Validate a literal at its selected width before any allocation/mutation.
+    /// Materialize a literal's bit pattern at its selected primitive width.
+    /// Rust's overflowing_literals lint is outside runtime execution.
     pub(crate) fn integer_literal_bits(
         negative: bool,
         magnitude: u128,
@@ -12,16 +13,15 @@ impl GuestStore {
         use super::super::shape::{Primitive, primitive};
         match primitive(ty)? {
             Primitive::Signed(width) => {
-                let sign = 1u128 << (width - 1);
-                if width < 128 && magnitude > if negative { sign } else { sign - 1 } {
-                    return Err(invalid());
-                }
-                // Rust accepts full-width bit-pattern literals with
-                // overflowing_literals allowed. LRR does not enforce lints.
-                Ok(if negative {
+                let bits = if negative {
                     0u128.wrapping_sub(magnitude)
                 } else {
                     magnitude
+                };
+                Ok(if width == 128 {
+                    bits
+                } else {
+                    bits & ((1u128 << width) - 1)
                 })
             }
             Primitive::Unsigned(width) => {
@@ -31,10 +31,11 @@ impl GuestStore {
                         "unsigned integer cannot carry folded unary negation".into(),
                     ));
                 }
-                if width < 128 && magnitude >= (1u128 << width) {
-                    return Err(invalid());
-                }
-                Ok(magnitude)
+                Ok(if width == 128 {
+                    magnitude
+                } else {
+                    magnitude & ((1u128 << width) - 1)
+                })
             }
             _ => Err(invalid()),
         }

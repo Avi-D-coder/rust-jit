@@ -172,6 +172,47 @@ impl Default for i64 {
         0
     }
 }
+impl Clone for i128 {
+    fn clone(&self) -> i128 {
+        *self
+    }
+}
+impl Copy for i128 {}
+impl PartialEq for i128 {
+    fn eq(&self, other: &i128) -> bool {
+        *self == *other
+    }
+}
+impl PartialOrd for i128 {
+    fn partial_cmp(&self, other: &i128) -> Option<Ordering> {
+        if *self < *other {
+            Option::Some(Ordering::Less)
+        } else if *self > *other {
+            Option::Some(Ordering::Greater)
+        } else if *self == *other {
+            Option::Some(Ordering::Equal)
+        } else {
+            Option::None
+        }
+    }
+}
+impl Eq for i128 {}
+impl Ord for i128 {
+    fn cmp(&self, other: &i128) -> Ordering {
+        if *self < *other {
+            Ordering::Less
+        } else if *self > *other {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+impl Default for i128 {
+    fn default() -> i128 {
+        0
+    }
+}
 impl Clone for isize {
     fn clone(&self) -> isize {
         *self
@@ -374,6 +415,47 @@ impl Ord for u64 {
 }
 impl Default for u64 {
     fn default() -> u64 {
+        0
+    }
+}
+impl Clone for u128 {
+    fn clone(&self) -> u128 {
+        *self
+    }
+}
+impl Copy for u128 {}
+impl PartialEq for u128 {
+    fn eq(&self, other: &u128) -> bool {
+        *self == *other
+    }
+}
+impl PartialOrd for u128 {
+    fn partial_cmp(&self, other: &u128) -> Option<Ordering> {
+        if *self < *other {
+            Option::Some(Ordering::Less)
+        } else if *self > *other {
+            Option::Some(Ordering::Greater)
+        } else if *self == *other {
+            Option::Some(Ordering::Equal)
+        } else {
+            Option::None
+        }
+    }
+}
+impl Eq for u128 {}
+impl Ord for u128 {
+    fn cmp(&self, other: &u128) -> Ordering {
+        if *self < *other {
+            Ordering::Less
+        } else if *self > *other {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+impl Default for u128 {
+    fn default() -> u128 {
         0
     }
 }

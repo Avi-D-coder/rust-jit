@@ -292,9 +292,7 @@ fn upstream_nested_statement_items_enter_the_normal_index_and_lexical_inventory(
             WireEdition::E2021 => 2021,
             WireEdition::E2024 => 2024,
         };
-        let parsed =
-            ParsedFile::from_syntax_snapshot(syntax.snapshot().unwrap(), profile)
-                .unwrap();
+        let parsed = ParsedFile::from_syntax_snapshot(syntax.snapshot().unwrap(), profile).unwrap();
         let handle = body(&parsed, "main");
         let index = parsed
             .index_body(&handle, BodyIndexLimits::default())
@@ -336,10 +334,7 @@ fn non_item_snapshots_cannot_be_replayed_as_source_units() {
     )
     .unwrap();
     assert!(
-        ParsedFile::from_syntax_snapshot(
-            syntax.snapshot().unwrap(),
-            ProfileIdentity::current()
-        )
-        .is_err()
+        ParsedFile::from_syntax_snapshot(syntax.snapshot().unwrap(), ProfileIdentity::current())
+            .is_err()
     );
 }

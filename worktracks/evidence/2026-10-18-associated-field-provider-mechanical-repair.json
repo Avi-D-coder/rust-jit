@@ -1,0 +1,8 @@
+{
+  "status": "mechanical compile repair, validation pending",
+  "original_failed_source": "461f09; actual candidate-v11/compile.exit101; E0308 db/provider.rs893",
+  "old_provider_sha256": "f8643fcce0226f1d3e8334bf3a56287883025cf3c81858fae8ce3cfbfc58d40c",
+  "new_provider_sha256": "93b758f2d51dd1447f7a918f78d41d8d5f887c5821d3c50b0e454edad0724f72",
+  "change": "NominalMember adapter returns QueryPoll<Provided> directly, matching neighboring BoundRecordConstructor. Ready wraps pure QueryValue; errors and NeedInput propagate unchanged. Enclosing provider match remains QueryValue-valued. No other semantic/source edit after V11 freeze.",
+  "review": "Inspected SyntaxProvider::execute enclosing match and neighboring EnteredValue/BoundRecordConstructor/QualifiedBodyType adapter returns. Query dependency capture unchanged because nested prepare still executes within same provider demand. All8 own review remains original15leaf except provider control-flow join now superseded by this one leaf."
+}

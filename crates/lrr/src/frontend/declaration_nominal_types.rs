@@ -133,6 +133,20 @@ impl SchemaNames<'_> {
         arguments: &[Option<TyTerm>],
         members: &crate::frontend::member_index::MemberIndex,
     ) -> QueryPoll<NominalConstructorBinding> {
+        let bindings = checked!(self.argument_bindings(arguments));
+        let result = self.bind_record_constructor_with(name, plan, caller, |query| {
+            self.instantiated_query(db, sources, query, &bindings, members)
+        });
+        match result {
+            Ok(poll) => poll,
+            Err(error) => QueryPoll::Ready(Err(error)),
+        }
+    }
+
+    fn argument_bindings(
+        &self,
+        arguments: &[Option<TyTerm>],
+    ) -> Result<BTreeMap<crate::traits::term::ParamKey, TyTerm>, Diagnostic> {
         let parameters: Vec<_> = self
             .schema
             .generics
@@ -140,9 +154,9 @@ impl SchemaNames<'_> {
             .filter(|parameter| parameter.kind == GenericKind::Type)
             .collect();
         if arguments.len() > parameters.len() {
-            return QueryPoll::Ready(Err(schema_fault(
-                "record Type arguments exceed its declaration parameters",
-            )));
+            return Err(schema_fault(
+                "nominal Type arguments exceed its declaration parameters",
+            ));
         }
         let bindings: BTreeMap<_, _> = parameters
             .iter()
@@ -159,49 +173,110 @@ impl SchemaNames<'_> {
                 })
             })
             .collect();
-        let result = self.bind_record_constructor_with(name, plan, caller, |query| {
-            let FieldTypeQuery::Compound(field) = query else {
-                return self.current_query(db, sources, query);
-            };
-            // Keep local fields on their actual HeaderTypeSite prefix. Their
-            // pending projection integration never grants a module fallback.
-            if self.schema.scope.owner.is_some() {
-                return self.current_query(db, sources, query);
+        Ok(bindings)
+    }
+
+    fn instantiated_query(
+        &self,
+        db: &mut Database,
+        sources: &[&PreparedSourceView],
+        query: FieldTypeQuery<'_>,
+        bindings: &BTreeMap<crate::traits::term::ParamKey, TyTerm>,
+        members: &crate::frontend::member_index::MemberIndex,
+    ) -> QueryPoll<SchemaTypeName> {
+        let field = match query {
+            FieldTypeQuery::Compound(field) | FieldTypeQuery::Name(_, Some(field)) => field,
+            FieldTypeQuery::Name(_, None) => return self.current_query(db, sources, query),
+        };
+        // Keep local fields on their actual HeaderTypeSite prefix. Their
+        // pending projection integration never grants a module fallback.
+        if self.schema.scope.owner.is_some() {
+            return self.current_query(db, sources, query);
+        }
+        let term = match self.actual_field_type(db, sources, field) {
+            QueryPoll::Ready(Ok(Some(term))) => term,
+            QueryPoll::Ready(Ok(None)) => {
+                return QueryPoll::Ready(Ok(SchemaTypeName::deferred()));
             }
-            let term = match self.actual_field_type(db, sources, field) {
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let term = crate::frontend::associated_types::substitute(&term, bindings);
+        let term = if crate::frontend::associated_types::contains_projection(&term) {
+            match crate::frontend::associated_types::normalize(
+                db, self.graph, sources, members, &term,
+            ) {
                 QueryPoll::Ready(Ok(Some(term))) => term,
                 QueryPoll::Ready(Ok(None)) => {
                     return QueryPoll::Ready(Ok(SchemaTypeName::deferred()));
                 }
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
-            let term = crate::frontend::associated_types::substitute(&term, &bindings);
-            let term = if crate::frontend::associated_types::contains_projection(&term) {
-                match crate::frontend::associated_types::normalize(
-                    db, self.graph, sources, members, &term,
-                ) {
-                    QueryPoll::Ready(Ok(Some(term))) => term,
-                    QueryPoll::Ready(Ok(None)) => {
-                        return QueryPoll::Ready(Ok(SchemaTypeName::deferred()));
-                    }
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                }
-            } else {
-                term
-            };
-            let written = match self.written_field_type(db, sources, &term) {
-                QueryPoll::Ready(Ok(written)) => written,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
-            QueryPoll::Ready(Ok(SchemaTypeName {
-                written,
-                ..SchemaTypeName::deferred()
-            }))
-        });
-        match result {
+            }
+        } else {
+            term
+        };
+        let written = match self.written_field_type(db, sources, &term) {
+            QueryPoll::Ready(Ok(written)) => written,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Ok(SchemaTypeName {
+            written,
+            ..SchemaTypeName::deferred()
+        }))
+    }
+
+    pub(crate) fn bind_variant_current_with_arguments(
+        &self,
+        db: &mut Database,
+        sources: &[&PreparedSourceView],
+        name: Option<&str>,
+        arguments: &[Option<TyTerm>],
+        members: &crate::frontend::member_index::MemberIndex,
+    ) -> QueryPoll<NominalBinding> {
+        let bindings = checked!(self.argument_bindings(arguments));
+        match self.bind_variant_with(name, |query| {
+            self.instantiated_query(db, sources, query, &bindings, members)
+        }) {
+            Ok(poll) => poll,
+            Err(error) => QueryPoll::Ready(Err(error)),
+        }
+    }
+
+    pub(crate) fn bind_named_field_current_with_arguments(
+        &self,
+        db: &mut Database,
+        sources: &[&PreparedSourceView],
+        variant: Option<&str>,
+        member: &str,
+        caller: &ScopeKey,
+        arguments: &[Option<TyTerm>],
+        members: &crate::frontend::member_index::MemberIndex,
+    ) -> QueryPoll<NominalFieldBinding> {
+        let bindings = checked!(self.argument_bindings(arguments));
+        match self.bind_named_field_with(variant, member, caller, |query| {
+            self.instantiated_query(db, sources, query, &bindings, members)
+        }) {
+            Ok(poll) => poll,
+            Err(error) => QueryPoll::Ready(Err(error)),
+        }
+    }
+
+    pub(crate) fn bind_positional_field_current_with_arguments(
+        &self,
+        db: &mut Database,
+        sources: &[&PreparedSourceView],
+        variant: Option<&str>,
+        field: u32,
+        caller: &ScopeKey,
+        arguments: &[Option<TyTerm>],
+        members: &crate::frontend::member_index::MemberIndex,
+    ) -> QueryPoll<NominalFieldBinding> {
+        let bindings = checked!(self.argument_bindings(arguments));
+        match self.bind_field_with(variant, FieldSelector::Positional(field), caller, |query| {
+            self.instantiated_query(db, sources, query, &bindings, members)
+        }) {
             Ok(poll) => poll,
             Err(error) => QueryPoll::Ready(Err(error)),
         }

@@ -3968,31 +3968,15 @@ impl GuestStore {
         ty: TypeId,
     ) -> Result<ValueRepr, Diagnostic> {
         match super::shape::primitive(ty)? {
-            super::shape::Primitive::Signed(width) => {
-                let max = 1u128 << (width - 1);
-                if negative {
-                    if magnitude > max {
-                        return Err(invalid());
-                    }
-                    ValueRepr::signed(
-                        ty,
-                        i64::try_from(-(magnitude as i128)).map_err(|_| invalid())?,
-                    )
-                } else {
-                    ValueRepr::signed(ty, i64::try_from(magnitude).map_err(|_| invalid())?)
-                }
+            super::shape::Primitive::Signed(width) if width <= 64 => {
+                let bits = Self::integer_literal_bits(negative, magnitude, ty)?;
+                let shift = 128 - width;
+                let signed = ((bits << shift) as i128) >> shift;
+                ValueRepr::signed(ty, signed as i64)
             }
-            super::shape::Primitive::Unsigned(_) => {
-                // Folding a signed literal must preserve unary-negation admission:
-                // unsigned operands cannot be negated, including zero. An explicit
-                // cast of an already signed value uses the separate cast operation.
-                if negative {
-                    return Err(Diagnostic::new(
-                        "LRR-E-OP-TYPE",
-                        "unsigned integer cannot carry folded unary negation".into(),
-                    ));
-                }
-                ValueRepr::unsigned(ty, u64::try_from(magnitude).map_err(|_| invalid())?)
+            super::shape::Primitive::Unsigned(width) if width <= 64 => {
+                let bits = Self::integer_literal_bits(negative, magnitude, ty)?;
+                ValueRepr::unsigned(ty, bits as u64)
             }
             _ => Err(invalid()),
         }

@@ -21,7 +21,14 @@ use crate::{
 pub(super) struct NominalRunFacts {
     values: BTreeMap<PcKey, Arc<BoundConstructor>>,
     /// `None` records a call site whose callee is not a constructor.
-    calls: BTreeMap<(BodyKey, crate::vm::call::CallIdentity), Option<Arc<BoundConstructor>>>,
+    calls: BTreeMap<
+        (
+            BodyKey,
+            crate::vm::call::CallIdentity,
+            Option<crate::traits::term::TyTerm>,
+        ),
+        Option<Arc<BoundConstructor>>,
+    >,
     /// Whether each call site's callee is bound lexically (a block item or
     /// import), decided once per site.
     lexical_callees: BTreeMap<(BodyKey, crate::vm::call::CallIdentity), bool>,
@@ -37,9 +44,19 @@ pub(super) struct NominalRunFacts {
             crate::core::digest::Digest,
         )>,
     >,
-    /// Positional members (`t.0`) keyed by PC and the base's nominal identity.
-    positional:
+    /// Held legacy unnormalized field selections, unchanged until actual
+    /// source catalogue publication supplies a retained BodyEnvironment.
+    legacy_positional:
         BTreeMap<(PcKey, crate::core::digest::Digest), crate::frontend::types::BoundNominalField>,
+    /// Current pure member specializations; runtime representation is an
+    /// additional guard key, never part of the memo request.
+    members: BTreeMap<
+        (
+            crate::frontend::nominal_member_goals::NominalMemberKey,
+            Option<crate::runtime::shape::TypeId>,
+        ),
+        (Arc<QueryValue>, Arc<crate::db::memo::PreparedInputGuard>),
+    >,
 }
 
 fn unsupported(message: &str) -> Diagnostic {
@@ -118,8 +135,28 @@ impl RunMachine {
         destination: SlotId,
         definition: crate::core::digest::Digest,
     ) -> QueryPoll<()> {
+        if matches!(self.graph, Some(RunNames::Legacy(_))) {
+            return self.prepare_legacy_positional_field(db, base, field, destination, definition);
+        }
+        self.prepare_selected_field(
+            db,
+            base,
+            destination,
+            definition,
+            crate::frontend::nominal_member_goals::NominalMemberSelection::Positional(field),
+        )
+    }
+
+    fn prepare_legacy_positional_field(
+        &mut self,
+        db: &mut Database,
+        base: SlotId,
+        field: u32,
+        destination: SlotId,
+        definition: crate::core::digest::Digest,
+    ) -> QueryPoll<()> {
         let key = (self.frame.pc().clone(), definition);
-        if let Some(binding) = self.nominal.positional.get(&key) {
+        if let Some(binding) = self.nominal.legacy_positional.get(&key) {
             return QueryPoll::Ready(self.frame.prepare_source_field(
                 base,
                 destination,
@@ -173,9 +210,198 @@ impl RunMachine {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-        self.nominal.positional.insert(key, binding.clone());
+        self.nominal.legacy_positional.insert(key, binding.clone());
         QueryPoll::Ready(self.frame.prepare_source_field(base, destination, binding))
     }
+    /// An admitted context is source identity; a runtime descriptor may supply
+    /// its actual closed arguments after the declaration has been selected.
+    fn constructor_context(
+        &self,
+        site: u32,
+    ) -> Result<Option<crate::traits::term::TyTerm>, Diagnostic> {
+        let slot = self
+            .frame
+            .body
+            .nodes()
+            .get(site as usize)
+            .and_then(|node| node.value)
+            .ok_or_else(|| call_fault("constructor context result slot absent"))?;
+        if let Some(source) = self.frame.source_view_ref(slot)? {
+            return Ok(Some(self.frame.bound_view(source, &self.store)));
+        }
+        Ok(self
+            .frame
+            .hint(slot)?
+            .and_then(|ty| self.store.descriptor_source_term(ty)))
+    }
+
+    fn nominal_member(
+        &mut self,
+        db: &mut Database,
+        key: crate::frontend::nominal_member_goals::NominalMemberKey,
+        runtime: Option<crate::runtime::shape::TypeId>,
+    ) -> QueryPoll<(Arc<QueryValue>, Arc<crate::db::memo::PreparedInputGuard>)> {
+        let cache_key = (key.clone(), runtime);
+        if let Some((value, guard)) = self.nominal.members.get(&cache_key) {
+            return match guard.require_current(db) {
+                Ok(()) => QueryPoll::Ready(Ok((Arc::clone(value), Arc::clone(guard)))),
+                Err(error) => QueryPoll::Ready(Err(error)),
+            };
+        }
+        let demand = QueryKey::NominalMember(Box::new(key));
+        let fetched = match db.fetch(&SyntaxProvider, demand.clone()) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let guard = match db.prepare_input_guard(&SyntaxProvider, &demand, fetched.fingerprint) {
+            QueryPoll::Ready(Ok(guard)) => Arc::new(guard),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let value = fetched.value;
+        self.nominal
+            .members
+            .insert(cache_key, (Arc::clone(&value), Arc::clone(&guard)));
+        QueryPoll::Ready(Ok((value, guard)))
+    }
+
+    pub(super) fn bind_selected_constructor(
+        &self,
+        db: &mut Database,
+        target: &crate::frontend::nominal_constructors::NominalConstructorTarget,
+    ) -> QueryPoll<BoundConstructor> {
+        if let Some(RunNames::Legacy(graph)) = &self.graph {
+            let sources: Vec<_> = self.sources.iter().collect();
+            return bind_constructor(db, graph, &sources, target);
+        }
+        let context = match self.constructor_context(self.frame.pc().node) {
+            Ok(context) => context,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let arguments = match context {
+            Some(crate::traits::term::TyTerm::Nominal(definition, arguments))
+                if definition == target.identity() =>
+            {
+                arguments
+                    .into_iter()
+                    .filter_map(|argument| match argument {
+                        crate::traits::term::GenericArg::Type(term) => Some(term),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            }
+            _ => Vec::new(),
+        };
+        if arguments.is_empty() {
+            let Some(graph) = &self.graph else {
+                return QueryPoll::Ready(Err(call_fault("constructor source graph absent")));
+            };
+            let sources: Vec<_> = self.sources.iter().collect();
+            return bind_constructor(db, graph, &sources, target);
+        }
+        let key = crate::frontend::nominal_member_goals::NominalMemberKey {
+            pc: PcKey {
+                phase: 0,
+                ..self.frame.pc().clone()
+            },
+            definition: target.identity(),
+            arguments,
+            selection: crate::frontend::nominal_member_goals::NominalMemberSelection::Variant(
+                target.variant_name().map(str::to_owned),
+            ),
+        };
+        // This helper is used while selecting a cold target; its result and
+        // exact guard are retained by the call-site cache. Database memo hits
+        // share the same immutable variant across activations.
+        let demand = QueryKey::NominalMember(Box::new(key));
+        let selected = match db.fetch(&SyntaxProvider, demand.clone()) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::NominalMember(member) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault(
+                "constructor specialization outcome differs",
+            )));
+        };
+        let Some(variant) = member.variant() else {
+            return QueryPoll::Ready(Err(call_fault("constructor specialization variant absent")));
+        };
+        let guard = match db.prepare_input_guard(&SyntaxProvider, &demand, selected.fingerprint) {
+            QueryPoll::Ready(Ok(guard)) => Arc::new(guard),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Ok(BoundConstructor::specialized(
+            Arc::clone(variant),
+            member.shape(),
+            guard,
+        )))
+    }
+
+    pub(super) fn prepare_selected_field(
+        &mut self,
+        db: &mut Database,
+        base: SlotId,
+        destination: SlotId,
+        definition: crate::core::digest::Digest,
+        selection: crate::frontend::nominal_member_goals::NominalMemberSelection,
+    ) -> QueryPoll<()> {
+        let source = match self.frame.source_view_ref(base) {
+            Ok(Some(source)) => self.frame.bound_view(source, &self.store),
+            Ok(None) => {
+                return QueryPoll::Ready(Err(call_fault("nominal field source arguments absent")));
+            }
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let source = match &source {
+            crate::traits::term::TyTerm::Ref(_, _, target) => target.as_ref(),
+            _ => &source,
+        };
+        let crate::traits::term::TyTerm::Nominal(owner, args) = source else {
+            return QueryPoll::Ready(Err(call_fault("nominal field source application absent")));
+        };
+        if *owner != definition {
+            return QueryPoll::Ready(Err(call_fault("nominal field source declaration differs")));
+        }
+        let arguments = args
+            .iter()
+            .filter_map(|arg| match arg {
+                crate::traits::term::GenericArg::Type(term) => Some(term.clone()),
+                _ => None,
+            })
+            .collect();
+        let runtime = match self.frame.place_type(base, &self.store) {
+            Ok(ty) => ty,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let key = crate::frontend::nominal_member_goals::NominalMemberKey {
+            pc: PcKey {
+                phase: 0,
+                ..self.frame.pc().clone()
+            },
+            definition,
+            arguments,
+            selection,
+        };
+        let (selected, _guard) = match self.nominal_member(db, key, Some(runtime)) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::NominalMember(member) = selected.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("field specialization outcome differs")));
+        };
+        let Some(binding) = member.field() else {
+            return QueryPoll::Ready(Err(call_fault("field specialization binding absent")));
+        };
+        QueryPoll::Ready(
+            self.frame
+                .prepare_source_field(base, destination, binding.clone()),
+        )
+    }
+
     /// Select `path` through the ordinary Value namespace from the executing
     /// body's declaration context. `None` is any non-constructor selection.
     pub(super) fn select_nominal_constructor(
@@ -233,7 +459,7 @@ impl RunMachine {
                 }
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-        bind_constructor(db, graph, &sources, &target).map(Some)
+        self.bind_selected_constructor(db, &target).map(Some)
     }
     /// Install the unit constructor selected for the `ValuePath` at this PC.
     pub(super) fn prepare_value_path(
@@ -362,14 +588,15 @@ impl RunMachine {
         name: &str,
     ) -> QueryPoll<bool> {
         let identity = self.frame.call_identity(site);
-        if self.frame.selected_constructor_call(site).is_some() {
-            return QueryPoll::Ready(Ok(true));
-        }
         // Method calls (`.name`) are selected from their receiver's type.
         if self.pending.contains_key(&identity) || name.starts_with('.') {
             return QueryPoll::Ready(Ok(false));
         }
-        let key = (self.frame.pc().body.clone(), identity);
+        let context = match self.constructor_context(site) {
+            Ok(context) => context,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let key = (self.frame.pc().body.clone(), identity, context);
         // The classification of a call site is fixed for the run's source
         // publication; ordinary calls are probed once, not per execution.
         let bound = if let Some(cached) = self.nominal.calls.get(&key) {
@@ -424,6 +651,9 @@ impl RunMachine {
             self.nominal.calls.insert(key, Some(Arc::clone(&bound)));
             bound
         };
+        if let Err(error) = bound.require_current(db) {
+            return QueryPoll::Ready(Err(error));
+        }
         self.frame
             .select_constructor_call(site, Arc::clone(bound.variant()));
         QueryPoll::Ready(Ok(true))

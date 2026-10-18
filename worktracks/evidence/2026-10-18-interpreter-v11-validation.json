@@ -1,0 +1,19 @@
+{
+  "candidate": "V11",
+  "status": "compile failure; no runtime validation",
+  "head": "046bd18d453f327ea82efeab220f3d7b19273028",
+  "source_sha256": "461f09efab9cb6366dabda3ae3ddf64de9f48d54f1255d55f4325d9e42868ebb",
+  "file_count": 3325,
+  "source_unchanged": true,
+  "lib": {
+    "exit": 101,
+    "seconds": 17.237,
+    "terminal": "e46fff",
+    "diagnostic": "E0308 db/provider.rs893 NominalMember branch returns QueryPoll<Provided> instead of QueryValue; absent early return",
+    "log": "compile.log"
+  },
+  "cli": "unexecuted; previous V10 binary retained",
+  "controls": [],
+  "stock": [],
+  "local_report_sha256": "7ecb7f2185b23a5891064fe34777ddf2844d9f6cd588853c007f4f4b2b5be4e6"
+}

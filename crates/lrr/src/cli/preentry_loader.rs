@@ -361,6 +361,7 @@ impl Packet {
                 | QueryKey::ExpansionInput(_)
                 | QueryKey::TypeSchema(_)
                 | QueryKey::ConstructorPlan(_)
+                | QueryKey::NominalMember(_)
                 | QueryKey::BoundRecordConstructor(_)
                 | QueryKey::QualifiedBodyType(_)
                 | QueryKey::Constant(_) => {

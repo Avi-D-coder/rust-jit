@@ -1,18 +1,17 @@
+pub(crate) mod associated_types;
 pub mod builtin_attributes;
-pub(crate) mod written_terms;
 pub mod compile_input_catalog;
 mod glob_lookup;
 pub mod hygiene;
 pub mod item_attributes;
 pub(crate) mod library_macros;
-pub mod member_index;
-pub(crate) mod associated_types;
 pub mod local_scopes;
 pub(crate) mod macro_boundary;
 pub(crate) mod macro_definition_modules;
 pub mod macro_names;
 pub mod macro_origins;
 pub mod macro_scopes;
+pub mod member_index;
 mod module_aliases;
 mod module_paths;
 pub mod original_attributes;
@@ -20,6 +19,7 @@ pub mod procedural_exports;
 pub mod source_macro_routes;
 pub mod source_macros;
 pub mod types;
+pub(crate) mod written_terms;
 
 mod body_imports;
 
@@ -67,8 +67,8 @@ pub mod generated_derive_helpers;
 
 pub mod constructors;
 pub mod declaration_imports;
-pub(crate) mod prepared_constructors;
 pub(crate) mod nominal_constructors;
+pub(crate) mod prepared_constructors;
 
 pub mod source_view;
 
@@ -111,3 +111,5 @@ pub mod entered_call_goals;
 pub mod source_return_goals;
 
 pub(crate) mod explicit_type_arguments;
+
+pub mod nominal_member_goals;

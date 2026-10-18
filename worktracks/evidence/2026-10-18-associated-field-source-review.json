@@ -1,0 +1,155 @@
+{
+  "status": "source-reviewed, compile/runtime validation pending",
+  "scope": "bounded constructor source-argument and nominal field specialization; named open record template held",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/declaration_nominal_types.rs",
+      "sha256": "0fc03c6e63a2db685f59e0512ee5d7a3709452f151a45a93a06915b8c314b5a9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/nominal_member_goals.rs",
+      "sha256": "1579aabc8ce03492deb908f1ed40fa820f0760475cd34030d998aa4507981dd8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/nominal_constructors.rs",
+      "sha256": "cf4c20b031dc2a014eef439a34d72650106a68dda20411124f9df850337a88ca"
+    },
+    {
+      "path": "crates/lrr/src/frontend/binding_constraint_nominal.rs",
+      "sha256": "2c0e6677a8d2e3470c9a8d4b7a249b1f35a738c1bfe3618eda2f948afaec680a"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "1e27d65a0da3d8adf93ea37fe68948b5d121e3cfb947fbaef95ea9448f6a1472"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "b9c761464be4f7a8f1d6ccb009ba7ec9aa31c6d4c16f026d445445af74266cc2"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_fields.rs",
+      "sha256": "5c3515ae10b527d32914df22c0a70d1cba830733383b8cca95fb757d255aa2f0"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "d14009810911c31612a2e6f88ec35c6bd8dca2485bd9076a31642f46c6f0ffad"
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "6eb59a3c06d4bcebdb409e6665d2e2053e5806dac5c845fd36def6e8ba86d62a"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "7fef1c0b1a1413467253f99f871f884592df4468de9994d26adc9b6e1e8c0f0e"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "f8643fcce0226f1d3e8334bf3a56287883025cf3c81858fae8ce3cfbfc58d40c"
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "sha256": "973443ffaf9d4f1f51e0bf2ccdb2d589b3830741444a23f3ac64d406d7217911"
+    },
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "sha256": "2b647bd35afe1e2b12d5fa4d559241c75864094792d15b5a11f6384f3d85fca2"
+    },
+    {
+      "path": "crates/lrr/src/traits/term.rs",
+      "sha256": "60f2b00bb892ce7b377dd35e7317235bf2dadf81ad971827b995f2ecf0e62ec7"
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "sha256": "a3a56eac08a43ff0a28a7b1efa7fdce71aa8f41398ef3df807c3852f2916de2b"
+    }
+  ],
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": [
+        "SchemaNames::instantiated_query",
+        "RunMachine::bind_selected_constructor",
+        "nominal_member_goals::prepare"
+      ],
+      "finding": "ordinary actual source field binder and source-selected constructor; no assertion/expression evaluator"
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "SchemaNames::actual_field_type",
+        "source_types::resolve_actual_type"
+      ],
+      "finding": "actual AST field Type; no literal-only generated executor or display-text reparse"
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "SchemaNames::argument_bindings",
+        "associated_types::substitute",
+        "associated_types::normalize",
+        "Component::nominal_field"
+      ],
+      "finding": "real raw declaration ParamKeys and actual source Type arguments; projection normalizes before written field template, including named alias leaves; no method/macro whitelist"
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "NominalMemberKey",
+        "PreparedSourceLocalPlan::require_current",
+        "AdmittedBodyContext::require_identifier_origin",
+        "ParsedFile::named_field_site"
+      ],
+      "finding": "source/body/edition/epoch and actual origin evidence retained. Existing RunNames::Legacy adapters held unchanged, no new projection support or fabricated completed seal. Generated opaque field origin adjustment remains existing gap"
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "nominal_member_goals::prepare",
+        "SchemaNames::bind_field_with",
+        "SchemaNames::bind_variant_with"
+      ],
+      "finding": "only reached selected field/variant and declaration Type queried; no executable sibling arm preparation or pattern engine added"
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "QueryKey::NominalMember",
+        "QueryValue::NominalMember",
+        "RunMachine::nominal_member",
+        "NominalRunFacts::members",
+        "NominalRunFacts::calls"
+      ],
+      "finding": "primary completed-discovery path memoizes exact Pc+source args+selection; field cache adds actual runtime base descriptor and PreparedInputGuard; constructor call cache adds actual result source context and retained guard. Removed primary per-entry named binding and unsafe source-specialized positional(pc,def) reuse. Legacy actual-source adapters still retain original repeated cold binding; complete removal held on common BodyEnvironment publication"
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "PreparedInputGuard::require_current",
+        "SchemaNames::from_current_database",
+        "CompletedSourceEnvironment::member_index"
+      ],
+      "finding": "source map/member-index/schema work only inside cold pure provider; cache hit checks relevant retained input guard, no namespace construction/scan. Inherited completed BodyEnvironment dependency breadth remains as existing query framework, no new world namespace comparison Constructor target selection precedes this memo; its exact positive/negative lookup dependencies require an explicit join before claiming precise namespace invalidation. Existing coarse source/owner currentness is not removed."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "PreparedNominalMember::retained_plan",
+        "QueryValue::source_roots",
+        "RunMachine::nominal_member",
+        "ParsedFile::entered_node_syntax"
+      ],
+      "finding": "Arc retained plan/query values and direct indexed syntax; no body clone/whole-file node search. Bound field clone shares WrittenType Arc. Symbolic key cloning scales with actual Type-argument structure, not full source world"
+    }
+  ],
+  "runtime_cleanup": "existing Frame::prepare_source_field/prepare_projection, ordinary constructor call hints/seal/commit and GuestStore project/cleanup unchanged. NeedInput propagates before guest effects; cached guard invalidation returns explicit stale diagnostic; exact-once/suspension/cold matrix unexecuted for this successor.",
+  "holds": [
+    "named TesterPair generic record T::V deferred template/result-activation join",
+    "legacy start_with_sources actual source-catalogue to BodyEnvironment publication; no prepare-once gate closure",
+    "local HeaderTypeSite associated projection normalization remains existing pending",
+    "const/default/omitted generic argument inference broader than retained exact Type arguments",
+    "generated/wrapper/standard macro/edition/currentness/suspension matrix unexecuted; no full feature gate closure",
+    "inherited common associated_types::impl_type_pattern header token-text parser remains cold metadata preparation; actual field producer uses original AST and does not extend it",
+    "constructor specialization guard does not directly include the preceding actual callee EnteredValue/CallResolver positive-or-negative lookup; exact selected-target dependency join unproven, coarse owner/source guards retained. Independent reviewer confirmed this coverage limit."
+  ],
+  "cold_costs": "Source/schema validation and actual selected field walking are cold. actual_field_type validates membership by scanning schema fields; binding a full variant may therefore do quadratic field-membership comparisons in that variant size. CompletedSourceEnvironment::member_index is retained/cached. Reused associated_types::normalize retains inherited impl_type_pattern captured-header token-text reparse for self/trait pattern metadata; no new parser/executable evaluator was added. This exception remains a common-service repair candidate, not a zero-transitive-parsing claim."
+}

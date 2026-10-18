@@ -117,10 +117,7 @@ impl Unifier {
         })
     }
     pub fn fresh_universe(&mut self) -> Result<u32, Diagnostic> {
-        let next = self
-            .universe
-            .checked_add(1)
-            .ok_or_else(limit)?;
+        let next = self.universe.checked_add(1).ok_or_else(limit)?;
         self.universe = next;
         Ok(next)
     }
@@ -222,7 +219,11 @@ impl Unifier {
                 // reference reached from a descriptor is `'static`-erased,
                 // an argument's carries its local region).
                 (TyTerm::Ref(_, m, a), TyTerm::Ref(_, n, b)) if m == n => work.push((*a, *b)),
-                _ => return Err(fault("reached structural type contracts disagree")),
+                (left, right) => {
+                    return Err(fault(&format!(
+                        "reached structural type contracts disagree: {left:?} != {right:?}"
+                    )));
+                }
             }
         }
         for term in staged.values() {

@@ -1,0 +1,77 @@
+{
+  "reviewer": "/root/generic_projection_resume",
+  "status": "source review only; no concrete argument-transport blocker; selected-target lookup invalidation coverage held",
+  "source_mutations": false,
+  "build_or_runtime_commands": false,
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "b9c761464be4f7a8f1d6ccb009ba7ec9aa31c6d4c16f026d445445af74266cc2"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_fields.rs",
+      "sha256": "5c3515ae10b527d32914df22c0a70d1cba830733383b8cca95fb757d255aa2f0"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "d14009810911c31612a2e6f88ec35c6bd8dca2485bd9076a31642f46c6f0ffad"
+    },
+    {
+      "path": "crates/lrr/src/frontend/nominal_member_goals.rs",
+      "sha256": "1579aabc8ce03492deb908f1ed40fa820f0760475cd34030d998aa4507981dd8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/nominal_constructors.rs",
+      "sha256": "cf4c20b031dc2a014eef439a34d72650106a68dda20411124f9df850337a88ca"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_nominal_types.rs",
+      "sha256": "0fc03c6e63a2db685f59e0512ee5d7a3709452f151a45a93a06915b8c314b5a9"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "3eb20fc035d1d4b2e7b0fe4cb479295f3058be813f94aa02e5f1a7da30a313c4"
+    }
+  ],
+  "inspected_symbols": [
+    "RunMachine::constructor_context",
+    "RunMachine::bind_selected_constructor",
+    "RunMachine::select_constructor_call",
+    "RunMachine::prepare_selected_field",
+    "RunMachine::nominal_member",
+    "RunMachine::prepare_field_inner",
+    "RunMachine::lexical_constructor",
+    "RunMachine::entered_value_declaration",
+    "nominal_member_goals::prepare",
+    "SchemaNames::argument_bindings",
+    "SchemaNames::instantiated_query",
+    "SchemaNames::actual_field_type",
+    "BoundConstructor::require_current",
+    "PreparedInputGuard::require_current"
+  ],
+  "positive_findings": [
+    "Actual declaration identity selected before runtime descriptor supplies Type arguments; source nominal identity must match target.",
+    "Constructor calls cache actual result source TyTerm; selected member specialization has retained input guard.",
+    "Completed field cache includes exact Pc/definition/source Type arguments/selector plus runtime base TypeId and checks guard on hits.",
+    "Binder maps filtered Type arguments to actual declaration generic ordinals and normalizes actual AST field projections before WrittenType conversion; source single-name aliases take same field-bearing route.",
+    "Actual field membership/range/tokens and owner source/header/context/current TypeSchema are preserved; generated source uses ordinary entry points."
+  ],
+  "held_findings": [
+    "Pure NominalMember query does not automatically capture preceding EnteredValue or module positive/negative callee name selection dependencies. Owner BodyEnvironment/DiscoverySeal guards cover their actual closure; equivalence to every relevant same-environment namespace change remains unproved.",
+    "Derived namespace publication need not increment source_revision; source revision guard alone cannot establish exact selected-target invalidation.",
+    "Existing legacy adapters, local HeaderTypeSite projections, open named-record template integration and broader omitted/const argument inference remain producer-documented gaps.",
+    "No cross-instantiation, source-invalidation, suspension, generated/wrapper/standard macro or full-edition execution is inferred from source review."
+  ],
+  "recommendation": "Keep currentness/feature closure held; retain or compose actual name-selection query/input closure when that cache boundary is repaired, without global namespace invalidation. V11 frozen production unchanged.",
+  "all_eight": {
+    "1": "ordinary source constructor/member/field path; no evaluator",
+    "2": "no macro-output executor",
+    "3": "actual source terms and selected arguments; no context whitelist",
+    "4": "source/origin/current owner checks retained; generated matrix pending",
+    "5": "no pattern engine/cold executable work added",
+    "6": "completed primary specialization memoized; existing legacy/parser debt held",
+    "7": "cache-hit relevant input guards; exact preceding lookup closure held",
+    "8": "Arc body/plan/query handles; key clone scales with Type terms"
+  },
+  "detail": "worktracks/evidence/2026-10-18-associated-field-independent-transport-review.md"
+}

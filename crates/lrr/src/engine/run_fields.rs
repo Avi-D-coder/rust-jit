@@ -4,13 +4,12 @@ use crate::{
     frontend::types::{NominalFieldBinding, SchemaNames},
     source::manifest::ItemKind,
 };
-
-#[path = "run_field_source.rs"]
-mod source;
-
 fn field_fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-SCHEMA", message.into())
 }
+
+#[path = "run_field_source.rs"]
+mod source;
 
 impl RunMachine {
     #[cfg(test)]
@@ -63,6 +62,27 @@ impl RunMachine {
         // The definition comes from the executed expression's retained source
         // view. A runtime descriptor or a same-spelled type cannot select it.
         let definition = self.frame.nominal_place_source(base)?;
+        if matches!(self.graph, Some(RunNames::Legacy(_))) {
+            return self.prepare_legacy_field(db, base, destination, definition);
+        }
+        Ok(self.prepare_selected_field(
+            db,
+            base,
+            destination,
+            definition,
+            crate::frontend::nominal_member_goals::NominalMemberSelection::Named,
+        ))
+    }
+    // Held legacy source-catalogue adapter. It keeps the pre-existing argument-
+    // free shared SchemaNames binder and VM projection unchanged. Removal needs
+    // actual BodyEnvironment publication, never a fabricated discovery seal.
+    fn prepare_legacy_field(
+        &mut self,
+        db: &mut Database,
+        base: SlotId,
+        destination: SlotId,
+        definition: crate::core::digest::Digest,
+    ) -> Result<QueryPoll<()>, Diagnostic> {
         let graph = self
             .graph
             .as_ref()

@@ -195,6 +195,16 @@ impl<S: ?Sized + LrrText> PartialEq<S> for String {
         core::intrinsics::lrr_str_eq(self.as_str(), other.lrr_text())
     }
 }
+impl PartialEq<String> for str {
+    fn eq(&self, other: &String) -> bool {
+        core::intrinsics::lrr_str_eq(self, other.as_str())
+    }
+}
+impl PartialEq<String> for &str {
+    fn eq(&self, other: &String) -> bool {
+        core::intrinsics::lrr_str_eq(*self, other.as_str())
+    }
+}
 impl Eq for String {}
 impl Ord for String {
     fn cmp(&self, other: &String) -> core::cmp::Ordering {

@@ -76,8 +76,10 @@ impl NominalConstructorTarget {
     ) -> QueryPoll<Option<Self>> {
         match super::source_types::local_nominal_owner(db, identity) {
             QueryPoll::Ready(Ok(Some(owner))) => {
-                if !matches!(owner.definition.item_kind, ItemKind::Struct | ItemKind::Enum)
-                    || (owner.definition.item_kind == ItemKind::Enum) != variant.is_some()
+                if !matches!(
+                    owner.definition.item_kind,
+                    ItemKind::Struct | ItemKind::Enum
+                ) || (owner.definition.item_kind == ItemKind::Enum) != variant.is_some()
                 {
                     return QueryPoll::Ready(Ok(None));
                 }
@@ -91,6 +93,9 @@ impl NominalConstructorTarget {
             QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
         }
+    }
+    pub(crate) fn identity(&self) -> Digest {
+        self.identity
     }
     pub(crate) fn owner(&self) -> &DefKey {
         &self.owner
@@ -106,8 +111,27 @@ impl NominalConstructorTarget {
 pub(crate) struct BoundConstructor {
     variant: Arc<BoundNominalVariant>,
     shape: FieldShape,
+    guard: Option<Arc<crate::db::memo::PreparedInputGuard>>,
 }
 impl BoundConstructor {
+    pub(crate) fn specialized(
+        variant: Arc<BoundNominalVariant>,
+        shape: FieldShape,
+        guard: Arc<crate::db::memo::PreparedInputGuard>,
+    ) -> Self {
+        Self {
+            variant,
+            shape,
+            guard: Some(guard),
+        }
+    }
+    pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
+        if let Some(guard) = &self.guard {
+            guard.require_current(db)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn variant(&self) -> &Arc<BoundNominalVariant> {
         &self.variant
     }
@@ -152,6 +176,7 @@ pub(crate) fn bind_constructor(
             QueryPoll::Ready(Ok(BoundConstructor {
                 variant: Arc::new(variant),
                 shape,
+                guard: None,
             }))
         }
         QueryPoll::Ready(Ok(NominalBinding::Deferred { demand, .. })) => {
@@ -222,9 +247,7 @@ pub(crate) fn generic_annotation_base(
         // is usable here only when it has no Type parameter (`Context<'a>`
         // written `Context<'_>`: the written arguments are lifetimes, which
         // carry no runtime Type).
-        BodyTypeOutcome::Ready(prepared) => {
-            (prepared.declaration().definition_identity(), true)
-        }
+        BodyTypeOutcome::Ready(prepared) => (prepared.declaration().definition_identity(), true),
         BodyTypeOutcome::Pending(_) => {
             return unsupported("generic Type occurrence requires further source resolution");
         }

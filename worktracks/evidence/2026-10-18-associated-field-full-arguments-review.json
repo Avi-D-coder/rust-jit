@@ -1,0 +1,22 @@
+{
+  "status": "lead source-review identity repair; compilation/runtime pending",
+  "reason": "Full source GenericArg application must remain distinct in pure query key; Type-only filter could alias const/region applications. No actual fixture pass/failure inferred.",
+  "key_domain": "lrr/v2/nominal-member-goal",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/nominal_member_goals.rs",
+      "sha256": "792c74067cccc7d16d40d0df22bf5e4f9ae770ac55421444ddbe4dc3ded6ad96"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "0dc0efd6180c604777dcbff316fa77c9f00209637f9d3f3043bc44dff731c7e1"
+    }
+  ],
+  "joins": [
+    "constructor producer retains all Nominal GenericArg values from actual result context after selected definition identity matches",
+    "field producer retains all GenericArg values from current bound source nominal application",
+    "provider creates Type-only adapter only immediately before existing SchemaNames binder; existing generics_supported rejects pending const features",
+    "key stable encoding records full GenericArg tag/value; Ord/serde already exact; heap metadata accounts full GenericArg vector plus recursive Type storage"
+  ],
+  "all_eight_delta": "No new parser/evaluator, context-specific inference, generated exclusion, pattern route, repeated source plan, namespace scan or body clone. Only exact typed key producer/consumer identity changed; existing source/runtime guard and legacy/template/lookup-dependency holds remain. Previous template-repair receipt engine hash is superseded by this file; associated_types and declaration_nominal_types hashes remain unchanged."
+}

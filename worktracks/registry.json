@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T09:35:10.556551+00:00",
+  "updated_at": "2026-10-18T10:03:44.754575+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -727,12 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V9 exactsource462e11a293d49c1f11592251cfcde6d7c4227f187a7d73e880176019f6940c5a, bothbuildsPASS,6/6controlsPASS,4/7wholemain runtimePASS. Two new sinceV7, four distinct targeted gains vs savedv16. i128/u128 fault; properaux import gap. Evidence worktracks/evidence/2026-10-18-interpreter-v9-validation.json. Successors unvalidated.",
+    "validation": "V12 exact staged sourcea02f3317 bothbuildsPASS,5/7controlsPASS,0/6wholemainPASS. Known sourceDeref/viawhere regressions; held from integration. V11 compile101 retained. Corrective successors unstaged/unvalidated. Four gains belong to historical V9, no refreshed current total.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 4,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "b6aa9706bc72d4a5c8f69e30fe7124992f23d8fd",
-    "scope": "targeted distinct delta versus savedv16; no refreshed global current count/fullsuite/JITgate"
+    "source_checkpoint_pushed": "046bd18d453f327ea82efeab220f3d7b19273028",
+    "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

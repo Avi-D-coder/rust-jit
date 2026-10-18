@@ -3273,6 +3273,26 @@ impl NameNamespaces {
         text.push('}');
         Some(text)
     }
+    /// Current ordinary namespace outcomes for a stalled import. This is only
+    /// failure evidence: it neither advances discovery nor discharges a producer.
+    pub(crate) fn import_resolution_summary(
+        &self,
+        identity: Digest,
+    ) -> Option<String> {
+        let (import, edition) = self.imports.get(&identity)?;
+        // An evidence lookup must not replace the primary incomplete-discovery
+        // diagnostic or its blocked ledger if that lookup itself fails.
+        let outcome = |namespace| match self.lookup_import_target(import, namespace, *edition) {
+            Ok(value) => format!("{value:?}"),
+            Err(error) => format!("error {}: {}", error.code, error.message),
+        };
+        Some(format!(
+            "value={}, type={}, macro={}",
+            outcome(Namespace::Value),
+            outcome(Namespace::Type),
+            outcome(Namespace::Macro)
+        ))
+    }
     /// Unqualified lookup of a member of the caller's own module only.
     fn lookup_module_member(
         &self,

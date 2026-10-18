@@ -786,6 +786,36 @@ impl<A: LrrToNum<i64>> Product<A> for i64 {
         total
     }
 }
+impl LrrToNum<i128> for i128 {
+    fn lrr_to_num(self) -> i128 {
+        self
+    }
+}
+impl<'a> LrrToNum<i128> for &'a i128 {
+    fn lrr_to_num(self) -> i128 {
+        *self
+    }
+}
+impl<A: LrrToNum<i128>> Sum<A> for i128 {
+    fn sum<I: Iterator<Item = A>>(iter: I) -> i128 {
+        let mut total: i128 = 0;
+        let mut it = iter;
+        while let Option::Some(x) = it.next() {
+            total += x.lrr_to_num();
+        }
+        total
+    }
+}
+impl<A: LrrToNum<i128>> Product<A> for i128 {
+    fn product<I: Iterator<Item = A>>(iter: I) -> i128 {
+        let mut total: i128 = 1;
+        let mut it = iter;
+        while let Option::Some(x) = it.next() {
+            total *= x.lrr_to_num();
+        }
+        total
+    }
+}
 impl LrrToNum<isize> for isize {
     fn lrr_to_num(self) -> isize {
         self
@@ -929,6 +959,36 @@ impl<A: LrrToNum<u64>> Sum<A> for u64 {
 impl<A: LrrToNum<u64>> Product<A> for u64 {
     fn product<I: Iterator<Item = A>>(iter: I) -> u64 {
         let mut total: u64 = 1;
+        let mut it = iter;
+        while let Option::Some(x) = it.next() {
+            total *= x.lrr_to_num();
+        }
+        total
+    }
+}
+impl LrrToNum<u128> for u128 {
+    fn lrr_to_num(self) -> u128 {
+        self
+    }
+}
+impl<'a> LrrToNum<u128> for &'a u128 {
+    fn lrr_to_num(self) -> u128 {
+        *self
+    }
+}
+impl<A: LrrToNum<u128>> Sum<A> for u128 {
+    fn sum<I: Iterator<Item = A>>(iter: I) -> u128 {
+        let mut total: u128 = 0;
+        let mut it = iter;
+        while let Option::Some(x) = it.next() {
+            total += x.lrr_to_num();
+        }
+        total
+    }
+}
+impl<A: LrrToNum<u128>> Product<A> for u128 {
+    fn product<I: Iterator<Item = A>>(iter: I) -> u128 {
+        let mut total: u128 = 1;
         let mut it = iter;
         while let Option::Some(x) = it.next() {
             total *= x.lrr_to_num();

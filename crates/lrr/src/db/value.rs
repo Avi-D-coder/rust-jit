@@ -118,6 +118,7 @@ pub enum QueryValue {
     DeclaredParameterGoal(Box<crate::frontend::source_parameter_goals::ParameterGoalObservation>),
     SourceConstraints(Box<crate::syntax::source_constraints::SourceConstraintPlan>),
     QualifiedBodyType(Box<crate::frontend::qualified_type_names::QualifiedTypeObservation>),
+    NominalMember(Box<crate::frontend::nominal_member_goals::PreparedNominalMember>),
     BoundRecordConstructor(Box<crate::frontend::prepared_constructors::PreparedRecordConstructor>),
     SourceLocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     CurrentModuleName(Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>),
@@ -155,6 +156,7 @@ impl QueryValue {
             _ => None,
         };
         let local = match self {
+            Self::NominalMember(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::PreparedBodySyntax(value) => Some(SourceArtifactRef::PreparedBodySyntax(value)),
             Self::PreparedExplicitTypeArguments(value) => {
                 Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
@@ -211,6 +213,9 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::NominalMember(value), QueryKey::NominalMember(key)) = (self, key) {
+            return value.key() == key.as_ref();
+        }
         if let (Self::PreparedBodySyntax(value), QueryKey::PreparedBodySyntax(key)) = (self, key) {
             return value.key() == key.as_ref();
         }
@@ -394,6 +399,10 @@ impl QueryValue {
                 e.u32(36);
                 e.digest(value.fingerprint());
             }
+            Self::NominalMember(value) => {
+                e.u32(49);
+                e.record(value.as_ref());
+            }
             Self::BoundRecordConstructor(value) => {
                 e.u32(35);
                 e.record(value.as_ref());
@@ -560,6 +569,7 @@ impl QueryValue {
             Self::TypeAlias(v) => v.estimated_bytes(),
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
+            Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::BoundRecordConstructor(v) => v.metadata_bytes().unwrap_or(usize::MAX),
             Self::QualifiedBodyType(value) => value.estimated_bytes(),
             Self::ScopeBucket(v) => {

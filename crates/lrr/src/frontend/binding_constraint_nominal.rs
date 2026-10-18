@@ -257,9 +257,7 @@ impl FieldType {
                 }
                 // Indexing a one-argument container field (`Vec<T>`): its
                 // element is that type argument.
-                (Step::Element, WrittenType::Generic { args, .. }) if args.len() == 1 => {
-                    &args[0]
-                }
+                (Step::Element, WrittenType::Generic { args, .. }) if args.len() == 1 => &args[0],
                 _ => return FieldProjection::Unknown,
             };
             if !matches!(step, Step::AutoDeref) {
@@ -346,9 +344,12 @@ impl Constructed {
     /// Whether some declared field of this constructor names type parameter
     /// `ordinal`.
     pub(super) fn names_parameter(&self, ordinal: u32) -> bool {
-        self.fields
-            .iter()
-            .any(|field| field.parameters().iter().any(|(index, _)| *index == ordinal))
+        self.fields.iter().any(|field| {
+            field
+                .parameters()
+                .iter()
+                .any(|(index, _)| *index == ordinal)
+        })
     }
     /// The type-parameter positions inside declaration field `field`.
     pub(super) fn field_parameters(&self, field: u32) -> Vec<(u32, Vec<Step>)> {
@@ -378,7 +379,9 @@ impl Constructed {
         (
             TyTerm::Nominal(
                 self.definition,
-                keys.iter().map(|key| GenericArg::Type(TyTerm::Param(*key))).collect(),
+                keys.iter()
+                    .map(|key| GenericArg::Type(TyTerm::Param(*key)))
+                    .collect(),
             ),
             keys,
         )
@@ -543,7 +546,11 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(None));
         }
         let target = if local {
-            match ready!(NominalConstructorTarget::local(db, enumeration, Some(member))) {
+            match ready!(NominalConstructorTarget::local(
+                db,
+                enumeration,
+                Some(member)
+            )) {
                 Some(target) => target,
                 None => return QueryPoll::Ready(Ok(None)),
             }
@@ -842,9 +849,8 @@ impl<'a> Component<'a> {
     /// The constructed value's own type arguments as placeholders: each is
     /// decided by this same demand started at the value's type argument.
     fn dependent_arguments(&mut self, node: NodeId, constructed: &Constructed) -> Vec<GenericArg> {
-        let definition = Digest::of_bytes(
-            &[b"lrr/open-dependent".as_slice(), &node.0.to_le_bytes()].concat(),
-        );
+        let definition =
+            Digest::of_bytes(&[b"lrr/open-dependent".as_slice(), &node.0.to_le_bytes()].concat());
         (0..constructed.type_parameters)
             .filter_map(|ordinal| u32::try_from(ordinal).ok())
             .map(|ordinal| {
@@ -1017,17 +1023,43 @@ impl<'a> Component<'a> {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let source_arguments: Vec<_> = args
+            .iter()
+            .filter_map(|argument| match argument {
+                GenericArg::Type(term) => Some(Some(term.clone())),
+                _ => None,
+            })
+            .collect();
         let enumeration = names.definition().item_kind == ItemKind::Enum;
         let binding = match *step {
             Step::Named(row) if !enumeration => {
                 let Some(member) = self.plan.member(row) else {
                     return QueryPoll::Ready(Ok(None));
                 };
-                names.bind_named_field_current(db, &sources, None, member, &caller)
+                names.bind_named_field_current_with_arguments(
+                    db,
+                    &sources,
+                    None,
+                    member,
+                    &caller,
+                    &source_arguments,
+                    &members,
+                )
             }
-            Step::Field(position) if !enumeration => {
-                names.bind_positional_field_current(db, &sources, None, position, &caller)
-            }
+            Step::Field(position) if !enumeration => names
+                .bind_positional_field_current_with_arguments(
+                    db,
+                    &sources,
+                    None,
+                    position,
+                    &caller,
+                    &source_arguments,
+                    &members,
+                ),
             Step::Variant {
                 definition: owner,
                 variant,
@@ -1046,14 +1078,24 @@ impl<'a> Component<'a> {
                         else {
                             return QueryPoll::Ready(Ok(None));
                         };
-                        names.bind_named_field_current(db, &sources, variant_name, member, &caller)
+                        names.bind_named_field_current_with_arguments(
+                            db,
+                            &sources,
+                            variant_name,
+                            member,
+                            &caller,
+                            &source_arguments,
+                            &members,
+                        )
                     }
-                    FieldShape::Tuple => names.bind_positional_field_current(
+                    FieldShape::Tuple => names.bind_positional_field_current_with_arguments(
                         db,
                         &sources,
                         variant_name,
                         field,
                         &caller,
+                        &source_arguments,
+                        &members,
                     ),
                     FieldShape::Unit => return QueryPoll::Ready(Ok(None)),
                 }
@@ -1163,10 +1205,7 @@ impl<'a> Component<'a> {
         position: u32,
         rest: Vec<Step>,
     ) -> QueryPoll<()> {
-        let step = match self
-            .fact(access)
-            .map(|fact| (fact.field(), fact.member()))
-        {
+        let step = match self.fact(access).map(|fact| (fact.field(), fact.member())) {
             Ok((Some(position), _)) => Step::Field(position),
             Ok((None, Some(row))) => Step::Named(row),
             _ => {

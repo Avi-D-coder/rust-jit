@@ -37,6 +37,45 @@ Current implementation branch checkpoints b6aa9706bc72d4a5c8f69e30fe7124992f23d8
 and its predecessor 9d4c588ea279ca3c25ff19d99b4e4cdd5b21b112 were pushed.
 Only source, fixtures, plans and compact evidence were included.
 
+## V10 numeric and diagnostic followup
+
+Source `0a21e2a8fdb73527f37dc3de2fd26964729790a005ee570371d5699092177ff2`
+compiles unchanged (lib `e5a6ad/0`, CLI `53e33b/0`). Six selected literal,
+arithmetic and retained-origin controls pass. No new whole-main pass: i128 now
+reaches 81 source calls / 31,833 dispatches, u128 reaches 70 / 15,995; both fail
+the same reference/nominal type contract. Shared Unifier diagnostics retain actual
+terms; retained token origins now map the reached equality to its real standard
+macro definition. They do not prove the original caller expression location.
+[Exact V10 evidence](../../worktracks/evidence/2026-10-18-interpreter-v10-validation.json).
+
+Successor source adds ordinary reverse string comparison impls (the missing
+library direction, without loosening unification), 128-bit primitive/fold trait
+impls, guarded nominal member specialization, and failure-only ordinary import
+resolution evidence. These remain unvalidated until a subsequent exact build.
+Current upstream gains remain four targeted whole-main runtime passes, not a
+fresh global result or full-feature/interpreter/JIT gate.
+
+## V11/V12 retained failure and correction frontier
+
+V11 lib exited 101 (`e46fff`) from the NominalMember provider arm return type;
+no CLI or tests ran. V12 changed only that provider control-flow join and compiled
+exact source `a02f33176cf1a277a32bb6b27ca90c959ce5a99607de2e95e80b7b5e88c7bd32`
+(lib `2b504c/0`, CLI `883381/0`). Five/seven controls pass; zero/six upstream
+whole-main attempts complete. The source-Deref and via-where regressions hold
+integration. i128/u128 pass the old string comparison frontier but fail a new
+constructor-context result-slot requirement in a valid synthetic pattern call.
+The initial review covered ordinary Expr calls and missed this other call family;
+its correction is preserved. Numbered fields reach a bogus Struct-as-Fn signature
+demand; named open record construction remains unsupported. Properaux imports
+still stall despite a currently defined Type target.
+
+The next unstaged successors share optional context across synthetic sites, keep
+nonprojection Params for anonymous runtime arguments, classify actual Fn AST
+occurrences in both source-callee paths, retain full GenericArg member identities,
+and refresh current import results before declaring discovery incomplete. These
+are source-reviewed candidates, not passes. Exact staged V12 is preserved as a
+held source checkpoint separately from those dirty successors. See [V12 evidence](../../worktracks/evidence/2026-10-18-interpreter-v12-validation.json).
+
 ## Ownership and validation
 
 Root implements generated body environments and local const/static admission.

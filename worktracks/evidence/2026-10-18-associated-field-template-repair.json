@@ -1,0 +1,95 @@
+{
+  "status": "source-reviewed successor, compilation/runtime pending",
+  "supersedes": "V12 exact a02f3317 source only three changed leaves in this receipt; previous provider repair remains attached V12",
+  "actual_witnesses": [
+    "V12 Option::PartialEq synthetic pattern/operator node lacks value; i128808sourcecalls46899dispatches then constructor_context regression",
+    "V12 callable sourceDeref/Rc::clone self.ptr actual facade field &static RcBox<T> cannot close anonymous closure source into fabricated named Type"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/associated_types.rs",
+      "sha256": "72f06bbe05ce3524f4df056a42eccfbf7b81bd6f07ed54d1e68415b6f6aed2b9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_nominal_types.rs",
+      "sha256": "6ede333477ce4b57434a0e640cd7dbef3c3430ccad591041763077a6d174372f"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "f390d1f2052d31357e5399bb69075686310e33ed438fcf2e2264730b9cc2646a"
+    }
+  ],
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": [
+        "associated_types::normalize_with_bindings",
+        "SchemaNames::instantiated_query"
+      ],
+      "finding": "one existing source associated-type algorithm; no assertion/expression evaluator"
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "SchemaNames::actual_field_type",
+        "source_types::resolve_actual_type"
+      ],
+      "finding": "field actual AST unchanged; inherited captured impl-header parser exception remains cold and unextended"
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "associated_types::normalize",
+        "normalize_template",
+        "normalize_with_bindings",
+        "SchemaNames::instantiated_query"
+      ],
+      "finding": "old normalize supplies no bindings and retains same resolution algorithm. Template entry substitutes actual declaration inputs only at Projection subtree, once; surrounding ordinary Params/wrappers retained for actual runtime descriptor instantiation. Deleted eager whole-field substitution. Concrete primitive result uses existing SchemaTypeName::metadata, preserving primitive/concrete field API. No Rc/member-name specialcase"
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "RunMachine::constructor_context"
+      ],
+      "finding": "valid indexed synthetic site without expression result returns None optional context, out-of-range node still explicit invalid. No original/generated rule. Existing source/type guards retained"
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "RunMachine::constructor_context",
+        "associated_types::normalize_with_bindings"
+      ],
+      "finding": "pattern/operator probe does not demand an expression slot; no pattern evaluator or sibling arm preparation"
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "QueryKey::NominalMember",
+        "SchemaNames::instantiated_query"
+      ],
+      "finding": "normalization remains cold pure memo preparation. VM receives prior retained templates. No installed operation re-enters source preparation. Existing legacy adapter hold unchanged"
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "PreparedInputGuard::require_current",
+        "RunMachine::nominal_member"
+      ],
+      "finding": "unchanged retained guards/cachekeys, no new namespace scans. Previous callee selection dependency gap remains explicitly held"
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "normalize_with_bindings",
+        "RunMachine::constructor_context"
+      ],
+      "finding": "symbolic subtree copy only at reached projection cold goal; existing Arc/body/direct index route unchanged; no body copies or whole-file searches"
+    }
+  ],
+  "known_gaps": [
+    "actual successor compile/runtime controls pending",
+    "opaque associated projection result still unsupported if actual descriptor/template join missing; do not invent schema",
+    "mixed projection plus unrelated anonymous parameter structural argument reviewed; dedicated runtime matrix not yet executed",
+    "old named generic record template/legacy publication/selected-target lookup closure holds remain"
+  ]
+}

@@ -1141,14 +1141,16 @@
       "paths": [
         "crates/lrr/src/engine/run_module_source_preparation.rs",
         "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
-        "crates/lrr/src/expand/source_discovery.rs",
         "crates/lrr/src/cli/retained_generated_body_tests.rs",
         "crates/lrr/src/expand/body_macro_boundary.rs"
       ],
       "issue": null,
       "pull_request": null,
       "updated_at": "2026-10-18T08:11:34.033776+00:00",
-      "review_after": "2026-10-18T08:11:34.033776+00:00"
+      "review_after": "2026-10-18T08:11:34.033776+00:00",
+      "transferred_paths": [
+        "crates/lrr/src/expand/source_discovery.rs"
+      ]
     },
     {
       "id": "LOCAL-037",
@@ -1160,7 +1162,6 @@
       "scope": "M023/M025 bound-aware shorthand projection and shared generic substitution; evidence worktracks/evidence/2026-10-18-generic-projection-bound-repair.md. Current candidates under async validation; no stock or complete projection acceptance.",
       "paths": [
         "crates/lrr/src/frontend/source_types.rs",
-        "crates/lrr/src/frontend/associated_types.rs",
         "crates/lrr/src/syntax/signatures.rs",
         "crates/lrr/src/frontend/binding_constraint_methods.rs",
         "crates/lrr/src/frontend/binding_constraint_projection.rs",
@@ -1170,7 +1171,10 @@
       "issue": null,
       "pull_request": null,
       "updated_at": "2026-10-18T08:24:19.411826+00:00",
-      "review_after": "2026-10-18T08:24:19.411826+00:00"
+      "review_after": "2026-10-18T08:24:19.411826+00:00",
+      "transferred_paths": [
+        "crates/lrr/src/frontend/associated_types.rs"
+      ]
     },
     {
       "id": "LOCAL-038",
@@ -1181,7 +1185,6 @@
       "status": "active",
       "scope": "T032/T033/M025 ordinary source Deref callable adjustment, existing VM operator continuation and bound result descriptors; evidence worktracks/04-calls-source-views/2026-10-18-callable-autoderef.md. Async validation pending; Arc constructor dependency remains unsupported. M030 source Deref continuation plus retained ordinary type-equality/runtime numeric fact join; actual sourceDeref numeric witness pending V6. No assertion-specific inference. See observed-numeric-constraints.md.",
       "paths": [
-        "crates/lrr/src/ir/op.rs",
         "crates/lrr/src/ir/recipe.rs",
         "crates/lrr/src/ir/validate.rs",
         "crates/lrr/src/ir/parameter_place_wire_tests.rs",
@@ -1194,7 +1197,6 @@
         "crates/lrr/src/cli/format_trait_facade_tests.rs",
         "crates/lrr/src/vm/context.rs",
         "crates/lrr/src/frontend/binding_constraint_observed.rs",
-        "crates/lrr/src/frontend/binding_constraints.rs",
         "crates/lrr/src/frontend/prepared_binding_plan.rs",
         "crates/lrr/src/db/binding_constraint_thunk.rs",
         "crates/lrr/src/syntax/thunks.rs",
@@ -1203,7 +1205,11 @@
       "issue": null,
       "pull_request": null,
       "updated_at": "2026-10-18T08:48:59.774551+00:00",
-      "review_after": "2026-10-18T08:24:19.411826+00:00"
+      "review_after": "2026-10-18T08:24:19.411826+00:00",
+      "transferred_paths": [
+        "crates/lrr/src/ir/op.rs",
+        "crates/lrr/src/frontend/binding_constraints.rs"
+      ]
     },
     {
       "id": "LOCAL-040",
@@ -1290,7 +1296,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "T023/T025 wide primitive runtime foundation; actual unchanged stockconst/i128 witnesses. Existing 16-byte ValueRepr with checked immutable backing; full VM/library integration held. See worktracks/evidence/2026-10-18-wide-integer-precode.md.",
+      "scope": "T023/T025 shared wide integer runtime and ordinary primitive/fold source library. V10 literals advance wholei128, six scoped controls pass. Fullwide/Clone/fold acceptance pending; no JIT gate.",
       "paths": [
         "crates/lrr/src/runtime/value.rs",
         "crates/lrr/src/runtime/shape.rs",
@@ -1307,7 +1313,9 @@
         "crates/lrr/src/vm/frame_string_literals.rs",
         "crates/lrr/src/vm/pattern_match.rs",
         "crates/lrr/src/vm/integer_literal_decode_tests.rs",
-        "crates/lrr/src/engine/run_facade.rs"
+        "crates/lrr/src/engine/run_facade.rs",
+        "crates/lrr/facade/core/primitive_impls.rs",
+        "crates/lrr/facade/core/iter.rs"
       ],
       "issue": null,
       "pull_request": null,
@@ -1323,13 +1331,84 @@
       "status": "active",
       "scope": "E007 reached item-value pure fallback removed; actual declared result shared Frame join. V9 4 initializer controls and whole constarith pass. Nonprimitive run-once template/generic cache/pure pattern debt remains held; no feature closure.",
       "paths": [
-        "crates/lrr/src/engine/run_value_items.rs",
         "crates/lrr/src/engine/run_initializers.rs"
       ],
       "issue": null,
       "pull_request": null,
       "updated_at": "2026-10-18T09:35:10.556551+00:00",
-      "review_after": "2026-10-18T09:15:07.352169+00:00"
+      "review_after": "2026-10-18T09:15:07.352169+00:00",
+      "transferred_paths": [
+        "crates/lrr/src/engine/run_value_items.rs"
+      ]
+    },
+    {
+      "id": "LOCAL-045",
+      "track": "WT05",
+      "item": "WT05-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "T008/M025 ordinary incomplete import namespace diagnostics only; actual issue17718 properaux preexecution failure. No semantic or stock acceptance.",
+      "paths": [
+        "crates/lrr/src/frontend/names.rs",
+        "crates/lrr/src/expand/source_discovery.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-18T09:44:05.987318+00:00",
+      "review_after": "2026-10-18T09:44:05.987318+00:00"
+    },
+    {
+      "id": "LOCAL-046",
+      "track": "WT04",
+      "item": "WT04-01",
+      "owner": "/root/closure_callable_resume",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "Shared argument-aware constructors/fields source candidate. V12 compilePASS but introduces sourceDeref/viawhere regressions, held. Corrective optional-context/projection-template/fullGenericArg successors unvalidated. No feature closure.",
+      "paths": [
+        "crates/lrr/src/frontend/nominal_member_goals.rs",
+        "crates/lrr/src/frontend/declaration_nominal_types.rs",
+        "crates/lrr/src/frontend/binding_constraint_nominal.rs",
+        "crates/lrr/src/frontend/nominal_constructors.rs",
+        "crates/lrr/src/engine/run_nominal.rs",
+        "crates/lrr/src/engine/run_fields.rs",
+        "crates/lrr/src/engine/run_value_items.rs",
+        "crates/lrr/src/db/key.rs",
+        "crates/lrr/src/db/value.rs",
+        "crates/lrr/src/db/provider.rs",
+        "crates/lrr/src/frontend/mod.rs",
+        "crates/lrr/src/cli/preentry_loader.rs",
+        "crates/lrr/src/service/expansion.rs",
+        "crates/lrr/src/traits/term.rs",
+        "crates/lrr/src/ir/op.rs",
+        "crates/lrr/src/frontend/associated_types.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-18T09:44:05.987318+00:00",
+      "review_after": "2026-10-18T09:44:05.987318+00:00"
+    },
+    {
+      "id": "LOCAL-047",
+      "track": "WT04",
+      "item": "WT04-01",
+      "owner": "/root/generic_projection_resume",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "Actual shared mismatch term and retained-source failure provenance plus ordinary reverse String comparison source impl. V10 diagnostic/literal controls pass; reverse String semantic repair awaits next exact binary. No macro special case or feature/gate closure. Corrective common actual-Fn classifier source-only after V12 constructor-signature fault.",
+      "paths": [
+        "crates/lrr/src/engine/failure.rs",
+        "crates/lrr/src/syntax/parse_retained.rs",
+        "crates/lrr/src/syntax/parse_retained_tests.rs",
+        "crates/lrr/src/traits/unify.rs",
+        "crates/lrr/facade/alloc/string.rs",
+        "crates/lrr/src/frontend/binding_constraints.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-18T09:45:35.941918+00:00",
+      "review_after": "2026-10-18T09:45:35.941918+00:00"
     }
   ]
 }

@@ -5343,9 +5343,13 @@ impl SourceDiscovery {
                     break;
                 }
             }
-        } else if let Some(spelling) = blocked
+        } else if let Some((spelling, identity)) = blocked
             .iter()
-            .filter_map(|(identity, _)| self.graph.import_spelling(*identity))
+            .filter_map(|(identity, _)| {
+                self.graph
+                    .import_spelling(*identity)
+                    .map(|spelling| (spelling, *identity))
+            })
             .min()
         {
             // No original macro producer is blocked: name the first stalled
@@ -5353,6 +5357,10 @@ impl SourceDiscovery {
             use std::fmt::Write;
             write!(&mut diagnostic.message, "; blocked import `{spelling}`")
                 .map_err(|_| fault("blocked import diagnostic formatting"))?;
+            if let Some(summary) = self.graph.import_resolution_summary(identity) {
+                write!(&mut diagnostic.message, "; {summary}")
+                    .map_err(|_| fault("blocked import resolution diagnostic formatting"))?;
+            }
         }
         Ok(diagnostic)
     }
