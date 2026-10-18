@@ -42,7 +42,6 @@ impl ParsedFile {
                 vec![]
             },
         };
-        let mut disabled_bytes = 0usize;
         for module in root.syntax().descendants().filter_map(ast::Module::cast) {
             if module.syntax().ancestors().any(|n| {
                 ast::Fn::can_cast(n.kind())
@@ -66,35 +65,10 @@ impl ParsedFile {
                 .map(|n| MacroName::parse(n.text(), self.edition).map(|n| n.as_str().to_owned()))
                 .collect::<Result<Vec<_>, _>>()?;
             path.reverse();
-            disabled_bytes = path
-                .iter()
-                .try_fold(disabled_bytes, |total, name| {
-                    total.checked_add(name.capacity())
-                })
-                .and_then(|n| n.checked_add(64))
-                .ok_or_else(|| {
-                    Diagnostic::new(
-                        "LRR-E-METADATA-LIMIT",
-                        "macro prelude aggregate policy budget".into(),
-                    )
-                })?;
             policy.disabled.push(path);
         }
         policy.disabled.sort();
         policy.disabled.dedup();
-        Ok(policy)
-    }
-    pub(crate) fn live_macro_prelude_policy(
-        &self,
-        cfg: &CfgSet,
-    ) -> Result<MacroPreludePolicy, Diagnostic> {
-        let policy = self.macro_prelude_policy(cfg)?;
-        if policy.no_core {
-            return Err(Diagnostic::new(
-                "LRR-E-UNSUPPORTED",
-                "no_core is outside the live runtime profile".into(),
-            ));
-        }
         Ok(policy)
     }
 }

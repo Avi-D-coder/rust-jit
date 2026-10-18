@@ -8999,12 +8999,11 @@ impl SourceDiscovery {
                     }
                 }
             }
-            let mut policies: BTreeMap<(Digest, Digest), Option<std::sync::Arc<crate::syntax::BindingPreludePolicies>>> = BTreeMap::new();
+            let mut policies: BTreeMap<(Digest, Digest, Digest), Option<std::sync::Arc<crate::syntax::BindingPreludePolicies>>> = BTreeMap::new();
             let mut policy_for = |source: &PreparedSourceView| -> Result<_, Diagnostic> {
-                let key = (source.selection().outline.parse.fingerprint(), source.selection().outline.cfg);
+                let key = (source.selection().location_identity(), source.selection().outline.parse.fingerprint(), source.selection().outline.cfg);
                 if let Some(policy) = policies.get(&key) { return Ok(policy.clone()); }
-                let policy = source.retained_declaration_parser()?
-                    .prepare_binding_prelude_policies(source.captured_macro_cfg()?)?
+                let policy = source.prepare_binding_prelude_policies()?
                     .map(std::sync::Arc::new);
                 policies.insert(key, policy.clone());
                 Ok(policy)

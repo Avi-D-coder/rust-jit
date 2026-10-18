@@ -723,8 +723,50 @@ impl PreparedSourceView {
         if let Some(policy) = file.macro_prelude.get() {
             return Ok(policy.clone());
         }
-        let policy = file.parsed.live_macro_prelude_policy(cfg)?;
+        let mut policy = file.parsed.macro_prelude_policy(cfg)?;
+        // Crate attributes apply to external module files too. Follow the
+        // actual captured root, not a filename or the caller's source scope.
+        if !self.selection.outline.module_path.is_empty()
+            && let Some(crate::db::dependency::InputValue::SourceDependencies(graph)) =
+                self.state.inputs.get(&crate::db::dependency::InputKey::SourceDependencies)
+            && let Some(root) = graph.root(self.selection.outline.crate_key)
+        {
+            if root.outline.cfg != self.selection.outline.cfg
+                || root.outline.parse.profile != self.selection.outline.parse.profile
+            {
+                return Err(publication_fault("crate prelude root source/profile differs"));
+            }
+            let root_view = Self {
+                state: std::sync::Arc::clone(&self.state),
+                location: UnitLocation {
+                    path: root.path.clone(), crate_key: root.outline.crate_key,
+                    module_path: root.outline.module_path.clone(),
+                },
+                selection: root.clone(),
+            };
+            let root_policy = root_view.macro_prelude_policy()?;
+            policy.no_core = root_policy.no_core;
+            policy.standard = root_policy.standard;
+            let module = &self.selection.outline.module_path;
+            for disabled in root_policy.disabled {
+                if module.starts_with(&disabled) {
+                    policy.disabled.push(Vec::new());
+                } else if disabled.starts_with(module) {
+                    policy.disabled.push(disabled[module.len()..].to_vec());
+                }
+            }
+            policy.disabled.sort();
+            policy.disabled.dedup();
+        }
         Ok(file.macro_prelude.get_or_init(|| policy).clone())
+    }
+    pub(crate) fn prepare_binding_prelude_policies(
+        &self,
+    ) -> Result<Option<crate::syntax::BindingPreludePolicies>, Diagnostic> {
+        self.retained_declaration_parser()?.prepare_binding_prelude_policies(
+            self.captured_macro_cfg()?, self.macro_prelude_policy()?,
+            &self.selection.outline.module_path,
+        )
     }
     /// Syntax facts only. The caller must bind an actual preparation role;
     /// these flags grant no runtime or compiler namespace authority.

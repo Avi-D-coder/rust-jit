@@ -50,29 +50,28 @@ pub(super) fn publish(
     db.publish_macro_export_sources(facets).unwrap();
 }
 #[test]
-fn actual_no_core_facts_require_selected_role_and_never_supply_runtime_index() {
-    let (manifest, unit, inputs, root_selection, _) = core_sources();
+fn no_core_disables_implicit_prelude_without_promoting_macro_only_source() {
+    let (manifest, unit, inputs, root_selection, child_selection) = core_sources();
     let root = select(&inputs, &root_selection);
     assert_eq!(root.captured_macro_blob().unwrap().bytes(), ROOT);
     let facts = root.macro_prelude_facts().unwrap();
     assert!(facts.no_core);
     assert!(!facts.standard);
     assert!(facts.disabled.contains(&vec![]));
-    let error = match root.macro_prelude_policy() {
-        Err(error) => error,
-        Ok(_) => panic!("live no_core admitted"),
-    };
-    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-    assert_eq!(error.message, "no_core is outside the live runtime profile");
+    let child = select(&inputs, &child_selection);
+    let inherited = child.macro_prelude_policy().unwrap();
+    assert!(inherited.no_core && !inherited.standard);
+    assert!(inherited.disabled.contains(&vec![]));
+    let ordinary_policy = root.macro_prelude_policy().unwrap();
+    assert!(ordinary_policy.no_core && !ordinary_policy.standard);
+    assert!(ordinary_policy.disabled.contains(&vec![]));
     let mut ordinary = SourceDeclarative::new(root.share()).unwrap();
     let compiler =
         Arc::new(CompileInputCatalog::standalone(&root_selection.outline.parse.profile).unwrap());
     ordinary.compiler = Some(Arc::clone(&compiler));
-    let error = match ordinary.route_dependency_sets() {
-        Err(error) => error,
-        Ok(_) => panic!("unbound source-only role inferred"),
-    };
-    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+    let (implicit, available) = ordinary.route_dependency_sets().unwrap();
+    assert!(implicit.is_empty(), "no_core must not inject compiler crate dependencies");
+    assert!(!available.is_empty(), "explicit extern crate routes remain available");
     let package = fixture_root().join("library/core");
     let facet = Arc::new(
         SourceMacroExportFacet::capture(

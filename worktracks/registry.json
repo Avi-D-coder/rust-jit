@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T23:04:48.319101+00:00",
+  "updated_at": "2026-10-18T23:48:52.337846+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -754,20 +754,21 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V113 solo held M007/M018 common module prerequisite: Q61 selects actual sealed producer source/module for ordinary Type and Value requests, including retained entered-body records. Final3/5focused controls pass, including actual Type selection, Type/Value memo reuse, absent Value-certificate refusal and epoch invalidation all4editions; generated primitive return namespace and opaque nominal field adjustment remain failed. Same-production-CLI V111 unchanged macro stock2/2passes (issue44127 expected stdout, nested_expr), V110 slice sample1/3passes and actual xcrate root+aux fails qualified lookup. No measured baseline delta/new distinct gains or refreshed suite total. Library/configured owner namespace, generated header, field/qualified adjustment and full runtime/interpreter/JIT gates remain open.",
+    "validation": "V116 solo common no_core source/prelude repair: remove live-only refusal, share cfg-aware policy, suppress implicit compiler imports while retaining explicit extern routes, inherit actual root flags into external files, and key/rebase ordinary Value prelude policy by owning source. Both builds pass;5/6focused controls pass, library source configuration still fails at actual core_simd module closure. Unchanged no-core-with-explicit-std-core.rs newly completes all4editions versus saved V114 failure, with complete capture/cleanup and2source calls each: one distinct upstream runtime gain. No refreshed suite total/full-fixture or M007/M018/interpreter/JIT closure. Library/field/header/qualified and full matrix requirements remain open.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 28,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": true,
+    "source_checkpoint_pushed": false,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v109-v113-definition-modules.json",
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v114-v116-no-core-prelude.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
       "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json",
       "worktracks/evidence/2026-10-18-interpreter-v102-v108-producer-provenance.json",
-      "worktracks/evidence/2026-10-18-interpreter-v109-v113-definition-modules.json"
+      "worktracks/evidence/2026-10-18-interpreter-v109-v113-definition-modules.json",
+      "worktracks/evidence/2026-10-18-interpreter-v114-v116-no-core-prelude.json"
     ],
     "source_checkpoint_commit": "3d90cd4ee1176ac5973cac4fd2eef36a7c4f9b3b"
   }

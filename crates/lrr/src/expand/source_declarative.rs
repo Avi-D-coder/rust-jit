@@ -3461,11 +3461,11 @@ impl SourceDeclarative {
     /// Captured Cargo aliases plus the installed owned compiler facets. This
     /// is pure route metadata and grants no expansion or runtime authority.
     pub(crate) fn route_dependency_sets(&self) -> Result<RouteDependencySets, Diagnostic> {
-        self.route_dependency_sets_for_standard(self.source_prelude_policy()?.standard)
+        self.route_dependency_sets_for_policy(&self.source_prelude_policy()?)
     }
-    fn route_dependency_sets_for_standard(
+    fn route_dependency_sets_for_policy(
         &self,
-        standard: bool,
+        policy: &crate::syntax::macro_prelude::MacroPreludePolicy,
     ) -> Result<RouteDependencySets, Diagnostic> {
         let mut available = (*self.dependencies).clone();
         let mut dependencies = available.clone();
@@ -3478,7 +3478,7 @@ impl SourceDeclarative {
                     self.source.outline().profile.edition,
                 )?;
                 available.entry(name.clone()).or_insert(unit);
-                if alias != "std" || standard {
+                if !policy.no_core && (alias != "std" || policy.standard) {
                     dependencies.entry(name).or_insert(unit);
                 }
             }
@@ -3558,7 +3558,7 @@ impl SourceDeclarative {
         inherited: Option<&InheritedMacroContext<'_>>,
     ) -> Result<crate::frontend::source_macro_routes::SourceMacroRoutes, Diagnostic> {
         let policy = self.source_prelude_policy()?;
-        let (dependencies, available) = self.route_dependency_sets_for_standard(policy.standard)?;
+        let (dependencies, available) = self.route_dependency_sets_for_policy(&policy)?;
         let disabled = policy
             .disabled
             .into_iter()

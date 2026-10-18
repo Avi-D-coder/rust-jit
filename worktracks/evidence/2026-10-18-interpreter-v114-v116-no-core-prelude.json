@@ -1,0 +1,497 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-18T23:17:48.617722+00:00",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "scope": "M007/M018 source/prelude prerequisite and one unchanged upstream runtime gain; full gates held",
+  "baseline": "850264baa330ae43a9a9c10e8880980574d8288e",
+  "architecture_review": "worktracks/04-calls-source-views/2026-10-18-library-definition-namespace.md",
+  "cohorts": [
+    {
+      "version": 114,
+      "source_sha256": "45d628e72c6c075aaa887d47b8759b7523b27ccff54fee5b97578067e1a86638",
+      "head": "850264baa330ae43a9a9c10e8880980574d8288e",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "test_binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "4524ebbf6989250b4f6291a5fb8f7c120b7e070302eee14c88727143588648e3"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "bf91a00dfdc95ba94c5af19b8c53c2a11e8530758fa4622ae9dd0c1b390ae190"
+      },
+      "terminals": {
+        "lib": "41055/dc00f9",
+        "cli": "e18309",
+        "controls": "58038/f1aba6",
+        "stock": "6453/44dca4"
+      },
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v114",
+      "controls": [
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 0.272,
+          "log": "control-0.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2015,
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 1.656,
+          "capture_complete": false,
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-UNSUPPORTED",
+            "message": "no_core is outside the live runtime profile",
+            "output": null
+          },
+          "facts": null
+        }
+      ]
+    },
+    {
+      "version": 115,
+      "source_sha256": "c05685b8aafecd9c02cce036f7982aa5a16643816b9fd7c12f95aacef00bdf76",
+      "head": "850264baa330ae43a9a9c10e8880980574d8288e",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "test_binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "54997d8c413bda886384de09499f1481bd3c50f06a9204d14ec4076d979447c5"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "ad358d230c7d2608ff95f895ebfb2a5955c469b2942360ec340e437761bc0073"
+      },
+      "terminals": {
+        "lib": "18594/918b3c",
+        "cli": "86749/fd0561",
+        "controls": "59764/73d075",
+        "stock": "98473/80f8a1",
+        "editions": "36351/d38762"
+      },
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v115",
+      "controls": [
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 0.262,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "expand::source_declarative::macro_exports::tests::role_tests::no_core_disables_implicit_prelude_without_promoting_macro_only_source",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.101,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "expand::source_discovery::compiler_profiles_tests::exact_owning_cfg_no_std_and_disabled_prelude_policy_survive_facet_preparation",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.162,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::crate_graph::tests::no_implicit_prelude_removes_the_standard_prelude",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 3.845,
+          "log": "control-3.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2015,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 4.656,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2018,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 3.7007832919999997,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2021,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 3.713331125,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2024,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 3.7730222499999995,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        }
+      ]
+    },
+    {
+      "version": 116,
+      "source_sha256": "b2b93f43bfcc7da3bf0023d3f8dd6f90da3b1cf8a1576f95d232d66152df1a75",
+      "head": "850264baa330ae43a9a9c10e8880980574d8288e",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "test_binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "b0e638ad494930f2d63e57fdc2ceb76752ed1c389de2ce23ccb217657d0c7087"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "9e953beca3af6757b713809d78c5261a0c7d79667a93d499110455fa1ac89001"
+      },
+      "terminals": {
+        "lib": "74933/c2aff9",
+        "cli": "69175/7e168a",
+        "controls": "75039/145f36",
+        "stock": "87283/56d11f",
+        "editions": "60696/53ea63"
+      },
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v116",
+      "controls": [
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 0.218,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "expand::source_declarative::macro_exports::tests::role_tests::no_core_disables_implicit_prelude_without_promoting_macro_only_source",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.102,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "expand::source_discovery::compiler_profiles_tests::exact_owning_cfg_no_std_and_disabled_prelude_policy_survive_facet_preparation",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.167,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::crate_graph::tests::no_implicit_prelude_removes_the_standard_prelude",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 3.844,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "frontend::macro_definition_modules::tests::actual_opaque_body_record_joins_selected_definition_module_and_expires",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.378,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::derived_impls_run_like_handwritten_and_user_macro_impls",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 13.575,
+          "log": "control-5.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2015,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 4.76,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2018,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 3.7545865,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2021,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 3.7267652499999997,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2024,
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "seconds": 3.7959766659999996,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null,
+            "output": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        }
+      ]
+    }
+  ],
+  "implementation": [
+    "Delete live-only no_core prelude refusal and duplicate policy wrapper",
+    "Route automatic compiler crate injection through shared cfg-aware no_core/no_std policy; explicit extern routes remain available",
+    "Inherit actual captured crate-root flags into external module policy via ordered root/source lookup; merge applicable root disabled prefixes",
+    "Use that same policy in ordinary Value binding-prelude preparation; rebase disabled paths to actual module paths and include source owner/location in the per-world policy cache",
+    "Keep macro-only source roles and missing library namespace/module closure separate from live runtime source"
+  ],
+  "new_distinct_upstream_runtime_gains_verified": 1,
+  "witness": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+  "baseline_result": "V114 exact unchanged original fails no_core is outside the live runtime profile before interpreter execution",
+  "final_result": "V116 exact original completes in2015,2018,2021,2024 with complete runtime capture, cleanup observed and2source calls each; one distinct original, not four tests",
+  "final_controls": "5/6 pass; library configuration probe still fails after validating real core root/child policies, at an unresolved core::simd import requiring core_simd source module closure",
+  "next_source_demand": "Actual core/src/lib.rs import range12734..12759 is pub use crate::core_simd::simd::*; core_simd source is declared with ../../portable-simd/crates/core_simd/src/mod.rs. Both portable-simd and stdarch source files exist in the pinned local checkout. Need ordinary module capture/import/producer completion in a separate metadata world. Never grant absence from the partial macro catalog or runtime facade.",
+  "remaining": [
+    "Full actual library module/import/producer namespace closure and original slice-pattern execution",
+    "Generated header, opaque field and qualified definition-root source adjustment",
+    "General disabled-prelude inheritance through intermediate external parent files and full equal-bytes cross-owner cache controls",
+    "Full common macro origin/cleanup/suspension/currentness matrix",
+    "Complete applicable upstream runtime and interpreter correctness gates before guest JIT"
+  ],
+  "upstream_runtime_acceptance": "one selected original newly passes; complete gate remains open",
+  "diagnostic_compatibility": "not evaluated by this runtime change",
+  "compiler_tooling_compatibility": "not evaluated by this runtime change",
+  "full_suite_compatibility": "incomplete",
+  "full_fixture_passes_newly_verified": 0,
+  "guest_jit_allowed": false
+}

@@ -112,3 +112,44 @@ fn edition_panic_macros_resolve_from_another_crate() {
         );
     }
 }
+
+#[test]
+fn actual_library_definition_value_namespace_requires_source_module_closure() {
+    use crate::{
+        db::memo::Database,
+        expand::{source_discovery::SourceDiscovery, source_declarative},
+        frontend::compile_input_catalog::CompileInputCatalog,
+        source::manifest::Namespace,
+    };
+    let profile = ProfileIdentity::current();
+    let library = LibraryMacros::for_profile(&profile).unwrap();
+    let definition = library.resolve_path("core", &["cmp", "PartialEq"]).unwrap();
+    let owner = library.providers().iter().find(|provider| {
+        provider.macro_index().definition(definition.identity).is_some()
+    }).unwrap();
+    let declaration = owner.module_source().outline().items.iter().find(|item| {
+        item.def_key.fingerprint() == definition.identity
+    }).unwrap();
+    // The guest facade and the real library source must not share a publication
+    // database. This uses exactly the catalog's actual source inputs instead.
+    let mut metadata = Database::default();
+    library._prepared.publish(&mut metadata).unwrap();
+    metadata.begin_expansion_epoch(1).unwrap();
+    let discovery = SourceDiscovery::new(
+        library.providers().iter().filter(|provider| {
+            provider.module_source().selection().outline.crate_key == definition.defining_unit
+        }).map(|provider| {
+            let policy = provider.module_source().macro_prelude_policy().unwrap();
+            assert!(policy.no_core && !policy.standard, "actual core modules inherit their root");
+            assert!(policy.disabled.contains(&vec![]));
+            provider.module_source().share()
+        }).collect(),
+        declaration.scope.clone(), Namespace::Value,
+        Digest::of_bytes(b"actual library definition source namespace"), 1,
+    ).unwrap();
+    let _discovery = discovery.with_declarative_compiler(
+        Digest::of_bytes(b"actual library definition compile context"),
+        source_declarative::engine_version(),
+        Arc::new(CompileInputCatalog::standalone(&profile).unwrap()),
+    ).expect("real library definition namespace source/module preparation");
+}

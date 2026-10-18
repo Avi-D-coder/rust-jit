@@ -56,13 +56,14 @@ impl ParsedFile {
     pub(crate) fn prepare_binding_prelude_policies(
         &self,
         cfg: &CfgSet,
+        policy: crate::syntax::macro_prelude::MacroPreludePolicy,
+        module_path: &[String],
     ) -> Result<Option<BindingPreludePolicies>, Diagnostic> {
         if self.generated_origin.is_some() {
             return Err(fault(
                 "generated Value prelude policy requires actual owning-crate origin",
             ));
         }
-        let policy = self.live_macro_prelude_policy(cfg)?;
         let mut stack = vec![self.parsed.tree().syntax().clone()];
         while let Some(node) = stack.pop() {
             if let Some(module) = ast::Module::cast(node.clone()) {
@@ -111,7 +112,9 @@ impl ParsedFile {
             source: self.key(),
             cfg: cfg.fingerprint(),
             standard: policy.standard,
-            disabled: policy.disabled,
+            disabled: policy.disabled.into_iter().map(|suffix| {
+                module_path.iter().cloned().chain(suffix).collect()
+            }).collect(),
         }))
     }
 }
