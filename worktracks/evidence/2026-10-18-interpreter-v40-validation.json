@@ -1,0 +1,344 @@
+{
+  "schema_version": 1,
+  "candidate": "V40",
+  "head": "53a1246b0c95399dd98046459da0a260e60f3e63",
+  "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111",
+  "source_leaves": 3335,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "source_unchanged_through_both_builds": true,
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "session_id": 31702,
+      "initial": "f5b8d2",
+      "terminal": "6c0ec2",
+      "seconds": 23.92,
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd"
+    },
+    "cli": {
+      "exit": 0,
+      "session_id": 40410,
+      "initial": "fa879c",
+      "terminal": "ee6104",
+      "seconds": 17.12,
+      "binary_sha256": "d8f4fcced29f195a7751639a633f015d29e28ef6a96d805db949b3d301bebdc1"
+    }
+  },
+  "staged_source": {
+    "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111",
+    "status": "exact-compiled-index",
+    "files": [
+      {
+        "path": "crates/lrr/src/db/local_declaration_inputs.rs",
+        "sha256": "cadd8751c98b9fc7ff96470a39d317e7021327354e91182f73884488294e7c51"
+      },
+      {
+        "path": "crates/lrr/src/db/local_declaration_inputs_tests.rs",
+        "sha256": "69b7a5404a9d585d5f5cbcec375191df28a22f32612cd9373e0ccc9152dcb95b"
+      },
+      {
+        "path": "crates/lrr/src/frontend/associated_declarations.rs",
+        "sha256": "ec1d862667fbc2d1194682e6ae270109c34b74c99556f2da9d7ae99e93d241f7"
+      },
+      {
+        "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
+        "sha256": "a158e09b7f9ae8c8a86a76836738046f8c312da7ebbe3025f335c4f97f4b1768"
+      }
+    ]
+  },
+  "controls": [
+    {
+      "selector": "db::memo::local_declaration_inputs::tests::cold_declaration_publication_rejects_changed_parent_before_any_child_input",
+      "exit": 0,
+      "seconds": 0.103,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "db::memo::local_declaration_inputs::tests::cold_declaration_publication_rejects_changed_parent_before_any_child_input",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd",
+      "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111"
+    },
+    {
+      "selector": "db::memo::local_declaration_inputs::tests::local_attribute_producer_does_not_publish_unexpanded_header",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "db::memo::local_declaration_inputs::tests::local_attribute_producer_does_not_publish_unexpanded_header",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd",
+      "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111"
+    },
+    {
+      "selector": "db::memo::local_declaration_inputs::tests::local_header_publication_conflict_refusal_is_atomic",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "db::memo::local_declaration_inputs::tests::local_header_publication_conflict_refusal_is_atomic",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd",
+      "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111"
+    },
+    {
+      "selector": "db::memo::local_declaration_inputs::tests::local_header_publication_requires_current_owner_and_coordinator",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "db::memo::local_declaration_inputs::tests::local_header_publication_requires_current_owner_and_coordinator",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd",
+      "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111"
+    },
+    {
+      "selector": "db::memo::local_declaration_inputs::tests::local_owner_locator_is_derived_and_conflicts_publish_no_partial_headers",
+      "exit": 0,
+      "seconds": 0.008,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "db::memo::local_declaration_inputs::tests::local_owner_locator_is_derived_and_conflicts_publish_no_partial_headers",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd",
+      "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111"
+    },
+    {
+      "selector": "db::memo::local_declaration_inputs::tests::unchanged_cold_impl_scopes_publish_headers_without_entering_enclosing_functions",
+      "exit": 0,
+      "seconds": 0.324,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "db::memo::local_declaration_inputs::tests::unchanged_cold_impl_scopes_publish_headers_without_entering_enclosing_functions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd",
+      "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111"
+    },
+    {
+      "selector": "db::memo::local_declaration_inputs::tests::unchanged_local_structs_publish_selected_headers_for_the_shared_schema_query",
+      "exit": 0,
+      "seconds": 0.011,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-6.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "db::memo::local_declaration_inputs::tests::unchanged_local_structs_publish_selected_headers_for_the_shared_schema_query",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "db94f442a9433eec1461e5fee6227e03e5da2c4b846059a9c1d639eecc39b1cd",
+      "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111"
+    }
+  ],
+  "control_summary": {
+    "pass": 7,
+    "total": 7,
+    "session_id": 91409,
+    "initial": "09f530",
+    "terminal": "bff5bc",
+    "queue_exit": 0
+  },
+  "stock": [
+    {
+      "path": "tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+      "edition": 2015,
+      "sha256": "aad0ede2f330c1d0c8e4f8bfedeec050ad194511099765ae2eb246c204aff7ae",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "facts": {
+        "classified_operation_candidates": 36,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 35,
+        "vm_outcomes": 35
+      },
+      "seconds": 4.925,
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "7cf99d9080d6ae6a53a6d4b2a294aee3e092d414bc2d6bd86b2fbc522a23118d"
+      ]
+    }
+  ],
+  "stock_summary": {
+    "pass": 1,
+    "total": 1,
+    "session_id": 16128,
+    "initial": "277945",
+    "terminal": "cd67f0",
+    "queue_exit": 0,
+    "new_historical_witnesses": 0
+  },
+  "scope": "Shared exact-row metadata kernel now consumes genuine entered or captured cold declaration facts. Cold required-pub-in-blocks scopes/headers/signatures all4editions pass source-only controls without BodyStructure/Thunk/SourceLocalPlan/BodyEnvironment. Whole required-pub-in-blocks runtime is NOT fixed or rerun. Existing ordinary entered publisher and atomic/producer/currentness behavior retained.",
+  "holds": [
+    "cold runtime Type-prefix/member/callee admission join",
+    "nested/generated cold parent proof gaps",
+    "scope-plan memo retention across consumers",
+    "global impl and Drop completeness",
+    "generic initializer application packets",
+    "nominal once/template correctness and structural4vs3",
+    "full architecture/interpreter/runtime/JIT gates"
+  ],
+  "acceptance_reports": {
+    "upstream_runtime_acceptance": "incomplete;1current regression only, older11/14selected V37 evidence remains tied to olderCLI",
+    "diagnostic_compatibility": "unexecuted/separate",
+    "compiler_tooling_compatibility": "unexecuted/separate",
+    "full_suite_compatibility": "incomplete"
+  },
+  "raw_files": [
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/after-cli.json",
+      "sha256": "b77003c0931a94905fe2a8d13c5d126657fbfde2593a5a0395a2dfc9ed802f19"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/after-lib.json",
+      "sha256": "2807340be329461ac4ca166b23aa821bbf055fba9858ff59935c526bda8826ca"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/before.json",
+      "sha256": "e6e4224473da373830a8bd225407aceba33af61fb5ec47bde1a2a1a7c8775b6b"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/cli-build.log",
+      "sha256": "84f1ad052181bb33375e3ae98d71f7c43e361e696f716d6efe231a700a09dd19"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-0.log",
+      "sha256": "bbb4b5075099c8533cf5c9c03e104459f8ef5b98c340a5177dfbe132c2b190bc"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-1.log",
+      "sha256": "20bfddd03effdd11d92be9fd32733db394e6da6829e644a82877ac002f59d3a4"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-2.log",
+      "sha256": "b13558804800cc3247b23d369f22ba0fcf378a0ab9658deddc89e36e87897178"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-3.log",
+      "sha256": "34c3410758c2db4b53352250b63f18c05be6515281026edf35b2791e66e7b3e7"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-4.log",
+      "sha256": "d8fd0694d0c8f52e511dfd792d7942c0f81f7a93336f28442206af9c97c268e1"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-5.log",
+      "sha256": "c596f083b222b917ebd403cac48061f715f87aa8f3fba25ba72e51fb70ab9b4c"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-6.log",
+      "sha256": "753eaf530800cb9d3275edeb653fa0cb82e2512983b5dd5fdb914346fb38ecfe"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/control-queue.log",
+      "sha256": "b7041bd1c353ec01601077b5fa0fa60941c3d66d04ef5ad0c0fbf737bfe525c5"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/controls.json",
+      "sha256": "0c0c2fd14f23e9caad119e89b5f6f8cda8a5c1f542c420603fbc98ec8924ac02"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/lib-build.log",
+      "sha256": "81f20698f658f8555bdacdd355dd19a746aeff9ad516c239a37fa5e723624899"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/root-index-audit.json",
+      "sha256": "1618dc64f31484369b734eea33999208a0a056fe9a7eae9860d3d01bc3cab628"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/selected-controls.json",
+      "sha256": "07bc940123ceb701a1b10df4b5a3150d4913c6053a30059a5e0c05d83abb0ee9"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/selector-proof.json",
+      "sha256": "503e5101ff166af5344f88a7de28f2b029be18e4d4b3edc0b7474571bc07ba16"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/source-checkpoint-plan.json",
+      "sha256": "86ec1e856974554ef4df8b364ea34dfea6f4f4f0a7bf5787a3cce17cb5963249"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/stock-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/stock-0.stdout",
+      "sha256": "f290725e3be535141b2d26a97dd773e990d8fd8731111b5def9ca1cf42432268"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/stock-queue.log",
+      "sha256": "ad2845b12fefa1b20bbf1192b843bbe619f5ccdbdd832bc0c7be93296e64e6c9"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/stock-results.json",
+      "sha256": "da475e8fa0b010e9ef4b41026b3318aa61bb242571310f77000bf9c0b4ac013c"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/stock-roots.json",
+      "sha256": "49171ba15f813c3d1408625274afbf829bb1694f73a66a7ff288f4fe7fe46f22"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/candidate-v40/test-list.txt",
+      "sha256": "510fd183139f96efaf8883d3de13594652d4baecdf46818a1311942502c654f4"
+    }
+  ]
+}

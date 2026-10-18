@@ -11,6 +11,7 @@ pub(super) struct LocalDeclarationLocation {
     member: bool,
 }
 struct LocalPlan {
+    parent: u32,
     plan: Arc<DeclarationScopePlan>,
     items: BTreeMap<(u32, u32), u32>,
     members: BTreeMap<(Digest, (u32, u32)), u32>,
@@ -104,6 +105,7 @@ impl LocalImplOwners {
                 let index = u32::try_from(prepared.plans.len()).map_err(|_| resource())?;
                 prepared.plans.try_reserve(1).map_err(|_| resource())?;
                 prepared.plans.push(LocalPlan {
+                    parent: u32::try_from(parent).map_err(|_| resource())?,
                     plan,
                     items,
                     members,
@@ -152,6 +154,13 @@ impl LocalImplOwners {
     }
     pub(super) fn owner(&self, range: SourceRange) -> Option<LocalDeclarationLocation> {
         self.owners.get(&key(range)).copied()
+    }
+    pub(super) fn scope(
+        &self,
+        location: LocalDeclarationLocation,
+    ) -> (u32, &Arc<DeclarationScopePlan>) {
+        let scope = &self.plans[location.plan as usize];
+        (scope.parent, &scope.plan)
     }
     pub(super) fn item(&self, location: LocalDeclarationLocation) -> &ItemOutline {
         let facts = self.plans[location.plan as usize].plan.declarations();

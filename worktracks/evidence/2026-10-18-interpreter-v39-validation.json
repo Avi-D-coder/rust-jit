@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "candidate": "V39",
+  "source_sha256": "b291ba8f408964e3299b4edc16bbf7e219bfa8ae23c8117f11dc132c81a387bd",
+  "head": "53a1246b0c95399dd98046459da0a260e60f3e63",
+  "source_unchanged": true,
+  "build": {
+    "exit": 101,
+    "session_id": 43986,
+    "initial": "946895",
+    "terminal": "058b4b",
+    "seconds": 13.57,
+    "log_sha256": "e29bfffae122f9e9a06e9fbf6f07a9bb34f261b0dd668906c165e2bd687ee65f",
+    "errors": "Five E0596 at associated_declarations.rs135-144, one cause: Database::input requires &mut Database for dependency tracing."
+  },
+  "cli": "UNEXECUTED",
+  "controls": "UNEXECUTED",
+  "runtime": "UNEXECUTED",
+  "acceptance": "No feature or runtime pass"
+}

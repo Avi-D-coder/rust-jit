@@ -4,7 +4,12 @@ use super::*;
 use crate::{
     core::digest::StableEncode,
     frontend::source_body_context::PreparedBodyContext,
-    syntax::{ast_adapter::tokens, outline::DeclarationContext},
+    syntax::{
+        ast_adapter::tokens,
+        entered_macros::DeclarationFacts,
+        outline::{BodyHandle, DeclarationContext, ScopeKey},
+        parse::ParsedFile,
+    },
 };
 use ra_ap_syntax::{AstNode, TextRange, ast};
 
@@ -48,10 +53,57 @@ impl Database {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
+        let source = context.source();
+        self.publish_declaration_metadata(
+            source.parsed(),
+            source.body(),
+            source.scope(),
+            context.facts().declaration_facts(),
+            definition,
+        )
+    }
+    /// The same exact-row publication kernel for a retained cold declaration
+    /// scope. Its owner proof supplies no executable BodyIndex or bindings.
+    pub(crate) fn publish_captured_declaration(
+        &mut self,
+        scope: &crate::frontend::associated_declarations::CapturedDeclarationScope<'_>,
+        definition: Digest,
+    ) -> QueryPoll<LocalDeclarationPublication> {
+        if self.run_active {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "cold declaration publication during run",
+            )));
+        }
+        if let Err(error) = self
+            .require_coordinator()
+            .and_then(|()| scope.require_current(self))
+        {
+            return QueryPoll::Ready(Err(error));
+        }
+        let parsed = match scope.parsed() {
+            Ok(parsed) => parsed,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        self.publish_declaration_metadata(
+            parsed,
+            scope.body(),
+            scope.scope(),
+            scope.facts(),
+            definition,
+        )
+    }
+    fn publish_declaration_metadata(
+        &mut self,
+        parsed: &ParsedFile,
+        body: &BodyHandle,
+        scope: &ScopeKey,
+        facts: &DeclarationFacts,
+        definition: Digest,
+    ) -> QueryPoll<LocalDeclarationPublication> {
         QueryPoll::Ready((|| {
             let invalid = |message| fault("LRR-E-EXPANSION-INPUT", message);
-            let mut selected = context
-                .facts()
+            let mut selected = facts
                 .declarations()
                 .filter(|row| row.item.def_key.fingerprint() == definition);
             let row = selected
@@ -63,12 +115,11 @@ impl Database {
             if let Some(producer) = row.attribute_input {
                 return Ok(LocalDeclarationPublication::NeedsProducer(producer));
             }
-            let source = context.source();
             let item = &row.item;
-            if !source.body().range.contains(item.declaration_span)
-                || item.header.profile != source.parsed().key().profile
-                || item.scope.crate_key != source.scope().crate_key
-                || item.scope.module_path != source.scope().module_path
+            if !body.range.contains(item.declaration_span)
+                || item.header.profile != parsed.key().profile
+                || item.scope.crate_key != scope.crate_key
+                || item.scope.module_path != scope.module_path
                 || item.def_key.crate_key != item.scope.crate_key
                 || item.def_key.module_path != item.scope.module_path
             {
@@ -76,8 +127,7 @@ impl Database {
             }
             // A block-local enum's discriminant constant is declared by its
             // variant (E-R5-013).
-            let syntax = source
-                .parsed()
+            let syntax = parsed
                 .syntax_at(item.declaration_span, |node| {
                     ast::Item::can_cast(node.kind()) || ast::Variant::can_cast(node.kind())
                 })?
@@ -96,11 +146,11 @@ impl Database {
             let rows = [
                 (
                     InputKey::LocalDeclarationOwner(definition),
-                    InputValue::LocalDeclarationOwner(source.index().body().clone()),
+                    InputValue::LocalDeclarationOwner(body.key()),
                 ),
                 (
                     InputKey::DefinitionSource(definition),
-                    InputValue::DefinitionSource(source.parsed().key()),
+                    InputValue::DefinitionSource(parsed.key()),
                 ),
                 (
                     InputKey::DefinitionHeader(definition),
@@ -124,11 +174,7 @@ impl Database {
                     item.def_key.item_kind,
                     crate::source::manifest::ItemKind::Constant
                         | crate::source::manifest::ItemKind::Static
-                ) || context
-                    .facts()
-                    .members
-                    .iter()
-                    .any(|member| std::ptr::eq(member, row)))
+                ) || facts.members.iter().any(|member| std::ptr::eq(member, row)))
             {
                 rows.push((
                     InputKey::DefinitionBody(definition),
@@ -136,7 +182,6 @@ impl Database {
                 ));
             }
             let mut staged = BTreeMap::new();
-            let mut bytes = 0;
             for (key, value) in rows {
                 if let Some(current) = self.inputs.get(&key) {
                     // Semantic header hashes deliberately omit attachments.
@@ -167,7 +212,6 @@ impl Database {
                     }
                     continue;
                 }
-                bytes = account_add(bytes, input_metadata_bytes(&key, &value)?)?;
                 staged.insert(
                     key,
                     InputRecord {
@@ -179,7 +223,6 @@ impl Database {
             if staged.is_empty() {
                 return Ok(LocalDeclarationPublication::Published(definition));
             }
-            let _ = bytes; // E-R5-006: no byte accounting.
             let revision = self.revision.checked_add(1).ok_or_else(|| {
                 fault("LRR-E-ID-EXHAUSTED", "local declaration revision exhausted")
             })?;

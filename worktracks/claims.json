@@ -1229,7 +1229,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "E-R5-007 common local const/static VM initializer admission, reusing genuine local body locator, same source-call mechanism and initializer continuation/static storage. Read/precode now; production implementation after validator current build release. No new evaluator/pure extension/static checker/caps. See worktracks/evidence/2026-10-18-local-initializer-vm-precode.json. No acceptance yet. V5 compiled, 5 existing controls pass, new witness held by actual declared result Type header support; extending common header service, not initializer evaluator.",
+      "scope": "E-R5-007 common local const/static VM initializer admission, reusing genuine local body locator, same source-call mechanism and initializer continuation/static storage. Read/precode now; production implementation after validator current build release. No new evaluator/pure extension/static checker/caps. See worktracks/evidence/2026-10-18-local-initializer-vm-precode.json. No acceptance yet. V5 compiled, 5 existing controls pass, new witness held by actual declared result Type header support; extending common header service, not initializer evaluator. Solo root continuation: cold actual canonical scope borrows shared declaration plan and delegates to the existing exact-row metadata publication kernel; no executable parent preparation or runtime MemberIndex closure claim. See cold-declaration-publication.md.",
       "paths": [
         "crates/lrr/src/db/local_declaration_inputs.rs",
         "crates/lrr/src/frontend/ordinary_local_callables.rs",
@@ -1238,11 +1238,14 @@
         "crates/lrr/src/syntax/node_lookup.rs",
         "crates/lrr/src/frontend/local_body_context.rs",
         "crates/lrr/src/expand/source_declarative/retained_child_readiness_tests.rs",
-        "crates/lrr/src/frontend/declaration_return_types.rs"
+        "crates/lrr/src/frontend/declaration_return_types.rs",
+        "crates/lrr/src/db/local_declaration_inputs_tests.rs",
+        "crates/lrr/src/frontend/associated_declarations.rs",
+        "crates/lrr/src/frontend/declaration_impl_owners.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T08:31:23.730682+00:00",
+      "updated_at": "2026-10-18T16:24:36.565608+00:00",
       "review_after": "2026-10-18T08:31:23.730682+00:00"
     },
     {

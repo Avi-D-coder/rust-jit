@@ -2768,7 +2768,8 @@
         "worktracks/evidence/2026-10-14-byte-scalar-components.json",
         "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
         "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
-        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json"
+        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v40-validation.json"
       ],
       "release_complete": false,
       "validation_scope": "Original-source call component accepted under E-57-001: 763 actual macOS Rust1.99 host/doc tests and all 81 selected controls, Gate00/01/02 and strict audits pass. Each task-card acceptance clause has observed test evidence. Lexical/generated catalogs, full source/context/dictionary IDs, traits/member/composite/coercion semantics and native/JIT/service integration remain mandatory and unverified; release_complete is false.",
@@ -2870,7 +2871,7 @@
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
         "guest_jit_authorized": false
       },
-      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
+      "latest_component_scope": "V40 shared exact-row entered/cold metadata publisher compilerchecked;7/7affectedcontrols plus1/1currentordinaryruntime regression. Required-pub cold3scopes/signatures all4ed sourcecomponent only; runtimeTypeprefix/member/calleejoin stillabsent. No status/taskrelease promotion."
     },
     {
       "id": "T033",
@@ -19903,7 +19904,8 @@
       "artifact_paths": [
         "worktracks/candidates/sol-type-alias-prelude-integration-v1/HANDOFF.md",
         "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
-        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json"
+        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v40-validation.json"
       ],
       "title": "SourceView propagation",
       "acceptance_contract": "TR003\u2013TR005, alias/field/return/default-Self variants. Depends: M017.",
@@ -19946,7 +19948,7 @@
           "scope": "Actual live Type/prelude/alias/query consumers; unconsumed future generated constant/full-role models retained as prototypes. Shared Type/Value proof merge and real qualified consumer Value/module export replay remain required. No task or runtime acceptance."
         }
       ],
-      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
+      "latest_component_scope": "V40 shared exact-row entered/cold metadata publisher compilerchecked;7/7affectedcontrols plus1/1currentordinaryruntime regression. Required-pub cold3scopes/signatures all4ed sourcecomponent only; runtimeTypeprefix/member/calleejoin stillabsent. No status/taskrelease promotion."
     },
     {
       "id": "M019",
@@ -20029,12 +20031,13 @@
       "fixture_ids": [],
       "artifact_paths": [
         "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
-        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json"
+        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v40-validation.json"
       ],
       "title": "Source member identification",
       "acceptance_contract": "TR003/TR019/TR020; mutability failure never picks lower-ranked member. Depends: M024.",
       "release_complete": false,
-      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
+      "latest_component_scope": "V40 shared exact-row entered/cold metadata publisher compilerchecked;7/7affectedcontrols plus1/1currentordinaryruntime regression. Required-pub cold3scopes/signatures all4ed sourcecomponent only; runtimeTypeprefix/member/calleejoin stillabsent. No status/taskrelease promotion."
     },
     {
       "id": "M026",

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-040",
+  "baseline": "53a1246b0c",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/local_declaration_inputs.rs",
+      "sha256": "cadd8751c98b9fc7ff96470a39d317e7021327354e91182f73884488294e7c51"
+    },
+    {
+      "path": "crates/lrr/src/db/local_declaration_inputs_tests.rs",
+      "sha256": "69b7a5404a9d585d5f5cbcec375191df28a22f32612cd9373e0ccc9152dcb95b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_declarations.rs",
+      "sha256": "ec1d862667fbc2d1194682e6ae270109c34b74c99556f2da9d7ae99e93d241f7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
+      "sha256": "a158e09b7f9ae8c8a86a76836738046f8c312da7ebbe3025f335c4f97f4b1768"
+    }
+  ],
+  "status": "source-reviewed-uncompiled-unexecuted",
+  "ordinary_route": [
+    "PreparedBodyContext::require_current",
+    "Database::publish_local_declaration_checked",
+    "Database::publish_declaration_metadata"
+  ],
+  "cold_route": [
+    "PreparedOriginalAssociatedDeclarations::declaration_scope",
+    "LocalImplOwners::scope",
+    "CapturedDeclarationScope::require_current",
+    "Database::publish_captured_declaration",
+    "Database::publish_declaration_metadata"
+  ],
+  "removed_route": "Entered publication no longer duplicates the exact-row kernel or requires BodyIndex for metadata owner identity; obsolete byte census removed.",
+  "review": [
+    {
+      "mode": 1,
+      "finding": "No interpreter/parser/evaluator added; existing production publisher uses same fact-row kernel as cold adapter."
+    },
+    {
+      "mode": 2,
+      "finding": "No literal/break generated payload route. Captured canonical local owners only; generated missing-parent proof remains existing gap, no runtime semantics exclusion added."
+    },
+    {
+      "mode": 3,
+      "finding": "No method/inference dispatch changed. Constant/method signatures only metadata requests."
+    },
+    {
+      "mode": 4,
+      "finding": "No supported origin refusal introduced; new scope is privately derived from actual retained canonical local parent, not fabricated context."
+    },
+    {
+      "mode": 5,
+      "finding": "No BodyStructure, binding planning or executable cold body allowed by new route; selected-member signatures remain body-independent. No pattern engine changed."
+    },
+    {
+      "mode": 6,
+      "finding": "Opaque scope borrows existing Arc plan, no repeated parse/plan construction. Publication performs existing exact-row scan/direct syntax attach once per requested metadata row."
+    },
+    {
+      "mode": 7,
+      "finding": "Exact parent input/source/cfg checks at cold coordinator publication; existing captured source lease registry lookup only. No namespace census or per-dispatch work. No member/Drop absence proof."
+    },
+    {
+      "mode": 8,
+      "finding": "Shared retained declaration facts/parser/body metadata; no BodyIndex/data-tree clone; syntax_at follows direct range descent."
+    }
+  ],
+  "cold_cost": "O(log canonical owners + requested scope rows + relevant header tokens + existing retained source-lease lookup) per cold publication. Zero added installed operation cost; no speed claim.",
+  "evidence_required": [
+    "unchanged required-pub-in-blocks cold declaration rows + signatures all4editions without body/binding queries",
+    "cold stale-parent rejection atomic",
+    "existing entered exact-row/atomic/producer regressions"
+  ],
+  "holds": [
+    "runtime MemberIndex publication not connected",
+    "shared declaration-only Type-prefix and selected-callee cold authority still needed",
+    "nested/generated cold parent proof gaps",
+    "global impl/Drop completeness",
+    "all interpreter/JIT gates"
+  ],
+  "resource_policy": "No new budgets/caps/accounting; removed obsolete publisher byte arithmetic. Checked real IDs/revision/indexes and allocation errors preserved.",
+  "formatting": "Pinned rustfmt1.99 in-place, skip_children=true; only4reservedfiles touched. Review renewed against formatted sources; actual entered/cold adapters and source guards rechecked.",
+  "interface_correction": "V39 proved DB read API needs mutable handle for dependency tracing. Exact single mutability change reviewed separately; all source/currentness conditions unchanged.",
+  "source_review_after_validation": {
+    "source_sha256": "c3f4f227fb9b7ddfb42f0131f59bd349d93928cf60bfc53cdf3af0b2cfc98111",
+    "conclusion": "bounded shared metadata publication component clear; no runtime cold-impl feature closure",
+    "inspected_symbols": [
+      "CapturedDeclarationScope::require_current",
+      "PreparedOriginalAssociatedDeclarations::declaration_scope",
+      "LocalImplOwners::scope",
+      "Database::publish_local_declaration_checked",
+      "Database::publish_captured_declaration",
+      "Database::publish_declaration_metadata"
+    ],
+    "actual_evidence": "V40 both builds,7exact control bodies,1unchanged whole-main runtime pass; V39 interface failure preserved",
+    "unexecuted": "full generated/nested cold-parent matrix, runtime method/member join, full milestone/JIT gates",
+    "source_unchanged_after_review": true
+  }
+}

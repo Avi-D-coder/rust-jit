@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "path": "crates/lrr/src/frontend/associated_declarations.rs",
+  "prior_sha256": "b8d40a2d056e6647ec2a97276794c46c68a1ef88fe73baa03bdc6a4f7180b919",
+  "new_sha256": "ec1d862667fbc2d1194682e6ae270109c34b74c99556f2da9d7ae99e93d241f7",
+  "cause": "Actual DB input read API records dependencies through a mutable Database handle.",
+  "change": "Borrow-only interface correction; no condition, input set, parser, publication or runtime behavior changed. Prior V39 failed source retained with its actual terminal.",
+  "acceptance": "uncompiled/unexecuted"
+}

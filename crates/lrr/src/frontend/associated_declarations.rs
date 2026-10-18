@@ -99,6 +99,56 @@ pub(crate) struct AssociatedOwnerHeader<'a> {
     /// Actual Outline child-scope identity, prepared once for this owner.
     pub(crate) member_owner: Option<Digest>,
 }
+/// Actual captured lexical declaration scope, retaining its canonical plan.
+/// This grants metadata publication only, never executable body/name authority.
+/// Fields are private: only a checked canonical local owner can supply it.
+pub(crate) struct CapturedDeclarationScope<'a> {
+    source: &'a PreparedSourceView,
+    parent: &'a ItemOutline,
+    plan: &'a Arc<crate::syntax::declaration_scope_plan::DeclarationScopePlan>,
+}
+impl CapturedDeclarationScope<'_> {
+    pub(crate) fn body(&self) -> &crate::syntax::outline::BodyHandle {
+        self.plan.body()
+    }
+    pub(crate) fn scope(&self) -> &crate::syntax::outline::ScopeKey {
+        self.plan.scope()
+    }
+    pub(crate) fn facts(&self) -> &crate::syntax::entered_macros::DeclarationFacts {
+        self.plan.declarations()
+    }
+    pub(crate) fn parsed(&self) -> Result<&crate::syntax::parse::ParsedFile, Diagnostic> {
+        Ok(self.source.retained_declaration_parser()?.as_ref())
+    }
+    /// Cold coordinator check of this exact captured parent. No namespace
+    /// census, body preparation, producer execution or substitute parser.
+    pub(crate) fn require_current(&self, db: &mut crate::db::memo::Database) -> Result<(), Diagnostic> {
+        publication(self.source, self.parent)?;
+        let parent = self.parent.def_key.fingerprint();
+        let current = db
+            .prepared_source(self.source.selection())?
+            .ok_or_else(|| fault("cold declaration source publication absent"))?;
+        if !self.source.same_publication(&current)
+            || self.parent.body.as_ref() != Some(self.plan.body())
+            || self.parent.scope != *self.plan.scope()
+            || self.parsed()?.key() != *self.plan.parse()
+            || !matches!(db.input(&InputKey::DefinitionSource(parent)).as_deref(),
+                Some(InputValue::DefinitionSource(parse)) if parse == self.plan.parse())
+            || !matches!(db.input(&InputKey::DefinitionHeader(parent)).as_deref(),
+                Some(InputValue::DefinitionHeader(header)) if header == &self.parent.header)
+            || !matches!(db.input(&InputKey::DefinitionBody(parent)).as_deref(),
+                Some(InputValue::DefinitionBody(body)) if body == self.plan.body())
+            || !matches!(db.input(&InputKey::DeclarationContext(parent)).as_deref(),
+                Some(InputValue::DeclarationContext(context))
+                    if context.scope == self.parent.scope && context.range == self.parent.declaration_span)
+            || !matches!(db.input(&InputKey::CrateCfg(self.parent.scope.crate_key)).as_deref(),
+                Some(InputValue::CrateCfg(cfg)) if cfg.fingerprint() == self.plan.cfg())
+        {
+            return Err(fault("cold declaration owning publication changed"));
+        }
+        Ok(())
+    }
+}
 pub(crate) enum OriginalAssociatedTarget<'a> {
     Declaration(&'a ItemOutline),
     Producer(&'a DeclarationProducer),
@@ -211,10 +261,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
             .iter()
             .map(|r| r.associated.len())
             .chain(scan.impls().iter().map(|r| r.associated.len()))
-            .try_fold(0usize, |n, m| {
-                n.checked_add(m)
-                    .ok_or_else(resource)
-            })?;
+            .try_fold(0usize, |n, m| n.checked_add(m).ok_or_else(resource))?;
         let mut spans = reserve::<((u32, u32), u32)>(outline.items.len())?;
         for (i, item) in outline.items.iter().enumerate() {
             spans.push((
@@ -271,12 +318,14 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
                 publication(source, item)?;
                 member_owner = Some(match kind {
                     OwnerKind::Trait => item.def_key.fingerprint(),
-                    OwnerKind::Impl => item.def_key.enclosing_impl.ok_or_else(|| {
-                        fault("original associated impl identity is absent")
-                    })?,
+                    OwnerKind::Impl => item
+                        .def_key
+                        .enclosing_impl
+                        .ok_or_else(|| fault("original associated impl identity is absent"))?,
                 });
             }
-            if canonical.is_none() && matches!(kind, OwnerKind::Impl)
+            if canonical.is_none()
+                && matches!(kind, OwnerKind::Impl)
                 && let Some(location) = local.owner(range)
             {
                 member_owner = local.item(location).def_key.enclosing_impl;
@@ -532,6 +581,26 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
             .binary_search_by_key(&identity, |r| r.identity)
             .ok()?];
         Some(self.owner_at(row))
+    }
+    /// Share the retained real scope of this selected cold local impl.
+    /// A missing canonical/generated parent remains pending; no plan is rebuilt.
+    pub(crate) fn declaration_scope(
+        &self,
+        identity: Digest,
+    ) -> Option<CapturedDeclarationScope<'_>> {
+        let row = &self.owners[self
+            .owners
+            .binary_search_by_key(&identity, |row| row.identity)
+            .ok()?];
+        let CanonicalLocation::Local(location) = row.canonical? else {
+            return None;
+        };
+        let (parent, plan) = self.local.scope(location);
+        Some(CapturedDeclarationScope {
+            source: self.source,
+            parent: &self.source.outline().items[parent as usize],
+            plan,
+        })
     }
     pub(crate) fn associated(&self, identity: Digest) -> Option<OriginalAssociatedSlot<'_>> {
         let row = &self.slots[self

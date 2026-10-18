@@ -139,6 +139,123 @@ fn absent(db: &Database, definition: Digest) {
     }
 }
 #[test]
+fn unchanged_cold_impl_scopes_publish_headers_without_entering_enclosing_functions() {
+    use crate::frontend::associated_declarations::{
+        AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
+    };
+    use crate::source::manifest::ItemKind;
+    const COLD: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/privacy/required-pub-in-blocks.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let (provider, _, inputs) =
+            crate::expand::source_declarative::assembly::tests::world(COLD, edition);
+        let view = provider.module_source();
+        let mut db = Database::default();
+        inputs.publish(&mut db).unwrap();
+        db.trace.detailed = true;
+        let AssociatedDeclarationsPreparation::Original(joined) =
+            PreparedOriginalAssociatedDeclarations::prepare(view).unwrap()
+        else {
+            panic!("upstream original requires genuine canonical owner");
+        };
+        assert_eq!(joined.scan().impls().len(), 3);
+        let mut signatures = 0;
+        for implementation in joined.scan().impls() {
+            let scope = joined
+                .declaration_scope(implementation.identity)
+                .expect("unchanged cold impl has its genuine enclosing function");
+            let owner = scope.body().key();
+            assert!(
+                !db.inputs
+                    .contains_key(&InputKey::BodyEnvironment(owner.clone()))
+            );
+            for row in scope.facts().declarations() {
+                let definition = row.item.def_key.fingerprint();
+                assert_eq!(
+                    ready(db.publish_captured_declaration(&scope, definition)),
+                    LocalDeclarationPublication::Published(definition)
+                );
+                assert!(
+                    matches!(db.input(&InputKey::LocalDeclarationOwner(definition)).as_deref(),
+                    Some(InputValue::LocalDeclarationOwner(actual)) if actual == &owner)
+                );
+            }
+            for member in &scope.facts().members {
+                if member.item.def_key.item_kind != ItemKind::Function {
+                    continue;
+                }
+                let definition = member.item.def_key.fingerprint();
+                let selected =
+                    ready(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)));
+                assert!(matches!(selected.value.as_ref(),
+                    QueryValue::FunctionSignature(signature) if signature.definition == definition));
+                signatures += 1;
+            }
+            assert!(!db.inputs.contains_key(&InputKey::BodyEnvironment(owner)));
+        }
+        assert_eq!(signatures, 2);
+        assert!(!db.trace.events.iter().any(|event| matches!(
+            event.key,
+            QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::SourceLocalPlan(_)
+        )));
+    }
+}
+#[test]
+fn cold_declaration_publication_rejects_changed_parent_before_any_child_input() {
+    use crate::frontend::associated_declarations::{
+        AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
+    };
+    const COLD: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/privacy/required-pub-in-blocks.rs"
+    );
+    let (provider, _, inputs) =
+        crate::expand::source_declarative::assembly::tests::world(COLD, 2024);
+    let view = provider.module_source();
+    let mut db = Database::default();
+    inputs.publish(&mut db).unwrap();
+    let AssociatedDeclarationsPreparation::Original(joined) =
+        PreparedOriginalAssociatedDeclarations::prepare(view).unwrap()
+    else {
+        panic!("upstream original owner absent");
+    };
+    let scope = joined
+        .declaration_scope(joined.scan().impls()[0].identity)
+        .unwrap();
+    let parent = scope.body().def_key;
+    let member = scope
+        .facts()
+        .members
+        .first()
+        .unwrap()
+        .item
+        .def_key
+        .fingerprint();
+    let Some(InputValue::DefinitionHeader(mut changed)) = db
+        .input(&InputKey::DefinitionHeader(parent))
+        .as_deref()
+        .cloned()
+    else {
+        panic!("actual parent header absent");
+    };
+    changed.tokens[0].text.push('_');
+    let mut rows = source_rows(&db);
+    rows.insert(
+        InputKey::DefinitionHeader(parent),
+        InputValue::DefinitionHeader(changed),
+    );
+    db.publish_inputs(rows).unwrap();
+    let before = stamps(&db);
+    let revision = db.revision;
+    assert!(matches!(
+        db.publish_captured_declaration(&scope, member),
+        QueryPoll::Ready(Err(_))
+    ));
+    assert_eq!(db.revision, revision);
+    assert_eq!(stamps(&db), before);
+    absent(&db, member);
+}
+#[test]
 fn unchanged_local_structs_publish_selected_headers_for_the_shared_schema_query() {
     for edition in [2015, 2018, 2021, 2024] {
         let (mut db, context) = setup(ORIGINAL, edition);
