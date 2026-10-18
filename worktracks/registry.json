@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T19:20:24.882299+00:00",
+  "updated_at": "2026-10-18T19:33:38.719857+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -731,23 +731,23 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "add23d99d961f12fda5ed19367846e510308919f",
+    "baseline_git_head": "e6e5ea2ab6720e1a4b4be416c1f975f5c335ac66",
     "working_tree": "inherited_dirty_plus_current_source_components",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V67/V68 solo held component: shared iteration Item projection uses Component::project_term/nominal_field, deleting a partial duplicate switch; block/control result value/place share their existing enclosing continuation scope in Frame::new. V67:6/6selected unchanged upstream mains and8/9focused controls, with full hygiene all4editions via coordinator. V68:4/4selected unchanged upstream mains and6/6focused controls; macro-2/macro-stmt also directly pass all4editions. Three newly passing originals versus recorded V63/V64 baselines, not a refreshed suite total. W::new();w.set(1) inference control remains failed/enabled and unexecuted V68; broad matrices/current milestone/full interpreter/JIT gates open. Evidence worktracks/evidence/2026-10-18-interpreter-v67-validation.json and worktracks/evidence/2026-10-18-interpreter-v68-validation.json.",
+    "validation": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "add23d99d961f12fda5ed19367846e510308919f",
+    "source_checkpoint_pushed": "e6e5ea2ab6720e1a4b4be416c1f975f5c335ac66",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": [
-      "worktracks/evidence/2026-10-18-interpreter-v67-validation.json",
-      "worktracks/evidence/2026-10-18-interpreter-v68-validation.json"
+      "worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json",
+      "worktracks/evidence/2026-10-18-interpreter-v72-validation.json"
     ]
   }
 }

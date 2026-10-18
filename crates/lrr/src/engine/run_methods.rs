@@ -180,13 +180,13 @@ impl RunMachine {
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         let unsize = alternatives.unsize;
-        // Impls of one trait that differ by its arguments (`PartialEq<i32>`,
-        // `PartialEq<M>`) share the method's receiver and declaration: the
-        // call starts against the trait's declaration and selects its impl
-        // by the evaluated arguments (`select_deferred_trait_call`).
+        // Impls of one trait share its declaration. The call starts against
+        // that declaration and selects its impl by all evaluated arguments,
+        // including the receiver's actual Self application even when the
+        // method has no other arguments (`select_deferred_trait_call`).
         let deferred = match (alternatives.functions.as_slice(), alternatives.same_trait) {
             ([_], _) => None,
-            (_, Some(trait_key)) if syntax.is_empty() && arguments.len() > 1 => {
+            (_, Some(trait_key)) if syntax.is_empty() => {
                 members
                     .trait_declaration(trait_key, method)
                     .map(|declaration| (trait_key, declaration))
@@ -310,7 +310,6 @@ impl RunMachine {
                     self_reference: false,
                     arguments: arguments.to_vec(),
                     alternatives: alternatives.functions,
-                    compare_from: 1,
                     result_self: None,
                 },
             }));

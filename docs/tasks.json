@@ -1827,7 +1827,8 @@
         "old_macro_specific_passes_establish_common_engine": false,
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
         "guest_jit_authorized": false
-      }
+      },
+      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json."
     },
     {
       "id": "T030",
@@ -2871,7 +2872,7 @@
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
         "guest_jit_authorized": false
       },
-      "latest_component_scope": "V67/V68 solo held component: shared iteration Item projection uses Component::project_term/nominal_field, deleting a partial duplicate switch; block/control result value/place share their existing enclosing continuation scope in Frame::new. V67:6/6selected unchanged upstream mains and8/9focused controls, with full hygiene all4editions via coordinator. V68:4/4selected unchanged upstream mains and6/6focused controls; macro-2/macro-stmt also directly pass all4editions. Three newly passing originals versus recorded V63/V64 baselines, not a refreshed suite total. W::new();w.set(1) inference control remains failed/enabled and unexecuted V68; broad matrices/current milestone/full interpreter/JIT gates open. Evidence worktracks/evidence/2026-10-18-interpreter-v67-validation.json and worktracks/evidence/2026-10-18-interpreter-v68-validation.json."
+      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json."
     },
     {
       "id": "T033",
@@ -19897,7 +19898,8 @@
         "worktracks/evidence/2026-10-14-macro-preparation-milestone.json",
         "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
         "worktracks/evidence/2026-10-14-adopted-source-registry.json"
-      ]
+      ],
+      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json."
     },
     {
       "id": "M018",
@@ -20054,7 +20056,8 @@
       "artifact_paths": [],
       "title": "Lazy dictionary fulfillment and calls",
       "acceptance_contract": "TR021\u2013TR023; selected method contract checked; other missing methods remain cold. Depends: M025.",
-      "release_complete": false
+      "release_complete": false,
+      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json."
     },
     {
       "id": "M027",

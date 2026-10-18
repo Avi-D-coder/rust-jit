@@ -294,7 +294,6 @@ impl RunMachine {
                                     self_reference: false,
                                     arguments: arguments.to_vec(),
                                     alternatives: functions,
-                                    compare_from: 0,
                                     result_self: self_term.filter(|_| returns_self),
                                 },
                             })))
@@ -362,11 +361,10 @@ impl RunMachine {
                 let declaration = members
                     .trait_declaration(trait_key, function)
                     .expect("checked");
-                // A declaration with a `Self`/`&Self` parameter takes the
-                // impl from it, so only the later arguments select among the
-                // trait's argument variants; one without (`fn from(value: T)
-                // -> Self`) compares every argument and constrains the
-                // impl's result to the reached Self.
+                // Every evaluated argument participates in signature
+                // unification, including any Self parameter. A declaration
+                // without one (`fn from(value: T) -> Self`) additionally
+                // constrains the impl's result to the reached Self.
                 let (has_self_parameter, returns_self) = match db
                     .fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration))
                 {
@@ -405,7 +403,6 @@ impl RunMachine {
                         self_reference: false,
                         arguments: arguments.to_vec(),
                         alternatives: candidates,
-                        compare_from: usize::from(has_self_parameter),
                         result_self,
                     },
                 })));
@@ -473,7 +470,6 @@ impl RunMachine {
                     self_reference: reference,
                     arguments: slots,
                     alternatives: Vec::new(),
-                    compare_from: 1,
                     result_self: None,
                 },
             })));
@@ -654,7 +650,7 @@ impl RunMachine {
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     }
                 }
-                let function = match self.select_by_arguments(db, &functions, 1, &views, None) {
+                let function = match self.select_by_arguments(db, &functions, &views, None) {
                     QueryPoll::Ready(Ok(Some(function))) => function,
                     QueryPoll::Ready(Ok(None)) => {
                         return QueryPoll::Ready(Err(Diagnostic::new(
@@ -710,7 +706,6 @@ impl RunMachine {
                         match self.select_by_arguments(
                             db,
                             &deferred.alternatives,
-                            deferred.compare_from,
                             &views,
                             deferred.result_self.as_ref(),
                         ) {
@@ -787,7 +782,7 @@ impl RunMachine {
     }
     /// rustc's impl selection by the trait's arguments: of several impls
     /// for one self type (`impl PartialEq<i32> for M` beside
-    /// `impl PartialEq<M> for M`), the one whose parameters (from `first`)
+    /// `impl PartialEq<M> for M`), the one whose parameters, receiver included,
     /// accept the arguments, through the shared signature substitution's
     /// unification. An unresolved literal unifies only with an integer
     /// (float) type or a parameter, and, when several still accept it,
@@ -797,7 +792,6 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         candidates: &[crate::core::digest::Digest],
-        first: usize,
         arguments: &[SelectionArgument],
         result_self: Option<&crate::traits::term::TyTerm>,
     ) -> QueryPoll<Option<crate::core::digest::Digest>> {
@@ -820,7 +814,7 @@ impl RunMachine {
             let mut compared = Vec::new();
             let mut fallback = true;
             let mut fits = true;
-            for (ordinal, argument) in arguments.iter().enumerate().skip(first) {
+            for (ordinal, argument) in arguments.iter().enumerate() {
                 // A parameter without a source template cannot be compared.
                 let Some(Some(hint)) = hints.get(ordinal) else {
                     continue;

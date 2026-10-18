@@ -315,10 +315,6 @@ pub(crate) struct DeferredTraitCall {
     /// arguments' reached types (empty for a trait-path call, whose impl is
     /// selected by its self type).
     pub(crate) alternatives: Vec<crate::core::digest::Digest>,
-    /// The first written argument the alternatives are compared on: 1 when
-    /// argument 0 is the receiver/`Self`, 0 for a type-relative call
-    /// (`u64::from(x)`) whose Self is written.
-    pub(crate) compare_from: usize,
     /// A type-relative call to a function whose trait declaration returns
     /// bare `Self` (`u64::from(x)`): the written Self, which every accepted
     /// impl's result must unify with (rejects the blanket `From<T> for T`

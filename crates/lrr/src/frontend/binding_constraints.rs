@@ -1127,11 +1127,12 @@ impl<'a> Component<'a> {
             || (is_call && methods::mentions_parameter(term))
         {
             instantiated = ready!(self.instantiated_declared(db, node, definition, term));
-            // An unsolved operand variable is not a source Type answer.
-            // Retain the declared parameter relation so its other argument,
-            // result and bound occurrences can still determine that variable.
+            // An open operand Type is not a source Type answer, including
+            // symbolic parameters from another still-undecided call result.
+            // Retain the declared relation so the receiver, other arguments,
+            // result and bounds can still determine the same variable.
             if !super::associated_types::contains_projection(term)
-                && super::call_contracts::contains_transaction_term(&instantiated)
+                && !super::call_contracts::closed_term(&instantiated)
             {
                 term
             } else {
