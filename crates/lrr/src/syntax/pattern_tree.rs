@@ -45,6 +45,7 @@ pub(crate) enum PatternLiteral {
     Char(char),
     Byte(u8),
     Str(String),
+    Bytes(std::sync::Arc<[u8]>),
 }
 impl Eq for PatternLiteral {}
 
@@ -108,6 +109,10 @@ impl PatternLiteral {
             Self::Str(value) => {
                 e.u8(5);
                 e.string(value);
+            }
+            Self::Bytes(value) => {
+                e.u8(6);
+                e.bytes(value);
             }
         }
     }
@@ -315,6 +320,7 @@ impl PatternNode {
                 .map_or(0, |(_, name)| name.capacity())
                 .saturating_add(subpattern.as_ref().map_or(0, |sub| node + sub.heap_bytes())),
             Self::Literal(PatternLiteral::Str(text)) => text.capacity(),
+            Self::Literal(PatternLiteral::Bytes(bytes)) => bytes.len(),
             Self::Literal(PatternLiteral::Float { decimal, .. }) => decimal.capacity(),
             Self::Range { start, end, .. } => [start, end]
                 .into_iter()
@@ -323,6 +329,7 @@ impl PatternNode {
                     Ok(RangeEndpoint::Literal(
                         PatternLiteral::Str(text) | PatternLiteral::Float { decimal: text, .. },
                     )) => text.capacity(),
+                    Ok(RangeEndpoint::Literal(PatternLiteral::Bytes(bytes))) => bytes.len(),
                     Ok(_) => 0,
                     Err(message) => message.capacity(),
                 })
@@ -509,6 +516,13 @@ fn literal(pattern: &ast::LiteralPat) -> Result<PatternLiteral, String> {
                 .map_err(|_| "invalid string pattern escape".to_string())?
                 .into_owned(),
         ),
+        SyntaxKind::BYTE_STRING if !negative => PatternLiteral::Bytes(std::sync::Arc::from(
+            ast::ByteString::cast(token)
+                .ok_or("byte string token cast failed")?
+                .value()
+                .map_err(|_| "invalid byte string pattern escape".to_string())?
+                .as_ref(),
+        )),
         _ => return Err("literal pattern kind requires its reached semantics".into()),
     })
 }
@@ -1036,7 +1050,7 @@ impl PartialEq for PatternTree {
 }
 impl Eq for PatternTree {}
 impl StableEncode for PatternTree {
-    const DOMAIN: &'static str = "lrr/v6/pattern-tree-identity";
+    const DOMAIN: &'static str = "lrr/v7/pattern-tree-identity";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.identity);
     }

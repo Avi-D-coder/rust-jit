@@ -1,0 +1,389 @@
+{
+  "schema_version": 1,
+  "candidate": "V53",
+  "head": "1c977b9a9658bcafb2d8bfbaaf6657369fa26f38",
+  "source_sha256": "f004d4a9035ed38e00ac84d110961ef8ea50e15a90893ee97ed1126ad0dac57b",
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "lib_build": {
+    "session": 51287,
+    "terminal": "1bf3ba",
+    "exit": 0,
+    "seconds": 16.51,
+    "binary_sha256": "56b8504fc9816174f6d79abdec758f8b06ede123bf20d1b33ae7cc3f4b5188c1"
+  },
+  "cli_build": {
+    "session": 70802,
+    "terminal": "f6cc67",
+    "exit": 0,
+    "binary_sha256": "49c3c1ff3833d3e9e2d223e805ba359e57f44c2ae6a4bc8119e4cee0e42f14e9"
+  },
+  "controls": [
+    {
+      "selector": "service::common_pattern_route_tests::a_generated_condition_cannot_capture_a_same_spelled_caller_without_its_scope_join",
+      "exit": 101,
+      "seconds": 0.124,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::a_generated_condition_cannot_capture_a_same_spelled_caller_without_its_scope_join",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "56b8504fc9816174f6d79abdec758f8b06ede123bf20d1b33ae7cc3f4b5188c1",
+      "source_sha256": "f004d4a9035ed38e00ac84d110961ef8ea50e15a90893ee97ed1126ad0dac57b"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+      "exit": 0,
+      "seconds": 0.913,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "56b8504fc9816174f6d79abdec758f8b06ede123bf20d1b33ae7cc3f4b5188c1",
+      "source_sha256": "f004d4a9035ed38e00ac84d110961ef8ea50e15a90893ee97ed1126ad0dac57b"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::conditional_pending_bindings_commit_once_through_the_shared_transaction_owner",
+      "exit": 0,
+      "seconds": 0.643,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::conditional_pending_bindings_commit_once_through_the_shared_transaction_owner",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "56b8504fc9816174f6d79abdec758f8b06ede123bf20d1b33ae7cc3f4b5188c1",
+      "source_sha256": "f004d4a9035ed38e00ac84d110961ef8ea50e15a90893ee97ed1126ad0dac57b"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+      "exit": 0,
+      "seconds": 0.9,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "56b8504fc9816174f6d79abdec758f8b06ede123bf20d1b33ae7cc3f4b5188c1",
+      "source_sha256": "f004d4a9035ed38e00ac84d110961ef8ea50e15a90893ee97ed1126ad0dac57b"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::reached_scalar_condition_chains_share_test_and_clause_cleanup_routes",
+      "exit": 0,
+      "seconds": 0.172,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::reached_scalar_condition_chains_share_test_and_clause_cleanup_routes",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "56b8504fc9816174f6d79abdec758f8b06ede123bf20d1b33ae7cc3f4b5188c1",
+      "source_sha256": "f004d4a9035ed38e00ac84d110961ef8ea50e15a90893ee97ed1126ad0dac57b"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+      "exit": 0,
+      "seconds": 1.744,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "56b8504fc9816174f6d79abdec758f8b06ede123bf20d1b33ae7cc3f4b5188c1",
+      "source_sha256": "f004d4a9035ed38e00ac84d110961ef8ea50e15a90893ee97ed1126ad0dac57b"
+    }
+  ],
+  "stock": [
+    {
+      "path": "tests/ui/array-slice-vec/byte-literals.rs",
+      "sha256": "fe8d3ce4bb7a95f7ef8bb5eaf3a75fb64b4ea377ab2da47d32c13980da1993e6",
+      "pass": true,
+      "exit": 0,
+      "facts": {
+        "classified_operation_candidates": 15860,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 4,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 161,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 8029,
+        "vm_outcomes": 8029
+      }
+    },
+    {
+      "path": "tests/ui/match/pattern-deref-miscompile.rs",
+      "sha256": "4223d65c42a69ebfb34a305684c80e19e91e6ad8604988f954dd63537fb5861e",
+      "pass": true,
+      "exit": 0,
+      "facts": {
+        "classified_operation_candidates": 347,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 186,
+        "vm_outcomes": 186
+      }
+    },
+    {
+      "path": "tests/ui/consts/repeat_match.rs",
+      "sha256": "bb2c655a3ecede4bcb5d02165c68607a649e1c9073b950709a7309cc945a8282",
+      "pass": true,
+      "exit": 0,
+      "facts": {
+        "classified_operation_candidates": 35,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 1,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 26,
+        "vm_outcomes": 26
+      }
+    },
+    {
+      "path": "tests/ui/array-slice-vec/vec-matching-legal-tail-element-borrow.rs",
+      "sha256": "0ad5a5ba094c902ac00dd4a4f589144aced093e15048040b3aee216efd4e253d",
+      "pass": true,
+      "exit": 0,
+      "facts": {
+        "classified_operation_candidates": 149,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 4,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 106,
+        "vm_outcomes": 106
+      }
+    }
+  ],
+  "source_review_hold": "Historical generated-binding control requires Unsupported even after ordinary lookup lowering exists. Successor executes the unchanged control source and checks actual definition-site result; no pass inferred from successful lowering.",
+  "scope": "Both builds pass; 4/4 selected unchanged whole-main runtime contracts pass; 5/6 existing host controls pass. Origins separately recorded once terminal. One measured new whole-main gain versus V52: byte-literals. No full milestone/JIT acceptance.",
+  "origin_controls": {
+    "total": 16,
+    "passed": 16,
+    "terminal": "128031",
+    "exit": 0,
+    "rows": [
+      {
+        "origin": "handwritten",
+        "edition": 2015,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "a729f1efca99243a8a7815d3cec3cb5c4b017f6ad30c7e21081b1db327a24ecd"
+      },
+      {
+        "origin": "handwritten",
+        "edition": 2018,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "ca19c577eff994c8515f1226c333d46489a0005a3b36dfa00dda3c4c54ea034e"
+      },
+      {
+        "origin": "handwritten",
+        "edition": 2021,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "34370c8f57fe064fd87e2846ce4d860eaf964100a5e023d99c8932534b5e2407"
+      },
+      {
+        "origin": "handwritten",
+        "edition": 2024,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "1c60db06d7434810855619f06b1f4f9ad63c061511644b294e0540d879b0ec68"
+      },
+      {
+        "origin": "user_macro",
+        "edition": 2015,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "50046e796d00b97d901c7b661fbacc8422d43a2eb7af0c99bcf4162e1941aafe"
+      },
+      {
+        "origin": "user_macro",
+        "edition": 2018,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "b41bbfef1a72a73bf66ac2c620847f474d3789bfe6886b22ffe9c887ab05e91e"
+      },
+      {
+        "origin": "user_macro",
+        "edition": 2021,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "6dabcc6bbcdbb696b4c5556c73a60819b4a8ad1f954ad90957dab3cc29423a25"
+      },
+      {
+        "origin": "user_macro",
+        "edition": 2024,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "4d163e20c3eb5e70b8f84413e26b61d009d0338c79a111d68271b752f9006b9e"
+      },
+      {
+        "origin": "wrapper_macro",
+        "edition": 2015,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "f78780983667b1f0045327f5eecc100aa6d0f60ca8a9206da23661de31e9ce5a"
+      },
+      {
+        "origin": "wrapper_macro",
+        "edition": 2018,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "035f2a24cbca0d586d910287ed38488e07b4cc67ef5d0dfcce6ac4c029d2486d"
+      },
+      {
+        "origin": "wrapper_macro",
+        "edition": 2021,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "9855d96744fddc4eba7beafb034bdad1c94e65ce29a2551b52da0079e62b76ce"
+      },
+      {
+        "origin": "wrapper_macro",
+        "edition": 2024,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 40,
+        "raw_stdout_sha256": "24cb2a883b235218c07912c0b4540e0bfda0b3f5e00d0d776535220d3a38e7a8"
+      },
+      {
+        "origin": "standard_macro",
+        "edition": 2015,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 44,
+        "raw_stdout_sha256": "5ca286b118b0fed8af0fada9cd7a682a052cf78498d75e4ecfc5a0da22f56dd9"
+      },
+      {
+        "origin": "standard_macro",
+        "edition": 2018,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 44,
+        "raw_stdout_sha256": "5f9aa78f7b1dd35c2d5b4f34f9a7f061e7ba985b7a1c2c5db7d13ac654e9f3c2"
+      },
+      {
+        "origin": "standard_macro",
+        "edition": 2021,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 44,
+        "raw_stdout_sha256": "0edce88ab49fbe904f813a8f9040976b7f4d66291b4f80e742496188555e58f8"
+      },
+      {
+        "origin": "standard_macro",
+        "edition": 2024,
+        "pass": true,
+        "observed_calls": 0,
+        "initializer_frames_entered": 0,
+        "pattern_steps": 44,
+        "raw_stdout_sha256": "1c70c9bd604d7c10f2ca0e8c3b3763d1e343b7e122e54fad50d4b0fd62d23d16"
+      }
+    ]
+  },
+  "queues": {
+    "controls": {
+      "terminal": "6ee840",
+      "exit": 0,
+      "body_failures": 1
+    },
+    "stock": {
+      "terminal": "93a565",
+      "exit": 0
+    }
+  },
+  "origin_tool_sha256": "090c42798784cb6f40d1c9f507ed9df34a1cffcdb1de9f344c907a57445d69b7",
+  "origin_command": "python3 tools/check_byte_pattern_origins.py --output artifacts/validation-resume-2026-10-18/candidate-v53/byte-origins"
+}

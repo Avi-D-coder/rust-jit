@@ -179,14 +179,14 @@ fn changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared() {
 }
 
 #[test]
-fn a_generated_condition_cannot_capture_a_same_spelled_caller_without_its_scope_join() {
-    // Native Rust selects the definition-site x=2 and returns 7. LRR still lacks
-    // that cross-context source join: explicit refusal is the required authority
-    // control, never a runtime-contract pass for this valid Rust program.
+fn a_generated_condition_uses_its_definition_site_binding_despite_caller_shadowing() {
+    // The original held control expected Unsupported before the source join
+    // existed. Exercise that join: choosing the later caller x=8 would return
+    // 99 instead of the definition-site x=2's 7. Lowering alone proves neither.
     const SOURCE: &str = "fn value()->i32{let x=2_i32;macro_rules! test {()=>{if let 1_i32..=3_i32=x{7_i32}else{99_i32}}}let x=8_i32;test!()}fn main(){}";
     for edition in [2015, 2018, 2021, 2024] {
         let mut db = Database::default();
-        let (input, _) = prepare_expanded_body_source(&mut db, SOURCE, edition, 1, "value");
+        let (input, discovery) = prepare_expanded_body_source(&mut db, SOURCE, edition, 1, "value");
         let source = db
             .prepared_source(input.prepared().source())
             .unwrap()
@@ -201,38 +201,19 @@ fn a_generated_condition_cannot_capture_a_same_spelled_caller_without_its_scope_
             .fingerprint();
         ready(db.publish_retained_syntax(input.clone()));
         let body = ready(db.publish_retained_body(input, definition));
-        let indexed = ready(db.fetch(
-            &crate::db::provider::SyntaxProvider,
-            QueryKey::BodyStructure(body),
+        let mut run = ready(RunMachine::start_with_discovery(
+            &mut db, body, 100_000, discovery,
         ));
-        let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
-            panic!("ordinary condition body absent")
+        let RunPoll::Completed(report) = run.poll(&mut db) else {
+            panic!("definition-site binding did not execute in edition {edition}");
         };
-        let paths: Vec<_> = index
-            .nodes()
-            .iter()
-            .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Path))
-            .collect();
-        assert_eq!(paths.len(), 1);
-        let recipe = ready(db.fetch(
-            &crate::db::provider::SyntaxProvider,
-            QueryKey::Thunk(index.pc(paths[0].id, Phase::Entry).unwrap()),
-        ));
-        let QueryValue::Thunk(recipe) = recipe.value.as_ref() else {
-            panic!("ordinary condition scrutinee thunk absent")
-        };
-        assert!(
-            recipe
-                .recipe()
-                .operations
-                .iter()
-                .any(|operation| matches!(operation, Op::Unsupported(_)))
-        );
-        assert!(
-            !recipe.recipe().operations.iter().any(|operation| matches!(
-                operation,
-                Op::ReadLocal { .. } | Op::ReadParameter { .. }
-            ))
+        assert!(matches!(report.value, ValueSummary::Signed(ref value) if value == "7"));
+        assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+        assert_eq!(report.opcode_counters.started_by_opcode[19], 0);
+        assert!(report.opcode_counters.started_by_opcode[45] > 0);
+        assert_eq!(
+            report.opcode_counters.operations_started,
+            report.opcode_counters.operations_completed
         );
     }
 }

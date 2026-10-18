@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "candidate": "V54",
+  "head": "1c977b9a9658bcafb2d8bfbaaf6657369fa26f38",
+  "source_sha256": "47e5c447630f2e32e350b502b973bbb64b0f4b89061933db2e27b16d31e8afc3",
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "source_matches_before": true,
+  "lib_build": {
+    "session": 19711,
+    "terminal": "86906f",
+    "exit": 0,
+    "seconds": 14.64,
+    "binary_sha256": "c5d6941249c35149ac8b82afc02cae316c7d611984802a86f98fe041bae7628c"
+  },
+  "cli_build": {
+    "terminal": "4d2d72",
+    "exit": 0,
+    "seconds": 0.25,
+    "binary_sha256": "49c3c1ff3833d3e9e2d223e805ba359e57f44c2ae6a4bc8119e4cee0e42f14e9"
+  },
+  "same_cli_as_v53": true,
+  "runtime_evidence": "worktracks/evidence/2026-10-18-interpreter-v53-validation.json",
+  "runtime_scope": "Identical exact production CLI bytes: V53 four unchanged whole-main runtime contracts and 16 byte-pattern origin/edition runs remain evidence for this unchanged binary. They were not rerun on V54. Only host control source changed.",
+  "controls": [
+    {
+      "selector": "service::common_pattern_route_tests::a_generated_condition_uses_its_definition_site_binding_despite_caller_shadowing",
+      "exit": 101,
+      "seconds": 0.138,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::a_generated_condition_uses_its_definition_site_binding_despite_caller_shadowing",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "c5d6941249c35149ac8b82afc02cae316c7d611984802a86f98fe041bae7628c",
+      "source_sha256": "47e5c447630f2e32e350b502b973bbb64b0f4b89061933db2e27b16d31e8afc3"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+      "exit": 0,
+      "seconds": 0.908,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "c5d6941249c35149ac8b82afc02cae316c7d611984802a86f98fe041bae7628c",
+      "source_sha256": "47e5c447630f2e32e350b502b973bbb64b0f4b89061933db2e27b16d31e8afc3"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::conditional_pending_bindings_commit_once_through_the_shared_transaction_owner",
+      "exit": 0,
+      "seconds": 0.655,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::conditional_pending_bindings_commit_once_through_the_shared_transaction_owner",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "c5d6941249c35149ac8b82afc02cae316c7d611984802a86f98fe041bae7628c",
+      "source_sha256": "47e5c447630f2e32e350b502b973bbb64b0f4b89061933db2e27b16d31e8afc3"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+      "exit": 0,
+      "seconds": 0.861,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "c5d6941249c35149ac8b82afc02cae316c7d611984802a86f98fe041bae7628c",
+      "source_sha256": "47e5c447630f2e32e350b502b973bbb64b0f4b89061933db2e27b16d31e8afc3"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::reached_scalar_condition_chains_share_test_and_clause_cleanup_routes",
+      "exit": 0,
+      "seconds": 0.168,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::reached_scalar_condition_chains_share_test_and_clause_cleanup_routes",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "c5d6941249c35149ac8b82afc02cae316c7d611984802a86f98fe041bae7628c",
+      "source_sha256": "47e5c447630f2e32e350b502b973bbb64b0f4b89061933db2e27b16d31e8afc3"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+      "exit": 0,
+      "seconds": 1.71,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "c5d6941249c35149ac8b82afc02cae316c7d611984802a86f98fe041bae7628c",
+      "source_sha256": "47e5c447630f2e32e350b502b973bbb64b0f4b89061933db2e27b16d31e8afc3"
+    }
+  ],
+  "control_queue": {
+    "session": 3588,
+    "terminal": "a061d9",
+    "exit": 0,
+    "passed": 5,
+    "total": 6
+  },
+  "hygiene_control": "The strengthened actual-runtime same-source control fails noncompletion at edition2015. Later editions not reached. This is not corrected by expecting Unsupported or counted as compatibility acceptance. It remains a failed regression and the next shared source-binding repair.",
+  "separate_cli_witness": {
+    "path": "artifacts/validation-resume-2026-10-18/definition-site-shadowing.rs",
+    "source": "fn value()->i32{let x=2_i32;macro_rules! test {()=>{if let 1_i32..=3_i32=x{7_i32}else{99_i32}}}let x=8_i32;test!()}fn main(){assert_eq!(value(),7_i32);}",
+    "edition": 2015,
+    "exit": 2,
+    "fault_code": "LRR-E-NAME-MISSING",
+    "fault_message": "reached direct function identity is absent before argument evaluation (value path `x`)",
+    "stdout_sha256": "da2af955da148a61159e221751ad2bc56912a8eda162241bc7834bc118113f8c"
+  },
+  "architecture_review": "worktracks/03-control-flow-patterns/2026-10-18-byte-string-patterns.md",
+  "integration": "held WIP, source checkpoint only",
+  "feature_complete": false,
+  "milestone_passed": false,
+  "jit_gate": "blocked",
+  "full_fixture_passes_claimed": 0
+}

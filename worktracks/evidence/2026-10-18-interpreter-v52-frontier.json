@@ -1,0 +1,304 @@
+{
+  "schema_version": 1,
+  "candidate": "V52 baseline on unchanged V51 binary",
+  "head": "1c977b9a9658bcafb2d8bfbaaf6657369fa26f38",
+  "source_sha256": "b6b2696a1f9867a523574b5a5af39d17ab067541c97b82dbc3fb5e3a0af98891",
+  "binary_sha256": "bbd93ce49509fe33f129ed081e45f45cf5c6b04df993a5d682729591e3c6bab2",
+  "build": "No rebuild; exact V51 binary and unchanged production sources, verified before queues.",
+  "groups": [
+    {
+      "name": "adjacent repetition",
+      "session": 93604,
+      "terminal": "d46e2a",
+      "exit": 0,
+      "rows": [
+        {
+          "path": "tests/ui/consts/const-expr-in-vec-repeat.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "09957be7bb64fd1f9e5946ef787776bec20835218ec4b85b5a5831824963f404",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 25,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 0,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 25,
+            "vm_outcomes": 25
+          }
+        },
+        {
+          "path": "tests/ui/consts/const-repeated-values.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "e3a60ccb5c3a9101436dd3911de78b0832dcb485b1358b4ce852c918f614c319",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 82,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 0,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 67,
+            "vm_outcomes": 67
+          }
+        },
+        {
+          "path": "tests/ui/consts/repeat_match.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "bb2c655a3ecede4bcb5d02165c68607a649e1c9073b950709a7309cc945a8282",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 35,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 26,
+            "vm_outcomes": 26
+          }
+        },
+        {
+          "path": "tests/ui/repeat-expr/repeat-expr-in-static.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "0510efc178b84c4c0fd6d636d2bba869730a9e5036b710ce04ca9297d07b6391",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 400,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 277,
+            "vm_outcomes": 277
+          }
+        },
+        {
+          "path": "tests/ui/array-slice-vec/vec-repeat-with-cast.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "700d737126159bd03d608f3bf88b9f5569b66a67ea492305e928cc2ce415f335",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 12,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 0,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 11,
+            "vm_outcomes": 11
+          }
+        }
+      ]
+    },
+    {
+      "name": "adjacent aggregate/pattern regression",
+      "session": 82303,
+      "terminal": "5bcfa5",
+      "exit": 0,
+      "rows": [
+        {
+          "path": "tests/ui/array-slice-vec/copy-out-of-array-1.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "26b0e7f19bfecd8823d275d14b8d1d6bc99f82ebf98b8a2412c2ec4fc6b84d57",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 145,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 107,
+            "vm_outcomes": 107
+          }
+        },
+        {
+          "path": "tests/ui/array-slice-vec/destructure-array-1.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "8682274b501366c18bb86e6ebd1b4c5db23fe4a48ef1d7673ba00017867c2545",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 441,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 281,
+            "vm_outcomes": 281
+          }
+        },
+        {
+          "path": "tests/ui/array-slice-vec/fixed-size-arrays-zero-size-types-8898.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "cbbd99d7962b898d0351376fb05877e3b25d8349037f7f33c8cb595b8055b228",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 7629,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 387,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 5443,
+            "vm_outcomes": 5443
+          }
+        },
+        {
+          "path": "tests/ui/array-slice-vec/vec-matching-legal-tail-element-borrow.rs",
+          "pass": true,
+          "exit": 0,
+          "sha256": "0ad5a5ba094c902ac00dd4a4f589144aced093e15048040b3aee216efd4e253d",
+          "fault": null,
+          "facts": {
+            "classified_operation_candidates": 149,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 106,
+            "vm_outcomes": 106
+          }
+        }
+      ]
+    },
+    {
+      "name": "next failure frontiers",
+      "session": 48719,
+      "terminal": "44826c",
+      "exit": 0,
+      "rows": [
+        {
+          "path": "tests/ui/array-slice-vec/byte-literals.rs",
+          "pass": false,
+          "exit": 2,
+          "sha256": "fe8d3ce4bb7a95f7ef8bb5eaf3a75fb64b4ea377ab2da47d32c13980da1993e6",
+          "fault": "literal pattern kind requires its reached semantics",
+          "facts": {
+            "classified_operation_candidates": 10627,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 3,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 88,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 5257,
+            "vm_outcomes": 5256
+          }
+        },
+        {
+          "path": "tests/ui/array-slice-vec/fixed-length-vector-pattern-matching-7784.rs",
+          "pass": false,
+          "exit": 2,
+          "sha256": "4800c6af7cc62e9b4b82835157305d671f809666de7e85bf8e11e8bbe794be33",
+          "fault": "completed structural field requires its reached concrete type",
+          "facts": {
+            "classified_operation_candidates": 13,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 0,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 12,
+            "vm_outcomes": 11
+          }
+        }
+      ]
+    }
+  ],
+  "scope": "9/11 selected distinct upstream runtime contracts pass; byte-string literal patterns fail in PatternTree, fixed-length pattern root fails earlier at unsuffixed constructor context. No gains or refreshed suite total claimed."
+}

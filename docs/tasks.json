@@ -5721,7 +5721,8 @@
         "old_macro_specific_passes_establish_common_engine": false,
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
         "guest_jit_authorized": false
-      }
+      },
+      "latest_component_scope": "V53/V54 solo root held WIP: common PatternLiteral byte strings decode through pinned AST and Search reads actual checked u8 array/slice places. V53 exact CLI4/4unchanged runtime contracts and16/16origin/edition controls pass; byte-literals newly passes versus measured V52. V54 host-only successor leaves CLI bytes identical, but 5/6focused controls pass: strengthened definition-site-shadowing runtime control fails at edition2015; later editions unexecuted. Separate CLI reproduction fails LRR-E-NAME-MISSING at generated x. Preserve failed control; next priority shared source-binding/rib join. No full feature, architecture, milestone, suite total or JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v54-validation.json."
     },
     {
       "id": "T051",

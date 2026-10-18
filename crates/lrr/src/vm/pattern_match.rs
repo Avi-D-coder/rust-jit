@@ -443,7 +443,7 @@ impl<'s> Search<'s> {
             }
             PatternLiteral::Bool(value) => Number::Bool(*value),
             PatternLiteral::Char(value) => Number::Char(u32::from(*value)),
-            PatternLiteral::Str(_) => {
+            PatternLiteral::Str(_) | PatternLiteral::Bytes(_) => {
                 return Err(unsupported(
                     "string literal pattern requires str comparison integration",
                 ));
@@ -800,6 +800,45 @@ impl<'s> Search<'s> {
                     ),
                     None => self.proceed(next),
                 }
+            }
+            PatternNode::Literal(PatternLiteral::Bytes(expected)) => {
+                let (place, _, _, ty) =
+                    self.peel(copy_place(&goal.place), None, goal.context, false)?;
+                let ty = ty.ok_or_else(|| mismatch("byte string pattern requires a sequence"))?;
+                let (element, length) = match self.store.type_descriptor(ty)?.key.as_ref() {
+                    TypeKey::Array { element, len } => (*element, *len),
+                    TypeKey::Slice { element } => (
+                        *element,
+                        self.store.slice_place_len(&place).map_err(place_fault)?,
+                    ),
+                    _ => {
+                        return Err(
+                            mismatch("byte string pattern requires an array or slice").into()
+                        );
+                    }
+                };
+                if element != TypeId(9) {
+                    return Err(mismatch("byte string pattern requires u8 elements").into());
+                }
+                if length as usize != expected.len() {
+                    return Ok(false);
+                }
+                for (index, expected) in expected.iter().enumerate() {
+                    let index = ValueRepr::unsigned(
+                        TypeId(13),
+                        u64::try_from(index)
+                            .map_err(|_| mismatch("byte pattern index overflow"))?,
+                    )?;
+                    let member = self
+                        .store
+                        .project_index(&place, index)
+                        .map_err(place_fault)?;
+                    let value = self.value(&member)?;
+                    if value != ValueRepr::unsigned(TypeId(9), u64::from(*expected))? {
+                        return Ok(false);
+                    }
+                }
+                self.proceed(next)
             }
             PatternNode::Literal(PatternLiteral::Str(expected)) => {
                 // A string literal pattern has type &str: peel references
