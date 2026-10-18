@@ -19903,7 +19903,7 @@
     },
     {
       "id": "M018",
-      "status": "not_started",
+      "status": "in_progress",
       "commit_id": null,
       "acceptance_tests": [],
       "commands": [],
@@ -19912,7 +19912,9 @@
         "worktracks/candidates/sol-type-alias-prelude-integration-v1/HANDOFF.md",
         "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
         "worktracks/evidence/2026-10-18-interpreter-v38-validation.json",
-        "worktracks/evidence/2026-10-18-interpreter-v40-validation.json"
+        "worktracks/evidence/2026-10-18-interpreter-v40-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
+        "worktracks/04-calls-source-views/2026-10-18-symbolic-parameter-places.md"
       ],
       "title": "SourceView propagation",
       "acceptance_contract": "TR003\u2013TR005, alias/field/return/default-Self variants. Depends: M017.",
@@ -19955,7 +19957,7 @@
           "scope": "Actual live Type/prelude/alias/query consumers; unconsumed future generated constant/full-role models retained as prototypes. Shared Type/Value proof merge and real qualified consumer Value/module export replay remain required. No task or runtime acceptance."
         }
       ],
-      "latest_component_scope": "V40 shared exact-row entered/cold metadata publisher compilerchecked;7/7affectedcontrols plus1/1currentordinaryruntime regression. Required-pub cold3scopes/signatures all4ed sourcecomponent only; runtimeTypeprefix/member/calleejoin stillabsent. No status/taskrelease promotion."
+      "latest_component_scope": "V99 held M018 component: common parameter/local places and borrow/deref/read preserve symbolic Param(T), with the accepted runtime substitution used separately for descriptor checks. Both builds and16/16focused controls pass, including full RunMachine execution of unchanged issue46095 and an alias/borrow/deref route across all4editions. V97 same-production-CLI runtime sample6/8passes; conditional method2 remains ambiguous and generic slice-view call preparation fails (baseline attribution unverified). Zero new distinct upstream gains; no refreshed suite total. Composite call parameter templates, ParamEnv/member selection, full SourceView/provenance and required origin/cleanup/invalidation matrix remain open; no M018/interpreter/JIT closure."
     },
     {
       "id": "M019",

@@ -287,7 +287,7 @@ impl Frame {
         guard: Arc<crate::db::memo::PreparedInputGuard>,
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
-        Self::require_structural_source_target(source, ty, store)?;
+        self.require_bound_structural_source_target(source, ty, store)?;
         if self.bound_view(goal_source, store) != *source {
             return Err(transaction(
                 "pattern goal/member source application differs",

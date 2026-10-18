@@ -72,7 +72,7 @@ impl Frame {
                 TyTerm::Ref(_, expected, pointee)
                     if *expected == mutable && matches!(pointee.as_ref(), TyTerm::Slice(_)) =>
                 {
-                    Self::require_borrow_source_target(Some(pointee), slice, store)?;
+                    self.require_borrow_source_target(Some(pointee), slice, store)?;
                     Some(reference)
                 }
                 _ => None,

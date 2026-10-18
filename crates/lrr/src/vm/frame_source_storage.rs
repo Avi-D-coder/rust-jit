@@ -214,15 +214,7 @@ impl Frame {
             return self.preflight_source_view(destination, Some(written));
         }
         let source = self.place_slot(place)?.source.as_ref();
-        if !matches!(
-            source,
-            Some(
-                TyTerm::Primitive(_)
-                    | TyTerm::Nominal(_, _)
-                    | TyTerm::Array(_, _)
-                    | TyTerm::Tuple(_)
-            )
-        ) {
+        if source.is_none_or(|source| !Self::supported_source(source)) {
             return Ok(());
         }
         let heap = Self::source_heap(source)?

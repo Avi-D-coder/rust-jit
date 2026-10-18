@@ -80,7 +80,7 @@ impl Frame {
         match key.as_ref() {
             TypeKey::Tuple(members) if members.len() == operands.len() => {
                 for (slot, target) in operands.iter().zip(members.iter()) {
-                    Self::require_structural_source_target(
+                    self.require_bound_structural_source_target(
                         self.source_view_ref(*slot)?
                             .ok_or_else(|| invalid("tuple source disappeared"))?,
                         *target,

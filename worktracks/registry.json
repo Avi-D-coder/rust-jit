@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T19:33:38.719857+00:00",
+  "updated_at": "2026-10-18T21:54:33.261718+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -233,7 +233,12 @@
         {
           "id": "WT04-02",
           "title": "Expression source views",
-          "status": "in_progress"
+          "status": "in_progress",
+          "candidate": "worktracks/04-calls-source-views/2026-10-18-symbolic-parameter-places.md",
+          "acceptance_scope": "V99 held M018 component: common parameter/local places and borrow/deref/read preserve symbolic Param(T), with the accepted runtime substitution used separately for descriptor checks. Both builds and16/16focused controls pass, including full RunMachine execution of unchanged issue46095 and an alias/borrow/deref route across all4editions. V97 same-production-CLI runtime sample6/8passes; conditional method2 remains ambiguous and generic slice-view call preparation fails (baseline attribution unverified). Zero new distinct upstream gains; no refreshed suite total. Composite call parameter templates, ParamEnv/member selection, full SourceView/provenance and required origin/cleanup/invalidation matrix remain open; no M018/interpreter/JIT closure.",
+          "evidence": [
+            "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json"
+          ]
         },
         {
           "id": "WT04-03",
@@ -746,7 +751,7 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V91 solo held M019 source component: Q60 retains actual selected Trait declaration kind through shared ParseFile/direct syntax_at and original/generated source/epoch dependencies. source_types::projection_trait now requires that receipt for every ordinary bound/projection caller; Sized shares it, removing its separate declaration-row scan. Generated Trait owners join the existing declaration Type/origin service. Both builds and11/11focused controls pass, including13actual declaration worlds (original/emit/wrapper all4editions plus non-trait-bound metadata), cache/source/epoch/no-body and existing26Sized worlds/source lifetime controls. Selected unchanged upstream runtime contracts pass3/4: deferred1, via-bound-in-where and issue17718 with its actual auxiliary; conditional deferred2 still faults LRR-E-NAME-AMBIGUOUS after partial execution and remains a runtime blocker. Source/HEAD/generator frozen; V89 test API compile failure and V90 client-only review correction preserved. Zero new distinct runtime/full-fixture gains verified, no refreshed suite total. M018 SourceView propagation, full trait schemas/catalog/oracle, canonical transactions/tabled fulfillment and runtime selection remain incomplete; no M018/M019/interpreter/JIT gate closes.",
+    "validation": "V99 held M018 component: common parameter/local places and borrow/deref/read preserve symbolic Param(T), with the accepted runtime substitution used separately for descriptor checks. Both builds and16/16focused controls pass, including full RunMachine execution of unchanged issue46095 and an alias/borrow/deref route across all4editions. V97 same-production-CLI runtime sample6/8passes; conditional method2 remains ambiguous and generic slice-view call preparation fails (baseline attribution unverified). Zero new distinct upstream gains; no refreshed suite total. Composite call parameter templates, ParamEnv/member selection, full SourceView/provenance and required origin/cleanup/invalidation matrix remain open; no M018/interpreter/JIT closure.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
@@ -755,6 +760,9 @@
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json"
+    ],
+    "evidence": [
+      "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json"
     ]
   }
 }

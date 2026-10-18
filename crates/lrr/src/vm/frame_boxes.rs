@@ -145,7 +145,7 @@ impl Frame {
             if expected == Some(ty)
                 || expected.is_some_and(|expected| store.dyn_admits(expected, ty))
                 || source.as_ref().is_some_and(|pointee| {
-                    Self::require_borrow_source_target(Some(pointee), ty, store).is_ok()
+                    self.require_borrow_source_target(Some(pointee), ty, store).is_ok()
                 })
             {
                 return Ok(());
@@ -183,10 +183,10 @@ impl Frame {
                 )
             })?),
         };
-        Self::require_borrow_source_target(pointee, contents, store)?;
+        self.require_borrow_source_target(pointee, contents, store)?;
         self.preflight_source_view(destination, pointee)?;
         if let Some(expected) = self.place_slot(destination)?.source.as_ref() {
-            Self::require_borrow_source_target(Some(expected), contents, store)?;
+            self.require_borrow_source_target(Some(expected), contents, store)?;
         }
         Ok(())
     }

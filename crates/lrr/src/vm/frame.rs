@@ -1,4 +1,7 @@
 //! Physical frame state. Syntax and query providers never mutate it.
+#[cfg(test)]
+#[path = "symbolic_place_source_tests.rs"]
+mod symbolic_place_source_tests;
 #[path = "frame_aggregate_copy.rs"]
 mod aggregate_copy_frame;
 #[path = "frame_boxes.rs"]
@@ -864,7 +867,7 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         use crate::{runtime::shape::TypeKey, traits::term::TyTerm};
         match self.parameter_sources.get(ordinal as usize) {
-            Some(TyTerm::Primitive(_)) => Self::require_borrow_source_target(
+            Some(TyTerm::Primitive(_)) => self.require_borrow_source_target(
                 self.parameter_sources.get(ordinal as usize),
                 ty,
                 store,
@@ -899,7 +902,7 @@ impl Frame {
                         })?
                         .require_reference_parameter_descriptor(ordinal as usize, store, ty)?;
                 }
-                Self::require_borrow_source_target(Some(target.as_ref()), *actual_target, store)
+                self.require_borrow_source_target(Some(target.as_ref()), *actual_target, store)
             }
             // Rigid parameters retain their identities under the existing
             // prepared definition environment; no incidental method is selected.
@@ -1016,9 +1019,8 @@ impl Frame {
                     "parameter place requires its retained source identity".into(),
                 )
             })?;
-        let substituted = self.bound_parameter_source(declared);
-        let source = substituted.as_ref().unwrap_or(declared);
-        if !Self::supported_source(source) || matches!(source, TyTerm::Param(_)) {
+        let source = declared;
+        if !Self::supported_source(source) {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "parameter place requires admitted symbolic source integration".into(),
@@ -1047,10 +1049,11 @@ impl Frame {
             {
                 self.preflight_parameter_source(ordinal, ty, store)?;
             }
+            TyTerm::Param(_) => self.require_borrow_source_target(Some(source), ty, store)?,
             // These are already understood by source-aware place checks. The
             // parameter entry producer still decides which such tables exist.
             TyTerm::Nominal(..) | TyTerm::Array(..) | TyTerm::Tuple(..) => {
-                Self::require_borrow_source_target(Some(source), ty, store)?;
+                self.require_borrow_source_target(Some(source), ty, store)?;
             }
             _ => return Err(invalid("unsupported retained parameter place source")),
         }
@@ -1062,20 +1065,14 @@ impl Frame {
         self.preflight_source_view(destination, Some(source))?;
         Ok(())
     }
-    /// A generic parameter's source is the closed source Type its call bound
-    /// it to (the frame's definition environment), e.g. a closure argument.
-    pub(crate) fn bound_parameter_source(
-        &self,
-        declared: &crate::traits::term::TyTerm,
+    /// Concrete binding for reached representation/dispatch consumers only.
+    /// Source place publication must retain the original declared parameter.
+    pub(crate) fn concrete_parameter_source(
+        &self, declared: &crate::traits::term::TyTerm,
     ) -> Option<crate::traits::term::TyTerm> {
-        let crate::traits::term::TyTerm::Param(key) = declared else {
-            return None;
-        };
-        self.context
-            .as_ref()?
-            .symbolic_binding(*key)
-            .filter(|bound| crate::frontend::call_contracts::closed_term(bound))
-            .cloned()
+        let crate::traits::term::TyTerm::Param(key) = declared else { return None; };
+        self.context.as_ref()?.symbolic_binding(*key)
+            .filter(|bound| crate::frontend::call_contracts::closed_term(bound)).cloned()
     }
     pub(crate) fn parameter_place(
         &mut self,
@@ -1085,19 +1082,12 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         self.preflight_parameter_place(ordinal, destination, store)?;
         let cell = self.parameter(ordinal)?;
-        let source = match self
-            .parameter_sources
-            .get(ordinal as usize)
-            .and_then(|declared| self.bound_parameter_source(declared))
-        {
-            Some(bound) => Some(bound),
-            // A captured parameter's view is its reached closed Type.
-            None if ordinal as usize >= self.parameters.len() => store
-                .live_place_type_id(&crate::runtime::place::Place::cell(cell))
-                .ok()
-                .and_then(|ty| store.descriptor_source_term(ty)),
-            None => self.clone_source(self.parameter_sources.get(ordinal as usize))?,
-        };
+        let source = if ordinal as usize >= self.parameters.len() {
+            // Captures without a declared parameter table retain their reached
+            // source until capture-source propagation is integrated.
+            store.live_place_type_id(&crate::runtime::place::Place::cell(cell)).ok()
+                .and_then(|ty| store.descriptor_source_term(ty))
+        } else { self.clone_source(self.parameter_sources.get(ordinal as usize))? };
         self.set_source_view(destination, source)?;
         self.slots[destination.0 as usize].place = Some(crate::runtime::place::Place::cell(cell));
         Ok(())
@@ -1609,7 +1599,8 @@ impl Frame {
     /// a descriptor cannot invent a missing source identity.
     fn supported_source(source: &crate::traits::term::TyTerm) -> bool {
         use crate::traits::term::TyTerm;
-        matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_) | TyTerm::Dyn(_))
+        Self::supported_structural_source(source)
+            || matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_) | TyTerm::Dyn(_))
             || (matches!(source, TyTerm::Tuple(_)) && Self::supported_structural_source(source))
             || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Dyn(_))
                 || (matches!(target.as_ref(), TyTerm::Tuple(_)) && Self::supported_structural_source(target))
@@ -2002,6 +1993,8 @@ impl Frame {
             self.preflight_source_replacement(self.source_view_ref(slot)?, source.as_ref())?;
         self.slots[slot.0 as usize].source = source;
         self.source_extra_bytes = excess;
+        #[cfg(test)]
+        symbolic_place_source_tests::observe(self, slot);
         Ok(())
     }
     /// Source attachment is admitted while its current call environment still
@@ -2163,33 +2156,26 @@ impl Frame {
         if self.place_slot(destination)?.place.is_some() {
             return Err(invalid("place slot already initialized"));
         }
-        // A local typed by this activation's own generic parameter (`let mut
-        // it = self;` in a provided method) has the parameter's bound view.
-        let source = self.make_place_source(binding, store);
-        if source.as_ref().is_some_and(|source| {
-            !Self::supported_source(source)
-                || matches!(source, crate::traits::term::TyTerm::Param(_))
-        }) {
+        let source = self.make_place_source(binding);
+        if source.is_some_and(|source| !Self::supported_source(source)) {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "local borrow requires retained symbolic reference source integration".into(),
             ));
         }
         store.location_epoch(self.binding(binding)?)?;
-        self.preflight_source_view(destination, source.as_ref())?;
+        self.preflight_source_view(destination, source)?;
         Ok(())
     }
-    /// The retained source of a local, with this activation's bound generic
-    /// parameters replaced by their runtime types.
+    /// Addressing a local preserves its declared source identity. Runtime
+    /// substitutions belong to physical checks, never source publication.
     fn make_place_source(
         &self,
         binding: NodeId,
-        store: &GuestStore,
-    ) -> Option<crate::traits::term::TyTerm> {
+    ) -> Option<&crate::traits::term::TyTerm> {
         self.binding_sources
             .get(binding.0 as usize)
             .and_then(Option::as_ref)
-            .map(|source| self.bound_view(source, store))
     }
     pub(crate) fn make_place(
         &mut self,
@@ -2198,8 +2184,7 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_make_place(binding, destination, store)?;
-        let source = self.make_place_source(binding, store);
-        let source = self.clone_source(source.as_ref())?;
+        let source = self.clone_source(self.make_place_source(binding))?;
         self.set_source_view(destination, source)?;
         self.slots[destination.0 as usize].place =
             Some(crate::runtime::place::Place::cell(self.binding(binding)?));
@@ -2618,7 +2603,7 @@ impl Frame {
                     // The source ordinal selects a member of the actual
                     // retained tuple type. Runtime shape is correspondence
                     // evidence, never a replacement for that source identity.
-                    Self::require_structural_source_target(
+                    self.require_bound_structural_source_target(
                         source,
                         store.place_type_id(base_place)?,
                         store,
@@ -2642,7 +2627,7 @@ impl Frame {
                     // place's own descriptor; its element view types the
                     // element place. A range index keeps the `[T]` view.
                     let actual = store.place_type_id(base_place)?;
-                    Self::require_borrow_source_target(Some(view), actual, store).map_err(
+                    self.require_borrow_source_target(Some(view), actual, store).map_err(
                         |error| {
                             if error.code == "LRR-E-OWNERSHIP" {
                                 Diagnostic::new(
@@ -2675,7 +2660,7 @@ impl Frame {
                         })
                         .ok_or_else(|| invalid("vector source view lacks its element Type"))?;
                     let actual = store.place_type_id(base_place)?;
-                    Self::require_borrow_source_target(Some(view), actual, store)?;
+                    self.require_borrow_source_target(Some(view), actual, store)?;
                     if self.range_index(*index, store)?.is_some() {
                         Some(crate::traits::term::TyTerm::Slice(Box::new(
                             element.clone(),
@@ -2843,9 +2828,9 @@ impl Frame {
                 // Reuse the source-aware borrow predicate: primitive identity
                 // or an exact nongeneric nominal definition, never runtime-name
                 // lookup or an invented symbolic target from a worker TypeId.
-                Self::require_borrow_source_target(Some(pointee), *target, store)?;
+                self.require_borrow_source_target(Some(pointee), *target, store)?;
             }
-            None => Self::require_borrow_source_target(None, *target, store)?,
+            None => self.require_borrow_source_target(None, *target, store)?,
             _ => {
                 return Err(Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
@@ -2863,7 +2848,7 @@ impl Frame {
         // scratch space. Reject mismatch before replacing it or publishing
         // an address; neither runtime shape nor spelling can override it.
         if let Some(expected) = self.place_slot(destination)?.source.as_ref() {
-            Self::require_borrow_source_target(Some(expected), *target, store)?;
+            self.require_borrow_source_target(Some(expected), *target, store)?;
         }
         Ok(())
     }
@@ -3226,6 +3211,7 @@ impl Frame {
         Ok(())
     }
     fn require_borrow_source_target(
+        &self,
         source: Option<&crate::traits::term::TyTerm>,
         target: TypeId,
         store: &GuestStore,
@@ -3246,7 +3232,7 @@ impl Frame {
                 crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id() == target
             }
             Some(source @ TyTerm::Tuple(_)) => {
-                return Self::require_structural_source_target(source, target, store);
+                return self.require_bound_structural_source_target(source, target, store);
             }
             Some(TyTerm::Nominal(definition, arguments)) if arguments.is_empty() => {
                 matches!(store.type_descriptor(target)?.key.as_ref(),
@@ -3261,7 +3247,7 @@ impl Frame {
                         element: actual,
                         len,
                     } if u64::from(*len) == *length => {
-                        Self::require_borrow_source_target(Some(element), *actual, store)?;
+                        self.require_borrow_source_target(Some(element), *actual, store)?;
                         true
                     }
                     _ => false,
@@ -3270,7 +3256,7 @@ impl Frame {
             // `[T]`: an element window's Type is its element's `[T]` view.
             Some(TyTerm::Slice(element)) => match store.type_descriptor(target)?.key.as_ref() {
                 TypeKey::Slice { element: actual } => {
-                    Self::require_borrow_source_target(Some(element), *actual, store)?;
+                    self.require_borrow_source_target(Some(element), *actual, store)?;
                     true
                 }
                 _ => false,
@@ -3290,6 +3276,10 @@ impl Frame {
                     let declared = crate::frontend::signature_subst::erase_regions(source);
                     actual == declared || declared.admits_dyn(&actual)
                 })
+            }
+            Some(source) if Self::supported_structural_source(source) => {
+                self.require_bound_structural_source_target(source, target, store)?;
+                true
             }
             _ => {
                 return Err(Diagnostic::new(
@@ -3333,7 +3323,7 @@ impl Frame {
             crate::ir::op::BorrowAccess::Mutable => Access::Mutable,
         };
         let target = store.admit_place_borrow(source, access)?;
-        Self::require_borrow_source_target(self.place_slot(place)?.source.as_ref(), target, store)?;
+        self.require_borrow_source_target(self.place_slot(place)?.source.as_ref(), target, store)?;
         self.preflight_borrow_source_storage(place, destination)?;
         let result = self.slot(destination)?;
         if !self.active_scopes.contains(&result.scope) {
@@ -3356,7 +3346,7 @@ impl Frame {
                 .into());
             };
             if unsize.is_none() {
-                Self::require_borrow_source_target(Some(pointee), target, store)?;
+                self.require_borrow_source_target(Some(pointee), target, store)?;
             }
             if *mutable != (access == Access::Mutable) {
                 return Err(Diagnostic::new(
@@ -3410,13 +3400,7 @@ impl Frame {
         let written_source = match self.source_view(destination)? {
             Some(written) => Some(written),
             None => match self.place_slot(place)?.source.as_ref() {
-                Some(
-                    source @ (crate::traits::term::TyTerm::Primitive(_)
-                    | crate::traits::term::TyTerm::Nominal(_, _)
-                    | crate::traits::term::TyTerm::Array(_, _)
-                    | crate::traits::term::TyTerm::Slice(_)
-                    | crate::traits::term::TyTerm::Tuple(_)),
-                ) => {
+                Some(source) if Self::supported_source(source) => {
                     // Preflight has already matched this written source target
                     // to the actual descriptor; a worker TypeId never invents it.
                     let range = self

@@ -98,6 +98,7 @@ impl Frame {
     /// expectation (a parameter or trait object pointee) or an expectation
     /// the Type cannot be checked against.
     fn coercion_target(
+        &self,
         ty: TypeId,
         expected: ExpectedPointee,
         store: &GuestStore,
@@ -113,7 +114,7 @@ impl Frame {
             if !crate::frontend::call_contracts::closed_term(pointee) {
                 return Ok(None);
             }
-            if Self::require_borrow_source_target(Some(pointee), ty, store).is_ok() {
+            if self.require_borrow_source_target(Some(pointee), ty, store).is_ok() {
                 return Ok(None);
             }
         }
@@ -158,7 +159,7 @@ impl Frame {
         let Some(expected) = self.expected_pointee(destination, store) else {
             return Ok(None);
         };
-        Ok(Self::coercion_target(ty, expected, store)?.map(|expected| BorrowCoercionGoal {
+        Ok(self.coercion_target(ty, expected, store)?.map(|expected| BorrowCoercionGoal {
             place_type: ty,
             expected,
         }))
@@ -212,7 +213,7 @@ impl Frame {
         if !Self::is_overloaded_nominal(target, store)? || (expected_mutable && !value_mutable) {
             return Ok(None);
         }
-        let Some(expected_term) = Self::coercion_target(target, expected, store)? else {
+        let Some(expected_term) = self.coercion_target(target, expected, store)? else {
             return Ok(None);
         };
         let Ok(referent) = store.dereference_place(&reference) else {

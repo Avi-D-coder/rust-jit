@@ -84,7 +84,7 @@ impl Frame {
                 && matches!(key, TypeKey::Primitive(_))
                 && matches!(descriptor, crate::runtime::shape::TypeId(2 | 4..=15 | 17 | 18))
             {
-                Self::require_borrow_source_target(target_source, descriptor, store)?;
+                self.require_borrow_source_target(target_source, descriptor, store)?;
                 return Ok(Some(descriptor));
             }
             let TypeKey::Ref { target, mutable } = key else {
@@ -100,7 +100,7 @@ impl Frame {
                     "borrow reference context source access differs".into(),
                 ));
             }
-            Self::require_borrow_source_target(target_source, *target, store)?;
+            self.require_borrow_source_target(target_source, *target, store)?;
             // `&[T]` expects its operand only like an unsized rvalue (rustc's
             // `ExpectRvalueLikeUnsized`): the retained `[T]` view gives an
             // array operand its element Type, never a `[T]` descriptor.

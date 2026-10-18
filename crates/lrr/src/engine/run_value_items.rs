@@ -625,7 +625,7 @@ impl RunMachine {
                     Ok(None) => return QueryPoll::Ready(Err(call_fault("associated qualifier source parameter has no paired runtime binding"))),
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 }
-                let Some(actual) = self.frame.bound_parameter_source(source.source()) else {
+                let Some(actual) = self.frame.concrete_parameter_source(source.source()) else {
                     return QueryPoll::Ready(Err(call_fault("associated qualifier parameter requires its actual closed source binding")));
                 };
                 actual
