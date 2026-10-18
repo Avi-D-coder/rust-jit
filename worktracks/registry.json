@@ -284,14 +284,15 @@
           "id": "WT05-01",
           "title": "Header catalogs",
           "status": "claimed",
-          "candidate": "worktracks/05-trait-goal-engine/2026-10-18-sized-predicates.md",
-          "acceptance_scope": "V88 solo held M019 source component: configured owning core membership selects actual core::marker::Sized through CurrentModuleName and verifies the actual Trait declaration. Implicit required defaults and inline/where relaxations use the common declaration collector/Type/name service; direct ParamKey identity is separate from alias-normalized Type terms. User Sized shadow and identity-alias subject do not suppress the default. The configured core-map digest is retained once and included in inventory stable domainv5. Both builds,10/10focused controls and2/2unchanged runtime regressions pass; source/HEAD/generator frozen. Source matrices include original/emit/wrapper all4editions, absent configured core input, user shadow and alias, query cache/epoch/no-body and retained-source lifecycle controls. V86 mechanical test API build failure and V87 review/fix evidence preserved. Zero new distinct stock/runtime/full-fixture passes; no refreshed suite total. Full canonical trait/header, region/associated/binder/callable identities, catalog/oracle, goal transactions/tables and runtime fulfillment remain incomplete. No M019/interpreter/JIT gate closes.",
+          "candidate": "worktracks/05-trait-goal-engine/2026-10-18-trait-declaration-identity.md",
+          "acceptance_scope": "V91 solo held M019 source component: Q60 retains actual selected Trait declaration kind through shared ParseFile/direct syntax_at and original/generated source/epoch dependencies. source_types::projection_trait now requires that receipt for every ordinary bound/projection caller; Sized shares it, removing its separate declaration-row scan. Generated Trait owners join the existing declaration Type/origin service. Both builds and11/11focused controls pass, including13actual declaration worlds (original/emit/wrapper all4editions plus non-trait-bound metadata), cache/source/epoch/no-body and existing26Sized worlds/source lifetime controls. Selected unchanged upstream runtime contracts pass3/4: deferred1, via-bound-in-where and issue17718 with its actual auxiliary; conditional deferred2 still faults LRR-E-NAME-AMBIGUOUS after partial execution and remains a runtime blocker. Source/HEAD/generator frozen; V89 test API compile failure and V90 client-only review correction preserved. Zero new distinct runtime/full-fixture gains verified, no refreshed suite total. M018 SourceView propagation, full trait schemas/catalog/oracle, canonical transactions/tabled fulfillment and runtime selection remain incomplete; no M018/M019/interpreter/JIT gate closes.",
           "evidence": [
             "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json",
             "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json",
             "worktracks/evidence/2026-10-18-interpreter-v82-v83-impl-head-types.json",
             "worktracks/evidence/2026-10-18-interpreter-v84-v85-predicate-requirements.json",
-            "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json"
+            "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json",
+            "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json"
           ]
         },
         {
@@ -738,22 +739,22 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "d50ba3b270c5601d4a7119d125368f53781eb1bf",
+    "baseline_git_head": "dcd056e542c86605f6a282470566952b2aea3c79",
     "working_tree": "solo_source_checkpoint_after_collected_async_validation",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V88 solo held M019 source component: configured owning core membership selects actual core::marker::Sized through CurrentModuleName and verifies the actual Trait declaration. Implicit required defaults and inline/where relaxations use the common declaration collector/Type/name service; direct ParamKey identity is separate from alias-normalized Type terms. User Sized shadow and identity-alias subject do not suppress the default. The configured core-map digest is retained once and included in inventory stable domainv5. Both builds,10/10focused controls and2/2unchanged runtime regressions pass; source/HEAD/generator frozen. Source matrices include original/emit/wrapper all4editions, absent configured core input, user shadow and alias, query cache/epoch/no-body and retained-source lifecycle controls. V86 mechanical test API build failure and V87 review/fix evidence preserved. Zero new distinct stock/runtime/full-fixture passes; no refreshed suite total. Full canonical trait/header, region/associated/binder/callable identities, catalog/oracle, goal transactions/tables and runtime fulfillment remain incomplete. No M019/interpreter/JIT gate closes.",
+    "validation": "V91 solo held M019 source component: Q60 retains actual selected Trait declaration kind through shared ParseFile/direct syntax_at and original/generated source/epoch dependencies. source_types::projection_trait now requires that receipt for every ordinary bound/projection caller; Sized shares it, removing its separate declaration-row scan. Generated Trait owners join the existing declaration Type/origin service. Both builds and11/11focused controls pass, including13actual declaration worlds (original/emit/wrapper all4editions plus non-trait-bound metadata), cache/source/epoch/no-body and existing26Sized worlds/source lifetime controls. Selected unchanged upstream runtime contracts pass3/4: deferred1, via-bound-in-where and issue17718 with its actual auxiliary; conditional deferred2 still faults LRR-E-NAME-AMBIGUOUS after partial execution and remains a runtime blocker. Source/HEAD/generator frozen; V89 test API compile failure and V90 client-only review correction preserved. Zero new distinct runtime/full-fixture gains verified, no refreshed suite total. M018 SourceView propagation, full trait schemas/catalog/oracle, canonical transactions/tabled fulfillment and runtime selection remain incomplete; no M018/M019/interpreter/JIT gate closes.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "d50ba3b270c5601d4a7119d125368f53781eb1bf",
+    "source_checkpoint_pushed": "dcd056e542c86605f6a282470566952b2aea3c79",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": [
-      "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json"
+      "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json"
     ]
   }
 }

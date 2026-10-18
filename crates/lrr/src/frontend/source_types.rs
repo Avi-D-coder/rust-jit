@@ -1192,6 +1192,14 @@ pub(super) fn projection_trait(
             Err(error) => return QueryPoll::Ready(Err(error)),
         }
     };
+    // A Type-namespace definition alone is not a trait declaration. All
+    // ordinary bound/projection consumers share this actual source receipt.
+    match super::trait_declarations::is_trait(db, trait_key) {
+        QueryPoll::Ready(Ok(true)) => {},
+        QueryPoll::Ready(Ok(false)) => return QueryPoll::Ready(Ok(None)),
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    }
     let mut arguments = Vec::new();
     if let Some(list) = path
         .segment()

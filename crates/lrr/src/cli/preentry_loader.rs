@@ -338,6 +338,7 @@ impl Packet {
                 | QueryKey::ImplHeaderSyntax(_)
                 | QueryKey::ImplHeadTypes(_)
                 | QueryKey::ImplPredicates(_)
+                | QueryKey::TraitDeclaration(_)
                 | QueryKey::ParseFile(_)
                 | QueryKey::Outline(_)
                 | QueryKey::ScopeBucket(_)

@@ -410,6 +410,7 @@ pub(crate) fn lookup_type_declaration(
     let key = match definition.item_kind {
         ItemKind::Struct | ItemKind::Enum => QueryKey::TypeSchema(declaration.definition),
         ItemKind::TypeAlias => QueryKey::TypeAlias(declaration.definition),
+        ItemKind::Trait => QueryKey::TraitDeclaration(declaration.definition),
         _ => {
             return QueryPoll::Ready(Err(fault(
                 "LRR-E-CALL-CONTEXT",
@@ -423,6 +424,9 @@ pub(crate) fn lookup_type_declaration(
         QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
     };
     let valid = match captured.value.as_ref() {
+        crate::db::value::QueryValue::TraitDeclaration(recipe) => {
+            recipe.matches_owner(declaration.definition, parse, declaration.header, declaration.scope)
+        }
         crate::db::value::QueryValue::TypeSchema(recipe) => {
             recipe.definition == declaration.definition
                 && &recipe.scope == declaration.scope

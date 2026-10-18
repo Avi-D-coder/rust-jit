@@ -849,3 +849,214 @@ fn unchanged_sized_relaxations_use_actual_language_item_across_origins_and_editi
         }
     }
 }
+
+#[test]
+fn unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins() {
+    use crate::{
+        db::{
+            dependency::{InputKey, InputValue},
+            key::QueryKey,
+            poll::QueryPoll,
+            provider::SyntaxProvider,
+            value::QueryValue,
+        },
+        frontend::{
+            names::NameLookup,
+            trait_declarations::TraitDeclarationResult,
+            type_name_namespace::{SourceTypeOwner, lookup_declaration_name},
+        },
+        source::manifest::Namespace,
+        syntax::imports::ImportSegment,
+    };
+    fn ready<T>(value: QueryPoll<T>) -> T {
+        match value {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => panic!("{error}"),
+            QueryPoll::NeedInput(input) => panic!("{input:?}"),
+        }
+    }
+    const ORIGINAL: &str =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/unsized/unsized.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        for origin in 0..4 {
+            if origin == 3 && edition != 2024 {
+                continue;
+            }
+            let emit = "macro_rules! emit { ($($t:tt)*) => { $($t)* }; }";
+            let path = match origin {
+                0 => PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../fixtures/upstream/rustc-checkout/tests/ui/unsized/unsized.rs"),
+                1 => temporary_source(
+                    &format!("trait-kind-{edition}-{origin}"),
+                    &format!("{emit} emit!{{{ORIGINAL}}}"),
+                ),
+                2 => temporary_source(
+                    &format!("trait-kind-{edition}-{origin}"),
+                    &format!(
+                        "{emit} macro_rules! wrap {{ ($($t:tt)*) => {{ emit!{{$($t)*}} }}; }} wrap!{{{ORIGINAL}}}"
+                    ),
+                ),
+                _ => temporary_source(
+                    "trait-kind-nontrait-bound",
+                    &format!(
+                        "{ORIGINAL}\ntrait BoundTarget {{}} struct Receiver<X>(std::marker::PhantomData<X>); impl<X: S1<X>> BoundTarget for Receiver<X> {{}}"
+                    ),
+                ),
+            };
+            let (mut db, seal, root) = prepared_impl_header_world(&path, edition);
+            let inventory = ready(db.fetch(
+                &SyntaxProvider,
+                QueryKey::PreparedScopeImplHeaders(seal.clone()),
+            ));
+            let QueryValue::PreparedScopeImplHeaders(inventory) = inventory.value.as_ref() else {
+                panic!()
+            };
+            let environment = inventory.inventory_root().environment().unwrap();
+            let select = |namespace, name: &str| match environment
+                .names()
+                .lookup_source_path(
+                    namespace,
+                    &[ImportSegment::Name(name.into())],
+                    false,
+                    &root,
+                    edition,
+                )
+                .unwrap()
+            {
+                NameLookup::Defined(selected) => selected.identity,
+                other => panic!("{name}: {other:?}"),
+            };
+            let expected = select(Namespace::Type, "T1");
+            let sources: Vec<_> = environment.sources().iter().collect();
+            db.trace.detailed = true;
+            let start = db.trace.events.len();
+            for (name, namespace, is_trait) in [
+                ("T1", Namespace::Type, true),
+                ("T2", Namespace::Type, true),
+                ("T3", Namespace::Type, true),
+                ("T4", Namespace::Type, true),
+                ("T5", Namespace::Type, true),
+                ("T6", Namespace::Type, true),
+                ("T7", Namespace::Type, true),
+                ("T8", Namespace::Type, true),
+                ("T9", Namespace::Type, true),
+                ("S1", Namespace::Type, false),
+                ("E", Namespace::Type, false),
+                ("TT", Namespace::Type, false),
+                ("f", Namespace::Value, false),
+            ] {
+                let definition = select(namespace, name);
+                let key = QueryKey::TraitDeclaration(definition);
+                let first = ready(db.fetch(&SyntaxProvider, key.clone()));
+                let second = ready(db.fetch(&SyntaxProvider, key));
+                assert!(std::sync::Arc::ptr_eq(&first.value, &second.value));
+                let QueryValue::TraitDeclaration(declaration) = first.value.as_ref() else {
+                    panic!()
+                };
+                assert_eq!(declaration.definition(), definition);
+                assert_eq!(
+                    declaration.result(),
+                    if is_trait {
+                        TraitDeclarationResult::Trait
+                    } else {
+                        TraitDeclarationResult::NotTrait
+                    },
+                    "{name} {edition} origin{origin}"
+                );
+                if is_trait {
+                    let parse = db.input(&InputKey::DefinitionSource(definition)).unwrap();
+                    let header = db.input(&InputKey::DefinitionHeader(definition)).unwrap();
+                    let context = db.input(&InputKey::DeclarationContext(definition)).unwrap();
+                    let (
+                        InputValue::DefinitionSource(parse),
+                        InputValue::DefinitionHeader(header),
+                        InputValue::DeclarationContext(context),
+                    ) = (parse.as_ref(), header.as_ref(), context.as_ref())
+                    else {
+                        panic!()
+                    };
+                    assert!(declaration.matches_owner(definition, parse, header, &context.scope));
+                    let lookup = ready(lookup_declaration_name(
+                        &mut db,
+                        SourceTypeOwner {
+                            definition,
+                            scope: &context.scope,
+                            header,
+                        },
+                        &sources,
+                        "T1",
+                    ));
+                    assert!(
+                        matches!(&lookup, NameLookup::Defined(found) if found.identity == expected),
+                        "{lookup:?}"
+                    );
+                }
+            }
+            if origin == 3 {
+                let mut pending_bound = 0;
+                for raw in inventory
+                    .inventory_root()
+                    .headers()
+                    .iter()
+                    .filter(|raw| raw.scope.crate_key == root.crate_key)
+                {
+                    let result = ready(db.fetch(
+                        &SyntaxProvider,
+                        QueryKey::ImplPredicates(Box::new(
+                            crate::traits::header_syntax::ImplHeaderSyntaxKey {
+                                inventory: seal.clone(),
+                                implementation: raw.identity,
+                            },
+                        )),
+                    ));
+                    let QueryValue::ImplPredicates(prepared) = result.value.as_ref() else {
+                        panic!()
+                    };
+                    let crate::frontend::impl_predicates::ImplPredicateResult::Requirements(
+                        requirements,
+                    ) = prepared.result()
+                    else {
+                        panic!("{:?}", prepared.result())
+                    };
+                    pending_bound += requirements
+                        .iter()
+                        .filter(|row| {
+                            matches!(
+                                row,
+                                crate::traits::predicate::SourcePredicateRecipe::Explicit {
+                                    result: crate::traits::predicate::PredicateResult::Pending(
+                                        crate::traits::predicate::PredicatePending::TraitName
+                                    ),
+                                    ..
+                                }
+                            )
+                        })
+                        .count();
+                }
+                assert_eq!(pending_bound, 1);
+            }
+            let absent = ready(db.fetch(
+                &SyntaxProvider,
+                QueryKey::TraitDeclaration(Digest::of_bytes(b"unpublished-trait-kind")),
+            ));
+            assert!(
+                matches!(absent.value.as_ref(), QueryValue::TraitDeclaration(declaration) if declaration.result() == TraitDeclarationResult::MetadataPending)
+            );
+            assert!(db.trace.events[start..].iter().all(|event| !matches!(
+                event.key,
+                QueryKey::BodyStructure(_)
+                    | QueryKey::Thunk(_)
+                    | QueryKey::PatternPlan(_)
+                    | QueryKey::FunctionSignature(_)
+            )));
+            db.begin_expansion_epoch(2).unwrap();
+            match db.fetch(&SyntaxProvider, QueryKey::TraitDeclaration(expected)) {
+                QueryPoll::Ready(Ok(value)) if origin == 0 || origin == 3 => assert!(
+                    matches!(value.value.as_ref(), QueryValue::TraitDeclaration(declaration) if declaration.is_trait())
+                ),
+                QueryPoll::Ready(Err(_)) if origin == 1 || origin == 2 => {}
+                other => panic!("trait source epoch {edition} origin{origin}: {other:?}"),
+            }
+        }
+    }
+}

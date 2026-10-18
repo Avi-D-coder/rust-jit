@@ -146,6 +146,7 @@ impl StableEncode for PreparedBodySyntaxKey {
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    TraitDeclaration(Digest),
     PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
     ArrayRepeatPlan(crate::source::manifest::PcKey),
     PreparedArrayRepeat(crate::source::manifest::PcKey),
@@ -210,7 +211,7 @@ impl QueryKey {
                     + key.bucket.name.capacity()
             }
             Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) => 0,
             Self::ExpansionInput(k) | Self::CurrentExpansionInput(k) => {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k)
             }
@@ -259,6 +260,7 @@ impl QueryKey {
             Self::ImplHeaderSyntax(_) => "ImplHeaderSyntax",
             Self::ImplHeadTypes(_) => "ImplHeadTypes",
             Self::ImplPredicates(_) => "ImplPredicates",
+            Self::TraitDeclaration(_) => "TraitDeclaration",
             Self::AssociatedItemQualifier(_) => "AssociatedItemQualifier",
             Self::AssociatedEquations(_) => "AssociatedEquations",
             Self::NominalMember(_) => "NominalMember",
@@ -310,6 +312,7 @@ impl StableEncode for QueryKey {
             Self::ImplHeaderSyntax(key) => { e.u32(57); e.record(key.as_ref()); }
             Self::ImplHeadTypes(key) => { e.u32(58); e.record(key.as_ref()); }
             Self::ImplPredicates(key) => { e.u32(59); e.record(key.as_ref()); }
+            Self::TraitDeclaration(key) => { e.u32(60); e.digest(*key); }
             Self::AssociatedItemQualifier(key) => { e.u32(51); e.record(key); }
             Self::AssociatedEquations(key) => {
                 e.u32(50);
