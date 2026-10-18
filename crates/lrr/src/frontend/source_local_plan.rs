@@ -142,7 +142,7 @@ impl LocalTypePrefix {
         db: &mut Database,
     ) -> QueryPoll<Option<Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>>>
     {
-        if !matches!(self.selection, LocalTypePrefixSelection::ModuleTail) {
+        if !matches!(self.selection, LocalTypePrefixSelection::ModuleTail | LocalTypePrefixSelection::NeedDefinitionModule(_)) {
             return QueryPoll::Ready(Ok(None));
         }
         match self.plan.require_current(db) {
@@ -153,19 +153,22 @@ impl LocalTypePrefix {
         let Some(name) = &self.use_name else {
             return QueryPoll::Ready(Err(error("module tail has no actual Type use")));
         };
-        if self.module_selector.is_none() {
-            return QueryPoll::Ready(Err(error("module tail has no use-context selector")));
-        }
-        let key = match self
-            .plan
-            .lexical_module
-            .request(name.name(), name.edition())
-        {
-            Ok(Some(key)) => key,
-            Ok(None) => {
-                return QueryPoll::Ready(Err(error("module tail source publication absent")));
+        let key = if matches!(self.selection, LocalTypePrefixSelection::NeedDefinitionModule(_)) {
+            match self.plan.definition_module_request(db, name.context(), name.name(), name.edition(), crate::source::manifest::Namespace::Type) {
+                QueryPoll::Ready(Ok(Some(key))) => key,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
-            Err(error) => return QueryPoll::Ready(Err(error)),
+        } else {
+            if self.module_selector.is_none() {
+                return QueryPoll::Ready(Err(error("module tail has no use-context selector")));
+            }
+            match self.plan.lexical_module.request(name.name(), name.edition()) {
+                Ok(Some(key)) => key,
+                Ok(None) => return QueryPoll::Ready(Err(error("module tail source publication absent"))),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            }
         };
         let result = match db.fetch(
             &crate::db::provider::SyntaxProvider,
@@ -719,6 +722,31 @@ impl PreparedSourceLocalPlan {
             proof.fingerprint = StableEncode::fingerprint(&proof);
             Ok(proof)
         }))
+    }
+    /// Shared cold Type/Value tail. The key uses pinned item normalization;
+    /// it does not strip an opaque mark into a caller-selected module.
+    pub(crate) fn definition_module_request(
+        &self, db: &mut Database, raw: Key, name: &str, edition: u16,
+        namespace: crate::source::manifest::Namespace,
+    ) -> QueryPoll<Option<crate::db::key::CurrentModuleNameKey>> {
+        let context = match self.allocation_roots().hygiene().item(raw) {
+            Ok(context) => context,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let body = self.context().source().index().body();
+        let answer = match db.fetch(&crate::db::provider::SyntaxProvider,
+            crate::db::key::QueryKey::MacroDefinitionModule { body: body.clone(), context }) {
+            QueryPoll::Ready(Ok(answer)) => answer,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let crate::db::value::QueryValue::MacroDefinitionModule(module) = answer.value.as_ref() else {
+            return QueryPoll::Ready(Err(error("definition module query variant differs")));
+        };
+        if !module.matches(body, context) || !Arc::ptr_eq(module.retained_plan().context(), self.context()) {
+            return QueryPoll::Ready(Err(error("definition module actual body/context differs")));
+        }
+        QueryPoll::Ready(module.request(name, edition, namespace))
     }
     pub(crate) fn module_scope(&self) -> Option<&crate::syntax::outline::ScopeKey> {
         // Membership only. A use must consume type_prefix/module_selector,

@@ -88,7 +88,7 @@ fn unchanged_official_macro_owner_keeps_actual_nested_declaration_module() {
 fn actual_opaque_body_record_joins_selected_definition_module_and_expires() {
     // LRR authority matrix control: source assembly/selection are real. This is
     // not substituted for the unchanged upstream language/privacy witnesses.
-    const SOURCE: &str = "#![feature(decl_macro)]mod definitions{struct Target{x:i32}pub macro emit(){fn answer(){let _=Target{x:1};}}}definitions::emit!();fn main(){}";
+    const SOURCE: &str = "#![feature(decl_macro)]mod definitions{struct Target{x:i32}const VALUE:i32=9;pub macro emit(){fn answer(){let _=Target{x:1};}}}definitions::emit!();fn main(){}";
     for edition in [2015, 2018, 2021, 2024] {
         let (provider, _, inputs) =
             crate::expand::source_declarative::assembly::tests::world(SOURCE, edition);
@@ -280,7 +280,31 @@ fn actual_opaque_body_record_joins_selected_definition_module_and_expires() {
             receipt.declaration_comparison()
         );
         ready(receipt.revalidate(&mut db));
+        // Enter through the production owning-body publication, not a
+        // caller-supplied source receipt. Both namespaces use the same Q61.
+        let published = ready(db.prepare_source_local_plan(&discovery, &[&source], &body.key()));
+        let prefix = ready(published.type_prefix(&mut db, prefix.node().unwrap()));
+        let observation = ready(prefix.module_name(&mut db)).expect("actual Type module");
+        assert!(matches!(observation.lookup(), Some(crate::frontend::names::NameLookup::Defined(_))));
+        assert_eq!(observation.scope().module_path, ["definitions"]);
+        let raw = prefix.use_name().unwrap().context();
+        let normalized = published.allocation_roots().hygiene().item(raw).unwrap();
+        let module_key = QueryKey::MacroDefinitionModule { body: body.key(), context: normalized };
+        let first = ready(db.fetch(&SyntaxProvider, module_key.clone()));
+        let value_request = ready(published.definition_module_request(&mut db, raw, "VALUE", edition, Namespace::Value))
+            .expect("actual Value module");
+        assert_eq!(value_request.bucket.scope, *observation.scope());
+        let value = ready(db.fetch(&SyntaxProvider, QueryKey::CurrentModuleName(Box::new(value_request))));
+        let QueryValue::CurrentModuleName(value) = value.value.as_ref() else { panic!() };
+        // This discovery was explicitly sealed for Type only. Selecting the
+        // genuine module for Value must not manufacture a Value namespace seal
+        // or turn missing evidence into Absent (and hence a pattern binding).
+        assert_eq!(value.completion(), crate::frontend::current_module_names::ModuleNameCompletion::Unsealed);
+        assert!(value.lookup().is_none());
+        let again = ready(db.fetch(&SyntaxProvider, module_key.clone()));
+        assert!(Arc::ptr_eq(&first.value, &again.value), "Type/Value must reuse the same immutable module selection");
         db.begin_expansion_epoch(2).unwrap();
+        assert!(matches!(db.fetch(&SyntaxProvider, module_key), QueryPoll::Ready(Err(_))));
         assert!(matches!(
             receipt.revalidate(&mut db),
             QueryPoll::Ready(Err(_))

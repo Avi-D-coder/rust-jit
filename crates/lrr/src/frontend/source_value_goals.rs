@@ -785,16 +785,15 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             return qualified(db, goal, &expression);
         }
         PrefixResolution::ModuleTail => {
-            match checked!(plan.lexical_module.route(&hygiene, raw)) {
+            let request = match checked!(plan.lexical_module.route(&hygiene, raw)) {
                 ModuleRoute::Definition(expansion) => {
-                    return goal.needs(ValueGoalDemand::DefinitionModule(expansion));
+                    let Some(request) = polled!(plan.definition_module_request(db, raw, &name, edition, namespace)) else {
+                        return goal.needs(ValueGoalDemand::DefinitionModule(expansion));
+                    };
+                    Some(request)
                 }
-                ModuleRoute::Lexical(_) => {}
-            }
-            let request = checked!(
-                plan.lexical_module
-                    .request_in_namespace(&name, edition, namespace)
-            );
+                ModuleRoute::Lexical(_) => checked!(plan.lexical_module.request_in_namespace(&name, edition, namespace)),
+            };
             let Some(request) = request else {
                 return goal.needs(ValueGoalDemand::ModulePublication);
             };

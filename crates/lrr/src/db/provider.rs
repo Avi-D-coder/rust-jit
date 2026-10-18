@@ -928,6 +928,13 @@ impl Provider for SyntaxProvider {
             QueryKey::SourceConstraints(body) => {
                 return super::source_constraint_provider::prepare(self, db, body);
             }
+            QueryKey::MacroDefinitionModule { body, context } => {
+                return match crate::frontend::macro_definition_modules::PreparedDefinitionModule::prepare(db, body, *context) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::MacroDefinitionModule(Arc::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourceLocalPlan(body) => {
                 return super::body_environment_provider::source_local_plan(db, body);
             }

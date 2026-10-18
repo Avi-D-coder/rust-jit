@@ -332,9 +332,12 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
     let mut trace = checked!(Trace::new());
     let mut module = None;
     let selected: NameDefinition = match prefix.selection() {
-        LocalTypePrefixSelection::ModuleTail => {
+        LocalTypePrefixSelection::ModuleTail | LocalTypePrefixSelection::NeedDefinitionModule(_) => {
             let Some(observation) = polled!(prefix.module_name(db)) else {
-                return QueryPoll::Ready(Err(error("body Type module observation absent")));
+                return match prefix.selection() {
+                    LocalTypePrefixSelection::NeedDefinitionModule(key) => pending(BodyTypeDemand::DefinitionModule(*key)),
+                    _ => QueryPoll::Ready(Err(error("body Type module observation absent"))),
+                };
             };
             if observation.completion() != ModuleNameCompletion::Complete {
                 return pending(BodyTypeDemand::ModuleCompletion(observation.completion()));
@@ -460,9 +463,6 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
         }
         LocalTypePrefixSelection::NeedExpansionDefinition(key) => {
             return pending(BodyTypeDemand::ExpansionDefinition(*key));
-        }
-        LocalTypePrefixSelection::NeedDefinitionModule(key) => {
-            return pending(BodyTypeDemand::DefinitionModule(*key));
         }
         LocalTypePrefixSelection::NeedModulePublication => {
             return pending(BodyTypeDemand::ModulePublication);
@@ -654,6 +654,17 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
     {
         return QueryPoll::Ready(Err(error("body Type declaration name/edition differs")));
     }
+    let definition_module = if matches!(prefix.selection(), LocalTypePrefixSelection::NeedDefinitionModule(_)) {
+        let context = checked!(prefix.retained_plan().allocation_roots().hygiene().item(use_name.context()));
+        let key = QueryKey::MacroDefinitionModule {
+            body: prefix.retained_plan().context().source().index().body().clone(), context,
+        };
+        Some(polled!(trace.query(db, key)))
+    } else { None };
+    let adjusted = definition_module.as_ref().and_then(|value| match value.as_ref() {
+        QueryValue::MacroDefinitionModule(module) => module.selected(),
+        _ => None,
+    });
     let (original, original_facts) = prefix.retained_plan().entered.local_hygiene();
     let (raw, comparison, normalized) = match checked!(parsed.identifier_context(name_range)) {
         Some(raw) => {
@@ -665,6 +676,12 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
                 checked!(facts.name_item(raw)),
                 checked!(facts.item(raw)),
             )
+        }
+        None if adjusted.is_some() => {
+            let module = adjusted.unwrap();
+            // A genuine original declaration in the selected definition module
+            // has that source index's root item context, not the caller's root.
+            (module.declaration_context(), module.declaration_comparison(), module.declaration_context())
         }
         None if prefix.retained_plan().entered.parent.source().outline.parse != *parse => {
             // An original (non-generated) declaration of another source file,
@@ -702,19 +719,28 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
             )
         }
     };
-    let use_normalized = checked!(original_facts.item(use_name.context()));
-    let declaration_facts = parsed
-        .hygiene_facts()
-        .map_or(original_facts.as_ref(), |facts| facts.as_ref());
-    if checked!(declaration_facts.context(normalized))
-        .parent
-        .is_some()
-        || checked!(original_facts.context(use_normalized))
+    if let Some(adjusted) = adjusted {
+        if module.as_ref().is_none_or(|observation| observation.scope() != adjusted.scope()
+            || observation.source() != adjusted.source())
+            || comparison != adjusted.declaration_comparison()
+        {
+            return pending(BodyTypeDemand::PinnedAdjustment(identity));
+        }
+    } else {
+        let use_normalized = checked!(original_facts.item(use_name.context()));
+        let declaration_facts = parsed
+            .hygiene_facts()
+            .map_or(original_facts.as_ref(), |facts| facts.as_ref());
+        if checked!(declaration_facts.context(normalized))
             .parent
             .is_some()
-        || comparison != checked!(original_facts.name_item(use_name.context()))
-    {
-        return pending(BodyTypeDemand::PinnedAdjustment(identity));
+            || checked!(original_facts.context(use_normalized))
+                .parent
+                .is_some()
+            || comparison != checked!(original_facts.name_item(use_name.context()))
+        {
+            return pending(BodyTypeDemand::PinnedAdjustment(identity));
+        }
     }
     let mut declaration = BodyTypeDeclaration {
         // The declaring body's plan owns the declaration's header, fields and

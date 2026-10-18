@@ -185,6 +185,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         QueryKey::ConstructorPlan(_)
         | QueryKey::BoundRecordConstructor(_)
         | QueryKey::QualifiedBodyType(_)
+        | QueryKey::MacroDefinitionModule { .. }
         | QueryKey::SourceLocalPlan(_)
         | QueryKey::TypeSchema(_)
         | QueryKey::TypeAlias(_)

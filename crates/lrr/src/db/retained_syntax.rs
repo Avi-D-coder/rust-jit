@@ -127,6 +127,7 @@ impl RetainedSyntaxInput {
         })();
         QueryPoll::Ready(result)
     }
+    pub(crate) fn seal(&self) -> &SealKey { &self.seal }
     pub fn key(&self) -> &ParseKey {
         &self.key
     }

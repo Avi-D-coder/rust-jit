@@ -137,3 +137,58 @@ fn generated_module_functions_publish_their_nested_item_environment() {
         );
     }
 }
+
+
+#[test]
+fn opaque_definition_module_shares_type_value_and_pattern_routes() {
+    // LRR route/effect control, supplementary to unchanged upstream witnesses.
+    // Shadow the producer's names at the call site: opaque item lookup must
+    // retain the actual declaration module for Type and Value alike.
+    const SOURCE: &str = r#"
+        #![feature(decl_macro)]
+        mod definitions {
+            struct Target { value: i32 }
+            fn number() -> i32 { println!("number"); 7 }
+            pub macro emit($name:ident) {
+                fn $name() -> i32 {
+                    let item: Target = Target { value: number() };
+                    let result = item.value;
+                    result
+                }
+            }
+        }
+        struct Target { value: bool }
+        fn number() -> bool { false }
+        definitions::emit!(answer);
+        fn main() { println!("{}", answer()); }
+    "#;
+    for edition in [2015, 2018, 2021, 2024] {
+        let report = completed(SOURCE, edition);
+        assert_eq!(report.output.stdout, "number\n7\n", "edition {edition}");
+    }
+}
+
+#[test]
+fn opaque_expression_module_shares_type_value_and_pattern_routes() {
+    // Independent entered-body route control. The generated-function signature
+    // control above remains required; this does not stand in for that gate.
+    const SOURCE: &str = r#"
+        #![feature(decl_macro)]
+        mod definitions {
+            struct Target { value: i32 }
+            fn number() -> i32 { println!("number"); 7 }
+            pub macro body() {{
+                let item: Target = Target { value: number() };
+                let result = item.value;
+                println!("{}", result);
+            }}
+        }
+        struct Target { value: bool }
+        fn number() -> bool { false }
+        fn main() { definitions::body!(); }
+    "#;
+    for edition in [2015, 2018, 2021, 2024] {
+        let report = completed(SOURCE, edition);
+        assert_eq!(report.output.stdout, "number\n7\n", "edition {edition}");
+    }
+}

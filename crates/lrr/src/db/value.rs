@@ -131,6 +131,7 @@ pub enum QueryValue {
     NominalMember(Box<crate::frontend::nominal_member_goals::PreparedNominalMember>),
     BoundRecordConstructor(Box<crate::frontend::prepared_constructors::PreparedRecordConstructor>),
     SourceLocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
+    MacroDefinitionModule(Arc<crate::frontend::macro_definition_modules::PreparedDefinitionModule>),
     CurrentModuleName(Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>),
     SealedName {
         key: Box<super::key::SealedNameKey>,
@@ -182,6 +183,7 @@ impl QueryValue {
             }
             Self::EnteredValue(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::SourceLocalPlan(plan) => Some(SourceArtifactRef::LocalPlan(plan)),
+            Self::MacroDefinitionModule(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::QualifiedBodyType(value) => {
                 Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
             }
@@ -296,6 +298,7 @@ impl QueryValue {
         {
             return value.key() == key && key.phase == 0;
         }
+        if let (Self::MacroDefinitionModule(value), QueryKey::MacroDefinitionModule { body, context }) = (self, key) { return value.matches(body, *context); }
         if let (Self::SourceLocalPlan(plan), QueryKey::SourceLocalPlan(body)) = (self, key) {
             return plan.context().source().index().body() == body;
         }
@@ -447,6 +450,7 @@ impl QueryValue {
                 e.u32(35);
                 e.record(value.as_ref());
             }
+            Self::MacroDefinitionModule(value) => { e.u32(61); e.record(value.as_ref()); }
             Self::SourceLocalPlan(plan) => {
                 e.u32(34);
                 e.digest(plan.source_identity());
@@ -606,7 +610,7 @@ impl QueryValue {
             Self::Signature(v) => v.estimated_bytes(),
             Self::FunctionSignature(v) => v.estimated_bytes(),
             // Artifact retirement owns and charges the actual inner plan.
-            Self::SourceLocalPlan(_) => 0,
+            Self::SourceLocalPlan(_) | Self::MacroDefinitionModule(_) => 0,
             Self::ReferenceHeader(v) => v
                 .metadata_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),

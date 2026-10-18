@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T22:32:42.892806+00:00",
+  "updated_at": "2026-10-18T23:03:36.576868+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -748,27 +748,26 @@
   },
   "current_checkpoint": {
     "baseline_git_head": "dcd056e542c86605f6a282470566952b2aea3c79",
-    "working_tree": "solo_source_checkpoint_after_collected_async_validation",
+    "working_tree": "solo_held_source_checkpoint_after_collected_async_validation",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V108 solo held M007/M018 producer-definition integration: actual completed derive selections validate their output identity/edition and supply immutable per-record definition metadata to GeneratedBodyBoundary, whose v3 fingerprint and existing source/currentness proof retain it for the common lexical resolver. No receiver/derive runtime evaluator. Both builds pass;6/8focused controls pass, including handwritten/user-macro/builtin-derived Clone+PartialEq equivalence in2015/2021 (failed V101/V104), copy-derive originals, symbolic source control all4editions and3boundary authority controls. Selected unchanged stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals now resolve self but fail generated local __self_discr classification. Diagnostic trace proves DefinitionModule pending at declaration and BindingClassification pending at later read. Zero new distinct upstream runtime gains; no refreshed suite total or M007/M018/interpreter/JIT gate closure. Common definition-site Type/Value module receipt/query integration is the next prerequisite.",
+    "validation": "V113 solo held M007/M018 common module prerequisite: Q61 selects actual sealed producer source/module for ordinary Type and Value requests, including retained entered-body records. Final3/5focused controls pass, including actual Type selection, Type/Value memo reuse, absent Value-certificate refusal and epoch invalidation all4editions; generated primitive return namespace and opaque nominal field adjustment remain failed. Same-production-CLI V111 unchanged macro stock2/2passes (issue44127 expected stdout, nested_expr), V110 slice sample1/3passes and actual xcrate root+aux fails qualified lookup. No measured baseline delta/new distinct gains or refreshed suite total. Library/configured owner namespace, generated header, field/qualified adjustment and full runtime/interpreter/JIT gates remain open.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "dcd056e542c86605f6a282470566952b2aea3c79",
+    "source_checkpoint_pushed": false,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": [
-      "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json"
-    ],
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v109-v113-definition-modules.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
       "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json",
-      "worktracks/evidence/2026-10-18-interpreter-v102-v108-producer-provenance.json"
+      "worktracks/evidence/2026-10-18-interpreter-v102-v108-producer-provenance.json",
+      "worktracks/evidence/2026-10-18-interpreter-v109-v113-definition-modules.json"
     ]
   }
 }

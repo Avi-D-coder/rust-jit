@@ -168,6 +168,7 @@ pub enum QueryKey {
     QualifiedBodyType(crate::source::manifest::PcKey),
     BoundRecordConstructor(crate::source::manifest::PcKey),
     SourceLocalPlan(crate::source::manifest::BodyKey),
+    MacroDefinitionModule { body: crate::source::manifest::BodyKey, context: crate::syntax::token_wire::Key },
     CurrentModuleName(Box<CurrentModuleNameKey>),
     SealedName(Box<SealedNameKey>),
     DiscoverySeal(super::seals::SealKey),
@@ -235,6 +236,7 @@ impl QueryKey {
             | Self::PreparedBindingPlan(_)
             | Self::BindingConstraints(_)
             | Self::EnteredValue(_)
+            | Self::MacroDefinitionModule { .. }
             | Self::SourceLocalPlan(_)
             | Self::SourceConstraints(_)
             | Self::QualifiedBodyType(_)
@@ -279,6 +281,7 @@ impl QueryKey {
             Self::QualifiedBodyType(_) => "QualifiedBodyType",
             Self::BoundRecordConstructor(_) => "BoundRecordConstructor",
             Self::SourceLocalPlan(_) => "SourceLocalPlan",
+            Self::MacroDefinitionModule { .. } => "MacroDefinitionModule",
             Self::CurrentModuleName(_) => "CurrentModuleName",
             Self::SealedName(_) => "SealedName",
             Self::DiscoverySeal(_) => "DiscoverySeal",
@@ -383,6 +386,7 @@ impl StableEncode for QueryKey {
                 e.u32(35);
                 e.record(key);
             }
+            Self::MacroDefinitionModule { body, context } => { e.u32(61); e.record(body); e.digest(Digest(context.0)); }
             Self::SourceLocalPlan(key) => {
                 e.u32(34);
                 e.record(key);
