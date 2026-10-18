@@ -672,6 +672,7 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             field,
             source,
         } => frame.preflight_constructor_field(*guard, *field, *source, store),
+        Op::ConstructRest { guard, base } => frame.preflight_record_rest(*guard, *base, store),
         Op::ConstructFinish { guard, destination } => {
             frame.preflight_constructor_finish(*guard, *destination, store)
         }
@@ -1240,6 +1241,9 @@ fn execute(
             field,
             source,
         } => frame.constructor_field(*guard, *field, *source, store),
+        Op::ConstructRest { .. } => Err(invalid(
+            "record update bypassed its ordinary Copy activation",
+        )),
         Op::ConstructFinish { guard, destination } => {
             frame.finish_constructor(*guard, *destination, store)
         }

@@ -125,7 +125,9 @@ impl LangRecord {
     /// The lang item a range expression constructs and its written fields.
     /// `a..=b` lowers to `RangeInclusive::new(a, b)` (private fields), which
     /// is not a record construction; it is `None` here.
-    pub(crate) fn of(range: &ast::RangeExpr) -> Option<(Self, Option<ast::Expr>, Option<ast::Expr>)> {
+    pub(crate) fn of(
+        range: &ast::RangeExpr,
+    ) -> Option<(Self, Option<ast::Expr>, Option<ast::Expr>)> {
         use ast::RangeItem;
         let inclusive = range.op_kind()? == ast::RangeOp::Inclusive;
         let (start, end) = (range.start(), range.end());
@@ -170,6 +172,10 @@ pub struct ConstructorPlan {
     kind: ConstructorKind,
     /// `Some` for a range expression: a record of this `core` lang item.
     lang: Option<LangRecord>,
+    /// Actual spread syntax requests an address rather than a whole-value read.
+    base_is_place: bool,
+    /// Deterministic direct phase selector, built once with source capture.
+    operand_ordinals: Box<[(NodeId, u32)]>,
 }
 impl ConstructorPlan {
     pub fn node(&self) -> NodeId {
@@ -190,6 +196,25 @@ impl ConstructorPlan {
     /// The `core` lang-item struct a range expression's record constructs.
     pub fn lang_record(&self) -> Option<LangRecord> {
         self.lang
+    }
+    pub(crate) fn base_is_place(&self) -> bool {
+        self.base_is_place
+    }
+    pub(crate) fn operand(&self, written: usize) -> Option<&ConstructorOperand> {
+        match &self.kind {
+            ConstructorKind::Tuple(fields) | ConstructorKind::Array(fields) => fields.get(written),
+            ConstructorKind::Record { fields, rest, .. } => fields
+                .get(written)
+                .map(|field| &field.operand)
+                .or_else(|| (written == fields.len()).then_some(rest.as_ref()).flatten()),
+            ConstructorKind::Repeat { element, .. } => (written == 0).then_some(element),
+        }
+    }
+    pub(crate) fn written_ordinal(&self, node: NodeId) -> Option<usize> {
+        self.operand_ordinals
+            .binary_search_by_key(&node, |entry| entry.0)
+            .ok()
+            .map(|index| self.operand_ordinals[index].1 as usize)
     }
     pub fn estimated_bytes(&self) -> Option<usize> {
         let operands = |n: usize| n.checked_mul(std::mem::size_of::<ConstructorOperand>());
@@ -212,6 +237,11 @@ impl ConstructorPlan {
         };
         std::mem::size_of::<Self>()
             .checked_add(extra)?
+            .checked_add(
+                self.operand_ordinals
+                    .len()
+                    .checked_mul(std::mem::size_of::<(NodeId, u32)>())?,
+            )?
             .checked_add(self.profile.semantics.capacity())
     }
 }
@@ -403,6 +433,7 @@ impl ParsedFile {
             return Ok(None);
         }
         let mut lang = None;
+        let mut base_is_place = false;
         let operand = |expr: ast::Expr| -> Result<ConstructorOperand, Diagnostic> {
             let r = range(expr.syntax().text_range());
             let relative = SourceRange {
@@ -492,10 +523,11 @@ impl ParsedFile {
                         },
                     )?;
                 }
-                let rest = list.spread().map(operand).transpose()?;
-                if rest.is_some() && fields.len() >= usize::from(u16::MAX - 3) {
-                    return Err(limit());
-                }
+                let rest = list.spread();
+                base_is_place = rest
+                    .as_ref()
+                    .is_some_and(super::thunks::intrinsic_place_receiver);
+                let rest = rest.map(operand).transpose()?;
                 ConstructorKind::Record {
                     path: self.constructor_tokens(path.syntax())?,
                     fields,
@@ -529,6 +561,31 @@ impl ParsedFile {
             }
             _ => return Ok(None),
         };
+        let operands: Vec<&ConstructorOperand> = match &kind {
+            ConstructorKind::Tuple(fields) | ConstructorKind::Array(fields) => {
+                fields.iter().collect()
+            }
+            ConstructorKind::Repeat { element, .. } => vec![element],
+            ConstructorKind::Record { fields, rest, .. } => fields
+                .iter()
+                .map(|field| &field.operand)
+                .chain(rest.iter())
+                .collect(),
+        };
+        let mut operand_ordinals = Vec::new();
+        operand_ordinals
+            .try_reserve_exact(operands.len())
+            .map_err(|_| limit())?;
+        for (written, operand) in operands.into_iter().enumerate() {
+            operand_ordinals.push((operand.node, u32::try_from(written).map_err(|_| limit())?));
+        }
+        operand_ordinals.sort_unstable_by_key(|entry| entry.0);
+        if operand_ordinals
+            .windows(2)
+            .any(|pair| pair[0].0 == pair[1].0)
+        {
+            return Err(fault("constructor operand source identity is duplicated"));
+        }
         let plan = ConstructorPlan {
             origin,
             node,
@@ -536,12 +593,14 @@ impl ParsedFile {
             cfg: cfg.fingerprint(),
             kind,
             lang,
+            base_is_place,
+            operand_ordinals: operand_ordinals.into_boxed_slice(),
         };
         Ok(Some(plan))
     }
 }
 impl StableEncode for ConstructorPlan {
-    const DOMAIN: &'static str = "lrr/v2/entered-constructor-plan";
+    const DOMAIN: &'static str = "lrr/v3/entered-constructor-plan";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.origin.body_key);
         e.u32(self.node.0);
@@ -579,6 +638,11 @@ impl StableEncode for ConstructorPlan {
             }
         }
         e.option(&self.lang, |e, item| e.u32(item.tag()));
+        e.bool(self.base_is_place);
+        e.sequence(&self.operand_ordinals, |e, (node, written)| {
+            e.u32(node.0);
+            e.u32(*written);
+        });
     }
 }
 impl StableEncode for ConstructorToken {
@@ -602,8 +666,9 @@ mod tests {
     /// plan with its written bounds as the named fields, in source order.
     #[test]
     fn rustc_range_expressions_plan_core_lang_item_records() {
-        const ORIGINAL: &str =
-            include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/slice.rs");
+        const ORIGINAL: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/slice.rs"
+        );
         let cfg = CfgSet::guest_default();
         let parsed = ParsedFile::parse(
             &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
@@ -640,7 +705,10 @@ mod tests {
                 else {
                     panic!("range plan is not a plain record")
                 };
-                assert!(path.is_empty(), "a lang item is never named by caller tokens");
+                assert!(
+                    path.is_empty(),
+                    "a lang item is never named by caller tokens"
+                );
                 (
                     plan.lang_record().unwrap(),
                     fields

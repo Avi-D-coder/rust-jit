@@ -159,10 +159,8 @@ pub(crate) fn select_pattern_name(
             ))));
         }
     };
-    let item_kind = sources
-        .iter()
-        .find_map(|source| source.outline_item(definition.identity))
-        .map(|item| item.def_key.item_kind);
+    let item_kind =
+        super::callables::selected_item_kind(db, sources.iter().copied(), definition.identity);
     QueryPoll::Ready(
         pattern_declaration(graph, &name, definition.identity, item_kind)
             .map(|selection| (name, selection)),

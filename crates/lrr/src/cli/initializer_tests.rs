@@ -213,7 +213,7 @@ fn generated_constant_patterns_use_the_same_vm_initializer_demand() {
             let _same = N;
         }
     "#;
-    for source in [
+    for (origin, source) in [
         BODY.to_owned(),
         "const fn value() -> i32 { 7 } const N: i32 = value();
          fn main() { assert!(matches!(7_i32, N)); let _same = N; }"
@@ -222,14 +222,14 @@ fn generated_constant_patterns_use_the_same_vm_initializer_demand() {
         format!(
             "macro_rules! emit {{ ($($i:item)*) => {{ $($i)* }}; }} macro_rules! wrap {{ ($($i:item)*) => {{ emit! {{ $($i)* }} }}; }} wrap! {{ {BODY} }}"
         ),
-    ] {
+    ].into_iter().enumerate() {
         for edition in [2015, 2018, 2021, 2024] {
             match super::format_trait_facade_tests::run("pattern-init-origin", &source, edition) {
                 Ok(crate::cli::StandaloneOutcome::Completed(report)) => {
-                    assert_eq!(report.opcode_counters.started_by_opcode[19], 1, "{edition}");
+                    assert_eq!(report.opcode_counters.started_by_opcode[19], 1, "{edition}, origin={origin}");
                 }
-                Err(error) => panic!("{edition}: {error}"),
-                Ok(other) => panic!("{edition}: {}", serde_json::to_string(&other).unwrap()),
+                Err(error) => panic!("{edition}, origin={origin}: {error}"),
+                Ok(other) => panic!("{edition}, origin={origin}: {}", serde_json::to_string(&other).unwrap()),
             }
         }
     }

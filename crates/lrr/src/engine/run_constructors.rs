@@ -160,14 +160,9 @@ impl RunMachine {
             return QueryPoll::Ready(Err(call_fault("constructor plan outcome differs")));
         };
         match plan.kind() {
-            ConstructorKind::Record { rest: None, .. }
+            ConstructorKind::Record { .. }
             | ConstructorKind::Tuple(_)
             | ConstructorKind::Array(_) => {}
-            ConstructorKind::Record { rest: Some(_), .. } => {
-                return QueryPoll::Ready(Err(unsupported(
-                    "record update requires checked base-field transfers",
-                )));
-            }
             ConstructorKind::Repeat { .. } => {
                 return QueryPoll::Ready(Err(unsupported(
                     "array repeat requires reached const length and Copy binding",
@@ -182,7 +177,7 @@ impl RunMachine {
         // A genuine prepared record entry must have installed its binding
         // atomically with the recipe. Never reconstruct a missing payload or
         // fall back after a stale/invalid prepared environment.
-        if matches!(plan.kind(), ConstructorKind::Record { rest: None, .. })
+        if matches!(plan.kind(), ConstructorKind::Record { .. })
             && db
                 .published_input(&crate::db::dependency::InputKey::BodyEnvironment(
                     self.frame.body.body().clone(),

@@ -1002,6 +1002,22 @@ fn verify_inner(
                 }
                 None
             }
+            Op::ConstructRest { guard, base } => {
+                slot(body, *guard, SlotKind::Guard)?;
+                slot(body, *base, SlotKind::Place)?;
+                let operand_matches = match Phase::from_code(draft.key.phase) {
+                    Phase::Operand(ordinal) => node
+                        .operands
+                        .get(usize::from(ordinal))
+                        .and_then(|id| body.nodes().get(id.0 as usize))
+                        .is_some_and(|operand| operand.place == Some(*base)),
+                    _ => false,
+                };
+                if node.constructor_guard != Some(*guard) || !operand_matches {
+                    return Err(invalid("record update guard/base source phase differs"));
+                }
+                None
+            }
             Op::ConstructFinish { guard, destination } => {
                 slot(body, *guard, SlotKind::Guard)?;
                 slot(body, *destination, SlotKind::Value)?;

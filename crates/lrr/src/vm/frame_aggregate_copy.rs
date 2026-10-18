@@ -15,10 +15,16 @@ pub(super) struct OpActivation {
     pc: crate::core::digest::Digest,
     operation_index: u32,
     expected: Op,
-    copy: AggregateCopy,
-    source: CellId,
-    destination: SlotId,
-    source_view: Option<crate::traits::term::TyTerm>,
+    work: CopyOperation,
+}
+enum CopyOperation {
+    Read {
+        copy: AggregateCopy,
+        source: CellId,
+        destination: SlotId,
+        source_view: Option<crate::traits::term::TyTerm>,
+    },
+    RecordRest(super::record_update_frame::RestActivation),
 }
 fn place_error(error: PlaceFailure) -> Diagnostic {
     match error {
@@ -74,6 +80,17 @@ impl Frame {
     ) -> Result<bool, Diagnostic> {
         if self.copy_activation.is_some() {
             return Err(invalid("copy activation already active"));
+        }
+        if let Op::ConstructRest { guard, base } = op {
+            let work = self.begin_record_rest(*guard, *base, store)?;
+            self.copy_activation = Some(OpActivation {
+                pc: self.pc.fingerprint(),
+                operation_index: u32::try_from(index)
+                    .map_err(|_| invalid("copy operation index overflow"))?,
+                expected: op.clone(),
+                work: CopyOperation::RecordRest(work),
+            });
+            return Ok(true);
         }
         let (source, destination, mode) = match op {
             Op::ReadLocal {
@@ -131,10 +148,12 @@ impl Frame {
             pc: self.pc.fingerprint(),
             operation_index: index,
             expected: op.clone(),
-            copy,
-            source,
-            destination,
-            source_view,
+            work: CopyOperation::Read {
+                copy,
+                source,
+                destination,
+                source_view,
+            },
         });
         Ok(true)
     }
@@ -145,56 +164,78 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<bool, Diagnostic> {
         for _ in 0..256 {
-            let activation = self
+            let mut activation = self
                 .copy_activation
-                .as_ref()
+                .take()
                 .ok_or_else(|| invalid("copy activation absent"))?;
-            let source = match &activation.expected {
-                Op::ReadLocal { binding, .. } => self.binding(*binding)?,
-                Op::ReadParameter { ordinal, .. } => self.parameter(*ordinal)?,
-                Op::ReadPlace { place, .. } => {
-                    store
-                        .admit_owning_place_read(self.executed_place(*place)?)
-                        .map_err(place_error)?
-                        .0
-                }
-                _ => return Err(invalid("copy activation holds a non-read operation")),
+            let progress = match &mut activation.work {
+                CopyOperation::RecordRest(rest) => self.advance_record_rest(rest, store),
+                CopyOperation::Read {
+                    copy,
+                    source,
+                    destination,
+                    source_view,
+                } => (|| {
+                    let current = match &activation.expected {
+                        Op::ReadLocal { binding, .. } => self.binding(*binding)?,
+                        Op::ReadParameter { ordinal, .. } => self.parameter(*ordinal)?,
+                        Op::ReadPlace { place, .. } => {
+                            store
+                                .admit_owning_place_read(self.executed_place(*place)?)
+                                .map_err(place_error)?
+                                .0
+                        }
+                        _ => return Err(invalid("copy activation holds a non-read operation")),
+                    };
+                    if current != *source {
+                        return Err(invalid("copy activation source location changed"));
+                    }
+                    let current_source = match &activation.expected {
+                        Op::ReadLocal { binding, .. } => {
+                            self.binding_sources[binding.0 as usize].as_ref()
+                        }
+                        Op::ReadParameter { ordinal, .. } => {
+                            self.parameter_sources.get(*ordinal as usize)
+                        }
+                        Op::ReadPlace { place, .. } => self.place_slot(*place)?.source.as_ref(),
+                        _ => return Err(invalid("copy activation holds a non-read operation")),
+                    };
+                    if current_source != source_view.as_ref() {
+                        return Err(invalid("copy activation source annotation changed"));
+                    }
+                    if let CopyProgress::Complete(ticket) = self.advance_copy_work(copy, store)? {
+                        self.write(*destination, ticket, store)?;
+                        self.set_source_view(*destination, source_view.clone())?;
+                        if let Op::ReadPlace { place, .. } = &activation.expected {
+                            self.clear_place(*place)?;
+                        }
+                        return Ok(true);
+                    }
+                    Ok(false)
+                })(),
             };
-            if source != activation.source {
-                return Err(invalid("copy activation source location changed"));
-            }
-            let current_source = match &activation.expected {
-                Op::ReadLocal { binding, .. } => self.binding_sources[binding.0 as usize].as_ref(),
-                Op::ReadParameter { ordinal, .. } => self.parameter_sources.get(*ordinal as usize),
-                Op::ReadPlace { place, .. } => self.place_slot(*place)?.source.as_ref(),
-                _ => return Err(invalid("copy activation holds a non-read operation")),
-            };
-            if current_source != activation.source_view.as_ref() {
-                return Err(invalid("copy activation source annotation changed"));
-            }
-            if matches!(activation.copy.next(store)?, CopyWork::Field(_)) {
-                self.count_step();
-            }
-            let progress = self
-                .copy_activation
-                .as_mut()
-                .ok_or_else(|| invalid("copy activation absent"))?
-                .copy
-                .advance(store)?;
-            if let CopyProgress::Complete(ticket) = progress {
-                let activation = self
-                    .copy_activation
-                    .take()
-                    .ok_or_else(|| invalid("copy activation absent"))?;
-                let source = activation.source_view;
-                self.write(activation.destination, ticket, store)?;
-                self.set_source_view(activation.destination, source)?;
-                if let Op::ReadPlace { place, .. } = activation.expected {
-                    self.clear_place(place)?;
+            match progress {
+                Ok(true) => return Ok(true),
+                Ok(false) => self.copy_activation = Some(activation),
+                Err(error) => {
+                    // Preserve the ordinary partial-copy/guard owner on refusal.
+                    self.copy_activation = Some(activation);
+                    return Err(error);
                 }
-                return Ok(true);
             }
         }
         Ok(false)
+    }
+    /// Shared structural Copy work accounting/engine for ordinary reads and
+    /// omitted record fields; neither operation implements its own copier.
+    pub(super) fn advance_copy_work(
+        &mut self,
+        copy: &mut AggregateCopy,
+        store: &mut GuestStore,
+    ) -> Result<CopyProgress, Diagnostic> {
+        if matches!(copy.next(store)?, CopyWork::Field(_)) {
+            self.count_step();
+        }
+        copy.advance(store)
     }
 }

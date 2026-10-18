@@ -804,6 +804,10 @@ fn place_context(syntax: &SyntaxNode) -> bool {
                     if pattern.ref_token().is_some() && pattern.at_token().is_none())
                     || super::body_index::pattern_statement(&statement));
         }
+        // Record update reads only omitted fields from the original base.
+        if let Some(list) = ast::RecordExprFieldList::cast(parent.clone()) {
+            return list.spread().is_some_and(|base| base.syntax() == &current);
+        }
         // A pattern scrutinee is a place expression: the shared transaction
         // tests it in place and moves/borrows only the bound parts.
         if let Some(expression) = ast::MatchExpr::cast(parent.clone()) {
@@ -825,7 +829,7 @@ fn place_context(syntax: &SyntaxNode) -> bool {
         return false;
     }
 }
-fn intrinsic_place_receiver(expr: &ast::Expr) -> bool {
+pub(super) fn intrinsic_place_receiver(expr: &ast::Expr) -> bool {
     let mut current = expr.clone();
     loop {
         match &current {
@@ -1911,7 +1915,7 @@ impl ParsedFile {
         key: &PcKey,
         plan: &super::constructors::ConstructorPlan,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        use super::constructors::{ConstructorKind, ConstructorOperand};
+        use super::constructors::ConstructorKind;
         if body.key() != *index.body()
             || key.body != body.key()
             || plan.origin().body_key != body.key()
@@ -1930,35 +1934,8 @@ impl ParsedFile {
             .constructor_guard
             .ok_or_else(|| error("constructor guard absent"))?;
         let fallback = index.pc(node.id, Phase::Exit)?;
-        let mut operands: Vec<&ConstructorOperand> = Vec::new();
-        let count = match plan.kind() {
-            ConstructorKind::Tuple(fields) | ConstructorKind::Array(fields) => fields.len(),
-            ConstructorKind::Record {
-                fields, rest: None, ..
-            } => fields.len(),
-            ConstructorKind::Record { rest: Some(_), .. } => {
-                return thunks::unsupported(
-                    index,
-                    key.clone(),
-                    "record update requires bound base-field transfer".into(),
-                    fallback,
-                );
-            }
-            ConstructorKind::Repeat { element, .. } => {
-                return self.repeat_thunk(body, index, key, node, element.node, element.value);
-            }
-        };
-        operands
-            .try_reserve_exact(count)
-            .map_err(|_| error("constructor operand allocation failed"))?;
-        match plan.kind() {
-            ConstructorKind::Tuple(fields) | ConstructorKind::Array(fields) => {
-                operands.extend(fields)
-            }
-            ConstructorKind::Record { fields, .. } => {
-                operands.extend(fields.iter().map(|field| &field.operand))
-            }
-            _ => return Err(error("constructor operand inventory mismatch")),
+        if let ConstructorKind::Repeat { element, .. } = plan.kind() {
+            return self.repeat_thunk(body, index, key, node, element.node, element.value);
         }
         let start = body
             .range
@@ -1988,7 +1965,7 @@ impl ParsedFile {
             );
         }
         let next = |written: usize| -> Result<PcKey, Diagnostic> {
-            if let Some(operand) = operands.get(written) {
+            if let Some(operand) = plan.operand(written) {
                 index.pc(operand.node, Phase::Entry)
             } else {
                 index.pc(node.id, Phase::Commit)
@@ -2006,22 +1983,37 @@ impl ParsedFile {
                     .operands
                     .get(usize::from(raw))
                     .ok_or_else(|| error("constructor operand phase absent"))?;
-                let written = operands
-                    .iter()
-                    .position(|operand| operand.node == *source_node)
+                let written = plan
+                    .written_ordinal(*source_node)
                     .ok_or_else(|| error("constructor phase is not an enabled written field"))?;
+                let operand = plan
+                    .operand(written)
+                    .ok_or_else(|| error("constructor selected operand absent"))?;
                 let field = u32::try_from(written)
                     .map_err(|_| error("constructor field ordinal overflow"))?;
-                draft(
-                    index,
-                    key,
+                let operations = if matches!(plan.kind(),
+                    ConstructorKind::Record { fields, rest: Some(_), .. } if written == fields.len())
+                {
+                    let base = index.nodes()[source_node.0 as usize]
+                        .place
+                        .ok_or_else(|| error("record update base place absent"))?;
+                    let mut ops = Vec::new();
+                    if !plan.base_is_place() {
+                        ops.push(Op::ValuePlace {
+                            source: operand.value,
+                            destination: base,
+                        });
+                    }
+                    ops.push(Op::ConstructRest { guard, base });
+                    ops
+                } else {
                     vec![Op::ConstructField {
                         guard,
                         field,
-                        source: operands[written].value,
-                    }],
-                    RecipeExit::Next(next(written + 1)?),
-                )
+                        source: operand.value,
+                    }]
+                };
+                draft(index, key, operations, RecipeExit::Next(next(written + 1)?))
             }
             Phase::Commit => {
                 let destination = node

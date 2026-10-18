@@ -1,0 +1,12 @@
+{
+  "scope": "V21 mechanical exhaustive operation observer repair only; exact old failed build retained",
+  "predecessor_review": "worktracks/evidence/2026-10-18-record-update-source-review.json",
+  "predecessor_sha256": "9bd473f4556a4aa2781ca76c4d690ba67fc3891452b63d42e560a7281d690303",
+  "file": "crates/lrr/src/engine/run_capture.rs",
+  "sha256": "d9bd845a0943e095d2971f80fcb9b4926709bf5b31045c17df25b5d976b012f7",
+  "symbols": [
+    "RunCapture::observe_recipe"
+  ],
+  "review": "ConstructRest joins same ordinary operation fact family as ConstructStart/Field/Finish. No external boundary/event, catchall, evaluator, authority change or VM behavior. Previous all8 source conclusions otherwise unchanged; this missing exhaustive observer join was not covered by prior exact18leaf receipt.",
+  "validation": "V21 lib failed this exhaustive join plus five disjoint worker mechanical errors; no CLI/runtime launched. Successor not tested."
+}

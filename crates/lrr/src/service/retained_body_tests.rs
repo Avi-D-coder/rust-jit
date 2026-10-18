@@ -178,7 +178,7 @@ fn prepare_source_scope(
         inputs.publish(db).unwrap();
     }
     db.begin_expansion_epoch(epoch).unwrap();
-    for _ in 0..16 {
+    loop {
         match discovery.poll().unwrap() {
             SourceDiscoveryStep::NeedExpansion { request } => {
                 discovery
@@ -225,10 +225,18 @@ fn prepare_source_scope(
                 ));
                 return (input, discovery);
             }
-            _ => panic!("actual arithmetic discovery requires an unhandled phase"),
+            SourceDiscoveryStep::Incomplete {
+                diagnostic,
+                blocked,
+            } => panic!(
+                "source discovery incomplete: edition={edition}, selected={selected:?}, source={text:?}, diagnostic={diagnostic:?}, blocked={blocked:?}"
+            ),
+            phase => panic!(
+                "source discovery requires an unhandled phase {:?}: edition={edition}, selected={selected:?}, source={text:?}",
+                std::mem::discriminant(&phase)
+            ),
         }
     }
-    panic!("actual arithmetic discovery did not close")
 }
 
 #[test]

@@ -1,0 +1,156 @@
+{
+  "scope": "Record update omitted-field construction, bounded source-only successor to actual V20 const-struct failure; no compile/runtime or full-feature claim",
+  "tasks": [
+    "T032",
+    "T033",
+    "M018",
+    "M025",
+    "M030"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-record-update-construction.md",
+  "files_sha256": {
+    "crates/lrr/src/syntax/constructors.rs": "3d3430cfb2da612f766b713b7292e3f3b95ac947bd42ef58c0b8f12610d7863a",
+    "crates/lrr/src/syntax/thunks.rs": "2b3d5a245d5b229df1712ab87e3017d47ea1c304d83468416dac14bc842d319d",
+    "crates/lrr/src/frontend/types.rs": "74544ba6a3c17b33c26d6dfefc20ceb49ccf3e6858677e551368802fc57b8aff",
+    "crates/lrr/src/frontend/prepared_constructors.rs": "6eb60554bedb43db7cd18fdca981cc38be45dcce5263c001a6fd4e6e9f2af38b",
+    "crates/lrr/src/frontend/constructors.rs": "913511d5f7a335a262c56cb96897122984a9e32696f3375bc8ee97cbda6a298d",
+    "crates/lrr/src/engine/install.rs": "ba5b23225ef2649ade70b6879da5bdd8f1c973ad05da19da42482df9381fd901",
+    "crates/lrr/src/engine/run_constructors.rs": "ee7a23cd19e769fbbde167c2ac001b51ef940049e522fc444ff522a3277f9a91",
+    "crates/lrr/src/vm/frame.rs": "9d68587d06f4d923777f8a1dd695495db3f14e105250a551fd879e3efb85d0be",
+    "crates/lrr/src/vm/frame_aggregate_copy.rs": "bb48314dd8e90d7ddd88f25f4f3f58152029bda7f0e7cd438477c4537dc52bd1",
+    "crates/lrr/src/vm/frame_record_update.rs": "f5d235e154f65551f24a9bfe35ab01881fe3e669d67bdc84d4f73db8275a74ab",
+    "crates/lrr/src/vm/step.rs": "482257e51388c4ec1d942be7646911e5b8169bcb11df223556c767e37d7d5e72",
+    "crates/lrr/src/ir/op.rs": "34ef4e9a23b3859fcc4aaa1e7c2959e680d9c957cb7afb47d45e58c8126eef63",
+    "crates/lrr/src/ir/recipe.rs": "11c154bab3215e6f95b706d148f2ca960d33cc3e41d7dc5e5a82515ee0d3ec0f",
+    "crates/lrr/src/ir/validate.rs": "eef456648bcf960f3915753e0be533337c1697f6eb295abc779820c86c32872c",
+    "crates/lrr/src/ir/parameter_place_wire_tests.rs": "78e7acefa3691e065ba12e7724d63ad4de9899c07920aac74b3fb953d6243345",
+    "crates/lrr/src/ir/definition_numeric_wire_tests.rs": "b6a0dfec571f748989aeba5f5889e8f35c1c50af33c3a6fb77a171ec7fe75591",
+    "crates/lrr/src/cli/mod.rs": "2d410821b5762a9783842a030dc60a00370ae9021734837e87c678c52a0ce3cc",
+    "crates/lrr/src/cli/reached_record_update_tests.rs": "e7a9b63d73fe336f2b94a61ca3d2a5381df41f6869ca296e84672064dcb20fae"
+  },
+  "primary_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-struct.rs",
+    "sha256": "ea2ef00a878f74349c68eb5db9f3026befe26b02bac48fbc3eadaf24dc58978b",
+    "edition": 2015,
+    "baseline": "V20 actual fault original550..566 in const w foo{a:5,..x}; 0source calls/341dispatches/527classified candidates; candidate-v20/additional-const-witnesses/stock-1.stdout"
+  },
+  "unchanged_additional_roots": [
+    "tests/ui/structs/struct-update-syntax-2463.rs",
+    "tests/ui/structs-enums/functional-struct-upd.rs"
+  ],
+  "control_selector": "cli::reached_record_update_tests::record_updates_share_place_transfers_and_resumable_copy_all_editions",
+  "wire_selectors": [
+    "ir::parameter_place_wire_tests::unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions",
+    "ir::definition_numeric_wire_tests"
+  ],
+  "wire": {
+    "ConstructRest": 69,
+    "opcode_count": 70,
+    "recipe_schema": 16,
+    "recipe_domain": "lrr/v16/lrir-recipe",
+    "ConstructorPlan_domain": "lrr/v3/entered-constructor-plan",
+    "BoundRecordFields_domain": "lrr/v3/bound-record-fields",
+    "PreparedRecordConstructor_domain": "lrr/v5/prepared-record-constructor"
+  },
+  "source_review": [
+    {
+      "failure_mode": 1,
+      "symbols": [
+        "ConstructorPlan",
+        "ParsedFile::constructor_thunk",
+        "Frame::begin_record_rest"
+      ],
+      "finding": "Actual source record plan and ordinary child PCs lower into normal constructor/VM operations; no assertion-specific compiler/evaluator, synthetic executable body or source text parse. New operation is generic record update semantics."
+    },
+    {
+      "failure_mode": 2,
+      "symbols": [
+        "syntax::thunks::place_context",
+        "syntax::thunks::intrinsic_place_receiver",
+        "Op::ConstructRest"
+      ],
+      "finding": "Any admitted generated record uses identical actual AST place classification, retained plan, verifier and operation. No generated-only literal/break executor or separate index namespace."
+    },
+    {
+      "failure_mode": 3,
+      "symbols": [
+        "SchemaNames::bind_record_constructor_with",
+        "BoundRecordFields",
+        "prepare_installed_record_template",
+        "ConstructionMapping::bound"
+      ],
+      "finding": "Ordinary source-selected schema and field-Type binder supplies explicit/omitted declaration mapping, complete unique coverage and shared actual nominal specialization. Destination admits each real field before transfer. No field-name/type-name/macro whitelist or alternate numeric inference. FRU open Type inference remains held."
+    },
+    {
+      "failure_mode": 4,
+      "symbols": [
+        "ConstructorPlan::base_is_place",
+        "Frame::record_base_place",
+        "InstalledRecipes record binding admission"
+      ],
+      "finding": "No generated-source exclusion introduced. Same owning BodyEnvironment/pure query handle used for spread and nonspread records. Missing generic context remains explicit unsupported; control unexecuted until actual terminal."
+    },
+    {
+      "failure_mode": 5,
+      "symbols": [
+        "ConstructionMapping",
+        "Frame::advance_record_rest",
+        "frame_aggregate_copy::OpActivation",
+        "Frame::advance_copy_work",
+        "Frame::finish_constructor",
+        "Frame::constructor_cleanup_next"
+      ],
+      "finding": "Record update is an ordinary constructor operation, not another pattern/evaluator engine. Explicit children evaluate before base once. Only omitted fields projected; overwritten nonCopy source fields untouched. Same OpActivation retains PC/op/cursor/construction identity, uses existing AggregateCopy child engine and owning-place copy/move, preserving partial guard and base cleanup. No synchronous aggregate Copy bypass. Primary constructor/panic/cleanup matrix remains unexecuted for candidate."
+    },
+    {
+      "failure_mode": 6,
+      "symbols": [
+        "ConstructorPlan::operand_ordinals",
+        "ConstructorPlan::written_ordinal",
+        "ParsedFile::constructor_thunk",
+        "PreparedRecordConstructorHandle",
+        "RestActivation"
+      ],
+      "finding": "New deterministic NodeId-to-written-ordinal index captured once and accounted/encoded; phase lowering no longer rebuilds operand Vec or scans whole source plan. Installed operation only uses retained source map/runtime places and Copy cursor; no parser/planner/source query in rest execution. Member/source guards and normal immutable query sharing remain."
+    },
+    {
+      "failure_mode": 7,
+      "symbols": [
+        "BoundRecordFields::base_fields",
+        "BoundNominalConstructor::rejoin",
+        "Frame::preflight_record_rest",
+        "Frame::advance_record_rest",
+        "InstalledRecordConstructor"
+      ],
+      "finding": "Selected definition/schema/variant, prepared plan PC/base slot and original construction identity guard every transfer. No namespace lookup/global census in operation; relevant original installed source/member guard retained. Exact selector/legacy publication limitations remain held."
+    },
+    {
+      "failure_mode": 8,
+      "symbols": [
+        "ConstructionMapping::Prepared",
+        "ConstructionMapping::Legacy",
+        "ConstructorPlan::operand_ordinals",
+        "Frame::record_base_place"
+      ],
+      "finding": "Primary discovered route shares actual prepared query allocation; legacy source BoundNominalConstructor Box transfers into Arc instead of cloning its field map at start. BodyIndex never deep-cloned. Direct body node/phase index joins supply base/source operands; no repeated whole-file node search."
+    }
+  ],
+  "policy_repairs": [
+    "Removed inherited spread-specific u16 field-count cap instead of raising it; only existing checked phase/index representation remains, whose uncited general u16 limit is explicitly held",
+    "Removed static field-privacy refusal in reached record binder per E-R5-006; old foreign-caller component control now verifies same actual bound schema/map rather than expecting a static diagnostic"
+  ],
+  "mechanical_checks": [
+    "rustfmt1.99 parsed separately owned source with skip_children",
+    "git diff --check exit0",
+    "Reviewed new opcode producer/stable wire/verifier/effect/counter/state-preflight/activation/execute-rejection joins; only same Copy activation executes it"
+  ],
+  "known_gaps": [
+    "No Cargo or tests run by implementation worker; sole validation agent must provide exact frozen build and runtime terminals",
+    "New all-edition ordinary/user/wrapper/std nested exact-once/partial-move/aggregate Copy control unexecuted",
+    "Dedicated panic/Drop/failure/NeedInput/source-invalidation matrix remains held",
+    "Open record Type inference from FRU base not delivered; original const witness has actual declared nominal context",
+    "Existing source member/nominal const-region projection restrictions and legacy discovery publication remain held",
+    "Other static privacy checks outside reached record constructor binder not audited or claimed removed",
+    "No interpreter/JIT/task/feature/full-suite acceptance closure"
+  ]
+}

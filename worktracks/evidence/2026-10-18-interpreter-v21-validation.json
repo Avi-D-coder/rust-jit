@@ -1,0 +1,70 @@
+{
+  "candidate": "V21",
+  "status": "exactsource libcompilefailed, noCLI/runtime",
+  "source_sha256": "648c0af067ec62f738f5d3680da600a1002e2c444783c1d25e07cda07b6e67a3",
+  "head": "0dc40e40125d9536b1da4115f427dd0c1078f2e8",
+  "source_leaves": 3330,
+  "lib_terminal": "e34c33/101",
+  "lib": {
+    "exit": 101,
+    "seconds": 16.705
+  },
+  "source_unchanged": true,
+  "diagnostics": [
+    {
+      "code": "E0433",
+      "message": "cannot find `ordinary_local_callables` in `frontend`",
+      "path": "crates/lrr/src/frontend/declaration_header_names.rs",
+      "line": 9,
+      "column": 34
+    },
+    {
+      "code": "E0433",
+      "message": "cannot find `ordinary_local_callables` in `super`",
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "line": 361,
+      "column": 36
+    },
+    {
+      "code": "E0433",
+      "message": "cannot find `ordinary_local_callables` in `super`",
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "line": 388,
+      "column": 27
+    },
+    {
+      "code": "E0433",
+      "message": "cannot find `ordinary_local_callables` in `super`",
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "line": 452,
+      "column": 20
+    },
+    {
+      "code": "E0433",
+      "message": "cannot find type `InputKey` in this scope",
+      "path": "crates/lrr/src/frontend/binding_constraints.rs",
+      "line": 1201,
+      "column": 46
+    },
+    {
+      "code": "E0004",
+      "message": "non-exhaustive patterns: `&op::Op::ConstructRest { .. }` not covered",
+      "path": "crates/lrr/src/engine/run_capture.rs",
+      "line": 78,
+      "column": 19
+    }
+  ],
+  "cli_build": "unexecuted",
+  "runtime_roots": "unexecuted",
+  "controls": "unexecuted",
+  "binaries": "V20 retained unchanged; noV21runtimeacceptance",
+  "planned_stock_roots": 11,
+  "planned_exact_control_bodies": 15,
+  "holds": "All semanticreviews attachedoriginalsourcefingerprints; exactmechanicalrepairsrequirefreshbeforemanifest androotallwriterfreeze.",
+  "raw_report_sha256": "605ce14da0595f426060462321aeb2af07e1d054e34b419fb7b8e1864e50c093",
+  "acceptance_limits": [
+    "Six mechanical module/import/exhaustive operation-fact errors stopped the library build; no CLI or runtime validation ran.",
+    "Failed exact source and actual terminal are retained. Narrow owner repairs are separate source, not a passing retry.",
+    "V20 runtime evidence remains historical to its exact binary; no feature/architecture/interpreter/JIT gate closure."
+  ]
+}

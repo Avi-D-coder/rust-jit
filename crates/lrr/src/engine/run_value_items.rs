@@ -420,11 +420,9 @@ impl RunMachine {
             }
             // A variant has no outline row of its own: it is its enum's member.
             None if declaration.variant().is_some() => None,
-            None => self
-                .sources
-                .iter()
-                .find_map(|source| source.outline_item(identity))
-                .map(|item| item.def_key.item_kind),
+            None => {
+                crate::frontend::callables::selected_item_kind(db, self.sources.iter(), identity)
+            }
         };
         // A module-level root (a module, or a type or trait an import brings
         // into scope): its path spelled from the defining crate, so `Root::item`
@@ -503,12 +501,8 @@ impl RunMachine {
                 ))));
             }
         };
-        let item_kind = self
-            .sources
-            .iter()
-            .find_map(|source| source.outline_item(identity))
-            .map(|item| item.def_key.item_kind)
-            .or_else(|| generated_item_kind(db, identity));
+        let item_kind =
+            crate::frontend::callables::selected_item_kind(db, self.sources.iter(), identity);
         self.prepare_selected_item_value(db, path, identity, item_kind)
     }
     /// The associated constant a type-relative written path selects through
@@ -717,19 +711,4 @@ impl RunMachine {
         self.frame.prepare_item_value(value);
         QueryPoll::Ready(Ok(()))
     }
-}
-
-/// A macro-generated declaration's kind, from its canonical owner (its
-/// published unit, or the retained admission of an associated item).
-fn generated_item_kind(
-    db: &mut Database,
-    identity: crate::core::digest::Digest,
-) -> Option<ItemKind> {
-    use crate::db::dependency::{InputKey, InputValue};
-    let parse = match db.input(&InputKey::DefinitionSource(identity)).as_deref() {
-        Some(InputValue::DefinitionSource(parse)) => parse.clone(),
-        _ => return None,
-    };
-    db.generated_declaration_owner(&parse, identity)
-        .map(|owner| owner.def_key.item_kind)
 }

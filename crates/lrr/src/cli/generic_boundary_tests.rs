@@ -551,6 +551,44 @@ fn cold_associated_source(branch: &str, route: u8) -> String {
     )
 }
 
+fn cold_local_associated_source(branch: &str, route: u8) -> String {
+    // Move the exact upstream Fn declaration; the imported source is unchanged.
+    let source = cold_associated_source(branch, route);
+    let start = source.find("fn foo<").unwrap();
+    let end = source[start..].find("impl UnifyKey for i32").unwrap() + start;
+    let declaration = source[start..end].to_owned();
+    let mut source = format!("{}{}", &source[..start], &source[end..]);
+    let main = source.find("fn main() {").unwrap() + "fn main() {".len();
+    source.insert_str(main, &declaration);
+    source
+}
+
+#[test]
+fn cold_local_associated_result_keeps_unentered_source_calls_cold() {
+    for edition in [2015, 2018, 2021, 2024] {
+        for route in 0..4 {
+            for branch in ["0_u32", "foo(&node).unwrap()"] {
+                let source = cold_local_associated_source(branch, route);
+                match run("cold-local-associated-result", &source, edition) {
+                    Ok(StandaloneOutcome::Completed(report)) => {
+                        assert_eq!(report.output.stdout, "")
+                    }
+                    Ok(StandaloneOutcome::Panicked(report)) => panic!(
+                        "edition {edition}, route {route}, branch {branch}: {:?}",
+                        report.panic
+                    ),
+                    Ok(_) => panic!(
+                        "edition {edition}, route {route}, branch {branch}: unexpected outcome"
+                    ),
+                    Err(error) => {
+                        panic!("edition {edition}, route {route}, branch {branch}: {error}")
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn cold_associated_result_keeps_unentered_source_calls_cold() {
     for edition in [2015, 2018, 2021, 2024] {
@@ -579,6 +617,15 @@ fn cold_associated_result_keeps_unentered_source_calls_cold() {
 
 #[test]
 fn cold_associated_type_goal_retains_selected_source_without_callee_preparation() {
+    check_cold_associated_type_goal(false);
+}
+
+#[test]
+fn cold_local_associated_type_goal_retains_selected_source_without_callee_preparation() {
+    check_cold_associated_type_goal(true);
+}
+
+fn check_cold_associated_type_goal(local: bool) {
     use crate::{
         core::digest::StableEncode,
         db::{
@@ -608,7 +655,15 @@ fn cold_associated_type_goal_retains_selected_source_without_callee_preparation(
         for branch in ["0_u32", "foo(&node).unwrap()"] {
             let temp = Temp::new("cold-associated-type-goal");
             let root = temp.0.join("main.rs");
-            std::fs::write(&root, cold_associated_source(branch, 0)).unwrap();
+            std::fs::write(
+                &root,
+                if local {
+                    cold_local_associated_source(branch, 0)
+                } else {
+                    cold_associated_source(branch, 0)
+                },
+            )
+            .unwrap();
             let profile = ProfileIdentity {
                 edition,
                 ..ProfileIdentity::current()
@@ -683,14 +738,39 @@ fn cold_associated_type_goal_retains_selected_source_without_callee_preparation(
                             .is_some_and(|syntax| syntax.text().to_string() == "0xffffffff")
                 })
                 .expect("actual reached literal");
-            let foo = view
-                .outline()
-                .items
-                .iter()
-                .find(|item| item.def_key.declared_name == "foo")
-                .unwrap();
+            let foo = if local {
+                &plan
+                    .context()
+                    .facts()
+                    .declarations()
+                    .find(|row| row.item.def_key.declared_name == "foo")
+                    .unwrap()
+                    .item
+            } else {
+                view.outline()
+                    .items
+                    .iter()
+                    .find(|item| item.def_key.declared_name == "foo")
+                    .unwrap()
+            };
             let definition = foo.def_key.fingerprint();
             let cold_body = foo.body.as_ref().unwrap().key();
+            let unpublished = |db: &mut Database| {
+                for key in [
+                    InputKey::DefinitionHeader(definition),
+                    InputKey::DefinitionSource(definition),
+                    InputKey::DeclarationContext(definition),
+                    InputKey::DefinitionBody(definition),
+                ] {
+                    assert!(
+                        db.input(&key).is_none(),
+                        "local child metadata was published: {key:?}"
+                    );
+                }
+            };
+            if local {
+                unpublished(&mut db);
+            }
             assert!(
                 db.input(&InputKey::BodyEnvironment(cold_body.clone()))
                     .is_none()
@@ -735,11 +815,15 @@ fn cold_associated_type_goal_retains_selected_source_without_callee_preparation(
                     QueryKey::AssociatedEquations(key) if key.definition == definition
                         && matches!(&key.owner, EquationOwner::SelectedCall(_)))));
             }
-            // Metadata rows are allowed; they are not executable body owners.
-            assert!(matches!(
-                db.input(&InputKey::DefinitionBody(definition)).as_deref(),
-                Some(InputValue::DefinitionBody(_))
-            ));
+            if local {
+                unpublished(&mut db);
+            } else {
+                // Existing module metadata rows are not executable owners.
+                assert!(matches!(
+                    db.input(&InputKey::DefinitionBody(definition)).as_deref(),
+                    Some(InputValue::DefinitionBody(_))
+                ));
+            }
         }
     }
 }

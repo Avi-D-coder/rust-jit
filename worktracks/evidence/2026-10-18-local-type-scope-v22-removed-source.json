@@ -1,0 +1,20 @@
+{
+  "before_sha256": {
+    "crates/lrr/src/frontend/associated_equations.rs": "4252dbb92dc37539b34defe303e63246a2bd5d04077195970a035ac770fae51e",
+    "crates/lrr/src/frontend/source_types.rs": "ff046a3ebc4ded332e5155e7a17387277998a1c0e257ef1c8b56b511d800e510",
+    "crates/lrr/src/frontend/declaration_field_types.rs": "e875be91b03d5474d8967cd8e7061391bee4eae708b2b6088424f42df9d4abed",
+    "crates/lrr/src/frontend/source_local_plan.rs": "34941bb35dbb5a290a82d8bf7eaecf48f5e915a2d0b64fb50207f4e31d5429c2",
+    "crates/lrr/src/frontend/binding_constraints.rs": "91cbbcc4d3738251ab1a227baf3f094d92cd80cb874fd62a22d0110771acba66",
+    "crates/lrr/src/frontend/declaration_header_names.rs": "66425597503b992529866dc155e86ea6a78c7d32d960db52185f36f218fe41c8"
+  },
+  "restored_from": "0dc40e4",
+  "after_sha256": {
+    "crates/lrr/src/frontend/associated_equations.rs": "9301240adbaf2e064eae3c3f3c200b4148f1909c3a90c91768249eee0e09f0ae",
+    "crates/lrr/src/frontend/source_types.rs": "9a60e010fc4bb526a5079de9da84bae6ef6f8fafe824407a4a325d0243ff2c78",
+    "crates/lrr/src/frontend/declaration_field_types.rs": "0c83e69ae261d5a03435ce8e0808226a73eb57f10985e0509baabd17a809518f",
+    "crates/lrr/src/frontend/source_local_plan.rs": "f9e41e2a69a4eda4082d70347dd3d95722422219d3fbe82e8d872c5b36d04769",
+    "crates/lrr/src/frontend/binding_constraints.rs": "c63279b1c3b578f14881640e071ad7f175bc7769dd55185cc306a17af4dd92dc"
+  },
+  "deleted_unused_leaf": "crates/lrr/src/frontend/declaration_header_names.rs",
+  "status": "Unneeded unpublished-only candidate removed; V22 failed setup evidence preserved. No successor compile/runtime claim."
+}

@@ -1,6 +1,8 @@
 //! Physical frame state. Syntax and query providers never mutate it.
 #[path = "frame_aggregate_copy.rs"]
 mod aggregate_copy_frame;
+#[path = "frame_record_update.rs"]
+mod record_update_frame;
 #[path = "frame_boxes.rs"]
 mod boxes_frame;
 #[cfg(test)]
@@ -176,6 +178,7 @@ struct ActiveConstruction {
     cleaning: bool,
     mapping: Option<ConstructionMapping>,
     source_operands: Option<Arc<[SlotId]>>,
+    base_place: Option<SlotId>,
 }
 #[derive(Clone, Copy)]
 enum ConstructionResult {
@@ -187,22 +190,25 @@ enum ConstructionResult {
 }
 #[derive(Clone)]
 enum ConstructionMapping {
-    Legacy(Arc<[u32]>),
+    Legacy(Arc<crate::frontend::types::BoundNominalConstructor>),
     Prepared(crate::frontend::prepared_constructors::PreparedRecordConstructorHandle),
 }
 impl ConstructionMapping {
     fn fields(&self) -> &[u32] {
         match self {
-            Self::Legacy(mapping) => mapping,
+            Self::Legacy(bound) => bound.mapping().written_to_declaration(),
             Self::Prepared(source) => source.prepared().mapping().written_to_declaration(),
+        }
+    }
+    fn bound(&self) -> Result<&crate::frontend::types::BoundNominalConstructor, Diagnostic> {
+        match self {
+            Self::Legacy(bound) => Ok(bound),
+            Self::Prepared(source) => source.ready_bound(),
         }
     }
     fn heap_bytes(&self) -> Option<usize> {
         match self {
-            Self::Legacy(mapping) => mapping
-                .len()
-                .checked_mul(std::mem::size_of::<u32>())?
-                .checked_add(3 * std::mem::size_of::<usize>()),
+            Self::Legacy(bound) => bound.estimated_bytes(),
             // Source metadata belongs to the retained query; any ready Type
             // specialization is shared with the run's record cache. This
             // frame owns only the inline handle, not another field-list copy.
@@ -242,6 +248,7 @@ struct PreparedConstructor {
     binding: ConstructorBinding,
     hints: Vec<(SlotId, TypeId)>,
     source_operands: Option<Arc<[SlotId]>>,
+    base_place: Option<SlotId>,
 }
 /// Per-operation preparation owns only checked guest identities. It is committed
 /// immediately after this exact operation starts.
@@ -3564,6 +3571,7 @@ impl Frame {
             binding: ConstructorBinding::Structural(ty),
             hints,
             source_operands,
+            base_place: None,
         });
         Ok(())
     }
@@ -3619,6 +3627,7 @@ impl Frame {
             binding: ConstructorBinding::Observed { kind, fields },
             hints,
             source_operands,
+            base_place: None,
         });
         Ok(())
     }
@@ -3679,6 +3688,7 @@ impl Frame {
             binding: ConstructorBinding::Nominal(Box::new(bound)),
             hints,
             source_operands: None,
+            base_place: self.record_base_place(plan)?,
         });
         for (slot, written) in partial {
             self.set_partial_hint(slot, written, Some(guard))?;
@@ -3739,12 +3749,14 @@ impl Frame {
             source.ready_bound()?,
             store,
         )?;
+        let base_place = self.record_base_place(prepared.plan())?;
         self.constructor_start = Some(PreparedConstructor {
             pc: self.pc.clone(),
             guard,
             binding: ConstructorBinding::PreparedNominal(source),
             hints,
             source_operands: None,
+            base_place,
         });
         for (slot, written) in partial {
             self.set_partial_hint(slot, written, Some(guard))?;
@@ -3769,7 +3781,10 @@ impl Frame {
     > {
         let guard = self.admit_constructor_plan(plan)?;
         if bound.mapping().constructor() != plan_identity
-            || !matches!(plan.kind(), crate::syntax::constructors::ConstructorKind::Record { fields, rest: None, .. } if fields.len() == bound.variant().fields().len())
+            || !matches!(plan.kind(), crate::syntax::constructors::ConstructorKind::Record { fields, rest, .. }
+                if fields.len() == bound.mapping().written_to_declaration().len()
+                    && fields.len().checked_add(bound.mapping().base_fields().len()) == Some(bound.variant().fields().len())
+                    && (rest.is_some() || bound.mapping().base_fields().is_empty()))
         {
             return Err(invalid("nominal constructor source shape mismatch"));
         }
@@ -3819,6 +3834,23 @@ impl Frame {
             }
         }
         Ok((guard, typed, partial))
+    }
+    fn record_base_place(
+        &self,
+        plan: &crate::syntax::constructors::ConstructorPlan,
+    ) -> Result<Option<SlotId>, Diagnostic> {
+        match plan.kind() {
+            crate::syntax::constructors::ConstructorKind::Record {
+                rest: Some(base), ..
+            } => self
+                .body
+                .nodes()
+                .get(base.node.0 as usize)
+                .and_then(|node| node.place)
+                .map(Some)
+                .ok_or_else(|| invalid("record update source base place absent")),
+            _ => Ok(None),
+        }
     }
     fn admit_constructor_hints(&self, hints: &[(SlotId, TypeId)]) -> Result<(), Diagnostic> {
         for (slot, _) in hints {
@@ -3889,10 +3921,11 @@ impl Frame {
                     cleaning: false,
                     mapping: None,
                     source_operands: None,
+                    base_place: None,
                 });
             }
             ConstructorBinding::Nominal(bound) => {
-                self.begin_bound_nominal_constructor(guard, &bound, store)?
+                self.begin_bound_nominal_constructor(guard, bound, store)?
             }
             ConstructorBinding::PreparedNominal(source) => {
                 let mapping = ConstructionMapping::Prepared(source.clone());
@@ -3901,6 +3934,11 @@ impl Frame {
                 self.begin_nominal_with_mapping(guard, bound, mapping, total, store)?
             }
         }
+        self.slots[guard.0 as usize]
+            .construction
+            .as_mut()
+            .ok_or_else(|| invalid("entered constructor guard absent"))?
+            .base_place = facts.base_place;
         if let Some(operands) = facts.source_operands {
             // The source slots are unique indexed operands of this admitted
             // constructor, retained through suspension without cloning syntax.
@@ -3958,6 +3996,7 @@ impl Frame {
             cleaning: false,
             mapping: None,
             source_operands: None,
+            base_place: None,
         });
         Ok(())
     }
@@ -3977,31 +4016,25 @@ impl Frame {
             cleaning: false,
             mapping: None,
             source_operands: None,
+            base_place: None,
         });
         self.publish_nominal_source(id, bound.identity())
     }
     fn begin_bound_nominal_constructor(
         &mut self,
         id: SlotId,
-        bound: &crate::frontend::types::BoundNominalConstructor,
+        bound: Box<crate::frontend::types::BoundNominalConstructor>,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         let bytes = bound
-            .mapping()
-            .written_to_declaration()
-            .len()
-            .checked_mul(std::mem::size_of::<u32>())
-            .and_then(|bytes| bytes.checked_add(3 * std::mem::size_of::<usize>()))
+            .estimated_bytes()
             .ok_or_else(crate::runtime::arena::resource)?;
-        let total = self.preflight_nominal_mapping(id, bound, bytes)?;
-        let mut map = Vec::new();
-        map.try_reserve_exact(bound.mapping().written_to_declaration().len())
-            .map_err(|_| crate::runtime::arena::resource())?;
-        map.extend_from_slice(bound.mapping().written_to_declaration());
+        let total = self.preflight_nominal_mapping(id, &bound, bytes)?;
+        let bound: Arc<crate::frontend::types::BoundNominalConstructor> = Arc::from(bound);
         self.begin_nominal_with_mapping(
             id,
-            bound,
-            ConstructionMapping::Legacy(map.into()),
+            &bound,
+            ConstructionMapping::Legacy(Arc::clone(&bound)),
             total,
             store,
         )
@@ -4055,6 +4088,7 @@ impl Frame {
                 cleaning: false,
                 mapping: Some(mapping),
                 source_operands: None,
+                base_place: None,
             });
             self.constructor_mapping_bytes = total;
             return Ok(());
@@ -4066,6 +4100,7 @@ impl Frame {
             cleaning: false,
             mapping: Some(mapping),
             source_operands: None,
+            base_place: None,
         });
         self.constructor_mapping_bytes = total;
         self.publish_nominal_source(id, bound.variant().identity())

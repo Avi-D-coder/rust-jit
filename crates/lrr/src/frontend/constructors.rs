@@ -957,7 +957,8 @@ mod tests {
                 | QueryKey::ExpansionInput(_)
         )));
         // Same unchanged upstream constructor: exact source path ranges are
-        // parser data, and a foreign caller must fail privacy before Type work.
+        // parser data. E-R5-006 leaves privacy to rustc/cargo check; source
+        // schema identity and field binding still hold for a foreign caller.
         let RecordPathSelection::Named(path) = view.record_constructor_path(&body, plan).unwrap()
         else {
             panic!("unchanged upstream record path missing")
@@ -983,16 +984,16 @@ mod tests {
             .unwrap();
         let mut foreign_caller = caller.scope.clone();
         foreign_caller.crate_key = Digest([226; 32]);
-        let before = db.trace.events.len();
-        assert!(
-            matches!(names.bind_record_constructor_current(&mut db, &[&view], None, plan, &foreign_caller),
-            QueryPoll::Ready(Err(error)) if error.code == "LRR-E-TYPE-SCHEMA")
-        );
-        assert_eq!(
-            db.trace.events.len(),
-            before,
-            "privacy must precede current Type lookup"
-        );
+        let foreign = names
+            .bind_record_constructor_current(&mut db, &[&view], None, plan, &foreign_caller)
+            .into_ready()
+            .expect("foreign caller needs no additional source input")
+            .expect("runtime record binding does not enforce static privacy");
+        let crate::frontend::types::NominalConstructorBinding::Ready(foreign) = foreign else {
+            panic!("foreign caller still requires the same actual field Type binding")
+        };
+        assert_eq!(foreign.mapping(), bound.mapping());
+        assert_eq!(foreign.variant(), bound.variant());
         // Actual nominal source/schema witness only. Constant evaluation,
         // nested constants, array lengths and the original main are unexecuted.
     }

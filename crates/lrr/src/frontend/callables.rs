@@ -388,6 +388,28 @@ pub struct CallResolver<'a> {
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CALL-CONTEXT", message.into())
 }
+/// Kind metadata for an already selected declaration. This does not select a
+/// name or confer callable/body authority; consumers keep their source proofs.
+/// Generated and original items expose the same canonical declaration fact.
+pub(crate) fn selected_item_kind<'a>(
+    db: &mut Database,
+    sources: impl IntoIterator<Item = &'a PreparedSourceView>,
+    identity: Digest,
+) -> Option<ItemKind> {
+    if let Some(kind) = sources
+        .into_iter()
+        .find_map(|source| source.outline_item(identity))
+        .map(|item| item.def_key.item_kind)
+    {
+        return Some(kind);
+    }
+    let source = db.input(&InputKey::DefinitionSource(identity))?;
+    let InputValue::DefinitionSource(parse) = source.as_ref() else {
+        return None;
+    };
+    db.generated_declaration_owner(parse, identity)
+        .map(|owner| owner.def_key.item_kind)
+}
 impl<'a> CallResolver<'a> {
     pub fn new(
         graph: &'a NameNamespaces,

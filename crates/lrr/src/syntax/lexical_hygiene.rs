@@ -67,9 +67,24 @@ impl ParsedFile {
         range: SourceRange,
     ) -> Result<Option<&TokenContext>, Diagnostic> {
         let fail = || {
+            // Failure facts only. Preserve exact containment; another token's
+            // context cannot stand in for this actual source occurrence.
+            let interval = self.token_contexts.as_ref().and_then(|contexts| {
+                let index = contexts.partition_point(|context| context.end <= range.start);
+                contexts.get(index).map(|context| {
+                    let start = index.checked_sub(1).map_or(0, |i| contexts[i].end);
+                    (index, start, context.end, context.context)
+                })
+            });
+            let text = self.parsed.syntax_node().text().to_string();
+            let fragment = text.get(range.start as usize..range.end as usize);
             Diagnostic::new(
                 "LRR-E-MACRO-OUTPUT",
-                "generated name crosses or lacks its token context attachment".into(),
+                format!(
+                    "generated name crosses or lacks its token context attachment \
+                     (source {:?}, generated {:?}, range {}..{}, interval {:?}, text {:?})",
+                    self.content, self.generated_origin, range.start, range.end, interval, fragment
+                ),
             )
         };
         let Some(contexts) = &self.token_contexts else {

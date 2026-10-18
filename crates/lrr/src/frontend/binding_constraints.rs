@@ -1178,9 +1178,75 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(term));
         }
         let outer = self.deferred.replace(Vec::new());
-        let term = match ordinal {
-            None => self.result_term_uncached(db, node, definition),
-            Some(ordinal) => self.parameter_term_uncached(db, node, definition, ordinal),
+        // An actual selected local declaration may remain unpublished while
+        // its signature answers a cold Type goal. Read its real header through
+        // the same retained declaration-scope walker, not a global Fn input.
+        let local = if self
+            .fact(node)
+            .is_ok_and(|fact| fact.kind() == FactKind::Call)
+        {
+            let selected = ready!(db.fetch(
+                &SyntaxProvider,
+                QueryKey::EnteredCall(entry(self.key, node))
+            ));
+            match selected.value.as_ref() {
+                QueryValue::EnteredCall(goal) => {
+                    if let Err(error) = goal.require_current(db) {
+                        return QueryPoll::Ready(Err(error));
+                    }
+                    matches!(goal.selection(),
+                        crate::frontend::entered_call_goals::EnteredCallSelection::Local(proof)
+                            if proof.signature().definition == definition
+                                && !proof.is_member()
+                                && db.input(&crate::db::dependency::InputKey::DefinitionHeader(definition)).is_none())
+                    .then_some(selected.value)
+                }
+                _ => return QueryPoll::Ready(Err(fault("selected local Type call differs"))),
+            }
+        } else {
+            None
+        };
+        let term = if let Some(selected) = local {
+            let QueryValue::EnteredCall(goal) = selected.as_ref() else {
+                return QueryPoll::Ready(Err(fault("selected local Type query differs")));
+            };
+            let crate::frontend::entered_call_goals::EnteredCallSelection::Local(proof) =
+                goal.selection()
+            else {
+                return QueryPoll::Ready(Err(fault("selected local Type admission differs")));
+            };
+            match ready!(self.environment(db)) {
+                Some(environment) => {
+                    let sources: Vec<_> = environment.sources().iter().collect();
+                    let term = super::source_types::selected_local_signature_type(
+                        db,
+                        environment.names(),
+                        &sources,
+                        proof,
+                        ordinal,
+                    );
+                    if matches!(&term, QueryPoll::Ready(Ok(None))) {
+                        self.defer(
+                            node,
+                            if ordinal.is_some() {
+                                ConstraintDemand::ParameterType
+                            } else {
+                                ConstraintDemand::ResultType
+                            },
+                        );
+                    }
+                    term
+                }
+                None => {
+                    self.defer(node, ConstraintDemand::ModuleEnvironment);
+                    QueryPoll::Ready(Ok(None))
+                }
+            }
+        } else {
+            match ordinal {
+                None => self.result_term_uncached(db, node, definition),
+                Some(ordinal) => self.parameter_term_uncached(db, node, definition, ordinal),
+            }
         };
         let demands = std::mem::replace(&mut self.deferred, outer).unwrap_or_default();
         if let Some(outer) = &mut self.deferred {

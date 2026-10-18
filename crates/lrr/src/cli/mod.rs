@@ -28,6 +28,8 @@ mod callable_value_tests;
 #[cfg(test)]
 mod reached_pattern_nominal_tests;
 #[cfg(test)]
+mod reached_record_update_tests;
+#[cfg(test)]
 mod value_scope_tests;
 #[cfg(test)]
 mod drop_witness_tests;

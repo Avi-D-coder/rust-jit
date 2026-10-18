@@ -1,0 +1,134 @@
+{
+  "status": "READY source candidate; successor build/runtime unexecuted",
+  "owner": "/root/generic_projection_resume",
+  "tasks": [
+    "T025",
+    "T062",
+    "M019",
+    "M020",
+    "M023",
+    "M026",
+    "M027"
+  ],
+  "precode": "2026-10-18-local-selected-declaration-type-scope.md",
+  "source_sha256": {
+    "crates/lrr/src/frontend/associated_equations.rs": "4252dbb92dc37539b34defe303e63246a2bd5d04077195970a035ac770fae51e",
+    "crates/lrr/src/frontend/source_types.rs": "3f034e9462c6393cdb548a328b32924a8d515e7a2013c40f247289c87bbc3f12",
+    "crates/lrr/src/frontend/declaration_field_types.rs": "e875be91b03d5474d8967cd8e7061391bee4eae708b2b6088424f42df9d4abed",
+    "crates/lrr/src/frontend/declaration_header_names.rs": "5ef4c55a01b60aea6f41582463ae2145bcc65a7c3a18a75e9cd645ce617840c6",
+    "crates/lrr/src/frontend/source_local_plan.rs": "34941bb35dbb5a290a82d8bf7eaecf48f5e915a2d0b64fb50207f4e31d5429c2",
+    "crates/lrr/src/frontend/binding_constraints.rs": "d71fbfc0ab0f9235600b70b50038af5201992420ac13d0027eeca814a30246c0",
+    "crates/lrr/src/cli/generic_boundary_tests.rs": "e43f80b0517f4546069a124c4236bb7e10315f3e3c831e181dd6bd896d09bb5d"
+  },
+  "upstream_runtime_witnesses": [
+    "tests/ui/fn/expr-fn.rs",
+    "tests/ui/associated-types/associated-types-struct-field-numbered.rs",
+    "tests/ui/associated-types/associated-types-struct-field-named.rs"
+  ],
+  "controls": [
+    "cli::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation",
+    "cli::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold",
+    "cli::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation"
+  ],
+  "reviews": [
+    {
+      "mode": 1,
+      "symbols": [
+        "Component::goal",
+        "source_types::selected_local_signature_type",
+        "associated_equations::prepare"
+      ],
+      "finding": "Actual signature Type facts only, same existing constraint/equation/unifier route; no assertion operands, synthetic AST/parser, evaluator or expected-value rewrite."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "EnteredCallGoal::selection/signature",
+        "WrittenTypeDeclaration::with_local_scope",
+        "resolve_actual_type"
+      ],
+      "finding": "Local admission is selected by actual indexed Call regardless origin. No literal/break-only generated path or separate language lowering."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "selected_header_type_name",
+        "prepare_header_prefix",
+        "SignatureSubstitution"
+      ],
+      "finding": "Source ParamKey/header/name contexts decide Type facts; no macro, fixture, method-name or numeric-value dispatch. Existing AST normalizer/unifier unchanged."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "HeaderTypeSite::require/generic",
+        "selected_header_type_name",
+        "SourceBodyContext::identifier_context_or_original",
+        "ParsedFile::token_edition"
+      ],
+      "finding": "Actual proof parent/source/declaration range/header/scope, direct NameRef locator/nearest Fn/outside body and owning name context/edition required. No original-source restriction or hygiene bypass. V20 arbitrary-macro cold control token-attachment failure remains an independent runtime gap owned by root."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "selected_local_signature_type",
+        "AssociatedEquations EquationOwner::SelectedCall",
+        "check_cold_associated_type_goal"
+      ],
+      "finding": "No callable(), child publication, BodyStructure, BodyEnvironment, SourceLocalPlan, Thunk or PatternPlan for selected callee demanded by new production path. Required pure local control explicitly inspects actual traces and absent local global inputs; still unexecuted. No pattern implementation changed."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "Component::goal existing goals memo",
+        "AssociatedEquations query",
+        "DeclarationFieldTypes::prepare",
+        "prepare_header_prefix"
+      ],
+      "finding": "Parent retains immutable HeaderItem scope/generic rows; demand reads actual annotation and exact NameRef direct locators. Cold work within enclosing query and per-component goal memo; no execution path parse/replan added. Actual field/parameter/result preparation shares factored prefix constructor. Legacy token-only/method and qualified local-path adapters remain held rather than expanded."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "OrdinaryLocalAdmission::revalidate",
+        "PreparedSourceLocalPlan::require_current",
+        "LocalTypePrefix::module_name",
+        "CurrentModuleName",
+        "lookup_prepared_field_type_prefix"
+      ],
+      "finding": "Q44 query and real parent/header scope provide relevant lookup input closure; module tail uses ordinary completed module query, preserving absence/pending/ambiguity. No full-world map/census or global declaration publication added. Legacy source_types qualified/token namespace debt remains outside bounded scope, no performance closure."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "OrdinaryLocalAdmission::parent",
+        "HeaderTypeSite",
+        "ParsedFile::syntax_at",
+        "WrittenTypeDeclaration"
+      ],
+      "finding": "Borrow retained proof/Arc parent/index; no immutable BodyIndex/body deep copy. Exact syntax locator plus bounded ancestor walk; actual Fn param position uses bounded parameter-list traversal, no complete-file search. Temporary header name occurrence is real AST-derived data, not invented syntax."
+    }
+  ],
+  "migration": [
+    "SelectedCall Local no longer requires published child DefinitionHeader/Source/Context merely for equations. Current actual proof supplies real source/header/context; module selected inputs unchanged.",
+    "Component::goal consumes actual Q44 Local parameter/result annotation through same actual AST/header walker; other definition-only APIs unchanged.",
+    "prepare_header_prefix factors existing canonical header name lookup shared by field/parameter/result and selected local header facts; Type classification uses existing classify_completed_type_lookup.",
+    "No existing runtime evaluator/dispatch/IR/native path was added or removed by this bounded Type-fact prerequisite. Historical alternative engine gate remains separately held.",
+    "New retained scope selects only actual unpublished ordinary local Fn (negative DefinitionHeader input, !is_member). Published locals and impl/trait members keep existing checked definition-scope adapter; present mismatched metadata is not bypassed. This preserves existing qualified/Self behavior and names the remaining legacy route held."
+  ],
+  "cost": "Cold actual local signature parameter/result O(annotation terms + relevant lexical prefixes); header/generic inventory reused from parent, actual NameRef direct location + bounded ancestors. Same BindingConstraints component goal memo and AssociatedEquations memo capture dependencies. No source work added to installed runtime; no measured performance claim.",
+  "remaining": [
+    "Successor compile/runtime evidence unexecuted.",
+    "V20 original pure cold Eq control passed all4 editions/both branches, numbered/named wholemains passed; arbitrary user-macro runtime matrix failed token context attachment. Those prior results are not local-successor passes.",
+    "Local module-qualified Type/trait paths, trait objects/impl Trait and Self without actual NameRef proof remain explicitly unanswered; do not use module-owner erasure to guess local names. Full local import/generated/mixed-origin/epoch/invalidation matrix not closed.",
+    "Existing alias normalization of selected local Type declarations may still require reached declaration publication; no fake aliases/rows were added.",
+    "Cold method/lang-call or function-item-value signature goal consumers still use prior definition-based paths and require future actual member/selection joins.",
+    "GAT item arguments and broader trait solver/novel runtime descriptors remain held. No task/milestone/architecture/full-suite completion claim.",
+    "Full migration of published local/impl/trait/qualified paths to retained header scope remains held. Current selector records actual Header absence; relevant publication invalidates that preparation."
+  ],
+  "source_only_checks": [
+    "Rustfmt syntax parse on owned leaves; shared binding_constraints::goal formatted alone through scratch wrapper, no shared-module traversal.",
+    "source_local_plan.rs formatting-only drift restored to exact index outside its eight new Header enum/tag lines.",
+    "git diff --check on seven owned leaves passes. No Cargo/tests/guest execution by implementation worker."
+  ]
+}

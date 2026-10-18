@@ -121,7 +121,7 @@ impl PreparedRecordConstructor {
     }
 }
 impl StableEncode for PreparedRecordConstructor {
-    const DOMAIN: &'static str = "lrr/v4/prepared-record-constructor";
+    const DOMAIN: &'static str = "lrr/v5/prepared-record-constructor";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.plan);
@@ -232,7 +232,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
     let QueryValue::ConstructorPlan(plan) = syntax.value.as_ref() else {
         return QueryPoll::Ready(Err(fault("prepared constructor plan variant differs")));
     };
-    if !matches!(plan.kind(), ConstructorKind::Record { rest: None, .. }) {
+    if !matches!(plan.kind(), ConstructorKind::Record { .. }) {
         return QueryPoll::Ready(Err(fault(
             "prepared record query requires a record constructor",
         )));

@@ -169,102 +169,118 @@ pub(crate) fn prepare(
             EquationOwner::SelectedCall(pc) => QueryKey::EnteredCall(pc.clone()),
         }
     ));
-    let (signature, source, context, completed) = match (&key.owner, selected.value.as_ref()) {
-        (EquationOwner::DeclaredBody(body), QueryValue::FunctionSignature(signature)) => {
-            let environment = db.input(&InputKey::BodyEnvironment(body.clone()));
-            let Some(InputValue::BodyEnvironment(environment)) = environment.as_deref() else {
-                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
-            };
-            ready!(environment.require_current(db));
-            if environment.body() != body || body.definition != definition {
-                return QueryPoll::Ready(Err(fault("bound equation declaration owner differs")));
-            }
-            let context = db.input(&InputKey::DeclarationContext(definition));
-            let source = db.input(&InputKey::DefinitionSource(definition));
-            let (
-                Some(InputValue::DeclarationContext(context)),
-                Some(InputValue::DefinitionSource(source)),
-            ) = (context.as_deref(), source.as_deref())
-            else {
-                return QueryPoll::Ready(Err(fault("bound equation declaration inputs absent")));
-            };
-            (
-                signature.as_ref(),
-                source.clone(),
-                context.clone(),
-                std::sync::Arc::clone(environment.macros().source_environment()),
-            )
-        }
-        (EquationOwner::SelectedCall(pc), QueryValue::EnteredCall(goal)) => {
-            checked!(goal.require_current(db));
-            if goal.key() != pc {
-                return QueryPoll::Ready(Err(fault("bound equation call occurrence differs")));
-            }
-            let Some(signature) = goal.signature() else {
-                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
-            };
-            use super::entered_call_goals::EnteredCallSelection;
-            let (source, context, parent) = match goal.selection() {
-                EnteredCallSelection::Module(declaration) => {
-                    if declaration.identity() != definition
-                        || declaration.header() != signature.header.fingerprint()
-                    {
-                        return QueryPoll::Ready(Err(fault(
-                            "bound equation selected module declaration differs",
-                        )));
-                    }
-                    (
-                        declaration.source().clone(),
-                        declaration.context().clone(),
-                        goal.retained_plan(),
-                    )
+    let (signature, source, context, completed, local_scope) =
+        match (&key.owner, selected.value.as_ref()) {
+            (EquationOwner::DeclaredBody(body), QueryValue::FunctionSignature(signature)) => {
+                let environment = db.input(&InputKey::BodyEnvironment(body.clone()));
+                let Some(InputValue::BodyEnvironment(environment)) = environment.as_deref() else {
+                    return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+                };
+                ready!(environment.require_current(db));
+                if environment.body() != body || body.definition != definition {
+                    return QueryPoll::Ready(Err(fault(
+                        "bound equation declaration owner differs",
+                    )));
                 }
-                EnteredCallSelection::Local(proof) => {
-                    let item = proof.item();
-                    if item.def_key.fingerprint() != definition
-                        || item.header != signature.header
-                        || item.scope != signature.scope
-                    {
-                        return QueryPoll::Ready(Err(fault(
-                            "bound equation selected local declaration differs",
-                        )));
-                    }
-                    (
-                        proof.source().clone(),
-                        crate::syntax::outline::DeclarationContext {
-                            scope: item.scope.clone(),
-                            range: item.declaration_span,
-                        },
-                        proof.parent(),
-                    )
+                let context = db.input(&InputKey::DeclarationContext(definition));
+                let source = db.input(&InputKey::DefinitionSource(definition));
+                let (
+                    Some(InputValue::DeclarationContext(context)),
+                    Some(InputValue::DefinitionSource(source)),
+                ) = (context.as_deref(), source.as_deref())
+                else {
+                    return QueryPoll::Ready(Err(fault(
+                        "bound equation declaration inputs absent",
+                    )));
+                };
+                (
+                    signature.as_ref(),
+                    source.clone(),
+                    context.clone(),
+                    std::sync::Arc::clone(environment.macros().source_environment()),
+                    None,
+                )
+            }
+            (EquationOwner::SelectedCall(pc), QueryValue::EnteredCall(goal)) => {
+                checked!(goal.require_current(db));
+                if goal.key() != pc {
+                    return QueryPoll::Ready(Err(fault("bound equation call occurrence differs")));
                 }
-                _ => return QueryPoll::Ready(Ok(pending(key, selected.fingerprint))),
-            };
-            ready!(parent.require_current(db));
-            let Some(environment) = parent.environment() else {
-                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
-            };
-            // The actual selected local declaration remains unpublished until
-            // reached. Its legacy named-Type adapter still needs a genuine
-            // declaration-scope join; never publish substitute global rows.
-            if !matches!(db.input(&InputKey::DefinitionHeader(definition)).as_deref(),
+                let Some(signature) = goal.signature() else {
+                    return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+                };
+                use super::entered_call_goals::EnteredCallSelection;
+                let (source, context, parent, local_scope) = match goal.selection() {
+                    EnteredCallSelection::Module(declaration) => {
+                        if declaration.identity() != definition
+                            || declaration.header() != signature.header.fingerprint()
+                        {
+                            return QueryPoll::Ready(Err(fault(
+                                "bound equation selected module declaration differs",
+                            )));
+                        }
+                        (
+                            declaration.source().clone(),
+                            declaration.context().clone(),
+                            goal.retained_plan(),
+                            None,
+                        )
+                    }
+                    EnteredCallSelection::Local(proof) => {
+                        let item = proof.item();
+                        if item.def_key.fingerprint() != definition
+                            || item.header != signature.header
+                            || item.scope != signature.scope
+                        {
+                            return QueryPoll::Ready(Err(fault(
+                                "bound equation selected local declaration differs",
+                            )));
+                        }
+                        (
+                            proof.source().clone(),
+                            crate::syntax::outline::DeclarationContext {
+                                scope: item.scope.clone(),
+                                range: item.declaration_span,
+                            },
+                            proof.parent(),
+                            (!proof.is_member()
+                                && db.input(&InputKey::DefinitionHeader(definition)).is_none())
+                            .then_some(proof),
+                        )
+                    }
+                    _ => return QueryPoll::Ready(Ok(pending(key, selected.fingerprint))),
+                };
+                ready!(parent.require_current(db));
+                let Some(environment) = parent.environment() else {
+                    return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+                };
+                // Published module declarations retain their existing input join.
+                // An actual local admission instead resolves header occurrences in
+                // its genuine declaring parent, without publishing child inputs.
+                if local_scope.is_none()
+                    && (!matches!(db.input(&InputKey::DefinitionHeader(definition)).as_deref(),
                 Some(InputValue::DefinitionHeader(header)) if header == &signature.header)
-                || !matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),
+                        || !matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),
                     Some(InputValue::DefinitionSource(actual)) if actual == &source)
-                || !matches!(db.input(&InputKey::DeclarationContext(definition)).as_deref(),
-                    Some(InputValue::DeclarationContext(actual)) if actual == &context)
-            {
-                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+                        || !matches!(db.input(&InputKey::DeclarationContext(definition)).as_deref(),
+                    Some(InputValue::DeclarationContext(actual)) if actual == &context))
+                {
+                    return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+                }
+                (
+                    signature,
+                    source,
+                    context,
+                    std::sync::Arc::clone(environment.macros().source_environment()),
+                    local_scope,
+                )
             }
-            (
-                signature,
-                source,
-                context,
-                std::sync::Arc::clone(environment.macros().source_environment()),
-            )
-        }
-        _ => return QueryPoll::Ready(Err(fault("bound equation selected query outcome differs"))),
-    };
+            _ => {
+                return QueryPoll::Ready(Err(fault(
+                    "bound equation selected query outcome differs",
+                )));
+            }
+        };
     if signature.definition != definition
         || context.scope != signature.scope
         || source.profile != signature.header.profile
@@ -283,6 +299,10 @@ pub(crate) fn prepare(
     let sources: Vec<_> = completed.sources().iter().collect();
     let declaration =
         super::source_types::WrittenTypeDeclaration::function_syntax(signature, &owner);
+    let declaration = match local_scope {
+        Some(proof) => declaration.with_local_scope(proof),
+        None => declaration,
+    };
     let equations = ready!(super::source_types::actual_bound_equations(
         db,
         completed.names(),

@@ -1061,6 +1061,26 @@ impl PreparedSourceLocalPlan {
                 crate::frontend::type_aliases::AliasTarget::Type(term),
             )));
         }
+        let prefix = ready!(self.prepare_header_prefix(db, &header, identity));
+        if generic_base {
+            prefix.prepare_named_base(db)
+        } else {
+            prefix.prepare_named(db)
+        }
+    }
+    fn prepare_header_prefix(
+        self: &Arc<Self>,
+        db: &mut Database,
+        header: &HeaderTypeSite<'_>,
+        identity: super::DeclarationTypeSite,
+    ) -> QueryPoll<LocalTypePrefix> {
+        ready!(self.require_current(db));
+        let name = checked!(
+            header
+                .leaf
+                .or(header.field.name.as_ref())
+                .ok_or_else(|| error("header Type actual name occurrence absent"))
+        );
         let site = crate::frontend::source_locals::OrdinaryNameSite {
             source: self.entered.parent.source(),
             body: self.context.source().index().body(),
@@ -1079,7 +1099,7 @@ impl PreparedSourceLocalPlan {
                 &site,
                 &self.type_names,
                 name.edition(),
-                &header
+                header
             ));
             checked!(self.select_type_prefix(found, name.context()))
         };
@@ -1099,11 +1119,7 @@ impl PreparedSourceLocalPlan {
         };
         checked!(prefix.exclusive_metadata_bytes());
         prefix.fingerprint = StableEncode::fingerprint(&prefix);
-        if generic_base {
-            prefix.prepare_named_base(db)
-        } else {
-            prefix.prepare_named(db)
-        }
+        QueryPoll::Ready(Ok(prefix))
     }
 }
 
@@ -1116,3 +1132,6 @@ mod returns;
 
 #[path = "local_containers.rs"]
 mod containers;
+
+#[path = "declaration_header_names.rs"]
+mod header_names;

@@ -1,0 +1,25 @@
+{
+  "status": "READY mechanical compile repair only; successor uncompiled/unexecuted",
+  "failed_candidate": "V21 exact source648c0af...; six compile errors, no CLI/runtime",
+  "failed_log": "artifacts/validation-resume-2026-10-18/candidate-v21/compile.log",
+  "before_sha256": {
+    "crates/lrr/src/frontend/declaration_header_names.rs": "5ef4c55a01b60aea6f41582463ae2145bcc65a7c3a18a75e9cd645ce617840c6",
+    "crates/lrr/src/frontend/source_types.rs": "3f034e9462c6393cdb548a328b32924a8d515e7a2013c40f247289c87bbc3f12",
+    "crates/lrr/src/frontend/binding_constraints.rs": "d71fbfc0ab0f9235600b70b50038af5201992420ac13d0027eeca814a30246c0"
+  },
+  "after_sha256": {
+    "crates/lrr/src/frontend/declaration_header_names.rs": "66425597503b992529866dc155e86ea6a78c7d32d960db52185f36f218fe41c8",
+    "crates/lrr/src/frontend/source_types.rs": "ff046a3ebc4ded332e5155e7a17387277998a1c0e257ef1c8b56b511d800e510",
+    "crates/lrr/src/frontend/binding_constraints.rs": "91cbbcc4d3738251ab1a227baf3f094d92cd80cb874fd62a22d0110771acba66"
+  },
+  "mechanical_changes": [
+    "declaration_header_names.rs actual pub(crate) callables::ordinary_local module path (one reference)",
+    "source_types.rs same module path for proof fields/helper (three references)",
+    "binding_constraints.rs fully qualified existing InputKey at DefinitionHeader absence guard (one reference)"
+  ],
+  "independent_fourth_delta": "Worker2 owns run_capture ConstructRest exhaustiveness match; no source edits by this worker to that leaf. Its exact source hash is supplied below if the confirmed path exists.",
+  "review": "Inspected callables.rs lines29\u201330: path attribute exposes ordinary_local as pub(crate); no visibility changes. Five references only, no inference/source/guard semantic changes. Prior all8 conclusions unchanged subject to three new exact fingerprints; V21 failed evidence preserved. No Cargo or tests by implementation worker.",
+  "worker2_source_sha256": {
+    "crates/lrr/src/engine/run_capture.rs": "d9bd845a0943e095d2971f80fcb9b4926709bf5b31045c17df25b5d976b012f7"
+  }
+}

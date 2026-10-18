@@ -199,7 +199,7 @@ impl InstalledRecipes {
             };
             if matches!(
                 plan.kind(),
-                crate::syntax::constructors::ConstructorKind::Record { rest: None, .. }
+                crate::syntax::constructors::ConstructorKind::Record { .. }
             ) {
                 let demand = QueryKey::BoundRecordConstructor(key.clone());
                 let prepared = match db.fetch(&SyntaxProvider, demand.clone()) {

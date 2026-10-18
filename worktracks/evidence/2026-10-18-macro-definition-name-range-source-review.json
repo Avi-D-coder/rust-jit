@@ -1,0 +1,107 @@
+{
+  "status": "READY source removal/lifecycle correction/name-range repair; successor uncompiled/unexecuted",
+  "precode": "2026-10-18-local-type-scope-v22-lifecycle-correction.md",
+  "source_sha256": {
+    "crates/lrr/src/frontend/associated_equations.rs": "9301240adbaf2e064eae3c3f3c200b4148f1909c3a90c91768249eee0e09f0ae",
+    "crates/lrr/src/frontend/source_types.rs": "9a60e010fc4bb526a5079de9da84bae6ef6f8fafe824407a4a325d0243ff2c78",
+    "crates/lrr/src/frontend/declaration_field_types.rs": "0c83e69ae261d5a03435ce8e0808226a73eb57f10985e0509baabd17a809518f",
+    "crates/lrr/src/frontend/source_local_plan.rs": "f9e41e2a69a4eda4082d70347dd3d95722422219d3fbe82e8d872c5b36d04769",
+    "crates/lrr/src/frontend/binding_constraints.rs": "c63279b1c3b578f14881640e071ad7f175bc7769dd55185cc306a17af4dd92dc",
+    "crates/lrr/src/frontend/source_macros.rs": "a0a4a0c2e4848a5928f0ef0af6c2102a00c6797919a320c5fbe4dec6d81d07e6",
+    "crates/lrr/src/syntax/macro_definition_capture.rs": "dbaf44b17cfcf411983b0bea7653339e10eeafd0a688d1b89fd12ba2ed79241c",
+    "crates/lrr/src/cli/generic_boundary_tests.rs": "053c9883654542946d93732b5eca1808c29add46e76ba8e5fc7dc7db4dbc8b57"
+  },
+  "deleted": "crates/lrr/src/frontend/declaration_header_names.rs",
+  "restored_production_exact_base": "0dc40e4",
+  "actual_failed_witness": {
+    "candidate": "V22",
+    "local_control": "Fails before Type demand on wrong assertion absent DefinitionHeader; genuine coordinator metadata exists.",
+    "macro_control": "actual requested315..331 text macro_rules!emit crosses keyword interval315..326. build_entered_with_context used diagnostic label as identifier range.",
+    "upstream_complement": "expr-fn.rs owning2015 wholemain passed25calls544dispatches772classifiedops; no local cold Eq/macro claim."
+  },
+  "controls": [
+    "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+    "cli::crate_graph::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation",
+    "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+    "cli::crate_graph::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold"
+  ],
+  "reviews": [
+    {
+      "mode": 1,
+      "symbols": [
+        "MacroDefinitionShape::name_range",
+        "EnteredMacroIndex::build_entered_with_context"
+      ],
+      "finding": "Actual declaration identifier metadata only; same ordinary parser/hygiene macro selection, no expression/assertion evaluator. Removed abandoned Type preflight/walker."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "macro_definition_shape_at",
+        "build_entered_with_context"
+      ],
+      "finding": "Both Rules and Macro2 forms reuse actual AST Name. No literal/break-only output execution or generated-only evaluator. Existing generated Macro2 admission exclusion remains prior held debt."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "MacroDefinitionShape",
+        "AssociatedEquations::SelectedCall existingV20 route"
+      ],
+      "finding": "No method/numeric/macro-name/fixture inference semantics; label versus identifier is a general source occurrence distinction. Same Eq/unification path preserved."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "macro_definition_shape_at",
+        "identifier_context_or_original",
+        "ParsedFile::token_edition"
+      ],
+      "finding": "Original/generated/retained actual Name range supplied to unchanged exact token containment and hygiene/context/edition services. No context guessing or producer/containment exception."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "Database::prepare_source_local_plan",
+        "publish_local_declaration_checked",
+        "check_cold_associated_type_goal"
+      ],
+      "finding": "Control now verifies genuine matching header/source/context/owner metadata, exact fingerprints/revision stable, no child free-Fn body/environment or executable query before/after, plus actual U32/Eq query. Not weakened to values only; no pattern executor/eager child body preparation added. Successor assertions unexecuted."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "macro_definition_shape_at",
+        "build_entered_with_context"
+      ],
+      "finding": "One existing shape demand at definition index preparation now returns an additional fixedsize exact range; no second parse, phase rebuild or installed execution source planning. Removed unused header adapter/query consumer."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "build_entered_with_context",
+        "MacroDefinitionShape::name_range"
+      ],
+      "finding": "Existing actual definition scope and token context/currentness route unchanged. No global namespace scan/invalidation added. Removed abandoned negative Header routing; genuine published-header input closure remains."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "macro_definition_shape_at",
+        "MacroDefinitionShape"
+      ],
+      "finding": "Actual already-selected AST Name text_range captured in O(1) extra data. No new whole-file walk, retained body clone or index. Existing shape syntax selection cost unchanged; no performance acceptance claim."
+    }
+  ],
+  "acceptance_limits": [
+    "No successor compile/runtime pass yet. V22 failed source/receipts remain attached to their exact candidate; removed components never counted as successful runtime mechanism.",
+    "Local published-header Eq may still expose a further genuine goal after corrected lifecycle assertion. Do not claim closure until actual corrected control executes.",
+    "All applicable runtime origins/editions, epoch/suspension/cleanup and milestone remain incomplete; one name-range join is not full macro architecture acceptance.",
+    "Legacy synthetic signature/impl parsing and generated Macro2 source admission remain explicit held routes outside this bounded repair."
+  ],
+  "checks": [
+    "Five restored production leaves byte-identical to0dc40e4 verified; deleted helper references removed.",
+    "rustfmt parsed only macro_definition_capture and test leaf; source_macros only three-line owned branch edit, no wholemodule formatting.",
+    "git diff --check passes; no Cargo/tests run by implementation worker."
+  ]
+}

@@ -414,3 +414,60 @@ the same constructor/copy/cleanup mechanisms. These successors remain unvalidate
 [Exact V20](../../worktracks/evidence/2026-10-18-interpreter-v20-validation.json).
 Fourteen distinct targeted cases have newly passed at least once in this
 resumption's exact historical binaries; no refreshed full-inventory count follows.
+
+The exact compiled V20 source and scoped evidence were pushed in checkpoint
+`0dc40e40125d9536b1da4115f427dd0c1078f2e8`. Current successors remain unstaged.
+
+## V21: source-reviewed successor failed compilation
+
+Frozen source `648c0af067ec62f738f5d3680da600a1002e2c444783c1d25e07cda07b6e67a3`
+(3,330 leaves, HEAD `0dc40e40125d9536b1da4115f427dd0c1078f2e8`) failed the
+library build, actual `e34c33/101`, 16.705 seconds. Five worker1 module/import
+references and one worker2 exhaustive operation-capture classification join
+need mechanical corrections. CLI and all planned runtime commands were unexecuted;
+V20 binaries remain intact. [Exact failed V21](../../worktracks/evidence/2026-10-18-interpreter-v21-validation.json).
+The failed source and prior all-eight review snapshots remain preserved; narrow
+four-leaf owner repairs will be captured as a distinct successor.
+
+## V22: common kind metadata, record transfer and actual lifecycle evidence
+
+Exact source `85d8844fcca9ebd6ef3f34eab3fbb505e419dad75bed33558bbfe774afb3c2ac`
+(3,330 leaves, HEAD `0dc40e40125d9536b1da4115f427dd0c1078f2e8`) passes both frozen
+builds: lib `0d5b5a/0` 19.929s; CLI `786f91/0` 16.347s. All 32 changed Rust leaves
+were staged against that manifest before release. CLI SHA `8b927161038a419602effdbd3de0750619983eadeb345d3b50f40b2df8cfe2bb`;
+test SHA `eb032113259045b22b16e06952252107b85886a5f8fa507e72fea8ca75ae62a0`.
+
+Twelve/thirteen unchanged upstream runtime contracts complete: primary10/11 plus
+two additional FRU edges. New saved-failed witnesses are const-struct,
+struct-update-syntax-2463, fsu-moves-and-copies and drop/issue-21486. These include
+nested Drop wrappers, actual early-return event-log assertions, omitted-only
+transfer and a cold base closure. expr-fn is retained historical pass evidence,
+not a new gain. functional-struct-upd crosses its update, then fails formatting
+catalogue source attachment; it is not a runtime-contract pass.
+
+Ten/fifteen actual controls pass, including generated constant patterns all four
+contexts/editions (64.193s). Main wrapper `ef7d50/1` ran13 bodies before a missing
+wire selector; that error is retained. Only the two unexecuted selectors were
+corrected from --list and run (`20c6c6/0`), no duplicate13 bodies. Main stock
+`a99a69/0`; edge stock `cfcf16/0`. All binary hashes remain unchanged.
+
+Actual failure facts identify a macro-definition diagnostic label315..331
+(`macro_rules!emit`) passed as an identifier range; token containment correctly
+refuses it. Another control fails the existing ValuePlace operand0 assumption
+for a reached rvalue at a later operand. Ancestry setup is genuinely incomplete
+(import/macro producer fixedpoint), before the wrong-graph assertions. The local
+pure control's expectation of absent headers was false: ordinary coordinator
+preparation legitimately publishes genuine local headers without executable
+bodies. The unexercised unpublished-only header adapter is removed in the next
+source candidate, keeping V20's existing SelectedCall Eq service; the control
+will check actual metadata, stable inputs, no child body preparation and U32.
+
+Next source-only repairs are actual MacroDefinitionShape AST name-range capture,
+the shared exact indexed-operand verifier proof, and completed catalogue context
+projection retaining the genuine pre-append provider/before rather than assuming
+every catalogue has an original invocation storage key. No macro-specific
+execution/inference rules or relaxed hygiene checks. [Exact V22](../../worktracks/evidence/2026-10-18-interpreter-v22-validation.json).
+Eighteen distinct saved-failed targeted witnesses have newly passed at least once
+across this resumption; this is not the current whole-inventory count. Aggregate
+constant run-once templates/generic cache identity remain E007 holds: const w
+being initialized twice here is not a duplicate FRU transfer within one activation.

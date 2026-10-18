@@ -162,7 +162,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 15;
+pub const LRIR_RECIPE_SCHEMA: u32 = 16;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {
@@ -353,7 +353,8 @@ pub const PROMOTED_PLACE_OPCODE: u8 = 66;
 pub const POINTER_CAST_OPCODE: u8 = 67;
 // Tag 68 adjusts a once-evaluated value callee through ordinary Deref calls.
 pub const CALLEE_DEREF_OPCODE: u8 = 68;
-pub const OPCODE_COUNT: usize = 69;
+pub const CONSTRUCT_REST_OPCODE: u8 = 69;
+pub const OPCODE_COUNT: usize = 70;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -648,6 +649,11 @@ pub enum Op {
         field: u32,
         source: SlotId,
     },
+    /// Move/copy only the source-checked omitted fields from an evaluated base.
+    ConstructRest {
+        guard: SlotId,
+        base: SlotId,
+    },
     ConstructFinish {
         guard: SlotId,
         destination: SlotId,
@@ -912,6 +918,7 @@ impl Op {
             Self::ConstructStart { .. } => 27,
             Self::ConstructField { .. } => 28,
             Self::ConstructFinish { .. } => 29,
+            Self::ConstructRest { .. } => CONSTRUCT_REST_OPCODE,
             Self::FormatArguments { .. } => FORMAT_ARGUMENTS_OPCODE,
             Self::MethodReceiver { .. } => METHOD_RECEIVER_OPCODE,
             Self::CalleeDeref { .. } => CALLEE_DEREF_OPCODE,
@@ -969,6 +976,7 @@ impl Op {
             | Self::ConstructStart { .. }
             | Self::ConstructField { .. }
             | Self::ConstructFinish { .. }
+            | Self::ConstructRest { .. }
             | Self::MethodReceiver { .. }
             | Self::CalleeDeref { .. }
             | Self::ComparisonOperand { .. }

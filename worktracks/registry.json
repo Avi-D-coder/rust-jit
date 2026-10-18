@@ -727,12 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V20 exactsource18f193dc bothbuildsPASS;7/7primary+0/2additionaloriginalwholemainPASS, namedenum1new.6/9controlsPASS includingcoldsignatureTypefact+heterogeneousnominal, generatedkind/hygiene/ancestrysetupheld. V19compile101preserved; uncompiledsuccessors andno refreshedsuitecount.",
+    "validation": "V22 exactsource85d8844f bothbuildsPASS;12/13unchangedupstreamruntimePASS,4newrecordupdate/move/cleanup witnesses,10/15actualcontrolsPASS. Generatedconstantoriginsallcontexts/editionsPASS. Formattingcatalogue/name-range/verifier/ancestry/lifecyclecontrolholds; successorsunvalidated, nofreshsuitecount.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 14,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 18,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "3feaeb81822666664570f54c47892c597e42dede",
+    "source_checkpoint_pushed": "0dc40e40125d9536b1da4115f427dd0c1078f2e8",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

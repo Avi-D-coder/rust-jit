@@ -92,6 +92,7 @@ impl RunCapture {
                 | Op::Borrow { .. }
                 | Op::ConstructStart { .. }
                 | Op::ConstructField { .. }
+                | Op::ConstructRest { .. }
                 | Op::ConstructFinish { .. }
                 | Op::ValuePath { .. }
                 | Op::MakeClosure { .. }

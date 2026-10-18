@@ -62,6 +62,13 @@ impl VariantRecipe {
     /// Validates a reached constructor and retains written order independently
     /// of declaration-order storage. It evaluates no initializer.
     pub fn named_initializer_slots(&self, written: &[&str]) -> Result<Vec<u32>, Diagnostic> {
+        self.named_initializer_slots_with_base(written, false)
+    }
+    fn named_initializer_slots_with_base(
+        &self,
+        written: &[&str],
+        has_base: bool,
+    ) -> Result<Vec<u32>, Diagnostic> {
         // A unit struct also accepts the empty braced form (`S {}`, and the
         // `RangeFull` record of `..`); it has no field to name.
         if !matches!(
@@ -111,7 +118,7 @@ impl VariantRecipe {
             *flag = true;
             slots.push(ordinal);
         }
-        if initialized.iter().any(|initialized| !initialized) {
+        if !has_base && initialized.iter().any(|initialized| !initialized) {
             return Err(schema_fault("missing field in reached initializer"));
         }
         Ok(slots)
@@ -1212,7 +1219,7 @@ impl<'a> SchemaNames<'a> {
             )),
         }
     }
-    /// Same record-shape/privacy/field-order binder; schema field Type names are
+    /// Same record-shape/field-order binder; schema field Type names are
     /// admitted by the shared current declaration service used by ordinary members.
     pub(crate) fn bind_record_constructor_current(
         &self,
@@ -1233,17 +1240,13 @@ impl<'a> SchemaNames<'a> {
         &self,
         name: Option<&str>,
         plan: &crate::syntax::constructors::ConstructorPlan,
-        caller: &ScopeKey,
+        _caller: &ScopeKey,
         lookup: impl FnMut(FieldTypeQuery<'_>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalConstructorBinding>, Diagnostic> {
         use crate::syntax::constructors::ConstructorKind;
-        let ConstructorKind::Record {
-            fields, rest: None, ..
-        } = plan.kind()
-        else {
-            return Err(Diagnostic::new(
-                "LRR-E-UNSUPPORTED",
-                "record update requires its ordered construction integration".into(),
+        let ConstructorKind::Record { fields, rest, .. } = plan.kind() else {
+            return Err(schema_fault(
+                "record constructor binding requires record syntax",
             ));
         };
         let selected = self.schema.variant(name)?;
@@ -1252,23 +1255,24 @@ impl<'a> SchemaNames<'a> {
             .try_reserve_exact(fields.len())
             .map_err(|_| schema_limit())?;
         written.extend(fields.iter().map(|field| field.name.as_str()));
-        let slots = selected.named_initializer_slots(&written)?;
-        for recipe in &selected.fields {
-            if !crate::syntax::visibility::VisibilityScope::for_declaration(
-                self.field_visibility(&recipe.visibility),
-                &self.schema.scope,
-                self.schema.header.profile.edition,
-            )?
-            .allows(caller)?
-            {
-                return Err(schema_fault("reached constructor field is inaccessible"));
-            }
-        }
+        let slots = selected.named_initializer_slots_with_base(&written, rest.is_some())?;
+        let selected_fields: std::collections::BTreeSet<_> = slots.iter().copied().collect();
+        let base_fields = if rest.is_some() {
+            (0..selected.fields.len())
+                .map(|field| u32::try_from(field).map_err(|_| schema_limit()))
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .filter(|field| !selected_fields.contains(field))
+                .collect()
+        } else {
+            Vec::new()
+        };
         let mapping = BoundRecordFields {
             definition: self.schema.definition,
             schema: self.schema.fingerprint(),
             constructor: plan.fingerprint(),
             written_to_declaration: slots,
+            base_fields,
         };
         let bound = match self.bind_variant_with(name, lookup)? {
             crate::db::poll::QueryPoll::Ready(result) => result?,
@@ -1309,10 +1313,15 @@ pub struct BoundRecordFields {
     schema: Digest,
     constructor: Digest,
     written_to_declaration: Vec<u32>,
+    /// Omitted fields transferred from the base in declaration order.
+    base_fields: Vec<u32>,
 }
 impl BoundRecordFields {
     pub fn written_to_declaration(&self) -> &[u32] {
         &self.written_to_declaration
+    }
+    pub(crate) fn base_fields(&self) -> &[u32] {
+        &self.base_fields
     }
     pub fn constructor(&self) -> Digest {
         self.constructor
@@ -1326,16 +1335,18 @@ impl BoundRecordFields {
     pub(crate) fn heap_bytes(&self) -> Option<usize> {
         self.written_to_declaration
             .capacity()
+            .checked_add(self.base_fields.capacity())?
             .checked_mul(std::mem::size_of::<u32>())
     }
 }
 impl StableEncode for BoundRecordFields {
-    const DOMAIN: &'static str = "lrr/v2/bound-record-fields";
+    const DOMAIN: &'static str = "lrr/v3/bound-record-fields";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.digest(self.schema);
         e.digest(self.constructor);
         e.sequence(&self.written_to_declaration, |e, ordinal| e.u32(*ordinal));
+        e.sequence(&self.base_fields, |e, ordinal| e.u32(*ordinal));
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1354,11 +1365,23 @@ impl BoundNominalConstructor {
         if mapping.definition() != variant.identity()
             || mapping.schema() != variant.schema()
             || selected_variant != variant.variant()
-            || mapping.written_to_declaration().len() != variant.fields().len()
+            || mapping
+                .written_to_declaration()
+                .len()
+                .checked_add(mapping.base_fields().len())
+                != Some(variant.fields().len())
             || mapping
                 .written_to_declaration()
                 .iter()
+                .chain(mapping.base_fields())
                 .any(|field| *field as usize >= variant.fields().len())
+            || mapping
+                .written_to_declaration()
+                .iter()
+                .chain(mapping.base_fields())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != variant.fields().len()
         {
             return Err(schema_fault(
                 "record map/specialized source variant differs",
