@@ -118,3 +118,5 @@ pub mod source_return_goals;
 pub(crate) mod explicit_type_arguments;
 
 pub mod nominal_member_goals;
+
+pub(crate) mod impl_head_types;

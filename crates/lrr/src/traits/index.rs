@@ -31,6 +31,7 @@ pub struct PreparedScopeImplHeaders {
     inventory: Arc<ImplHeaderIndex>,
     locations: Vec<HeaderLocation>,
     owners: Vec<Option<CanonicalImplOwner>>,
+    owner_locations: Vec<(Digest, u32)>,
     inventory_fingerprint: Digest,
     fingerprint: Digest,
     exclusive_bytes: usize,
@@ -218,6 +219,16 @@ impl PreparedScopeImplHeaders {
             .iter()
             .map(|header| source_owners.remove(&header.identity))
             .collect();
+        let mut owner_locations = Vec::new();
+        for (ordinal, owner) in owners.iter().enumerate() {
+            if let Some(owner) = owner {
+                owner_locations.push((
+                    owner.identity(),
+                    u32::try_from(ordinal).map_err(|_| resource())?,
+                ));
+            }
+        }
+        owner_locations.sort_unstable();
         let mut encoded = StableEncoder::new("lrr/v2/prepared-scope-source-impl-headers");
         encoded.record(&key);
         encoded.digest(inventory_fingerprint);
@@ -234,6 +245,7 @@ impl PreparedScopeImplHeaders {
             inventory,
             locations: prepared,
             owners,
+            owner_locations,
             inventory_fingerprint,
             fingerprint: encoded.finish(),
             exclusive_bytes,
@@ -280,6 +292,21 @@ impl PreparedScopeImplHeaders {
             .binary_search_by_key(&identity, |header| header.identity)
             .ok()?;
         self.owners.get(ordinal)?.as_ref()
+    }
+    pub(crate) fn header_by_owner(&self, definition: Digest) -> Option<SourceImplHeader<'_>> {
+        let at = self
+            .owner_locations
+            .partition_point(|row| row.0 < definition);
+        let &(identity, ordinal) = self.owner_locations.get(at)?;
+        if identity != definition
+            || self
+                .owner_locations
+                .get(at + 1)
+                .is_some_and(|row| row.0 == definition)
+        {
+            return None;
+        }
+        self.header(self.inventory.headers().get(ordinal as usize)?.identity)
     }
     pub(crate) fn syntax_source(
         &self,

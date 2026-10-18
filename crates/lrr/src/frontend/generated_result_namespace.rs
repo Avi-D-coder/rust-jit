@@ -373,6 +373,40 @@ pub(crate) fn lookup_type_declaration(
         )));
     };
     use crate::source::manifest::ItemKind;
+    if definition.item_kind == ItemKind::Impl {
+        let inventory = match db.fetch(&SyntaxProvider,
+            crate::db::key::QueryKey::PreparedScopeImplHeaders(unit.seal.clone())) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let crate::db::value::QueryValue::PreparedScopeImplHeaders(inventory) = inventory.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl header inventory differs")));
+        };
+        let Some(raw) = inventory.header_by_owner(declaration.definition) else {
+            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl canonical source is absent or ambiguous")));
+        };
+        if raw.requirements().header != declaration.header.tokens {
+            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl actual header differs")));
+        }
+        let syntax = match db.fetch(&SyntaxProvider, QueryKey::ImplHeaderSyntax(Box::new(
+            crate::traits::header_syntax::ImplHeaderSyntaxKey {
+                inventory: unit.seal.clone(), implementation: raw.identity(),
+            }))) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        if !matches!(syntax.value.as_ref(), crate::db::value::QueryValue::ImplHeaderSyntax(syntax)
+            if syntax.canonical_owner().is_some_and(|owner| owner.identity() == declaration.definition)
+                && syntax.source().profile == declaration.header.profile
+                && syntax.scope().crate_key == declaration.scope.crate_key
+                && syntax.scope().module_path == declaration.scope.module_path)
+        {
+            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl canonical header proof differs")));
+        }
+        return QueryPoll::Ready(lookup_declaration_inner(db, declaration, parse, written_name, None));
+    }
     let key = match definition.item_kind {
         ItemKind::Struct | ItemKind::Enum => QueryKey::TypeSchema(declaration.definition),
         ItemKind::TypeAlias => QueryKey::TypeAlias(declaration.definition),

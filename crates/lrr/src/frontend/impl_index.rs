@@ -50,6 +50,7 @@ pub struct ImplHeaderIndex {
     producers: Vec<DeclarationProducer>,
     retained_bytes: usize,
     syntax_sources: BTreeMap<crate::core::digest::Digest, ImplSyntaxSource>,
+    environment: Option<Arc<crate::expand::source_discovery::CompletedSourceEnvironment>>,
 }
 impl std::fmt::Debug for ImplHeaderIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -97,6 +98,7 @@ impl ImplHeaderIndex {
             producers,
             retained_bytes: bytes,
             syntax_sources: BTreeMap::new(),
+            environment: None,
         })
     }
     /// Called by actual discovery publication, retaining only owners joined
@@ -114,6 +116,13 @@ impl ImplHeaderIndex {
             }
         }
         Ok(self)
+    }
+    pub(crate) fn with_environment(mut self, environment: Option<Arc<crate::expand::source_discovery::CompletedSourceEnvironment>>) -> Self {
+        self.environment = environment;
+        self
+    }
+    pub(crate) fn environment(&self) -> Option<&Arc<crate::expand::source_discovery::CompletedSourceEnvironment>> {
+        self.environment.as_ref()
     }
     pub(crate) fn syntax_source(
         &self,
@@ -268,8 +277,9 @@ impl ImplHeaderIndex {
     }
 }
 impl StableEncode for ImplHeaderIndex {
-    const DOMAIN: &'static str = "lrr/v3/impl-header-inventory";
+    const DOMAIN: &'static str = "lrr/v4/impl-header-inventory";
     fn encode_fields(&self, e: &mut StableEncoder) {
+        e.option(&self.environment, |e, environment| e.record(environment.dependency()));
         e.sequence(&self.sources, |e, s| e.digest(s.fingerprint()));
         e.sequence(&self.headers, |e, h| {
             e.digest(h.identity);

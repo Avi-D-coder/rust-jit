@@ -9308,6 +9308,7 @@ impl SourceDiscovery {
             .exclude_replaced_sources(&proofs)?
             .exclude_generated_replacements(&masks)?
             .with_syntax_sources(syntax_sources)
+            .map(|inventory| inventory.with_environment(self.completed_source_environment.clone()))
     }
     /// Exact non-item grammar records; ordinary item facets remain separate.
     pub fn sealed_declaration_expansions(

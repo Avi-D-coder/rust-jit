@@ -284,11 +284,12 @@
           "id": "WT05-01",
           "title": "Header catalogs",
           "status": "claimed",
-          "candidate": "worktracks/05-trait-goal-engine/2026-10-18-retained-impl-header-query.md",
-          "acceptance_scope": "V81 solo held M018/M019 source prerequisite: impl header queries retain actual canonical Original DefKey or admitted GeneratedItemKey, separate from raw scan identity. OriginalAssociatedDeclarations/LocalImplOwners indexes prepare once per queried source; active generated headers join exact kind/range. Both builds and13/13focused controls pass, including all4edition original/emit/wrapper identity checks and unchanged cold local Drop impl with no executable body demand. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations); zero new distinct stock runtime passes and no refreshed suite total. V80 Clone compile failure preserved. Type/predicate lowering, argument/local-generated owner gaps, complete catalog/tabled goals/runtime applicability and interpreter/JIT gates remain open.",
+          "candidate": "worktracks/05-trait-goal-engine/2026-10-18-impl-head-types.md",
+          "acceptance_scope": "V83 solo held M019 source component: Q58 resolves actual impl self/trait head Types through the ordinary declaration Type resolver and existing generated header/origin proof. Real completed environment Arc retained with inventory; reverse canonical-owner lookup prepared once. Both builds and17/17focused controls pass (15header/discovery/preentry plus2existing source lifecycle), including unchanged conditional original/emit/wrapper all4editions and explicit region/cold-metadata pending states. One unchanged deferred-resolution1 runtime regression passes10calls196VMoperations. Generic/where predicates remain retained syntax; no applicability/catalog/table/runtime proof, zero new stock runtime passes, no refreshed suite total. Broader hygiene/arguments/Self/normalization and interpreter/JIT gates remain held.",
           "evidence": [
             "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json",
-            "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json"
+            "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json",
+            "worktracks/evidence/2026-10-18-interpreter-v82-v83-impl-head-types.json"
           ]
         },
         {
@@ -735,22 +736,22 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "f32cd15714d05f8ad84420f9b4e6f215d3f09cc8",
+    "baseline_git_head": "5d69fe2ff0f639bf5a85a20d92bd8c038fe39f20",
     "working_tree": "inherited_dirty_plus_current_source_components",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V81 solo held M018/M019 source prerequisite: impl header queries retain actual canonical Original DefKey or admitted GeneratedItemKey, separate from raw scan identity. OriginalAssociatedDeclarations/LocalImplOwners indexes prepare once per queried source; active generated headers join exact kind/range. Both builds and13/13focused controls pass, including all4edition original/emit/wrapper identity checks and unchanged cold local Drop impl with no executable body demand. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations); zero new distinct stock runtime passes and no refreshed suite total. V80 Clone compile failure preserved. Type/predicate lowering, argument/local-generated owner gaps, complete catalog/tabled goals/runtime applicability and interpreter/JIT gates remain open.",
+    "validation": "V83 solo held M019 source component: Q58 resolves actual impl self/trait head Types through the ordinary declaration Type resolver and existing generated header/origin proof. Real completed environment Arc retained with inventory; reverse canonical-owner lookup prepared once. Both builds and17/17focused controls pass (15header/discovery/preentry plus2existing source lifecycle), including unchanged conditional original/emit/wrapper all4editions and explicit region/cold-metadata pending states. One unchanged deferred-resolution1 runtime regression passes10calls196VMoperations. Generic/where predicates remain retained syntax; no applicability/catalog/table/runtime proof, zero new stock runtime passes, no refreshed suite total. Broader hygiene/arguments/Self/normalization and interpreter/JIT gates remain held.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "f32cd15714d05f8ad84420f9b4e6f215d3f09cc8",
+    "source_checkpoint_pushed": "5d69fe2ff0f639bf5a85a20d92bd8c038fe39f20",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": [
-      "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json"
+      "worktracks/evidence/2026-10-18-interpreter-v82-v83-impl-head-types.json"
     ]
   }
 }

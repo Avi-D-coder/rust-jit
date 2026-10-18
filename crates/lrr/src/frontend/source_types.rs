@@ -359,6 +359,7 @@ pub(super) struct WrittenTypeDeclaration<'a> {
     predicates: &'a [crate::syntax::ast_adapter::TokenRecipe],
     function: Option<&'a FunctionSignature>,
     syntax: Option<&'a ra_ap_syntax::SyntaxNode>,
+    impl_self: Option<&'a TyTerm>,
 }
 impl<'a> WrittenTypeDeclaration<'a> {
     fn function(signature: &'a FunctionSignature) -> Self {
@@ -370,6 +371,7 @@ impl<'a> WrittenTypeDeclaration<'a> {
             predicates: &signature.predicates,
             function: Some(signature),
             syntax: None,
+            impl_self: None,
         }
     }
     pub(super) fn function_syntax(
@@ -393,7 +395,17 @@ impl<'a> WrittenTypeDeclaration<'a> {
             predicates: &[],
             function: None,
             syntax: Some(syntax),
+            impl_self: None,
         }
+    }
+    pub(super) fn implementation(
+        owner: super::type_name_namespace::SourceTypeOwner<'a>,
+        generics: &'a [crate::syntax::signatures::DefinitionParameter],
+        syntax: &'a ra_ap_syntax::SyntaxNode,
+        impl_self: Option<&'a TyTerm>,
+    ) -> Self {
+        Self { definition: owner.definition, scope: owner.scope, header: owner.header,
+            generics, predicates: &[], function: None, syntax: Some(syntax), impl_self }
     }
     fn resolve_name(
         &self,
@@ -686,6 +698,9 @@ pub(super) fn resolve_actual_type(
                 // `Self` of an impl: its written self type, whose generic
                 // names are the function's inherited impl parameters.
                 if segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw) {
+                    if let Some(self_ty) = signature.impl_self {
+                        return QueryPoll::Ready(Ok(Some(self_ty.clone())));
+                    }
                     if signature.generics.iter().any(|p| {
                         p.kind == crate::syntax::signatures::GenericKind::Type && p.name == "Self"
                     }) {

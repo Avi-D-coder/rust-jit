@@ -19973,13 +19973,15 @@
       "artifact_paths": [
         "worktracks/05-trait-goal-engine/2026-10-18-retained-impl-header-query.md",
         "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json",
-        "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json"
+        "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json",
+        "worktracks/evidence/2026-10-18-interpreter-v82-v83-impl-head-types.json",
+        "worktracks/05-trait-goal-engine/2026-10-18-impl-head-types.md"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V81 solo held M018/M019 source prerequisite: impl header queries retain actual canonical Original DefKey or admitted GeneratedItemKey, separate from raw scan identity. OriginalAssociatedDeclarations/LocalImplOwners indexes prepare once per queried source; active generated headers join exact kind/range. Both builds and13/13focused controls pass, including all4edition original/emit/wrapper identity checks and unchanged cold local Drop impl with no executable body demand. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations); zero new distinct stock runtime passes and no refreshed suite total. V80 Clone compile failure preserved. Type/predicate lowering, argument/local-generated owner gaps, complete catalog/tabled goals/runtime applicability and interpreter/JIT gates remain open.",
-      "source_baseline": "f32cd15714d05f8ad84420f9b4e6f215d3f09cc8"
+      "latest_component_scope": "V83 solo held M019 source component: Q58 resolves actual impl self/trait head Types through the ordinary declaration Type resolver and existing generated header/origin proof. Real completed environment Arc retained with inventory; reverse canonical-owner lookup prepared once. Both builds and17/17focused controls pass (15header/discovery/preentry plus2existing source lifecycle), including unchanged conditional original/emit/wrapper all4editions and explicit region/cold-metadata pending states. One unchanged deferred-resolution1 runtime regression passes10calls196VMoperations. Generic/where predicates remain retained syntax; no applicability/catalog/table/runtime proof, zero new stock runtime passes, no refreshed suite total. Broader hygiene/arguments/Self/normalization and interpreter/JIT gates remain held.",
+      "source_baseline": "5d69fe2ff0f639bf5a85a20d92bd8c038fe39f20"
     },
     {
       "id": "M020",
