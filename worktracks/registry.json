@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T10:03:44.754575+00:00",
+  "updated_at": "2026-10-18T12:31:53.340859+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -727,12 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V22 exactsource85d8844f bothbuildsPASS;12/13unchangedupstreamruntimePASS,4newrecordupdate/move/cleanup witnesses,10/15actualcontrolsPASS. Generatedconstantoriginsallcontexts/editionsPASS. Formattingcatalogue/name-range/verifier/ancestry/lifecyclecontrolholds; successorsunvalidated, nofreshsuitecount.",
+    "validation": "V23 exactsource01d505d4 bothbuildsPASS;4/5selectedunchangedruntimePASS,0newstock;6/9controlsPASS,2newlocalcoldtype+all-editionFRUroutecontrols. Generatedoccurrence/module/importaliasgaps remain; nofreshsuitecount.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 18,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "0dc40e40125d9536b1da4115f427dd0c1078f2e8",
+    "source_checkpoint_pushed": "917fc1329be4b4b8210c7c154aa27e0382526fd2",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

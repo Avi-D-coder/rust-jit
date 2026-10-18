@@ -7778,7 +7778,7 @@ impl SourceDiscovery {
                         inherited,
                         captured: super::source_declarative::CapturedMacroContext {
                             exports,
-                            provider,
+                            provider: completed.provider,
                             owners: providers,
                             before: completed.before,
                             inherited: None,

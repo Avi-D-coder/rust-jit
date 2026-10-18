@@ -358,7 +358,6 @@ pub(super) struct WrittenTypeDeclaration<'a> {
     generics: &'a [crate::syntax::signatures::DefinitionParameter],
     predicates: &'a [crate::syntax::ast_adapter::TokenRecipe],
     function: Option<&'a FunctionSignature>,
-    local_scope: Option<&'a super::callables::ordinary_local::OrdinaryLocalAdmission>,
     syntax: Option<&'a ra_ap_syntax::SyntaxNode>,
 }
 impl<'a> WrittenTypeDeclaration<'a> {
@@ -370,7 +369,6 @@ impl<'a> WrittenTypeDeclaration<'a> {
             generics: &signature.generics,
             predicates: &signature.predicates,
             function: Some(signature),
-            local_scope: None,
             syntax: None,
         }
     }
@@ -383,25 +381,6 @@ impl<'a> WrittenTypeDeclaration<'a> {
             ..Self::function(signature)
         }
     }
-    pub(super) fn with_local_scope(
-        mut self,
-        proof: &'a super::callables::ordinary_local::OrdinaryLocalAdmission,
-    ) -> Self {
-        self.local_scope = Some(proof);
-        self
-    }
-    fn resolve_occurrence_name(
-        &self,
-        db: &mut Database,
-        graph: &NameNamespaces,
-        sources: &[&PreparedSourceView],
-        name: &ra_ap_syntax::ast::NameRef,
-    ) -> QueryPoll<SignatureName> {
-        if let Some(proof) = self.local_scope {
-            return proof.parent().selected_header_type_name(db, proof, name);
-        }
-        self.resolve_name(db, graph, sources, name.text())
-    }
     pub(super) fn nominal(
         schema: &'a super::types::NominalSchema,
         syntax: &'a ra_ap_syntax::SyntaxNode,
@@ -413,7 +392,6 @@ impl<'a> WrittenTypeDeclaration<'a> {
             generics: &schema.generics,
             predicates: &[],
             function: None,
-            local_scope: None,
             syntax: Some(syntax),
         }
     }
@@ -424,9 +402,6 @@ impl<'a> WrittenTypeDeclaration<'a> {
         sources: &[&PreparedSourceView],
         name: &str,
     ) -> QueryPoll<SignatureName> {
-        if self.local_scope.is_some() {
-            return QueryPoll::Ready(Ok(SignatureName::NeedOwnerContext(self.scope.clone())));
-        }
         if let Some(signature) = self.function {
             return resolve_named(db, graph, sources, signature, name);
         }
@@ -443,74 +418,6 @@ impl<'a> WrittenTypeDeclaration<'a> {
         )
     }
 }
-/// A selected local Fn's actual parameter/result annotation. This consumes
-/// the real admission and declaring parent; no derived child rows or code.
-pub(super) fn selected_local_signature_type(
-    db: &mut Database,
-    graph: &NameNamespaces,
-    sources: &[&PreparedSourceView],
-    proof: &super::callables::ordinary_local::OrdinaryLocalAdmission,
-    ordinal: Option<u32>,
-) -> QueryPoll<Option<TyTerm>> {
-    use ra_ap_syntax::{AstNode, ast};
-    match proof.revalidate(db) {
-        Ok(()) => {}
-        Err(error) => return QueryPoll::Ready(Err(error)),
-    }
-    match proof.parent().require_current(db) {
-        QueryPoll::Ready(Ok(())) => {}
-        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-    }
-    let parsed = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(proof.source().clone())) {
-        QueryPoll::Ready(Ok(parsed)) => parsed,
-        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-    };
-    let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("selected local signature parse differs")));
-    };
-    let owner = match parsed.syntax_at(proof.item().declaration_span, |node| {
-        ast::Fn::can_cast(node.kind())
-    }) {
-        Ok(Some(owner)) => owner,
-        Ok(None) => return QueryPoll::Ready(Err(fault("selected local signature Fn absent"))),
-        Err(error) => return QueryPoll::Ready(Err(error)),
-    };
-    let Some(function) = ast::Fn::cast(owner.clone()) else {
-        return QueryPoll::Ready(Err(fault("selected local signature Fn differs")));
-    };
-    let ty = match ordinal {
-        Some(ordinal) => {
-            let Some(parameters) = function.param_list() else {
-                return QueryPoll::Ready(Ok(None));
-            };
-            let receiver = u32::from(parameters.self_param().is_some());
-            let Some(ordinal) = ordinal.checked_sub(receiver) else {
-                return QueryPoll::Ready(Ok(None));
-            };
-            parameters
-                .params()
-                .nth(ordinal as usize)
-                .and_then(|parameter| parameter.ty())
-        }
-        None => {
-            if function.ret_type().is_none() {
-                return QueryPoll::Ready(Ok(Some(TyTerm::Primitive(
-                    crate::ir::op::PrimitiveType::Unit,
-                ))));
-            }
-            function.ret_type().and_then(|result| result.ty())
-        }
-    };
-    let Some(ty) = ty else {
-        return QueryPoll::Ready(Ok(None));
-    };
-    let declaration =
-        WrittenTypeDeclaration::function_syntax(proof.signature(), &owner).with_local_scope(proof);
-    resolve_actual_type(db, graph, sources, &declaration, &ty)
-}
-
 /// Resolve an actual retained Type occurrence through the same walk as legacy
 /// written signature Types. The caller proves its declaration/span/currentness.
 pub(super) fn resolve_actual_type(
@@ -558,11 +465,6 @@ pub(super) fn resolve_actual_type(
             // parameter: like a trait object it accepts the reached concrete
             // value, which keeps its own type.
             ast::Type::ImplTraitType(_) | ast::Type::DynTraitType(_) => {
-                // The legacy module-only trait-object adapter has no retained
-                // local header path proof. Keep that missing join explicit.
-                if signature.local_scope.is_some() {
-                    return QueryPoll::Ready(Ok(None));
-                }
                 let bounds = match ty {
                     ast::Type::ImplTraitType(object) => object.type_bound_list(),
                     ast::Type::DynTraitType(object) => object.type_bound_list(),
@@ -818,12 +720,12 @@ pub(super) fn resolve_actual_type(
                 let Some(name_ref) = segment.name_ref() else {
                     return QueryPoll::Ready(Ok(None));
                 };
-                let selected =
-                    match signature.resolve_occurrence_name(db, graph, sources, &name_ref) {
-                        QueryPoll::Ready(Ok(selected)) => selected,
-                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                    };
+                let name = name_ref.text().to_string();
+                let selected = match signature.resolve_name(db, graph, sources, &name) {
+                    QueryPoll::Ready(Ok(selected)) => selected,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
                 QueryPoll::Ready(Ok(match selected {
                     SignatureName::Primitive(primitive) => Some(TyTerm::Primitive(primitive)),
                     SignatureName::Str => Some(TyTerm::Str),
@@ -866,9 +768,6 @@ pub(super) fn resolve_actual_type(
         path: &ra_ap_syntax::ast::Path,
     ) -> QueryPoll<Option<TyTerm>> {
         use ra_ap_syntax::ast;
-        if signature.local_scope.is_some() {
-            return QueryPoll::Ready(Ok(None));
-        }
         let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
             return QueryPoll::Ready(Ok(None));
         };
@@ -1006,11 +905,7 @@ pub(super) fn resolve_actual_type(
                 None => return QueryPoll::Ready(Ok(None)),
             }
         };
-        let selected_base = match base.name_ref() {
-            Some(name) => signature.resolve_occurrence_name(db, graph, sources, &name),
-            None => signature.resolve_name(db, graph, sources, &base_name),
-        };
-        let self_ty = match selected_base {
+        let self_ty = match signature.resolve_name(db, graph, sources, &base_name) {
             QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => TyTerm::Param(key),
             QueryPoll::Ready(Ok(_)) if base_name == "Self" => {
                 let Some(owner) = signature.scope.owner else {
@@ -1251,7 +1146,7 @@ pub(super) fn projection_trait(
     let trait_key = if path.qualifier().is_none()
         && let Some(name) = path.segment().and_then(|segment| segment.name_ref())
     {
-        match signature.resolve_occurrence_name(db, graph, sources, &name) {
+        match signature.resolve_name(db, graph, sources, name.text()) {
             QueryPoll::Ready(Ok(SignatureName::Source(selected))) => selected.identity,
             QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -1296,9 +1191,6 @@ fn projection_trait_key(
     signature: &WrittenTypeDeclaration<'_>,
     path: &ra_ap_syntax::ast::Path,
 ) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
-    if signature.local_scope.is_some() {
-        return Ok(None);
-    }
     let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
         return Ok(None);
     };

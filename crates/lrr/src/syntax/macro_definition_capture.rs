@@ -10,6 +10,7 @@ pub(crate) enum MacroDefinitionDialect {
 pub(crate) struct MacroDefinitionShape {
     dialect: MacroDefinitionDialect,
     label: SourceRange,
+    name_range: SourceRange,
     name: String,
     arguments: Option<SourceRange>,
     body: SourceRange,
@@ -20,6 +21,11 @@ impl MacroDefinitionShape {
     }
     pub(crate) fn label(&self) -> SourceRange {
         self.label
+    }
+    /// The actual identifier token, distinct from the keyword-through-name
+    /// label used by diagnostics and source definition origins.
+    pub(crate) fn name_range(&self) -> SourceRange {
+        self.name_range
     }
     pub(crate) fn name(&self) -> &str {
         &self.name
@@ -91,10 +97,9 @@ impl ParsedFile {
                 };
             let keyword = keyword.ok_or_else(|| error("exact macro keyword absent"))?;
             let name = name.ok_or_else(|| error("exact macro name absent"))?;
-            let label = SourceRange::checked(
-                u32::from(keyword.text_range().start()),
-                u32::from(name.syntax().text_range().end()),
-            )?;
+            let name_range = range(name.syntax().text_range());
+            let label =
+                SourceRange::checked(u32::from(keyword.text_range().start()), name_range.end)?;
             let name = semantic_name(&name.syntax().text().to_string())
                 .ok_or_else(|| error("exact macro name invalid"))?;
             let arguments = args.map(|a| range(a.syntax().text_range()));
@@ -114,6 +119,7 @@ impl ParsedFile {
             return Ok(MacroDefinitionShape {
                 dialect,
                 label,
+                name_range,
                 name,
                 arguments,
                 body,

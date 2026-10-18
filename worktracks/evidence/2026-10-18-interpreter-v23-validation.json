@@ -1,0 +1,1050 @@
+{
+  "candidate": "V23",
+  "status": "Exact compiled source and focused runtime validation; source-context frontiers remain",
+  "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8",
+  "head": "917fc1329be4b4b8210c7c154aa27e0382526fd2",
+  "compiled_source_leaves": 3329,
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "seconds": 12.675,
+      "terminal": "93609b/0",
+      "warnings": 84,
+      "binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c"
+      }
+    },
+    "cli": {
+      "exit": 0,
+      "seconds": 8.953,
+      "terminal": "6150dd/0",
+      "warnings": 172,
+      "binary": {
+        "path": "target/debug/lrr",
+        "sha256": "1829bde400f0a0dfddc791e427caaef135cc69aa0a987baa403ec174c251eefc"
+      }
+    }
+  },
+  "source_frozen_through_both_builds": true,
+  "binaries_unchanged_after_runtime": true,
+  "runtime_scope": "Sealed V23 binaries, writers released after both builds and exact11modified+1deleted Rustpaths staged/verified. Five owning2015 unchanged imported original roots byte/hash verified against pinned checkout+manifest. No rustc guest execution/fullinventory/fullfixture claim.",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "stock_terminal": "85f9fe/0",
+  "stock_roots": 5,
+  "stock_runtime_passes": 4,
+  "stock": [
+    {
+      "path": "tests/ui/structs-enums/functional-struct-upd.rs",
+      "sha256": "99523cf3db37c83096666946c5cc33bc9e155c6a25d71bc9f4fed35c9a276d50",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/functional-struct-upd.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "3589e5aa3da2c46b9bb17a0e8a710b22df30a478910314b923bc114b8c055ffa"
+      ],
+      "exit": 2,
+      "seconds": 5.246,
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-MACRO-SCOPE",
+        "message": "generated declaration macro module absent",
+        "phase": "executor"
+      },
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 56,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 44,
+        "vm_outcomes": 44
+      },
+      "guest_stdout": null,
+      "operations_completed": null,
+      "diagnostic": {
+        "code": "LRR-E-MACRO-SCOPE",
+        "generated_origin": null,
+        "guest_stack": {
+          "frames": [
+            {
+              "body": {
+                "body_key": {
+                  "definition": "278116b1d861cdcde593f6d956652697b5c10a3ccae940d5c503ee833ed3b158",
+                  "exact_body_bytes": "65c3cb68986ee35e84efb9fa6850a37c83344234dfcf2d7ee5680c2ed5a910ca"
+                },
+                "relative_end": 133,
+                "relative_start": 108
+              },
+              "locations": [
+                {
+                  "range": {
+                    "end": 38473,
+                    "start": 38448
+                  },
+                  "source": {
+                    "content": [
+                      223,
+                      49,
+                      103,
+                      119,
+                      154,
+                      188,
+                      75,
+                      221,
+                      249,
+                      240,
+                      197,
+                      9,
+                      128,
+                      156,
+                      71,
+                      147,
+                      164,
+                      63,
+                      16,
+                      204,
+                      181,
+                      71,
+                      71,
+                      96,
+                      123,
+                      122,
+                      178,
+                      118,
+                      154,
+                      194,
+                      223,
+                      223
+                    ],
+                    "path": "<lrr-facade>/core/fmt.rs",
+                    "unit": [
+                      115,
+                      165,
+                      24,
+                      240,
+                      54,
+                      69,
+                      194,
+                      47,
+                      198,
+                      146,
+                      255,
+                      7,
+                      244,
+                      94,
+                      169,
+                      92,
+                      202,
+                      206,
+                      243,
+                      164,
+                      180,
+                      177,
+                      248,
+                      143,
+                      154,
+                      20,
+                      18,
+                      98,
+                      14,
+                      85,
+                      176,
+                      43
+                    ]
+                  }
+                }
+              ],
+              "pc": "3935f257da30b47684868d1869d0898298e17b61974efa2600d7584b27072522"
+            },
+            {
+              "body": {
+                "body_key": {
+                  "definition": "b077adc36a16c165f24a3738c144d82a3c13663c6fba78fa54200519eac4e2e9",
+                  "exact_body_bytes": "1bd877880c805e8a640481a541e663660b3cd894310174cc58c9c20065f8641e"
+                },
+                "relative_end": 89,
+                "relative_start": 58
+              },
+              "locations": [
+                {
+                  "range": {
+                    "end": 4515,
+                    "start": 4514
+                  },
+                  "source": {
+                    "content": [
+                      162,
+                      85,
+                      53,
+                      244,
+                      100,
+                      77,
+                      84,
+                      142,
+                      61,
+                      194,
+                      66,
+                      15,
+                      52,
+                      66,
+                      90,
+                      97,
+                      167,
+                      108,
+                      11,
+                      151,
+                      112,
+                      95,
+                      187,
+                      104,
+                      189,
+                      65,
+                      76,
+                      238,
+                      75,
+                      207,
+                      171,
+                      121
+                    ],
+                    "path": "std/src/macros.rs",
+                    "unit": [
+                      238,
+                      59,
+                      189,
+                      194,
+                      26,
+                      36,
+                      206,
+                      108,
+                      3,
+                      163,
+                      137,
+                      214,
+                      236,
+                      60,
+                      222,
+                      45,
+                      192,
+                      93,
+                      42,
+                      183,
+                      109,
+                      71,
+                      224,
+                      244,
+                      100,
+                      246,
+                      174,
+                      121,
+                      85,
+                      169,
+                      151,
+                      6
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "end": 4515,
+                    "start": 4514
+                  },
+                  "source": {
+                    "content": [
+                      162,
+                      85,
+                      53,
+                      244,
+                      100,
+                      77,
+                      84,
+                      142,
+                      61,
+                      194,
+                      66,
+                      15,
+                      52,
+                      66,
+                      90,
+                      97,
+                      167,
+                      108,
+                      11,
+                      151,
+                      112,
+                      95,
+                      187,
+                      104,
+                      189,
+                      65,
+                      76,
+                      238,
+                      75,
+                      207,
+                      171,
+                      121
+                    ],
+                    "path": "std/src/macros.rs",
+                    "unit": [
+                      238,
+                      59,
+                      189,
+                      194,
+                      26,
+                      36,
+                      206,
+                      108,
+                      3,
+                      163,
+                      137,
+                      214,
+                      236,
+                      60,
+                      222,
+                      45,
+                      192,
+                      93,
+                      42,
+                      183,
+                      109,
+                      71,
+                      224,
+                      244,
+                      100,
+                      246,
+                      174,
+                      121,
+                      85,
+                      169,
+                      151,
+                      6
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "end": 194,
+                    "start": 188
+                  },
+                  "source": {
+                    "content": [
+                      4,
+                      15,
+                      155,
+                      73,
+                      209,
+                      6,
+                      94,
+                      76,
+                      168,
+                      211,
+                      215,
+                      86,
+                      58,
+                      129,
+                      65,
+                      74,
+                      170,
+                      237,
+                      191,
+                      9,
+                      134,
+                      124,
+                      110,
+                      181,
+                      68,
+                      120,
+                      70,
+                      96,
+                      45,
+                      86,
+                      115,
+                      44
+                    ],
+                    "path": "functional-struct-upd.rs",
+                    "unit": [
+                      102,
+                      140,
+                      36,
+                      245,
+                      160,
+                      20,
+                      201,
+                      161,
+                      102,
+                      161,
+                      64,
+                      229,
+                      162,
+                      215,
+                      163,
+                      246,
+                      133,
+                      176,
+                      208,
+                      99,
+                      13,
+                      96,
+                      21,
+                      160,
+                      81,
+                      221,
+                      4,
+                      72,
+                      134,
+                      123,
+                      54,
+                      201
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "end": 195,
+                    "start": 194
+                  },
+                  "source": {
+                    "content": [
+                      4,
+                      15,
+                      155,
+                      73,
+                      209,
+                      6,
+                      94,
+                      76,
+                      168,
+                      211,
+                      215,
+                      86,
+                      58,
+                      129,
+                      65,
+                      74,
+                      170,
+                      237,
+                      191,
+                      9,
+                      134,
+                      124,
+                      110,
+                      181,
+                      68,
+                      120,
+                      70,
+                      96,
+                      45,
+                      86,
+                      115,
+                      44
+                    ],
+                    "path": "functional-struct-upd.rs",
+                    "unit": [
+                      102,
+                      140,
+                      36,
+                      245,
+                      160,
+                      20,
+                      201,
+                      161,
+                      102,
+                      161,
+                      64,
+                      229,
+                      162,
+                      215,
+                      163,
+                      246,
+                      133,
+                      176,
+                      208,
+                      99,
+                      13,
+                      96,
+                      21,
+                      160,
+                      81,
+                      221,
+                      4,
+                      72,
+                      134,
+                      123,
+                      54,
+                      201
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "end": 197,
+                    "start": 196
+                  },
+                  "source": {
+                    "content": [
+                      4,
+                      15,
+                      155,
+                      73,
+                      209,
+                      6,
+                      94,
+                      76,
+                      168,
+                      211,
+                      215,
+                      86,
+                      58,
+                      129,
+                      65,
+                      74,
+                      170,
+                      237,
+                      191,
+                      9,
+                      134,
+                      124,
+                      110,
+                      181,
+                      68,
+                      120,
+                      70,
+                      96,
+                      45,
+                      86,
+                      115,
+                      44
+                    ],
+                    "path": "functional-struct-upd.rs",
+                    "unit": [
+                      102,
+                      140,
+                      36,
+                      245,
+                      160,
+                      20,
+                      201,
+                      161,
+                      102,
+                      161,
+                      64,
+                      229,
+                      162,
+                      215,
+                      163,
+                      246,
+                      133,
+                      176,
+                      208,
+                      99,
+                      13,
+                      96,
+                      21,
+                      160,
+                      81,
+                      221,
+                      4,
+                      72,
+                      134,
+                      123,
+                      54,
+                      201
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "end": 4524,
+                    "start": 4523
+                  },
+                  "source": {
+                    "content": [
+                      162,
+                      85,
+                      53,
+                      244,
+                      100,
+                      77,
+                      84,
+                      142,
+                      61,
+                      194,
+                      66,
+                      15,
+                      52,
+                      66,
+                      90,
+                      97,
+                      167,
+                      108,
+                      11,
+                      151,
+                      112,
+                      95,
+                      187,
+                      104,
+                      189,
+                      65,
+                      76,
+                      238,
+                      75,
+                      207,
+                      171,
+                      121
+                    ],
+                    "path": "std/src/macros.rs",
+                    "unit": [
+                      238,
+                      59,
+                      189,
+                      194,
+                      26,
+                      36,
+                      206,
+                      108,
+                      3,
+                      163,
+                      137,
+                      214,
+                      236,
+                      60,
+                      222,
+                      45,
+                      192,
+                      93,
+                      42,
+                      183,
+                      109,
+                      71,
+                      224,
+                      244,
+                      100,
+                      246,
+                      174,
+                      121,
+                      85,
+                      169,
+                      151,
+                      6
+                    ]
+                  }
+                }
+              ],
+              "pc": "d818e5adad413428c35f3269c1298ca62dabed8cba4d83a3fe3e2b1f6c81e02f"
+            }
+          ],
+          "omitted_frames": 0
+        },
+        "macro_origin": null,
+        "message": "generated declaration macro module absent",
+        "origin_attachment_failure": null,
+        "rendered_generated_origin": null,
+        "rendered_guest_stack": null,
+        "rendered_macro_origin": null
+      }
+    },
+    {
+      "path": "tests/ui/consts/const-struct.rs",
+      "sha256": "ea2ef00a878f74349c68eb5db9f3026befe26b02bac48fbc3eadaf24dc58978b",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const-struct.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "182d332fcd7222ccc0008d1058ae18d9a881cccd0b346c5eaf9b14fe71eb8611"
+      ],
+      "exit": 0,
+      "seconds": 5.347,
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 932,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 2,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 586,
+        "vm_outcomes": 586
+      },
+      "guest_stdout": "0x2\n0xc\n",
+      "operations_completed": 473
+    },
+    {
+      "path": "tests/ui/borrowck/fsu-moves-and-copies.rs",
+      "sha256": "6123354a378dd54a28c7f92b82a434b30631dc7f1cb7f78f7edb1462296bfab8",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/borrowck/fsu-moves-and-copies.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "4796e1ba02f835af991d154f9841c51435079967d56cdafbf6d5dc77316c5e4e"
+      ],
+      "exit": 0,
+      "seconds": 9.872,
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 5275,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 24,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 2732,
+        "vm_outcomes": 2732
+      },
+      "guest_stdout": null,
+      "operations_completed": 1563
+    },
+    {
+      "path": "tests/ui/drop/issue-21486.rs",
+      "sha256": "d4138922d8f2f001bae6a4ec7a8439a4a6361c86d3860d4bea3a5afe40a5c615",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/drop/issue-21486.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "fad7b138f43a218f620c078110628389d6d597b504b857e1bcc2a9aef1d1e6d1"
+      ],
+      "exit": 0,
+      "seconds": 11.079,
+      "stdout": "stock-3.stdout",
+      "stderr": "stock-3.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 3610,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 138,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 2577,
+        "vm_outcomes": 2577
+      },
+      "guest_stdout": null,
+      "operations_completed": 2956
+    },
+    {
+      "path": "tests/ui/fn/expr-fn.rs",
+      "sha256": "f30f6f76c325d841b26a981253c014ac7f2c11c65463f4ac86503536b7cbe422",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/fn/expr-fn.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "b05698eb591f07f5660284ccdd8c1bb29cce06f9c20cce89289f374a7f237633"
+      ],
+      "exit": 0,
+      "seconds": 5.989,
+      "stdout": "stock-4.stdout",
+      "stderr": "stock-4.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 772,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 25,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 544,
+        "vm_outcomes": 544
+      },
+      "guest_stdout": null,
+      "operations_completed": 747
+    }
+  ],
+  "new_stock_runtime_passes": 0,
+  "controls_terminal": "f7f69e/0",
+  "controls_bodies": 9,
+  "controls_passes": 6,
+  "controls": [
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+      "exit": 101,
+      "seconds": 11.354,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8",
+      "failure_excerpt": "thread 'cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold' (15441056) panicked at crates/lrr/src/cli/generic_boundary_tests.rs:610:25:\nedition 2015, route 1, branch 0_u32: LRR-E-TYPE-SCHEMA: retained macro reference requires its structural expansion occurrence proof\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation",
+      "exit": 0,
+      "seconds": 28.897,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold",
+      "exit": 101,
+      "seconds": 11.051,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8",
+      "failure_excerpt": "thread 'cli::crate_graph::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold' (15441696) panicked at crates/lrr/src/cli/generic_boundary_tests.rs:584:25:\nedition 2015, route 1, branch 0_u32: LRR-E-TYPE-SCHEMA: retained macro reference requires its structural expansion occurrence proof\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "selector": "cli::reached_record_update_tests::record_updates_share_place_transfers_and_resumable_copy_all_editions",
+      "exit": 0,
+      "seconds": 19.494,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::reached_record_update_tests::record_updates_share_place_transfers_and_resumable_copy_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8"
+    },
+    {
+      "selector": "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+      "exit": 101,
+      "seconds": 0.173,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8",
+      "failure_excerpt": "thread 'service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions' (15442063) panicked at crates/lrr/src/service/retained_body_tests.rs:231:18:\nsource discovery incomplete: edition=2015, selected=Some(\"lrr_probe\"), source=\"mod import_module{}macro_rules! earlier{()=>{}}macro_rules! emit{()=>{fn answer(){use earlier as selected;selected!();}}}emit!();macro_rules! later{()=>{}}fn lrr_probe(){}\", diagnostic=Diagnostic { code: \"LRR-E-CATALOG-INCOMPLETE\", message: \"fixed point retains unresolved import or macro producers\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, failure_context: None }, blocked=[(Digest(1be5aee2832f05fea4cffd203e83bb3a2a1ac94ea0c2e1a519ff058735031e7a), [Digest(bd2d122269bb0c320ffe8bbd34d80cf4cffd8e3fa3963395d4cc8f985ed56932)])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+      "exit": 0,
+      "seconds": 63.161,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+      "exit": 0,
+      "seconds": 27.887,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-6.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8"
+    },
+    {
+      "selector": "expand::scopes::prefix_tests::derive_prefix_views_preserve_prior_bindings_and_other_frontiers_after_shadow",
+      "exit": 0,
+      "seconds": 0.006,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-7.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "expand::scopes::prefix_tests::derive_prefix_views_preserve_prior_bindings_and_other_frontiers_after_shadow",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8"
+    },
+    {
+      "selector": "cli::callable_value_tests::callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins",
+      "exit": 0,
+      "seconds": 16.963,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-8.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::callable_value_tests::callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "19ed1bdd9410946d83fd401233abb36eb2b699a841629e8b2b8c26238119539c",
+      "source_sha256": "01d505d4c705f7178e28c8122a61e08c37376ed5a029362a53b3f5dbcfc8f7a8"
+    }
+  ],
+  "new_supplemental_control_passes": [
+    "cli::crate_graph::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation",
+    "cli::reached_record_update_tests::record_updates_share_place_transfers_and_resumable_copy_all_editions"
+  ],
+  "acceptance_limits": [
+    "No complete interpreter milestone, fullfixture/fullsuite, architecture feature or JIT gate closure.",
+    "Four previous stockruntime passes retained, zero newstockpasses. Historical18 distinct evernew targeted witnesses remain historical across exact candidates, not a freshcurrentbinarytotal.",
+    "Local pure control corrected false absent-header setup assumption. Genuine Header/Source/Context/Owner and fingerprints/revision remain stable, freeFnBody/env/executablequery absence and actual U32/Eq assertions pass; abandoned unexercised unpublished-only adapter was deleted.",
+    "FRU control now completes all4editions ordinary/macro/wrapper/assert contexts, aggregate300Copy, exactonce/evaluationorder/partialmove assertions; this is supplemental correctness evidence, not another upstream fixture.",
+    "Old and local coldmacro runtime matrices advance past incorrect diagnostic label tokenrange then fail at retained structural macro-reference occurrence proof; later entries unexecuted.",
+    "Ancestry negative control still fails genuine setup fixedpoint before wronggraph assertions; no passing negative authority claim.",
+    "Functionalstruct original advances past missing original invocation context then faults generated declaration macro module absent at Debug::fmt(value,&mut f), facade/core/fmt.rs38448..38473; capture incomplete.",
+    "Aggregate const/static runonce/generic cacheidentity E007holds remain; conststruct passing does not close them.",
+    "Other earlier upstream/runtime passes not rerun are not promoted to this focused5root count."
+  ],
+  "review_receipts": [
+    "../executed-operand-independent-review-next.json",
+    "../macro-definition-name-range-independent-review-next.json",
+    "../completed-catalogue-prefix-independent-review-next.json"
+  ],
+  "raw_report_sha256": "49f4db6490cfa2dc2f7ae4fbf7233773099dee161686fcbde9c5b378bdbf475b"
+}

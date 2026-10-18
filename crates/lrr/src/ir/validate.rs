@@ -877,10 +877,12 @@ fn verify_inner(
                         }
                         Some(node)
                     } else {
-                        reference_initializer.or_else(|| {
-                            node.operands
-                                .first()
-                                .and_then(|id| body.nodes().get(id.0 as usize))
+                        reference_initializer.or_else(|| match Phase::from_code(draft.key.phase) {
+                            Phase::Operand(ordinal) => node
+                                .operands
+                                .get(usize::from(ordinal))
+                                .and_then(|id| body.nodes().get(id.0 as usize)),
+                            _ => None,
                         })
                     }
                     .ok_or_else(|| invalid("temporary place receiver absent"))?;
@@ -888,7 +890,7 @@ fn verify_inner(
                         || operand.place != Some(*destination)
                         || (!own_path
                             && reference_initializer.is_none()
-                            && draft.key.phase != Phase::Operand(0).code()?)
+                            && !matches!(Phase::from_code(draft.key.phase), Phase::Operand(_)))
                     {
                         return Err(invalid(
                             "temporary place requires its executed base operand",

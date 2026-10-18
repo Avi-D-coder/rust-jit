@@ -755,22 +755,45 @@ fn check_cold_associated_type_goal(local: bool) {
             };
             let definition = foo.def_key.fingerprint();
             let cold_body = foo.body.as_ref().unwrap().key();
-            let unpublished = |db: &mut Database| {
-                for key in [
+            let local_metadata = |db: &mut Database| {
+                assert!(
+                    matches!(db.input(&InputKey::DefinitionHeader(definition)).as_deref(),
+                    Some(InputValue::DefinitionHeader(header)) if header == &foo.header)
+                );
+                assert!(
+                    matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),
+                    Some(InputValue::DefinitionSource(parse)) if *parse == source.parsed().key())
+                );
+                assert!(
+                    matches!(db.input(&InputKey::DeclarationContext(definition)).as_deref(),
+                    Some(InputValue::DeclarationContext(context))
+                        if context.scope == foo.scope && context.range == foo.declaration_span)
+                );
+                assert!(
+                    matches!(db.input(&InputKey::LocalDeclarationOwner(definition)).as_deref(),
+                    Some(InputValue::LocalDeclarationOwner(owner)) if owner == &body)
+                );
+                assert!(
+                    db.input(&InputKey::DefinitionBody(definition)).is_none(),
+                    "local free Fn body locator was prepared before call"
+                );
+                [
                     InputKey::DefinitionHeader(definition),
                     InputKey::DefinitionSource(definition),
                     InputKey::DeclarationContext(definition),
-                    InputKey::DefinitionBody(definition),
-                ] {
-                    assert!(
-                        db.input(&key).is_none(),
-                        "local child metadata was published: {key:?}"
-                    );
-                }
+                    InputKey::LocalDeclarationOwner(definition),
+                ]
+                .into_iter()
+                .map(|key| {
+                    let (_, stamp) = db
+                        .published_input(&key)
+                        .expect("actual local metadata input");
+                    (key, stamp)
+                })
+                .collect::<Vec<_>>()
             };
-            if local {
-                unpublished(&mut db);
-            }
+            let metadata = local.then(|| local_metadata(&mut db));
+            let input_revision = db.revision();
             assert!(
                 db.input(&InputKey::BodyEnvironment(cold_body.clone()))
                     .is_none()
@@ -815,8 +838,17 @@ fn check_cold_associated_type_goal(local: bool) {
                     QueryKey::AssociatedEquations(key) if key.definition == definition
                         && matches!(&key.owner, EquationOwner::SelectedCall(_)))));
             }
-            if local {
-                unpublished(&mut db);
+            if let Some(metadata) = metadata {
+                assert_eq!(
+                    db.revision(),
+                    input_revision,
+                    "pure local Type goal published inputs"
+                );
+                assert_eq!(
+                    local_metadata(&mut db),
+                    metadata,
+                    "local metadata changed during the pure Type goal"
+                );
             } else {
                 // Existing module metadata rows are not executable owners.
                 assert!(matches!(

@@ -1,0 +1,35 @@
+{
+  "status": "source-only root review; independent review pending; no compile/runtime claim",
+  "baseline": "V23/01d505d4",
+  "files": {
+    "crates/lrr/src/runtime/cell_pattern_constants.rs": "d0b90b510fd6e8b46eefd3f5b30ed2df4956ee50c73ca76ed431fe5ccfa53729",
+    "crates/lrr/src/runtime/cell.rs": "64ea3b7169aa184c99633da95afb12808684e4b139df2ee9f6f95c81348f866c",
+    "crates/lrr/src/vm/pattern_match.rs": "3e16fb0e75f2ad81d6a9f16090441a5f3766de81aefec585b446de8acd4091e4",
+    "crates/lrr/src/engine/run_pattern_names.rs": "ecca1e04f3fdf35a2b446b1a9636bc25375a1e85fb84d92fd93794e7adaa6539",
+    "crates/lrr/src/cli/initializer_tests.rs": "7acf9bfea60388c1931944b2b53ae3fc8ddfab2fa3a9bf782b2fb57714a53987"
+  },
+  "shared_route": [
+    "RunMachine::prepare_pattern_names -> actual ConstantRoot cell/ticket",
+    "Search::constant -> same Number predicate + GuestStore::compare_pattern_constant physical storage walk",
+    "Search completion -> existing Frame::complete_pattern_test/commit_pattern/cleanup unchanged"
+  ],
+  "removed_routes": [
+    "scalar-only Constant hydration refusal; raw unowned aggregate constant representation not added"
+  ],
+  "all_eight": {
+    "1_2": "No expression compiler/evaluator/parser or generated-language subset; actual ordinary initializer output only",
+    "3": "No macro identity/member/number inference branch; existing Search::number on every scalar leaf",
+    "4": "Actual run-owned storage same for all sources; no original-source restriction",
+    "5": "Existing Search owns alternatives/guard retry/exact operation suspension and Frame commit; helper compares physical data only",
+    "6": "Installed comparison no source parser/planner/query; scratch work over compared runtime graph",
+    "7": "Root owner/checked Place/field ownership/initialized summary/active variant/reference lease validated; no full-world scan",
+    "8": "No BodyIndex copies or whole source search; retained ownerhandles, explicit work stack and visited pairs"
+  },
+  "cost": "O(reached compared fields and bytes plus visited BTreeSet log work); scratch proportional to reached graph, no arbitrary cap; no measured performance claim",
+  "holds": [
+    "Independent source review and compilation/runtime pending",
+    "E007 nonCopy aggregate per-use reinitialization and generic cache key still held",
+    "Mixed reference lease representations/raw pointers/native/dyn values remain explicit gaps",
+    "Supplemental origin/guard/nonconsuming control must actually pass; no full architecture gate claim"
+  ]
+}

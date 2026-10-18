@@ -1322,7 +1322,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "E007 ordinary VM initializers/value storage; V15 C3call nowworks but constantpattern hitsobsoletepure route. Reviewed successor replaces patternpurehelpers with shared typedSearch initializer demand; scalarCopy fn/rawptr cache widened via existingdescriptor. NonCopytemplates/genericcache/structuralconstantpatterns held. Root run.rs only per-use key and pattern outcome; Frame only wide numeric forwarding (coordinated separately).",
+      "scope": "E007 ordinary VM initializer and shared Search constant patterns. V22 scalar/origin matrices pass; non-scalar constant patterns fail explicitly. Root extends checked nonconsuming structural storage comparison using actual retained cell/ticket; root LOCAL043 owns cell.rs module declaration. Aggregate template/runonce and generic initializer keys held independently.",
       "paths": [
         "crates/lrr/src/engine/run_initializers.rs",
         "crates/lrr/src/engine/run_pattern_tests.rs",
@@ -1330,11 +1330,14 @@
         "crates/lrr/src/engine/run_value_items.rs",
         "crates/lrr/src/engine/run_capture.rs",
         "crates/lrr/src/vm/frame_item_values.rs",
-        "crates/lrr/src/cli/initializer_tests.rs"
+        "crates/lrr/src/cli/initializer_tests.rs",
+        "crates/lrr/src/engine/run_pattern_names.rs",
+        "crates/lrr/src/vm/pattern_match.rs",
+        "crates/lrr/src/runtime/cell_pattern_constants.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T10:49:38.372473+00:00",
+      "updated_at": "2026-10-18T12:27:53.460827+00:00",
       "review_after": "2026-10-18T09:15:07.352169+00:00",
       "transferred_paths": [
         "crates/lrr/src/engine/run_value_items.rs"
@@ -1390,8 +1393,6 @@
         "crates/lrr/src/frontend/binding_constraint_generics.rs",
         "crates/lrr/src/frontend/binding_constraint_open.rs",
         "crates/lrr/src/db/binding_constraint_thunk.rs",
-        "crates/lrr/src/engine/run_pattern_names.rs",
-        "crates/lrr/src/vm/pattern_match.rs",
         "crates/lrr/src/vm/frame_pattern_engine.rs",
         "crates/lrr/src/vm/step.rs",
         "crates/lrr/src/vm/pattern.rs",
@@ -1407,7 +1408,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T12:24:16.642631+00:00",
+      "updated_at": "2026-10-18T12:27:53.460827+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00"
     },
     {

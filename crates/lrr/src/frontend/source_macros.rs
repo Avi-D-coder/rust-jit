@@ -1601,9 +1601,9 @@ impl PublishedMacroIndex {
                     let (definition_context, definition_edition) =
                         if let Some(context) = &body_context {
                             let parsed = context.source().parsed();
-                            let (name_range, actual_name) =
-                                parsed.macro_definition_header_at(event.range)?;
-                            if actual_name != *name {
+                            let shape = parsed.macro_definition_shape_at(event.range)?;
+                            let name_range = shape.name_range();
+                            if shape.name() != name.as_str() {
                                 return Err(error("prepared macro definition name differs"));
                             }
                             let raw = context

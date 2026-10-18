@@ -442,6 +442,7 @@ impl<'a> CapturedMacroContext<'a> {
 pub(crate) struct CompletedCatalogueContext<'a> {
     pub catalog: &'a crate::frontend::generated_macros::GeneratedMacroCatalog,
     pub ancestors: Vec<&'a crate::frontend::generated_macros::GeneratedMacroCatalog>,
+    pub provider: &'a SourceDeclarative,
     pub before: u64,
 }
 pub enum SourceDeclarativeDemand {
@@ -1496,12 +1497,37 @@ impl SourceDeclarative {
     ) -> impl Iterator<Item = &crate::frontend::generated_macros::GeneratedMacroCatalog> {
         self.catalogs.values().map(std::sync::Arc::as_ref)
     }
+    /// A catalogue's captured source context, keyed by its actual storage
+    /// identity. Appends retain the immutable prefix preceding that output.
+    fn catalogue_context(&self, storage: Digest) -> Result<(&Self, u64), Diagnostic> {
+        if let Some((before, prefix)) = self.derive_prefixes.get(&storage) {
+            return Ok((prefix.as_ref(), *before));
+        }
+        let call = self
+            .source
+            .outline()
+            .item_invocations
+            .iter()
+            .cloned()
+            .chain(
+                self.source
+                    .outline()
+                    .items
+                    .iter()
+                    .filter_map(crate::syntax::outline::potential_attribute_producer),
+            )
+            .find(|call| call.item_input == storage)
+            .ok_or_else(|| {
+                fault("LRR-E-EXPANSION-INPUT", "catalogue source producer absent")
+            })?;
+        Ok((self, u64::from(call.range.start)))
+    }
     pub(crate) fn completed_catalogue(
         &self,
         identity: Digest,
     ) -> Result<Option<CompletedCatalogueContext<'_>>, Diagnostic> {
         let mut result = None;
-        for root in self.catalogs.values() {
+        for (storage, root) in &self.catalogs {
             let mut ancestors = Vec::new();
             if let Some(catalog) = root.find_catalogue(identity, &mut ancestors)? {
                 if result.is_some() {
@@ -1511,30 +1537,12 @@ impl SourceDeclarative {
                     ));
                 }
                 ancestors.reverse();
-                let call = self
-                    .source
-                    .outline()
-                    .item_invocations
-                    .iter()
-                    .cloned()
-                    .chain(
-                        self.source
-                            .outline()
-                            .items
-                            .iter()
-                            .filter_map(crate::syntax::outline::potential_attribute_producer),
-                    )
-                    .find(|call| call.item_input == root.invocation())
-                    .ok_or_else(|| {
-                        fault(
-                            "LRR-E-EXPANSION-INPUT",
-                            "completed module original invocation absent",
-                        )
-                    })?;
+                let (provider, before) = self.catalogue_context(*storage)?;
                 result = Some(CompletedCatalogueContext {
                     catalog,
                     ancestors,
-                    before: u64::from(call.range.start),
+                    provider,
+                    before,
                 });
             }
         }
@@ -1559,29 +1567,11 @@ impl SourceDeclarative {
     ) -> Result<(), Diagnostic> {
         context.require_provider(self)?;
         for (invocation, catalog) in &self.catalogs {
-            let call = self
-                .source
-                .outline()
-                .item_invocations
-                .iter()
-                .cloned()
-                .chain(
-                    self.source
-                        .outline()
-                        .items
-                        .iter()
-                        .filter_map(crate::syntax::outline::potential_attribute_producer),
-                )
-                .find(|call| call.item_input == *invocation)
-                .ok_or_else(|| {
-                    fault(
-                        "LRR-E-EXPANSION-INPUT",
-                        "module catalogue invocation absent",
-                    )
-                })?;
+            let (provider, before) = self.catalogue_context(*invocation)?;
             catalog.revalidate_calls(
                 CapturedMacroContext {
-                    before: u64::from(call.range.start),
+                    provider,
+                    before,
                     ..context
                 },
                 &[],
@@ -3643,27 +3633,7 @@ impl SourceDeclarative {
         routes.push(self.original_routes(owners, inherited)?);
         let mut bytes = routes[0].metadata_bytes()?;
         for (invocation, catalog) in &self.catalogs {
-            let (provider, before) =
-                if let Some((before, prefix)) = self.derive_prefixes.get(invocation) {
-                    (prefix.as_ref(), *before)
-                } else {
-                    let call =
-                        self.source
-                            .outline()
-                            .item_invocations
-                            .iter()
-                            .cloned()
-                            .chain(
-                                self.source.outline().items.iter().filter_map(
-                                    crate::syntax::outline::potential_attribute_producer,
-                                ),
-                            )
-                            .find(|c| c.item_input == *invocation)
-                            .ok_or_else(|| {
-                                fault("LRR-E-EXPANSION-INPUT", "generated route invocation absent")
-                            })?;
-                    (self, u64::from(call.range.start))
-                };
+            let (provider, before) = self.catalogue_context(*invocation)?;
             let route = catalog.routes(CapturedMacroContext {
                 provider,
                 before,
