@@ -55,3 +55,35 @@ pub(super) fn same_requirements(left: &ScannedImpl, right: &ScannedImpl) -> bool
             .zip(&right.associated)
             .all(|(left, right)| left.range == right.range && left.header == right.header)
 }
+
+/// Actual canonical declaration identity, independent of raw scan attachments.
+/// This supplies neither Type-namespace authority nor an applicability witness.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum CanonicalImplOwner {
+    Original(crate::source::manifest::DefKey),
+    Generated(crate::expand::identity::GeneratedItemKey),
+}
+impl CanonicalImplOwner {
+    pub fn identity(&self) -> Digest {
+        use crate::core::digest::StableEncode;
+        match self {
+            Self::Original(key) => key.fingerprint(),
+            Self::Generated(key) => key.fingerprint(),
+        }
+    }
+}
+impl crate::core::digest::StableEncode for CanonicalImplOwner {
+    const DOMAIN: &'static str = "lrr/v1/canonical-source-impl-owner";
+    fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
+        match self {
+            Self::Original(key) => {
+                e.u32(0);
+                e.record(key);
+            }
+            Self::Generated(key) => {
+                e.u32(1);
+                e.record(key);
+            }
+        }
+    }
+}

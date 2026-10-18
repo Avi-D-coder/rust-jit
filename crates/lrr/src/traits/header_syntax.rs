@@ -46,6 +46,7 @@ pub struct ImplHeaderSyntax {
     origin: Option<Digest>,
     scope: ScopeKey,
     header: Digest,
+    owner: Option<super::header::CanonicalImplOwner>,
     self_type: SourceRange,
     trait_type: Option<SourceRange>,
     generics: Vec<DefinitionParameter>,
@@ -85,6 +86,9 @@ impl ImplHeaderSyntax {
     }
     pub fn scope(&self) -> &ScopeKey {
         &self.scope
+    }
+    pub fn canonical_owner(&self) -> Option<&super::header::CanonicalImplOwner> {
+        self.owner.as_ref()
     }
     pub fn self_type(&self) -> SourceRange {
         self.self_type
@@ -166,6 +170,7 @@ impl ImplHeaderSyntax {
             origin: header.source().generated_origin(),
             scope: selected.scope.clone(),
             header: header.header_identity(),
+            owner: inventory.canonical_owner(key.implementation).cloned(),
             self_type: ast_adapter::range(self_type.syntax().text_range()),
             trait_type: implementation
                 .trait_()
@@ -180,7 +185,7 @@ impl ImplHeaderSyntax {
     }
 }
 impl StableEncode for ImplHeaderSyntax {
-    const DOMAIN: &'static str = "lrr/v1/impl-header-syntax";
+    const DOMAIN: &'static str = "lrr/v2/impl-header-syntax";
     fn encode_fields(&self, e: &mut StableEncoder) {
         fn range(e: &mut StableEncoder, range: SourceRange) {
             e.u32(range.start);
@@ -192,6 +197,7 @@ impl StableEncode for ImplHeaderSyntax {
         e.option(&self.origin, |e, origin| e.digest(*origin));
         e.record(&self.scope);
         e.digest(self.header);
+        e.option(&self.owner, |e, owner| e.record(owner));
         range(e, self.self_type);
         e.option(&self.trait_type, |e, r| range(e, *r));
         e.sequence(&self.generics, |e, p| {

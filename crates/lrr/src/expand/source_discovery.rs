@@ -9291,8 +9291,7 @@ impl SourceDiscovery {
         let mut syntax_sources = BTreeMap::new();
         for source in &self.sources {
             let scan = source.declaration_inventory(Default::default())?;
-            syntax_sources.insert(scan.fingerprint(), ImplSyntaxSource::Original(
-                source.retained_declaration_parser()?.clone()));
+            syntax_sources.insert(scan.fingerprint(), ImplSyntaxSource::original(source)?);
         }
         for (_, arguments) in self.nested_argument_summaries.values() {
             for argument in arguments {

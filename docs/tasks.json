@@ -19972,13 +19972,14 @@
       "fixture_ids": [],
       "artifact_paths": [
         "worktracks/05-trait-goal-engine/2026-10-18-retained-impl-header-query.md",
-        "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json"
+        "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V79 solo held source prerequisite: retained impl header queries56/57 share actual original/generated/argument syntax owners; common child trait and impl frontiers share actual ancestor completion/parent-chain/replacement checks. Both builds and12/12focused controls pass, including all4edition original/emit/wrapper headers, real-facade projection headers and wrong parent/epoch/ancestor controls. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations), zero new distinct stock passes. Canonical Type/predicate lowering, complete catalog/tabled goals/runtime consumers and interpreter/JIT gates remain open. Earlier V73--V78 failures and V77 terminal receipt gap preserved. No refreshed suite total.",
-      "source_baseline": "af771ed9e24cc5b6b401854d92eb0868e4ef3439"
+      "latest_component_scope": "V81 solo held M018/M019 source prerequisite: impl header queries retain actual canonical Original DefKey or admitted GeneratedItemKey, separate from raw scan identity. OriginalAssociatedDeclarations/LocalImplOwners indexes prepare once per queried source; active generated headers join exact kind/range. Both builds and13/13focused controls pass, including all4edition original/emit/wrapper identity checks and unchanged cold local Drop impl with no executable body demand. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations); zero new distinct stock runtime passes and no refreshed suite total. V80 Clone compile failure preserved. Type/predicate lowering, argument/local-generated owner gaps, complete catalog/tabled goals/runtime applicability and interpreter/JIT gates remain open.",
+      "source_baseline": "f32cd15714d05f8ad84420f9b4e6f215d3f09cc8"
     },
     {
       "id": "M020",

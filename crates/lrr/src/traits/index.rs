@@ -1,6 +1,6 @@
 //! Checked active source headers from an actual scope inventory. A scope inventory
 //! is not global impl completeness and cannot answer Drop/NoDrop or applicability.
-use super::header::{SourceImplHeader, same_requirements};
+use super::header::{CanonicalImplOwner, SourceImplHeader, same_requirements};
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -30,6 +30,7 @@ pub struct PreparedScopeImplHeaders {
     key: SealKey,
     inventory: Arc<ImplHeaderIndex>,
     locations: Vec<HeaderLocation>,
+    owners: Vec<Option<CanonicalImplOwner>>,
     inventory_fingerprint: Digest,
     fingerprint: Digest,
     exclusive_bytes: usize,
@@ -153,20 +154,86 @@ impl PreparedScopeImplHeaders {
                     .ok_or_else(resource)?,
             )
             .ok_or_else(resource)?;
-        let mut encoded = StableEncoder::new("lrr/v1/prepared-scope-source-impl-headers");
+        // Once per selected source inventory, not once per header query.
+        let mut source_owners = std::collections::BTreeMap::new();
+        for scan in scans {
+            if scan.impls().is_empty() {
+                continue;
+            }
+            let Some(syntax) = inventory.syntax_source(scan.fingerprint()) else {
+                continue;
+            };
+            match syntax {
+                crate::frontend::impl_index::ImplSyntaxSource::Original { source, .. } => {
+                    use crate::frontend::associated_declarations::{
+                        AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
+                    };
+                    match PreparedOriginalAssociatedDeclarations::prepare(source)? {
+                        AssociatedDeclarationsPreparation::Original(prepared) => {
+                            if prepared.scan().fingerprint() != scan.fingerprint() {
+                                return Err(error("canonical impl source scan differs"));
+                            }
+                            for raw in scan.impls() {
+                                if let Some(item) = prepared
+                                    .owner(raw.identity)
+                                    .and_then(|owner| owner.canonical)
+                                {
+                                    source_owners.insert(
+                                        raw.identity,
+                                        CanonicalImplOwner::Original(item.def_key.clone()),
+                                    );
+                                }
+                            }
+                        }
+                        AssociatedDeclarationsPreparation::NeedGeneratedParent => {}
+                    }
+                }
+                crate::frontend::impl_index::ImplSyntaxSource::Generated(output) => {
+                    use crate::expand::generated_items::GeneratedHeaderKind;
+                    let mut items = std::collections::BTreeMap::new();
+                    for item in output
+                        .headers()
+                        .iter()
+                        .filter(|item| item.kind == GeneratedHeaderKind::Impl)
+                    {
+                        if items.insert((item.start, item.end), item).is_some() {
+                            return Err(error("canonical generated impl range is ambiguous"));
+                        }
+                    }
+                    for raw in scan.impls() {
+                        if let Some(item) = items.get(&(raw.range.start, raw.range.end)) {
+                            source_owners.insert(
+                                raw.identity,
+                                CanonicalImplOwner::Generated(item.key.clone()),
+                            );
+                        }
+                    }
+                }
+                // An argument arena is not an expansion's generated item key.
+                // Its canonical entered-declaration owner join remains pending.
+                crate::frontend::impl_index::ImplSyntaxSource::Argument(_) => {}
+            }
+        }
+        let owners: Vec<_> = headers
+            .iter()
+            .map(|header| source_owners.remove(&header.identity))
+            .collect();
+        let mut encoded = StableEncoder::new("lrr/v2/prepared-scope-source-impl-headers");
         encoded.record(&key);
         encoded.digest(inventory_fingerprint);
         encoded.u64(prepared.len() as u64);
-        for (header, location) in headers.iter().zip(&prepared) {
+        for ((header, location), owner) in headers.iter().zip(&prepared).zip(&owners) {
             encoded.digest(header.identity);
             encoded.digest(header.header_identity);
             encoded.u32(location.source);
             encoded.u32(location.header);
+            encoded.option(owner, |e, owner| e.record(owner));
         }
         Ok(Self {
             key,
             inventory,
             locations: prepared,
+            owners,
             inventory_fingerprint,
             fingerprint: encoded.finish(),
             exclusive_bytes,
@@ -205,6 +272,14 @@ impl PreparedScopeImplHeaders {
             .get(location.source as usize)?;
         let header = source.impls().get(location.header as usize)?;
         Some(SourceImplHeader::joined(source, header))
+    }
+    pub fn canonical_owner(&self, identity: Digest) -> Option<&CanonicalImplOwner> {
+        let ordinal = self
+            .inventory
+            .headers()
+            .binary_search_by_key(&identity, |header| header.identity)
+            .ok()?;
+        self.owners.get(ordinal)?.as_ref()
     }
     pub(crate) fn syntax_source(
         &self,
@@ -384,6 +459,40 @@ mod tests {
                         panic!()
                     };
                     let actual = headers.header(raw.identity).unwrap();
+                    let canonical = plan.canonical_owner().expect("actual canonical impl owner");
+                    assert_ne!(canonical.identity(), raw.identity);
+                    match (canonical, headers.syntax_source(raw.identity).unwrap()) {
+                        (
+                            CanonicalImplOwner::Original(key),
+                            crate::frontend::impl_index::ImplSyntaxSource::Original {
+                                source, ..
+                            },
+                        ) => {
+                            let item = source
+                                .outline()
+                                .items
+                                .iter()
+                                .find(|item| item.declaration_span == raw.range)
+                                .unwrap();
+                            assert_eq!(key, &item.def_key);
+                            assert_eq!(key.item_kind, crate::source::manifest::ItemKind::Impl);
+                        }
+                        (
+                            CanonicalImplOwner::Generated(key),
+                            crate::frontend::impl_index::ImplSyntaxSource::Generated(output),
+                        ) => {
+                            let item = output
+                                .headers()
+                                .iter()
+                                .find(|item| {
+                                    item.start == raw.range.start && item.end == raw.range.end
+                                })
+                                .unwrap();
+                            assert_eq!(key, &item.key);
+                            assert_eq!(key.expansion, output.record().key().fingerprint());
+                        }
+                        _ => panic!("canonical impl source kind differs"),
+                    }
                     assert_eq!(plan.source(), actual.source().parse());
                     assert_eq!(plan.path(), actual.source().path());
                     assert_eq!(plan.scope(), &raw.scope);
@@ -486,6 +595,66 @@ mod tests {
                 QueryPoll::Ready(Err(error)) => assert_eq!(error.code, "LRR-E-IMPL-HEADER"),
                 other => panic!("absent source header accepted: {other:?}"),
             }
+        }
+    }
+    #[test]
+    fn unchanged_cold_local_impl_keeps_its_actual_canonical_declaration() {
+        const ORIGINAL: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let (mut db, headers) = prepared(ORIGINAL, edition);
+            db.trace.detailed = true;
+            let start = db.trace.events.len();
+            let outcome = ready(db.fetch(
+                &SyntaxProvider,
+                QueryKey::PreparedScopeImplHeaders(headers.key().clone()),
+            ));
+            let QueryValue::PreparedScopeImplHeaders(shared) = outcome.value.as_ref() else {
+                panic!()
+            };
+            let mut local = 0;
+            for raw in shared.inventory_root().headers() {
+                let CanonicalImplOwner::Original(key) = shared
+                    .canonical_owner(raw.identity)
+                    .expect("unchanged original canonical impl")
+                else {
+                    panic!()
+                };
+                assert_eq!(key.item_kind, crate::source::manifest::ItemKind::Impl);
+                assert_ne!(key.fingerprint(), raw.identity);
+                let crate::frontend::impl_index::ImplSyntaxSource::Original { source, .. } =
+                    shared.syntax_source(raw.identity).unwrap()
+                else {
+                    panic!()
+                };
+                if !source
+                    .outline()
+                    .items
+                    .iter()
+                    .any(|item| item.declaration_span == raw.range)
+                {
+                    use crate::frontend::associated_declarations::{
+                        AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
+                    };
+                    let AssociatedDeclarationsPreparation::Original(owners) =
+                        PreparedOriginalAssociatedDeclarations::prepare(source).unwrap()
+                    else {
+                        panic!()
+                    };
+                    let actual = owners.owner(raw.identity).unwrap().canonical.unwrap();
+                    assert_eq!(key, &actual.def_key);
+                    local += 1;
+                }
+            }
+            assert!(local > 0);
+            assert!(db.trace.events[start..].iter().all(|event| !matches!(
+                event.key,
+                QueryKey::BodyStructure(_)
+                    | QueryKey::Thunk(_)
+                    | QueryKey::PatternPlan(_)
+                    | QueryKey::FunctionSignature(_)
+            )));
         }
     }
 }

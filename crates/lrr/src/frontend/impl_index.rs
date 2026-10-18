@@ -15,14 +15,23 @@ use std::{
 /// not necessarily a globally published file (notably for macro fragments).
 #[derive(Clone)]
 pub(crate) enum ImplSyntaxSource {
-    Original(Arc<crate::syntax::parse::ParsedFile>),
+    Original {
+        source: Arc<crate::source::changes::PreparedSourceView>,
+        parsed: Arc<crate::syntax::parse::ParsedFile>,
+    },
     Generated(Arc<crate::expand::generated_declarations::GeneratedDeclarations>),
     Argument(Arc<crate::expand::argument_declarations::ArgumentDeclarations>),
 }
 impl ImplSyntaxSource {
+    pub(crate) fn original(source: &crate::source::changes::PreparedSourceView) -> Result<Self, Diagnostic> {
+        Ok(Self::Original {
+            source: Arc::new(source.share()),
+            parsed: source.retained_declaration_parser()?.clone(),
+        })
+    }
     pub(crate) fn parsed(&self) -> &crate::syntax::parse::ParsedFile {
         match self {
-            Self::Original(parsed) => parsed,
+            Self::Original { parsed, .. } => parsed,
             Self::Generated(output) => output.admitted_parsed(),
             Self::Argument(argument) => argument.admitted_parsed(),
         }
