@@ -750,6 +750,18 @@ impl GeneratedHeaderPlan {
     pub(crate) fn retained_impl_projection(&self) -> Arc<ActiveImplProjection> {
         self.impl_projection.clone()
     }
+    /// Retain the same checked range projection for a child trait frontier.
+    /// Declaration kind is checked by the common item attachment operation.
+    pub(crate) fn retained_trait_projection(
+        &self,
+        items: &GeneratedItems,
+        cfg: &CfgSet,
+    ) -> Result<Arc<ActiveImplProjection>, Diagnostic> {
+        let ranges = self.active_trait_ranges(items, cfg, &self.scope, self.epoch)?;
+        Ok(Arc::new(ActiveImplProjection::prepare(
+            items, cfg, &self.scope, self.epoch, ranges.to_vec(),
+        )?))
+    }
     pub fn publish(self, graph: &mut NameNamespaces) -> Result<(), Diagnostic> {
         // Import frontiers are installed at their actual lexical module by
         // admit_generated_import, then retired by that module's import resolver.

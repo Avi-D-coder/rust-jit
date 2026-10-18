@@ -334,6 +334,8 @@ impl Packet {
                 | QueryKey::SealedName(_)
                 | QueryKey::DiscoverySeal(_)
                 | QueryKey::ScopeDeclarationInventory(_)
+                | QueryKey::PreparedScopeImplHeaders(_)
+                | QueryKey::ImplHeaderSyntax(_)
                 | QueryKey::ParseFile(_)
                 | QueryKey::Outline(_)
                 | QueryKey::ScopeBucket(_)

@@ -7,3 +7,5 @@ pub mod subst;
 
 pub mod header;
 pub mod index;
+
+pub mod header_syntax;

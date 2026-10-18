@@ -4,7 +4,7 @@ use super::header::{SourceImplHeader, same_requirements};
 use crate::{
     core::{
         diagnostic::Diagnostic,
-        digest::{Digest, StableEncoder},
+        digest::{Digest, StableEncode, StableEncoder},
     },
     db::{
         key::QueryKey,
@@ -206,6 +206,13 @@ impl PreparedScopeImplHeaders {
         let header = source.impls().get(location.header as usize)?;
         Some(SourceImplHeader::joined(source, header))
     }
+    pub(crate) fn syntax_source(
+        &self,
+        identity: Digest,
+    ) -> Option<&crate::frontend::impl_index::ImplSyntaxSource> {
+        let header = self.header(identity)?;
+        self.inventory.syntax_source(header.source().fingerprint())
+    }
     /// Replays the real preparation dependency. Not an installed-operation guard.
     pub fn require_current(&self, db: &mut Database) -> QueryPoll<()> {
         match db.fetch(
@@ -243,6 +250,7 @@ mod tests {
         frontend::compile_input_catalog::CompileInputCatalog,
         source::manifest::Namespace,
     };
+    use ra_ap_syntax::AstNode;
     const FIELDS: &str = include_str!(
         "../../../../fixtures/upstream/rustc-checkout/tests/ui/borrowck/borrowck-assign-to-subfield.rs"
     );
@@ -335,6 +343,149 @@ mod tests {
         match PreparedScopeImplHeaders::prepare(&mut db, &key) {
             QueryPoll::Ready(Err(error)) => assert_eq!(error.code, "LRR-E-IMPL-HEADER"),
             other => panic!("scope inventory promoted to impl completeness: {other:?}"),
+        }
+    }
+
+    const CONDITIONAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/methods/method-two-trait-defer-resolution-2.rs"
+    );
+    #[test]
+    fn unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins() {
+        use crate::traits::header_syntax::ImplHeaderSyntaxKey;
+        for edition in [2015, 2018, 2021, 2024] {
+            let forms = [
+                CONDITIONAL.to_owned(),
+                format!(
+                    "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }}; }} emit! {{\n{CONDITIONAL}\n}}"
+                ),
+                format!(
+                    "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }}; }} macro_rules! wrap {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }}; }} wrap! {{\n{CONDITIONAL}\n}}"
+                ),
+            ];
+            for (origin, text) in forms.iter().enumerate() {
+                let (mut db, headers) = prepared(text, edition);
+                db.trace.detailed = true;
+                let start = db.trace.events.len();
+                assert_eq!(headers.len(), 3);
+                let key = QueryKey::PreparedScopeImplHeaders(headers.key().clone());
+                let first = ready(db.fetch(&SyntaxProvider, key.clone()));
+                let second = ready(db.fetch(&SyntaxProvider, key));
+                assert!(Arc::ptr_eq(&first.value, &second.value));
+                let mut generic_count = 0;
+                for raw in headers.inventory_root().headers() {
+                    let key = QueryKey::ImplHeaderSyntax(Box::new(ImplHeaderSyntaxKey {
+                        inventory: headers.key().clone(),
+                        implementation: raw.identity,
+                    }));
+                    let first = ready(db.fetch(&SyntaxProvider, key.clone()));
+                    let second = ready(db.fetch(&SyntaxProvider, key));
+                    assert!(Arc::ptr_eq(&first.value, &second.value));
+                    let QueryValue::ImplHeaderSyntax(plan) = first.value.as_ref() else {
+                        panic!()
+                    };
+                    let actual = headers.header(raw.identity).unwrap();
+                    assert_eq!(plan.source(), actual.source().parse());
+                    assert_eq!(plan.path(), actual.source().path());
+                    assert_eq!(plan.scope(), &raw.scope);
+                    assert_eq!(plan.generated_origin(), actual.source().generated_origin());
+                    assert_eq!(plan.source().profile.edition, edition);
+                    assert_eq!(plan.generated_origin().is_some(), origin != 0);
+                    assert!(plan.trait_type().is_some());
+                    assert!(plan.predicates().is_empty());
+                    assert_eq!(plan.modifiers(), (false, false, false, false));
+                    generic_count += plan.generics().len();
+                    if let [generic] = plan.generics() {
+                        assert_eq!(generic.name, "T");
+                        assert!(generic.bounds.iter().any(|token| token.text == "MyCopy"));
+                    }
+                    let parsed = plan.parsed();
+                    assert!(
+                        parsed
+                            .syntax_at(plan.self_type(), |node| ra_ap_syntax::ast::Type::can_cast(
+                                node.kind()
+                            ))
+                            .unwrap()
+                            .is_some()
+                    );
+                }
+                assert_eq!(generic_count, 1);
+                assert_eq!(
+                    db.trace.events[start..]
+                        .iter()
+                        .filter(
+                            |event| matches!(event.key, QueryKey::PreparedScopeImplHeaders(_))
+                                && event.action == crate::db::trace::Action::ProviderRun
+                        )
+                        .count(),
+                    1
+                );
+                assert!(db.trace.events[start..].iter().all(|event| !matches!(
+                    event.key,
+                    QueryKey::Thunk(_)
+                        | QueryKey::BodyStructure(_)
+                        | QueryKey::PatternPlan(_)
+                        | QueryKey::FunctionSignature(_)
+                )));
+                db.begin_expansion_epoch(2).unwrap();
+                let raw = &headers.inventory_root().headers()[0];
+                assert!(matches!(
+                    db.fetch(
+                        &SyntaxProvider,
+                        QueryKey::ImplHeaderSyntax(Box::new(ImplHeaderSyntaxKey {
+                            inventory: headers.key().clone(),
+                            implementation: raw.identity,
+                        }))
+                    ),
+                    QueryPoll::Ready(Err(_))
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn unchanged_recursive_where_headers_keep_projection_and_region_predicates() {
+        use crate::traits::header_syntax::ImplHeaderSyntaxKey;
+        const ORIGINAL: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/associated-types/issue-47139-2.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let (mut db, headers) = prepared(ORIGINAL, edition);
+            assert_eq!(headers.len(), 5);
+            let mut predicates = 0;
+            for raw in headers.inventory_root().headers() {
+                let outcome = ready(db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::ImplHeaderSyntax(Box::new(ImplHeaderSyntaxKey {
+                        inventory: headers.key().clone(),
+                        implementation: raw.identity,
+                    })),
+                ));
+                let QueryValue::ImplHeaderSyntax(plan) = outcome.value.as_ref() else {
+                    panic!()
+                };
+                predicates += plan.predicates().len();
+                for range in plan.predicates() {
+                    assert!(
+                        plan.parsed()
+                            .syntax_at(*range, |node| ra_ap_syntax::ast::WherePred::can_cast(
+                                node.kind()
+                            ))
+                            .unwrap()
+                            .is_some()
+                    );
+                }
+            }
+            assert_eq!(predicates, 5);
+            match db.fetch(
+                &SyntaxProvider,
+                QueryKey::ImplHeaderSyntax(Box::new(ImplHeaderSyntaxKey {
+                    inventory: headers.key().clone(),
+                    implementation: Digest::of_bytes(b"absent-recursive-impl"),
+                })),
+            ) {
+                QueryPoll::Ready(Err(error)) => assert_eq!(error.code, "LRR-E-IMPL-HEADER"),
+                other => panic!("absent source header accepted: {other:?}"),
+            }
         }
     }
 }

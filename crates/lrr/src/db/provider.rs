@@ -337,6 +337,20 @@ impl Provider for SyntaxProvider {
             QueryKey::SealedName(key) => {
                 return super::sealed_name_provider::execute(db, key);
             }
+            QueryKey::PreparedScopeImplHeaders(key) => {
+                return match crate::traits::index::PreparedScopeImplHeaders::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::PreparedScopeImplHeaders(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),
+                };
+            }
+            QueryKey::ImplHeaderSyntax(key) => {
+                return match crate::traits::header_syntax::ImplHeaderSyntax::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplHeaderSyntax(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),
+                };
+            }
             QueryKey::ScopeDeclarationInventory(key) => {
                 if !matches!(&key.domain, super::seals::SealDomain::Scope { .. }) {
                     return Provided::error(

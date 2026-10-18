@@ -1,0 +1,838 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-18T20:08:52.821232+00:00",
+  "head": "af771ed9e24cc5b6b401854d92eb0868e4ef3439",
+  "owner": "solo root; no subagents",
+  "scope": "M018/M019 retained source prerequisite and common child trait/impl discovery; not canonical Type/predicate lowering, catalog completeness or trait applicability",
+  "candidates": [
+    {
+      "candidate": "V73",
+      "source_sha256": "3c5eb1d3a59827580a30c1dbe099e0679840f4de9dbb0a1d85dde6f88e74cd5e",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "lib_build": {
+        "session": 90887,
+        "terminal": "ba370a",
+        "exit": 101,
+        "seconds": 13.76,
+        "log_sha256": "f3611f95915bea209bfb8e29c9977965e089360e0f745c8e0052ed60d293bf65",
+        "errors": [
+          "error[E0004]: non-exhaustive patterns: `&db::key::QueryKey::PreparedScopeImplHeaders(_)` and `&db::key::QueryKey::ImplHeaderSyntax(_)` not covered",
+          "error: could not compile `lrr` (lib test) due to 1 previous error; 11 warnings emitted"
+        ]
+      },
+      "source_unchanged": true
+    },
+    {
+      "candidate": "V74",
+      "source_sha256": "1f030669079831927a7c1b11f0bbec82544be0939b90874bbabcead9ef918b8a",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "lib_build": {
+        "session": 93841,
+        "terminal": "6bcb6c",
+        "exit": 101,
+        "seconds": 12.18,
+        "log_sha256": "58048dbcb99c448172ebd92cd43d8d21a3de8c7bbb15bfa27a5f9d7f9d47e279",
+        "errors": [
+          "error[E0277]: the trait bound `snapshot::SourcePath: digest::StableEncode` is not satisfied",
+          "error: could not compile `lrr` (lib test) due to 1 previous error; 11 warnings emitted"
+        ]
+      },
+      "source_unchanged": true
+    },
+    {
+      "candidate": "V75",
+      "source_sha256": "21db9365d25b681aae23710abbf2bf8c6b0365d203af7ab97e8df9b87544e527",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "lib_build": {
+        "session": 3621,
+        "terminal": "462876",
+        "exit": 0,
+        "seconds": 28.96,
+        "log_sha256": "1d590f57354654034b42b1e578b84c94e33377163911e088c7cc222985b31b3d",
+        "errors": []
+      },
+      "source_unchanged": true,
+      "test_binary_sha256": "0416345919d84d9e5835d79c31c78791e13e574e4848f4856ef210a47b01c85f",
+      "cli_binary_sha256": "1b50f127e3351c665d2bef271fefa4e49b6ffdfb750d66646f0f2f1e9f27148d",
+      "cli_build": {
+        "session": 68477,
+        "terminal": "b3a6d8",
+        "exit": 0,
+        "seconds": 23.46,
+        "log_sha256": "f88bd9a131bb9160bd83bcf7b8d159660aa7c4a2a75ee56d2cd2599ace5b73c2"
+      },
+      "queues": {
+        "controls": {
+          "session": 43223,
+          "terminal": "1ec14e",
+          "runner_exit": 0,
+          "passed": 6,
+          "total": 8,
+          "runner_exit_is_not_acceptance": true
+        },
+        "stock": {
+          "session": 58752,
+          "terminal": "6aa7b7",
+          "runner_exit": 0,
+          "passed": 1,
+          "total": 1,
+          "runner_exit_is_not_acceptance": true
+        }
+      },
+      "controls": [
+        {
+          "selector": "traits::index::tests::scope_header_preparation_rejects_caller_catalogue_keys",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.007
+        },
+        {
+          "selector": "traits::index::tests::unchanged_cleanup_and_user_drop_headers_retain_exact_source_requirements_all_editions",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 1.11
+        },
+        {
+          "selector": "traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins",
+          "exit": 101,
+          "bodies": 1,
+          "pass": false,
+          "seconds": 0.207,
+          "failure": "\nrunning 1 test\ntest traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins ... \nthread 'traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins' (15899833) panicked at crates/lrr/src/traits/index.rs:256:45:\nsource impl preparation: Diagnostic { code: \"LRR-E-INTERNAL-SNAPSHOT\", message: \"parse source absent\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1687 filtered out; finished in 0.20s\n\n"
+        },
+        {
+          "selector": "traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate",
+          "exit": 101,
+          "bodies": 1,
+          "pass": false,
+          "seconds": 0.096,
+          "failure": "\nrunning 1 test\ntest traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate ... \nthread 'traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate' (15899839) panicked at crates/lrr/src/traits/index.rs:293:22:\nsource impl header discovery requires an unprepared producer\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1687 filtered out; finished in 0.09s\n\n"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::metadata_context_flags_are_strict_and_separate_from_run",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.007
+        },
+        {
+          "selector": "cli::preentry_loader_tests::missing_ambiguous_or_generated_main_is_typed_frontier",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.112
+        },
+        {
+          "selector": "cli::preentry_loader_tests::structural_metadata_never_runs_panic_arithmetic_or_managed_output",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.217
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_original_main_metadata_uses_actual_capture_and_index",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.367
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/methods/method-two-trait-defer-resolution-1.rs",
+          "sha256": "37ed71fa905ef662c8d43566ce2404c222aa38520156b3dda51076bf6bbd88ea",
+          "edition": 2015,
+          "exit": 0,
+          "seconds": 5.432,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "terminal": {
+            "installed_lrir_bytes": 2891645,
+            "installed_recipes": 162,
+            "live_edition": 2015,
+            "opcode_counters": {
+              "backedge_polls": 0,
+              "backedges_completed": 0,
+              "cleanup_elements_completed": 77,
+              "exits_completed": 180,
+              "fuel_used": 503,
+              "operations_completed": 246,
+              "operations_started": 246,
+              "panic_scopes_cleaned": 0,
+              "return_scopes_cleaned": 9,
+              "started_by_opcode": [
+                6,
+                5,
+                24,
+                16,
+                39,
+                30,
+                0,
+                4,
+                2,
+                8,
+                2,
+                2,
+                0,
+                22,
+                0,
+                0,
+                0,
+                2,
+                0,
+                10,
+                4,
+                2,
+                6,
+                10,
+                0,
+                0,
+                0,
+                2,
+                4,
+                2,
+                8,
+                6,
+                6,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                8,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                0,
+                0,
+                4,
+                0,
+                0,
+                4,
+                0,
+                2,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "schema": "lrr/v2/development-run",
+            "semantics_profile": "lrr-2024-v2",
+            "status": "completed",
+            "value": {
+              "kind": "unit"
+            }
+          },
+          "capture_complete": true,
+          "capture_facts": {
+            "classified_operation_candidates": 286,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 196,
+            "vm_outcomes": 196
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "V76",
+      "source_sha256": "36d552cdb9b4730eb4ccd54cc57227bedb586e1720fa990b603a6ac7f32b551d",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "lib_build": {
+        "session": 23145,
+        "terminal": "243707",
+        "exit": 101,
+        "seconds": 9.4,
+        "log_sha256": "679d15ff96966655e564b7f6b0e48b9b027061d636df54967fd56e1dd567453b",
+        "errors": [
+          "error[E0599]: no method named `fingerprint` found for reference `&declaration_scan::DeclarationScan` in the current scope",
+          "error: could not compile `lrr` (lib test) due to 1 previous error; 11 warnings emitted"
+        ]
+      },
+      "source_unchanged": true
+    },
+    {
+      "candidate": "V77",
+      "source_sha256": "4e0dc4c0d2d9798e37e11c4d868a0ea3ae37ec2ce7fb8328dc31161f7fffdb71",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "lib_build": {
+        "session": 28928,
+        "terminal": null,
+        "exit": null,
+        "seconds": 22.57,
+        "log_sha256": "2e8e1c32061d508271b8f6648c2d92bebace184b635691302b19a4ab2253acbd",
+        "errors": [],
+        "terminal_receipt_gap": "Session no longer available after compaction; do not invent exit receipt. Saved log reports Finished test/executable; built binary actually executed controls and regression.",
+        "log_reports_finished": true
+      },
+      "source_unchanged": true,
+      "test_binary_sha256": "9157ad7bbf453f65b55f3637ecf7d91d4dd012363a51ed91a0a20ebce5e0571c",
+      "cli_binary_sha256": "52a9b77287dc82642cbb8fe244ee6398bc7e36e8266381616df91e27e648a555",
+      "cli_build": {
+        "session": 42574,
+        "terminal": "5a3e7f",
+        "exit": 0,
+        "seconds": 17.27,
+        "log_sha256": "199d5f6714b946e5e2cebabe754ee2e9bf5d9976e8fc1a37258be25f5c0882b6"
+      },
+      "queues": {
+        "controls": {
+          "session": 72697,
+          "terminal": "3e6916",
+          "runner_exit": 0,
+          "passed": 7,
+          "total": 9,
+          "runner_exit_is_not_acceptance": true
+        },
+        "stock": {
+          "session": 68691,
+          "terminal": "e7cd77",
+          "runner_exit": 0,
+          "passed": 1,
+          "total": 1,
+          "runner_exit_is_not_acceptance": true
+        }
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::metadata_context_flags_are_strict_and_separate_from_run",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.008
+        },
+        {
+          "selector": "cli::preentry_loader_tests::missing_ambiguous_or_generated_main_is_typed_frontier",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.12
+        },
+        {
+          "selector": "cli::preentry_loader_tests::structural_metadata_never_runs_panic_arithmetic_or_managed_output",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.205
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_original_main_metadata_uses_actual_capture_and_index",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.354
+        },
+        {
+          "selector": "traits::index::tests::scope_header_preparation_rejects_caller_catalogue_keys",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.006
+        },
+        {
+          "selector": "traits::index::tests::unchanged_cleanup_and_user_drop_headers_retain_exact_source_requirements_all_editions",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 1.06
+        },
+        {
+          "selector": "traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins",
+          "exit": 101,
+          "bodies": 1,
+          "pass": false,
+          "seconds": 0.235,
+          "failure": "\nrunning 1 test\ntest traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins ... \nthread 'traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins' (15916127) panicked at crates/lrr/src/traits/index.rs:295:22:\ncalled `Result::unwrap()` on an `Err` value: Diagnostic { code: \"LRR-E-CATALOG-INCOMPLETE\", message: \"generated child requires further declaration discovery\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1688 filtered out; finished in 0.23s\n\n"
+        },
+        {
+          "selector": "traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate",
+          "exit": 101,
+          "bodies": 1,
+          "pass": false,
+          "seconds": 0.096,
+          "failure": "\nrunning 1 test\ntest traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate ... \nthread 'traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate' (15916135) panicked at crates/lrr/src/traits/index.rs:300:22:\nsource impl header discovery requires an unprepared producer\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    traits::index::tests::unchanged_projection_impl_header_queries_retain_every_where_predicate\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1688 filtered out; finished in 0.09s\n\n"
+        },
+        {
+          "selector": "traits::index::tests::unchanged_recursive_where_headers_keep_projection_and_region_predicates",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.345
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/methods/method-two-trait-defer-resolution-1.rs",
+          "sha256": "37ed71fa905ef662c8d43566ce2404c222aa38520156b3dda51076bf6bbd88ea",
+          "edition": 2015,
+          "exit": 0,
+          "seconds": 5.361,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "terminal": {
+            "installed_lrir_bytes": 2891645,
+            "installed_recipes": 162,
+            "live_edition": 2015,
+            "opcode_counters": {
+              "backedge_polls": 0,
+              "backedges_completed": 0,
+              "cleanup_elements_completed": 77,
+              "exits_completed": 180,
+              "fuel_used": 503,
+              "operations_completed": 246,
+              "operations_started": 246,
+              "panic_scopes_cleaned": 0,
+              "return_scopes_cleaned": 9,
+              "started_by_opcode": [
+                6,
+                5,
+                24,
+                16,
+                39,
+                30,
+                0,
+                4,
+                2,
+                8,
+                2,
+                2,
+                0,
+                22,
+                0,
+                0,
+                0,
+                2,
+                0,
+                10,
+                4,
+                2,
+                6,
+                10,
+                0,
+                0,
+                0,
+                2,
+                4,
+                2,
+                8,
+                6,
+                6,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                8,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                0,
+                0,
+                4,
+                0,
+                0,
+                4,
+                0,
+                2,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "schema": "lrr/v2/development-run",
+            "semantics_profile": "lrr-2024-v2",
+            "status": "completed",
+            "value": {
+              "kind": "unit"
+            }
+          },
+          "capture_complete": true,
+          "capture_facts": {
+            "classified_operation_candidates": 286,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 196,
+            "vm_outcomes": 196
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "V78",
+      "source_sha256": "6f593977683d03494557b7692dd46a287938548bf17d98064e361d32be1dd6e7",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "lib_build": {
+        "session": 26822,
+        "terminal": "98d7e7",
+        "exit": 101,
+        "seconds": 4.0,
+        "log_sha256": "aae3ff8145428bdbb5d018fd0ace7107a4a945e16a5223d3636c373785547262",
+        "errors": [
+          "error[E0507]: cannot move out of an `Arc`",
+          "error: could not compile `lrr` (lib test) due to 1 previous error; 11 warnings emitted"
+        ]
+      },
+      "source_unchanged": true
+    },
+    {
+      "candidate": "V79",
+      "source_sha256": "6b72d3b2f4d1032b8dd7b47dfe09f4cd7417c37005f829543e49a96f35876f44",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "lib_build": {
+        "session": 27981,
+        "terminal": "8e700b",
+        "exit": 0,
+        "seconds": 16.2,
+        "log_sha256": "0addde53ac2ef953d4694089a7b12e919458445c890b2a49a51a1d0987f9834c",
+        "errors": []
+      },
+      "source_unchanged": true,
+      "test_binary_sha256": "7b881a18fc7227c5749337d27b0138fb124db4f1cc9f680405b7a775d61f5f95",
+      "cli_binary_sha256": "cd338832bd51b4d1c5e5f64df310ae88590ac43b9c9dacd037d92524694349a4",
+      "cli_build": {
+        "session": 40509,
+        "terminal": "b3972e",
+        "exit": 0,
+        "seconds": 12.8,
+        "log_sha256": "5c07b4b609fc1dbb4fbd240442e17e44b6572eac12ad352a801e451895d92da4"
+      },
+      "queues": {
+        "controls": {
+          "session": 57717,
+          "terminal": "ad2e05",
+          "runner_exit": 0,
+          "passed": 12,
+          "total": 12,
+          "runner_exit_is_not_acceptance": true
+        },
+        "stock": {
+          "session": 60059,
+          "terminal": "fb4c8d",
+          "runner_exit": 0,
+          "passed": 1,
+          "total": 1,
+          "runner_exit_is_not_acceptance": true
+        }
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::metadata_context_flags_are_strict_and_separate_from_run",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.008
+        },
+        {
+          "selector": "cli::preentry_loader_tests::missing_ambiguous_or_generated_main_is_typed_frontier",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.121
+        },
+        {
+          "selector": "cli::preentry_loader_tests::structural_metadata_never_runs_panic_arithmetic_or_managed_output",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.204
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_original_main_metadata_uses_actual_capture_and_index",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.353
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_projection_impl_header_queries_retain_every_where_predicate",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 9.862
+        },
+        {
+          "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::item_impl_child_tests::actual_stock_child_requires_its_selected_parent_epoch_and_ancestor",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.103
+        },
+        {
+          "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::item_impl_child_tests::equal_source_metadata_cannot_substitute_another_actual_completed_arc_owner",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.116
+        },
+        {
+          "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::item_impl_child_tests::unchanged_trait_and_impl_children_share_ancestor_completion_all_editions",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.73
+        },
+        {
+          "selector": "traits::index::tests::scope_header_preparation_rejects_caller_catalogue_keys",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.006
+        },
+        {
+          "selector": "traits::index::tests::unchanged_cleanup_and_user_drop_headers_retain_exact_source_requirements_all_editions",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 1.063
+        },
+        {
+          "selector": "traits::index::tests::unchanged_conditional_impl_headers_share_one_retained_query_across_source_origins",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 1.038
+        },
+        {
+          "selector": "traits::index::tests::unchanged_recursive_where_headers_keep_projection_and_region_predicates",
+          "exit": 0,
+          "bodies": 1,
+          "pass": true,
+          "seconds": 0.336
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/methods/method-two-trait-defer-resolution-1.rs",
+          "sha256": "37ed71fa905ef662c8d43566ce2404c222aa38520156b3dda51076bf6bbd88ea",
+          "edition": 2015,
+          "exit": 0,
+          "seconds": 5.396,
+          "runtime_contract_pass": true,
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "terminal": {
+            "installed_lrir_bytes": 2891645,
+            "installed_recipes": 162,
+            "live_edition": 2015,
+            "opcode_counters": {
+              "backedge_polls": 0,
+              "backedges_completed": 0,
+              "cleanup_elements_completed": 77,
+              "exits_completed": 180,
+              "fuel_used": 503,
+              "operations_completed": 246,
+              "operations_started": 246,
+              "panic_scopes_cleaned": 0,
+              "return_scopes_cleaned": 9,
+              "started_by_opcode": [
+                6,
+                5,
+                24,
+                16,
+                39,
+                30,
+                0,
+                4,
+                2,
+                8,
+                2,
+                2,
+                0,
+                22,
+                0,
+                0,
+                0,
+                2,
+                0,
+                10,
+                4,
+                2,
+                6,
+                10,
+                0,
+                0,
+                0,
+                2,
+                4,
+                2,
+                8,
+                6,
+                6,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                8,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                2,
+                0,
+                0,
+                4,
+                0,
+                0,
+                4,
+                0,
+                2,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "schema": "lrr/v2/development-run",
+            "semantics_profile": "lrr-2024-v2",
+            "status": "completed",
+            "value": {
+              "kind": "unit"
+            }
+          },
+          "capture_complete": true,
+          "capture_facts": {
+            "classified_operation_candidates": 286,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 196,
+            "vm_outcomes": 196
+          }
+        }
+      ]
+    }
+  ],
+  "upstream_source_controls": [
+    {
+      "path": "tests/ui/methods/method-two-trait-defer-resolution-2.rs",
+      "sha256": "048cdae633ad9efbcd3dae1e661d33dcdf040a482145c1cad34ea1ff859b1d9d",
+      "source_only": true,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-conditional-dispatch.rs",
+      "sha256": "238bb3287aa91fe113b09ec519cf302852da7b2153ce1966c625d524a6ef940b",
+      "source_only": true,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    },
+    {
+      "path": "tests/ui/associated-types/issue-47139-2.rs",
+      "sha256": "2488281a153cb460abee6715f1f8c6791a0329b4264003c0c6de511dacc5403d",
+      "source_only": true,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    }
+  ],
+  "new_distinct_upstream_runtime_passes": 0,
+  "full_fixture_passes_claimed": 0,
+  "refreshed_suite_total": false,
+  "remaining": [
+    "M019 canonical owner/Type/predicate lowering and intrinsic rules",
+    "complete live impl catalog membership and facade/world join",
+    "canonical tabled transactional goals and runtime consumers",
+    "generated intrinsic argument scans without retained source owners",
+    "full architecture and interpreter correctness/runtime milestone",
+    "guest JIT gated"
+  ],
+  "validation_root_local": "artifacts/validation-resume-2026-10-18",
+  "v79_source_frozen_through_queues": true
+}

@@ -130,3 +130,115 @@ fn metadata_context_flags_are_strict_and_separate_from_run() {
         );
     }
 }
+
+// The first source-only helper lacked the actual std import world. This is
+// the same unchanged upstream header witness, through real facade capture.
+#[test]
+fn unchanged_projection_impl_header_queries_retain_every_where_predicate() {
+    use crate::{
+        core::profile::ProfileIdentity,
+        db::{
+            key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider,
+            value::QueryValue,
+        },
+        expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
+        source::manifest::Namespace,
+        traits::header_syntax::ImplHeaderSyntaxKey,
+    };
+    fn ready<T>(value: QueryPoll<T>) -> T {
+        match value {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => panic!("actual projection header: {error}"),
+            QueryPoll::NeedInput(request) => panic!("actual projection header demand: {request:?}"),
+        }
+    }
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-conditional-dispatch.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let profile = ProfileIdentity {
+            edition,
+            ..ProfileIdentity::current()
+        };
+        let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(
+            &path,
+            false,
+            edition,
+            &super::crate_graph::ExternCrates::default(),
+            crate::source::embedded_crates::standard_facade_crates(&profile),
+            None,
+        )
+        .unwrap();
+        let (compiler, inputs, source, sources) =
+            super::compile_inputs::PreparedCompileInputs::prepare(&path, inputs, source, sources)
+                .unwrap();
+        let root = source.outline().root_scope.clone();
+        let mut db = Database::default();
+        inputs.publish(&mut db).unwrap();
+        db.begin_expansion_epoch(1).unwrap();
+        let mut discovery =
+            SourceDiscovery::new(sources, root.clone(), Namespace::Value, root.crate_key, 1)
+                .unwrap()
+                .with_declarative_compiler(
+                    compiler.environment_identity(),
+                    crate::expand::source_declarative::engine_version(),
+                    compiler.catalog.clone(),
+                )
+                .unwrap();
+        loop {
+            match discovery.poll().unwrap() {
+                SourceDiscoveryStep::NeedExpansion { request } => discovery
+                    .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
+                    .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::Sealed(_) => {
+                    discovery.publish(&mut db).unwrap();
+                    break;
+                }
+                SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!("{diagnostic}"),
+                _ => panic!("actual projection header requires an unprepared producer"),
+            }
+        }
+        let outcome = ready(db.fetch(
+            &SyntaxProvider,
+            QueryKey::PreparedScopeImplHeaders(discovery.key().clone()),
+        ));
+        let QueryValue::PreparedScopeImplHeaders(headers) = outcome.value.as_ref() else {
+            panic!()
+        };
+        let own: Vec<_> = headers
+            .inventory_root()
+            .headers()
+            .iter()
+            .filter(|header| header.scope.crate_key == root.crate_key)
+            .collect();
+        assert_eq!(own.len(), 4);
+        let mut predicates = 0;
+        for raw in own {
+            let outcome = ready(db.fetch(
+                &SyntaxProvider,
+                QueryKey::ImplHeaderSyntax(Box::new(ImplHeaderSyntaxKey {
+                    inventory: discovery.key().clone(),
+                    implementation: raw.identity,
+                })),
+            ));
+            let QueryValue::ImplHeaderSyntax(plan) = outcome.value.as_ref() else {
+                panic!()
+            };
+            predicates += plan.predicates().len();
+            assert_eq!(plan.source().profile.edition, edition);
+        }
+        assert_eq!(predicates, 3);
+        match db.fetch(
+            &SyntaxProvider,
+            QueryKey::ImplHeaderSyntax(Box::new(ImplHeaderSyntaxKey {
+                inventory: discovery.key().clone(),
+                implementation: Digest::of_bytes(b"absent-impl"),
+            })),
+        ) {
+            QueryPoll::Ready(Err(error)) => assert_eq!(error.code, "LRR-E-IMPL-HEADER"),
+            other => panic!("absent source header accepted: {other:?}"),
+        }
+    }
+}

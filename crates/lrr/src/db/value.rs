@@ -103,6 +103,8 @@ pub struct Bucket {
 }
 #[derive(Debug)]
 pub enum QueryValue {
+    PreparedScopeImplHeaders(Box<crate::traits::index::PreparedScopeImplHeaders>),
+    ImplHeaderSyntax(Box<crate::traits::header_syntax::ImplHeaderSyntax>),
     PreparedBodySyntax(Arc<super::memo::source_syntax_inputs::PreparedBodySyntax>),
     PreparedExplicitTypeArguments(
         Box<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
@@ -222,6 +224,8 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::PreparedScopeImplHeaders(value), QueryKey::PreparedScopeImplHeaders(key)) = (self, key) { return value.key() == key; }
+        if let (Self::ImplHeaderSyntax(value), QueryKey::ImplHeaderSyntax(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::ArrayRepeatPlan(value), QueryKey::ArrayRepeatPlan(key)) = (self, key) { return value.key() == key; }
         if let (Self::PreparedArrayRepeat(value), QueryKey::PreparedArrayRepeat(key)) = (self, key) { return value.plan().key() == key; }
         if let (Self::InitializerOwnerTemplate(value), QueryKey::InitializerOwnerTemplate(key)) = (self, key) { return value.key() == key; }
@@ -419,6 +423,8 @@ impl QueryValue {
             Self::ArrayRepeatPlan(value) => { e.u32(54); e.record(value.as_ref()); }
             Self::PreparedArrayRepeat(value) => { e.u32(55); e.record(value.as_ref()); }
             Self::InitializerOwnerTemplate(value) => { e.u32(53); e.record(value.as_ref()); }
+            Self::PreparedScopeImplHeaders(value) => { e.u32(56); e.digest(value.fingerprint()); }
+            Self::ImplHeaderSyntax(value) => { e.u32(57); e.record(value.as_ref()); }
             Self::AssociatedItemQualifier(value) => { e.u32(51); e.record(value.as_ref()); }
             Self::AssociatedEquations(value) => {
                 e.u32(50);
@@ -602,7 +608,8 @@ impl QueryValue {
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
             // E006: no new retained-admission memory accounting.
-            Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::InitializerOwnerTemplate(_) => 0,
+            Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::InitializerOwnerTemplate(_)
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) => 0,
             Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),

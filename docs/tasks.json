@@ -19959,15 +19959,26 @@
     },
     {
       "id": "M019",
-      "status": "not_started",
+      "status": "in_progress",
       "commit_id": null,
-      "acceptance_tests": [],
-      "commands": [],
+      "acceptance_tests": [
+        "M019 raw syntax/retained-source controls only; full TR006/index-versus-catalog integration not accepted"
+      ],
+      "commands": [
+        "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run",
+        "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+        "Exact binary selectors and actual CLI argv in worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json"
+      ],
       "fixture_ids": [],
-      "artifact_paths": [],
+      "artifact_paths": [
+        "worktracks/05-trait-goal-engine/2026-10-18-retained-impl-header-query.md",
+        "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json"
+      ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
-      "release_complete": false
+      "release_complete": false,
+      "latest_component_scope": "V79 solo held source prerequisite: retained impl header queries56/57 share actual original/generated/argument syntax owners; common child trait and impl frontiers share actual ancestor completion/parent-chain/replacement checks. Both builds and12/12focused controls pass, including all4edition original/emit/wrapper headers, real-facade projection headers and wrong parent/epoch/ancestor controls. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations), zero new distinct stock passes. Canonical Type/predicate lowering, complete catalog/tabled goals/runtime consumers and interpreter/JIT gates remain open. Earlier V73--V78 failures and V77 terminal receipt gap preserved. No refreshed suite total.",
+      "source_baseline": "af771ed9e24cc5b6b401854d92eb0868e4ef3439"
     },
     {
       "id": "M020",

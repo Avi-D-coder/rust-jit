@@ -36,6 +36,10 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTRINSIC-DECLARATIONS", message.into())
 }
 impl ArgumentDeclarations {
+    /// Borrow the actual pinned argument tree; this is syntax, not a name grant.
+    pub(crate) fn admitted_parsed(&self) -> &ParsedFile {
+        &self.parsed
+    }
     fn capture_fingerprint(
         definitions: &std::collections::BTreeMap<Digest, declaration_output::DefinitionCapture>,
         calls: &std::collections::BTreeMap<Digest, declaration_output::CallCapture>,

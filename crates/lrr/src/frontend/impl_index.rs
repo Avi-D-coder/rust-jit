@@ -6,12 +6,41 @@ use crate::{
     },
     syntax::declaration_scan::{DeclarationProducer, DeclarationScan, ScannedImpl},
 };
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
+
+/// Actual immutable syntax owner of a captured scan. A raw scan ParseKey is
+/// not necessarily a globally published file (notably for macro fragments).
+#[derive(Clone)]
+pub(crate) enum ImplSyntaxSource {
+    Original(Arc<crate::syntax::parse::ParsedFile>),
+    Generated(Arc<crate::expand::generated_declarations::GeneratedDeclarations>),
+    Argument(Arc<crate::expand::argument_declarations::ArgumentDeclarations>),
+}
+impl ImplSyntaxSource {
+    pub(crate) fn parsed(&self) -> &crate::syntax::parse::ParsedFile {
+        match self {
+            Self::Original(parsed) => parsed,
+            Self::Generated(output) => output.admitted_parsed(),
+            Self::Argument(argument) => argument.admitted_parsed(),
+        }
+    }
+}
+impl std::fmt::Debug for ImplSyntaxSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ImplSyntaxSource")
+            .field(&self.parsed().key())
+            .finish()
+    }
+}
 pub struct ImplHeaderIndex {
     sources: Vec<Arc<DeclarationScan>>,
     headers: Vec<ScannedImpl>,
     producers: Vec<DeclarationProducer>,
     retained_bytes: usize,
+    syntax_sources: BTreeMap<crate::core::digest::Digest, ImplSyntaxSource>,
 }
 impl std::fmt::Debug for ImplHeaderIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -58,7 +87,30 @@ impl ImplHeaderIndex {
             headers,
             producers,
             retained_bytes: bytes,
+            syntax_sources: BTreeMap::new(),
         })
+    }
+    /// Called by actual discovery publication, retaining only owners joined
+    /// to this inventory's exact scans. Missing syntax is an unfinished join.
+    pub(crate) fn with_syntax_sources(
+        mut self,
+        mut sources: BTreeMap<crate::core::digest::Digest, ImplSyntaxSource>,
+    ) -> Result<Self, Diagnostic> {
+        for scan in &self.sources {
+            if let Some(source) = sources.remove(&scan.fingerprint()) {
+                if source.parsed().key() != *scan.parse() {
+                    return Err(fault());
+                }
+                self.syntax_sources.insert(scan.fingerprint(), source);
+            }
+        }
+        Ok(self)
+    }
+    pub(crate) fn syntax_source(
+        &self,
+        scan: crate::core::digest::Digest,
+    ) -> Option<&ImplSyntaxSource> {
+        self.syntax_sources.get(&scan)
     }
     pub(crate) fn exclude_replaced_sources(
         mut self,
@@ -207,7 +259,7 @@ impl ImplHeaderIndex {
     }
 }
 impl StableEncode for ImplHeaderIndex {
-    const DOMAIN: &'static str = "lrr/v2/impl-header-inventory";
+    const DOMAIN: &'static str = "lrr/v3/impl-header-inventory";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.sequence(&self.sources, |e, s| e.digest(s.fingerprint()));
         e.sequence(&self.headers, |e, h| {
@@ -215,6 +267,11 @@ impl StableEncode for ImplHeaderIndex {
             e.digest(h.header_identity);
         });
         e.sequence(&self.producers, |e, p| e.digest(p.identity));
+        e.u64(self.syntax_sources.len() as u64);
+        for (scan, source) in &self.syntax_sources {
+            e.digest(*scan);
+            e.record(&source.parsed().key());
+        }
     }
 }
 

@@ -669,6 +669,29 @@ impl CompletedDeclarationFragment {
     pub fn inventory(&self) -> &ImplHeaderIndex {
         &self.inventory
     }
+    /// Retain actual syntax producers, without re-creating fragment text or
+    /// treating their structural ParseKeys as captured file bytes.
+    pub(crate) fn impl_syntax_sources(
+        &self,
+    ) -> Vec<(Digest, crate::frontend::impl_index::ImplSyntaxSource)> {
+        use crate::frontend::impl_index::ImplSyntaxSource;
+        let mut pending = vec![self];
+        let mut sources = Vec::new();
+        while let Some(fragment) = pending.pop() {
+            for index in std::iter::once(&fragment.index).chain(&fragment.completed_indexes) {
+                sources.push((index.output().scan().fingerprint(),
+                    ImplSyntaxSource::Generated(index.output().clone())));
+            }
+            for argument in &fragment.completed_arguments {
+                for source in &argument.assembly.arguments {
+                    sources.push((source.scan().fingerprint(),
+                        ImplSyntaxSource::Argument(source.clone())));
+                }
+                pending.extend(argument.assembly.completed.iter().map(Arc::as_ref));
+            }
+        }
+        sources
+    }
     pub(crate) fn generated_replacement_masks(
         &self,
     ) -> Result<Vec<(Digest, crate::syntax::spans::SourceRange)>, Diagnostic> {

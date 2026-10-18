@@ -4183,6 +4183,23 @@ impl SourceDiscovery {
         } else {
             None
         };
+        let trait_frontier = plan.trait_frontier();
+        let child_trait = if let Some(frontier) = trait_frontier {
+            if self.child_impl_frontiers.contains_key(&frontier)
+                || self.item_declaration_jobs.contains_key(&frontier)
+                || Some(frontier) == impl_frontier
+            {
+                return Err(fault("generated child trait frontier conflict"));
+            }
+            let ancestor_job = self.item_root_declarations
+                .get(&ticket.job().identity).copied()
+                .ok_or_else(|| fault("generated child declaration ancestor absent"))?;
+            Some(item_impl_children::ChildImplFrontier::prepare_traits(
+                ancestor_job, child.retained_items().clone(), parent.retained_items().clone(),
+                plan.retained_trait_projection(child.retained_items(), child.cfg())?,
+                child.owner().clone(), child.cfg().clone(), self.epoch,
+            )?)
+        } else { None };
         let nested_bytes = self
             .nested_bytes
             .checked_add(
@@ -4198,6 +4215,7 @@ impl SourceDiscovery {
                 && !imports.contains(id)
                 && !modules.contains(id)
                 && Some(*id) != impl_frontier
+                && Some(*id) != trait_frontier
         }) {
             return Err(fault(
                 "generated child requires further declaration discovery",
@@ -4220,6 +4238,7 @@ impl SourceDiscovery {
         let job_count = imports
             .len()
             .checked_add(usize::from(child_impl.is_some()))
+            .and_then(|n| n.checked_add(usize::from(child_trait.is_some())))
             .ok_or_else(|| fault("generated child job count limit"))?;
         fragment
             .jobs
@@ -4235,6 +4254,14 @@ impl SourceDiscovery {
             identity,
         }));
         if let Some(frontier) = impl_frontier {
+            jobs.push(DiscoveryJob {
+                module_order: ticket.job().module_order,
+                source_offset: fragment.call.range.start,
+                kind: DiscoveryKind::ScanNestedDeclarations,
+                identity: frontier,
+            });
+        }
+        if let Some(frontier) = trait_frontier {
             jobs.push(DiscoveryJob {
                 module_order: ticket.job().module_order,
                 source_offset: fragment.call.range.start,
@@ -4295,6 +4322,10 @@ impl SourceDiscovery {
             );
             fragment.jobs.extend(jobs);
             if let (Some(frontier), Some(waiter)) = (impl_frontier, child_impl) {
+                self.child_impl_frontiers.insert(frontier, waiter);
+                self.producers.insert(frontier);
+            }
+            if let (Some(frontier), Some(waiter)) = (trait_frontier, child_trait) {
                 self.child_impl_frontiers.insert(frontier, waiter);
                 self.producers.insert(frontier);
             }
@@ -9254,9 +9285,30 @@ impl SourceDiscovery {
                 .map_err(|_| fault("generated replacement masks allocation"))?;
             masks.extend(rows);
         }
+        // A scan's key may belong to an admitted fragment rather than a file.
+        // Preserve its actual syntax owner in the same sealed publication.
+        use crate::frontend::impl_index::ImplSyntaxSource;
+        let mut syntax_sources = BTreeMap::new();
+        for source in &self.sources {
+            let scan = source.declaration_inventory(Default::default())?;
+            syntax_sources.insert(scan.fingerprint(), ImplSyntaxSource::Original(
+                source.retained_declaration_parser()?.clone()));
+        }
+        for (_, arguments) in self.nested_argument_summaries.values() {
+            for argument in arguments {
+                syntax_sources.insert(argument.scan().fingerprint(),
+                    ImplSyntaxSource::Argument(argument.clone()));
+            }
+        }
+        for fragment in self.nested_completed.values().chain(self.completed_argument_fragments.iter()) {
+            for (scan, source) in fragment.impl_syntax_sources() {
+                syntax_sources.insert(scan, source);
+            }
+        }
         inventory
             .exclude_replaced_sources(&proofs)?
-            .exclude_generated_replacements(&masks)
+            .exclude_generated_replacements(&masks)?
+            .with_syntax_sources(syntax_sources)
     }
     /// Exact non-item grammar records; ordinary item facets remain separate.
     pub fn sealed_declaration_expansions(

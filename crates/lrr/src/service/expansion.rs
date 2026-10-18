@@ -180,7 +180,8 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
             bytes = add(bytes, std::mem::size_of_val(key.as_ref()))?;
             bytes = add(bytes, key.bucket.name.capacity())?;
         }
-        QueryKey::DiscoverySeal(_) | QueryKey::ScopeDeclarationInventory(_) => {}
+        QueryKey::DiscoverySeal(_) | QueryKey::ScopeDeclarationInventory(_)
+        | QueryKey::PreparedScopeImplHeaders(_) | QueryKey::ImplHeaderSyntax(_) => {}
         QueryKey::ConstructorPlan(_)
         | QueryKey::BoundRecordConstructor(_)
         | QueryKey::QualifiedBodyType(_)

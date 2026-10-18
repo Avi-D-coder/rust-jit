@@ -284,8 +284,11 @@
           "id": "WT05-01",
           "title": "Header catalogs",
           "status": "claimed",
-          "candidate": "artifacts/macos-first/sol-trait-header-index-v1/HANDOFF.md",
-          "acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled, M018 prerequisite and integration incomplete"
+          "candidate": "worktracks/05-trait-goal-engine/2026-10-18-retained-impl-header-query.md",
+          "acceptance_scope": "V79 solo held source prerequisite: retained impl header queries56/57 share actual original/generated/argument syntax owners; common child trait and impl frontiers share actual ancestor completion/parent-chain/replacement checks. Both builds and12/12focused controls pass, including all4edition original/emit/wrapper headers, real-facade projection headers and wrong parent/epoch/ancestor controls. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations), zero new distinct stock passes. Canonical Type/predicate lowering, complete catalog/tabled goals/runtime consumers and interpreter/JIT gates remain open. Earlier V73--V78 failures and V77 terminal receipt gap preserved. No refreshed suite total.",
+          "evidence": [
+            "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json"
+          ]
         },
         {
           "id": "WT05-02",
@@ -731,23 +734,22 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "e6e5ea2ab6720e1a4b4be416c1f975f5c335ac66",
+    "baseline_git_head": "af771ed9e24cc5b6b401854d92eb0868e4ef3439",
     "working_tree": "inherited_dirty_plus_current_source_components",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json.",
+    "validation": "V79 solo held source prerequisite: retained impl header queries56/57 share actual original/generated/argument syntax owners; common child trait and impl frontiers share actual ancestor completion/parent-chain/replacement checks. Both builds and12/12focused controls pass, including all4edition original/emit/wrapper headers, real-facade projection headers and wrong parent/epoch/ancestor controls. One unchanged deferred-resolution1 runtime regression passes (10calls196VMoperations), zero new distinct stock passes. Canonical Type/predicate lowering, complete catalog/tabled goals/runtime consumers and interpreter/JIT gates remain open. Earlier V73--V78 failures and V77 terminal receipt gap preserved. No refreshed suite total.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "e6e5ea2ab6720e1a4b4be416c1f975f5c335ac66",
+    "source_checkpoint_pushed": "af771ed9e24cc5b6b401854d92eb0868e4ef3439",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": [
-      "worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json",
-      "worktracks/evidence/2026-10-18-interpreter-v72-validation.json"
+      "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json"
     ]
   }
 }

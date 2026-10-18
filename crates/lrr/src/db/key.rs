@@ -171,6 +171,8 @@ pub enum QueryKey {
     SealedName(Box<SealedNameKey>),
     DiscoverySeal(super::seals::SealKey),
     ScopeDeclarationInventory(super::seals::SealKey),
+    PreparedScopeImplHeaders(super::seals::SealKey),
+    ImplHeaderSyntax(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
     BodyStructure(crate::source::manifest::BodyKey),
     Thunk(crate::source::manifest::PcKey),
     CurrentExpansionInput(Box<crate::expand::identity::ExpansionKey>),
@@ -205,7 +207,8 @@ impl QueryKey {
                     + key.bucket.scope.heap_bytes()
                     + key.bucket.name.capacity()
             }
-            Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_) => 0,
+            Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_)
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) => 0,
             Self::ExpansionInput(k) | Self::CurrentExpansionInput(k) => {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k)
             }
@@ -250,6 +253,8 @@ impl QueryKey {
             Self::ArrayRepeatPlan(_) => "ArrayRepeatPlan",
             Self::PreparedArrayRepeat(_) => "PreparedArrayRepeat",
             Self::InitializerOwnerTemplate(_) => "InitializerOwnerTemplate",
+            Self::PreparedScopeImplHeaders(_) => "PreparedScopeImplHeaders",
+            Self::ImplHeaderSyntax(_) => "ImplHeaderSyntax",
             Self::AssociatedItemQualifier(_) => "AssociatedItemQualifier",
             Self::AssociatedEquations(_) => "AssociatedEquations",
             Self::NominalMember(_) => "NominalMember",
@@ -297,6 +302,8 @@ impl StableEncode for QueryKey {
             Self::ArrayRepeatPlan(key) => { e.u32(54); e.record(key); }
             Self::PreparedArrayRepeat(key) => { e.u32(55); e.record(key); }
             Self::InitializerOwnerTemplate(key) => { e.u32(53); e.record(key); }
+            Self::PreparedScopeImplHeaders(key) => { e.u32(56); e.record(key); }
+            Self::ImplHeaderSyntax(key) => { e.u32(57); e.record(key.as_ref()); }
             Self::AssociatedItemQualifier(key) => { e.u32(51); e.record(key); }
             Self::AssociatedEquations(key) => {
                 e.u32(50);

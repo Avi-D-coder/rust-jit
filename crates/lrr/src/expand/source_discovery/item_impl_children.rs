@@ -16,16 +16,20 @@ use crate::{
 };
 use std::sync::Arc;
 
-
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
+}
+
+enum DeclarationProjection {
+    Impl(Arc<ActiveImplProjection>),
+    Trait(Arc<ActiveImplProjection>),
 }
 
 pub(super) struct ChildImplFrontier {
     ancestor_job: Digest,
     items: Arc<GeneratedItems>,
     parent_items: Arc<GeneratedItems>,
-    projection: Arc<ActiveImplProjection>,
+    projection: DeclarationProjection,
     scope: ScopeKey,
     cfg: CfgSet,
     cfg_fingerprint: Digest,
@@ -43,20 +47,73 @@ impl ChildImplFrontier {
         cfg: CfgSet,
         epoch: u64,
     ) -> Result<Self, Diagnostic> {
+        Self::prepare_declaration(
+            ancestor_job,
+            items,
+            parent_items,
+            DeclarationProjection::Impl(projection),
+            scope,
+            cfg,
+            epoch,
+        )
+    }
+
+    pub(super) fn prepare_traits(
+        ancestor_job: Digest,
+        items: Arc<GeneratedItems>,
+        parent_items: Arc<GeneratedItems>,
+        projection: Arc<ActiveImplProjection>,
+        scope: ScopeKey,
+        cfg: CfgSet,
+        epoch: u64,
+    ) -> Result<Self, Diagnostic> {
+        Self::prepare_declaration(
+            ancestor_job,
+            items,
+            parent_items,
+            DeclarationProjection::Trait(projection),
+            scope,
+            cfg,
+            epoch,
+        )
+    }
+
+    fn prepare_declaration(
+        ancestor_job: Digest,
+        items: Arc<GeneratedItems>,
+        parent_items: Arc<GeneratedItems>,
+        projection: DeclarationProjection,
+        scope: ScopeKey,
+        cfg: CfgSet,
+        epoch: u64,
+    ) -> Result<Self, Diagnostic> {
+        let active = match &projection {
+            DeclarationProjection::Impl(projection) => {
+                projection.active_impl_ranges(&items, &cfg, &scope, epoch)?
+            }
+            DeclarationProjection::Trait(plan) => {
+                plan.active_impl_ranges(&items, &cfg, &scope, epoch)?
+            }
+        };
         if epoch == 0
             || items.epoch() != epoch
             || parent_items.epoch() != epoch
             || items.record().key().grammar != GrammarSlot::Items
-            || projection
-                .active_impl_ranges(&items, &cfg, &scope, epoch)?
-                .is_empty()
+            || active.is_empty()
         {
-            return Err(fault("child impl frontier actual output/epoch is absent"));
+            return Err(fault(
+                "child declaration frontier actual output/epoch is absent",
+            ));
         }
         let cfg_fingerprint = cfg.fingerprint();
         let bytes = std::mem::size_of::<Self>()
             .checked_add(scope.heap_bytes())
-            .and_then(|n| n.checked_add(projection.metadata_bytes()))
+            .and_then(|n| {
+                n.checked_add(match &projection {
+                    DeclarationProjection::Impl(projection) => projection.metadata_bytes(),
+                    DeclarationProjection::Trait(projection) => projection.metadata_bytes(),
+                })
+            })
             .and_then(|n| n.checked_add(128))
             .ok_or_else(|| fault("child impl frontier metadata overflow"))?
             .checked_add(cfg.metadata_bytes()?)
@@ -128,8 +185,23 @@ impl ChildImplFrontier {
 
         // One shared active raw-header -> admitted canonical-header join. No
         // parser, scope reconstruction, header re-encoding or body query here.
-        let pairs =
-            output.item_impl_headers_from_projection(&self.items, &self.cfg, &self.projection)?;
+        let projection = match &self.projection {
+            DeclarationProjection::Impl(projection) => projection,
+            DeclarationProjection::Trait(plan) => {
+                let pairs =
+                    output.item_trait_headers_from_projection(&self.items, &self.cfg, plan)?;
+                if pairs.is_empty() {
+                    return Err(fault("child trait completed active headers absent"));
+                }
+                let requirements = super::ItemDeclarationRequirements::traits(
+                    output.scan().fingerprint(),
+                    &pairs,
+                )?;
+                requirements.require_present(completed.completed())?;
+                return Ok(pairs.into_iter().map(|(_, _, header, _)| header).collect());
+            }
+        };
+        let pairs = output.item_impl_headers_from_projection(&self.items, &self.cfg, projection)?;
         if pairs.is_empty() {
             return Err(fault("child impl completed active headers absent"));
         }

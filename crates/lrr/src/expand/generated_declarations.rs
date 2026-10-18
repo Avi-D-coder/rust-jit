@@ -230,6 +230,23 @@ impl GeneratedDeclarations {
         plan: &crate::frontend::generated_headers::GeneratedHeaderPlan,
     ) -> Result<Vec<(Digest, Digest, Digest, crate::syntax::spans::SourceRange)>, Diagnostic> {
         let active = plan.active_trait_ranges(items, cfg, self.scan.scope(), self.epoch)?;
+        self.trait_headers_at(items, cfg, active)
+    }
+    pub(crate) fn item_trait_headers_from_projection(
+        &self,
+        items: &super::generated_items::GeneratedItems,
+        cfg: &CfgSet,
+        projection: &crate::frontend::generated_headers::ActiveImplProjection,
+    ) -> Result<Vec<(Digest, Digest, Digest, crate::syntax::spans::SourceRange)>, Diagnostic> {
+        let active = projection.active_impl_ranges(items, cfg, self.scan.scope(), self.epoch)?;
+        self.trait_headers_at(items, cfg, active)
+    }
+    fn trait_headers_at(
+        &self,
+        items: &super::generated_items::GeneratedItems,
+        cfg: &CfgSet,
+        active: &[crate::syntax::spans::SourceRange],
+    ) -> Result<Vec<(Digest, Digest, Digest, crate::syntax::spans::SourceRange)>, Diagnostic> {
         self.item_associated_headers(
             items,
             cfg,
