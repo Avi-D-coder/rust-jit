@@ -1,8 +1,6 @@
 //! Physical frame state. Syntax and query providers never mutate it.
 #[path = "frame_aggregate_copy.rs"]
 mod aggregate_copy_frame;
-#[path = "frame_record_update.rs"]
-mod record_update_frame;
 #[path = "frame_boxes.rs"]
 mod boxes_frame;
 #[cfg(test)]
@@ -26,6 +24,8 @@ pub(crate) mod nominal_values_frame;
 mod partial_hints_frame;
 #[path = "frame_pointers.rs"]
 mod pointers_frame;
+#[path = "frame_record_update.rs"]
+mod record_update_frame;
 #[path = "frame_related_numeric.rs"]
 mod related_numeric_frame;
 #[path = "frame_repeat.rs"]
@@ -507,6 +507,24 @@ impl Frame {
             });
         }
         for node in body.nodes() {
+            // Control/block results are consumed after their entered scope
+            // leaves. Their value and its temporary place share that outer
+            // continuation scope; inner bindings keep their indexed scopes.
+            let result_scope = if matches!(
+                node.role,
+                crate::syntax::body_index::NodeRole::Expression(
+                    crate::syntax::body_index::ExpressionKind::Block
+                        | crate::syntax::body_index::ExpressionKind::While
+                        | crate::syntax::body_index::ExpressionKind::Loop
+                        | crate::syntax::body_index::ExpressionKind::For
+                )
+            ) {
+                body.scopes()[node.scope.0 as usize]
+                    .parent
+                    .unwrap_or(node.scope)
+            } else {
+                node.scope
+            };
             if let Some(id) = node.value {
                 if node
                     .extended_to
@@ -527,20 +545,8 @@ impl Frame {
                     body.scopes()[clause.0 as usize]
                         .parent
                         .unwrap_or(node.scope)
-                } else if matches!(
-                    node.role,
-                    crate::syntax::body_index::NodeRole::Expression(
-                        crate::syntax::body_index::ExpressionKind::Block
-                            | crate::syntax::body_index::ExpressionKind::While
-                            | crate::syntax::body_index::ExpressionKind::Loop
-                            | crate::syntax::body_index::ExpressionKind::For
-                    )
-                ) {
-                    body.scopes()[node.scope.0 as usize]
-                        .parent
-                        .unwrap_or(node.scope)
                 } else {
-                    node.scope
+                    result_scope
                 };
             }
             for (ordinal, id) in node.runtime_temporaries.into_iter().enumerate() {
@@ -591,7 +597,7 @@ impl Frame {
                 slots[id.0 as usize].scope = node.scope;
             }
             if let Some(id) = node.place {
-                slots[id.0 as usize].scope = node.scope;
+                slots[id.0 as usize].scope = result_scope;
             }
         }
         let mut active_scopes = Vec::new();
@@ -4581,37 +4587,35 @@ impl Frame {
                 .source_view(parent)?
                 .as_ref()
                 .is_none_or(|source| matches!(source, crate::traits::term::TyTerm::Primitive(_)))
-            && self
-                .body
-                .value_node(child)
-                .is_some_and(|node| {
-                    node.value == Some(child)
-                        && node.role
-                            == crate::syntax::body_index::NodeRole::Expression(
-                                crate::syntax::body_index::ExpressionKind::Borrow,
-                            )
-                });
+            && self.body.value_node(child).is_some_and(|node| {
+                node.value == Some(child)
+                    && node.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Borrow,
+                        )
+            });
         if operator.is_none() && !primitive_borrow {
             self.set_source_view(child, self.source_view(parent)?)?;
             // None/None is also used by Neg/Not, whose Output can differ
             // from its operand. A value-forward edge additionally needs the
             // actual indexed wrapper/control owner (or return/break site).
             use crate::syntax::body_index::{ExpressionKind as K, NodeRole};
-            let forwards_value = self
-                .body
-                .value_node(parent)
-                .is_some_and(|node| {
-                    node.parenthesized
-                        || matches!(
-                            node.role,
-                            NodeRole::Expression(
-                                K::Block | K::Const | K::If | K::Match | K::Loop | K::While | K::For
-                            )
+            let forwards_value = self.body.value_node(parent).is_some_and(|node| {
+                node.parenthesized
+                    || matches!(
+                        node.role,
+                        NodeRole::Expression(
+                            K::Block | K::Const | K::If | K::Match | K::Loop | K::While | K::For
                         )
-                        || self.body.nodes().get(self.pc.node as usize).is_some_and(|site| {
+                    )
+                    || self
+                        .body
+                        .nodes()
+                        .get(self.pc.node as usize)
+                        .is_some_and(|site| {
                             matches!(site.role, NodeRole::Expression(K::Return | K::Break))
                         })
-                });
+            });
             if left.is_none() && forwards_value {
                 self.forward_partial_hint(parent, child)?;
             }

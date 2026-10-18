@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "candidates": [
+    {
+      "candidate": "V65",
+      "source_sha256": "d95e746aee44188225170ec0a17eac158345616badeaa1683c70dc54efe5b8f8",
+      "head": "add23d99d961f12fda5ed19367846e510308919f",
+      "test_binary_sha256": "ed60ad4b71009f305b1151bed4af6aac1b17d09f3240468fb3373d0a8b2f9028",
+      "source_unchanged_through_build": true,
+      "lib_build_exit": 0,
+      "lib_build_seconds": 10.38,
+      "hygiene_test_exit": 101,
+      "hygiene_test_bodies": 1,
+      "trace_lines": [
+        "test cli::reached_pattern_nominal_tests::unchanged_upstream_hygiene_uses_the_full_coordinator ... OPEN_TRACE node=NodeId(17) key=ParamKey { definition: Digest(e7c2572e1f662f1589f8a306c76ddd07c23a811d1f06fc30e4009988ef4f604d), ordinal: 1 } literal=Some(false) pending=None unrecorded=true candidates={}"
+      ],
+      "hygiene_log_sha256": "3c757ec29eede85efc30bb1132b09835a92731a40f7b9f485fb56e592ee45cd9",
+      "conclusion": "Sibling integer family reached; unresolved iteration Item/Deref/Variant relation suppresses fallback, rather than a missing sibling edge."
+    },
+    {
+      "candidate": "V66",
+      "source_sha256": "094e141faa86495e4886a373ec7cf45664c62b8d4d2b4d3c98cf81a84e80da0b",
+      "head": "add23d99d961f12fda5ed19367846e510308919f",
+      "test_binary_sha256": "dc8297b722126e46617fe95eed9abb12c89ca4b5a555c78557dd39e9f13dc548",
+      "source_unchanged_through_build": true,
+      "lib_build_exit": 0,
+      "lib_build_seconds": 10.84,
+      "hygiene_test_exit": 101,
+      "hygiene_test_bodies": 1,
+      "trace_lines": [
+        "test cli::reached_pattern_nominal_tests::unchanged_upstream_hygiene_uses_the_full_coordinator ... HOLD_TRACE node=NodeId(15) demand=ExpressionRelation via=Via { steps: [Item, Deref, Variant { definition: Digest(e7c2572e1f662f1589f8a306c76ddd07c23a811d1f06fc30e4009988ef4f604d), variant: 1, field: 0 }], strict: false }",
+        "OPEN_TRACE node=NodeId(17) key=ParamKey { definition: Digest(e7c2572e1f662f1589f8a306c76ddd07c23a811d1f06fc30e4009988ef4f604d), ordinal: 1 } literal=Some(false) pending=None unrecorded=true candidates={}"
+      ],
+      "hygiene_log_sha256": "2ca0b1d186e8a84f7d791a93898e065f93bea6202c1d2cd762396513024ff54f",
+      "conclusion": "Sibling integer family reached; unresolved iteration Item/Deref/Variant relation suppresses fallback, rather than a missing sibling edge."
+    }
+  ],
+  "scope": "Temporary cfg(test) source-component tracing only. No CLI build, runtime pass or integration claim. Traces removed before V67."
+}

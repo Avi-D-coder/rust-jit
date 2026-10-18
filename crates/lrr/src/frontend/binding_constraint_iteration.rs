@@ -200,55 +200,36 @@ enum ItemProjection {
     Concrete(TyTerm),
     Unknown,
 }
-fn project_item(item: &TyTerm, steps: &[Step]) -> ItemProjection {
+fn project_item(
+    component: &mut Component<'_>,
+    db: &mut Database,
+    item: &TyTerm,
+    steps: &[Step],
+) -> QueryPoll<ItemProjection> {
     let mut term = item.clone();
     for (index, step) in steps.iter().enumerate() {
         if let TyTerm::Infer(key) = &term
             && key.transaction == hole_transaction()
         {
-            return ItemProjection::Hole(key.ordinal, steps[index..].to_vec());
+            return QueryPoll::Ready(Ok(ItemProjection::Hole(
+                key.ordinal,
+                steps[index..].to_vec(),
+            )));
         }
-        if *step == Step::AutoDeref {
-            while let TyTerm::Ref(_, _, inner) = term {
-                term = *inner;
-            }
-            continue;
-        }
-        term = match (step, term) {
-            (Step::Deref, TyTerm::Ref(_, _, inner)) => *inner,
-            // `*p` of a raw pointer is its pointee (E-R5-008).
-            (Step::Deref, term)
-                if crate::traits::pointer_terms::as_raw_pointer(&term).is_some() =>
-            {
-                match crate::traits::pointer_terms::as_raw_pointer(&term) {
-                    Some((_, pointee)) => pointee.clone(),
-                    None => return ItemProjection::Unknown,
-                }
-            }
-            (Step::Field(position), TyTerm::Tuple(mut members)) => {
-                if (*position as usize) < members.len() {
-                    members.swap_remove(*position as usize)
-                } else {
-                    return ItemProjection::Unknown;
-                }
-            }
-            (Step::Element, TyTerm::Array(inner, _) | TyTerm::Slice(inner)) => *inner,
-            (Step::TypeArgument(position), TyTerm::Nominal(_, args)) => {
-                match super::type_argument(&args, *position) {
-                    Some(inner) => inner,
-                    None => return ItemProjection::Unknown,
-                }
-            }
-            _ => return ItemProjection::Unknown,
+        // Keep iteration-hole bookkeeping here; all actual Type projection,
+        // including nominal variant fields, uses the ordinary source binder.
+        term = match ready!(component.project_term(db, &term, std::slice::from_ref(step))) {
+            Some(projected) => projected,
+            None => return QueryPoll::Ready(Ok(ItemProjection::Unknown)),
         };
     }
-    match term {
+    QueryPoll::Ready(Ok(match term {
         TyTerm::Infer(key) if key.transaction == hole_transaction() => {
             ItemProjection::Hole(key.ordinal, Vec::new())
         }
         term if !mentions_hole(&term) => ItemProjection::Concrete(term),
         _ => ItemProjection::Unknown,
-    }
+    }))
 }
 /// Whether `term` still mentions an inference hole.
 fn mentions_hole(term: &TyTerm) -> bool {
@@ -497,37 +478,40 @@ impl<'a> Component<'a> {
             }
             // A Type built around the head's parts: the rest of the
             // projection either reaches one of those parts or a closed Type.
-            ItemAnswer::Structured { item, paths } => match project_item(&item, &rest.steps) {
-                ItemProjection::Hole(hole, remaining) => match paths.get(hole as usize) {
-                    Some(path) => {
-                        let mut steps = path.clone();
-                        steps.extend(remaining);
-                        self.expression_via(
-                            Some(node),
+            ItemAnswer::Structured { item, paths } => {
+                match ready!(project_item(self, db, &item, &rest.steps)) {
+                    ItemProjection::Hole(hole, remaining) => match paths.get(hole as usize) {
+                        Some(path) => {
+                            let mut steps = path.clone();
+                            steps.extend(remaining);
+                            self.expression_via(
+                                Some(node),
+                                Via {
+                                    steps,
+                                    strict: false,
+                                },
+                            );
+                            true
+                        }
+                        None => false,
+                    },
+                    ItemProjection::Concrete(term) => {
+                        let current = std::mem::replace(
+                            &mut self.via,
                             Via {
-                                steps,
-                                strict: false,
+                                steps: Vec::new(),
+                                strict: rest.strict,
                             },
                         );
+                        let result =
+                            self.constrain_term(db, node, &term, ConstraintDemand::ResultType);
+                        self.via = current;
+                        ready!(result);
                         true
                     }
-                    None => false,
-                },
-                ItemProjection::Concrete(term) => {
-                    let current = std::mem::replace(
-                        &mut self.via,
-                        Via {
-                            steps: Vec::new(),
-                            strict: rest.strict,
-                        },
-                    );
-                    let result = self.constrain_term(db, node, &term, ConstraintDemand::ResultType);
-                    self.via = current;
-                    ready!(result);
-                    true
+                    ItemProjection::Unknown => false,
                 }
-                ItemProjection::Unknown => false,
-            },
+            }
             ItemAnswer::Unknown => false,
         }))
     }
