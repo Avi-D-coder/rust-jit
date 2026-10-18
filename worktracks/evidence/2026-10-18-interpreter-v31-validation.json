@@ -1,0 +1,65 @@
+{
+  "status": "COMPILE_FAILED exact source frozen; no CLI or runtime execution",
+  "head": "674d67baa6191f6a90a6aec3309001852813bc96",
+  "source_sha256": "540a7abbc90707c05ffcd2d9d9c30d1c951927fb02a67ce35cc8e43342713b3d",
+  "source_file_count": 3333,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "lib_build": {
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "test",
+      "--offline",
+      "--locked",
+      "-p",
+      "lrr",
+      "--lib",
+      "--no-run"
+    ],
+    "exit": 101,
+    "seconds": 6.717,
+    "log": "compile.log",
+    "session_id": 96747,
+    "initial_chunk": "1f9ab5",
+    "terminal_chunk": "2836d8"
+  },
+  "source_head_generator_unchanged": true,
+  "compiler_errors": [
+    {
+      "code": "E0599",
+      "file": "crates/lrr/src/syntax/entered_macros.rs",
+      "line": 640,
+      "message": "CfgSet::fingerprint requires StableEncode trait in scope"
+    }
+  ],
+  "warnings": 11,
+  "cli_build": "unexecuted",
+  "runtime_contract_results": "unexecuted",
+  "supplemental_control_results": "unexecuted",
+  "prior_results": "V30 source7a15c2b9 actual0/8stock10/12controls preserved separately, not overwritten by successful source reviews or unexecutedV31 queue",
+  "holds": [
+    "Nominal initial Drop completeness and E007 exactonce still held; structural template only.",
+    "All$crate/declarationplan/transfer source component conclusions remain source-only and require actual build/runtime.",
+    "No current passing-suite total, feature/interpreter/JIT/performance gate claim."
+  ],
+  "schema": "lrr/interpreter-focused-validation/v1",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "raw_artifacts": {
+    "directory": "artifacts/validation-resume-2026-10-18/candidate-v31",
+    "sha256_index": {
+      "after-lib.json": "e3f54a620785eee7c5478525db0a228fb1d466c33f7a8a981efd27573b19a775",
+      "before.json": "c7e4bdbced21c5506d51f09114d9a3a154febd6b4fed4ab7bf25dea19ac7b9c9",
+      "compile-terminal.json": "213fc2539564fd9ebf604708aeefd820cbe14bab607256d025b5dcec2b9425f9",
+      "compile.exit": "39b8dc3fc8b44765c8e6f1adee04c5b465e555ab791cc42d0d9e810d5b64297c",
+      "compile.log": "62379ad411243ad1949edc06092ddf4fe3a2077b02623b67afe1db908cdc827b",
+      "input-proof.json": "a5e76f352d0a31c61ebacc122b37b51caeb8daeccbe2c112945ae8e7d1b8e5cd",
+      "portable-report-skeleton.json": "1ca49dcead84c9710c52712523cd4c2f3c067390528a353b29589e421b5ae6f6",
+      "queue-plan.json": "d7cb114bfc7e341d54771831fb5f120eed39669d6a11e3d00f289ad2414ece30",
+      "report.json": "8176dc9ce13768a03e9c8b9945e931d61c837adc40efb7a6e910a7c7012b8fb7",
+      "roots.json": "088ab1afef2e8b3faaddc9be0e2bbc6a07b00360465870e055f57408006ecd75",
+      "selected-controls.json": "b88df5094cb62faeac395b5974b2a90c5f61bc105f7c596010549cd4045b07b5",
+      "source-review-files.json": "1b34b0149fc1fa27b0cd295caf59a8b09b7c9328f3e7f7fdca6a18226e97d8ea"
+    }
+  }
+}

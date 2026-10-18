@@ -1,0 +1,86 @@
+{
+  "status": "READY bounded canonical source attachment component; compile/runtime unexecuted successor",
+  "precode": "worktracks/evidence/2026-10-18-cold-local-impl-canonical-join-precode.md",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/associated_declarations.rs",
+      "sha256": "68c42f1c3ae26cdf6b9beb049974a537505e8064cbeb48d6e4245094ff75633d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
+      "sha256": "8b66a4995a950e5ac2431b8bb94f3bd6b98eccd49516b826a7e0d70d80c0a8d8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+      "sha256": "99833ac2a17fce4294899c73efb02074443c6c006c2e7e9b4028680826bc056d"
+    }
+  ],
+  "actual_consumer": [
+    "PreparedOriginalAssociatedDeclarations::from_scan constructs LocalImplOwners after existing exact captured scan/source proof and uses it for missing module Outline impl owners.",
+    "Private CanonicalLocation::Outline/Local both resolve same borrowed ItemOutline; public AssociatedOwnerHeader.canonical and OriginalAssociatedTarget::Declaration APIs unchanged.",
+    "Existing associated member/source name/header/context/body checks apply equally to local canonical rows. Module rows still require actual captured publication; local rows derive solely from actual shared lexical plan, never fake global inputs.",
+    "Owner/slot fingerprint domain bumped v1->v2 for new explicit canonical location discriminant and source-derived identities; existing callers compare opaque fingerprints."
+  ],
+  "proof": [
+    "Actual captured parse and cfg fingerprint match DeclarationScan. Same source original join already validates source path/OutlineKey/scope/cfg/origin and captures immutable source lifetime.",
+    "Only actual canonical Outline Fn declaration ranges contained in ScannedImpl.containers choose parent; existing publication validates captured DefinitionSource/Header/Body/DeclarationContext of that real parent.",
+    "Actual BodyHandle/root/hash/transform gate and containing ScopeKey are checked by shared declaration_scope_plan; no raw source function-owner digest converted to DefKey.",
+    "Local canonical impl must be an exact direct row of that plan: same range/header/profile/kind/Type namespace/crate/module; opaque attribute owner skipped as pending, not absence.",
+    "Child associated members indexed by actual canonical impl child owner +exact range, then same parent context/header/name/body verification. No canonical identity algorithm duplicated.",
+    "Nested local Fn/method that lacks direct actual parent plan has no exact owner row and remains pending; no outer plan authority leaked to it.",
+    "Lookups retain Arc plan and return same canonical row pointer; no source planner on repeated owner/slot lookup. No bindings applied or local global inputs published."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "No expression/assertion compiler/evaluator; source metadata attachment only."
+    },
+    {
+      "mode": 2,
+      "review": "No generated executor/opcode/literal route, same declaration collector."
+    },
+    {
+      "mode": 3,
+      "review": "No Drop/type/method/function spelling whitelist. Real source owner/range/header and same canonical BodyItemBudget identities; no numeric inference changes."
+    },
+    {
+      "mode": 4,
+      "review": "No new generated rejection. Existing NeedGeneratedParent selection remains; actual missing generated parent/record chain requires its genuine existing bridge. No origin/hygiene/currentness bypass or generated fixture compatibility claim."
+    },
+    {
+      "mode": 5,
+      "review": "Uses declaration_scope_plan only, never prepare_entered/BindingBudget/PatternTree/BodyIndex/SourceLocalPlan/BodyEnvironment. Unsupported cold executable binding/shape requests retained unexecuted. Header plan not a call/entry/member grant."
+    },
+    {
+      "mode": 6,
+      "review": "Within one prepared source join, canonical parent Fn plans cached once and exact range/member indexes built once; each raw impl finds actual parent via bounded actual container chain and indexed range. Repeated public owner/slot access borrows retained rows. Cross-prepared-source memo sharing and main consumer adoption remain held; no installed dispatch integration or performance claim."
+    },
+    {
+      "mode": 7,
+      "review": "No namespace/global world/Drop set scan or negative completeness inference. Actual captured source publication proof only; live DB freshness remains consumers existing guard responsibility. Unresolved/cold nested/transform rows remain explicit NeedCanonicalOwner."
+    },
+    {
+      "mode": 8,
+      "review": "Shared plan/AST/header allocations; no BodyIndex clone or wholefile node search per row/phase. Scope/header IDs from existing collector, direct sorted/BTree indexes. No new resource accounting/caps."
+    }
+  ],
+  "tests": [
+    {
+      "selector": "frontend::associated_declarations::tests::unchanged_local_drop_impl_joins_canonical_declaration_plan_without_body_entry",
+      "source": "fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs",
+      "sha256": "34adb67b8cf73f5558f1fe1a8e0ce62ed6b9dd132a2c0dec6aa99a3564ea2453",
+      "scope": "unchanged original all4editions metadata: actual local Drop owner/member canonical identity/header/body, no fabricated published DefinitionHeader/DefinitionBody, stable row pointer; no wholemain pass claim"
+    },
+    {
+      "selector": "frontend::associated_declarations::tests::actual_direct_members_keep_distinct_canonical_owners_and_cold_local_attachment",
+      "scope": "existing supplemental source old local gap oracle updated to new actual canonical local attachment; all other direct/producers/disabled/canonical invariants retained"
+    }
+  ],
+  "holds": [
+    "Existing PreparedOriginalAssociatedDeclarations/generated associated consumer itself is still a source component, not general runtime member publication. No feature closure from metadata attachment.",
+    "Cross-preparation declaration-plan memo retention/query and ordinary entered production adoption remain unimplemented; helper caches only within actual prepared source join.",
+    "Cold local trait owners and nested Fn/method parents/opaque attributes/generated actual parent completion not added by this slice; typed pending remains.",
+    "Header Type resolution, generic applicability, MemberIndex publication, configured-world macro/declaration closure and common tabled trait goal/negative Drop proof remain held.",
+    "No new Cargo/tests/guest execution by implementation owner; successor compile/runtime all unexecuted."
+  ]
+}

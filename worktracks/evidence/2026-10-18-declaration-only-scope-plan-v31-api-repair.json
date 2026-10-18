@@ -1,0 +1,9 @@
+{
+  "status": "READY import-only repair, source stationary for standing V32 freeze",
+  "path": "crates/lrr/src/syntax/entered_macros.rs",
+  "sha256": "d755cf0373a3af9c1fc4a1486b7005eccce53f4d15efb728f121fee632b17d13",
+  "change": "add existing StableEncode trait to entered_macros.rs import so CfgSet::fingerprint resolves",
+  "failed_terminal": "V31 lib2836d8 exit101; no CLI/runtime",
+  "semantics": "same deterministic cfg fingerprint, no body/currentness/authority/allocation/accounting changes",
+  "all8": "Previous corrected semantic review retained; import-only API repair does not change any reviewed path; successor compile/runtime unexecuted"
+}

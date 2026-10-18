@@ -153,6 +153,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         Ok(())
     };
     match query {
+        QueryKey::InitializerOwnerTemplate(_) => {}
         QueryKey::AssociatedItemQualifier(_) | QueryKey::AssociatedEquations(_) | QueryKey::NominalMember(_) => {
             bytes = add(bytes, query.heap_bytes())?;
         }

@@ -68,12 +68,33 @@ pub(crate) enum ItemValue {
 
 #[derive(Default)]
 pub(crate) struct ItemValueFacts {
+    // Bound source members/cells belong to this activation's generic context,
+    // while immutable source plans remain in the shared query memo.
+    prepared: std::collections::BTreeMap<PcKey, ItemValue>,
     value: Option<(PcKey, ItemValue)>,
     /// A static selected by a `ValuePath` whose value slot forms its place.
     static_place: Option<(SlotId, crate::runtime::cell::CellId, Option<TyTerm>)>,
 }
 
 impl Frame {
+    pub(crate) fn has_cached_item_value(&self) -> bool {
+        self.item_values.prepared.contains_key(&self.pc)
+    }
+    pub(crate) fn use_cached_item_value(&mut self) -> bool {
+        let Some(value) = self.item_values.prepared.get(&self.pc).cloned() else {
+            return false;
+        };
+        self.prepare_item_value(value);
+        true
+    }
+    /// Reusable item facts only. Single-use initializer tickets use
+    /// prepare_item_value directly and never enter this activation cache.
+    pub(crate) fn cache_item_value(&mut self, value: ItemValue) {
+        self.item_values
+            .prepared
+            .insert(self.pc.clone(), value.clone());
+        self.prepare_item_value(value);
+    }
     pub(crate) fn prepare_item_value(&mut self, value: ItemValue) {
         self.item_values.value = Some((self.pc.clone(), value));
     }

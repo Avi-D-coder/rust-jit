@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-044",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "8d4d4147d27734494477c08382f3ba3fa106e545d5fa47d29dc935a8a0400962"
+    }
+  ],
+  "task_invariants": [
+    "T032",
+    "T054",
+    "E-R5-005",
+    "E-R5-007"
+  ],
+  "witness": "unchanged tests/ui/consts/static-ref-to-const-array-element.rs::tuple_field; V33 stale lease before array",
+  "status": "source-reviewed-runtime-unexecuted",
+  "review": [
+    {
+      "mode": 1,
+      "symbols": [
+        "ParsedFile::initial_place_thunk",
+        "shared_borrowed_projection"
+      ],
+      "finding": "No parser/evaluator added; ordinary retained expression recipe selects existing storage opcode."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "FIELD_EXPR",
+        "INDEX_EXPR",
+        "Op::PromotedPlace"
+      ],
+      "finding": "Actual handwritten and generated syntax shares existing indexed place lowering; no literal-only generated executor."
+    },
+    {
+      "mode": 3,
+      "finding": "No member or numeric rule changed; no macro identity inspected."
+    },
+    {
+      "mode": 4,
+      "finding": "No origin exclusion; actual ordinary AST context and existing guards apply."
+    },
+    {
+      "mode": 5,
+      "finding": "No pattern selection or cold executable subtree evaluation. Index operand remains ordinary reached execution, base only changes storage."
+    },
+    {
+      "mode": 6,
+      "finding": "Independent review caught unconditional phase preparation traversal. Classification now runs only in the Operand(0) recipe which converts the temporary base, never Entry/Commit or installed opcode. Existing memo retains that recipe; other general retained-plan debt unchanged."
+    },
+    {
+      "mode": 7,
+      "finding": "No namespace lookup/census/invalidation added. Existing runtime promotion eligibility and site/type storage retained."
+    },
+    {
+      "mode": 8,
+      "finding": "No BodyIndex copy or whole-file syntax search added; existing direct node locations retained."
+    }
+  ],
+  "holds": [
+    "unchanged stock and route controls unexecuted on this source",
+    "nominal Drop absence completeness",
+    "full generic application identity",
+    "call/const-root and implicit autoref promotion beyond existing proof",
+    "full architecture/interpreter/JIT gates"
+  ],
+  "cost": "On recipe miss O(constant literal subtree + projection ancestry); installed dispatch unchanged except existing promotion operation. No measured performance claim."
+}

@@ -1,0 +1,87 @@
+{
+  "status": "source_only_component_ready_for_independent_review_uncompiled",
+  "tasks": [
+    "T032",
+    "T054",
+    "M018",
+    "M025"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-initializer-owner-template-source-phase.md",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/initializer_owner_templates.rs",
+      "sha256": "4e1c988d0c9286c2ef5e7b615384410b2c246b6d0bb9050ad7470b638800a647"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "9a3a3ca9fddb4dacc9158f3e1408bb69ff6076a9b0c5adc1439b2d2a6d6ddafb"
+    }
+  ],
+  "actual_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs",
+    "sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+    "actual_v32": "Old Self::X unsupported fault crossed; actual new error in assertion failure branch Option::None after2calls414dispatch769ops, underlying equality may be wrong. Root owns current runtime/ValueItem investigation. No Proxy/application pass assumed."
+  },
+  "interface": {
+    "key": "InitializerOwnerTemplateKey {caller_path: PcKey, definition: Digest}; serde/Eq/Ord/Clone/StableEncode, domain lrr/v1/initializer-owner-template-key",
+    "output": "Private PreparedInitializerOwnerTemplate retains actual caller plan and signature query Arc, ParseKey/DeclarationContext/cfg, actual owner AST handle, source Impl self TyTerm or trait Self ParamKey, typed pending demand. APIs key/retained_plan/signature/owner/demand and StableEncode. No mutation/entry/applicability constructor exposed.",
+    "producer": "Existing DB provider/root wiring pending tag53; helper prepare is intended sole owning pure query provider, never installed operation direct planning. Root owns DB key/value/provider/exhaustive joins; no duplicate framework or new memory accounting API."
+  },
+  "guards": [
+    "Caller EnteredValue actual key/cacheable ->retained SourceLocalPlan.require_current and genuine completed source environment; no target BodyEnvironment read.",
+    "Actual FunctionSignature signature.definition/header/scope/profile matches current DefinitionHeader/Source/DeclarationContext. ParseFile cacheable/key equals real source.",
+    "Exact actual Const/Static declaration via direct syntax_at context range; header tokens exclude only actual body expression. Immediate associated parent only; its real header excluding associated items must match captured context.",
+    "Impl template lowered by existing WrittenTypeDeclaration::function_syntax/resolve_actual_type using constant signature ParamKeys; no impl ordinal/spelling guess. Trait Self is actual last appended Type Self of real trait owner signature.",
+    "Missing cfg/owner envelope/Type fact is explicit demand. No Descriptor/TypeId or unrelated caller substitution enters result; provider/applicability/cache remains separate."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "initializer_owner_templates::prepare",
+      "review": "Source declaration/Type facts only. No assertion/expression evaluator or runtime initializer path."
+    },
+    {
+      "mode": 2,
+      "symbols": "ParseFile/syntax_at/actual parent AST",
+      "review": "Genuine original/generated retained source uses same actual Const/Impl/Trait AST and shared Type walk; no generated output payload route."
+    },
+    {
+      "mode": 3,
+      "symbols": "WrittenTypeDeclaration::function_syntax/resolve_actual_type",
+      "review": "Real selected constant generic binder and declaration context; no fixture/type/method/numeric cases. Selected provider/application not inferred from runtime type or result i32."
+    },
+    {
+      "mode": 4,
+      "symbols": "actual header/source/context/owner proof",
+      "review": "No generated-only branch or fabricated header/parser. Missing actual envelope/type remains pending. Full generated header hygiene compatibility through existing shared resolver remains acceptance hold until controls establish it; component confers no runtime authority."
+    },
+    {
+      "mode": 5,
+      "symbols": "Header exclusion / actual self_ty",
+      "review": "No target BodyIndex/Thunk/BodyEnvironment/cold executable preparation, no matcher. Const expression inspected only as exclusion range, never lowered/evaluated."
+    },
+    {
+      "mode": 6,
+      "symbols": "new pure query provider API / retained signature Arc",
+      "review": "One source declaration/self Type walk per actual query generation; result immutable. Runtime application not yet connected; must consume memo instead of calling prepare per phase. No fallback executor."
+    },
+    {
+      "mode": 7,
+      "symbols": "existing caller environment/name Type service",
+      "review": "Existing relevant declaration/name dependencies captured through DB query; no new namespace map/census. Shared Type resolver has inherited cold source-view/outline scans for impl-owned names, not an installed guard; no performance claim. Provider candidate positive/negative completeness remains explicitly unproven."
+    },
+    {
+      "mode": 8,
+      "symbols": "syntax_at / owner AST handle / signature query Arc",
+      "review": "Direct exact declaration range and shared immutable syntax/query handles; no BodyIndex clone or whole-file node search. Existing tokens traverses excluded owner descendants before filtering, cold O(owner subtree tokens), accurately held as cost."
+    }
+  ],
+  "pending": [
+    "Root DB owning-query joins53 and exact independent combined source review",
+    "Compile/source metadata controls and ordinary/generated/edition/epoch owner-template runtime coverage not executed",
+    "No applied owner packet, Type/Const/Region cache key, provider applicability/absence proof or initializer gate retirement in this source component",
+    "Legacy synthetic-header parser helpers are not called directly or extended; broader shared resolver cleanup remains separate",
+    "Full Const/Region GenericEnv and signed/wide ConstTerm representation remain named prerequisites; no truncation/erasure",
+    "No runtime stock pass/feature/milestone/JIT or performance closure claimed"
+  ]
+}

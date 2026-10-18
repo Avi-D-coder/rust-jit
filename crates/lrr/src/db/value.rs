@@ -119,6 +119,7 @@ pub enum QueryValue {
     SourceConstraints(Box<crate::syntax::source_constraints::SourceConstraintPlan>),
     QualifiedBodyType(Box<crate::frontend::qualified_type_names::QualifiedTypeObservation>),
     AssociatedItemQualifier(Box<crate::frontend::associated_constant_applications::PreparedAssociatedItemQualifier>),
+    InitializerOwnerTemplate(Box<crate::frontend::initializer_owner_templates::PreparedInitializerOwnerTemplate>),
     AssociatedEquations(Box<crate::frontend::associated_equations::PreparedAssociatedEquations>),
     NominalMember(Box<crate::frontend::nominal_member_goals::PreparedNominalMember>),
     BoundRecordConstructor(Box<crate::frontend::prepared_constructors::PreparedRecordConstructor>),
@@ -158,6 +159,7 @@ impl QueryValue {
             _ => None,
         };
         let local = match self {
+            Self::InitializerOwnerTemplate(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::AssociatedItemQualifier(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::NominalMember(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::PreparedBodySyntax(value) => Some(SourceArtifactRef::PreparedBodySyntax(value)),
@@ -216,6 +218,7 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::InitializerOwnerTemplate(value), QueryKey::InitializerOwnerTemplate(key)) = (self, key) { return value.key() == key; }
         if let (Self::AssociatedItemQualifier(value), QueryKey::AssociatedItemQualifier(key)) = (self, key) { return value.key() == key; }
         if let (Self::AssociatedEquations(value), QueryKey::AssociatedEquations(key)) = (self, key)
         {
@@ -407,6 +410,7 @@ impl QueryValue {
                 e.u32(36);
                 e.digest(value.fingerprint());
             }
+            Self::InitializerOwnerTemplate(value) => { e.u32(53); e.record(value.as_ref()); }
             Self::AssociatedItemQualifier(value) => { e.u32(51); e.record(value.as_ref()); }
             Self::AssociatedEquations(value) => {
                 e.u32(50);
@@ -589,6 +593,8 @@ impl QueryValue {
             Self::TypeAlias(v) => v.estimated_bytes(),
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
+            // E006: no new retained-admission memory accounting.
+            Self::InitializerOwnerTemplate(_) => 0,
             Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),

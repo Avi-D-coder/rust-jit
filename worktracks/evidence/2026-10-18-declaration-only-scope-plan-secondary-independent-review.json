@@ -1,0 +1,79 @@
+{
+  "status": "independent_source_review_clear_bounded_uncompiled_component",
+  "reviewer": "closure_callable_resume",
+  "sources": [
+    {
+      "path": "crates/lrr/src/syntax/entered_macros.rs",
+      "sha256": "3c2575609bc466ee2c23e42df5709fdf24e62e0dd1518d4bdccd86c2517c61b1"
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scope_plan.rs",
+      "sha256": "af961dcdc1994d9f354d82c3b7e43d76f3f27b122812e8ef60b2987f7430a2a2"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "sha256": "09fc9c460632d85bfa9fe3bcc0da285ec37b5a0e69b0327adc5897ebcc7ff428"
+    }
+  ],
+  "owner_receipt": "worktracks/evidence/2026-10-18-declaration-only-scope-plan-source-review.json",
+  "inspected": [
+    "ParsedFile::entered_macro_facts",
+    "declaration_scope_plan",
+    "entered_container_facts",
+    "lexical_declarations",
+    "pattern_producers",
+    "BodyItemBudget::collect",
+    "collect_container_members",
+    "DeferredBindings::{receiver,pattern,for_expression,match_arm,apply}",
+    "DeclarationScopePlan::{new,into_entered}",
+    "BindingBudget::{receiver,collect}"
+  ],
+  "conclusions": [
+    "One original lexical traversal remains. All prior BindingBudget sites become ordered AST requests in their original receiver/parameter/condition/let/match/closure/for order. BindingBudget ordinal map depends only on same scope/form/name sequence; item/header/producers do not consume those binding ordinals.",
+    "For iterable/body boundary check deferred before the later loop-body pattern request, matching old order. Match shape request precedes its binding request; missing pattern/body still refuses into_entered. Cold capture can keep unsupported/missing reached shapes without certifying entry or building a PatternTree/BodyIndex.",
+    "Cfg predicates and continue boundaries remain at same source sites. Pattern macro producer discovery remains actual AST source discovery and canonical producer identity calculation; no pattern executor runs during cold capture. Raw name ranges/parser token contexts retained on actual AST handles.",
+    "BodyItemBudget/associated-member collection, opaque item boundaries, producer scope counters, visible-from positions and entry root/container source checks remain same producers. Nested opaque item bodies are not entered by the cold plan.",
+    "DeclarationScopePlan retains parse/body/scope/cfg/header-context fingerprint and actual deferred syntax handles. It is not currentness, applicable impl, Drop absence or executable authority. Fresh ordinary entry consumes ownership and runs same binding collector without cloning facts or walking headers again.",
+    "Error priority between malformed binding syntax and later declaration error may differ because binding errors now deferred; valid execution semantics retain same binding identities/order. Exact diagnostic compatibility not claimed."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "result": "No assertion/expression compiler or evaluator. Only immutable source declaration facts and existing source binding metadata."
+    },
+    {
+      "mode": 2,
+      "result": "Original/generated parser root and body/container gates unchanged; no payload execution or alternate opcode/index namespace."
+    },
+    {
+      "mode": 3,
+      "result": "Same canonical scope/producer/item/member/binding identity producers; no fixture, Drop-name, numeric or method whitelist."
+    },
+    {
+      "mode": 4,
+      "result": "Actual ParseKey/BodyHandle/current source origin retained; no generated-only exclusion or fabricated entry context."
+    },
+    {
+      "mode": 5,
+      "result": "Cold captures no BindingBudget/PatternTree/BodyIndex/SourceLocalPlan/BodyEnvironment. Deferred For/Match required-shape checks remain at entered adoption; no eager cold-arm execution or second matcher."
+    },
+    {
+      "mode": 6,
+      "result": "Single lexical walk creates plan; ordered request adoption does not replay source/header traversal. Full cross-consumer memo/retained-plan sharing not installed and explicitly held; no hot performance claim."
+    },
+    {
+      "mode": 7,
+      "result": "No namespace/global-world queries or negative trait proof minted. Configured syntax facts alone do not authorize runtime Drop/noDrop decisions."
+    },
+    {
+      "mode": 8,
+      "result": "AST requests share genuine immutable syntax, no BodyIndex clone/full-file per-node search. O(actual owner AST/header tokens +pattern producer scans) cold capture, ordinary pattern binding traversal at entry, checked metadata arithmetic without new caps."
+    }
+  ],
+  "validation": "Source review only; no Cargo/test commands by reviewer. New metadata control and existing runtime/macro/scope/currentness suites await sole-validator actual terminals.",
+  "holds": [
+    "Full cold-plan memo sharing across discovery and later entry not integrated",
+    "Actual header-Type/member publication/complete configured producer graph and tabled trait negative completeness remain separate prerequisites",
+    "No full stock Drop pass, interpreter/feature/JIT gate or performance acceptance from this source component"
+  ]
+}

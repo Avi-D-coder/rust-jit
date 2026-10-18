@@ -1,0 +1,15 @@
+{
+  "status": "source-only LRR control correction; production unchanged from V32",
+  "baseline": "V32dc1a8b17 testf5ba0397, actual failed first-leaf test and nested case unexecuted",
+  "files": {
+    "crates/lrr/src/runtime/cell_aggregate_copy.rs": "7c7b2c2896251f15b3bc21ea3b7f28afa6975f82320b512d77a2fd4caf17d9ec"
+  },
+  "cause": "Original leaf injection marks its parent Cleaning before next; next calls copy_member_type -> copy_destination and correctly refuses before copying. Thus the expected retained replica does not exist. Production preflight stays unchanged.",
+  "correction": "Narrow LRR control to real nested child commit followed by parent refusal, where the parent is not the child next/commit guard. Restore same parent then retry exact retained live ticket once. No unchanged upstream fixture or expected3 oracle modified.",
+  "test": "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_committed_child_ticket_for_retry",
+  "holds": [
+    "Pre-copy refusal remains valid; no post-copy leaf refusal injected or claimed",
+    "Nested result remains unexecuted until actual successor terminal",
+    "Post-consume errors, cancellation and final-write cleanup not established"
+  ]
+}

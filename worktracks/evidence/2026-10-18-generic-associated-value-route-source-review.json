@@ -1,0 +1,99 @@
+{
+  "status": "bounded_source_repair_ready_uncompiled_runtime_unexecuted",
+  "tasks": [
+    "T032",
+    "T054",
+    "M018",
+    "M025"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-generic-associated-value-route.md",
+  "sources": [
+    {
+      "path": "crates/lrr/src/syntax/value_paths.rs",
+      "sha256": "f2cc66c13acc23ea631f1828b7e50cda6770f6fca517e69c0bfc93970a6c1f92"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "d3822ffe2078a8f2bf9beda51648d4837ff55061547cfb96804cb72e0f101396"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "6658c7558605643153e4217b62dd95dfe573128830ec9687ca0c9814b08c1d40"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "fff72fbaf02e6ca07bea61baeb3fc865133aeace06f6f31d971c58903e494710"
+    }
+  ],
+  "witness": {
+    "original": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs",
+    "sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+    "owning_edition": 2015,
+    "actual_saved_failure": "artifacts/validation-resume-2026-10-18/candidate-v33/stock-1.stdout",
+    "first_fault": "A::X original345..349 in sub<A:Foo,B:Foo>, generic source owner syntax refusal,3sourcecalls464dispatches911ops. Earlier root Frame activation cache failure crossed; no candidate runtime result inferred."
+  },
+  "changed_call_sites": [
+    "ParsedFile::written_path admits expression/callee generic roots as ordinary spelling/ValuePath, retaining pattern refusal until its source-pattern integration. Spelling is transport, not generic identity.",
+    "RunMachine::prepare_value_path calls prepare_parameter_associated_value before static/nominal cached selection/lexical/module constructors, after existing frame item cache. Actual source-selected Parameter alone can take this precedence.",
+    "RunMachine::prepare_item_value_path reuses same Parameter priority before raw module Value lookup for direct consumers, after existing frame item cache.",
+    "RunMachine::associated_value_qualifier fetches existing owning query51 Outcome, validates actual PC and cacheability; no new planner/key/sourcewalk.",
+    "RunMachine::associated_value_path and early Parameter path pass same retained Outcome into associated_value_path_prepared, existing shared member-bound selector/current PreparedInputGuard.",
+    "Existing Frame::bound_parameter_source visibility-only pub(crate); Parameter associated-value finalizer now requires closed actual symbolic source and actual matching parameter_hint runtime key. No descriptor-to-source fallback for this consumer.",
+    "All selection uses same prepare_selected_item_value, ordinary initializer entry/static storage/item value result/cleanup route; root runtime cache and initializer packet maps unchanged."
+  ],
+  "correctness_boundaries": [
+    "Real Type ParamKey and token/source hygiene from LocalTypePrefix/query51, not syntax raw spelling. This prevents module/constructor with same spelling from preceding genuine parameter while genuine definition-site macro module names remain ordinary module selection.",
+    "NeedInput returns before member/value execution or operand consumption; guard currentness checked before ordinary selected-item preparation. No additional effects/evaluator/continuation introduced.",
+    "Actual nominal GenericArgs nonempty are still explicitly held at existing full owner packet requirement; selected initializer signature generics also still held at common root enter_initializer boundary. No Const/Region erasure or wholecaller env copying.",
+    "Pattern generic-root integration unchanged/held. Other Frame::bound_view descriptor fallback consumers unchanged and not claimed repaired.",
+    "MemberIndex relevant provider applicability publication/currentness and full owner packet/once-per-application identity remain separate held integration; existing query51 input guard does not close these broader obligations."
+  ],
+  "cost": "Existing memo query51 now consulted for qualified value precedence before ordinary constructor/module selection. Its retained Outcome is reused for the selected associated path (no duplicate plan); negative non-Parameter paths may observe the same memo again in later ordinary fallback, with relevant dependency validation, not another source walk. Actual hot operation parameter check is closed symbolic + paired runtime binding lookup/member selection as existing path. No installed parser/reconstructed fullplan, newworldscan/census/bodyclone. Existing cold header/name queries can enumerate excluded owner subtree tokens before filtering; no measured performance claim.",
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "written_path/Op::ValuePath/prepare_selected_item_value",
+      "review": "No assertion/expression evaluator; ordinary existing source operation and VM initializer path."
+    },
+    {
+      "mode": 2,
+      "symbols": "query51 actual PathExpr/BodyTypeOccurrences/SourceLocalPlan",
+      "review": "All actual retained original/generated operations share ordinary indexed source qualifier service, no scalar/break output engine."
+    },
+    {
+      "mode": 3,
+      "symbols": "LocalTypePrefix::Parameter/parameter_member_traits/associated_value_for_source",
+      "review": "Actual ParamKey/hygiene/declared trait bounds and existing MemberIndex; no macro, fixture, member-name whitelist or numeric inference change."
+    },
+    {
+      "mode": 4,
+      "symbols": "AssociatedItemQualifier/retained source guard",
+      "review": "No generated-source rejection or bypass. Real hygiene decides Parameter versus actual module route; unsupported missing publication remains existing typed pending."
+    },
+    {
+      "mode": 5,
+      "symbols": "value_paths expression admission/pattern refusal unchanged",
+      "review": "No second pattern matcher/eager arm executable preparation; missing generic pattern support remains explicit held gap."
+    },
+    {
+      "mode": 6,
+      "symbols": "associated_value_qualifier/associated_value_path_prepared",
+      "review": "Existing pure owning memo; selected Outcome reused by common finalizer. No execution-time parse or sourceplan reconstruction; repeated negative memo observations disclosed."
+    },
+    {
+      "mode": 7,
+      "symbols": "PreparedInputGuard/query51/actual member bounds",
+      "review": "Existing relevant source dependency guard, no global namespace map/scan or new unrelated invalidation. Broader applicable member publication proof still held."
+    },
+    {
+      "mode": 8,
+      "symbols": "Outcome::value Arc/retained qualifier plan/Frame symbolic_binding",
+      "review": "Shared immutable query/AST/body data, closed symbolic result clone only. No deep BodyIndex copy or whole-file node search."
+    }
+  ],
+  "validation": {
+    "implementation_worker": "No Cargo/test/index commands. Existing official original unchanged; no replacement language suite added.",
+    "source_review": "Separate exact source pass inspected producer/consumer priority before lexical and nominal/module selection, source-hygienic parameter identity, paired source/runtime binding, full args hold, currentness and same initializer route. Independent reviewer requested.",
+    "runtime": "Uncompiled and unexecuted candidate. Require exact sole-validator combined builds, primary unchanged root and existing anchored/same-trait/Self controls. Macro/edition/suspension matrices not newly executed; no gate/feature closure."
+  }
+}

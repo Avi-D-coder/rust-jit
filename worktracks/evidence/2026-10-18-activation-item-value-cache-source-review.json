@@ -1,0 +1,38 @@
+{
+  "status": "source-only activation cache repair; independent/build/runtime pending",
+  "claim": "LOCAL-044",
+  "tasks": [
+    "T032",
+    "T054"
+  ],
+  "precode": "worktracks/evidence/2026-10-18-activation-item-value-cache-precode.md",
+  "files": {
+    "crates/lrr/src/engine/run.rs": "85b754b60fa7ff8e8b3550a7b461d0464cbe7a7256ebd79d12e2d3d274dfe806",
+    "crates/lrr/src/engine/run_value_items.rs": "2d09f40544933940964c024829113356386ac2bc852eff8e110dc114fff4be5b",
+    "crates/lrr/src/engine/run_nominal.rs": "674bf45369936cea9967b28dc810e0cb20c192541fe216db2ca83c02982ce395",
+    "crates/lrr/src/vm/frame_item_values.rs": "c1d8b6681a9cd4672109ad1d877b645cd6aa58e8a3cd1c3ff791f1ad0fa43425"
+  },
+  "witness": "Unchanged associated-const-type-parameters original: one Foo::get_x source PC entered for Abc thenDef. V32 actualassertfailurebranch has no operand capture; exact assertion cause remains inferred until successor execution. Source global cache skips sourceSelf lookup across activations independently proven.",
+  "actual_route": "Shared retained qualifier/source queries -> same resolver -> prepare_selected_item_value -> Frame::cache_item_value; Frame.use_cached_item_value only reuses this actual activation values. RunMachine global ItemValue map and both insertions removed, run_nominal fastpath uses same frame cache.",
+  "single_use": "Initialized Ticket earlyreturn still calls prepare_item_value directly and never caches; reusable ConstCell/ConstTemplate/Static-place/Function only existingcallers. Frame operation staging value/static_place consumption unchanged.",
+  "all8": {
+    "1": "No evaluator/assertion language route",
+    "2": "Same original/generated ValuePath operations",
+    "3": "No macro/method/inference vocabulary; actual owning activation genericcontext",
+    "4": "No original-only guard",
+    "5": "Same pattern/coldbody services unchanged",
+    "6": "Pure source preparation stays sharedmemo; only firstuseperactivation bindsruntimefacts, loops reuse sameframecache",
+    "7": "No world scan, wholecaller key or TypeId surrogate; actual operation/currentness guards unchanged",
+    "8": "Mutable bound value handles ownedFrame, shared immutable body/source/index remainArc"
+  },
+  "cost": "One runtime facts map per actual Frame activation instead of run-global PC map; firstuse does existing query-backed selection, within-frame repeated use same BTree lookup. No resource accounting or performance claim.",
+  "remaining_global_caches": [
+    "static_reads still caches actual static cell by PC, nongeneric local/free static cases currently; full source application ownership/invalidation hold",
+    "pattern_names/constant_plans cache classification not repaired by this leaf; parameter-dependent pattern/plan acceptance remains separate review"
+  ],
+  "holds": [
+    "Full generic initializer owner packet/cache keys remain unsupported at common entry",
+    "Source/epoch mutation matrix and genericfunction source witness not executed on this successor",
+    "No fullfeature/architecture/interpreter/JIT gate closure"
+  ]
+}

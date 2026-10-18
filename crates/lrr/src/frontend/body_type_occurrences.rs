@@ -65,6 +65,7 @@ pub(crate) enum BodyTypeSegment {
     SelfModule(BodyTypeIdentifier),
     Super(BodyTypeIdentifier),
     SelfType(BodyTypeIdentifier),
+    DollarCrate(BodyTypeIdentifier, Option<Digest>),
     NeedQualifiedType,
 }
 /// A query must consume a cached genuine local/import prefix before asking the
@@ -216,7 +217,8 @@ fn retained_original_origin(
                 | BodyTypeSegment::Crate(identifier)
                 | BodyTypeSegment::SelfModule(identifier)
                 | BodyTypeSegment::Super(identifier)
-                | BodyTypeSegment::SelfType(identifier) => identifier,
+                | BodyTypeSegment::SelfType(identifier)
+                | BodyTypeSegment::DollarCrate(identifier, _) => identifier,
                 BodyTypeSegment::NeedQualifiedType => return Ok(None),
             };
             let Some(context) = source.parsed().identifier_context(identifier.range())? else {
@@ -514,13 +516,19 @@ impl PreparedBodyTypeOccurrences {
                     Some(ast::PathSegmentKind::Name(reference)) => {
                         let actual = range(reference.syntax().text_range());
                         let edition = source.parsed().token_edition(actual)?;
-                        MacroName::parse(reference.text(), edition)?;
-                        BodyTypeSegment::Name(BodyTypeIdentifier {
+                        let identifier = BodyTypeIdentifier {
                             name: reference.text().to_string(),
                             range: actual,
                             raw_context: source.identifier_context(actual)?,
                             edition,
-                        })
+                        };
+                        if reference.text() == "$crate" {
+                            let defining = source.parsed().dollar_crate_root(actual)?.map(|(unit, _)| unit);
+                            BodyTypeSegment::DollarCrate(identifier, defining)
+                        } else {
+                            MacroName::parse(reference.text(), edition)?;
+                            BodyTypeSegment::Name(identifier)
+                        }
                     }
                     Some(ast::PathSegmentKind::SelfTypeKw) => {
                         let actual = range(segment.syntax().text_range());
@@ -600,7 +608,8 @@ impl PreparedBodyTypeOccurrences {
                     | BodyTypeSegment::Crate(name)
                     | BodyTypeSegment::SelfModule(name)
                     | BodyTypeSegment::Super(name)
-                    | BodyTypeSegment::SelfType(name) => {
+                    | BodyTypeSegment::SelfType(name)
+                    | BodyTypeSegment::DollarCrate(name, _) => {
                         extra_bytes = add(extra_bytes, name.name.capacity())?
                     }
                     BodyTypeSegment::NeedQualifiedType => {}
@@ -646,7 +655,7 @@ impl PreparedBodyTypeOccurrences {
 }
 
 impl StableEncode for PreparedBodyTypeOccurrences {
-    const DOMAIN: &'static str = "lrr/v3/prepared-body-type-occurrences";
+    const DOMAIN: &'static str = "lrr/v4/prepared-body-type-occurrences";
     fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
         let identifier = |e: &mut crate::core::digest::StableEncoder, name: &BodyTypeIdentifier| {
             e.string(name.name());
@@ -700,6 +709,9 @@ impl StableEncode for PreparedBodyTypeOccurrences {
                     identifier(e, name);
                 }
                 BodyTypeSegment::SelfType(name) => { e.u8(5); identifier(e, name); }
+                BodyTypeSegment::DollarCrate(name, unit) => {
+                    e.u8(6); identifier(e, name); e.option(unit, |e, unit| e.digest(*unit));
+                }
                 BodyTypeSegment::NeedQualifiedType => e.u8(4),
             });
         });

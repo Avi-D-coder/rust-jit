@@ -1151,7 +1151,7 @@
       "owner": "/root/generic_projection_resume",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Actual declaration import-alias producer prerequisite via retained full leaf-identity import plan and existing hygienic textual target callback; source/generated scope/context classes retained, alias/self/cycle comparisons use full SourceImport fingerprint. Source-only review correction after grouped-leaf collision; cross-output alias export/argument producer held.",
+      "scope": "Actual declaration import-alias producer prerequisite via retained full leaf-identity import plan and existing hygienic textual target callback; source/generated scope/context classes retained, alias/self/cycle comparisons use full SourceImport fingerprint. Source-only review correction after grouped-leaf collision; cross-output alias export/argument producer held. V32 bounded successor reservation: single canonical declaration-only scope plan/deferred bindings, no new memory accounting; cold-header/member integration held.",
       "paths": [
         "crates/lrr/src/frontend/source_types.rs",
         "crates/lrr/src/syntax/signatures.rs",
@@ -1173,11 +1173,14 @@
         "crates/lrr/src/frontend/declaration_imports.rs",
         "crates/lrr/src/frontend/impl_index.rs",
         "crates/lrr/src/syntax/declaration_scan.rs",
-        "crates/lrr/src/syntax/imports.rs"
+        "crates/lrr/src/syntax/imports.rs",
+        "crates/lrr/src/syntax/entered_macros.rs",
+        "crates/lrr/src/syntax/declaration_scope_plan.rs",
+        "crates/lrr/src/syntax/mod.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T12:43:38.345895+00:00",
+      "updated_at": "2026-10-18T14:57:11.772216+00:00",
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
         "crates/lrr/src/frontend/associated_types.rs"
@@ -1190,7 +1193,7 @@
       "owner": "/root/closure_callable_resume",
       "kind": "local_agent",
       "status": "active",
-      "scope": "T032/T033/M025 ordinary source Deref callable adjustment, existing VM operator continuation and bound result descriptors; evidence worktracks/04-calls-source-views/2026-10-18-callable-autoderef.md. Async validation pending; Arc constructor dependency remains unsupported. M030 source Deref continuation plus retained ordinary type-equality/runtime numeric fact join; actual sourceDeref numeric witness pending V6. No assertion-specific inference. See observed-numeric-constraints.md.",
+      "scope": "T032/T033/M025 ordinary source Deref callable adjustment, existing VM operator continuation and bound result descriptors; evidence worktracks/04-calls-source-views/2026-10-18-callable-autoderef.md. Async validation pending; Arc constructor dependency remains unsupported. M030 source Deref continuation plus retained ordinary type-equality/runtime numeric fact join; actual sourceDeref numeric witness pending V6. No assertion-specific inference. See observed-numeric-constraints.md. V32 bounded successor reservation: actual hygienic DollarCrate Type occurrence and existing observed qualified lookup root; no MacroName relaxation. Source reviewed, runtime pending.",
       "paths": [
         "crates/lrr/src/ir/recipe.rs",
         "crates/lrr/src/ir/validate.rs",
@@ -1203,11 +1206,14 @@
         "crates/lrr/src/cli/format_trait_facade_tests.rs",
         "crates/lrr/src/frontend/binding_constraint_observed.rs",
         "crates/lrr/src/frontend/prepared_binding_plan.rs",
-        "crates/lrr/src/vm/frame_related_numeric.rs"
+        "crates/lrr/src/vm/frame_related_numeric.rs",
+        "crates/lrr/src/frontend/body_type_occurrences.rs",
+        "crates/lrr/src/frontend/qualified_type_names.rs",
+        "crates/lrr/src/frontend/source_locals.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T08:48:59.774551+00:00",
+      "updated_at": "2026-10-18T14:57:11.772276+00:00",
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
         "crates/lrr/src/ir/op.rs",
@@ -1328,7 +1334,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "E007 ordinary VM initializer and shared Search constant patterns. V22 scalar/origin matrices pass; non-scalar constant patterns fail explicitly. Root extends checked nonconsuming structural storage comparison using actual retained cell/ticket; root LOCAL043 owns cell.rs module declaration. Aggregate template/runonce and generic initializer keys held independently. V26 exact source context crosses singleton array to EMPTY initializer; successor retains actual prepared WrittenType in common result hints, source-only. See retained-result-written-context.md. No acceptance/oncecache closure. Next source-only E007 physical prerequisite: replace shared AggregateCopy private ownerless destination implementation with existing checked ConstructionId guards, retaining Copy admission and source stamps; full template purpose/cleanup integration separate holds. Next source-only actual nongeneric plain-data VM template through same AggregateCopy private seal; no global Copy override. Full generic/Drop/heap/cancellation holds; precode plain-data-evaluated-template.md. Shared live Drop facts from MemberIndex publication replace stale store snapshot; relevant-key NoDrop proof guards private template. Independent/source/runtime acceptance pending. Initial non-local impl completeness discovered; false NoDropProof removed, owned nominal template caching held. Actual structural-only template class remains source-only pending review.",
+      "scope": "E007 ordinary VM initializer and shared Search constant patterns. V22 scalar/origin matrices pass; non-scalar constant patterns fail explicitly. Root extends checked nonconsuming structural storage comparison using actual retained cell/ticket; root LOCAL043 owns cell.rs module declaration. Aggregate template/runonce and generic initializer keys held independently. V26 exact source context crosses singleton array to EMPTY initializer; successor retains actual prepared WrittenType in common result hints, source-only. See retained-result-written-context.md. No acceptance/oncecache closure. Next source-only E007 physical prerequisite: replace shared AggregateCopy private ownerless destination implementation with existing checked ConstructionId guards, retaining Copy admission and source stamps; full template purpose/cleanup integration separate holds. Next source-only actual nongeneric plain-data VM template through same AggregateCopy private seal; no global Copy override. Full generic/Drop/heap/cancellation holds; precode plain-data-evaluated-template.md. Shared live Drop facts from MemberIndex publication replace stale store snapshot; relevant-key NoDrop proof guards private template. Independent/source/runtime acceptance pending. Initial non-local impl completeness discovered; false NoDropProof removed, owned nominal template caching held. Actual structural-only template class remains source-only pending review. V34 bounded shared-borrow projection literal-temporary root promotion via existing PromotedPlace; unchanged static-ref-to-const-array-element witness, no new evaluator. See shared-borrow-projection-promotion-precode.md.",
       "paths": [
         "crates/lrr/src/engine/run_initializers.rs",
         "crates/lrr/src/engine/run_pattern_tests.rs",
@@ -1353,7 +1359,8 @@
         "crates/lrr/src/runtime/drop_facts.rs",
         "crates/lrr/src/runtime/cell_promoted.rs",
         "crates/lrr/src/runtime/mod.rs",
-        "crates/lrr/src/engine/run_drop_inventory.rs"
+        "crates/lrr/src/engine/run_drop_inventory.rs",
+        "crates/lrr/src/syntax/thunks.rs"
       ],
       "issue": null,
       "pull_request": null,
@@ -1414,7 +1421,6 @@
         "crates/lrr/src/vm/pattern.rs",
         "crates/lrr/src/cli/reached_pattern_nominal_tests.rs",
         "crates/lrr/src/syntax/constructors.rs",
-        "crates/lrr/src/syntax/thunks.rs",
         "crates/lrr/src/frontend/constructors.rs",
         "crates/lrr/src/engine/install.rs",
         "crates/lrr/src/vm/frame_record_update.rs",
@@ -1434,7 +1440,8 @@
       "transferred_paths": [
         "crates/lrr/src/vm/step.rs",
         "crates/lrr/src/vm/frame.rs",
-        "crates/lrr/src/vm/frame_aggregate_copy.rs"
+        "crates/lrr/src/vm/frame_aggregate_copy.rs",
+        "crates/lrr/src/syntax/thunks.rs"
       ]
     },
     {

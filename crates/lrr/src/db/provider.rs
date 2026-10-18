@@ -896,6 +896,13 @@ impl Provider for SyntaxProvider {
             QueryKey::SourceLocalPlan(body) => {
                 return super::body_environment_provider::source_local_plan(db, body);
             }
+            QueryKey::InitializerOwnerTemplate(key) => {
+                return match crate::frontend::initializer_owner_templates::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::InitializerOwnerTemplate(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::AssociatedItemQualifier(key) => {
                 return match crate::frontend::associated_constant_applications::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::AssociatedItemQualifier(Box::new(value))),

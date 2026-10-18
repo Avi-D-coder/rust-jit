@@ -478,7 +478,7 @@ impl RunMachine {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         let pc = self.frame.pc().clone();
-        if self.item_values.contains_key(&pc) {
+        if self.frame.has_cached_item_value() {
             return self.prepare_item_value_path(db, path);
         }
         // A static read by value: its selection is cached per PC; only the

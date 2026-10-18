@@ -1,14 +1,14 @@
 {
-  "status": "READY bounded source component; not compiled/runtime validated",
+  "status": "READY after V31 sole missing StableEncode trait import; standing V32 source freeze, no successor validation",
   "scope": "single canonical lexical declaration traversal with ordered deferred binding requests; no impl/header type resolution or completeness authority installed",
   "sources": [
     {
       "path": "crates/lrr/src/syntax/entered_macros.rs",
-      "sha256": "3c2575609bc466ee2c23e42df5709fdf24e62e0dd1518d4bdccd86c2517c61b1"
+      "sha256": "d755cf0373a3af9c1fc4a1486b7005eccce53f4d15efb728f121fee632b17d13"
     },
     {
       "path": "crates/lrr/src/syntax/declaration_scope_plan.rs",
-      "sha256": "af961dcdc1994d9f354d82c3b7e43d76f3f27b122812e8ef60b2987f7430a2a2"
+      "sha256": "15baa9b97e90651b0b1e55b9b0ff6056a63bfa753e00da705e667b83460f95fa"
     },
     {
       "path": "crates/lrr/src/syntax/mod.rs",
@@ -50,7 +50,7 @@
     {
       "mode": 6,
       "symbols": "DeclarationScopePlan ownership / into_entered",
-      "review": "One existing lexical walk captures headers/scopes and binding handles, then one ordered request pass without source walk. Fresh entry moves owned metadata, no header/body clone. Full cross-consumer memo/cache/retained-plan later-entry adoption not installed and remains explicit prerequisite; no per-operation planner added. metadata_bytes adds one cold header-metadata traversal; no performance claim."
+      "review": "One existing lexical walk captures headers/scopes and binding handles, then one ordered request pass without source walk. Fresh entry moves owned metadata, no header/body clone. Full cross-consumer memo/cache/retained-plan later-entry adoption not installed and remains explicit prerequisite; no per-operation planner added. No new retained-admission/byte accounting or capacity census; no performance claim."
     },
     {
       "mode": 7,
@@ -60,7 +60,7 @@
     {
       "mode": 8,
       "symbols": "BindingRequest actual AST handles, retained body check, same scope traversal",
-      "review": "No BodyIndex clone or repeated whole-file lookup per operation. AST handles retain shared immutable syntax; requests capacity/accounting uses checked arithmetic. Plan has no address-space/resource ceiling."
+      "review": "No BodyIndex clone or repeated whole-file lookup per operation. AST handles retain shared immutable syntax; actual Vec allocation failure remains checked, with no new byte/memory/retained-capacity accounting or cap."
     }
   ],
   "control": {
@@ -81,5 +81,7 @@
     "Canonical owner adapter to checked ScannedImpl / actual header-Type prefix / member publication absent; cold nested child owner plans not recursively demanded.",
     "Complete configured graph producer closure and common tabled trait goal/negative completeness service absent; no Drop/noDrop authority.",
     "New control and existing runtime/macro/origin/scope regression tests unexecuted successor. No fixture/feature/interpreter/JIT/performance acceptance claim."
-  ]
+  ],
+  "correction": "Removed newly added unused bytes field, metadata_bytes method/census and its test-only >0 assertion per E-R5-006. Actual declaration/binding semantics and identity fingerprint unchanged; existing facts.metadata_bytes elsewhere untouched.",
+  "compile_repair": "V31 exact source libcompile failed E0599 entered_macros.rs640 cfg.fingerprint(): StableEncode not imported. Narrow correction adds existing StableEncode to top core::digest import only. Actual cfg identity/fingerprint semantics unchanged. V31 failed source+receipt remain historical."
 }

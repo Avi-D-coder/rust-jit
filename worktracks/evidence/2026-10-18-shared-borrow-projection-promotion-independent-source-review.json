@@ -1,0 +1,40 @@
+{
+  "status": "CLEAR bounded structural shared-borrow projection storage component; runtime unexecuted successor",
+  "reviewer": "/root/generic_projection_resume",
+  "sources": [
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "8d4d4147d27734494477c08382f3ba3fa106e545d5fa47d29dc935a8a0400962"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "fff72fbaf02e6ca07bea61baeb3fc865133aeace06f6f31d971c58903e494710"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_promoted.rs",
+      "sha256": "ef8e361a55a2fa96daa0a13c6a8d180dca575806ce21343b0d86a7efd433c125"
+    }
+  ],
+  "findings": [
+    "Actual thunks.rs SHA8d4d4147d27734494477c08382f3ba3fa106e545d5fa47d29dc935a8a0400962 matches root candidate.",
+    "shared_borrowed_projection follows only actual Paren inner/Field base/Index base edges to the same shared nonraw RefExpr. A literal used as an index operand cannot be mistaken for the borrowed storage root. Dereference, modified borrow and other ancestry return false with ordinary ValuePlace fallback, not a static rejection.",
+    "Both changed callsites run promotable_constant+ancestry only within Operand(0) temporary-base storage conversion; Entry/Commit/installed VM execution do not reclassify source.",
+    "ProjectTuple/ProjectField/ProjectIndex and same actual indexed base_place remain unchanged; index operand execution, hinting and bounds/panic stay reached ordinary operations after base setup.",
+    "Existing Frame::promoted_place consumes actual evaluated value and uses existing promoted storage/site/type mechanism; no new evaluator or fake root cell introduced."
+  ],
+  "all8": {
+    "1": "No assertion/expression evaluator; ordinary initial_place_thunk only.",
+    "2": "Same original/generated parser/index recipe and existing PromotedPlace opcode.",
+    "3": "No macro/method/numeric name conditions; actual AST base relationship only.",
+    "4": "No source-origin exclusion/currentness bypass.",
+    "5": "No pattern machinery or cold executable arm checking; reached index remains ordinary execution.",
+    "6": "O(constant literal subtree+projection ancestry) on relevant Operand0 memo miss only; no installed source planning or speed claim.",
+    "7": "No namespace/global scan or invalidation changes; existing runtime storage eligibility retained, known completeness hold below.",
+    "8": "Same retained index/direct indexed source nodes, no BodyIndex clone or fullfile search perphase."
+  },
+  "holds": [
+    "promotable_constant includes nominal RecordExpr; current value_promotable cannot prove absence of an unentered non-local Drop impl. General nominal promotion correctness remains the known source-completeness debt, not established by this structural witness.",
+    "Full generic application identity, implicit method autoref, path/call roots and broader promotion compatibility remain held.",
+    "No new tests/Cargo/guest execution by reviewer; unchanged complete upstream witness and four-origin/edition source-route acceptance pending."
+  ]
+}

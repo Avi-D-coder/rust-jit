@@ -1,0 +1,9 @@
+{
+  "status": "evidence_count_correction_only_no_source_change",
+  "supersedes_count_in": "worktracks/evidence/2026-10-18-dollar-crate-type-qualifier-source-review.json",
+  "early_count": 7,
+  "final_stock_rows": 8,
+  "source_results": "artifacts/validation-resume-2026-10-18/candidate-v30/stock-results.json",
+  "source_results_sha256": "84f0224157a7ffbcaffba0de82b8048441a9494186dc38c0be7f1ab880818b88",
+  "explanation": "Initial source precode/receipt cited first7 completed roots. Final V30 record contains8 roots, all reported common before-entry dollar-crate fault by validator. No root pass; promotion control has same fault. Source review conclusions/hashes unchanged."
+}

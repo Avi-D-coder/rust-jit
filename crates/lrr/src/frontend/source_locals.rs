@@ -1574,7 +1574,7 @@ impl SourceLocalIndex<'_> {
         absolute: bool,
         names: &super::names::NameNamespaces,
     ) -> Result<super::names::NameLookup, Diagnostic> {
-        self.lookup_qualified_module_kernel(site, path, absolute, names)
+        self.lookup_qualified_module_kernel(site, path, absolute, names, None)
     }
     pub(crate) fn lookup_qualified_module_observed(
         &self,
@@ -1589,8 +1589,20 @@ impl SourceLocalIndex<'_> {
         ),
         Diagnostic,
     > {
+        self.lookup_qualified_module_rooted_observed(site, path, absolute, names, None)
+    }
+    /// Same ordinary module resolver, with the actual emitting crate root of
+    /// a source keyword. The raw context must prove that unit independently.
+    pub(crate) fn lookup_qualified_module_rooted_observed(
+        &self,
+        site: OrdinaryNameSite<'_>,
+        path: &[crate::syntax::imports::ImportSegment],
+        absolute: bool,
+        names: &super::names::NameNamespaces,
+        defining_root: Option<Digest>,
+    ) -> Result<(super::names::NameLookup, super::names::reads::NamespaceReads), Diagnostic> {
         let observed = super::names::reads::ObservedNames::new(names);
-        let result = self.lookup_qualified_module_kernel(site, path, absolute, &observed)?;
+        let result = self.lookup_qualified_module_kernel(site, path, absolute, &observed, defining_root)?;
         Ok((result, observed.finish()))
     }
     fn lookup_qualified_module_kernel(
@@ -1599,6 +1611,7 @@ impl SourceLocalIndex<'_> {
         path: &[crate::syntax::imports::ImportSegment],
         absolute: bool,
         names: &impl super::names::reads::QualifiedNames,
+        defining_root: Option<Digest>,
     ) -> Result<super::names::NameLookup, Diagnostic> {
         use super::names::NameLookup;
         use crate::syntax::imports::{ImportKind, ImportSegment, SourceImport};
@@ -1606,6 +1619,13 @@ impl SourceLocalIndex<'_> {
             return Err(error("qualified macros require retained invocation lookup"));
         }
         let scope = self.require_lookup_position(site.source, site.body, site.at)?;
+        if let Some(unit) = defining_root {
+            if absolute || !matches!(path.first(), Some(ImportSegment::Crate))
+                || Digest(self.entered.local_hygiene().1.dollar_crate(site.context)?.0) != unit
+            {
+                return Err(error("qualified defining-crate root differs from actual keyword context"));
+            }
+        }
         // Keywords route structurally; they are not identifier/local bindings.
         // Actual pinned context and the same entered position remain required.
         if matches!(path.first(), Some(ImportSegment::Name(_))) {
@@ -1693,7 +1713,9 @@ impl SourceLocalIndex<'_> {
         let mut source = SourceImport {
             identity: site.body.fingerprint(),
             leaf_ordinal: 0,
-            scope: self.entered.module_scope.clone(),
+            scope: defining_root.map_or_else(|| self.entered.module_scope.clone(), |crate_key| crate::syntax::outline::ScopeKey {
+                crate_key, module_path: Vec::new(), owner: None,
+            }),
             range: crate::syntax::spans::SourceRange {
                 start: byte,
                 end: byte,

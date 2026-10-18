@@ -1,6 +1,7 @@
 //! Lexical facts for one explicitly entered body, using the pinned AST only.
 use super::{
     ast_adapter::{range, tokens},
+    declaration_scope_plan::{DeclarationScopePlan, DeferredBindings},
     outline::{AttributeClass, AttributeRecipe, BodyHandle, ProducerKind, attributes},
     parse::ParsedFile,
     spans::SourceRange,
@@ -8,7 +9,7 @@ use super::{
 use crate::{
     core::{
         diagnostic::Diagnostic,
-        digest::{Digest, StableEncoder},
+        digest::{Digest, StableEncode, StableEncoder},
     },
     source::snapshot::CfgSet,
 };
@@ -16,7 +17,7 @@ use ra_ap_syntax::{
     AstNode, SyntaxNode, TextRange, TextSize,
     ast::{self, HasAttrs, HasLoopBody, HasName},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct BodyMacroScope {
     pub ordinal: u32,
@@ -56,9 +57,9 @@ pub struct BodyImport {
     pub source: super::imports::SourceImport,
     pub attribute_input: Option<Digest>,
 }
-#[derive(Debug, Clone)]
-pub struct EnteredMacroFacts {
-    pub bindings: Vec<super::local_bindings::LocalBindingRecipe>,
+/// Immutable canonical declaration payload shared by cold readers and entry.
+#[derive(Debug)]
+pub struct DeclarationFacts {
     pub items: Vec<super::body_items::BodyItem>,
     /// The associated items of the block-level `impl`/`trait` rows of `items`.
     /// They are declarations (published, signed, called) but never lexical
@@ -70,6 +71,27 @@ pub struct EnteredMacroFacts {
     pub events: Vec<BodyMacroEvent>,
     pub opaque: Vec<SourceRange>,
 }
+#[derive(Debug, Clone)]
+pub struct EnteredMacroFacts {
+    pub bindings: Vec<super::local_bindings::LocalBindingRecipe>,
+    declarations: Arc<DeclarationFacts>,
+}
+impl std::ops::Deref for EnteredMacroFacts {
+    type Target = DeclarationFacts;
+    fn deref(&self) -> &Self::Target {
+        &self.declarations
+    }
+}
+impl DeclarationFacts {
+    pub(crate) fn declarations(
+        &self,
+    ) -> std::iter::Chain<
+        std::slice::Iter<'_, super::body_items::BodyItem>,
+        std::slice::Iter<'_, super::body_items::BodyItem>,
+    > {
+        self.items.iter().chain(self.members.iter())
+    }
+}
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
@@ -80,11 +102,23 @@ impl ParsedFile {
         cfg: &CfgSet,
         containing: &super::outline::ScopeKey,
     ) -> Result<EnteredMacroFacts, Diagnostic> {
+        self.declaration_scope_plan(body, cfg, containing)?
+            .prepare_entered()
+    }
+    /// Canonical declaration/scope facts without binding-pattern preparation.
+    /// The genuine owner/transform gate and exact retained body check remain;
+    /// this syntax result grants neither entry nor impl completeness.
+    pub(crate) fn declaration_scope_plan(
+        &self,
+        body: &BodyHandle,
+        cfg: &CfgSet,
+        containing: &super::outline::ScopeKey,
+    ) -> Result<DeclarationScopePlan, Diagnostic> {
         body.require_entry()?;
         let root = self
             .entered_body_root(body)
             .map_err(|failure| error(&failure.message))?;
-        self.lexical_facts(&root, body, cfg, containing, &[])
+        self.lexical_declarations(&root, body, cfg, containing, &[])
     }
     pub(crate) fn entered_container_facts(
         &self,
@@ -126,18 +160,18 @@ impl ParsedFile {
             entry_blocked: false,
             block_offset: 0,
         };
-        self.lexical_facts(&root, &owner, cfg, containing, context)
+        self.lexical_declarations(&root, &owner, cfg, containing, context)?
+            .prepare_entered()
     }
-    fn lexical_facts(
+    fn lexical_declarations(
         &self,
         root: &SyntaxNode,
         body: &BodyHandle,
         cfg: &CfgSet,
         containing: &super::outline::ScopeKey,
         header_context: &[super::ast_adapter::TokenRecipe],
-    ) -> Result<EnteredMacroFacts, Diagnostic> {
-        let mut facts = EnteredMacroFacts {
-            bindings: vec![],
+    ) -> Result<DeclarationScopePlan, Diagnostic> {
+        let mut facts = DeclarationFacts {
             items: vec![],
             members: vec![],
             imports: vec![],
@@ -150,29 +184,28 @@ impl ParsedFile {
             events: vec![],
             opaque: vec![],
         };
-        let mut binding_budget = super::local_bindings::BindingBudget::default();
+        let mut deferred = DeferredBindings::default();
         if let Some(function) = root.parent().and_then(ast::Fn::cast)
             && let Some(parameters) = function.param_list()
         {
             if let Some(receiver) = parameters.self_param()
                 && super::local_bindings::cfg_enabled(receiver.attrs(), cfg)?
             {
-                binding_budget.receiver(&receiver, body, &mut facts.bindings)?;
+                deferred.receiver(receiver)?;
             }
             for parameter in parameters.params() {
                 if !super::local_bindings::cfg_enabled(parameter.attrs(), cfg)? {
                     continue;
                 }
                 if let Some(pattern) = parameter.pat() {
-                    binding_budget.collect(
-                        &pattern,
-                        body,
+                    deferred.pattern(
+                        Some(pattern),
                         0,
                         // Parameters are visible from the body block on
                         // (a pattern function's handle also spans them).
                         u64::from(body.block_range().start),
                         super::local_bindings::BindingForm::Parameter,
-                        &mut facts.bindings,
+                        None,
                     )?;
                 }
             }
@@ -238,26 +271,25 @@ impl ParsedFile {
                         let ast::Expr::LetExpr(clause) = clause else {
                             continue;
                         };
-                        let pattern = clause
-                            .pat()
-                            .ok_or_else(|| error("condition pattern boundary missing"))?;
+                        let pattern = clause.pat();
                         let visible_from = u64::from(u32::from(clause.syntax().text_range().end()));
-                        binding_budget.collect(
-                            &pattern,
-                            body,
+                        deferred.pattern(
+                            pattern.clone(),
                             ordinal,
                             visible_from,
                             super::local_bindings::BindingForm::Condition,
-                            &mut facts.bindings,
+                            Some("condition pattern boundary missing"),
                         )?;
-                        pattern_producers(
-                            &mut facts,
-                            &mut producers,
-                            body,
-                            ordinal,
-                            &pattern,
-                            visible_from,
-                        )?;
+                        if let Some(pattern) = pattern {
+                            pattern_producers(
+                                &mut facts,
+                                &mut producers,
+                                body,
+                                ordinal,
+                                &pattern,
+                                visible_from,
+                            )?;
+                        }
                     }
                     conditional_scope = Some((range, ordinal, nested_depth));
                 }
@@ -267,13 +299,12 @@ impl ParsedFile {
                     continue;
                 }
                 if let Some(pattern) = statement.pat() {
-                    binding_budget.collect(
-                        &pattern,
-                        body,
+                    deferred.pattern(
+                        Some(pattern),
                         scope,
                         u64::from(u32::from(statement.syntax().text_range().end())),
                         super::local_bindings::BindingForm::Let,
-                        &mut facts.bindings,
+                        None,
                     )?;
                 }
             }
@@ -281,20 +312,14 @@ impl ParsedFile {
                 if !super::local_bindings::cfg_enabled(loop_expression.attrs(), cfg)? {
                     continue;
                 }
-                if loop_expression.iterable().is_none() || loop_expression.loop_body().is_none() {
-                    return Err(error("for iterator/body boundary missing"));
-                }
+                deferred.for_expression(loop_expression)?;
             }
             if let Some(arm) = ast::MatchArm::cast(node.clone()) {
                 if !super::local_bindings::cfg_enabled(arm.attrs(), cfg)? {
                     continue;
                 }
-                let pattern = arm
-                    .pat()
-                    .ok_or_else(|| error("match pattern/body boundary missing"))?;
-                if arm.expr().is_none() || arm.fat_arrow_token().is_none() {
-                    return Err(error("match pattern/body boundary missing"));
-                }
+                deferred.match_arm(arm.clone())?;
+                let pattern = arm.pat();
                 depth = depth
                     .checked_add(1)                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
                 let ordinal = u32::try_from(facts.scopes.len())
@@ -309,23 +334,24 @@ impl ParsedFile {
                     range: range(node.text_range()),
                 });
                 scope = ordinal;
-                let visible_from = u64::from(range(pattern.syntax().text_range()).end);
-                binding_budget.collect(
-                    &pattern,
-                    body,
-                    scope,
-                    visible_from,
-                    super::local_bindings::BindingForm::Match,
-                    &mut facts.bindings,
-                )?;
-                pattern_producers(
-                    &mut facts,
-                    &mut producers,
-                    body,
-                    scope,
-                    &pattern,
-                    visible_from,
-                )?;
+                if let Some(pattern) = pattern {
+                    let visible_from = u64::from(range(pattern.syntax().text_range()).end);
+                    deferred.pattern(
+                        Some(pattern.clone()),
+                        scope,
+                        visible_from,
+                        super::local_bindings::BindingForm::Match,
+                        None,
+                    )?;
+                    pattern_producers(
+                        &mut facts,
+                        &mut producers,
+                        body,
+                        scope,
+                        &pattern,
+                        visible_from,
+                    )?;
+                }
             }
             // A closure's parameters are bindings visible in its body, which
             // its own call frame executes as ordinary body syntax.
@@ -348,13 +374,12 @@ impl ParsedFile {
                     let visible_from = u64::from(range(parameters.syntax().text_range()).end);
                     for parameter in parameters.params() {
                         if let Some(pattern) = parameter.pat() {
-                            binding_budget.collect(
-                                &pattern,
-                                body,
+                            deferred.pattern(
+                                Some(pattern),
                                 scope,
                                 visible_from,
                                 super::local_bindings::BindingForm::Let,
-                                &mut facts.bindings,
+                                None,
                             )?;
                         }
                     }
@@ -589,27 +614,25 @@ impl ParsedFile {
                         .loop_body()
                         .is_some_and(|block| block.syntax() == &node)
                 {
-                    let pattern = loop_expression
-                        .pat()
-                        .ok_or_else(|| error("for pattern boundary missing"))?;
-                    binding_budget.collect(
-                        &pattern,
-                        body,
+                    let pattern = loop_expression.pat();
+                    deferred.pattern(
+                        pattern.clone(),
                         scope,
                         u64::from(range(node.text_range()).start),
                         super::local_bindings::BindingForm::For,
-                        &mut facts.bindings,
+                        Some("for pattern boundary missing"),
                     )?;
-                    // Pattern macros can introduce names in the loop body, while their
-                    // original invocation is resolved in the enclosing source scope.
-                    pattern_producers(
-                        &mut facts,
-                        &mut producers,
-                        body,
-                        scope,
-                        &pattern,
-                        u64::from(range(node.text_range()).start),
-                    )?;
+                    // This is producer discovery, not pattern binding preparation.
+                    if let Some(pattern) = pattern {
+                        pattern_producers(
+                            &mut facts,
+                            &mut producers,
+                            body,
+                            scope,
+                            &pattern,
+                            u64::from(range(node.text_range()).start),
+                        )?;
+                    }
                 }
             }
             let mut children = children(&node, scope, depth)?;
@@ -631,11 +654,19 @@ impl ParsedFile {
             children.reverse();
             stack.extend(children);
         }
-        Ok(facts)
+        DeclarationScopePlan::new(
+            self.key(),
+            body.clone(),
+            cfg.fingerprint(),
+            containing.clone(),
+            header_context,
+            facts,
+            deferred,
+        )
     }
 }
 fn pattern_producers(
-    facts: &mut EnteredMacroFacts,
+    facts: &mut DeclarationFacts,
     producers: &mut BTreeMap<u32, u32>,
     body: &BodyHandle,
     scope: u32,
@@ -687,7 +718,7 @@ fn pattern_producers(
 }
 
 fn add_producer(
-    facts: &mut EnteredMacroFacts,
+    facts: &mut DeclarationFacts,
     ordinals: &mut BTreeMap<u32, u32>,
     body: &BodyHandle,
     scope: u32,
@@ -746,7 +777,7 @@ fn children(
     Ok(children)
 }
 
-fn opaque(facts: &mut EnteredMacroFacts, range: SourceRange) -> Result<(), Diagnostic> {
+fn opaque(facts: &mut DeclarationFacts, range: SourceRange) -> Result<(), Diagnostic> {
     facts
         .opaque
         .try_reserve(1)
@@ -756,7 +787,7 @@ fn opaque(facts: &mut EnteredMacroFacts, range: SourceRange) -> Result<(), Diagn
 }
 
 fn add_invocation(
-    facts: &mut EnteredMacroFacts,
+    facts: &mut DeclarationFacts,
     scope: u32,
     node: &SyntaxNode,
     attribute_input: Option<Digest>,
@@ -884,6 +915,18 @@ fn collect_container_members(
 }
 
 impl EnteredMacroFacts {
+    pub(crate) fn from_declarations(
+        bindings: Vec<super::local_bindings::LocalBindingRecipe>,
+        declarations: Arc<DeclarationFacts>,
+    ) -> Self {
+        Self {
+            bindings,
+            declarations,
+        }
+    }
+    pub(crate) fn declaration_facts(&self) -> &Arc<DeclarationFacts> {
+        &self.declarations
+    }
     /// Every declaration of the body: its block-level items, then the
     /// associated items of its block-level impls and traits. Name binding
     /// uses `items` alone.

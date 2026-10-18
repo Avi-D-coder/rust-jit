@@ -4,12 +4,12 @@ use crate::{
     core::diagnostic::Diagnostic,
     expand::scopes::ScopeKey,
     syntax::{
-        entered_macros::{BodyImport, EnteredMacroFacts},
+        entered_macros::{BodyImport, DeclarationFacts, EnteredMacroFacts},
         imports::{ImportKind, ImportSegment},
         outline::Visibility,
     },
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 pub(crate) struct Namespace {
     pub facts: EnteredMacroFacts,
     pub contexts: BTreeMap<u32, (usize, ScopeKey)>,
@@ -103,8 +103,7 @@ impl Namespace {
             .as_ref()
             .map(|n| &n.facts)
             .unwrap_or(&parent.facts);
-        let mut facts = EnteredMacroFacts {
-            bindings: vec![],
+        let mut facts = DeclarationFacts {
             items: vec![],
             members: vec![],
             imports: vec![],
@@ -260,6 +259,9 @@ impl Namespace {
                 facts.imports.push(row);
             }
         }
-        Ok(Self { facts, contexts })
+        Ok(Self {
+            facts: EnteredMacroFacts::from_declarations(Vec::new(), Arc::new(facts)),
+            contexts,
+        })
     }
 }

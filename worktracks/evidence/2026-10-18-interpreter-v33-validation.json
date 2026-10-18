@@ -1,0 +1,2994 @@
+{
+  "candidate": "V33",
+  "status": "Focused exact candidate compiled;5/8 unchanged upstream runtime contracts and15/16 supplemental controls pass; no integration or gate closure",
+  "head": "674d67baa6191f6a90a6aec3309001852813bc96",
+  "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7",
+  "source_file_count": 3334,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "Rust1.99.0",
+  "source_generator_head_frozen_both_builds": true,
+  "builds": {
+    "lib": {
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "--no-run"
+      ],
+      "exit": 0,
+      "seconds": 33.07,
+      "log": "compile.log",
+      "session_id": 65796,
+      "initial_chunk": "8f441d",
+      "terminal_chunk": "f4a81f",
+      "warnings": 88
+    },
+    "cli": {
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--bin",
+        "lrr"
+      ],
+      "exit": 0,
+      "seconds": 25.992,
+      "log": "cli-compile.log",
+      "session_id": 64220,
+      "initial_chunk": "105e13",
+      "terminal_chunk": "2c355c",
+      "warnings": 181
+    }
+  },
+  "binaries": {
+    "cli_binary": {
+      "path": "target/debug/lrr",
+      "sha256": "9e11431da46863167d71912c0384281f14482960214b72db3ff81dec6c955358",
+      "after_runtime_sha256": "9e11431da46863167d71912c0384281f14482960214b72db3ff81dec6c955358",
+      "unchanged": true
+    },
+    "test_binary": {
+      "path": "target/debug/deps/lrr-5ae916bc286087fa",
+      "sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+      "after_runtime_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+      "unchanged": true
+    }
+  },
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "stock_queue": {
+    "session_id": 93964,
+    "initial_chunk": "3e98b9",
+    "terminal": "1a32d4/0",
+    "wrapper_exit0_is_not_fixture_success": true,
+    "passed": 5,
+    "executed_roots": 8,
+    "new_scoped_upstream_witnesses": 0,
+    "results": [
+      {
+        "path": "tests/ui/traits/default-method/macro.rs",
+        "sha256": "f3e380db2a2ce505338b2769bb888b538a63a9c993037ee8944a44b0ad285181",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/macro.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "90fffd6457e8cf44f276ae7f7e1b89188cd5b9e892509aaa2541588a7bb6082f"
+        ],
+        "exit": 0,
+        "seconds": 5.477,
+        "stdout": "stock-0.stdout",
+        "stderr": "stock-0.stderr",
+        "runtime_contract_pass": true,
+        "terminal": {
+          "status": "completed",
+          "code": null,
+          "message": null,
+          "phase": null
+        },
+        "capture_complete": true,
+        "facts": {
+          "classified_operation_candidates": 959,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 51,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 673,
+          "vm_outcomes": 673
+        },
+        "operations_completed": 935
+      },
+      {
+        "path": "tests/ui/associated-consts/associated-const-type-parameters.rs",
+        "sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "df5d70c640333788948ae08df608d8bea718a8b4694bbd3d27983df90d94191d"
+        ],
+        "exit": 2,
+        "seconds": 5.3,
+        "stdout": "stock-1.stdout",
+        "stderr": "stock-1.stderr",
+        "runtime_contract_pass": false,
+        "terminal": {
+          "status": "fault",
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "generic source owner requires associated-item integration",
+          "phase": "executor"
+        },
+        "capture_complete": false,
+        "facts": {
+          "classified_operation_candidates": 911,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 3,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 464,
+          "vm_outcomes": 463
+        },
+        "operations_completed": null,
+        "diagnostic": {
+          "code": "LRR-E-UNSUPPORTED",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "faa8a7e68404102adcdeb262fe89a0610ad7c98ade6f4e766d1b82b3a847c560",
+                    "exact_body_bytes": "9d9d84f428cd70f7f5a755af853c9fbd2f4f566bc07ccbc9e8f6522fe8dafa86"
+                  },
+                  "relative_end": 10,
+                  "relative_start": 6
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 349,
+                      "start": 345
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  }
+                ],
+                "pc": "4c203beae5dbca65f7485527b364ad36e91f533e5d942e978a5468e9e8b11ec1"
+              },
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "1c0de762ec9ff9238afd5cf3f81b26c389cab956123fb9606d0e732a665efdac",
+                    "exact_body_bytes": "88784125c9e9bef4290cfba4119f4e0959654e16ffe7dfbdfb346a64675fedfd"
+                  },
+                  "relative_end": 900,
+                  "relative_start": 884
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 602,
+                      "start": 599
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 603,
+                      "start": 602
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 605,
+                      "start": 604
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 608,
+                      "start": 605
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 609,
+                      "start": 608
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 613,
+                      "start": 610
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 614,
+                      "start": 613
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 615,
+                      "start": 614
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 616,
+                      "start": 615
+                    },
+                    "source": {
+                      "content": [
+                        58,
+                        63,
+                        14,
+                        84,
+                        49,
+                        198,
+                        246,
+                        113,
+                        11,
+                        157,
+                        25,
+                        74,
+                        141,
+                        98,
+                        196,
+                        208,
+                        79,
+                        167,
+                        163,
+                        18,
+                        204,
+                        252,
+                        200,
+                        187,
+                        118,
+                        247,
+                        175,
+                        211,
+                        170,
+                        35,
+                        152,
+                        37
+                      ],
+                      "path": "associated-const-type-parameters.rs",
+                      "unit": [
+                        68,
+                        215,
+                        158,
+                        131,
+                        160,
+                        15,
+                        37,
+                        93,
+                        101,
+                        141,
+                        18,
+                        2,
+                        25,
+                        136,
+                        38,
+                        195,
+                        90,
+                        33,
+                        34,
+                        44,
+                        105,
+                        25,
+                        253,
+                        53,
+                        163,
+                        184,
+                        200,
+                        138,
+                        178,
+                        70,
+                        17,
+                        204
+                      ]
+                    }
+                  }
+                ],
+                "pc": "4b8a00d8a75dc71d2821a068ca19328d09c3bd70298e786ac78b350996c0fa28"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "generic source owner requires associated-item integration",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        }
+      },
+      {
+        "path": "tests/ui/structs-enums/functional-struct-upd.rs",
+        "sha256": "99523cf3db37c83096666946c5cc33bc9e155c6a25d71bc9f4fed35c9a276d50",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/functional-struct-upd.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "96f3f0d56bf4cb3854c8115aa18e377273df1fdc4c1f40f5993adea4abf289fd"
+        ],
+        "exit": 0,
+        "seconds": 5.108,
+        "stdout": "stock-2.stdout",
+        "stderr": "stock-2.stderr",
+        "runtime_contract_pass": true,
+        "terminal": {
+          "status": "completed",
+          "code": null,
+          "message": null,
+          "phase": null
+        },
+        "capture_complete": true,
+        "facts": {
+          "classified_operation_candidates": 999,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 40,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 692,
+          "vm_outcomes": 692
+        },
+        "operations_completed": 840
+      },
+      {
+        "path": "tests/ui/consts/const_in_pattern/custom-eq-branch-pass.rs",
+        "sha256": "83a1e69b197e30fe7802b040e5c39a9fac07f46f8cf91f9fc7d3aad79fa1908e",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const_in_pattern/custom-eq-branch-pass.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "2db2730ec2241f0d83e04d935ac2260b3f9f0f3a35feac994fc421ac30eb1966"
+        ],
+        "exit": 0,
+        "seconds": 4.792,
+        "stdout": "stock-3.stdout",
+        "stderr": "stock-3.stderr",
+        "runtime_contract_pass": true,
+        "terminal": {
+          "status": "completed",
+          "code": null,
+          "message": null,
+          "phase": null
+        },
+        "capture_complete": true,
+        "facts": {
+          "classified_operation_candidates": 78,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 59,
+          "vm_outcomes": 59
+        },
+        "operations_completed": 76
+      },
+      {
+        "path": "tests/ui/consts/const-struct.rs",
+        "sha256": "ea2ef00a878f74349c68eb5db9f3026befe26b02bac48fbc3eadaf24dc58978b",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const-struct.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "fe7220381bf855ff755737416665d468b753f2055170f0e7f55f44b4a1defe6d"
+        ],
+        "exit": 0,
+        "seconds": 5.351,
+        "stdout": "stock-4.stdout",
+        "stderr": "stock-4.stderr",
+        "runtime_contract_pass": true,
+        "terminal": {
+          "status": "completed",
+          "code": null,
+          "message": null,
+          "phase": null
+        },
+        "capture_complete": true,
+        "facts": {
+          "classified_operation_candidates": 932,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 2,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 586,
+          "vm_outcomes": 586
+        },
+        "operations_completed": 473
+      },
+      {
+        "path": "tests/ui/associated-consts/associated-const-resolution-order.rs",
+        "sha256": "bc121a788a5420b67af7464cbe30c82dbcf18a23066eeca4a3c27819e855249a",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-resolution-order.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "019a8af2e00b601ff7aa6ce987b94e0326d8306ddf9b295ed6baff6af662d532"
+        ],
+        "exit": 0,
+        "seconds": 4.151,
+        "stdout": "stock-5.stdout",
+        "stderr": "stock-5.stderr",
+        "runtime_contract_pass": true,
+        "terminal": {
+          "status": "completed",
+          "code": null,
+          "message": null,
+          "phase": null
+        },
+        "capture_complete": true,
+        "facts": {
+          "classified_operation_candidates": 58,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 0,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 46,
+          "vm_outcomes": 46
+        },
+        "operations_completed": 58
+      },
+      {
+        "path": "tests/ui/associated-consts/associated-const-use-impl-of-same-trait.rs",
+        "sha256": "7c4a55f0c3e5d0b1e507c3daf2edbbce8c708786ab547059372ca9183e933161",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-use-impl-of-same-trait.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "e9022c06f50ba20b09873cb7edc0d16557d0d7e63e18bbfa5f355228b34a2dbc"
+        ],
+        "exit": 2,
+        "seconds": 4.061,
+        "stdout": "stock-6.stdout",
+        "stderr": "stock-6.stderr",
+        "runtime_contract_pass": false,
+        "terminal": {
+          "status": "fault",
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "associated constant qualifier requires its actual source Type application",
+          "phase": "executor"
+        },
+        "capture_complete": false,
+        "facts": {
+          "classified_operation_candidates": 14,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 0,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 17,
+          "vm_outcomes": 17
+        },
+        "operations_completed": null,
+        "diagnostic": {
+          "code": "LRR-E-UNSUPPORTED",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "7d9c9b0c9794f0b3d397cb110f15dc702435ca794d7a8ff3112a0a31064bbae2",
+                    "exact_body_bytes": "59724516a194ca4a02c53f0a1f8dea8e243922cbe917259c55244e1751bf0d64"
+                  },
+                  "relative_end": 20,
+                  "relative_start": 0
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 398,
+                      "start": 378
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  }
+                ],
+                "pc": "a28defae5b8ff20d62d421698b05b4de8850fa2fafa7766d5cac839c996bdf5a"
+              },
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "5bb0d627ca8fda3d42d0040281c19217787385ed5df286c97763e92b24405dc4",
+                    "exact_body_bytes": "b3056c78ebfaad4066cc9eef0e472c6fee1ff9457bfc38fee27f552cbe633717"
+                  },
+                  "relative_end": 46,
+                  "relative_start": 28
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 446,
+                      "start": 445
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 452,
+                      "start": 446
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 455,
+                      "start": 453
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 459,
+                      "start": 456
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 460,
+                      "start": 459
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 461,
+                      "start": 460
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 465,
+                      "start": 462
+                    },
+                    "source": {
+                      "content": [
+                        217,
+                        93,
+                        31,
+                        18,
+                        53,
+                        138,
+                        44,
+                        237,
+                        182,
+                        51,
+                        10,
+                        158,
+                        184,
+                        216,
+                        98,
+                        64,
+                        206,
+                        7,
+                        110,
+                        150,
+                        11,
+                        118,
+                        68,
+                        105,
+                        81,
+                        93,
+                        29,
+                        143,
+                        14,
+                        47,
+                        244,
+                        129
+                      ],
+                      "path": "associated-const-use-impl-of-same-trait.rs",
+                      "unit": [
+                        217,
+                        135,
+                        214,
+                        120,
+                        235,
+                        11,
+                        67,
+                        124,
+                        172,
+                        19,
+                        74,
+                        180,
+                        122,
+                        142,
+                        241,
+                        88,
+                        192,
+                        196,
+                        3,
+                        227,
+                        112,
+                        57,
+                        31,
+                        31,
+                        37,
+                        186,
+                        244,
+                        182,
+                        152,
+                        177,
+                        12,
+                        195
+                      ]
+                    }
+                  }
+                ],
+                "pc": "f17e0f079f9f8ade659140526202c609a57e21b2660eff72f1a229db24d3c922"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "associated constant qualifier requires its actual source Type application",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        }
+      },
+      {
+        "path": "tests/ui/consts/static-ref-to-const-array-element.rs",
+        "sha256": "7a33a8a09db04d74bb9cdc3608bcc7c2c629a9735b85140b4f58181cf3288762",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/static-ref-to-const-array-element.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "bad72f9b150a4b0553a7ac7810379700195315bbdd090e050de5640cbd1e08d1"
+        ],
+        "exit": 2,
+        "seconds": 3.803,
+        "stdout": "stock-7.stdout",
+        "stderr": "stock-7.stderr",
+        "runtime_contract_pass": false,
+        "terminal": {
+          "status": "fault",
+          "code": "LRR-E-STALE-HANDLE",
+          "message": "reference location lease is stale",
+          "phase": "executor"
+        },
+        "capture_complete": false,
+        "facts": {
+          "classified_operation_candidates": 23,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 22,
+          "vm_outcomes": 21
+        },
+        "operations_completed": null,
+        "diagnostic": {
+          "code": "LRR-E-STALE-HANDLE",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "6006c665e06a643364c0fd44a4990f3e626b4cf973fcd4a3109ffee62dc9bb81",
+                    "exact_body_bytes": "d809bfd0edb83930657cb9f287821b97298e68d04da7812b07dc907560c81482"
+                  },
+                  "relative_end": 16,
+                  "relative_start": 0
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 281,
+                      "start": 265
+                    },
+                    "source": {
+                      "content": [
+                        246,
+                        221,
+                        155,
+                        145,
+                        216,
+                        108,
+                        24,
+                        128,
+                        231,
+                        45,
+                        55,
+                        92,
+                        94,
+                        119,
+                        152,
+                        59,
+                        194,
+                        116,
+                        226,
+                        180,
+                        220,
+                        219,
+                        17,
+                        120,
+                        29,
+                        125,
+                        165,
+                        19,
+                        64,
+                        39,
+                        235,
+                        123
+                      ],
+                      "path": "static-ref-to-const-array-element.rs",
+                      "unit": [
+                        130,
+                        90,
+                        2,
+                        229,
+                        230,
+                        99,
+                        97,
+                        194,
+                        18,
+                        106,
+                        253,
+                        236,
+                        77,
+                        109,
+                        15,
+                        129,
+                        254,
+                        72,
+                        186,
+                        182,
+                        212,
+                        86,
+                        224,
+                        255,
+                        127,
+                        179,
+                        230,
+                        234,
+                        174,
+                        228,
+                        83,
+                        51
+                      ]
+                    }
+                  }
+                ],
+                "pc": "8413166a80767966ad733c56d03886be2923de63ec2f58cf0964f36d6aaa6ebb"
+              },
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "31df52495a9afa80bfc380e6ecddd3f03e7b8a017ecf302159fce51e7676222d",
+                    "exact_body_bytes": "fe37853c4472a56e292bc02e9c13c11df62231bf622ed5e681118f2728eac76b"
+                  },
+                  "relative_end": 23,
+                  "relative_start": 10
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 321,
+                      "start": 310
+                    },
+                    "source": {
+                      "content": [
+                        246,
+                        221,
+                        155,
+                        145,
+                        216,
+                        108,
+                        24,
+                        128,
+                        231,
+                        45,
+                        55,
+                        92,
+                        94,
+                        119,
+                        152,
+                        59,
+                        194,
+                        116,
+                        226,
+                        180,
+                        220,
+                        219,
+                        17,
+                        120,
+                        29,
+                        125,
+                        165,
+                        19,
+                        64,
+                        39,
+                        235,
+                        123
+                      ],
+                      "path": "static-ref-to-const-array-element.rs",
+                      "unit": [
+                        130,
+                        90,
+                        2,
+                        229,
+                        230,
+                        99,
+                        97,
+                        194,
+                        18,
+                        106,
+                        253,
+                        236,
+                        77,
+                        109,
+                        15,
+                        129,
+                        254,
+                        72,
+                        186,
+                        182,
+                        212,
+                        86,
+                        224,
+                        255,
+                        127,
+                        179,
+                        230,
+                        234,
+                        174,
+                        228,
+                        83,
+                        51
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 322,
+                      "start": 321
+                    },
+                    "source": {
+                      "content": [
+                        246,
+                        221,
+                        155,
+                        145,
+                        216,
+                        108,
+                        24,
+                        128,
+                        231,
+                        45,
+                        55,
+                        92,
+                        94,
+                        119,
+                        152,
+                        59,
+                        194,
+                        116,
+                        226,
+                        180,
+                        220,
+                        219,
+                        17,
+                        120,
+                        29,
+                        125,
+                        165,
+                        19,
+                        64,
+                        39,
+                        235,
+                        123
+                      ],
+                      "path": "static-ref-to-const-array-element.rs",
+                      "unit": [
+                        130,
+                        90,
+                        2,
+                        229,
+                        230,
+                        99,
+                        97,
+                        194,
+                        18,
+                        106,
+                        253,
+                        236,
+                        77,
+                        109,
+                        15,
+                        129,
+                        254,
+                        72,
+                        186,
+                        182,
+                        212,
+                        86,
+                        224,
+                        255,
+                        127,
+                        179,
+                        230,
+                        234,
+                        174,
+                        228,
+                        83,
+                        51
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 323,
+                      "start": 322
+                    },
+                    "source": {
+                      "content": [
+                        246,
+                        221,
+                        155,
+                        145,
+                        216,
+                        108,
+                        24,
+                        128,
+                        231,
+                        45,
+                        55,
+                        92,
+                        94,
+                        119,
+                        152,
+                        59,
+                        194,
+                        116,
+                        226,
+                        180,
+                        220,
+                        219,
+                        17,
+                        120,
+                        29,
+                        125,
+                        165,
+                        19,
+                        64,
+                        39,
+                        235,
+                        123
+                      ],
+                      "path": "static-ref-to-const-array-element.rs",
+                      "unit": [
+                        130,
+                        90,
+                        2,
+                        229,
+                        230,
+                        99,
+                        97,
+                        194,
+                        18,
+                        106,
+                        253,
+                        236,
+                        77,
+                        109,
+                        15,
+                        129,
+                        254,
+                        72,
+                        186,
+                        182,
+                        212,
+                        86,
+                        224,
+                        255,
+                        127,
+                        179,
+                        230,
+                        234,
+                        174,
+                        228,
+                        83,
+                        51
+                      ]
+                    }
+                  }
+                ],
+                "pc": "b83b950a62970b99b7e9ebcaf7f9f5c095dc1ef05fd99264c95ce7de5ddb739d"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "reference location lease is stale",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        }
+      }
+    ]
+  },
+  "controls_queue": {
+    "session_id": 38271,
+    "initial_chunk": "d75d3b",
+    "terminal": "f17725/0",
+    "wrapper_exit0_is_not_control_success": true,
+    "passed": 15,
+    "actual_bodies": 16,
+    "results": [
+      {
+        "selector": "cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins",
+        "exit": 101,
+        "seconds": 4.958,
+        "bodies": 1,
+        "pass": false,
+        "log": "control-0.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+        "exit": 0,
+        "seconds": 0.374,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-1.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+        "exit": 0,
+        "seconds": 0.12,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-2.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "runtime::drop_facts::tests::published_drop_facts_track_related_and_unrelated_additions",
+        "exit": 0,
+        "seconds": 0.006,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-3.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "runtime::drop_facts::tests::published_drop_facts_track_related_and_unrelated_additions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+        "exit": 0,
+        "seconds": 0.006,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-4.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "cli::crate_graph::initializer_tests::promoted_borrows_byte_strings_and_copy_receivers",
+        "exit": 0,
+        "seconds": 23.86,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-5.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "cli::crate_graph::initializer_tests::promoted_borrows_byte_strings_and_copy_receivers",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+        "exit": 0,
+        "seconds": 0.009,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-6.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+        "exit": 0,
+        "seconds": 0.008,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-7.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects",
+        "exit": 0,
+        "seconds": 0.136,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-8.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_copy_place_activation_skips_completed_recipe_prefix_and_clears_place_once",
+        "exit": 0,
+        "seconds": 0.009,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-9.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_copy_place_activation_skips_completed_recipe_prefix_and_clears_place_once",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells",
+        "exit": 0,
+        "seconds": 0.007,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-10.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "db::memo::prepared_inputs::tests::positive_changes_and_wrong_root_fingerprint_cannot_refresh_guard",
+        "exit": 0,
+        "seconds": 0.007,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-11.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "db::memo::prepared_inputs::tests::positive_changes_and_wrong_root_fingerprint_cannot_refresh_guard",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "syntax::declaration_scope_plan::tests::unchanged_local_drop_headers_keep_canonical_identity_without_binding_preparation",
+        "exit": 0,
+        "seconds": 0.008,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-12.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "syntax::declaration_scope_plan::tests::unchanged_local_drop_headers_keep_canonical_identity_without_binding_preparation",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_committed_child_ticket_for_retry",
+        "exit": 0,
+        "seconds": 0.006,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-13.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_committed_child_ticket_for_retry",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "frontend::source_locals::owned_plan::type_declarations::tests::qualified_type_tests::unchanged_qualified_type_uses_shared_kernel_certified_read_footprint_and_declaration_all_editions",
+        "exit": 0,
+        "seconds": 0.341,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-14.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "frontend::source_locals::owned_plan::type_declarations::tests::qualified_type_tests::unchanged_qualified_type_uses_shared_kernel_certified_read_footprint_and_declaration_all_editions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      },
+      {
+        "selector": "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+        "exit": 0,
+        "seconds": 64.037,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-15.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "7a9abd523c10cdbfad8922a5208db1c70927573288f42d2802ff97ad206baf47",
+        "source_sha256": "3374e7eedc866f329acef0f1ce5ec42be2b6a10f07408bd11f87abc95ac6dfb7"
+      }
+    ]
+  },
+  "first_faults": [
+    {
+      "stock": 1,
+      "path": "tests/ui/associated-consts/associated-const-type-parameters.rs",
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "generic source owner requires associated-item integration",
+      "frames": [
+        {
+          "body": {
+            "body_key": {
+              "definition": "faa8a7e68404102adcdeb262fe89a0610ad7c98ade6f4e766d1b82b3a847c560",
+              "exact_body_bytes": "9d9d84f428cd70f7f5a755af853c9fbd2f4f566bc07ccbc9e8f6522fe8dafa86"
+            },
+            "relative_end": 10,
+            "relative_start": 6
+          },
+          "pc": "4c203beae5dbca65f7485527b364ad36e91f533e5d942e978a5468e9e8b11ec1",
+          "locations": {
+            "associated-const-type-parameters.rs": {
+              "start": 345,
+              "end": 349,
+              "ranges": [
+                {
+                  "end": 349,
+                  "start": 345
+                }
+              ]
+            }
+          }
+        },
+        {
+          "body": {
+            "body_key": {
+              "definition": "1c0de762ec9ff9238afd5cf3f81b26c389cab956123fb9606d0e732a665efdac",
+              "exact_body_bytes": "88784125c9e9bef4290cfba4119f4e0959654e16ffe7dfbdfb346a64675fedfd"
+            },
+            "relative_end": 900,
+            "relative_start": 884
+          },
+          "pc": "4b8a00d8a75dc71d2821a068ca19328d09c3bd70298e786ac78b350996c0fa28",
+          "locations": {
+            "associated-const-type-parameters.rs": {
+              "start": 599,
+              "end": 616,
+              "ranges": [
+                {
+                  "end": 602,
+                  "start": 599
+                },
+                {
+                  "end": 603,
+                  "start": 602
+                },
+                {
+                  "end": 605,
+                  "start": 604
+                },
+                {
+                  "end": 608,
+                  "start": 605
+                },
+                {
+                  "end": 609,
+                  "start": 608
+                },
+                {
+                  "end": 613,
+                  "start": 610
+                },
+                {
+                  "end": 614,
+                  "start": 613
+                },
+                {
+                  "end": 615,
+                  "start": 614
+                },
+                {
+                  "end": 616,
+                  "start": 615
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stock": 6,
+      "path": "tests/ui/associated-consts/associated-const-use-impl-of-same-trait.rs",
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "associated constant qualifier requires its actual source Type application",
+      "frames": [
+        {
+          "body": {
+            "body_key": {
+              "definition": "7d9c9b0c9794f0b3d397cb110f15dc702435ca794d7a8ff3112a0a31064bbae2",
+              "exact_body_bytes": "59724516a194ca4a02c53f0a1f8dea8e243922cbe917259c55244e1751bf0d64"
+            },
+            "relative_end": 20,
+            "relative_start": 0
+          },
+          "pc": "a28defae5b8ff20d62d421698b05b4de8850fa2fafa7766d5cac839c996bdf5a",
+          "locations": {
+            "associated-const-use-impl-of-same-trait.rs": {
+              "start": 378,
+              "end": 398,
+              "ranges": [
+                {
+                  "end": 398,
+                  "start": 378
+                }
+              ]
+            }
+          }
+        },
+        {
+          "body": {
+            "body_key": {
+              "definition": "5bb0d627ca8fda3d42d0040281c19217787385ed5df286c97763e92b24405dc4",
+              "exact_body_bytes": "b3056c78ebfaad4066cc9eef0e472c6fee1ff9457bfc38fee27f552cbe633717"
+            },
+            "relative_end": 46,
+            "relative_start": 28
+          },
+          "pc": "f17e0f079f9f8ade659140526202c609a57e21b2660eff72f1a229db24d3c922",
+          "locations": {
+            "associated-const-use-impl-of-same-trait.rs": {
+              "start": 445,
+              "end": 465,
+              "ranges": [
+                {
+                  "end": 446,
+                  "start": 445
+                },
+                {
+                  "end": 452,
+                  "start": 446
+                },
+                {
+                  "end": 455,
+                  "start": 453
+                },
+                {
+                  "end": 459,
+                  "start": 456
+                },
+                {
+                  "end": 460,
+                  "start": 459
+                },
+                {
+                  "end": 461,
+                  "start": 460
+                },
+                {
+                  "end": 465,
+                  "start": 462
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stock": 7,
+      "path": "tests/ui/consts/static-ref-to-const-array-element.rs",
+      "code": "LRR-E-STALE-HANDLE",
+      "message": "reference location lease is stale",
+      "frames": [
+        {
+          "body": {
+            "body_key": {
+              "definition": "6006c665e06a643364c0fd44a4990f3e626b4cf973fcd4a3109ffee62dc9bb81",
+              "exact_body_bytes": "d809bfd0edb83930657cb9f287821b97298e68d04da7812b07dc907560c81482"
+            },
+            "relative_end": 16,
+            "relative_start": 0
+          },
+          "pc": "8413166a80767966ad733c56d03886be2923de63ec2f58cf0964f36d6aaa6ebb",
+          "locations": {
+            "static-ref-to-const-array-element.rs": {
+              "start": 265,
+              "end": 281,
+              "ranges": [
+                {
+                  "end": 281,
+                  "start": 265
+                }
+              ]
+            }
+          }
+        },
+        {
+          "body": {
+            "body_key": {
+              "definition": "31df52495a9afa80bfc380e6ecddd3f03e7b8a017ecf302159fce51e7676222d",
+              "exact_body_bytes": "fe37853c4472a56e292bc02e9c13c11df62231bf622ed5e681118f2728eac76b"
+            },
+            "relative_end": 23,
+            "relative_start": 10
+          },
+          "pc": "b83b950a62970b99b7e9ebcaf7f9f5c095dc1ef05fd99264c95ce7de5ddb739d",
+          "locations": {
+            "static-ref-to-const-array-element.rs": {
+              "start": 310,
+              "end": 323,
+              "ranges": [
+                {
+                  "end": 321,
+                  "start": 310
+                },
+                {
+                  "end": 322,
+                  "start": 321
+                },
+                {
+                  "end": 323,
+                  "start": 322
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "findings": [
+    "Frame-owned prepared runtime ItemValue cache replaces run-global PC cache. Same source generic function PC now selects item values within each actual Frame activation; original caller Frame retains its own map through suspension. Pure source plans remain shared. Single-use initializer tickets still bypass reusable cache.",
+    "Associated-const-type-parameters advances past prior assertion failure-branch None fault to actual A::X original345..349 in sub<A:Foo,B:Foo>, called by sub::<Abc,Def>()599..616. Actual LRR-E-UNSUPPORTED generic source owner requires associated-item integration after3sourcecalls464dispatch911classifiedops; capturefalse/cleanupfalse. No whole-root runtime pass or actual operand trace inferred.",
+    "Associated-const-use-impl-of-same-trait remainsFAIL at <IsFoo1 as Foo>::BAR378..398 in initializer,0calls17dispatch14ops. Reviewed successor constant-owner Type-prefix fix is UNCOMPILED and not part of V33 evidence.",
+    "Static-ref-to-const-array-element remains stale reference lease in tuple_field()->&(42,).0, before main reaches actual array-template path;1call22dispatch23ops. Root promotion successor uncompiled.",
+    "Structural constant route control still observes4calls vs3expected in2015origin0; expected oracle unchanged and rest of matrix unexecuted after first failure. Nominal once-cache remains held.",
+    "Corrected LRR transfer control now genuinely commits nested child then refuses outer parent append, retains live ticket, restores guard and consumes exact ticket once. Actual successor PASS0.006s. V32 wrong first-leaf injection/source failure remains preserved; no post-copy leaf refusal/cancellation/final-write generalization.",
+    "Shared declaration metadata control PASS0.008s across4editions including exact Arc pointer sharing for cold plan and two entered values plus independent nonempty binding Vec. Parent pure query/memo/real caller adoption not present in this source snapshot, no full producer/negative Drop proof.",
+    "New InitializerOwnerTemplate query53/helper compile as ordinary pure metadata with real source signature/context/binder and typed pending facts. It is unconsumed by runtime: no applied provider/packet/initializer application/cache acceptance.",
+    "All16selected controls execute exactly1body. Last generated constant-pattern route control PASS64.037s; promotion control also passes. All five stock passes were previously observed on historical binaries; V33 adds zero new historical stock witnesses."
+  ],
+  "holds": [
+    "Same-activation runtime item cache invalidation after relevant source/member changes remains independently held (worker1 review557d6768); frame ownership alone does not close currentness matrix. Other global static_reads/nominal/pattern classification caches remain outside bounded repair.",
+    "Full generic Type/Const/Region initializer packet, selected provider application proof and per-application once cache remain incomplete; current common nonempty-generics entry guard remains. Query53metadata not execution authority.",
+    "Initial complete Drop/Copy producer closure and owned nominal template eligibility remain held; published Drop currentness is not absence completeness.",
+    "Copy post-consume/final-write atomicity, cancellation/resource cleanup and complete source/epoch matrix remain unestablished. Actual child-parent retry control covers only its exercised authority window.",
+    "Mixed editions/origins/full architecture matrix and all upstream runtime prerequisite remain incomplete. Failure capturesfalse never count as interpreter execution acceptance."
+  ],
+  "reporting": {
+    "historical_ever_new_witnesses_across_binaries": 25,
+    "current_global_suite_total": "not measured",
+    "runtime_contract_passes_are_not_full_fixture_passes": true,
+    "diagnostic_compatibility": "not measured",
+    "compiler_tooling_compatibility": "not measured",
+    "full_suite_compatibility": "incomplete",
+    "upstream_runtime_acceptance": "incomplete",
+    "jit_gate": "blocked"
+  },
+  "compiled_index_evidence": {
+    "plan_path": "artifacts/validation-resume-2026-10-18/v33-source-checkpoint-plan.json",
+    "plan_sha256": "a26df405b8032521239da3bf5bab53101ecd0add5a55c1c992a5dfdd4ad95050",
+    "root_audit_path": "artifacts/validation-resume-2026-10-18/v33-root-index-audit.json",
+    "root_audit_sha256": "cf4c18089b8b57539aee17ea1d08d5952a925f13b8d029d2624567f50b5612ea",
+    "exact_nineteen_index_rows": [
+      {
+        "path": "crates/lrr/src/cli/preentry_loader.rs",
+        "compiled_sha256": "f8f514a8ef22c1a3e4c39ae220ac9dbc07efbd306d5c51dccc7e13b782c5c85f",
+        "reviewed_sha256": "f8f514a8ef22c1a3e4c39ae220ac9dbc07efbd306d5c51dccc7e13b782c5c85f",
+        "index_sha256": "f8f514a8ef22c1a3e4c39ae220ac9dbc07efbd306d5c51dccc7e13b782c5c85f"
+      },
+      {
+        "path": "crates/lrr/src/db/key.rs",
+        "compiled_sha256": "21bef36531bd5bcb5216cf6263244de2ff2841897b4c0c9475655447fa3e8c04",
+        "reviewed_sha256": "21bef36531bd5bcb5216cf6263244de2ff2841897b4c0c9475655447fa3e8c04",
+        "index_sha256": "21bef36531bd5bcb5216cf6263244de2ff2841897b4c0c9475655447fa3e8c04"
+      },
+      {
+        "path": "crates/lrr/src/db/provider.rs",
+        "compiled_sha256": "1b1ebfb27abcec1032cf1cd1ee2b39506a0c1bb9d073065b71c995596894dcb2",
+        "reviewed_sha256": "1b1ebfb27abcec1032cf1cd1ee2b39506a0c1bb9d073065b71c995596894dcb2",
+        "index_sha256": "1b1ebfb27abcec1032cf1cd1ee2b39506a0c1bb9d073065b71c995596894dcb2"
+      },
+      {
+        "path": "crates/lrr/src/db/value.rs",
+        "compiled_sha256": "056f7de0de8611a193a6da4400f902d769c9689b829950199b14f8a97ef2b8af",
+        "reviewed_sha256": "056f7de0de8611a193a6da4400f902d769c9689b829950199b14f8a97ef2b8af",
+        "index_sha256": "056f7de0de8611a193a6da4400f902d769c9689b829950199b14f8a97ef2b8af"
+      },
+      {
+        "path": "crates/lrr/src/engine/run.rs",
+        "compiled_sha256": "85b754b60fa7ff8e8b3550a7b461d0464cbe7a7256ebd79d12e2d3d274dfe806",
+        "reviewed_sha256": "85b754b60fa7ff8e8b3550a7b461d0464cbe7a7256ebd79d12e2d3d274dfe806",
+        "index_sha256": "85b754b60fa7ff8e8b3550a7b461d0464cbe7a7256ebd79d12e2d3d274dfe806"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_nominal.rs",
+        "compiled_sha256": "674bf45369936cea9967b28dc810e0cb20c192541fe216db2ca83c02982ce395",
+        "reviewed_sha256": "674bf45369936cea9967b28dc810e0cb20c192541fe216db2ca83c02982ce395",
+        "index_sha256": "674bf45369936cea9967b28dc810e0cb20c192541fe216db2ca83c02982ce395"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_value_items.rs",
+        "compiled_sha256": "2d09f40544933940964c024829113356386ac2bc852eff8e110dc114fff4be5b",
+        "reviewed_sha256": "2d09f40544933940964c024829113356386ac2bc852eff8e110dc114fff4be5b",
+        "index_sha256": "2d09f40544933940964c024829113356386ac2bc852eff8e110dc114fff4be5b"
+      },
+      {
+        "path": "crates/lrr/src/frontend/body_namespace.rs",
+        "compiled_sha256": "f2e708b42e5dfff7e72a5b55d45c65311f956987365bdeabbc846df5cbafe8ac",
+        "reviewed_sha256": "f2e708b42e5dfff7e72a5b55d45c65311f956987365bdeabbc846df5cbafe8ac",
+        "index_sha256": "f2e708b42e5dfff7e72a5b55d45c65311f956987365bdeabbc846df5cbafe8ac"
+      },
+      {
+        "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+        "compiled_sha256": "aae7590c44c841a1c02ea287bc8f2d7fd4e62e954109b00aa2ead30eb9fab3b6",
+        "reviewed_sha256": "aae7590c44c841a1c02ea287bc8f2d7fd4e62e954109b00aa2ead30eb9fab3b6",
+        "index_sha256": "aae7590c44c841a1c02ea287bc8f2d7fd4e62e954109b00aa2ead30eb9fab3b6"
+      },
+      {
+        "path": "crates/lrr/src/frontend/initializer_owner_templates.rs",
+        "compiled_sha256": "4e1c988d0c9286c2ef5e7b615384410b2c246b6d0bb9050ad7470b638800a647",
+        "reviewed_sha256": "4e1c988d0c9286c2ef5e7b615384410b2c246b6d0bb9050ad7470b638800a647",
+        "index_sha256": "4e1c988d0c9286c2ef5e7b615384410b2c246b6d0bb9050ad7470b638800a647"
+      },
+      {
+        "path": "crates/lrr/src/frontend/mod.rs",
+        "compiled_sha256": "9a3a3ca9fddb4dacc9158f3e1408bb69ff6076a9b0c5adc1439b2d2a6d6ddafb",
+        "reviewed_sha256": "9a3a3ca9fddb4dacc9158f3e1408bb69ff6076a9b0c5adc1439b2d2a6d6ddafb",
+        "index_sha256": "9a3a3ca9fddb4dacc9158f3e1408bb69ff6076a9b0c5adc1439b2d2a6d6ddafb"
+      },
+      {
+        "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+        "compiled_sha256": "711c7cabe42280cca7c3f3a1a36eea31b3d6cb52c101dfdb6c8307d50f19e976",
+        "reviewed_sha256": "711c7cabe42280cca7c3f3a1a36eea31b3d6cb52c101dfdb6c8307d50f19e976",
+        "index_sha256": "711c7cabe42280cca7c3f3a1a36eea31b3d6cb52c101dfdb6c8307d50f19e976"
+      },
+      {
+        "path": "crates/lrr/src/frontend/source_locals.rs",
+        "compiled_sha256": "c9bf1a48f19c4f853e5bf2fb59471bb5548c749a25b3659787e4cb536f3993da",
+        "reviewed_sha256": "c9bf1a48f19c4f853e5bf2fb59471bb5548c749a25b3659787e4cb536f3993da",
+        "index_sha256": "c9bf1a48f19c4f853e5bf2fb59471bb5548c749a25b3659787e4cb536f3993da"
+      },
+      {
+        "path": "crates/lrr/src/runtime/cell_aggregate_copy.rs",
+        "compiled_sha256": "7c7b2c2896251f15b3bc21ea3b7f28afa6975f82320b512d77a2fd4caf17d9ec",
+        "reviewed_sha256": "7c7b2c2896251f15b3bc21ea3b7f28afa6975f82320b512d77a2fd4caf17d9ec",
+        "index_sha256": "7c7b2c2896251f15b3bc21ea3b7f28afa6975f82320b512d77a2fd4caf17d9ec"
+      },
+      {
+        "path": "crates/lrr/src/service/expansion.rs",
+        "compiled_sha256": "6bfe99d066f1399324e6955f52a922709950b6bb496929e97bd8ad54e708634e",
+        "reviewed_sha256": "6bfe99d066f1399324e6955f52a922709950b6bb496929e97bd8ad54e708634e",
+        "index_sha256": "6bfe99d066f1399324e6955f52a922709950b6bb496929e97bd8ad54e708634e"
+      },
+      {
+        "path": "crates/lrr/src/syntax/declaration_scope_plan.rs",
+        "compiled_sha256": "e6d2f227670f510bbb26ec9aeec752a07e9c0e0d8d97fa26e4dfa3cef40b9ec8",
+        "reviewed_sha256": "e6d2f227670f510bbb26ec9aeec752a07e9c0e0d8d97fa26e4dfa3cef40b9ec8",
+        "index_sha256": "e6d2f227670f510bbb26ec9aeec752a07e9c0e0d8d97fa26e4dfa3cef40b9ec8"
+      },
+      {
+        "path": "crates/lrr/src/syntax/entered_macros.rs",
+        "compiled_sha256": "c36254ee3261a450f729766b1c1841b3935d77849510fc942a306e92fc086bae",
+        "reviewed_sha256": "c36254ee3261a450f729766b1c1841b3935d77849510fc942a306e92fc086bae",
+        "index_sha256": "c36254ee3261a450f729766b1c1841b3935d77849510fc942a306e92fc086bae"
+      },
+      {
+        "path": "crates/lrr/src/syntax/mod.rs",
+        "compiled_sha256": "09fc9c460632d85bfa9fe3bcc0da285ec37b5a0e69b0327adc5897ebcc7ff428",
+        "reviewed_sha256": "09fc9c460632d85bfa9fe3bcc0da285ec37b5a0e69b0327adc5897ebcc7ff428",
+        "index_sha256": "09fc9c460632d85bfa9fe3bcc0da285ec37b5a0e69b0327adc5897ebcc7ff428"
+      },
+      {
+        "path": "crates/lrr/src/vm/frame_item_values.rs",
+        "compiled_sha256": "c1d8b6681a9cd4672109ad1d877b645cd6aa58e8a3cd1c3ff791f1ad0fa43425",
+        "reviewed_sha256": "c1d8b6681a9cd4672109ad1d877b645cd6aa58e8a3cd1c3ff791f1ad0fa43425",
+        "index_sha256": "c1d8b6681a9cd4672109ad1d877b645cd6aa58e8a3cd1c3ff791f1ad0fa43425"
+      }
+    ]
+  },
+  "source_review_evidence": [
+    {
+      "path": "artifacts/validation-resume-2026-10-18/declaration-scope-plan-independent-review-next.json",
+      "sha256": "bd7bfa95c6be51be900dce7a7305ff870d8f90920521e89a5b09ce0e7d84fe49"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/declaration-plan-no-accounting-independent-review-next.json",
+      "sha256": "9823dcca4e0733b03ca79cef33ebab2d26da855034830cfdc0c20c734b3b565f"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/v32-import-only-independent-review.json",
+      "sha256": "1bf9b46489db466dcbb7e6356298cd347ee487e21db114a3130d9b662b2147f3"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/dollar-crate-type-root-independent-review-next.json",
+      "sha256": "abf9a319c6721c9934620b26f58b69daae1a37e78dcbd1f07633c74dc9e83055"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/copy-transfer-retention-independent-review-next.json",
+      "sha256": "2d11fcbb9a1b18c8bf1171b4ca7a46b60ba003bdd295a46326a1c4ac70f94922"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/shared-declaration-facts-independent-review-next.json",
+      "sha256": "66de3513684db30adf5568c24cb3c5284beac3b69aa8d0a61f2537d8214e75af"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/activation-item-value-cache-independent-review-next.json",
+      "sha256": "e1cbb0e289bbd2218b58e1211a64d23cb6ebb87f194c4047f407080da3361c1c"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/initializer-owner-query-independent-review-next.json",
+      "sha256": "81054b8a730aa5ad3a63e0914af9285c659e02f730bfc568c526b8e468147f9c"
+    },
+    {
+      "path": "artifacts/validation-resume-2026-10-18/copy-transfer-nested-control-independent-review-next.json",
+      "sha256": "96ec6998e0a0f46e176bc154348260928b11c6cf04aec6bac4c6414061343e49"
+    }
+  ],
+  "previous_failed_candidate": {
+    "candidate": "V31",
+    "portable_path": "worktracks/evidence/2026-10-18-interpreter-v31-validation.json",
+    "scope": "lib compile101 only, no CLI/runtime; preserved separately"
+  },
+  "previous_runtime_candidate": {
+    "candidate": "V32",
+    "portable_path": "worktracks/evidence/2026-10-18-interpreter-v32-validation.json",
+    "scope": "5/8stock14/16controls; wrong first-leaf test setup preserved; source/binaries distinct, no rewritten evidence"
+  },
+  "schema": "lrr/focused-validation/v1",
+  "raw_report_sha256": "a9633642e52837fca2fd5ef619ad596b43fb55f5430615e8c2e7cfaa758faf05",
+  "raw_artifact_sha256_index": {
+    "path": "artifacts/validation-resume-2026-10-18/candidate-v33/raw-artifact-sha256-index.json",
+    "sha256": "75d4e76b1f80915faab2c642d284173665fe8159d9ff1a419850456180be8e3c",
+    "files": 53
+  }
+}

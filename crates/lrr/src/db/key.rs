@@ -148,6 +148,7 @@ pub use crate::frontend::constants::query_identity::ConstQueryIdentity as Consta
 pub enum QueryKey {
     PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
     AssociatedItemQualifier(crate::source::manifest::PcKey),
+    InitializerOwnerTemplate(crate::frontend::initializer_owner_templates::InitializerOwnerTemplateKey),
     AssociatedEquations(Box<crate::frontend::associated_equations::AssociatedEquationsKey>),
     NominalMember(Box<crate::frontend::nominal_member_goals::NominalMemberKey>),
     PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
@@ -213,7 +214,8 @@ impl QueryKey {
                     + k.module_path.iter().map(String::capacity).sum::<usize>()
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
-            Self::AssociatedItemQualifier(_)
+            Self::InitializerOwnerTemplate(_)
+            | Self::AssociatedItemQualifier(_)
             | Self::PreparedExplicitTypeArguments(_)
             | Self::EnteredCall(_)
             | Self::PreparedReturnPlan(_)
@@ -242,6 +244,7 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::InitializerOwnerTemplate(_) => "InitializerOwnerTemplate",
             Self::AssociatedItemQualifier(_) => "AssociatedItemQualifier",
             Self::AssociatedEquations(_) => "AssociatedEquations",
             Self::NominalMember(_) => "NominalMember",
@@ -286,6 +289,7 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::InitializerOwnerTemplate(key) => { e.u32(53); e.record(key); }
             Self::AssociatedItemQualifier(key) => { e.u32(51); e.record(key); }
             Self::AssociatedEquations(key) => {
                 e.u32(50);

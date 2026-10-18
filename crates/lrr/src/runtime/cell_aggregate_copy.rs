@@ -24,6 +24,7 @@ struct CopyFrame {
 }
 pub(crate) enum CopyWork {
     Field(CellId),
+    Transfer,
     Finish,
 }
 pub(crate) enum CopyProgress {
@@ -35,6 +36,8 @@ pub(crate) struct AggregateCopy {
     root_value: ValueRepr,
     stack: Vec<CopyFrame>,
     complete: bool,
+    /// A replica is owned here until its parent accepts the transfer.
+    transfer: Option<TicketId>,
     template: Option<VmTemplate>,
 }
 /// Physical preparation of a source-checked VM result. This confers no source
@@ -314,6 +317,7 @@ impl AggregateCopy {
             root_value,
             stack: Vec::new(),
             complete: false,
+            transfer: None,
             template,
         };
         copy.reserve_frame()?;
@@ -340,6 +344,10 @@ impl AggregateCopy {
         store.copy_source(self.root, self.root_value)?;
         let frame = self.stack.last().ok_or_else(ownership)?;
         store.copy_source(frame.source, frame.value)?;
+        if let Some(ticket) = self.transfer {
+            store.peek_ticket(ticket)?;
+            return Ok(CopyWork::Transfer);
+        }
         if frame.next == frame.destination.count {
             return Ok(CopyWork::Finish);
         }
@@ -367,8 +375,23 @@ impl AggregateCopy {
         }
         Ok(CopyWork::Field(field))
     }
+    fn finish_transfer(&mut self, store: &mut GuestStore) -> Result<(), Diagnostic> {
+        let ticket = self.transfer.ok_or_else(ownership)?;
+        let parent = self.stack.last_mut().ok_or_else(ownership)?;
+        let next = parent.next.checked_add(1).ok_or_else(resource)?;
+        // A refused transactional append leaves the actual replica reachable.
+        // Clear it only after the common construction transfer consumes it.
+        store.append_copy_field(&parent.destination, ticket)?;
+        self.transfer = None;
+        parent.next = next;
+        Ok(())
+    }
     pub(crate) fn advance(&mut self, store: &mut GuestStore) -> Result<CopyProgress, Diagnostic> {
         match self.next(store)? {
+            CopyWork::Transfer => {
+                self.finish_transfer(store)?;
+                Ok(CopyProgress::Pending)
+            }
             CopyWork::Field(source) => {
                 let value = store.admit_move(source)?;
                 if value.kind == 8 {
@@ -385,9 +408,8 @@ impl AggregateCopy {
                 } else {
                     store.tickets.reserve(1, &mut store.budget)?;
                     let ticket = store.copy_from(source)?;
-                    let frame = self.stack.last_mut().ok_or_else(ownership)?;
-                    store.append_copy_field(&frame.destination, ticket)?;
-                    frame.next = frame.next.checked_add(1).ok_or_else(resource)?;
+                    self.transfer = Some(ticket);
+                    self.finish_transfer(store)?;
                 }
                 Ok(CopyProgress::Pending)
             }
@@ -398,9 +420,9 @@ impl AggregateCopy {
                 let frame = self.stack.last().ok_or_else(ownership)?;
                 let ticket = store.finish_copy_destination(&frame.destination)?;
                 self.stack.pop().ok_or_else(ownership)?;
-                if let Some(parent) = self.stack.last_mut() {
-                    store.append_copy_field(&parent.destination, ticket)?;
-                    parent.next = parent.next.checked_add(1).ok_or_else(resource)?;
+                if !self.stack.is_empty() {
+                    self.transfer = Some(ticket);
+                    self.finish_transfer(store)?;
                     Ok(CopyProgress::Pending)
                 } else {
                     self.complete = true;
@@ -464,5 +486,65 @@ mod template_authority_tests {
             "LRR-E-STALE-HANDLE"
         );
         assert_eq!(a.peek_ticket(moved).unwrap(), first.value);
+    }
+    #[test]
+    fn refused_copy_parent_retains_committed_child_ticket_for_retry() {
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let inner = sealed(&mut store);
+        let source = {
+            let ty = store.place_type(inner.cell()).unwrap();
+            let ticket = store.move_from(inner.cell()).unwrap();
+            let outer_ty = store.intern_type(TypeKey::Tuple(vec![ty].into())).unwrap();
+            let guard = store.begin_construction(&[ty]).unwrap();
+            store.construction_push(guard, 0, ticket).unwrap();
+            let ticket = store.commit_construction(guard, outer_ty).unwrap();
+            let frame = store.new_frame_anchor().unwrap();
+            let cell = store
+                .new_cell(
+                    StorageContract::Exact(outer_ty),
+                    false,
+                    CellOwner::FrameSlot { frame, slot: 0 },
+                )
+                .unwrap();
+            store.initialize(cell, ticket).unwrap();
+            cell
+        };
+        let original = store.admit_move(source).unwrap();
+        let mut copy = AggregateCopy::begin(&mut store, source).unwrap();
+        assert!(matches!(
+            copy.advance(&mut store).unwrap(),
+            CopyProgress::Pending
+        ));
+        assert!(matches!(
+            copy.advance(&mut store).unwrap(),
+            CopyProgress::Pending
+        ));
+        let parent = copy.stack[0].destination.guard;
+        // An authority refusal before the parent consumes the replica.
+        store.constructions.get_mut(parent).unwrap().state = ConstructionState::Cleaning;
+        assert!(copy.advance(&mut store).is_err());
+        let retained = copy
+            .transfer
+            .expect("replica must remain owned by the continuation");
+        let replica = store.peek_ticket(retained).unwrap();
+        assert_eq!(replica.kind, 8);
+        store.constructions.get_mut(parent).unwrap().state = ConstructionState::Building;
+        assert!(matches!(copy.next(&store).unwrap(), CopyWork::Transfer));
+        assert!(matches!(
+            copy.advance(&mut store).unwrap(),
+            CopyProgress::Pending
+        ));
+        assert!(copy.transfer.is_none());
+        assert_eq!(
+            store.peek_ticket(retained).unwrap_err().code,
+            "LRR-E-STALE-HANDLE"
+        );
+        let CopyProgress::Complete(result) = copy.advance(&mut store).unwrap() else {
+            panic!("completed parent must return its actual result");
+        };
+        let copied = store.peek_ticket(result).unwrap();
+        assert_eq!(copied.type_id, original.type_id);
+        assert_ne!(copied.payload, original.payload);
+        assert_eq!(store.admit_move(source).unwrap(), original);
     }
 }

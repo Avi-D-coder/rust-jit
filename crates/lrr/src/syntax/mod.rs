@@ -12,6 +12,7 @@ pub mod constructors;
 
 // Only this owned schema is shared. It imports no upstream parser, interner or arena IDs.
 pub mod entered_macros;
+pub(crate) mod declaration_scope_plan;
 pub mod imports;
 #[path = "../../../lrr-expand-adapter/src/token_wire/model.rs"]
 pub mod token_wire;

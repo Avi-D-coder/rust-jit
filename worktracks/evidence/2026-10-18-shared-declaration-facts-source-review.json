@@ -1,0 +1,86 @@
+{
+  "status": "READY source representation component, independent review/compile/runtime pending",
+  "precode": "worktracks/evidence/2026-10-18-shared-declaration-facts-precode.md",
+  "sources": [
+    {
+      "path": "crates/lrr/src/syntax/entered_macros.rs",
+      "sha256": "c36254ee3261a450f729766b1c1841b3935d77849510fc942a306e92fc086bae"
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scope_plan.rs",
+      "sha256": "e6d2f227670f510bbb26ec9aeec752a07e9c0e0d8d97fa26e4dfa3cef40b9ec8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_namespace.rs",
+      "sha256": "f2e708b42e5dfff7e72a5b55d45c65311f956987365bdeabbc846df5cbafe8ac"
+    }
+  ],
+  "interfaces": [
+    "pub struct DeclarationFacts (public nonbinding payload, no Clone, owned builder only)",
+    "EnteredMacroFacts{public bindings Vec, private Arc<DeclarationFacts>} + readonly Deref; from_declarations crate-private builder freeze; declaration_facts shared Arc accessor",
+    "pub struct DeclarationScopePlan (all private fields), crate-private actual-source factory, parse/body/scope/cfg/fingerprint getters; declarations() borrowed metadata; declaration_facts() Arc accessor; prepare_entered(&self)->Result<EnteredMacroFacts>",
+    "DeferredBindings::apply(&self) borrows same ordered requests and returns only owned binding-recipe Vec; no source walk",
+    "Namespace::capture composes own DeclarationFacts and freezes once; existing derived namespace remap rows deliberately distinct"
+  ],
+  "review_census": [
+    "All existing EnteredMacroFacts struct literals were syntax collector + Namespace::capture; migrated both.",
+    "All nonbinding vector mutation sites are canonical lexical collector or owned Namespace derived builder. No external write through shared facts found. No DerefMut or Arc::make_mut.",
+    "All existing Borrow readers retain .items/.members/etc through readonly Deref, declaration iterator unchanged.",
+    "Header/body/DefKey canonical producers, event/import scope IDs and cfg decisions unchanged.",
+    "Source-body main query consumer and actual retained provenance integration owned by parent; not changed here.",
+    "Plan debug reports only identity/owner fields, supports public QueryValue derive without dumping/deep-cloning syntax."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "No expression/assertion compiler/evaluator; syntax metadata ownership only."
+    },
+    {
+      "mode": 2,
+      "review": "Same canonical syntax collector, no generated executor/opcode or scalar route."
+    },
+    {
+      "mode": 3,
+      "review": "No macro/type/function/method/numeric name conditions. BindingBudget receives identical scopes/at/forms/order as previous component."
+    },
+    {
+      "mode": 4,
+      "review": "Actual parser/BodyHandle/context/cfg fingerprint and transform gates unchanged. Arc is lifetime sharing only, no source/currentness/entry grant; generated semantics unchanged."
+    },
+    {
+      "mode": 5,
+      "review": "Cold metadata cannot contain binding recipes by DeclarationFacts type. prepare_entered invokes same ordinary binding collector on retained requests only at entry; no PatternTree/BodyIndex/SourceLocalPlan/BodyEnvironment creation."
+    },
+    {
+      "mode": 6,
+      "review": "No canonical walker/header reconstruction for repeated prepare_entered on same plan. Entry clones one Arc and builds only owned binding recipes. Actual memo/caller plan adoption pending parent integration; no installed execution planner added."
+    },
+    {
+      "mode": 7,
+      "review": "No query/namespace/world change or Drop absence authority in this representation. Source/currentness receipt is separately retained by actual owning frontend/DB services."
+    },
+    {
+      "mode": 8,
+      "review": "Immutable declaration payload cannot be deep-cloned via DeclarationFacts::clone (no Clone impl), no DerefMut/make_mut. One Arc shared by cold plan and entered facts; BodyIndex unchanged. Existing Namespace composition copies only its required remapped derived rows, not a new same-source-entry copy. No new resource accounting."
+    }
+  ],
+  "control": {
+    "selector": "syntax::declaration_scope_plan::tests::unchanged_local_drop_headers_keep_canonical_identity_without_binding_preparation",
+    "original": "fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs",
+    "sha256": "34adb67b8cf73f5558f1fe1a8e0ce62ed6b9dd132a2c0dec6aa99a3564ea2453",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "assertions": "same cold plan enters twice sharing exact declaration Arc, distinct nonempty owned _x bindings Vec, unchanged canonical DefKeys/headers/body handles; deterministic plan key; no bindings container on cold DeclarationFacts",
+    "scope": "LRR metadata integration control outside original; unexecuted successor, no wholemain runtime claim"
+  },
+  "holds": [
+    "Parent real pure query/memo+source_body_context consumer adoption unimplemented at snapshot; direct adapters still fresh collectors until separately migrated.",
+    "Cold ScannedImpl canonical owner/type/member join and full configured-world producer/negative trait goal completeness absent.",
+    "Generated/origin/cfg/epoch matrices and primary wholemain successor acceptance unexecuted; representation review does not close those requirements.",
+    "No E007, interpreter/JIT or measured performance acceptance claimed."
+  ]
+}

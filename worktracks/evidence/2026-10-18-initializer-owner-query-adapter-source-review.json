@@ -1,0 +1,21 @@
+{
+  "status": "source-only pure source adapter; independent/build/unexercised",
+  "claim": "LOCAL-044",
+  "precode": "worktracks/evidence/2026-10-18-initializer-owner-query-adapter-precode.md",
+  "files": {
+    "crates/lrr/src/db/key.rs": "21bef36531bd5bcb5216cf6263244de2ff2841897b4c0c9475655447fa3e8c04",
+    "crates/lrr/src/db/value.rs": "056f7de0de8611a193a6da4400f902d769c9689b829950199b14f8a97ef2b8af",
+    "crates/lrr/src/db/provider.rs": "1b1ebfb27abcec1032cf1cd1ee2b39506a0c1bb9d073065b71c995596894dcb2",
+    "crates/lrr/src/service/expansion.rs": "6bfe99d066f1399324e6955f52a922709950b6bb496929e97bd8ad54e708634e",
+    "crates/lrr/src/cli/preentry_loader.rs": "f8f514a8ef22c1a3e4c39ae220ac9dbc07efbd306d5c51dccc7e13b782c5c85f"
+  },
+  "stable_tag": 53,
+  "scope": "Only agreed InitializerOwnerTemplate key/value/provider purehelperjoin; actualmatching/fingerprint/source-root/caller retention and preentry/demand exhaustive adapters. Value admission accounting0 underE006, keyinline noheapcensus. No service/world lookup or initializer packet entry.",
+  "all8": "Sharedactualsource query; no evaluator/generatedsubset/inference/matcher; declarationmetadata only; retainedpurememo; relevantactualinputs no sourceworld census; Arcsourceplan noBodyIndexcopies. Actual helperreview separate.",
+  "holds": [
+    "No installed applied-member/provider/cache consumer yet",
+    "No runtime or fixture pass from helper/query construction",
+    "Full target source/query currentness guard required before application execution",
+    "Tag52 remains unused, query52 declaration-plan adoption not implemented"
+  ]
+}

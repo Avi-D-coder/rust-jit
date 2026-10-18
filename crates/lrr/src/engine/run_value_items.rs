@@ -463,9 +463,7 @@ impl RunMachine {
         db: &mut Database,
         path: &str,
     ) -> QueryPoll<()> {
-        let pc = self.frame.pc().clone();
-        if let Some(value) = self.item_values.get(&pc) {
-            self.frame.prepare_item_value(value.clone());
+        if self.frame.use_cached_item_value() {
             return QueryPoll::Ready(Ok(()));
         }
         let found = match self.lookup_value_name(db, path, Namespace::Value) {
@@ -713,8 +711,7 @@ impl RunMachine {
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     };
                     let value = ItemValue::Static { cell, view };
-                    self.item_values.insert(pc, value.clone());
-                    self.frame.prepare_item_value(value);
+                    self.frame.cache_item_value(value);
                     return QueryPoll::Ready(Ok(()));
                 }
                 // A value read observes the static's current contents (a
@@ -756,8 +753,7 @@ impl RunMachine {
                 ))));
             }
         };
-        self.item_values.insert(pc, value.clone());
-        self.frame.prepare_item_value(value);
+        self.frame.cache_item_value(value);
         QueryPoll::Ready(Ok(()))
     }
 }

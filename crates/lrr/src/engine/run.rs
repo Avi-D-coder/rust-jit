@@ -413,8 +413,6 @@ pub struct RunMachine {
             Arc<[crate::vm::pattern::matcher::PatternTarget]>,
         ),
     >,
-    /// Value-namespace item values selected per `ValuePath` PC.
-    item_values: BTreeMap<PcKey, crate::vm::frame::item_values_frame::ItemValue>,
     /// The entered lexical selection of each single-name `ValuePath` PC a
     /// body-local item may bind (`None`: the module route), selected once.
     /// The selected static cell of each by-value static read PC.
@@ -566,7 +564,6 @@ impl RunMachine {
                 primitive_methods: BTreeMap::new(),
                 constant_plans: BTreeMap::new(),
                 pattern_names: BTreeMap::new(),
-                item_values: BTreeMap::new(),
                 lexical_values: BTreeMap::new(),
                 local_function_values: BTreeMap::new(),
                 static_reads: BTreeMap::new(),

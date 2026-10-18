@@ -1,0 +1,87 @@
+{
+  "status": "bounded_source_repair_ready_for_independent_review_uncompiled",
+  "tasks": [
+    "T032",
+    "T054",
+    "M018",
+    "M025"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-constant-owner-type-prefix-prerequisite.md",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/local_type_names.rs",
+      "sha256": "d7da5b010d268bd39e66671407d3d0f3b02c6e07534df05e9a41206877ede60d"
+    }
+  ],
+  "source_predecessor_sha256": "59bc96867eb1fce8274627d7c7cb1c6233c8f18f6b7e1c9abd51037d3547df3a",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-use-impl-of-same-trait.rs",
+    "sha256": "7c4a55f0c3e5d0b1e507c3daf2edbbce8c708786ab547059372ca9183e933161",
+    "owning_edition": 2015,
+    "saved_failure": "artifacts/validation-resume-2026-10-18/candidate-v32/stock-6.stdout",
+    "actual_first_fault": "<IsFoo1 as Foo>::BAR original378..398 in genuine IsFoo2 impl const initializer; associated qualifier missing actual source Type, zero source calls/17dispatches/14ops. Internal NeedOwnerGeneric is established by source review, not newly executed query diagnostic."
+  },
+  "common_route": [
+    "AdmittedBodyContext genuine ParsedFile/context/header/body -> LocalTypeNames::prepare actual declaration AST",
+    "Immediate real AssocItemList parent Impl/Trait and parent tokens excluding AssocItemList equal source.header.context; no parent/body wrapper fabricated",
+    "Fn retains canonical capture_generics/owner_generics; Const/Static reuse ParsedFile::initializer_parameters(header,context,body), same declaration_generics/associated_owner_generics used by real FunctionSignature",
+    "Inherited Type names keep source.owner_identifier_context, actual token edition, hygiene.name_item, semantic MacroName and real common signature ordinal -> ParamKey(currentdefinition,ordinal)",
+    "need_owner false only after complete actual inherited-name capture; empty real nongeneric impl succeeds; absent owner/header/hygiene remains existing NeedOwnerGeneric pending",
+    "Same source_locals::lookup_prefix_inner -> module tail or actual parameter -> LocalTypePrefix/current module Type bucket -> common source Type/trait finalizer -> associated member selector -> existing initializer VM/cache"
+  ],
+  "removed_restriction": "Fn-only condition in the existing common owner-name preparation block; no second selector or fallback introduced",
+  "authority_holds": [
+    "Existing owner_identifier_context admits only its proven source classes; generated/retained owner Type parameters missing genuine owner context remain pending, not new original-only refusal.",
+    "Full GenericArg owner application, provider applicability publication, actual runtime initializer packet/substitution and once-per-application cache remain root-held; no gate bypass.",
+    "No new query/key/schema or source environment authority. Plan signature/currentness/namespace observations remain existing owners."
+  ],
+  "cost": "Cold memoized SourceLocalPlan construction only. Adds immediate actual owner header tokens comparison; tokens traverses excluded descendants before filtering so O(actual owner subtree tokens), not constant work/no-body-enumeration. Existing initializer_parameters validates actual initializer via retained parser locator and repeats declaration header token validation, cold once per plan. No installed execution source parse/plan/world scan/bodyclone. Existing inherited-name loop work O(actual generic params).",
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "LocalTypeNames::prepare/ParsedFile::initializer_parameters",
+      "review": "Source names/binder facts only; no assertion/expression evaluator or executable body introduced."
+    },
+    {
+      "mode": 2,
+      "symbols": "actual admitted declaration/AssocItemList parent",
+      "review": "Original and retained/generated declarations share same actual AST/header/owner path. No scalar/break macro executor."
+    },
+    {
+      "mode": 3,
+      "symbols": "capture_generics/owner_generics/initializer_parameters/GenericName",
+      "review": "Canonical source ParamKeys and genuine Type namespace. No fixture spelling, member/numeric/assert context rule."
+    },
+    {
+      "mode": 4,
+      "symbols": "owner_identifier_context/need_owner",
+      "review": "Preserves existing actual hygiene evidence and pending boundaries; genuine owner proof extends admitted Const/Static rather than excluding generated code."
+    },
+    {
+      "mode": 5,
+      "symbols": "LocalTypeNames::prepare actual declaration header",
+      "review": "No pattern engine or executable-arm preparation. Parent header tokens helper traverses owner descendants before filtering; disclosed cold structural walk, no lowering/evaluation."
+    },
+    {
+      "mode": 6,
+      "symbols": "PreparedSourceLocalPlan::build -> LocalTypeNames::prepare",
+      "review": "Extends existing immutable cold memo construction; installed recipe and operation paths unchanged."
+    },
+    {
+      "mode": 7,
+      "symbols": "source_locals::lookup_prefix_inner/LocalTypePrefix",
+      "review": "Existing observed positive/negative Type namespace service remains. No full-world scan/guard or unrelated invalidation added."
+    },
+    {
+      "mode": 8,
+      "symbols": "ParsedFile retained syntax/source actual parent handles",
+      "review": "Direct genuine declaration/body locators and shared AST handles; no body deep clone, whole-file node search or extra retained index."
+    }
+  ],
+  "validation": {
+    "cargo": "Not run by implementation worker; sole validation agent owns builds/tests.",
+    "source_review": "Separate source pass inspected actual common binder API, all immediate parent/header guards, same inherited loop/ordinal/hygiene and pending commit behavior. Independent review requested.",
+    "runtime": "Unexecuted candidate. V32 failure retained. Require unchanged same-trait anchored fixture plus existing source-owner/anchored/Self route controls after exact combined build; no full-feature acceptance."
+  },
+  "formatting": "Ran rustfmt only this leaf with skip_children=true; restored unrelated preexisting indentation against verified exact predecessor hash. No other production leaf edited."
+}

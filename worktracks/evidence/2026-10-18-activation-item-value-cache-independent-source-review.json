@@ -1,0 +1,104 @@
+{
+  "status": "CLEAR bounded cross-activation ownership repair; no full source-invalidation/runtime acceptance",
+  "reviewer": "/root/generic_projection_resume",
+  "candidate_receipt": "worktracks/evidence/2026-10-18-activation-item-value-cache-source-review.json",
+  "sources": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "85b754b60fa7ff8e8b3550a7b461d0464cbe7a7256ebd79d12e2d3d274dfe806"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "2d09f40544933940964c024829113356386ac2bc852eff8e110dc114fff4be5b"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "674bf45369936cea9967b28dc810e0cb20c192541fe216db2ca83c02982ce395"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_item_values.rs",
+      "sha256": "c1d8b6681a9cd4672109ad1d877b645cd6aa58e8a3cd1c3ff791f1ad0fa43425"
+    },
+    {
+      "path": "crates/lrr/src/vm/context.rs",
+      "sha256": "ee136837c73cce09406f529e8455ef20f388434cf1a90b46d5957c5913842644"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "b7ea9b943234398f799b8da2a9d2928aa93c0ed70e94b93c9b95d0c474fcacf0"
+    },
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "4ef2a6ecf023a5e0e7edb19d22415e1a59787b79152076c4a6a05c993cb3d7f4"
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "ba5b23225ef2649ade70b6879da5bdd8f1c973ad05da19da42482df9381fd901"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_return.rs",
+      "sha256": "f1fad9a5bf99b2f99fb150f8479f78a68c424e5a456570dd3a7e83c27452d1df"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_panic.rs",
+      "sha256": "1ead50b7f8e60d5c4e93e5c3a877b4434e9afc442eeaa308f70f4809355e808f"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_drop_witness.rs",
+      "sha256": "3b43b73ca3d62c41d491ea24d68b2d54eef94f28945ebedbee1789b9bdff4c67"
+    }
+  ],
+  "findings": [
+    "Exact four candidate hashes match supplied source receipt; RunMachine global ItemValue cache removed and both reusable insertions now target actual Frame cache.",
+    "Frame::install_context permits only fresh accepted frame with no operations/scopes/existing environment; GenericEnv owns immutable boxed symbolic/runtime substitutions. with_written_result/template consumes self before installation. No mutable in-activation generic substitution path found.",
+    "RunMachine::enter_prepared_source_call moves whole old frame into SuspendedCall; return/panic/drop restoration assigns exact suspended caller frame. Fresh callee ItemValueFacts is default-empty. Suspension retains actual activation cache naturally.",
+    "run_nominal::prepare_value_path has_cached_item_value consults same Frame and delegates to prepare_item_value_path, whose use_cached_item_value stages that frame value before ordinary ValuePath. No second cache namespace introduced.",
+    "Single-use initialized_values Ticket path returns through prepare_item_value before cache insertion; static value reads also freshly stage current state. Current reusable callers cache only ConstCell/ConstTemplate(+Promotable), Static-place and Function. cache_item_value itself accepts generic ItemValue, so single-use exclusion is a reviewed current caller invariant rather than an enforced sum-type API.",
+    "No blocker found for actual cross-activation bug where same Foo::get_x PC executes for Abc and Def. Current source separates frames; actual successor witness must establish results."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "No assertion/compiler/evaluator changes; ordinary value namespace resolver and VM item path unchanged."
+    },
+    {
+      "mode": 2,
+      "review": "Generated and original source keep same ValuePath/read/copy activation; no macro-only executor or opcode."
+    },
+    {
+      "mode": 3,
+      "review": "Runtime-bound facts now owned by actual generic activation. No function/macro/method/type spelling or expected-result guess; immutable source qualifier queries still shared."
+    },
+    {
+      "mode": 4,
+      "review": "No source-origin exclusion or fabricated scope/source receipt; actual installed/body source leases retained."
+    },
+    {
+      "mode": 5,
+      "review": "No eager callee/cold-branch/pattern preparation or separate matcher. Ticket staging/consumption stays existing route."
+    },
+    {
+      "mode": 6,
+      "review": "First use per activation does existing resolver preparation; same-frame loop hits BTreeMap and stages cloned reusable handle only. No new parse/whole-plan work per installed execution. No speed claim."
+    },
+    {
+      "mode": 7,
+      "review": "No global namespace map/whole-caller-env/TypeId surrogate key; installed source revision/body leases remain. Relevant qualifier/member lookup invalidation is still an explicit incomplete boundary described below."
+    },
+    {
+      "mode": 8,
+      "review": "Cache follows mutable Frame state; no immutable BodyIndex/body/source deep-copy. Call suspension moves frame ownership, not cloned source structures. No new resource accounting."
+    }
+  ],
+  "source_guard_boundary": {
+    "observed": "associated_value_path prepares actual AssociatedItemQualifier guard, checks require_current then drops it; cache stores only ItemValue. use_cached_item_value does not fetch/query/revalidate that selection closure.",
+    "existing_protection": "poll checks source_revision against installed table, active/suspended body leases; get_current checks recipe namespace guard and constructor input guard. These do not by themselves establish coverage of every runtime qualifier/member publication.",
+    "hold": "Relevant same-activation namespace/member publication that changes source selection must retain/recheck the exact selection dependency before cached use, or be proved impossible by genuine completed configured-world closure. This source review does not claim either. Inherited debt also affected old global cache; frame ownership does not repair or worsen it by a new bypass.",
+    "remaining_global": "static_reads, pattern_names and constant classification/plan caches remain separate reviewed ownership/application/invalidation work; full generic initializer packet/cache scope held."
+  },
+  "evidence": "Source inspection only. V32 unchanged associated-const-type-parameters actual assertion failure and generic None-context secondary fault are historical frontier; no captured operands identify exact wrong comparison. No new tests or Cargo by reviewer.",
+  "holds": [
+    "Primary unchanged associated constant wholemain and source/epoch/generic matrix not executed on this successor.",
+    "No full generic item application identity/cache or interpreter/JIT/feature gate closure."
+  ]
+}

@@ -217,15 +217,22 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
     let mut first = None;
     let mut last = None;
     let mut normalized = None;
+    let mut defining_root = None;
     let mut path_bytes = 0usize;
     let mut path_identity = StableEncoder::new("lrr/v1/qualified-type-occurrence");
     path_identity.bool(occurrence.absolute());
-    for segment in occurrence.segments() {
+    for (ordinal, segment) in occurrence.segments().iter().enumerate() {
         let (identifier, part) = match segment {
             BodyTypeSegment::Name(name) => (name, ImportSegment::Name(name.name().to_owned())),
             BodyTypeSegment::Crate(name) => (name, ImportSegment::Crate),
             BodyTypeSegment::SelfModule(name) => (name, ImportSegment::SelfModule),
             BodyTypeSegment::Super(name) => (name, ImportSegment::Super),
+            BodyTypeSegment::DollarCrate(name, unit) => {
+                if ordinal != 0 || occurrence.absolute() { return proof.pending(QualifiedTypeDemand::PathAdjustment); }
+                let Some(unit) = unit else { return proof.pending(QualifiedTypeDemand::SourceOccurrence); };
+                defining_root = Some(*unit);
+                (name, ImportSegment::Crate)
+            }
             BodyTypeSegment::SelfType(_) | BodyTypeSegment::NeedQualifiedType => {
                 return proof.pending(QualifiedTypeDemand::PathAdjustment);
             }
@@ -249,10 +256,16 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
             return proof.pending(QualifiedTypeDemand::PathAdjustment);
         }
         let item = checked!(hygiene.name_item(raw));
-        if normalized.is_some_and(|prior| prior != item) {
-            return proof.pending(QualifiedTypeDemand::PathAdjustment);
+        if matches!(segment, BodyTypeSegment::DollarCrate(..)) {
+            if Some(Digest(checked!(hygiene.dollar_crate(raw)).0)) != defining_root {
+                return QueryPoll::Ready(Err(error("Type dollar-crate root differs from actual token context")));
+            }
+        } else {
+            if normalized.is_some_and(|prior| prior != item) {
+                return proof.pending(QualifiedTypeDemand::PathAdjustment);
+            }
+            normalized = Some(item);
         }
-        normalized = Some(item);
         path_identity.string(identifier.name());
         path_identity.u16(identifier.edition());
         path_identity.u32(identifier.range().start);
@@ -271,15 +284,21 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
     let (Some((first, context)), Some(last)) = (first, last) else {
         return proof.pending(QualifiedTypeDemand::SourceOccurrence);
     };
+    if defining_root.is_some() && parts.len() == 1 {
+        // The crate root alone names a module, not a completed source Type.
+        return proof.pending(QualifiedTypeDemand::PathAdjustment);
+    }
     let last_name = checked!(crate::frontend::names::owned_name(
         last.name(),
         last.edition()
     ));
-    match checked!(plan.lexical_module.route(&hygiene, context)) {
-        ModuleRoute::Definition(expansion) => {
-            return proof.pending(QualifiedTypeDemand::DefinitionModule(expansion));
+    if defining_root.is_none() {
+        match checked!(plan.lexical_module.route(&hygiene, context)) {
+            ModuleRoute::Definition(expansion) => {
+                return proof.pending(QualifiedTypeDemand::DefinitionModule(expansion));
+            }
+            ModuleRoute::Lexical(_) => {}
         }
-        ModuleRoute::Lexical(_) => {}
     }
     let site = OrdinaryNameSite {
         source: plan.entered.parent.source(),
@@ -310,11 +329,12 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
             PrefixResolution::Name(_) => return proof.pending(QualifiedTypeDemand::AssociatedType),
         }
     }
-    let (lookup, reads) = checked!(plan.adapter().lookup_qualified_module_observed(
+    let (lookup, reads) = checked!(plan.adapter().lookup_qualified_module_rooted_observed(
         site,
         &parts,
         occurrence.absolute(),
-        environment.names()
+        environment.names(),
+        defining_root,
     ));
     proof.lookup = Some(lookup);
     let selected = match proof.lookup.as_ref() {

@@ -1,0 +1,74 @@
+{
+  "status": "CLEAR bounded source component; compile/runtime unexecuted successor",
+  "reviewer": "/root/generic_projection_resume",
+  "scope": "Root transfer-retention successor; pre-consumption parent refusal only, no general failure/cancellation atomicity claim",
+  "candidate_receipt": "worktracks/evidence/2026-10-18-copy-transfer-ownership-source-review.json",
+  "sources": [
+    {
+      "path": "crates/lrr/src/runtime/cell_aggregate_copy.rs",
+      "sha256": "44cbdc084746a3b856170d60fe6059d530ddbdd9632e7b50858750c6c5761e3c"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "sha256": "9b0bdb7cd9c2da8b1986bcb68853e2611a92737299fc7ab9c9d782366c2d197d"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
+      "sha256": "97494219ed0d03da057975838186d1a2c7031993abb409c7e77be0dac0c86a9a"
+    }
+  ],
+  "inspected": [
+    "AggregateCopy::{next,advance,finish_transfer}",
+    "GuestStore::{append_copy_field,copy_destination,finish_copy_destination,construction_push,commit_construction_with_storage}",
+    "Frame::advance_aggregate_copy CopyWork Field-only reservation consumer",
+    "template_authority_tests::refused_copy_parent_retains_leaf_and_committed_child_tickets_for_retry"
+  ],
+  "findings": [
+    "No blocker found within the stated pre-consume refusal boundary.",
+    "Leaf copy stores actual returned ticket into transfer before any parent append; failed pre-consume append leaves exact live replica reachable.",
+    "Completed child is popped only after actual common commit returns its ticket; actual child ticket then enters transfer before parent append. Failed child commit leaves exact guard retained in stack.",
+    "finish_transfer prechecks parent.next increment before parent ownership transfer; successful push clears transfer and advances index exactly once. It does not issue another copy on retry.",
+    "next checks template/current root/current parent source stamps and ticket liveness before Transfer retry; common append validates actual parent construction and actual ticket owner/type. No guard bypass/authority renewal occurs.",
+    "Test nested path advances into child then copies its leaf, injects Cleaning parent, reaches child commit before parent refusal, retains kind8 child ticket, restores guard then consumes same ticket once and confirms stalehandle/fresh distinct root/source unchanged. Leaf path separately retains nonaggregate ticket. This is fault injection source evidence, not guest runtime acceptance."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "No expression/assertion compiler/evaluator; existing physical Copy kernel only."
+    },
+    {
+      "mode": 2,
+      "review": "No generated executor/opcode route. Ordinary generated and original source use same existing read/ValuePath/record-rest activation."
+    },
+    {
+      "mode": 3,
+      "review": "No type/function/macro name or numeric special case. Optional TicketId is one ownership state for all physical field transfers."
+    },
+    {
+      "mode": 4,
+      "review": "Source/root/template authority rechecked using unchanged actual handles; no origin exclusion/fake owner."
+    },
+    {
+      "mode": 5,
+      "review": "No pattern or cold executable checking. Same physical continuation retains actual replica across a bounded refusal."
+    },
+    {
+      "mode": 6,
+      "review": "O(1) pending ticket bookkeeping. No new successful normal transfer phase: initial append still happens in same advance; only retry selects Transfer. No parser/source plan reconstruction."
+    },
+    {
+      "mode": 7,
+      "review": "No namespace map/scan or unrelated invalidation; existing relevant physical source/template checks retained."
+    },
+    {
+      "mode": 8,
+      "review": "No body/index cloning or AST lookup. One optional ticket per activation, no additional immutable structures."
+    }
+  ],
+  "holds": [
+    "construction_push consumes tickets.take before fallible literal mutation/set_owner/guard reacquisition; current repair does not prove arbitrary post-consume errors leave ticket live. A stale retained transfer on such failure remains held, not safe retry evidence.",
+    "commit_construction_with_storage has fallible operations after allocations and construction guard take; this repair retains precommit guard only when actual common commit has not consumed it. General rollback remains held.",
+    "Activation cancellation/draining and failed final frame write cleanup explicitly remain unintegrated.",
+    "No compiler/guest commands executed by reviewer; no stock/full fixture/runtime correctness/interpreter/JIT/performance closure."
+  ]
+}
