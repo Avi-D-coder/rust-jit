@@ -1802,6 +1802,7 @@ fn verify_inner(
         namespace_witness: None,
         prepared_inputs: None,
         source_call: None,
+        inferred_arguments: None,
     })
 }
 /// Exact reached declarative literal admission. The private witness is created

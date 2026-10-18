@@ -180,7 +180,7 @@ pub(crate) fn lrr_parse_i64(s: &str, min: i64, max: i64) -> crate::result::Resul
     lrr_parse_radix_i64(s, 10, min, max)
 }
 pub struct ParseFloatError;
-pub struct TryFromIntError(pub(crate) ());
+pub struct TryFromIntError(pub(crate) IntErrorKind);
 
 pub struct Wrapping<T>(pub T);
 pub struct Saturating<T>(pub T);

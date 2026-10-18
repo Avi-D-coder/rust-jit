@@ -13,6 +13,7 @@
 //! dispatcher selects that method from the left operand's reached type
 //! through the run's member index and enters it as an ordinary source call
 //! (`engine/run_operator_calls.rs`); its result resumes the operation.
+use super::deref_coercion_frame::{ValueCoercionGoal, ValueRead};
 use super::*;
 use crate::{
     ir::op::{BorrowAccess, NumericBinary, NumericUnary, Op, OperandRead},
@@ -137,9 +138,38 @@ pub(super) struct OperatorActivation {
     /// A place operation whose base place takes an overloaded `Deref` step
     /// first: the base place slot.
     place_deref: Option<SlotId>,
-    /// The holder slot's reached expectation (a value the operation's node
-    /// will produce later, not the `&Target` this step returns).
-    held_hint: Option<TypeId>,
+    /// The dispatcher-owned location the step's returned `&Target` lands in
+    /// (no frame slot carries it: its expectations belong to the operation's
+    /// own later result).
+    result_cell: Option<CellId>,
+    /// The returned reference's source view.
+    returned_view: Option<TyTerm>,
+    /// A reference read taking rustc's deref coercion step by step.
+    value_coercion: Option<ValueCoercion>,
+}
+/// A reference value read into a destination that expects a reference to
+/// another Type: the referent place of the current reference, its nominal
+/// Type, the access the destination expects and the Type it expects. Each
+/// `Deref` call returns the next reference, which is the read's result once
+/// its pointee is the expected Type.
+struct ValueCoercion {
+    current: Place,
+    referent_type: TypeId,
+    mutable: bool,
+    expected: TyTerm,
+}
+impl ValueCoercion {
+    fn duplicate(&self) -> ValueCoercion {
+        ValueCoercion {
+            current: Place {
+                root: self.current.root,
+                projections: self.current.projections.clone(),
+            },
+            referent_type: self.referent_type,
+            mutable: self.mutable,
+            expected: self.expected.clone(),
+        }
+    }
 }
 /// The dispatcher's finding that the next place operation's base place needs
 /// an overloaded `Deref` step (`DerefMut` when `mutable`) before the
@@ -177,7 +207,7 @@ pub(crate) struct OperatorDemand {
     /// comparison, the autoref'd operand's) or the updated place's.
     pub(crate) self_type: TypeId,
     /// The operation's result slot.
-    pub(crate) destination: SlotId,
+    pub(crate) destination: Option<SlotId>,
 }
 /// A builtin operand type: a sized primitive scalar or a shared reference
 /// (Copy, read by value as before). Anything else selects a trait method.
@@ -341,6 +371,41 @@ impl Frame {
                 .place_deref
                 .filter(|demand| demand.base == *base && demand.pc == self.pc.fingerprint())
                 .map(|demand| OperatorKind::Deref(demand.mutable)),
+            // A borrow whose result expects a reference to another Type than
+            // the nominal value it borrows takes rustc's deref coercion: a
+            // `Deref` step, then the borrow of its referent.
+            Op::Borrow {
+                place,
+                access,
+                destination,
+            } => {
+                let goal = self.borrow_coercion_goal(*place, *destination, store)?;
+                match goal {
+                    Some(goal)
+                        if self.declined_coercion
+                            != Some((self.pc.fingerprint(), goal.place_type)) =>
+                    {
+                        Some(OperatorKind::Deref(matches!(
+                            access,
+                            crate::ir::op::BorrowAccess::Mutable
+                        )))
+                    }
+                    _ => None,
+                }
+            }
+            // A reference read into a destination expecting a reference to
+            // another Type takes the same deref coercion on its referent.
+            Op::ReadLocal {
+                binding,
+                destination,
+            } => self.value_coercion_kind(ValueRead::Local(*binding), *destination, store)?,
+            Op::ReadParameter {
+                ordinal,
+                destination,
+            } => self.value_coercion_kind(ValueRead::Parameter(*ordinal), *destination, store)?,
+            Op::ReadPlace { place, destination } => {
+                self.value_coercion_kind(ValueRead::Place(*place), *destination, store)?
+            }
             // A receiver with an overloaded autoderef step demands its
             // `Deref` method before the receiver can be formed.
             Op::MethodReceiver { site, .. } => self
@@ -379,37 +444,45 @@ impl Frame {
             return self.begin_receiver_overload(index, op, (site.0, *place, *scratch, *destination), store);
         }
         let mut place_deref = None;
-        let mut held_hint = None;
+        let mut value_coercion = None;
         let destination = match op {
             Op::NumericBinary { destination, .. }
             | Op::NumericUnary { destination, .. }
             | Op::CompoundAssignPlace { destination, .. }
             | Op::IteratorCall { destination, .. } => *destination,
-            // The returned reference is held in the operation's node value
-            // slot, which no value of this operation has used yet.
+            // The step's result lands in a dispatcher-owned location; the
+            // base place stands for the operation.
             Op::DerefPlace { reference: base, .. }
             | Op::ProjectField { base, .. }
             | Op::ProjectTuple { base, .. }
-            | Op::ProjectIndex { base, .. } => {
+            | Op::ProjectIndex { base, .. }
+            | Op::Borrow { place: base, .. } => {
                 place_deref = Some(*base);
                 self.place_deref = None;
-                let holder = self
-                    .body
-                    .nodes()
-                    .get(self.pc.node as usize)
-                    .and_then(|node| node.value)
-                    .ok_or_else(|| {
-                        Diagnostic::new(
-                            "LRR-E-UNSUPPORTED",
-                            "overloaded place dereference lacks a node value slot".into(),
-                        )
-                    })?;
-                held_hint = self.slots[holder.0 as usize].hint.take();
-                holder
+                *base
+            }
+            // The read's result is the coerced reference, written to the
+            // operation's own destination when the chain ends.
+            Op::ReadLocal { destination, .. }
+            | Op::ReadParameter { destination, .. }
+            | Op::ReadPlace { destination, .. } => {
+                let goal = self
+                    .read_coercion_goal(op, store)?
+                    .ok_or_else(|| invalid("reference read lost its coercion goal"))?;
+                value_coercion = Some(ValueCoercion {
+                    current: goal.referent,
+                    referent_type: goal.referent_type,
+                    mutable: goal.mutable,
+                    expected: goal.expected,
+                });
+                *destination
             }
             _ => return Err(invalid("operator call requires an operator operation")),
         };
-        let self_type = self.operator_self_type(op, kind, store)?;
+        let self_type = match &value_coercion {
+            Some(coercion) => coercion.referent_type,
+            None => self.operator_self_type(op, kind, store)?,
+        };
         self.operator_activation = Some(OperatorActivation {
             pc: self.pc.fingerprint(),
             operation_index: u32::try_from(index)
@@ -423,7 +496,9 @@ impl Frame {
             owned: Vec::new(),
             receiver: None,
             place_deref,
-            held_hint,
+            result_cell: None,
+            returned_view: None,
+            value_coercion,
         });
         Ok(())
     }
@@ -488,7 +563,9 @@ impl Frame {
                         owned: Vec::new(),
                         receiver: Some(progress),
                         place_deref: None,
-                        held_hint: None,
+                        result_cell: None,
+                        returned_view: None,
+                        value_coercion: None,
                     });
                     return Ok(true);
                 }
@@ -676,7 +753,8 @@ impl Frame {
             Op::DerefPlace { reference: base, .. }
             | Op::ProjectField { base, .. }
             | Op::ProjectTuple { base, .. }
-            | Op::ProjectIndex { base, .. } => store
+            | Op::ProjectIndex { base, .. }
+            | Op::Borrow { place: base, .. } => store
                 .place_type_id(self.executed_place(*base)?)
                 .map_err(place_error)?,
             // The evaluated `for` head's type, or the loop's iterator's.
@@ -702,7 +780,7 @@ impl Frame {
             .map(|activation| OperatorDemand {
                 kind: activation.kind,
                 self_type: activation.self_type,
-                destination: activation.destination,
+                destination: (!activation.holds_result()).then_some(activation.destination),
             })
     }
     pub(crate) fn operator_demanded(&self) -> bool {
@@ -1007,29 +1085,67 @@ impl Frame {
             | Op::DerefPlace { .. }
             | Op::ProjectField { .. }
             | Op::ProjectTuple { .. }
-            | Op::ProjectIndex { .. } => {
-                let current = self
+            | Op::ProjectIndex { .. }
+            | Op::Borrow { .. }
+            | Op::ReadLocal { .. }
+            | Op::ReadParameter { .. }
+            | Op::ReadPlace { .. } => {
+                if self
                     .operator_activation
                     .as_ref()
-                    .and_then(|activation| {
-                        activation
-                            .receiver
+                    .is_some_and(|activation| activation.holds_result())
+                {
+                    let cell = store.new_cell(
+                        StorageContract::Unbound,
+                        false,
+                        CellOwner::FrameSlot {
+                            frame: self.anchor,
+                            slot: self
+                                .owned_location_base()?
+                                .checked_add(8)
+                                .ok_or_else(|| invalid("operator location overflow"))?,
+                        },
+                    )?;
+                    self.operator_activation
+                        .as_mut()
+                        .ok_or_else(|| invalid("operator activation absent"))?
+                        .result_cell = Some(cell);
+                }
+                let coerced = self
+                    .operator_activation
+                    .as_ref()
+                    .and_then(|activation| activation.value_coercion.as_ref().map(ValueCoercion::duplicate));
+                let (current, executed, ty) = match coerced {
+                    // The referent of the reference being coerced.
+                    Some(coercion) => (None, coercion.current, coercion.referent_type),
+                    None => {
+                        let current = self
+                            .operator_activation
                             .as_ref()
-                            .map(|progress| progress.current)
-                            .or(activation.place_deref)
-                    })
-                    .ok_or_else(|| invalid("receiver walk lost its place"))?;
-                let executed = {
-                    let executed = self.executed_place(current)?;
-                    Place {
-                        root: executed.root,
-                        projections: executed.projections.clone(),
+                            .and_then(|activation| {
+                                activation
+                                    .receiver
+                                    .as_ref()
+                                    .map(|progress| progress.current)
+                                    .or(activation.place_deref)
+                            })
+                            .ok_or_else(|| invalid("receiver walk lost its place"))?;
+                        let executed = {
+                            let executed = self.executed_place(current)?;
+                            Place {
+                                root: executed.root,
+                                projections: executed.projections.clone(),
+                            }
+                        };
+                        let ty = store.place_type_id(&executed).map_err(place_error)?;
+                        (Some(current), executed, ty)
                     }
                 };
-                let ty = store.place_type_id(&executed).map_err(place_error)?;
-                let pointee = match self.place_slot(current)?.source.clone() {
-                    Some(view) => view,
-                    None => store.descriptor_source_term(ty).ok_or_else(|| {
+                let pointee = match current.map(|slot| self.place_slot(slot)).transpose()? {
+                    Some(slot) if slot.source.is_some() => {
+                        slot.source.clone().expect("checked source")
+                    }
+                    _ => store.descriptor_source_term(ty).ok_or_else(|| {
                         Diagnostic::new(
                             "LRR-E-UNSUPPORTED",
                             "autoderef receiver requires its closed source type".into(),
@@ -1042,7 +1158,9 @@ impl Frame {
                     Access::Shared
                 };
                 let reference = self.formed_reference(&executed, access, pointee, 0, store)?;
-                self.clear_place(current)?;
+                if let Some(current) = current {
+                    self.clear_place(current)?;
+                }
                 vec![reference]
             }
             // `Iterator::next(&mut iter)`: the loop-owned iterator in place.
@@ -1100,8 +1218,18 @@ impl Frame {
     pub(crate) fn operator_result_slot(&self) -> Option<SlotId> {
         self.operator_activation
             .as_ref()
-            .filter(|activation| activation.stage == Stage::Entered)
+            .filter(|activation| {
+                activation.stage == Stage::Entered && !activation.holds_result()
+            })
             .map(|activation| activation.destination)
+    }
+    /// The entered operator method is a `Deref` step of a place operation or
+    /// a reference coercion, whose result is held by the dispatcher rather
+    /// than a frame slot.
+    pub(crate) fn operator_is_place_deref(&self) -> bool {
+        self.operator_activation.as_ref().is_some_and(|activation| {
+            activation.stage == Stage::Entered && activation.holds_result()
+        })
     }
     pub(crate) fn preflight_operator_result(
         &self,
@@ -1113,6 +1241,9 @@ impl Frame {
             .as_ref()
             .filter(|activation| activation.stage == Stage::Entered)
             .ok_or_else(|| invalid("operator result requires an entered method"))?;
+        if activation.holds_result() {
+            return Ok(());
+        }
         self.preflight_write_value(activation.destination, store.peek_ticket(ticket)?, store)
     }
     /// The method returned: publish its result as the operation's and
@@ -1124,13 +1255,28 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_operator_result(ticket, store)?;
-        let destination = self
-            .operator_activation
-            .as_ref()
-            .ok_or_else(|| invalid("operator activation absent"))?
-            .destination;
-        self.write(destination, ticket, store)?;
-        self.set_source_view(destination, source)?;
+        let (destination, held) = {
+            let activation = self
+                .operator_activation
+                .as_ref()
+                .ok_or_else(|| invalid("operator activation absent"))?;
+            (activation.destination, activation.result_cell)
+        };
+        let mut source = source;
+        match held {
+            // A place step's reference lands in its dispatcher-owned location.
+            Some(cell) => {
+                store.initialize(cell, ticket)?;
+                self.operator_activation
+                    .as_mut()
+                    .ok_or_else(|| invalid("operator activation absent"))?
+                    .returned_view = source.take();
+            }
+            None => {
+                self.write(destination, ticket, store)?;
+                self.set_source_view(destination, source)?;
+            }
+        }
         let activation = self
             .operator_activation
             .as_mut()
@@ -1150,6 +1296,9 @@ impl Frame {
             .filter(|activation| activation.stage == Stage::Entered)
             .ok_or_else(|| invalid("operator unwind requires an entered method"))?;
         for cell in activation.owned {
+            store.retire_cell(cell)?;
+        }
+        if let Some(cell) = activation.result_cell {
             store.retire_cell(cell)?;
         }
         self.status = FrameStatus::Panicked;
@@ -1226,21 +1375,18 @@ impl Frame {
         let base = activation
             .place_deref
             .ok_or_else(|| invalid("place dereference base absent"))?;
-        let holder = activation.destination;
-        let cell = self.cell(holder)?;
-        let view = self.source_view(holder)?;
+        let cell = activation
+            .result_cell
+            .ok_or_else(|| invalid("place dereference result location absent"))?;
+        let view = activation.returned_view;
         let ticket = store.move_from(cell)?;
-        store.reset_moved_contract(cell)?;
-        // The holder carries none of this step's view into the value the
-        // operation's node produces later.
-        self.set_source_view(holder, None)?;
+        store.retire_cell(cell)?;
         let value = store.peek_ticket(ticket)?;
         if value.kind != 9 {
             return Err(invalid("a Deref method returned a non-reference"));
         }
         let reference = crate::runtime::cell::RefId::from_bits(value.payload);
-        let scope = self.slot(holder)?.scope;
-        self.slots[holder.0 as usize].hint = activation.held_hint;
+        let scope = self.place_slot(base)?.scope;
         self.deref_parked.push((scope, ticket));
         let pointee = match view {
             Some(TyTerm::Ref(_, _, pointee)) => Some(*pointee),
@@ -1328,5 +1474,202 @@ impl Frame {
             self.slots[base.0 as usize].place = Some(dereferenced);
             self.set_source_view(base, view)?;
         }
+    }
+}
+
+impl Frame {
+    /// The deref coercion goal of a demanded (not yet entered) coercion
+    /// step -- a borrow's or a reference read's -- as the Type being stepped,
+    /// the closed Type expected and the access; `None` for any other
+    /// operator activation.
+    pub(crate) fn pending_coercion_goal(
+        &self,
+        store: &GuestStore,
+    ) -> Result<Option<(TypeId, TyTerm, bool)>, Diagnostic> {
+        let Some(activation) = self
+            .operator_activation
+            .as_ref()
+            .filter(|activation| activation.stage == Stage::Demanded)
+        else {
+            return Ok(None);
+        };
+        if let Some(coercion) = &activation.value_coercion {
+            return Ok(Some((
+                coercion.referent_type,
+                coercion.expected.clone(),
+                coercion.mutable,
+            )));
+        }
+        let Op::Borrow {
+            place,
+            access,
+            destination,
+        } = &activation.expected
+        else {
+            return Ok(None);
+        };
+        Ok(self
+            .borrow_coercion_goal(*place, *destination, store)?
+            .map(|goal| {
+                (
+                    goal.place_type,
+                    goal.expected,
+                    matches!(access, crate::ir::op::BorrowAccess::Mutable),
+                )
+            }))
+    }
+    /// The dispatcher found no `Deref` chain from the borrowed Type to the
+    /// Type the borrow expects (a conversion other than deref coercion):
+    /// drop the demand and run the borrow as written.
+    pub(crate) fn decline_coercion(&mut self, place_type: TypeId) -> Result<(), Diagnostic> {
+        let activation = self
+            .operator_activation
+            .take()
+            .filter(|activation| activation.stage == Stage::Demanded)
+            .ok_or_else(|| invalid("coercion decline requires a demanded step"))?;
+        self.declined_coercion = Some((activation.pc, place_type));
+        self.rerun_index = Some(activation.operation_index);
+        Ok(())
+    }
+}
+
+impl OperatorActivation {
+    /// Its method's result lands in a dispatcher-owned location, not a
+    /// frame slot (a place operation's `Deref` step or a reference coercion).
+    fn holds_result(&self) -> bool {
+        self.place_deref.is_some() || self.value_coercion.is_some()
+    }
+}
+
+impl Frame {
+    /// The deref coercion a reference read calls for, if any (the read is
+    /// one of `ReadLocal`/`ReadParameter`/`ReadPlace`).
+    fn read_coercion_goal(
+        &self,
+        op: &Op,
+        store: &GuestStore,
+    ) -> Result<Option<ValueCoercionGoal>, Diagnostic> {
+        match op {
+            Op::ReadLocal {
+                binding,
+                destination,
+            } => self.value_coercion_goal(ValueRead::Local(*binding), *destination, store),
+            Op::ReadParameter {
+                ordinal,
+                destination,
+            } => self.value_coercion_goal(ValueRead::Parameter(*ordinal), *destination, store),
+            Op::ReadPlace { place, destination } => {
+                self.value_coercion_goal(ValueRead::Place(*place), *destination, store)
+            }
+            _ => Ok(None),
+        }
+    }
+    fn value_coercion_kind(
+        &self,
+        read: ValueRead,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<Option<OperatorKind>, Diagnostic> {
+        Ok(match self.value_coercion_goal(read, destination, store)? {
+            Some(goal)
+                if self.declined_coercion != Some((self.pc.fingerprint(), goal.referent_type)) =>
+            {
+                Some(OperatorKind::Deref(goal.mutable))
+            }
+            _ => None,
+        })
+    }
+    /// Whether an operator activation is a reference coercion step whose
+    /// method returned.
+    pub(crate) fn value_coercion_returned(&self) -> bool {
+        self.operator_activation.as_ref().is_some_and(|activation| {
+            activation.value_coercion.is_some() && activation.stage == Stage::Returned
+        })
+    }
+    /// A coercion step returned its reference. Once its pointee is the Type
+    /// the destination expects, the reference is the read's result and the
+    /// operation is complete (`true`); otherwise the next `Deref` step is
+    /// demanded over its referent (`false`).
+    pub(crate) fn resume_value_coercion(
+        &mut self,
+        index: usize,
+        op: &Op,
+        store: &mut GuestStore,
+    ) -> Result<bool, Diagnostic> {
+        let activation = self
+            .operator_activation
+            .take()
+            .ok_or_else(|| invalid("reference coercion activation absent"))?;
+        if activation.pc != self.pc.fingerprint()
+            || activation.operation_index as usize != index
+            || activation.expected != *op
+            || activation.stage != Stage::Returned
+        {
+            return Err(invalid("reference coercion resumed before its method returned"));
+        }
+        let coercion = activation
+            .value_coercion
+            .as_ref()
+            .map(ValueCoercion::duplicate)
+            .ok_or_else(|| invalid("reference coercion lost its goal"))?;
+        let cell = activation
+            .result_cell
+            .ok_or_else(|| invalid("reference coercion result location absent"))?;
+        let view = activation.returned_view;
+        let destination = activation.destination;
+        let ticket = store.move_from(cell)?;
+        store.retire_cell(cell)?;
+        let value = store.peek_ticket(ticket)?;
+        if value.kind != 9 {
+            return Err(invalid("a Deref method returned a non-reference"));
+        }
+        let TypeKey::Ref { target, .. } = store.type_descriptor(TypeId(value.type_id))?.key.as_ref()
+        else {
+            return Err(invalid("a Deref method returned a non-reference"));
+        };
+        let target = *target;
+        let reached = store
+            .descriptor_source_term(target)
+            .map(|term| crate::frontend::signature_subst::erase_regions(&term));
+        let wanted = crate::frontend::signature_subst::erase_regions(&coercion.expected);
+        if reached.as_ref() == Some(&wanted) {
+            // The chain ends: the reference is the read's value.
+            self.preflight_write_value(destination, value, store)?;
+            self.prepare_write(destination, store)?;
+            self.write(destination, ticket, store)?;
+            self.set_source_view(destination, view)?;
+            if let Op::ReadPlace { place, .. } = op {
+                self.clear_place(*place)?;
+            }
+            return Ok(true);
+        }
+        // Another step: the returned reference stays alive as a temporary of
+        // the destination's scope, and its referent is stepped next.
+        let scope = self.slot(destination)?.scope;
+        let reference = crate::runtime::cell::RefId::from_bits(value.payload);
+        self.deref_parked.push((scope, ticket));
+        let self_type = target;
+        self.operator_activation = Some(OperatorActivation {
+            pc: activation.pc,
+            operation_index: activation.operation_index,
+            expected: activation.expected,
+            kind: activation.kind,
+            self_type,
+            destination,
+            stage: Stage::Demanded,
+            arguments: None,
+            owned: Vec::new(),
+            receiver: None,
+            place_deref: None,
+            result_cell: None,
+            returned_view: None,
+            value_coercion: Some(ValueCoercion {
+                current: Place::deref(reference),
+                referent_type: target,
+                mutable: coercion.mutable,
+                expected: coercion.expected,
+            }),
+        });
+        Ok(false)
     }
 }

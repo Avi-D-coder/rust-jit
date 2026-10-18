@@ -79,11 +79,44 @@ pub(crate) fn normalize(
             let Some(name) = members.associated_type_name(key.item) else {
                 return QueryPoll::Ready(Ok(None));
             };
-            let (alias, row) = match members.associated_type_of(selected, pointee, trait_key, name) {
-                Ok(Some(found)) => found,
-                Ok(None) => return QueryPoll::Ready(Ok(None)),
-                Err(error) => return QueryPoll::Ready(Err(error)),
+            // The trait's own arguments (`TryFrom<u16>`), normalized like the
+            // self type: impls of one trait that differ by them are selected
+            // by matching their written trait path.
+            let mut trait_arguments = Vec::new();
+            for argument in &key.trait_ref.args {
+                if let GenericArg::Type(ty) = argument {
+                    trait_arguments.push(ready!(normalize(db, graph, sources, members, ty)));
+                }
+            }
+            let mut candidates =
+                members.associated_type_candidates(selected, pointee, trait_key, name);
+            if candidates.len() > 1 && trait_arguments.is_empty() {
+                return QueryPoll::Ready(Err(crate::core::diagnostic::Diagnostic::new(
+                    "LRR-E-NAME-AMBIGUOUS",
+                    format!("associated type `{name}` is provided by several impls"),
+                )));
+            }
+            if candidates.len() > 1 {
+                let mut matching = Vec::new();
+                for (alias, row) in candidates {
+                    if ready!(impl_matches(
+                        db,
+                        graph,
+                        sources,
+                        alias,
+                        row,
+                        &self_ty,
+                        &trait_arguments
+                    )) {
+                        matching.push((alias, row));
+                    }
+                }
+                candidates = matching;
+            }
+            let [(alias, row)] = candidates.as_slice() else {
+                return QueryPoll::Ready(Ok(None));
             };
+            let (alias, row) = (*alias, *row);
             let Some(target) = alias_target(&row.header.tokens) else {
                 return QueryPoll::Ready(Ok(None));
             };
@@ -99,13 +132,17 @@ pub(crate) fn normalize(
                     None => return QueryPoll::Ready(Ok(None)),
                 }
             };
+            // Wherever the impl's trait path names its parameters
+            // (`impl<A> From<A> for W<A>`), the projection's trait arguments
+            // bind them too.
+            let mut bindings = std::collections::BTreeMap::new();
             let signature = FunctionSignature {
                 definition: alias,
                 scope: row.scope.clone(),
                 header: row.header.clone(),
                 generics: owner
                     .as_ref()
-                    .map(|(generics, _)| generics.clone())
+                    .map(|(generics, _, _)| generics.clone())
                     .unwrap_or_default(),
                 parameters: Vec::new(),
                 result: Vec::new(),
@@ -115,7 +152,7 @@ pub(crate) fn normalize(
             let mut resolved = ready!(super::source_types::resolve_written_type(
                 db, graph, sources, &signature, &target
             ));
-            if let Some((_, written_self)) = &owner {
+            if let Some((_, written_self, written_arguments)) = &owner {
                 let template = ready!(super::source_types::resolve_written_type(
                     db,
                     graph,
@@ -123,9 +160,16 @@ pub(crate) fn normalize(
                     &signature,
                     written_self
                 ));
-                let mut bindings = std::collections::BTreeMap::new();
                 if !bind(&template, &self_ty, alias, &mut bindings) {
                     return QueryPoll::Ready(Ok(None));
+                }
+                for (written, actual) in written_arguments.iter().zip(&trait_arguments) {
+                    let template = ready!(super::source_types::resolve_written_type(
+                        db, graph, sources, &signature, written
+                    ));
+                    if !bind(&template, actual, alias, &mut bindings) {
+                        return QueryPoll::Ready(Ok(None));
+                    }
                 }
                 resolved = substitute(&resolved, &bindings);
                 if mentions(&resolved, alias) {
@@ -178,6 +222,7 @@ fn impl_owner(
 ) -> Option<(
     Vec<crate::syntax::signatures::DefinitionParameter>,
     Vec<crate::syntax::ast_adapter::TokenRecipe>,
+    Vec<Vec<crate::syntax::ast_adapter::TokenRecipe>>,
 )> {
     use ra_ap_syntax::{
         AstNode,
@@ -206,17 +251,96 @@ fn impl_owner(
         crate::syntax::signatures::capture_generics(implementation.generic_param_list()).ok()?;
     // The header text joins its tokens with one space: token `i` starts at
     // the sum of the earlier token lengths plus `i`.
-    let range = implementation.self_ty()?.syntax().text_range();
-    let mut at = 0usize;
-    let mut written = Vec::new();
-    for token in tokens {
-        let start = u32::try_from(at).ok()?;
-        if range.contains(start.into()) {
-            written.push(token.clone());
+    let within = |range: ra_ap_syntax::TextRange| -> Option<Vec<_>> {
+        let mut at = 0usize;
+        let mut written = Vec::new();
+        for token in tokens {
+            let start = u32::try_from(at).ok()?;
+            if range.contains(start.into()) {
+                written.push(token.clone());
+            }
+            at = at.checked_add(token.text.len())?.checked_add(1)?;
         }
-        at = at.checked_add(token.text.len())?.checked_add(1)?;
+        Some(written)
+    };
+    let written = within(implementation.self_ty()?.syntax().text_range())?;
+    // The written Type arguments of the implemented trait's path.
+    let mut trait_arguments = Vec::new();
+    if let Some(ast::Type::PathType(path)) = implementation.trait_()
+        && let Some(list) = path
+            .path()
+            .and_then(|path| path.segment())
+            .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
+    {
+        for argument in list.generic_args() {
+            if let ast::GenericArg::TypeArg(argument) = argument {
+                trait_arguments.push(within(argument.syntax().text_range())?);
+            }
+        }
     }
-    (!written.is_empty()).then_some((generics, written))
+    (!written.is_empty()).then_some((generics, written, trait_arguments))
+}
+
+/// Whether the impl providing associated alias `alias` implements its trait
+/// at `trait_arguments` for `self_ty`: its written self type and trait
+/// arguments bind its generic parameters consistently to them.
+fn impl_matches(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    alias: Digest,
+    row: &super::member_index::AssociatedTypeAlias,
+    self_ty: &TyTerm,
+    trait_arguments: &[TyTerm],
+) -> QueryPoll<Option<bool>> {
+    macro_rules! ready {
+        ($value:expr) => {
+            match $value {
+                QueryPoll::Ready(Ok(Some(value))) => value,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(Some(false))),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        };
+    }
+    let Some((generics, written_self, written_arguments)) =
+        impl_owner(sources, &row.scope, row.header.profile.edition)
+    else {
+        return QueryPoll::Ready(Ok(Some(false)));
+    };
+    if written_arguments.len() != trait_arguments.len() {
+        return QueryPoll::Ready(Ok(Some(false)));
+    }
+    let signature = FunctionSignature {
+        definition: alias,
+        scope: row.scope.clone(),
+        header: row.header.clone(),
+        generics,
+        parameters: Vec::new(),
+        result: Vec::new(),
+        result_symbolic: None,
+        predicates: Vec::new(),
+    };
+    let mut bindings = std::collections::BTreeMap::new();
+    let template = ready!(super::source_types::resolve_written_type(
+        db,
+        graph,
+        sources,
+        &signature,
+        &written_self
+    ));
+    if !bind(&template, self_ty, alias, &mut bindings) {
+        return QueryPoll::Ready(Ok(Some(false)));
+    }
+    for (written, actual) in written_arguments.iter().zip(trait_arguments) {
+        let template = ready!(super::source_types::resolve_written_type(
+            db, graph, sources, &signature, written
+        ));
+        if !bind(&template, actual, alias, &mut bindings) {
+            return QueryPoll::Ready(Ok(Some(false)));
+        }
+    }
+    QueryPoll::Ready(Ok(Some(true)))
 }
 
 /// Bind the parameters of `owner` in `template` so that it is `actual`.
@@ -277,7 +401,13 @@ fn bind(
 fn mentions(term: &TyTerm, owner: Digest) -> bool {
     match term {
         TyTerm::Param(key) => key.definition == owner,
-        TyTerm::Projection(key) => mentions(&key.trait_ref.self_ty, owner),
+        TyTerm::Projection(key) => {
+            mentions(&key.trait_ref.self_ty, owner)
+                || key.trait_ref.args.iter().any(|argument| match argument {
+                    GenericArg::Type(ty) => mentions(ty, owner),
+                    _ => false,
+                })
+        }
         TyTerm::Ref(_, _, inner) | TyTerm::Slice(inner) | TyTerm::Array(inner, _) => {
             mentions(inner, owner)
         }
@@ -315,6 +445,11 @@ pub(crate) fn substitute(
         TyTerm::Projection(key) => {
             let mut key = key.clone();
             key.trait_ref.self_ty = substitute(&key.trait_ref.self_ty, map);
+            for argument in &mut key.trait_ref.args {
+                if let GenericArg::Type(ty) = argument {
+                    *ty = substitute(ty, map);
+                }
+            }
             TyTerm::Projection(key)
         }
         TyTerm::Ref(region, mutable, inner) => {

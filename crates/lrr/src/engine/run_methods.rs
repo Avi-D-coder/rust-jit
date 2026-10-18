@@ -29,7 +29,16 @@ impl RunMachine {
         // Mutability of each reference stripped by autoderef, outermost first
         // (`None` for a builtin box dereference or an overloaded step).
         let mut references = Vec::new();
+        // The mutability of an autoref the overloaded-deref probe picked: the
+        // method belongs to an impl for `&U` / `&mut U` taking `self` by value
+        // (rustc's autoref step on the dereferenced type).
+        let mut autoref: Option<bool> = None;
+        // Each autoderef step's reached type with the receiver steps taken to
+        // reach it, for an explicit `self: Rc<Self>` / `self: &Rc<Self>`
+        // receiver type that names one of them.
+        let mut step_types: Vec<(crate::runtime::shape::TypeId, usize)> = Vec::new();
         let self_type = loop {
+            step_types.push((ty, steps.len()));
             let key = match self.store.type_descriptor(ty) {
                 Ok(descriptor) => descriptor.key.clone(),
                 Err(error) => return QueryPoll::Ready(Err(error)),
@@ -80,9 +89,10 @@ impl RunMachine {
                         break Ok(*identity);
                     }
                     match self.overloaded_deref_probe(db, ty, method) {
-                        QueryPoll::Ready(Ok(Some((chain, bucket)))) => {
+                        QueryPoll::Ready(Ok(Some((chain, bucket, by_reference)))) => {
                             references.extend(chain.iter().map(|_| None));
                             steps.extend(chain);
+                            autoref = by_reference;
                             break bucket;
                         }
                         QueryPoll::Ready(Ok(None)) => break Ok(*identity),
@@ -135,7 +145,16 @@ impl RunMachine {
         // peeled last: a method of an impl for `&'a U` (autoref'd `&&U`, or a
         // by-value `self`) when `U` itself has none.
         let mut self_is_reference = false;
-        let alternatives = match members.method_alternatives(self_type, method) {
+        let selected = match autoref {
+            Some(mutable) => {
+                let pointee = self_type;
+                self_type = Err(BuiltinSelf::Reference(mutable));
+                self_is_reference = true;
+                members.method_alternatives_of(self_type, Some(pointee), method)
+            }
+            None => members.method_alternatives(self_type, method),
+        };
+        let alternatives = match selected {
             Ok(alternatives) => alternatives,
             Err(error) if error.code == "LRR-E-NAME-MISSING" => {
                 match (references.last().copied().flatten(), steps.last()) {
@@ -224,6 +243,31 @@ impl RunMachine {
             Some("&") => ReceiverMode::Shared,
             _ => ReceiverMode::Value,
         };
+        // An explicit receiver type other than `Self`, `&Self`, `&mut Self`
+        // (`self: Rc<Self>`, `self: &Rc<Self>`): rustc's probe matches it
+        // against the type of one autoderef step, by value or autoref'd.
+        let receiver_tokens = receiver.ty.clone();
+        if !is_self_receiver(&receiver_tokens) {
+            match self.arbitrary_receiver(db, &callee, &receiver_tokens, &step_types) {
+                QueryPoll::Ready(Ok(Some((taken, adjusted)))) => {
+                    steps.truncate(taken);
+                    references.truncate(taken);
+                    mode = adjusted;
+                    self_is_reference = true;
+                    autoref = None;
+                }
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
+        // A by-value `self` of an impl for `&U` / `&mut U` reached through the
+        // overloaded-deref probe takes the autoref of the dereferenced place.
+        if let Some(mutable) = autoref
+            && mode == ReceiverMode::Value
+        {
+            mode = if mutable { ReceiverMode::Mutable } else { ReceiverMode::Shared };
+        }
         // `&self` through a shared reference passes that reference itself
         // (a copy), rather than dereferencing and reborrowing it.
         if unsize && mode == ReceiverMode::Value {
@@ -276,6 +320,23 @@ impl RunMachine {
     }
 }
 
+/// Whether a method's declared receiver type is `Self`, `&Self` or
+/// `&mut Self` (with an optional lifetime): the forms whose adjustment is
+/// decided by the impl bucket alone.
+fn is_self_receiver(tokens: &[crate::syntax::ast_adapter::TokenRecipe]) -> bool {
+    let mut rest = tokens;
+    if rest.first().is_some_and(|token| token.text == "&") {
+        rest = &rest[1..];
+        if rest.first().is_some_and(|token| token.text.starts_with('\'')) {
+            rest = &rest[1..];
+        }
+        if rest.first().is_some_and(|token| token.text == "mut") {
+            rest = &rest[1..];
+        }
+    }
+    matches!(rest, [token] if token.text == "Self")
+}
+
 /// The self-type bucket of a closed source type, as the impl index keys it.
 fn probe_bucket(
     term: &crate::traits::term::TyTerm,
@@ -310,6 +371,7 @@ impl RunMachine {
         Option<(
             Vec<ReceiverStep>,
             Result<crate::core::digest::Digest, crate::frontend::member_index::BuiltinSelf>,
+            Option<bool>,
         )>,
     > {
         use crate::traits::term::{ProjectionKey, TraitRef, TyTerm};
@@ -321,6 +383,12 @@ impl RunMachine {
             QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => {
                 return QueryPoll::Ready(Ok(None));
             }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let receiver_trait = match self.operator_trait(db, "ops", "Receiver") {
+            QueryPoll::Ready(Ok(receiver)) => Some(receiver),
+            QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => None,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
@@ -337,12 +405,23 @@ impl RunMachine {
             let Some(Ok(head)) = probe_bucket(&term) else {
                 return QueryPoll::Ready(Ok(None));
             };
+            // `Deref` steps call `deref`; an unstable `Receiver` impl names
+            // the next step's type only (arbitrary self types), with no call.
+            let mut by_receiver = false;
+            let mut stepping = deref;
             if members.trait_method(Ok(head), deref, "deref").is_empty() {
-                return QueryPoll::Ready(Ok(None));
+                let Some(receiver) = receiver_trait else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                if !members.implements(Ok(head), receiver) {
+                    return QueryPoll::Ready(Ok(None));
+                }
+                by_receiver = true;
+                stepping = receiver;
             }
             let projection = TyTerm::Projection(Box::new(ProjectionKey {
                 trait_ref: TraitRef {
-                    trait_key: deref,
+                    trait_key: stepping,
                     self_ty: term.clone(),
                     args: Vec::new(),
                 },
@@ -357,7 +436,9 @@ impl RunMachine {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-            steps.push(ReceiverStep::Overloaded { mutable: false });
+            if !by_receiver {
+                steps.push(ReceiverStep::Overloaded { mutable: false });
+            }
             let mut target = target;
             while let TyTerm::Ref(_, _, inner) = target {
                 steps.push(ReceiverStep::Deref);
@@ -367,7 +448,21 @@ impl RunMachine {
                 return QueryPoll::Ready(Ok(None));
             };
             if members.method_alternatives(bucket, method).is_ok() {
-                return QueryPoll::Ready(Ok(Some((steps, bucket))));
+                return QueryPoll::Ready(Ok(Some((steps, bucket, None))));
+            }
+            // rustc's autoref step on this type: a by-value method of an
+            // impl for `&U` / `&mut U` (`impl Foo for &[isize]`).
+            for mutable in [false, true] {
+                if members
+                    .method_alternatives_of(
+                        Err(crate::frontend::member_index::BuiltinSelf::Reference(mutable)),
+                        Some(bucket),
+                        method,
+                    )
+                    .is_ok()
+                {
+                    return QueryPoll::Ready(Ok(Some((steps, bucket, Some(mutable)))));
+                }
             }
             term = target;
         }
@@ -379,6 +474,54 @@ impl RunMachine {
 }
 
 impl RunMachine {
+    /// rustc's probe of a method with an explicit receiver type: the first
+    /// autoderef step whose type the declared receiver type is (by value),
+    /// or whose reference it is (autoref `&` / `&mut`). Returns the number
+    /// of receiver steps to take and the receiver mode, or `None` when no
+    /// step's type is named (the impl bucket's own adjustment then stands).
+    fn arbitrary_receiver(
+        &mut self,
+        db: &mut Database,
+        callee: &SourceCallable,
+        tokens: &[crate::syntax::ast_adapter::TokenRecipe],
+        step_types: &[(crate::runtime::shape::TypeId, usize)],
+    ) -> QueryPoll<Option<(usize, ReceiverMode)>> {
+        use crate::traits::term::TyTerm;
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
+        let declared = match crate::frontend::source_types::resolve_written_type(
+            db,
+            graph,
+            &sources,
+            callee.signature(),
+            tokens,
+        ) {
+            QueryPoll::Ready(Ok(Some(declared))) => declared,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        for (ty, taken) in step_types {
+            match self.instantiates(&declared, *ty) {
+                Ok(true) => return QueryPoll::Ready(Ok(Some((*taken, ReceiverMode::Value)))),
+                Ok(false) => {}
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            }
+            if let TyTerm::Ref(_, mutable, inner) = &declared {
+                match self.instantiates(inner, *ty) {
+                    Ok(true) => {
+                        let mode = if *mutable { ReceiverMode::Mutable } else { ReceiverMode::Shared };
+                        return QueryPoll::Ready(Ok(Some((*taken, mode))));
+                    }
+                    Ok(false) => {}
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            }
+        }
+        QueryPoll::Ready(Ok(None))
+    }
     /// Of inherent methods of impls for different instantiations of one
     /// type, the one whose impl self type the reached `receiver` type
     /// instantiates (`Foo<usize>` against `impl Foo<usize>` and

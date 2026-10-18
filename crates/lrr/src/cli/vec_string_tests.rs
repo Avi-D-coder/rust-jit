@@ -1446,3 +1446,363 @@ fn upstream_smart_pointer_collection_and_deref_witnesses_complete() {
         upstream_completes(path);
     }
 }
+
+/// Deref coercion at every borrow coercion site (call arguments, typed `let`s,
+/// struct fields, returns, reference-valued reads): `&Vec<T>` to `&[T]`,
+/// `&String` to `&str`, `&Rc<T>`/`&RefCell` guard/`&Box<Vec<T>>` to their
+/// targets and a user `Deref` type in two steps (the Rust-book `hello(&m)`).
+/// Operands that already have the expected type need no step.
+#[test]
+fn deref_coercion_at_call_arguments_lets_fields_and_returns() {
+    prints(
+        "coerce",
+        r###"use std::cell::RefCell;
+use std::ops::Deref;
+use std::rc::Rc;
+
+struct MyBox<T>(T);
+impl<T> MyBox<T> {
+    fn new(x: T) -> MyBox<T> {
+        MyBox(x)
+    }
+}
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+struct Holder<'a> {
+    name: &'a str,
+    items: &'a [u32],
+}
+
+fn first(v: &[u64]) -> u64 {
+    v[0]
+}
+fn len(s: &str) -> usize {
+    s.len()
+}
+fn get(x: &u64) -> u64 {
+    *x
+}
+fn show(x: &i32) -> i32 {
+    *x
+}
+fn hello(name: &str) {
+    println!("Hello, {}!", name);
+}
+fn total(xs: &[i32]) -> i32 {
+    let mut t = 0;
+    for x in xs {
+        t += *x;
+    }
+    t
+}
+fn bump(v: &mut [i32]) {
+    v[0] += 1;
+}
+fn pick(s: &String) -> &str {
+    s.as_str()
+}
+fn tail(v: &Vec<u32>) -> &[u32] {
+    &v[1..]
+}
+fn outer(s: &String, v: &Vec<u64>) -> usize {
+    len(s) + first(v) as usize
+}
+fn make<'a>(s: &'a String, v: &'a Vec<u32>) -> Holder<'a> {
+    Holder { name: s, items: v }
+}
+
+fn main() {
+    let v = vec![3_000_000_000, 5];
+    println!("{}", first(&v));
+    let s = String::from("héllo");
+    println!("{}", len(&s));
+    let r = Rc::new(7u64);
+    println!("{}", get(&r));
+
+    let m = MyBox::new(String::from("Rust"));
+    hello(&m);
+    hello(&MyBox::new(String::from("Rust")));
+    let w = MyBox::new(5i32);
+    let b: &i32 = &w;
+    println!("{}", b);
+
+    println!("{}", first(&vec![7u64, 8]));
+    println!("{}", len(&String::from("abc")));
+    println!("{}", len(&format!("{}{}", 1, 2)));
+
+    let rr = Rc::new(Rc::new(6i32));
+    println!("{}", show(&rr));
+    let cell = RefCell::new(vec![1i32, 2, 3]);
+    println!("{}", total(&cell.borrow()));
+    let g = cell.borrow();
+    println!("{}", total(&g));
+    let boxed = Box::new(vec![4i32, 5]);
+    println!("{}", total(&boxed));
+
+    let mut mv = vec![1i32, 2];
+    bump(&mut mv);
+    println!("{:?}", mv);
+
+    let word = String::from("abc");
+    println!("{}", pick(&word));
+    let nums = vec![1u32, 2, 3];
+    println!("{:?}", tail(&nums));
+    let wide = vec![3u64];
+    println!("{}", outer(&word, &wide));
+    let rs = &word;
+    println!("{}", len(rs));
+    let rv = &wide;
+    println!("{}", first(rv));
+    let t: &str = rs;
+    println!("{}", t);
+    let u: &[u64] = rv;
+    println!("{}", u.len());
+    let h = Holder { name: &word, items: &nums };
+    println!("{} {}", h.name, h.items.len());
+    let h2 = make(&word, &nums);
+    println!("{} {}", h2.name, h2.items.len());
+}
+"###,
+        r###"3000000000
+6
+7
+Hello, Rust!
+Hello, Rust!
+5
+7
+3
+2
+6
+6
+6
+9
+[2, 2]
+abc
+[2, 3]
+6
+3
+3
+abc
+1
+abc 3
+abc 3
+"###,
+    );
+}
+
+/// The same coercing calls emitted by user macros (an `$e:expr` fragment is a
+/// grouped expression), through a wrapper macro and nested in `assert_eq!`
+/// run the one coercion route.
+#[test]
+fn deref_coercion_runs_through_user_macros_and_assertions() {
+    prints(
+        "coerce-macro",
+        r###"use std::ops::Deref;
+use std::rc::Rc;
+
+struct MyBox<T>(T);
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+fn first(v: &[u64]) -> u64 {
+    v[0]
+}
+fn len(s: &str) -> usize {
+    s.len()
+}
+
+macro_rules! call_first {
+    ($v:expr) => {
+        first(&$v)
+    };
+}
+macro_rules! wrapped_len {
+    ($s:expr) => {
+        call_len!($s)
+    };
+}
+macro_rules! call_len {
+    ($s:expr) => {
+        len(&$s)
+    };
+}
+macro_rules! bind_ref {
+    ($name:ident : $ty:ty = $e:expr) => {
+        let $name: $ty = &$e;
+    };
+}
+
+fn main() {
+    let v = vec![3_000_000_000u64, 5];
+    println!("{}", call_first!(v));
+    println!("{}", call_first!(vec![9u64]));
+    let s = String::from("héllo");
+    println!("{}", wrapped_len!(s));
+    println!("{}", wrapped_len!(MyBox(String::from("abcd"))));
+    bind_ref!(sl: &[u64] = v);
+    bind_ref!(st: &str = s);
+    println!("{} {}", sl.len(), st);
+    assert_eq!(first(&v), 3_000_000_000);
+    assert_eq!(len(&s), 6);
+    assert_eq!(len(&Rc::new(String::from("rc"))), 2);
+    assert_eq!(len(&MyBox(MyBox(String::from("two")))), 3);
+    println!("done");
+}
+"###,
+        r###"3000000000
+9
+6
+4
+2 héllo
+done
+"###,
+    );
+}
+
+/// rustc's method probe past the first step of an overloaded autoderef: a
+/// by-value `self` of an impl for `&[T]`/`&mut [T]` is reached by autoref of
+/// the `Vec`'s slice target, and an explicit `self: Box<Self>`,
+/// `&Rc<Self>` or `Rc<Self>` receiver is the type of the step it names.
+#[test]
+fn method_probe_autorefs_deref_targets_and_honors_explicit_receiver_types() {
+    prints(
+        "probe-receivers",
+        r###"use std::rc::Rc;
+
+trait Sum {
+    fn sum_(self) -> usize;
+}
+impl<'a> Sum for &'a [isize] {
+    fn sum_(self) -> usize {
+        self.len()
+    }
+}
+trait Twice {
+    fn twice(self) -> Vec<u8>;
+}
+impl<'a> Twice for &'a mut [u8] {
+    fn twice(self) -> Vec<u8> {
+        let mut out = Vec::new();
+        for b in self.iter_mut() {
+            *b *= 2;
+            out.push(*b);
+        }
+        out
+    }
+}
+struct Foo {
+    x: i32,
+}
+impl Foo {
+    fn boxed(self: Box<Self>) -> i32 {
+        self.x
+    }
+    fn via_ref(self: &Rc<Self>) -> i32 {
+        self.x + 1
+    }
+    fn owned(self: Rc<Self>) -> i32 {
+        self.x + 2
+    }
+    fn plain(&self) -> i32 {
+        self.x + 3
+    }
+}
+
+fn main() {
+    let items: Vec<isize> = vec![3, 5, 1, 2, 4];
+    println!("{}", items.sum_());
+    let mut bytes = vec![1u8, 2, 3];
+    println!("{:?}", bytes.twice());
+    println!("{:?}", bytes);
+    let b = Box::new(Foo { x: 10 });
+    println!("{}", b.boxed());
+    let r = Rc::new(Foo { x: 20 });
+    println!("{}", r.via_ref());
+    println!("{}", r.plain());
+    println!("{}", Rc::strong_count(&r));
+    let r2 = r.clone();
+    println!("{}", r2.owned());
+    println!("{}", Rc::strong_count(&r));
+    let rr = &r;
+    println!("{}", rr.via_ref());
+}
+"###,
+        r###"5
+[2, 4, 6]
+[2, 4, 6]
+10
+21
+23
+1
+22
+1
+21
+"###,
+    );
+}
+
+/// Slice, array and `Vec` comparisons across their reference forms.
+#[test]
+fn slice_array_and_vec_equality_across_reference_forms() {
+    prints(
+        "slice-array-eq",
+        r###"fn main() {
+    let v = vec![1, 2, 3, 4, 5];
+    let s: &[i32] = &v[..4];
+    let a = [1, 2, 3, 4];
+    println!("{}", s == &[1, 2, 3, 4]);
+    println!("{}", s == &a[..]);
+    println!("{}", *s == a);
+    println!("{}", s == &a);
+    println!("{}", a == *s);
+    println!("{}", a == s);
+    println!("{}", a[..] == *s);
+    println!("{}", &v[..3] == &[1, 2, 3]);
+    println!("{}", s != &[1, 2, 3, 5]);
+}
+"###,
+        r###"true
+true
+true
+true
+true
+true
+true
+true
+true
+"###,
+    );
+}
+
+/// Unchanged upstream run-pass fixtures for deref coercion, slice receivers
+/// and arbitrary self types.
+#[test]
+fn upstream_coercion_receiver_and_slice_pattern_witnesses_complete() {
+    for path in [
+        "tests/ui/autoref-autoderef/autoderef-vec-to-slice-by-value.rs",
+        "tests/ui/coercion/coerce-reborrow-imm-ptr-arg.rs",
+        "tests/ui/coercion/coerce-reborrow-imm-ptr-rcvr.rs",
+        "tests/ui/coercion/coerce-reborrow-imm-vec-arg.rs",
+        "tests/ui/coercion/coerce-reborrow-imm-vec-rcvr.rs",
+        "tests/ui/coercion/coerce-reborrow-mut-ptr-arg.rs",
+        "tests/ui/coercion/coerce-reborrow-mut-ptr-rcvr.rs",
+        "tests/ui/coercion/coerce-reborrow-mut-vec-arg.rs",
+        "tests/ui/coercion/coerce-reborrow-mut-vec-rcvr.rs",
+        "tests/ui/or-patterns/slice-patterns.rs",
+        "tests/ui/pattern/bindings-after-at/slice-patterns.rs",
+        "tests/ui/regions/regions-borrow-evec-uniq.rs",
+        "tests/ui/regions/regions-dependent-autoslice.rs",
+        "tests/ui/self/arbitrary_self_types_struct.rs",
+        "tests/ui/self/arbitrary_self_types_struct_receiver_trait.rs",
+    ] {
+        upstream_completes(path);
+    }
+}

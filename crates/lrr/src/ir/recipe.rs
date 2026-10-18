@@ -92,6 +92,19 @@ pub struct VerifiedRecipe {
     // cache eviction must not cause installed execution to plan source again.
     pub(super) source_call:
         Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
+    // Type arguments of the call that later code decided (see
+    // `InferredArguments`); retained beside the recipe like `source_call`.
+    pub(super) inferred_arguments: Option<std::sync::Arc<InferredArguments>>,
+}
+/// Type arguments a call leaves open that later code decides (rustc's
+/// inferred turbofish): the callee declaration they belong to, then each
+/// decided generic parameter (its ordinal in the callee's generics, the same
+/// numbering a written turbofish uses) with its closed written Type. They
+/// are inputs of the recipe's prepared-input guard, not operations.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct InferredArguments {
+    pub definition: Digest,
+    pub arguments: Vec<(u32, std::sync::Arc<super::written_type::WrittenType>)>,
 }
 impl VerifiedRecipe {
     pub fn recipe(&self) -> &Recipe {
@@ -199,10 +212,32 @@ impl VerifiedRecipe {
         verified.namespace_witness = self.namespace_witness;
         verified.prepared_inputs = self.prepared_inputs;
         verified.source_call = self.source_call;
+        verified.inferred_arguments = self.inferred_arguments;
         // Everything the original accounted beyond its verified core stays
         // accounted: keep the larger bound.
         verified.metadata_bytes = verified.metadata_bytes.max(self.metadata_bytes);
         Ok(verified)
+    }
+    /// The type arguments later code decided for this recipe's call, stated
+    /// as written turbofish arguments would be (the dispatcher reads them
+    /// like the explicit ones; no operation carries them).
+    pub(crate) fn inferred_arguments(&self) -> Option<&std::sync::Arc<InferredArguments>> {
+        self.inferred_arguments.as_ref()
+    }
+    pub(crate) fn with_inferred_arguments(
+        mut self,
+        inferred: std::sync::Arc<InferredArguments>,
+    ) -> Self {
+        // Only a phase that prepares or seals the call reads them.
+        if self
+            .recipe
+            .operations
+            .iter()
+            .any(|op| matches!(op, Op::CallPrepare { .. } | Op::CallSeal { .. }))
+        {
+            self.inferred_arguments = Some(inferred);
+        }
+        self
     }
     pub fn metadata_bytes(&self) -> usize {
         self.metadata_bytes

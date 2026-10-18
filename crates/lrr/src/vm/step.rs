@@ -1367,6 +1367,7 @@ fn execute(
                 }
             }
             if let HintRecipe::BorrowTarget { reference } = hint {
+                frame.soften_borrow_operand_hint(crate::ir::pc::NodeId(frame.pc().node), *child);
                 frame.set_source_view(*child, frame.borrow_target_source(*reference)?)?;
             } else if matches!(
                 hint,
@@ -1631,6 +1632,15 @@ pub(crate) fn step_with_constant(
                 // A place operation's overloaded `Deref` step returned its
                 // reference: `*x` is complete; `x.f` runs again over the
                 // dereferenced base.
+                // A reference coercion step returned its reference.
+                if frame.value_coercion_returned() {
+                    let done = frame.resume_value_coercion(index, op, store)?;
+                    increment(&mut frame.counters.operations_completed)?;
+                    if done {
+                        continue;
+                    }
+                    return Ok(StepOutcome::Dispatch);
+                }
                 if frame.place_deref_returned() {
                     if frame.resume_place_deref(index, op, store)? {
                         increment(&mut frame.counters.operations_completed)?;
@@ -1657,9 +1667,36 @@ pub(crate) fn step_with_constant(
             let tag = usize::from(op.opcode_tag());
             let prepared = literal_preflight(frame, store, op)?;
             let assertion = assertion_preflight(frame, store, op)?;
-            state_preflight(frame, store, op)?;
+            // A reference read into a destination expecting a reference to
+            // another Type is a deref-coercion step; it is admitted when its
+            // chain ends, not as the plain read.
+            let read_op = matches!(
+                op,
+                Op::ReadLocal { .. } | Op::ReadParameter { .. } | Op::ReadPlace { .. }
+            );
+            let read_coercion = if read_op {
+                frame.overloaded_operator(op, store)?
+            } else {
+                None
+            };
+            if read_coercion.is_none() {
+                state_preflight(frame, store, op)?;
+            }
+            // rustc's deref coercion of a borrowed box (`&b` expected as
+            // `&T` borrows `&*b`), before the borrow's own admission and
+            // before an overloaded `Deref` step the rest of the chain needs.
+            if let Op::Borrow {
+                place, destination, ..
+            } = op
+            {
+                frame.box_deref_coercion(*place, *destination, store)?;
+            }
             // Non-primitive operands select the operator's trait method.
-            let overloaded = frame.overloaded_operator(op, store)?;
+            let overloaded = if read_op {
+                read_coercion
+            } else {
+                frame.overloaded_operator(op, store)?
+            };
             let numeric_result = if overloaded.is_some() {
                 None
             } else {
@@ -1674,6 +1711,7 @@ pub(crate) fn step_with_constant(
                         | Op::ProjectField { .. }
                         | Op::ProjectTuple { .. }
                         | Op::ProjectIndex { .. }
+                        | Op::Borrow { .. }
                 );
             let (projection, projection_panic) = if deferred_place {
                 (None, None)
@@ -1688,14 +1726,6 @@ pub(crate) fn step_with_constant(
                     }
                 }
             };
-            // rustc's deref coercion of a borrowed box (`&b` expected as
-            // `&T` borrows `&*b`), before the borrow's own admission.
-            if let Op::Borrow {
-                place, destination, ..
-            } = op
-            {
-                frame.box_deref_coercion(*place, *destination, store)?;
-            }
             let place_panic = if deferred_place {
                 None
             } else {

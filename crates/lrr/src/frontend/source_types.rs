@@ -759,12 +759,14 @@ pub(crate) fn resolve_written_type(
         let Some(base) = qualifier.segment() else {
             return QueryPoll::Ready(Ok(None));
         };
-        let projection = |self_ty: TyTerm, trait_key: crate::core::digest::Digest| {
+        let projection = |self_ty: TyTerm,
+                          trait_key: crate::core::digest::Digest,
+                          args: Vec<crate::traits::term::GenericArg>| {
             TyTerm::Projection(Box::new(crate::traits::term::ProjectionKey {
                 trait_ref: crate::traits::term::TraitRef {
                     trait_key,
                     self_ty,
-                    args: Vec::new(),
+                    args,
                 },
                 item: crate::frontend::member_index::associated_name_key(&name),
                 item_args: Vec::new(),
@@ -773,23 +775,17 @@ pub(crate) fn resolve_written_type(
         // `<Ty as Trait>::Name` (and `<Ty>::Name`): the written self type is
         // any Type this service resolves; the written trait, resolved in the
         // declaration's module like any trait path, selects among that
-        // type's impls. Trait Type arguments are not yet part of the key.
+        // type's impls, and its written Type arguments (`TryFrom<T>`) select
+        // among the impls of that trait.
         if let Some(ast::PathSegmentKind::Type { type_ref, trait_ref }) = base.kind() {
             let Some(type_ref) = type_ref else {
                 return QueryPoll::Ready(Ok(None));
             };
+            let mut trait_args = Vec::new();
             let trait_key = match trait_ref.and_then(|written| written.path()) {
                 None => crate::core::digest::Digest([0; 32]),
                 Some(written) => {
-                    let typed_arguments = written.segments().any(|segment| {
-                        ast::HasGenericArgs::generic_arg_list(&segment).is_some_and(|list| {
-                            list.generic_args()
-                                .any(|argument| !matches!(argument, ast::GenericArg::LifetimeArg(_)))
-                        })
-                    });
-                    let Some((segments, absolute)) = (!typed_arguments)
-                        .then(|| super::member_index::path_segments(written))
-                        .flatten()
+                    let Some((segments, absolute)) = super::member_index::path_segments(written.clone())
                     else {
                         return QueryPoll::Ready(Ok(None));
                     };
@@ -797,7 +793,7 @@ pub(crate) fn resolve_written_type(
                         owner: None,
                         ..signature.scope.clone()
                     };
-                    match graph.lookup_source_path(
+                    let trait_key = match graph.lookup_source_path(
                         Namespace::Type,
                         &segments,
                         absolute,
@@ -811,12 +807,35 @@ pub(crate) fn resolve_written_type(
                         // no impl here; selection falls back to the name.
                         Ok(_) => crate::core::digest::Digest([0; 32]),
                         Err(error) => return QueryPoll::Ready(Err(error)),
+                    };
+                    // The trait's written Type arguments, in order.
+                    if let Some(list) = written
+                        .segment()
+                        .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
+                    {
+                        for argument in list.generic_args() {
+                            match argument {
+                                ast::GenericArg::LifetimeArg(_) => {}
+                                ast::GenericArg::TypeArg(argument) => {
+                                    let Some(ty) = argument.ty() else {
+                                        return QueryPoll::Ready(Ok(None));
+                                    };
+                                    match walk(db, graph, sources, signature, &ty) {
+                                        QueryPoll::Ready(Ok(Some(term))) => trait_args
+                                            .push(crate::traits::term::GenericArg::Type(term)),
+                                        other => return other,
+                                    }
+                                }
+                                _ => return QueryPoll::Ready(Ok(None)),
+                            }
+                        }
                     }
+                    trait_key
                 }
             };
             return match walk(db, graph, sources, signature, &type_ref) {
                 QueryPoll::Ready(Ok(Some(self_ty))) => {
-                    QueryPoll::Ready(Ok(Some(projection(self_ty, trait_key))))
+                    QueryPoll::Ready(Ok(Some(projection(self_ty, trait_key, trait_args))))
                 }
                 other => other,
             };
@@ -864,6 +883,7 @@ pub(crate) fn resolve_written_type(
         QueryPoll::Ready(Ok(Some(projection(
             self_ty,
             crate::core::digest::Digest([0; 32]),
+            Vec::new(),
         ))))
     }
     walk(db, graph, sources, signature, &ty)

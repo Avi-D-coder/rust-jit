@@ -49,6 +49,12 @@ impl ReferenceResultContract {
                 ));
             }
         };
+        // A `str` pointee is an unsized buffer, not a location: like a `str`
+        // parameter, the result binds through the structural reference route
+        // (the return boundary checks the returned `&str`).
+        if matches!(pointee.source(), TyTerm::Str) {
+            return Ok(None);
+        }
         if syntax.lifetime() == Some("'static") {
             return Err(fault(
                 "LRR-E-UNSUPPORTED",

@@ -40,8 +40,8 @@ impl<T, U> TryInto<U> for T
 where
     U: TryFrom<T>,
 {
-    type Error = U::Error;
-    fn try_into(self) -> Result<U, U::Error> {
+    type Error = <U as TryFrom<T>>::Error;
+    fn try_into(self) -> Result<U, <U as TryFrom<T>>::Error> {
         U::try_from(self)
     }
 }

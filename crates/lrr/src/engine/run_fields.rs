@@ -183,7 +183,11 @@ impl RunMachine {
         let Some(mut ty) = self.frame.place_type_if_executed(base, &self.store)? else {
             return Ok(QueryPoll::Ready(Ok(())));
         };
-        if !matches!(need, PlaceNeed::Explicit) {
+        if matches!(need, PlaceNeed::Explicit) {
+            if self.store.box_contents_type(ty)?.is_some() {
+                return Ok(QueryPoll::Ready(Ok(())));
+            }
+        } else {
             // The builtin steps first: references and boxes to the value.
             loop {
                 match self.store.type_descriptor(ty)?.key.as_ref() {
@@ -194,8 +198,6 @@ impl RunMachine {
                     },
                 }
             }
-        } else if self.store.box_contents_type(ty)?.is_some() {
-            return Ok(QueryPoll::Ready(Ok(())));
         }
         let TypeKey::Nominal { identity, .. } = self.store.type_descriptor(ty)?.key.as_ref()
         else {
@@ -353,6 +355,88 @@ impl RunMachine {
             false
         };
         QueryPoll::Ready(Ok(result))
+    }
+    /// Whether `Deref` steps from the nominal Type `ty` reach `expected`
+    /// (the pointee a borrow's result expects), each target normalized by the
+    /// shared associated-type normalizer over the impl index; for a mutable
+    /// borrow every step must also be a `DerefMut` impl. Bounded by rustc's
+    /// autoderef recursion limit.
+    pub(super) fn deref_chain_reaches(
+        &mut self,
+        db: &mut Database,
+        ty: crate::runtime::shape::TypeId,
+        expected: &crate::traits::term::TyTerm,
+        mutable: bool,
+    ) -> QueryPoll<bool> {
+        use crate::traits::term::{ProjectionKey, TraitRef, TyTerm};
+        let Some(members) = self.members.clone() else {
+            return QueryPoll::Ready(Ok(false));
+        };
+        let deref = match self.operator_trait(db, "ops", "Deref") {
+            QueryPoll::Ready(Ok(deref)) => deref,
+            QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => {
+                return QueryPoll::Ready(Ok(false));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let deref_mut = if mutable {
+            match self.operator_trait(db, "ops", "DerefMut") {
+                QueryPoll::Ready(Ok(deref_mut)) => Some(deref_mut),
+                QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => {
+                    return QueryPoll::Ready(Ok(false));
+                }
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        } else {
+            None
+        };
+        let Some(mut term) = self.store.descriptor_source_term(ty) else {
+            return QueryPoll::Ready(Ok(false));
+        };
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Ok(false));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
+        let wanted = crate::frontend::signature_subst::erase_regions(expected);
+        for _ in 0..128 {
+            let TyTerm::Nominal(head, _) = &term else {
+                return QueryPoll::Ready(Ok(false));
+            };
+            if members.trait_method(Ok(*head), deref, "deref").is_empty()
+                || deref_mut.is_some_and(|deref_mut| {
+                    members.trait_method(Ok(*head), deref_mut, "deref_mut").is_empty()
+                })
+            {
+                return QueryPoll::Ready(Ok(false));
+            }
+            let projection = TyTerm::Projection(Box::new(ProjectionKey {
+                trait_ref: TraitRef {
+                    trait_key: deref,
+                    self_ty: term.clone(),
+                    args: Vec::new(),
+                },
+                item: crate::frontend::member_index::associated_name_key("Target"),
+                item_args: Vec::new(),
+            }));
+            let target = match crate::frontend::associated_types::normalize(
+                db, graph, &sources, &members, &projection,
+            ) {
+                QueryPoll::Ready(Ok(Some(target))) => target,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(false)),
+                QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => {
+                    return QueryPoll::Ready(Ok(false));
+                }
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            if crate::frontend::signature_subst::erase_regions(&target) == wanted {
+                return QueryPoll::Ready(Ok(true));
+            }
+            term = target;
+        }
+        QueryPoll::Ready(Ok(false))
     }
     /// Whether the place expression at the current node is used mutably:
     /// assigned to, compound-assigned, `&mut`-borrowed or a method receiver,

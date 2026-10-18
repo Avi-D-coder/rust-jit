@@ -166,6 +166,10 @@ pub struct StructuralNode {
     /// transaction (destructuring, `@` bindings or `let`-`else`). Its first
     /// runtime temporary is the reserved Bool test result.
     pub pattern_statement: bool,
+    /// A parenthesized expression (`( e )`, also the group a macro
+    /// `$e:expr` fragment expands to): a transparent wrapper whose operand
+    /// is the grouped expression.
+    pub parenthesized: bool,
 }
 /// `let` forms that need the shared pattern transaction. A plain identifier
 /// or wildcard declaration binds directly; every other pattern is matched.
@@ -405,6 +409,7 @@ impl StableEncode for BodyIndex {
             });
             e.bool(n.opaque);
             e.bool(n.pattern_statement);
+            e.bool(n.parenthesized);
         });
         e.sequence(&self.scopes, |e, s| {
             e.u32(s.id.0);
@@ -1337,6 +1342,7 @@ impl ParsedFile {
                 pattern_statement: frame.syntax.kind() == ra_ap_syntax::SyntaxKind::LET_STMT
                     && ast::LetStmt::cast(frame.syntax.clone())
                         .is_some_and(|statement| pattern_statement(&statement)),
+                parenthesized: frame.syntax.kind() == ra_ap_syntax::SyntaxKind::PAREN_EXPR,
             });
             if opaque {
                 continue;
@@ -1467,6 +1473,7 @@ impl ParsedFile {
                 extended_to: None,
                 opaque: true,
                 pattern_statement: false,
+                parenthesized: false,
             });
             index.slots = next_slots;
         }

@@ -113,6 +113,10 @@ pub(super) fn thunk(
         },
         None => recipe,
     };
+    let recipe = match typed.inferred_arguments() {
+        Some(arguments) => recipe.with_inferred_arguments(Arc::clone(arguments)),
+        None => recipe,
+    };
     let recipe = match recipe.with_source_call(typed) {
         Ok(recipe) => recipe,
         Err(error) => return QueryPoll::Ready(Err(error)),

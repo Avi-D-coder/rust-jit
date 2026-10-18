@@ -73,6 +73,17 @@ impl<'a> Component<'a> {
         ty: &TyTerm,
         candidates: &[Vec<Step>],
     ) -> QueryPoll<Option<(TyTerm, Vec<Vec<Step>>)>> {
+        self.through_target(db, ty, candidates, "Deref")
+    }
+    /// `through_deref` for the `Target` of another `core::ops` trait of the
+    /// same shape (`Receiver`, which names an arbitrary-self-types step).
+    pub(super) fn through_target(
+        &mut self,
+        db: &mut Database,
+        ty: &TyTerm,
+        candidates: &[Vec<Step>],
+        trait_name: &str,
+    ) -> QueryPoll<Option<(TyTerm, Vec<Vec<Step>>)>> {
         // A growable array's element is its type argument to the declared
         // Types that name it and `Element` to indexing: one position.
         let normalized: Vec<Vec<Step>>;
@@ -91,7 +102,7 @@ impl<'a> Component<'a> {
         } else {
             candidates
         };
-        match ready!(self.associated_answer(db, ty, "ops", "Deref", "Target")) {
+        match ready!(self.associated_answer(db, ty, "ops", trait_name, "Target")) {
             iteration::ItemAnswer::Concrete(target) => {
                 QueryPoll::Ready(Ok(Some((target, Vec::new()))))
             }
@@ -136,6 +147,17 @@ impl<'a> Component<'a> {
             }
             iteration::ItemAnswer::Unknown => QueryPoll::Ready(Ok(None)),
         }
+    }
+
+    /// The type an arbitrary-self-types receiver `ty` names as its next probe
+    /// step (`<ty as Receiver>::Target`).
+    pub(super) fn receiver_target(
+        &mut self,
+        db: &mut Database,
+        ty: &TyTerm,
+    ) -> QueryPoll<Option<TyTerm>> {
+        QueryPoll::Ready(Ok(ready!(self.through_target(db, ty, &[], "Receiver"))
+            .map(|(target, _)| target)))
     }
 
     /// `*x` of the overloaded `Deref` Type `ty` (a projection step

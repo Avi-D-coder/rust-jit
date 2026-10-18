@@ -198,12 +198,13 @@ pub(super) fn runtime_hint(
             {
                 store.intern_structural_term(&hint.source)?
             }
-            // A closed `&[T]`/`&mut [T]` parameter: like a closed reference
-            // proof, descriptor only (the coercion site's expectation, which
-            // selects unsizing and implicit reborrow); the caller slot keeps
-            // the region its actual evaluation attaches.
+            // A closed `&[T]`/`&mut [T]`/`&str` parameter: like a closed
+            // reference proof, descriptor only (the coercion site's
+            // expectation, which selects unsizing, implicit reborrow and
+            // deref coercion); the caller slot keeps the region its actual
+            // evaluation attaches.
             None if matches!(&hint.source, TyTerm::Ref(_, _, target)
-                if matches!(target.as_ref(), TyTerm::Slice(_)))
+                if matches!(target.as_ref(), TyTerm::Slice(_) | TyTerm::Str))
                 && crate::frontend::call_contracts::closed_term(&hint.source) =>
             {
                 let descriptor = store.intern_structural_term(&hint.source)?;

@@ -28,6 +28,36 @@ impl<T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<[U; N
     }
 }
 impl<T: crate::cmp::Eq, const N: usize> crate::cmp::Eq for [T; N] {}
+impl<T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<[U]> for [T; N] {
+    fn eq(&self, other: &[U]) -> bool {
+        self[..] == *other
+    }
+}
+impl<T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<[U; N]> for [T] {
+    fn eq(&self, other: &[U; N]) -> bool {
+        *self == other[..]
+    }
+}
+impl<'a, T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<&'a [U]> for [T; N] {
+    fn eq(&self, other: &&'a [U]) -> bool {
+        self[..] == **other
+    }
+}
+impl<'a, T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<[U; N]> for &'a [T] {
+    fn eq(&self, other: &[U; N]) -> bool {
+        **self == other[..]
+    }
+}
+impl<'a, T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<&'a mut [U]> for [T; N] {
+    fn eq(&self, other: &&'a mut [U]) -> bool {
+        self[..] == **other
+    }
+}
+impl<'a, T: crate::cmp::PartialEq<U>, U, const N: usize> crate::cmp::PartialEq<[U; N]> for &'a mut [T] {
+    fn eq(&self, other: &[U; N]) -> bool {
+        **self == other[..]
+    }
+}
 
 impl<'a, T, const N: usize> crate::iter::IntoIterator for &'a [T; N] {
     type Item = &'a T;

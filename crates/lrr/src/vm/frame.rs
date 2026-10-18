@@ -3,6 +3,8 @@
 mod aggregate_copy_frame;
 #[path = "frame_boxes.rs"]
 mod boxes_frame;
+#[path = "frame_deref_coercion.rs"]
+pub(crate) mod deref_coercion_frame;
 #[cfg(test)]
 #[path = "frame_call_scope_tests.rs"]
 mod call_scope_tests;
@@ -366,6 +368,9 @@ pub struct Frame {
     /// A place operation to run again, from this operation index, over the
     /// base its overloaded `Deref` step produced.
     rerun_index: Option<u32>,
+    /// A borrow position and place Type whose deref coercion the dispatcher
+    /// declined (no `Deref` chain reaches the expected Type).
+    declined_coercion: Option<(crate::core::digest::Digest, TypeId)>,
     /// A `FormatArguments` operation suspended for a trait-method `fmt`.
     format_activation: Option<format_calls_frame::FormatActivation>,
     /// Comparison operand slots holding an autoref (`&operand`).
@@ -594,6 +599,7 @@ impl Frame {
             place_deref: None,
             deref_parked: Vec::new(),
             rerun_index: None,
+            declined_coercion: None,
             nominal: nominal_values_frame::NominalFacts::default(),
             item_values: item_values_frame::ItemValueFacts::default(),
             partial_hints: partial_hints_frame::PartialHints::default(),
@@ -4183,6 +4189,42 @@ impl Frame {
     }
     pub(crate) fn hint(&self, id: SlotId) -> Result<Option<TypeId>, Diagnostic> {
         Ok(self.slot(id)?.hint)
+    }
+    /// The slot's hint where it is a contract (a call argument's parameter
+    /// hint and a borrow operand's call-like pointee hint are advice only).
+    pub(crate) fn strict_hint_of(&self, id: SlotId) -> Result<Option<TypeId>, Diagnostic> {
+        let slot = self.slot(id)?;
+        Ok(slot.hint.filter(|_| slot.strict_hint))
+    }
+    /// A borrow's operand that computes a value (a call, method call or
+    /// macro) is only advised of the pointee its reference result expects:
+    /// the computed value may be coerced by `Deref` (`&String::from("x")` as
+    /// `&str`, `&Rc::new(5)` as `&i32`), so a different Type is not an error
+    /// here and the hint binds only what the callee leaves open.
+    pub(crate) fn soften_borrow_operand_hint(&mut self, borrow: NodeId, child: SlotId) {
+        use crate::syntax::body_index::{ExpressionKind as K, NodeRole};
+        // Through the grouping a macro `$e:expr` fragment expands to.
+        let mut operand = self
+            .body
+            .nodes()
+            .get(borrow.0 as usize)
+            .and_then(|node| node.operands.first().copied())
+            .and_then(|operand| self.body.nodes().get(operand.0 as usize));
+        while let Some(node) = operand.filter(|node| node.parenthesized) {
+            operand = node
+                .operands
+                .first()
+                .and_then(|inner| self.body.nodes().get(inner.0 as usize));
+        }
+        let computed = operand.is_some_and(|operand| {
+            matches!(
+                operand.role,
+                NodeRole::Expression(K::Call | K::MethodCall | K::LangCall | K::Macro)
+            )
+        });
+        if computed && let Some(slot) = self.slots.get_mut(child.0 as usize) {
+            slot.strict_hint = false;
+        }
     }
     pub(crate) fn preflight_hint(&self, id: SlotId) -> Result<(), Diagnostic> {
         if self.slot(id)?.cell.is_some() {

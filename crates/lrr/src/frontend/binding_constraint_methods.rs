@@ -577,7 +577,7 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Err(fault("binding use query variant differs")));
         };
         let local = super::selected_local(observed);
-        if observed.pending().is_some() && local.is_none() {
+        if super::selection_pending(observed) && local.is_none() {
             // A fieldless constructor named as a value (`None`) has its
             // nominal Type; any other pending goal states nothing.
             return self.constructed_type(db, node);
@@ -826,7 +826,12 @@ impl<'a> Component<'a> {
             if !matches!(current, TyTerm::Nominal(..)) {
                 break;
             }
-            let Some(mut target) = ready!(self.deref_target(db, &current)) else {
+            let target = match ready!(self.deref_target(db, &current)) {
+                Some(target) => Some(target),
+                // An arbitrary-self-types step names the next type only.
+                None => ready!(self.receiver_target(db, &current)),
+            };
+            let Some(mut target) = target else {
                 break;
             };
             while let TyTerm::Ref(_, _, inner) = target {

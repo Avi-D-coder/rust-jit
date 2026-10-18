@@ -200,6 +200,17 @@ impl RunMachine {
         ticket: TicketId,
         result: SlotId,
     ) -> Result<(), Diagnostic> {
+        self.admit_call_result_at(db, suspended, ticket, Some(result))
+    }
+    /// `admit_call_result` for a result with no caller slot (a place
+    /// operation's `Deref` step): no slot expectation applies.
+    pub(super) fn admit_call_result_at(
+        &self,
+        db: &mut Database,
+        suspended: &mut SuspendedCall,
+        ticket: TicketId,
+        result: Option<SlotId>,
+    ) -> Result<(), Diagnostic> {
         let value = self.store.peek_ticket(ticket)?;
         let actual = self.store.effective_type(value)?.ok_or_else(|| {
             Diagnostic::new(
@@ -210,10 +221,11 @@ impl RunMachine {
         // Some generic results become concrete only on return. The
         // caller's physical expectation remains a constraint even
         // when it could not supply a symbolic source hint at entry.
-        if suspended
-            .caller
-            .hint(result)?
-            .is_some_and(|expected| !self.store.contract_admits(Some(expected), Some(actual)))
+        if let Some(result) = result
+            && suspended
+                .caller
+                .strict_hint_of(result)?
+                .is_some_and(|expected| !self.store.contract_admits(Some(expected), Some(actual)))
         {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-RETURN-TYPE",
@@ -300,9 +312,11 @@ impl RunMachine {
             (None, Some(view)) => Some(view),
             (None, None) => source_result,
         };
-        suspended
-            .caller
-            .preflight_source_view(result, source_result)?;
+        if let Some(result) = result {
+            suspended
+                .caller
+                .preflight_source_view(result, source_result)?;
+        }
         Ok(())
     }
     /// Retire the returned callee frame and restore its suspended caller,

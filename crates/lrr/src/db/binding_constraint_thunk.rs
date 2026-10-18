@@ -80,11 +80,14 @@ pub(super) fn thunk(
                     | ra_ap_syntax::SyntaxKind::METHOD_CALL_EXPR
             ) {
                 // A call or fieldless constructor whose type arguments later
-                // code decides: its own result Type, stated at its Entry.
-                if crate::ir::pc::Phase::Entry.code().ok() != Some(pc.phase) {
+                // code decides: its own result Type, stated at its Entry, and
+                // the callee's decided generic arguments, read by whichever
+                // phase prepares the call.
+                let entry = crate::ir::pc::Phase::Entry.code().ok() == Some(pc.phase);
+                if !entry && syntax.kind() == ra_ap_syntax::SyntaxKind::PATH_EXPR {
                     return QueryPoll::Ready(Ok(None));
                 }
-                Consumer::Open
+                Consumer::Open { entry }
             } else if ast::BinExpr::cast(syntax)
                 .and_then(|binary| binary.op_kind())
                 .is_some_and(|op| matches!(op, ast::BinaryOp::Assignment { op: Some(_) }))
@@ -106,13 +109,13 @@ pub(super) fn thunk(
         Consumer::Statement => statement(db, parsed, body, index, pc),
         Consumer::Compound => compound_assignment(db, parsed, body, index, pc),
         Consumer::Literal(node) => literal(db, parsed, body, index, pc, node),
-        Consumer::Open => open_expression(db, parsed, body, index, pc),
+        Consumer::Open { entry } => open_expression(db, parsed, body, index, pc, entry),
     }
 }
 enum Consumer {
     Statement,
     Compound,
-    Open,
+    Open { entry: bool },
     // The literal's own goal node (itself, or the literal a negation wraps).
     Literal(NodeId),
 }
@@ -200,6 +203,7 @@ fn open_expression(
     body: &BodyHandle,
     index: &BodyIndex,
     pc: &PcKey,
+    entry: bool,
 ) -> QueryPoll<Option<Provided>> {
     let key = PcKey {
         body: pc.body.clone(),
@@ -217,12 +221,15 @@ fn open_expression(
     let Some(guard) = plan.guard().filter(|_| prepared.cacheable) else {
         return QueryPoll::Ready(Ok(None));
     };
-    let Some(hint) = (match proof.hint_for(index, pc) {
-        Ok(hint) => hint,
+    // The result Type may be only partly stated (the projection of a decided
+    // parameter is not): the decided arguments are delivered either way.
+    let hint = match proof.hint_for(index, pc) {
+        Ok(hint) => hint.filter(|_| entry),
         Err(error) => return QueryPoll::Ready(Err(error)),
-    }) else {
-        return QueryPoll::Ready(Ok(None));
     };
+    if hint.is_none() && proof.inferred_arguments().is_none() {
+        return QueryPoll::Ready(Ok(None));
+    }
     // Only a node with a value of its own states a result Type.
     if index
         .nodes()
@@ -241,9 +248,16 @@ fn open_expression(
     ) {
         return QueryPoll::Ready(Ok(None));
     }
-    let recipe = match recipe.with_entry_hint(index, hint) {
-        Ok(recipe) => recipe,
-        Err(error) => return QueryPoll::Ready(Err(error)),
+    let recipe = match hint {
+        Some(hint) => match recipe.with_entry_hint(index, hint) {
+            Ok(recipe) => recipe,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        },
+        None => recipe,
+    };
+    let recipe = match proof.inferred_arguments() {
+        Some(arguments) => recipe.with_inferred_arguments(std::sync::Arc::clone(arguments)),
+        None => recipe,
     };
     QueryPoll::Ready(
         recipe

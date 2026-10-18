@@ -324,3 +324,16 @@ fn numeric_from_try_from_and_into_select_the_impl_by_argument_type() {
         "5 200 -3 7 100 true 3 A 5 5 7 9 1 true 255 65 8\n",
     );
 }
+
+#[test]
+fn integer_try_from_errors_format_like_core() {
+    prints(
+        "try-from-errors",
+        "fn main() {
+    println!(\"{:?} {:?}\", u8::try_from(256u32), u8::try_from(-1i32));
+    println!(\"{}\", u8::try_from(256u32).unwrap_err());
+}
+",
+        "Err(TryFromIntError(PosOverflow)) Err(TryFromIntError(NegOverflow))\nnumber too large to fit in target type\n",
+    );
+}

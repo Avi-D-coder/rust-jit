@@ -430,6 +430,10 @@ pub struct RunMachine {
     unwinding: Option<unwinding::PanicContinuation>,
     pending: BTreeMap<crate::vm::call::CallIdentity, SelectedArgumentCall>,
     pending_bytes: usize,
+    /// Type arguments later code decided for the call at this PC (the
+    /// recipe's `inferred_arguments`), as explicit arguments of the callee
+    /// declaration they belong to.
+    inferred_call: Option<(PcKey, crate::core::digest::Digest, Vec<(u32, ArgumentType)>)>,
     calls: Vec<SuspendedCall>,
     /// Impl members of the run's nominal types (built on first poll).
     members: Option<Arc<crate::frontend::member_index::MemberIndex>>,
@@ -562,6 +566,7 @@ impl RunMachine {
                 unwinding: None,
                 pending: BTreeMap::new(),
                 pending_bytes: 0,
+                inferred_call: None,
                 output: GuestOutput::default(),
                 members: None,
                 drop_witnesses: BTreeMap::new(),
@@ -1004,11 +1009,28 @@ impl RunMachine {
     }
     /// Shared ordinary call context after source Types have been selected.
     /// Entered calls never pass explicit spellings through the legacy adapter.
+    /// The decided generic arguments of a call as explicit arguments: each
+    /// closed written Type's run-local descriptor and source view.
+    fn inferred_explicit(
+        &mut self,
+        inferred: &crate::ir::recipe::InferredArguments,
+    ) -> Result<Vec<(u32, ArgumentType)>, Diagnostic> {
+        let mut arguments = Vec::with_capacity(inferred.arguments.len());
+        for (ordinal, written) in &inferred.arguments {
+            let (Some(source), Some(descriptor)) =
+                (written.source(), written.materialize(&mut self.store)?)
+            else {
+                continue;
+            };
+            arguments.push((*ordinal, ArgumentType { source, descriptor }));
+        }
+        Ok(arguments)
+    }
     fn finish_selected_argument_call(
         &self,
         db: &mut Database,
         callee: Arc<SourceCallable>,
-        explicit: Vec<(u32, ArgumentType)>,
+        mut explicit: Vec<(u32, ArgumentType)>,
         typed: Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
         argument_slots: &[SlotId],
     ) -> QueryPoll<SelectedArgumentCall> {
@@ -1018,6 +1040,19 @@ impl RunMachine {
             )));
         };
         let sources: Vec<_> = self.sources.iter().collect();
+        // Generic arguments later code decided for this call, when the
+        // selected callee is the declaration they were decided for: the same
+        // explicit arguments a written turbofish would supply.
+        if let Some((pc, definition, inferred)) = &self.inferred_call
+            && pc == self.frame.pc()
+            && *definition == callee.signature().definition
+        {
+            for (ordinal, argument) in inferred {
+                if !explicit.iter().any(|(written, _)| written == ordinal) {
+                    explicit.push((*ordinal, argument.clone()));
+                }
+            }
+        }
         let mut hints = if argument_slots.is_empty() {
             Vec::new()
         } else {
@@ -2737,6 +2772,26 @@ impl RunMachine {
                 return RunPoll::Fault(error);
             }
             self.frame.runtime_call = self.runtime_calls.get(self.frame.pc()).cloned();
+            let call_inferred = match self.installed.get_current(db, id) {
+                Ok(recipe) => recipe.inferred_arguments().cloned(),
+                Err(error) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+            };
+            self.inferred_call = None;
+            if let Some(inferred) = call_inferred {
+                match self.inferred_explicit(&inferred) {
+                    Ok(arguments) => {
+                        self.inferred_call =
+                            Some((self.frame.pc().clone(), inferred.definition, arguments));
+                    }
+                    Err(error) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                }
+            }
             let (call_ops, call_result, call_result_hint, call_next) =
                 match self.installed.get_current(db, id) {
                     Ok(recipe) => {

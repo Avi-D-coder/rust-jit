@@ -809,3 +809,87 @@ fn array_iteration_nested_in_a_standard_macro() {
         "9\n",
     );
 }
+
+/// A result-only generic call whose declared result names its parameter
+/// through a projection (`TryInto::try_into -> Result<U, <U as
+/// TryFrom<T>>::Error>`, `str::parse -> Result<F, <F as FromStr>::Err>`)
+/// takes the parameter later code decides as an explicit argument, exactly
+/// as if written as a turbofish; the existing projection normalization
+/// (which selects the impl by the trait's arguments) then closes the result.
+/// The hand-written, user-macro, wrapper-macro and standard-macro-nested
+/// forms are one route. Expected output verified with rustc 1.99.0.
+#[test]
+fn decided_generic_arguments_close_projected_results() {
+    for (label, source, expected) in [
+        (
+            "try-into",
+            "fn main() { let n = 200u16; let x: u8 = n.try_into().unwrap(); println!(\"{}\", x); }",
+            "200\n",
+        ),
+        (
+            "try-into-annotated",
+            "use std::num::TryFromIntError;
+fn main() {
+    let r: Result<u8, TryFromIntError> = 300u16.try_into();
+    println!(\"{}\", r.is_err());
+}",
+            "true\n",
+        ),
+        (
+            "try-into-macros",
+            "macro_rules! narrow { ($e:expr) => { $e.try_into().unwrap() } }
+macro_rules! outer { ($e:expr) => { narrow!($e) } }
+fn main() {
+    let n = 200u16;
+    let a: u8 = narrow!(n);
+    let b: u8 = outer!(n);
+    println!(\"{} {}\", a, b);
+}",
+            "200 200\n",
+        ),
+        (
+            "try-into-std-macro",
+            "fn main() {
+    let n = 200u16;
+    assert_eq!(n.try_into().ok(), Some(200u8));
+    println!(\"{}\", { let x: u8 = n.try_into().unwrap(); x });
+}",
+            "200\n",
+        ),
+        (
+            "parse",
+            "fn main() { let x: i32 = \"42\".parse().unwrap(); let y: u64 = \"9\".parse().unwrap(); \
+             println!(\"{} {}\", x, y); }",
+            "42 9\n",
+        ),
+        (
+            "parse-macros",
+            "macro_rules! num { ($s:expr) => { $s.parse().unwrap() } }
+fn main() {
+    let a: i32 = num!(\"5\");
+    assert_eq!(\"7\".parse().ok(), Some(7i32));
+    println!(\"{}\", a);
+}",
+            "5\n",
+        ),
+        // A parameter the call's own arguments fix is not decided here.
+        (
+            "argument-fixed",
+            "fn takes(x: u8) -> u8 { x + 1 }
+fn main() { println!(\"{}\", takes(\"5\".parse().unwrap())); }",
+            "6\n",
+        ),
+        (
+            "default-and-collect",
+            "fn main() {
+    let m: u64 = Default::default();
+    let v: Vec<u8> = (1..4u8).collect();
+    let t: u32 = [1u32, 2].iter().sum();
+    println!(\"{} {} {}\", m, v.len(), t);
+}",
+            "0 3 3\n",
+        ),
+    ] {
+        prints(label, source, expected);
+    }
+}

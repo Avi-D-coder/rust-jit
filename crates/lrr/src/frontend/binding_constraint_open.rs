@@ -54,6 +54,9 @@ macro_rules! ready {
 pub(super) struct OpenShape {
     term: TyTerm,
     keys: Vec<ParamKey>,
+    /// The selected function whose generic parameters `keys` are, when the
+    /// shape is a function's result (a constructor's are not turbofish).
+    callee: Option<Digest>,
 }
 
 /// Every `Param` of `definition` named anywhere in `term`.
@@ -150,7 +153,11 @@ impl<'a> Component<'a> {
                     .filter(|constructed| constructed.type_parameter_count() > 0)
                     .map(|constructed| {
                         let (term, keys) = constructed.open_type();
-                        OpenShape { term, keys }
+                        OpenShape {
+                            term,
+                            keys,
+                            callee: None,
+                        }
                     })))
             }
             FactKind::Call => {
@@ -170,9 +177,11 @@ impl<'a> Component<'a> {
                         .into_iter()
                         .filter(|key| !constructed.names_parameter(key.ordinal))
                         .collect();
-                    return QueryPoll::Ready(Ok(
-                        (!keys.is_empty()).then_some(OpenShape { term, keys })
-                    ));
+                    return QueryPoll::Ready(Ok((!keys.is_empty()).then_some(OpenShape {
+                        term,
+                        keys,
+                        callee: None,
+                    })));
                 }
                 match ready!(self.callee(db, node)) {
                     Some(super::Callee::Source(definition)) => {
@@ -255,6 +264,7 @@ impl<'a> Component<'a> {
         QueryPoll::Ready(Ok(Some(OpenShape {
             term: result,
             keys: open,
+            callee: Some(definition),
         })))
     }
 
@@ -518,16 +528,41 @@ pub(super) fn prepare_expression(
         &closed,
         Digest::default(),
     ) {
-        QueryPoll::Ready(Ok(Some(written))) => written,
-        QueryPoll::Ready(Ok(None)) | QueryPoll::Ready(Err(_)) => {
-            return QueryPoll::Ready(Ok(result));
+        QueryPoll::Ready(Ok(Some(written))) if !matches!(written, WrittenType::Infer) => {
+            Some(written)
         }
+        QueryPoll::Ready(Ok(_)) | QueryPoll::Ready(Err(_)) => None,
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
-    if matches!(written, WrittenType::Infer) {
+    // The function's own generic parameters, as a written turbofish would
+    // state them: closed written Types by callee parameter ordinal.
+    if let Some(definition) = shape.callee {
+        let mut arguments = Vec::with_capacity(shape.keys.len());
+        for open in &shape.keys {
+            let Some(solved) = solved.get(open) else {
+                continue;
+            };
+            match crate::frontend::written_terms::closed_written_type(db, &sources, solved) {
+                QueryPoll::Ready(Ok(Some(written))) => {
+                    arguments.push((open.ordinal, Arc::new(written)))
+                }
+                QueryPoll::Ready(Ok(None)) | QueryPoll::Ready(Err(_)) => {}
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
+        if !arguments.is_empty() {
+            result.arguments = Some(Arc::new(crate::ir::recipe::InferredArguments {
+                definition,
+                arguments,
+            }));
+        }
+    }
+    // Either answer is enough: the result Type as a hint, and the callee's
+    // own parameters as explicit arguments.
+    if written.is_none() && result.arguments.is_none() {
         return QueryPoll::Ready(Ok(result));
     }
-    result.written = Some(Arc::new(written));
+    result.written = written.map(Arc::new);
     result.state = BindingConstraintState::ResolvedType;
     QueryPoll::Ready(Ok(result))
 }

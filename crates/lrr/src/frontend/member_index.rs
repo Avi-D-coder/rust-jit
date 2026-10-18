@@ -1172,6 +1172,27 @@ impl MemberIndex {
         trait_key: Option<Digest>,
         name: &str,
     ) -> Result<Option<(Digest, &AssociatedTypeAlias)>, Diagnostic> {
+        let mut candidates = self.associated_type_candidates(ty, pointee, trait_key, name);
+        if candidates.len() > 1 {
+            return Err(Diagnostic::new(
+                "LRR-E-NAME-AMBIGUOUS",
+                format!("associated type `{name}` is provided by several impls"),
+            ));
+        }
+        Ok(candidates.pop())
+    }
+    /// Every associated type alias named `name` that a trait impl of the
+    /// self type provides: the impls naming the type itself, else the blanket
+    /// impls whose bounds it meets. Impls of one trait that differ by its
+    /// arguments (`TryFrom<u8>`, `TryFrom<u16>`) are all candidates; the
+    /// projection's trait arguments select among them.
+    pub fn associated_type_candidates(
+        &self,
+        ty: Result<Digest, BuiltinSelf>,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        trait_key: Option<Digest>,
+        name: &str,
+    ) -> Vec<(Digest, &AssociatedTypeAlias)> {
         let mut impls: Vec<&ImplMembers> = match ty {
             Ok(nominal) => self.impls_of(nominal).collect(),
             Err(builtin) => self
@@ -1194,48 +1215,35 @@ impl MemberIndex {
                 }
             });
         }
-        let mut found = impls.into_iter().filter(|members| {
-            members.trait_path.is_some()
-                && trait_key.is_none_or(|key| members.trait_definition == Some(key))
-        });
-        let mut selected = None;
-        for members in found.by_ref() {
-            let Some(alias) = members.types.get(name) else {
-                continue;
-            };
-            if selected.is_some() {
-                return Err(Diagnostic::new(
-                    "LRR-E-NAME-AMBIGUOUS",
-                    format!("associated type `{name}` is provided by several impls"),
-                ));
-            }
-            selected = Some(*alias);
-        }
-        // A blanket impl (`impl<T: Get> Grab for T`) whose bounds the type
-        // meets provides the name when no impl of the type itself does.
-        if selected.is_none() {
-            for members in self.unresolved().filter(|members| {
+        let mut selected: Vec<Digest> = impls
+            .into_iter()
+            .filter(|members| {
                 members.trait_path.is_some()
                     && trait_key.is_none_or(|key| members.trait_definition == Some(key))
-                    && members.blanket.as_ref().is_some_and(|bounds| {
-                        bounds
-                            .iter()
-                            .all(|bound| bound.is_none_or(|bound| self.implements(ty, bound)))
-                    })
-            }) {
-                let Some(alias) = members.types.get(name) else {
-                    continue;
-                };
-                if selected.is_some() {
-                    return Err(Diagnostic::new(
-                        "LRR-E-NAME-AMBIGUOUS",
-                        format!("associated type `{name}` is provided by several impls"),
-                    ));
-                }
-                selected = Some(*alias);
-            }
+            })
+            .filter_map(|members| members.types.get(name).copied())
+            .collect();
+        // A blanket impl (`impl<T: Get> Grab for T`) whose bounds the type
+        // meets provides the name when no impl of the type itself does.
+        if selected.is_empty() {
+            selected = self
+                .unresolved()
+                .filter(|members| {
+                    members.trait_path.is_some()
+                        && trait_key.is_none_or(|key| members.trait_definition == Some(key))
+                        && members.blanket.as_ref().is_some_and(|bounds| {
+                            bounds
+                                .iter()
+                                .all(|bound| bound.is_none_or(|bound| self.implements(ty, bound)))
+                        })
+                })
+                .filter_map(|members| members.types.get(name).copied())
+                .collect();
         }
-        Ok(selected.and_then(|alias| self.type_aliases.get(&alias).map(|row| (alias, row))))
+        selected
+            .into_iter()
+            .filter_map(|alias| self.type_aliases.get(&alias).map(|row| (alias, row)))
+            .collect()
     }
     /// The associated constant `name` of a type (`Type::NAME`, `Self::NAME`):
     /// an inherent impl's, else a trait impl's own, else the implemented

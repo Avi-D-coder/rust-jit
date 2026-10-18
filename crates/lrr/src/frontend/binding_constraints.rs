@@ -126,6 +126,9 @@ pub struct PreparedBindingConstraints {
     state: BindingConstraintState,
     // The written initializer Type of `ResolvedType`.
     written: Option<Arc<crate::ir::written_type::WrittenType>>,
+    // The callee's own generic parameters the same demand decided, stated as
+    // a written turbofish would (`ResolvedType` of a source function call).
+    arguments: Option<Arc<crate::ir::recipe::InferredArguments>>,
 }
 impl PreparedBindingConstraints {
     pub(crate) fn key(&self) -> &PcKey {
@@ -137,6 +140,12 @@ impl PreparedBindingConstraints {
     /// The written Type of an open-argument expression's `ResolvedType`.
     pub(crate) fn written(&self) -> Option<&crate::ir::written_type::WrittenType> {
         self.written.as_deref()
+    }
+    /// The callee generic parameters an open call's demand decided.
+    pub(crate) fn inferred_arguments(
+        &self,
+    ) -> Option<&Arc<crate::ir::recipe::InferredArguments>> {
+        self.arguments.as_ref()
     }
     pub(crate) fn metadata_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
@@ -232,6 +241,16 @@ fn selected_local(goal: &crate::frontend::source_value_goals::EnteredValueGoal) 
         Some(ValueGoalDemand::BindingClassification(id)) => Some(id),
         Some(_) => None,
     }
+}
+/// The selection awaits a declaration the service cannot read, or names an
+/// enum variant. A variant is a member of its enum and owns no declaration
+/// inputs: the numeric services read it as the pending constructor selection
+/// (`None`, `Some(..)`), whichever route selected it (prelude, import, glob).
+fn selection_pending(goal: &crate::frontend::source_value_goals::EnteredValueGoal) -> bool {
+    goal.pending().is_some()
+        || goal
+            .declaration()
+            .is_some_and(|declaration| declaration.variant().is_some())
 }
 /// A declaration owned by a body (its retained goal memos need no module
 /// environment).
@@ -1379,7 +1398,7 @@ impl<'a> Component<'a> {
         let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("function item query variant differs")));
         };
-        if selected.pending().is_some() || selected.local_binding().is_some() {
+        if selection_pending(selected) || selected.local_binding().is_some() {
             return QueryPoll::Ready(Ok(None));
         }
         QueryPoll::Ready(Ok(selected
@@ -1474,7 +1493,7 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Err(fault("constraint callee query variant differs")));
         };
         let local = selected_local(selected);
-        if selected.pending().is_some() && local.is_none() {
+        if selection_pending(selected) && local.is_none() {
             self.defer(callee, ConstraintDemand::SelectedDeclaration);
             return QueryPoll::Ready(Ok(None));
         }
@@ -1788,7 +1807,7 @@ impl<'a> Component<'a> {
                     return QueryPoll::Ready(Err(fault("binding use query variant differs")));
                 };
                 let local = selected_local(observed);
-                if observed.pending().is_some() && local.is_none() {
+                if selection_pending(observed) && local.is_none() {
                     // A fieldless constructor named as a value (`None`) is
                     // a constructed value of its declaration's Type.
                     match ready!(self.constructor(db, ConstructorSite::Expression(node))) {
@@ -2470,7 +2489,7 @@ impl<'a> Component<'a> {
                         };
                         match observed.declaration() {
                             Some(declaration)
-                                if observed.pending().is_none()
+                                if !selection_pending(observed)
                                     && observed.local_binding().is_none() =>
                             {
                                 let identity = declaration.identity();
@@ -2682,7 +2701,7 @@ impl<'a> Component<'a> {
                 return QueryPoll::Ready(Err(fault("binding use query variant differs")));
             };
             let local = selected_local(observed);
-            if observed.pending().is_some() && local.is_none() {
+            if selection_pending(observed) && local.is_none() {
                 self.defer(use_node, ConstraintDemand::ValueUse);
                 continue;
             }
@@ -2905,6 +2924,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
         members: Vec::new(),
         state: BindingConstraintState::NoNumericDemand,
         written: None,
+        arguments: None,
     };
     let Some(fact) = plan.fact(NodeId(key.node)) else {
         return QueryPoll::Ready(Err(fault("binding constraint node absent")));
@@ -2991,6 +3011,13 @@ impl StableEncode for PreparedBindingConstraints {
         e.option(&self.binding, |e, id| e.digest(*id));
         e.sequence(&self.members, |e, node| e.u32(node.0));
         e.option(&self.written, |e, written| e.record(written.as_ref()));
+        e.option(&self.arguments, |e, inferred| {
+            e.digest(inferred.definition);
+            e.sequence(&inferred.arguments, |e, (ordinal, written)| {
+                e.u32(*ordinal);
+                e.record(written.as_ref());
+            });
+        });
         match self.state {
             BindingConstraintState::NoNumericDemand => e.u8(0),
             BindingConstraintState::Unconstrained => e.u8(1),

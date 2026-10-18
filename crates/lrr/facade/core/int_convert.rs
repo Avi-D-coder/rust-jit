@@ -9,22 +9,28 @@ use crate::result::Result;
 
 impl crate::fmt::Debug for TryFromIntError {
     fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
-        f.write_str("TryFromIntError(())")
+        match self.0 {
+            crate::num::IntErrorKind::NegOverflow => f.write_str("TryFromIntError(NegOverflow)"),
+            _ => f.write_str("TryFromIntError(PosOverflow)"),
+        }
     }
 }
 impl crate::fmt::Display for TryFromIntError {
     fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
-        f.write_str("out of range integral type conversion attempted")
+        match self.0 {
+            crate::num::IntErrorKind::NegOverflow => f.write_str("number too small to fit in target type"),
+            _ => f.write_str("number too large to fit in target type"),
+        }
     }
 }
 impl crate::clone::Clone for TryFromIntError {
     fn clone(&self) -> TryFromIntError {
-        TryFromIntError(())
+        TryFromIntError(self.0.clone())
     }
 }
 impl crate::cmp::PartialEq for TryFromIntError {
-    fn eq(&self, _other: &TryFromIntError) -> bool {
-        true
+    fn eq(&self, other: &TryFromIntError) -> bool {
+        self.0 == other.0
     }
 }
 impl crate::cmp::Eq for TryFromIntError {}
@@ -307,60 +313,72 @@ impl TryFrom<i8> for isize {
 impl TryFrom<i8> for u8 {
     type Error = TryFromIntError;
     fn try_from(v: i8) -> Result<u8, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u8::MAX as u64) {
-            Result::Ok(v as u8)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u8::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u8)
         }
     }
 }
 impl TryFrom<i8> for u16 {
     type Error = TryFromIntError;
     fn try_from(v: i8) -> Result<u16, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u16::MAX as u64) {
-            Result::Ok(v as u16)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u16::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u16)
         }
     }
 }
 impl TryFrom<i8> for u32 {
     type Error = TryFromIntError;
     fn try_from(v: i8) -> Result<u32, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u32::MAX as u64) {
-            Result::Ok(v as u32)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u32::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u32)
         }
     }
 }
 impl TryFrom<i8> for u64 {
     type Error = TryFromIntError;
     fn try_from(v: i8) -> Result<u64, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u64::MAX as u64) {
-            Result::Ok(v as u64)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u64::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u64)
         }
     }
 }
 impl TryFrom<i8> for usize {
     type Error = TryFromIntError;
     fn try_from(v: i8) -> Result<usize, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (usize::MAX as u64) {
-            Result::Ok(v as usize)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (usize::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as usize)
         }
     }
 }
 impl TryFrom<i16> for i8 {
     type Error = TryFromIntError;
     fn try_from(v: i16) -> Result<i8, TryFromIntError> {
-        if (v as i64) >= (i8::MIN as i64) && (v as i64) <= (i8::MAX as i64) {
-            Result::Ok(v as i8)
+        if (v as i64) < (i8::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i8::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i8)
         }
     }
 }
@@ -385,70 +403,84 @@ impl TryFrom<i16> for isize {
 impl TryFrom<i16> for u8 {
     type Error = TryFromIntError;
     fn try_from(v: i16) -> Result<u8, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u8::MAX as u64) {
-            Result::Ok(v as u8)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u8::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u8)
         }
     }
 }
 impl TryFrom<i16> for u16 {
     type Error = TryFromIntError;
     fn try_from(v: i16) -> Result<u16, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u16::MAX as u64) {
-            Result::Ok(v as u16)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u16::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u16)
         }
     }
 }
 impl TryFrom<i16> for u32 {
     type Error = TryFromIntError;
     fn try_from(v: i16) -> Result<u32, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u32::MAX as u64) {
-            Result::Ok(v as u32)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u32::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u32)
         }
     }
 }
 impl TryFrom<i16> for u64 {
     type Error = TryFromIntError;
     fn try_from(v: i16) -> Result<u64, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u64::MAX as u64) {
-            Result::Ok(v as u64)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u64::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u64)
         }
     }
 }
 impl TryFrom<i16> for usize {
     type Error = TryFromIntError;
     fn try_from(v: i16) -> Result<usize, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (usize::MAX as u64) {
-            Result::Ok(v as usize)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (usize::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as usize)
         }
     }
 }
 impl TryFrom<i32> for i8 {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<i8, TryFromIntError> {
-        if (v as i64) >= (i8::MIN as i64) && (v as i64) <= (i8::MAX as i64) {
-            Result::Ok(v as i8)
+        if (v as i64) < (i8::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i8::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i8)
         }
     }
 }
 impl TryFrom<i32> for i16 {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<i16, TryFromIntError> {
-        if (v as i64) >= (i16::MIN as i64) && (v as i64) <= (i16::MAX as i64) {
-            Result::Ok(v as i16)
+        if (v as i64) < (i16::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i16::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i16)
         }
     }
 }
@@ -461,240 +493,288 @@ impl TryFrom<i32> for i64 {
 impl TryFrom<i32> for isize {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<isize, TryFromIntError> {
-        if (v as i64) >= (isize::MIN as i64) && (v as i64) <= (isize::MAX as i64) {
-            Result::Ok(v as isize)
+        if (v as i64) < (isize::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (isize::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as isize)
         }
     }
 }
 impl TryFrom<i32> for u8 {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<u8, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u8::MAX as u64) {
-            Result::Ok(v as u8)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u8::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u8)
         }
     }
 }
 impl TryFrom<i32> for u16 {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<u16, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u16::MAX as u64) {
-            Result::Ok(v as u16)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u16::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u16)
         }
     }
 }
 impl TryFrom<i32> for u32 {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<u32, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u32::MAX as u64) {
-            Result::Ok(v as u32)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u32::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u32)
         }
     }
 }
 impl TryFrom<i32> for u64 {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<u64, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u64::MAX as u64) {
-            Result::Ok(v as u64)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u64::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u64)
         }
     }
 }
 impl TryFrom<i32> for usize {
     type Error = TryFromIntError;
     fn try_from(v: i32) -> Result<usize, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (usize::MAX as u64) {
-            Result::Ok(v as usize)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (usize::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as usize)
         }
     }
 }
 impl TryFrom<i64> for i8 {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<i8, TryFromIntError> {
-        if (v as i64) >= (i8::MIN as i64) && (v as i64) <= (i8::MAX as i64) {
-            Result::Ok(v as i8)
+        if (v as i64) < (i8::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i8::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i8)
         }
     }
 }
 impl TryFrom<i64> for i16 {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<i16, TryFromIntError> {
-        if (v as i64) >= (i16::MIN as i64) && (v as i64) <= (i16::MAX as i64) {
-            Result::Ok(v as i16)
+        if (v as i64) < (i16::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i16::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i16)
         }
     }
 }
 impl TryFrom<i64> for i32 {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<i32, TryFromIntError> {
-        if (v as i64) >= (i32::MIN as i64) && (v as i64) <= (i32::MAX as i64) {
-            Result::Ok(v as i32)
+        if (v as i64) < (i32::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i32::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i32)
         }
     }
 }
 impl TryFrom<i64> for isize {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<isize, TryFromIntError> {
-        if (v as i64) >= (isize::MIN as i64) && (v as i64) <= (isize::MAX as i64) {
-            Result::Ok(v as isize)
+        if (v as i64) < (isize::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (isize::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as isize)
         }
     }
 }
 impl TryFrom<i64> for u8 {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<u8, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u8::MAX as u64) {
-            Result::Ok(v as u8)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u8::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u8)
         }
     }
 }
 impl TryFrom<i64> for u16 {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<u16, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u16::MAX as u64) {
-            Result::Ok(v as u16)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u16::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u16)
         }
     }
 }
 impl TryFrom<i64> for u32 {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<u32, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u32::MAX as u64) {
-            Result::Ok(v as u32)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u32::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u32)
         }
     }
 }
 impl TryFrom<i64> for u64 {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<u64, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u64::MAX as u64) {
-            Result::Ok(v as u64)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u64::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u64)
         }
     }
 }
 impl TryFrom<i64> for usize {
     type Error = TryFromIntError;
     fn try_from(v: i64) -> Result<usize, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (usize::MAX as u64) {
-            Result::Ok(v as usize)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (usize::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as usize)
         }
     }
 }
 impl TryFrom<isize> for i8 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<i8, TryFromIntError> {
-        if (v as i64) >= (i8::MIN as i64) && (v as i64) <= (i8::MAX as i64) {
-            Result::Ok(v as i8)
+        if (v as i64) < (i8::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i8::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i8)
         }
     }
 }
 impl TryFrom<isize> for i16 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<i16, TryFromIntError> {
-        if (v as i64) >= (i16::MIN as i64) && (v as i64) <= (i16::MAX as i64) {
-            Result::Ok(v as i16)
+        if (v as i64) < (i16::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i16::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i16)
         }
     }
 }
 impl TryFrom<isize> for i32 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<i32, TryFromIntError> {
-        if (v as i64) >= (i32::MIN as i64) && (v as i64) <= (i32::MAX as i64) {
-            Result::Ok(v as i32)
+        if (v as i64) < (i32::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i32::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i32)
         }
     }
 }
 impl TryFrom<isize> for i64 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<i64, TryFromIntError> {
-        if (v as i64) >= (i64::MIN as i64) && (v as i64) <= (i64::MAX as i64) {
-            Result::Ok(v as i64)
+        if (v as i64) < (i64::MIN as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as i64) > (i64::MAX as i64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as i64)
         }
     }
 }
 impl TryFrom<isize> for u8 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<u8, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u8::MAX as u64) {
-            Result::Ok(v as u8)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u8::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u8)
         }
     }
 }
 impl TryFrom<isize> for u16 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<u16, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u16::MAX as u64) {
-            Result::Ok(v as u16)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u16::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u16)
         }
     }
 }
 impl TryFrom<isize> for u32 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<u32, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u32::MAX as u64) {
-            Result::Ok(v as u32)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u32::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u32)
         }
     }
 }
 impl TryFrom<isize> for u64 {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<u64, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (u64::MAX as u64) {
-            Result::Ok(v as u64)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (u64::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as u64)
         }
     }
 }
 impl TryFrom<isize> for usize {
     type Error = TryFromIntError;
     fn try_from(v: isize) -> Result<usize, TryFromIntError> {
-        if v >= 0 && (v as u64) <= (usize::MAX as u64) {
-            Result::Ok(v as usize)
+        if v < 0 {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
+        } else if (v as u64) > (usize::MAX as u64) {
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Ok(v as usize)
         }
     }
 }
@@ -704,7 +784,7 @@ impl TryFrom<u8> for i8 {
         if (v as u64) <= (i8::MAX as u64) {
             Result::Ok(v as i8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -762,7 +842,7 @@ impl TryFrom<u16> for i8 {
         if (v as u64) <= (i8::MAX as u64) {
             Result::Ok(v as i8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -772,7 +852,7 @@ impl TryFrom<u16> for i16 {
         if (v as u64) <= (i16::MAX as u64) {
             Result::Ok(v as i16)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -794,7 +874,7 @@ impl TryFrom<u16> for isize {
         if (v as u64) <= (isize::MAX as u64) {
             Result::Ok(v as isize)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -804,7 +884,7 @@ impl TryFrom<u16> for u8 {
         if (v as u64) <= (u8::MAX as u64) {
             Result::Ok(v as u8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -832,7 +912,7 @@ impl TryFrom<u32> for i8 {
         if (v as u64) <= (i8::MAX as u64) {
             Result::Ok(v as i8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -842,7 +922,7 @@ impl TryFrom<u32> for i16 {
         if (v as u64) <= (i16::MAX as u64) {
             Result::Ok(v as i16)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -852,7 +932,7 @@ impl TryFrom<u32> for i32 {
         if (v as u64) <= (i32::MAX as u64) {
             Result::Ok(v as i32)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -868,7 +948,7 @@ impl TryFrom<u32> for isize {
         if (v as u64) <= (isize::MAX as u64) {
             Result::Ok(v as isize)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -878,7 +958,7 @@ impl TryFrom<u32> for u8 {
         if (v as u64) <= (u8::MAX as u64) {
             Result::Ok(v as u8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -888,7 +968,7 @@ impl TryFrom<u32> for u16 {
         if (v as u64) <= (u16::MAX as u64) {
             Result::Ok(v as u16)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -904,7 +984,7 @@ impl TryFrom<u32> for usize {
         if (v as u64) <= (usize::MAX as u64) {
             Result::Ok(v as usize)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -914,7 +994,7 @@ impl TryFrom<u64> for i8 {
         if (v as u64) <= (i8::MAX as u64) {
             Result::Ok(v as i8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -924,7 +1004,7 @@ impl TryFrom<u64> for i16 {
         if (v as u64) <= (i16::MAX as u64) {
             Result::Ok(v as i16)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -934,7 +1014,7 @@ impl TryFrom<u64> for i32 {
         if (v as u64) <= (i32::MAX as u64) {
             Result::Ok(v as i32)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -944,7 +1024,7 @@ impl TryFrom<u64> for i64 {
         if (v as u64) <= (i64::MAX as u64) {
             Result::Ok(v as i64)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -954,7 +1034,7 @@ impl TryFrom<u64> for isize {
         if (v as u64) <= (isize::MAX as u64) {
             Result::Ok(v as isize)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -964,7 +1044,7 @@ impl TryFrom<u64> for u8 {
         if (v as u64) <= (u8::MAX as u64) {
             Result::Ok(v as u8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -974,7 +1054,7 @@ impl TryFrom<u64> for u16 {
         if (v as u64) <= (u16::MAX as u64) {
             Result::Ok(v as u16)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -984,7 +1064,7 @@ impl TryFrom<u64> for u32 {
         if (v as u64) <= (u32::MAX as u64) {
             Result::Ok(v as u32)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -994,7 +1074,7 @@ impl TryFrom<u64> for usize {
         if (v as u64) <= (usize::MAX as u64) {
             Result::Ok(v as usize)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1004,7 +1084,7 @@ impl TryFrom<usize> for i8 {
         if (v as u64) <= (i8::MAX as u64) {
             Result::Ok(v as i8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1014,7 +1094,7 @@ impl TryFrom<usize> for i16 {
         if (v as u64) <= (i16::MAX as u64) {
             Result::Ok(v as i16)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1024,7 +1104,7 @@ impl TryFrom<usize> for i32 {
         if (v as u64) <= (i32::MAX as u64) {
             Result::Ok(v as i32)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1034,7 +1114,7 @@ impl TryFrom<usize> for i64 {
         if (v as u64) <= (i64::MAX as u64) {
             Result::Ok(v as i64)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1044,7 +1124,7 @@ impl TryFrom<usize> for isize {
         if (v as u64) <= (isize::MAX as u64) {
             Result::Ok(v as isize)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1054,7 +1134,7 @@ impl TryFrom<usize> for u8 {
         if (v as u64) <= (u8::MAX as u64) {
             Result::Ok(v as u8)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1064,7 +1144,7 @@ impl TryFrom<usize> for u16 {
         if (v as u64) <= (u16::MAX as u64) {
             Result::Ok(v as u16)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1074,7 +1154,7 @@ impl TryFrom<usize> for u32 {
         if (v as u64) <= (u32::MAX as u64) {
             Result::Ok(v as u32)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }
@@ -1084,7 +1164,7 @@ impl TryFrom<usize> for u64 {
         if (v as u64) <= (u64::MAX as u64) {
             Result::Ok(v as u64)
         } else {
-            Result::Err(TryFromIntError(()))
+            Result::Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
         }
     }
 }

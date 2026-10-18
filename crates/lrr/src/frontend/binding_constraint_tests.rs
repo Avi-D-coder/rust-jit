@@ -1735,3 +1735,123 @@ fn trait_objects_literal_receivers_and_function_items_relate_literals() {
         assert_eq!(first_literal_let(&text, edition, true), Resolved(U64), "{edition}");
     }
 }
+
+/// The callee generic arguments (ordinal, Type) that later code decided for
+/// every call, in source order, and whether the call's own result hint is
+/// stated in full.
+fn inferred_call_arguments(
+    text: &str,
+    edition: u16,
+    retained: bool,
+) -> Vec<(Vec<(u32, crate::traits::term::TyTerm)>, Option<bool>)> {
+    let (mut db, local) = world(text, edition, retained);
+    let body = local.context().source().index().body().clone();
+    let graph = ready(db.fetch(&SyntaxProvider, QueryKey::SourceConstraints(body.clone())));
+    let QueryValue::SourceConstraints(graph) = graph.value.as_ref() else {
+        panic!();
+    };
+    let nodes: Vec<_> = graph
+        .facts()
+        .iter()
+        .enumerate()
+        .filter(|(_, fact)| matches!(fact.kind(), FactKind::Call | FactKind::MethodCall))
+        .map(|(id, _)| u32::try_from(id).unwrap())
+        .collect();
+    let mut found = Vec::new();
+    for node in nodes {
+        let value = ready(db.fetch(
+            &SyntaxProvider,
+            QueryKey::BindingConstraints(crate::ir::pc::PcKey {
+                body: body.clone(),
+                node,
+                phase: 0,
+            }),
+        ));
+        let QueryValue::BindingConstraints(source) = value.value.as_ref() else {
+            panic!();
+        };
+        let Some(inferred) = source.inferred_arguments() else {
+            continue;
+        };
+        found.push((
+            inferred
+                .arguments
+                .iter()
+                .map(|(ordinal, written)| (*ordinal, written.source().expect("closed argument")))
+                .collect(),
+            source.written().map(|written| written.source().is_some()),
+        ));
+    }
+    found
+}
+
+/// A result that names a decided parameter only through a projection
+/// (`Result<U, U::Error>`) cannot be stated as a whole Type until the
+/// projection normalizes; the decided parameter itself is stated as a
+/// written turbofish argument would be, by the callee's generic ordinal.
+#[test]
+fn decided_generic_arguments_are_stated_parameter_wise() {
+    use crate::traits::term::TyTerm::Primitive as P;
+    use PrimitiveType::*;
+    const DECLARATIONS: &str = "enum Res<T, E> { Good(T), Bad(E) }\n\
+        trait Tr { type Out; }\n\
+        impl Tr for u8 { type Out = bool; }\n\
+        fn plain<U>() -> Res<U, bool> { loop {} }\n\
+        fn projected<U: Tr>() -> Res<U, U::Out> { loop {} }\n\
+        fn fixed<T>(t: T) -> Res<T, bool> { loop {} }\n\
+        fn need(r: Res<u8, bool>) {}\n";
+    for edition in [2015, 2018, 2021, 2024] {
+        let text = |body: &str| format!("{DECLARATIONS}{body}");
+        // The whole result is stated when nothing in it needs normalizing.
+        assert_eq!(
+            inferred_call_arguments(
+                &text("fn main() { let r = plain(); need(r); }"),
+                edition,
+                false
+            ),
+            vec![(vec![(0, P(U8))], Some(true))],
+            "{edition}"
+        );
+        // A projection of the decided parameter stays an inference leaf of
+        // the result hint; the argument is stated regardless.
+        assert_eq!(
+            inferred_call_arguments(
+                &text("fn main() { let r = projected(); need(r); }"),
+                edition,
+                false
+            ),
+            vec![(vec![(0, P(U8))], Some(false))],
+            "{edition}"
+        );
+        // The same call emitted by a user macro, a wrapper and nested in a
+        // block decides the same argument through the one published body.
+        for body in [
+            "fn main() { let r = projected(); need(r); }",
+            "macro_rules! make { () => { projected() } }\n\
+             fn main() { let r = make!(); need(r); }",
+            "macro_rules! make { () => { projected() } }\n\
+             macro_rules! outer { () => { make!() } }\n\
+             fn main() { let r = outer!(); need(r); }",
+            "fn main() { need({ let r = projected(); r }); }",
+        ] {
+            assert_eq!(
+                inferred_call_arguments(&text(body), edition, true),
+                vec![(vec![(0, P(U8))], Some(false))],
+                "{edition}: {body}"
+            );
+        }
+        // An argument fixes the parameter, a turbofish states it, and no
+        // later use decides it: nothing is decided here.
+        for body in [
+            "fn main() { let r = fixed(1u8); need(r); }",
+            "fn main() { let r = projected::<u8>(); need(r); }",
+            "fn main() { let r = projected::<u8>(); }",
+        ] {
+            assert_eq!(
+                inferred_call_arguments(&text(body), edition, false),
+                vec![],
+                "{edition}: {body}"
+            );
+        }
+    }
+}

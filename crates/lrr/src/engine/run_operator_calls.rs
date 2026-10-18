@@ -79,6 +79,21 @@ impl RunMachine {
         let Some(demand) = self.frame.operator_demand() else {
             return QueryPoll::Ready(Err(call_fault("no operator method is demanded")));
         };
+        // A borrow's deref coercion steps only along a `Deref` chain that
+        // reaches the Type the borrow expects (never an unsizing or a
+        // trait-object conversion); otherwise the borrow runs as written.
+        if let Some((place_type, expected, mutable)) =
+            ready!(self.frame.pending_coercion_goal(&self.store))
+        {
+            match self.deref_chain_reaches(db, place_type, &expected, mutable) {
+                QueryPoll::Ready(Ok(true)) => {}
+                QueryPoll::Ready(Ok(false)) => {
+                    return QueryPoll::Ready(self.frame.decline_coercion(place_type));
+                }
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
         if self.prepared_call.is_some() || self.frame.call_arguments.is_some() {
             return QueryPoll::Ready(Err(call_fault(
                 "an operator method cannot interleave a sealed call",
@@ -172,7 +187,11 @@ impl RunMachine {
                 );
             }
         }
-        let result_hint = ready!(self.call_result_source_hint(demand.destination)).map(|mut hint| {
+        let result_hint = match demand.destination {
+            Some(destination) => ready!(self.call_result_source_hint(destination)),
+            None => None,
+        }
+        .map(|mut hint| {
             hint.source = self.frame.bound_view(&hint.source, &self.store);
             hint
         });
@@ -405,6 +424,11 @@ impl RunMachine {
         suspended: &mut SuspendedCall,
         ticket: TicketId,
     ) -> Result<(), Diagnostic> {
+        // A place operation's `Deref` step returns into a dispatcher-owned
+        // location, with no frame slot expectation to check.
+        if suspended.caller.operator_is_place_deref() {
+            return self.admit_call_result_at(db, suspended, ticket, None);
+        }
         let destination = suspended
             .caller
             .operator_result_slot()

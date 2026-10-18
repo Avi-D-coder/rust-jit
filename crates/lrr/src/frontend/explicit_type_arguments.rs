@@ -199,6 +199,9 @@ pub struct PreparedExplicitTypeArguments {
     /// decided by later code (the common source constraints); its inputs are
     /// part of `guard`.
     inferred: Option<Arc<WrittenType>>,
+    /// The callee's own generic parameters later code decided, stated as the
+    /// written turbofish would (also inputs of `guard`).
+    inferred_arguments: Option<Arc<crate::ir::recipe::InferredArguments>>,
     bytes: usize,
     fingerprint: Digest,
 }
@@ -207,6 +210,11 @@ impl PreparedExplicitTypeArguments {
     /// first by the call's recipe as a parent's `SetHint` would.
     pub(crate) fn inferred_result(&self) -> Option<&Arc<WrittenType>> {
         self.inferred.as_ref()
+    }
+    pub(crate) fn inferred_arguments(
+        &self,
+    ) -> Option<&Arc<crate::ir::recipe::InferredArguments>> {
+        self.inferred_arguments.as_ref()
     }
     pub(crate) fn key(&self) -> &PcKey {
         &self.key
@@ -239,6 +247,7 @@ impl PreparedExplicitTypeArguments {
             && self.signature == other.signature
             && self.plan.source_identity() == other.plan.source_identity()
             && self.inferred == other.inferred
+            && self.inferred_arguments == other.inferred_arguments
             && self.rows.len() == other.rows.len()
             && self.rows.iter().zip(other.rows.iter()).all(|(a, b)| {
                 a.ordinal == b.ordinal
@@ -329,6 +338,13 @@ impl StableEncode for PreparedExplicitTypeArguments {
         e.record(self.target.as_ref());
         e.digest(self.guard.fingerprint());
         e.option(&self.inferred, |e, written| e.record(written.as_ref()));
+        e.option(&self.inferred_arguments, |e, inferred| {
+            e.digest(inferred.definition);
+            e.sequence(&inferred.arguments, |e, (ordinal, written)| {
+                e.u32(*ordinal);
+                e.record(written.as_ref());
+            });
+        });
         e.sequence(&self.rows, |e, row| e.record(row));
     }
 }
@@ -571,30 +587,32 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedExpli
     }
     // The Type later code decides for the call's open type arguments. A
     // plan that cannot state it leaves the explicit route unchanged.
-    let inferred = match db.fetch(&SyntaxProvider, QueryKey::PreparedBindingPlan(key.clone())) {
-        QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
-            QueryValue::PreparedBindingPlan(binding) if value.cacheable => {
-                match (
-                    binding.constraints().state(),
-                    binding.guard(),
-                    binding.constraints().written(),
-                ) {
-                    (
-                        crate::frontend::binding_constraints::BindingConstraintState::ResolvedType,
-                        Some(guard),
-                        Some(written),
-                    ) => {
-                        guards.push(Arc::clone(guard));
-                        Some(Arc::new(written.clone()))
+    let (inferred, inferred_arguments) =
+        match db.fetch(&SyntaxProvider, QueryKey::PreparedBindingPlan(key.clone())) {
+            QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                QueryValue::PreparedBindingPlan(binding) if value.cacheable => {
+                    match (binding.constraints().state(), binding.guard()) {
+                        (
+                            crate::frontend::binding_constraints::BindingConstraintState::ResolvedType,
+                            Some(guard),
+                        ) => {
+                            guards.push(Arc::clone(guard));
+                            (
+                                binding
+                                    .constraints()
+                                    .written()
+                                    .map(|written| Arc::new(written.clone())),
+                                binding.constraints().inferred_arguments().cloned(),
+                            )
+                        }
+                        _ => (None, None),
                     }
-                    _ => None,
                 }
-            }
-            _ => None,
-        },
-        QueryPoll::Ready(Err(_)) => None,
-        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-    };
+                _ => (None, None),
+            },
+            QueryPoll::Ready(Err(_)) => (None, None),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
     let mut references = Vec::new();
     checked!(add(
         bytes,
@@ -633,6 +651,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedExpli
         call_observation: call.fingerprint,
         guard: Arc::new(joined),
         inferred,
+        inferred_arguments,
         rows: Arc::from(rows.into_boxed_slice()),
         bytes,
         fingerprint: Digest([0; 32]),
