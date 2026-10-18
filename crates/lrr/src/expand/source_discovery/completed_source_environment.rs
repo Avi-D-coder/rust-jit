@@ -18,6 +18,8 @@ struct CompletedGeneratedSources {
 }
 pub struct CompletedSourceEnvironment {
     names: Arc<NameNamespaces>,
+    language_item_cores: BTreeMap<crate::core::profile::ProfileIdentity, Digest>,
+    language_item_identity: Digest,
     sources: Arc<Vec<PreparedSourceView>>,
     scope_owners: BTreeMap<ScopeKey, Vec<u32>>,
     body_macros: BTreeMap<Digest, (u32, super::body_macro_environment::CompletedBodyMacroFacts)>,
@@ -126,6 +128,14 @@ impl CompletedSourceEnvironment {
             .get(&unit.key.content)
             .cloned()
             .ok_or_else(|| fault("completed generated body boundary absent"))?
+    }
+    pub(crate) fn language_item_identity(&self) -> Digest {
+        self.language_item_identity
+    }
+    pub(crate) fn language_item_core(
+        &self, profile: &crate::core::profile::ProfileIdentity,
+    ) -> Option<Digest> {
+        self.language_item_cores.get(profile).copied()
     }
     pub fn names(&self) -> &NameNamespaces {
         &self.names
@@ -398,6 +408,7 @@ impl SourceDiscovery {
         let mut body_macros = BTreeMap::new();
         let mut macro_admission_bytes = 0usize;
         let mut macro_map_bytes = 0usize;
+        let mut language_item_cores = BTreeMap::new();
         if let Some(providers) = providers {
             let mut remaining = usize::MAX;
             for provider in providers
@@ -410,6 +421,14 @@ impl SourceDiscovery {
                     ));
                 }
                 let source = provider.module_source();
+                if let Some(catalog) = &provider.compiler {
+                    let profile = &source.selection().outline.parse.profile;
+                    if !language_item_cores.contains_key(profile) {
+                        if let Some(core) = catalog.language_item_core(profile)? {
+                            language_item_cores.insert(profile.clone(), core);
+                        }
+                    }
+                }
                 let index = provider.completed_runtime_index(providers, None, remaining)?;
                 remaining = remaining
                     .checked_sub(index.runtime_bytes())
@@ -486,6 +505,12 @@ impl SourceDiscovery {
             .and_then(|n| n.checked_add(owner_bytes))
             .and_then(|n| n.checked_add(macro_map_bytes))
             .ok_or_else(crate::runtime::arena::resource)?;
+        let mut language_items = crate::core::digest::StableEncoder::new("lrr/v1/configured-language-item-cores");
+        language_items.map(&language_item_cores, |e, profile, core| {
+            e.record(profile);
+            e.digest(*core);
+        });
+        let language_item_identity = language_items.finish();
         let source_syntax = self.prepare_completed_source_syntax(seal)?;
         let syntax_bytes = source_syntax.values().try_fold(0usize, |bytes, plan| {
             bytes
@@ -509,6 +534,8 @@ impl SourceDiscovery {
         // mutation is rejected by unique_graph; no COW allocation is possible.
         self.completed_source_environment = Some(Arc::new(CompletedSourceEnvironment {
             names: Arc::clone(&self.graph),
+            language_item_cores,
+            language_item_identity,
             sources: Arc::new(sources),
             scope_owners,
             body_macros,

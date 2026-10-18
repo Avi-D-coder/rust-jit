@@ -63,6 +63,14 @@ impl CompileInputCatalog {
         let identity = self.owning_profile_identity()?;
         Ok((identity == expected.owning_profile_identity()?).then_some(identity))
     }
+    /// The configured language-item crate, only from a matched owning catalog.
+    /// This selects a crate, never invents a trait declaration identity.
+    pub(crate) fn language_item_core(
+        &self,
+        profile: &ProfileIdentity,
+    ) -> Result<Option<Digest>, Diagnostic> {
+        Ok(self.canonical_standalone_member(profile)?.map(|_| self.unit))
+    }
     pub(crate) fn has_standard_facets(&self) -> bool {
         !self.facades.is_empty() || self.attributes.is_some()
     }

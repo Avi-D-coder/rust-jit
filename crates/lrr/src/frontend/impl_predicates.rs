@@ -111,7 +111,8 @@ impl PreparedImplPredicates {
             &declaration,
             canonical.identity(),
             syntax.generics(),
-            &node
+            &node,
+            environment.language_item_core(declaration.profile()),
         ));
         QueryPoll::Ready(Ok(Self {
             key: key.clone(),

@@ -48,7 +48,7 @@ fn region(
     }))
 }
 
-pub(super) fn prepare(
+pub(crate) fn prepare(
     db: &mut Database,
     graph: &NameNamespaces,
     sources: &[&PreparedSourceView],
@@ -56,6 +56,7 @@ pub(super) fn prepare(
     definition: crate::core::digest::Digest,
     generics: &[DefinitionParameter],
     owner: &ra_ap_syntax::SyntaxNode,
+    core: Option<crate::core::digest::Digest>,
 ) -> QueryPoll<Vec<SourcePredicateRecipe>> {
     macro_rules! ready {
         ($value:expr) => {
@@ -67,6 +68,17 @@ pub(super) fn prepare(
         };
     }
     let actual = source_types::actual_declaration_bound_syntax(declaration, owner);
+    let sized = if actual.implicit_sized.is_empty() {
+        None
+    } else {
+        ready!(super::language_items::sized(
+            db,
+            sources,
+            declaration.profile(),
+            core
+        ))
+    };
+    let mut unresolved_relaxation = false;
     let mut recipes = Vec::new();
     recipes.extend(
         actual
@@ -78,6 +90,7 @@ pub(super) fn prepare(
         let source = range(row.bound.syntax().text_range());
         macro_rules! pending {
             ($why:ident) => {{
+                unresolved_relaxation |= row.bound.question_mark_token().is_some();
                 recipes.push(SourcePredicateRecipe::Explicit {
                     source,
                     result: PredicateResult::Pending(PredicatePending::$why),
@@ -88,9 +101,6 @@ pub(super) fn prepare(
         if row.where_binder.is_some() || row.bound.for_binder().is_some() {
             pending!(HigherRanked);
         }
-        if row.bound.question_mark_token().is_some() {
-            pending!(RelaxedTrait);
-        }
         if row.bound.const_token().is_some()
             || row.bound.tilde_token().is_some()
             || row.bound.async_token().is_some()
@@ -98,6 +108,18 @@ pub(super) fn prepare(
         {
             pending!(QualifiedBound);
         }
+        let relaxation_parameter = if row.bound.question_mark_token().is_some() {
+            match &row.subject {
+                ActualBoundSubject::Type(TyTerm::Param(key)) => Some(*key),
+                ActualBoundSubject::TypeSyntax(ty) => match declaration.direct_type_parameter(ty) {
+                    Ok(key) => key,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                },
+                _ => None,
+            }
+        } else {
+            None
+        };
         enum Subject {
             Type(TyTerm),
             Region(RegionTerm),
@@ -187,14 +209,52 @@ pub(super) fn prepare(
             pending!(TraitName);
         };
         if args.iter().any(|arg| matches!(arg, crate::traits::term::GenericArg::Type(ty) if super::associated_types::contains_projection(ty))) { pending!(AssociatedIdentity); }
+        let trait_ref = TraitRef {
+            trait_key,
+            self_ty: subject,
+            args,
+        };
         recipes.push(SourcePredicateRecipe::Explicit {
             source,
-            result: PredicateResult::Implemented(TraitRef {
-                trait_key,
-                self_ty: subject,
-                args,
-            }),
+            result: if row.bound.question_mark_token().is_some() {
+                PredicateResult::Relaxed {
+                    trait_ref,
+                    parameter: relaxation_parameter,
+                }
+            } else {
+                PredicateResult::Implemented(trait_ref)
+            },
         });
+    }
+    if let Some(sized) = sized.filter(|_| !unresolved_relaxation) {
+        let relaxed: std::collections::BTreeSet<_> = recipes
+            .iter()
+            .filter_map(|recipe| match recipe {
+                SourcePredicateRecipe::Explicit {
+                    result:
+                        PredicateResult::Relaxed {
+                            trait_ref,
+                            parameter,
+                        },
+                    ..
+                } if trait_ref.trait_key == sized && trait_ref.args.is_empty() => *parameter,
+                _ => None,
+            })
+            .collect();
+        recipes = recipes
+            .into_iter()
+            .filter_map(|recipe| match recipe {
+                SourcePredicateRecipe::ImplicitSizedDefault(key) if relaxed.contains(&key) => None,
+                SourcePredicateRecipe::ImplicitSizedDefault(key) => {
+                    Some(SourcePredicateRecipe::ResolvedSizedDefault(TraitRef {
+                        trait_key: sized,
+                        self_ty: TyTerm::Param(key),
+                        args: Vec::new(),
+                    }))
+                }
+                other => Some(other),
+            })
+            .collect();
     }
     QueryPoll::Ready(Ok(recipes))
 }

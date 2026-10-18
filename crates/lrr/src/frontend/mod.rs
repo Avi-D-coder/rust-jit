@@ -1,3 +1,4 @@
+pub(crate) mod language_items;
 pub(crate) mod array_repeats;
 pub(crate) mod associated_constant_applications;
 pub(crate) mod associated_declarations;
@@ -121,5 +122,5 @@ pub mod nominal_member_goals;
 
 pub(crate) mod impl_head_types;
 
-mod source_predicates;
+pub(crate) mod source_predicates;
 pub(crate) mod impl_predicates;

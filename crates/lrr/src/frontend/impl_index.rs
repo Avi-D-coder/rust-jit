@@ -277,9 +277,12 @@ impl ImplHeaderIndex {
     }
 }
 impl StableEncode for ImplHeaderIndex {
-    const DOMAIN: &'static str = "lrr/v4/impl-header-inventory";
+    const DOMAIN: &'static str = "lrr/v5/impl-header-inventory";
     fn encode_fields(&self, e: &mut StableEncoder) {
-        e.option(&self.environment, |e, environment| e.record(environment.dependency()));
+        e.option(&self.environment, |e, environment| {
+            e.record(environment.dependency());
+            e.digest(environment.language_item_identity());
+        });
         e.sequence(&self.sources, |e, s| e.digest(s.fingerprint()));
         e.sequence(&self.headers, |e, h| {
             e.digest(h.identity);

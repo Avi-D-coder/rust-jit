@@ -284,13 +284,14 @@
           "id": "WT05-01",
           "title": "Header catalogs",
           "status": "claimed",
-          "candidate": "worktracks/05-trait-goal-engine/2026-10-18-impl-predicates.md",
-          "acceptance_scope": "V85 solo held M019 component: Q59 retains actual typed trait predicate requirements plus unresolved Sized defaults/pending bounds. Q58 retains verified metadata Arcs; all source-bound consumers and shorthand projection actual-AST lookup now share actual_declaration_bound_syntax through the Type-only view. Both builds and15/15focused controls pass across conditional original/emit/wrapper all4editions, cache/epoch/no-body and explicit associated/head pending checks. Both unchanged runtime regressions pass: deferred-resolution1 (10calls196VMoperations) and via-bound-in-where (49calls722VMoperations with initializer/cleanup). Zero new distinct stock/runtime/full-fixture passes, no refreshed total. V84 pinned parser API build failure preserved. Language-item/default/associated/region/binder resolution, catalog/oracle, canonical/tabled transactions and runtime fulfillment remain held; no interpreter/JIT acceptance.",
+          "candidate": "worktracks/05-trait-goal-engine/2026-10-18-sized-predicates.md",
+          "acceptance_scope": "V88 solo held M019 source component: configured owning core membership selects actual core::marker::Sized through CurrentModuleName and verifies the actual Trait declaration. Implicit required defaults and inline/where relaxations use the common declaration collector/Type/name service; direct ParamKey identity is separate from alias-normalized Type terms. User Sized shadow and identity-alias subject do not suppress the default. The configured core-map digest is retained once and included in inventory stable domainv5. Both builds,10/10focused controls and2/2unchanged runtime regressions pass; source/HEAD/generator frozen. Source matrices include original/emit/wrapper all4editions, absent configured core input, user shadow and alias, query cache/epoch/no-body and retained-source lifecycle controls. V86 mechanical test API build failure and V87 review/fix evidence preserved. Zero new distinct stock/runtime/full-fixture passes; no refreshed suite total. Full canonical trait/header, region/associated/binder/callable identities, catalog/oracle, goal transactions/tables and runtime fulfillment remain incomplete. No M019/interpreter/JIT gate closes.",
           "evidence": [
             "worktracks/evidence/2026-10-18-interpreter-v73-v79-header-validation.json",
             "worktracks/evidence/2026-10-18-interpreter-v80-v81-canonical-impl-identity.json",
             "worktracks/evidence/2026-10-18-interpreter-v82-v83-impl-head-types.json",
-            "worktracks/evidence/2026-10-18-interpreter-v84-v85-predicate-requirements.json"
+            "worktracks/evidence/2026-10-18-interpreter-v84-v85-predicate-requirements.json",
+            "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json"
           ]
         },
         {
@@ -737,22 +738,22 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "d4c265d82ea5a46b8077fb0c6fd4d9e6985419bf",
-    "working_tree": "inherited_dirty_plus_current_source_components",
+    "baseline_git_head": "d50ba3b270c5601d4a7119d125368f53781eb1bf",
+    "working_tree": "solo_source_checkpoint_after_collected_async_validation",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V85 solo held M019 component: Q59 retains actual typed trait predicate requirements plus unresolved Sized defaults/pending bounds. Q58 retains verified metadata Arcs; all source-bound consumers and shorthand projection actual-AST lookup now share actual_declaration_bound_syntax through the Type-only view. Both builds and15/15focused controls pass across conditional original/emit/wrapper all4editions, cache/epoch/no-body and explicit associated/head pending checks. Both unchanged runtime regressions pass: deferred-resolution1 (10calls196VMoperations) and via-bound-in-where (49calls722VMoperations with initializer/cleanup). Zero new distinct stock/runtime/full-fixture passes, no refreshed total. V84 pinned parser API build failure preserved. Language-item/default/associated/region/binder resolution, catalog/oracle, canonical/tabled transactions and runtime fulfillment remain held; no interpreter/JIT acceptance.",
+    "validation": "V88 solo held M019 source component: configured owning core membership selects actual core::marker::Sized through CurrentModuleName and verifies the actual Trait declaration. Implicit required defaults and inline/where relaxations use the common declaration collector/Type/name service; direct ParamKey identity is separate from alias-normalized Type terms. User Sized shadow and identity-alias subject do not suppress the default. The configured core-map digest is retained once and included in inventory stable domainv5. Both builds,10/10focused controls and2/2unchanged runtime regressions pass; source/HEAD/generator frozen. Source matrices include original/emit/wrapper all4editions, absent configured core input, user shadow and alias, query cache/epoch/no-body and retained-source lifecycle controls. V86 mechanical test API build failure and V87 review/fix evidence preserved. Zero new distinct stock/runtime/full-fixture passes; no refreshed suite total. Full canonical trait/header, region/associated/binder/callable identities, catalog/oracle, goal transactions/tables and runtime fulfillment remain incomplete. No M019/interpreter/JIT gate closes.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "d4c265d82ea5a46b8077fb0c6fd4d9e6985419bf",
+    "source_checkpoint_pushed": "d50ba3b270c5601d4a7119d125368f53781eb1bf",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": [
-      "worktracks/evidence/2026-10-18-interpreter-v84-v85-predicate-requirements.json"
+      "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json"
     ]
   }
 }

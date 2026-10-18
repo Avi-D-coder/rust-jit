@@ -419,7 +419,34 @@ fn unchanged_conditional_impl_heads_use_common_types_across_origins_and_editions
                     };
                     assert_eq!(
                         requirements[0],
-                        SourcePredicateRecipe::ImplicitSizedDefault(parameter)
+                        SourcePredicateRecipe::ResolvedSizedDefault(
+                            crate::traits::term::TraitRef {
+                                trait_key: match environment
+                                    .names()
+                                    .lookup_source_path(
+                                        Namespace::Type,
+                                        &[ImportSegment::Name("Sized".into())],
+                                        false,
+                                        &crate::syntax::outline::ScopeKey {
+                                            crate_key: environment
+                                                .language_item_core(
+                                                    &prepared.syntax().source().profile
+                                                )
+                                                .unwrap(),
+                                            module_path: vec!["marker".into()],
+                                            owner: None,
+                                        },
+                                        edition,
+                                    )
+                                    .unwrap()
+                                {
+                                    NameLookup::Defined(found) => found.identity,
+                                    other => panic!("{other:?}"),
+                                },
+                                self_ty: TyTerm::Param(parameter),
+                                args: vec![],
+                            }
+                        )
                     );
                     let SourcePredicateRecipe::Explicit {
                         result: PredicateResult::Implemented(actual),
@@ -556,7 +583,7 @@ fn unchanged_impl_heads_keep_region_and_cold_metadata_demands_explicit() {
                     ) => {
                         assert!(requirements.iter().any(|row| matches!(
                             row,
-                            SourcePredicateRecipe::ImplicitSizedDefault(_)
+                            SourcePredicateRecipe::ResolvedSizedDefault(_)
                         )));
                         assert!(requirements.iter().any(|row| matches!(
                             row,
@@ -602,6 +629,223 @@ fn unchanged_impl_heads_keep_region_and_cold_metadata_demands_explicit() {
                     | QueryKey::PatternPlan(_)
                     | QueryKey::FunctionSignature(_)
             )));
+        }
+    }
+}
+
+#[test]
+fn unchanged_sized_relaxations_use_actual_language_item_across_origins_and_editions() {
+    use crate::{
+        db::{
+            dependency::{InputKey, InputValue},
+            key::QueryKey,
+            poll::QueryPoll,
+            provider::SyntaxProvider,
+            value::QueryValue,
+        },
+        frontend::{source_types::WrittenTypeDeclaration, type_name_namespace::SourceTypeOwner},
+        traits::{
+            header_syntax::ImplHeaderSyntaxKey,
+            predicate::{PredicateResult, SourcePredicateRecipe},
+        },
+    };
+    use ra_ap_syntax::{AstNode, ast};
+    fn ready<T>(value: QueryPoll<T>) -> T {
+        match value {
+            QueryPoll::Ready(Ok(value)) => value,
+            other => panic!(
+                "{}",
+                match other {
+                    QueryPoll::Ready(Err(error)) => error.to_string(),
+                    QueryPoll::NeedInput(input) => format!("{input:?}"),
+                    _ => unreachable!(),
+                }
+            ),
+        }
+    }
+    let cases = [
+        (
+            "tests/ui/unsized/unsized.rs",
+            include_str!(
+                "../../../../fixtures/upstream/rustc-checkout/tests/ui/unsized/unsized.rs"
+            ),
+            1,
+        ),
+        (
+            "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-2.rs",
+            include_str!(
+                "../../../../fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-2.rs"
+            ),
+            2,
+        ),
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for (case, original, expected_relaxations) in cases {
+            for origin in 0..5 {
+                let shadow = origin == 3;
+                let alias = origin == 4;
+                if (shadow || alias) && (edition != 2024 || expected_relaxations != 1) {
+                    continue;
+                }
+                let emit = "macro_rules! emit { ($($t:tt)*) => { $($t)* }; }";
+                let path = match origin {
+                    0 => PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../fixtures/upstream/rustc-checkout")
+                        .join(case),
+                    1 => temporary_source(
+                        &format!("sized-{edition}-{origin}-{expected_relaxations}"),
+                        &format!("{emit} emit!{{{original}}}"),
+                    ),
+                    2 => temporary_source(
+                        &format!("sized-{edition}-{origin}-{expected_relaxations}"),
+                        &format!(
+                            "{emit} macro_rules! wrap {{ ($($t:tt)*) => {{ emit!{{$($t)*}} }}; }} wrap!{{{original}}}"
+                        ),
+                    ),
+                    3 => temporary_source(
+                        "sized-user-shadow",
+                        &format!("{original}\ntrait Sized {{}}"),
+                    ),
+                    _ => temporary_source(
+                        "sized-alias-subject",
+                        &format!(
+                            "{original}\ntype Identity<A> = A; struct AliasOwner<A>(PhantomData<A>); impl<A> T1 for AliasOwner<A> where Identity<A>: ?Sized {{}}"
+                        ),
+                    ),
+                };
+                let (mut db, seal, root) = prepared_impl_header_world(&path, edition);
+                let inventory = ready(db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::PreparedScopeImplHeaders(seal.clone()),
+                ));
+                let QueryValue::PreparedScopeImplHeaders(headers) = inventory.value.as_ref() else {
+                    panic!()
+                };
+                let environment = headers.inventory_root().environment().unwrap();
+                let sources: Vec<_> = environment.sources().iter().collect();
+                let mut observed = 0;
+                db.trace.detailed = true;
+                let start = db.trace.events.len();
+                for raw in headers
+                    .inventory_root()
+                    .headers()
+                    .iter()
+                    .filter(|raw| raw.scope.crate_key == root.crate_key)
+                {
+                    let syntax = ready(db.fetch(
+                        &SyntaxProvider,
+                        QueryKey::ImplHeaderSyntax(Box::new(ImplHeaderSyntaxKey {
+                            inventory: seal.clone(),
+                            implementation: raw.identity,
+                        })),
+                    ));
+                    let QueryValue::ImplHeaderSyntax(syntax) = syntax.value.as_ref() else {
+                        panic!()
+                    };
+                    // This source service does not need a resolved impl head: the
+                    // lifetime-bearing head remains pending in Q58 independently.
+                    let definition = syntax.canonical_owner().unwrap().identity();
+                    let header = db.input(&InputKey::DefinitionHeader(definition)).unwrap();
+                    let context = db.input(&InputKey::DeclarationContext(definition)).unwrap();
+                    let (
+                        InputValue::DefinitionHeader(header),
+                        InputValue::DeclarationContext(context),
+                    ) = (header.as_ref(), context.as_ref())
+                    else {
+                        panic!()
+                    };
+                    assert_eq!(header.tokens, raw.header);
+                    assert_eq!(context.range, raw.range);
+                    let node = syntax
+                        .parsed()
+                        .syntax_at(context.range, |node| ast::Impl::can_cast(node.kind()))
+                        .unwrap()
+                        .unwrap();
+                    let declaration = WrittenTypeDeclaration::implementation(
+                        SourceTypeOwner {
+                            definition,
+                            scope: &context.scope,
+                            header,
+                        },
+                        syntax.generics(),
+                        &node,
+                        None,
+                    );
+                    let core = environment.language_item_core(declaration.profile());
+                    let sized = ready(crate::frontend::language_items::sized(
+                        &mut db,
+                        &sources,
+                        declaration.profile(),
+                        core,
+                    ))
+                    .unwrap();
+                    let requirements = ready(crate::frontend::source_predicates::prepare(
+                        &mut db,
+                        environment.names(),
+                        &sources,
+                        &declaration,
+                        definition,
+                        syntax.generics(),
+                        &node,
+                        core,
+                    ));
+                    for row in &requirements {
+                        if let SourcePredicateRecipe::Explicit {
+                            result:
+                                PredicateResult::Relaxed {
+                                    trait_ref,
+                                    parameter,
+                                },
+                            ..
+                        } = row
+                        {
+                            assert_eq!(trait_ref.trait_key == sized, !shadow);
+                            assert!(trait_ref.args.is_empty());
+                            assert_eq!(requirements.iter().any(|default| matches!(default,
+                                SourcePredicateRecipe::ResolvedSizedDefault(required) if required.self_ty == trait_ref.self_ty && required.trait_key == sized)), shadow || parameter.is_none());
+                            assert!(!requirements.iter().any(|default| matches!(default,
+                                SourcePredicateRecipe::ImplicitSizedDefault(key) if trait_ref.self_ty == crate::traits::term::TyTerm::Param(*key))));
+                            if let Some(key) = parameter {
+                                assert_eq!(
+                                    trait_ref.self_ty,
+                                    crate::traits::term::TyTerm::Param(*key)
+                                );
+                            }
+                            observed += 1;
+                        }
+                    }
+                    // A source without a matched compiler facade retains its default;
+                    // plain spelling lookup is insufficient to resolve the language item.
+                    let absent = ready(crate::frontend::source_predicates::prepare(
+                        &mut db,
+                        environment.names(),
+                        &sources,
+                        &declaration,
+                        definition,
+                        syntax.generics(),
+                        &node,
+                        None,
+                    ));
+                    assert!(
+                        absent.iter().any(|row| matches!(
+                            row,
+                            SourcePredicateRecipe::ImplicitSizedDefault(_)
+                        ))
+                    );
+                }
+                assert_eq!(
+                    observed,
+                    expected_relaxations + usize::from(alias),
+                    "{case} edition{edition} origin{origin}"
+                );
+                assert!(db.trace.events[start..].iter().all(|event| !matches!(
+                    event.key,
+                    QueryKey::BodyStructure(_)
+                        | QueryKey::Thunk(_)
+                        | QueryKey::PatternPlan(_)
+                        | QueryKey::FunctionSignature(_)
+                )));
+            }
         }
     }
 }

@@ -13,7 +13,6 @@ pub enum PredicatePending {
     SymbolicType,
     HigherRanked,
     AssociatedIdentity,
-    RelaxedTrait,
     QualifiedBound,
     LifetimeName,
     CallableArguments,
@@ -21,6 +20,11 @@ pub enum PredicatePending {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PredicateResult {
     Implemented(TraitRef),
+    /// A relaxation is metadata, never a negative trait requirement.
+    Relaxed {
+        trait_ref: TraitRef,
+        parameter: Option<ParamKey>,
+    },
     RegionOutlives {
         longer: RegionTerm,
         shorter: RegionTerm,
@@ -40,14 +44,19 @@ pub enum SourcePredicateRecipe {
     /// No trait ID is guessed from the spelling `Sized`. Explicit relaxed
     /// bounds (including where clauses) remain independent source recipes.
     ImplicitSizedDefault(ParamKey),
+    ResolvedSizedDefault(TraitRef),
 }
 impl StableEncode for SourcePredicateRecipe {
-    const DOMAIN: &'static str = "lrr/v1/source-predicate-requirement";
+    const DOMAIN: &'static str = "lrr/v2/source-predicate-requirement";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
             Self::ImplicitSizedDefault(key) => {
                 e.u32(0);
                 e.record(key);
+            }
+            Self::ResolvedSizedDefault(trait_ref) => {
+                e.u32(2);
+                e.record(trait_ref);
             }
             Self::Explicit { source, result } => {
                 e.u32(1);
@@ -68,6 +77,14 @@ impl StableEncode for SourcePredicateRecipe {
                         e.record(ty);
                         e.record(region);
                     }
+                    PredicateResult::Relaxed {
+                        trait_ref,
+                        parameter,
+                    } => {
+                        e.u32(4);
+                        e.record(trait_ref);
+                        e.option(parameter, |e, key| e.record(key));
+                    }
                     PredicateResult::Pending(why) => {
                         e.u32(3);
                         e.u32(match why {
@@ -76,7 +93,6 @@ impl StableEncode for SourcePredicateRecipe {
                             PredicatePending::SymbolicType => 2,
                             PredicatePending::HigherRanked => 3,
                             PredicatePending::AssociatedIdentity => 4,
-                            PredicatePending::RelaxedTrait => 5,
                             PredicatePending::QualifiedBound => 6,
                             PredicatePending::LifetimeName => 7,
                             PredicatePending::CallableArguments => 8,

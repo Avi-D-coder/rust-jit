@@ -351,7 +351,7 @@ pub(crate) fn resolve_written_type(
 
 /// The actual declaration facts needed by the common Type walk. This is a
 /// borrowed header context, not an invented function/signature/body.
-pub(super) struct WrittenTypeDeclaration<'a> {
+pub(crate) struct WrittenTypeDeclaration<'a> {
     definition: crate::core::digest::Digest,
     scope: &'a crate::syntax::outline::ScopeKey,
     header: &'a crate::syntax::outline::HeaderRecipe,
@@ -362,6 +362,35 @@ pub(super) struct WrittenTypeDeclaration<'a> {
     impl_self: Option<&'a TyTerm>,
 }
 impl<'a> WrittenTypeDeclaration<'a> {
+    /// A directly written parameter, before alias normalization. Used for
+    /// declaration-bound identity, never a separate Type evaluator.
+    pub(super) fn direct_type_parameter(
+        &self, ty: &ra_ap_syntax::ast::Type,
+    ) -> Result<Option<crate::traits::term::ParamKey>, Diagnostic> {
+        use ra_ap_syntax::ast::{self, HasGenericArgs};
+        let mut ty = ty.clone();
+        while let ast::Type::ParenType(paren) = &ty {
+            let Some(inner) = paren.ty() else { return Ok(None); };
+            ty = inner;
+        }
+        let ast::Type::PathType(path) = ty else { return Ok(None); };
+        let Some(path) = path.path() else { return Ok(None); };
+        if path.qualifier().is_some() || path.coloncolon_token().is_some() { return Ok(None); }
+        let Some(segment) = path.segment() else { return Ok(None); };
+        if segment.generic_arg_list().is_some() || segment.parenthesized_arg_list().is_some() { return Ok(None); }
+        let name = match segment.kind() {
+            Some(ast::PathSegmentKind::SelfTypeKw) => "Self".to_owned(),
+            _ => match segment.name_ref() { Some(name) => name.text().to_string(), None => return Ok(None) },
+        };
+        Ok(match super::signature_names::declaration_type_name_local(
+            self.definition, self.scope, self.header.profile.edition, self.generics, &name,
+        )? { Some(SignatureName::Parameter(key)) => Some(key), _ => None })
+    }
+
+    pub(crate) fn profile(&self) -> &crate::core::profile::ProfileIdentity {
+        &self.header.profile
+    }
+
     fn function(signature: &'a FunctionSignature) -> Self {
         Self {
             definition: signature.definition,
@@ -398,7 +427,7 @@ impl<'a> WrittenTypeDeclaration<'a> {
             impl_self: None,
         }
     }
-    pub(super) fn implementation(
+    pub(crate) fn implementation(
         owner: super::type_name_namespace::SourceTypeOwner<'a>,
         generics: &'a [crate::syntax::signatures::DefinitionParameter],
         syntax: &'a ra_ap_syntax::SyntaxNode,
