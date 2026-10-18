@@ -106,8 +106,7 @@ impl LocalBodyContext {
             let mut rows = parent
                 .context()
                 .facts()
-                .items
-                .iter()
+                .declarations()
                 .filter(|row| row.item.def_key.fingerprint() == callee.identity());
             let row = rows
                 .next()
@@ -135,7 +134,8 @@ impl LocalBodyContext {
             let depth = source
                 .local_body
                 .as_ref()
-                .map_or(Some(1), |local| local.depth.checked_add(1))                .ok_or_else(crate::runtime::arena::resource)?;
+                .map_or(Some(1), |local| local.depth.checked_add(1))
+                .ok_or_else(crate::runtime::arena::resource)?;
             let owner_stamp = owner.fingerprint();
             if db
                 .published_input(&InputKey::LocalDeclarationOwner(definition))
@@ -153,7 +153,7 @@ impl LocalBodyContext {
                     }
                     Some(
                         unit.prepared()
-                            .require_closed_function_body(source.parsed(), handle.range)?,
+                            .require_closed_item_body(source.parsed(), handle.range)?,
                     )
                 }
                 _ => None,

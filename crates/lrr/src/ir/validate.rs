@@ -46,7 +46,12 @@ pub(crate) fn pattern_owner_test_slot(body: &BodyIndex, owner: NodeId) -> Option
         NodeRole::Expression(ExpressionKind::Match) => node.runtime_temporaries[1],
         NodeRole::Expression(ExpressionKind::Other) if node.clause_scope.is_some() => node.value,
         NodeRole::Expression(ExpressionKind::For) => node.value,
+        NodeRole::Expression(ExpressionKind::Closure) if node.pattern_statement => {
+            node.runtime_temporaries[0]
+        }
         NodeRole::Statement => node.runtime_temporaries[0],
+        // A pattern function's parameter list owns its parameter patterns.
+        NodeRole::Syntax if node.pattern_statement => node.runtime_temporaries[0],
         _ => None,
     }
 }
@@ -81,14 +86,25 @@ fn pattern_step(
                 return Err(invalid("for pattern source differs from its next result"));
             }
         }
+        // A closure's pattern parameters match their staged call arguments.
+        PatternOperation::Open { source, .. }
+            if selected.role
+                == NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Closure)
+                || (selected.role == NodeRole::Syntax && selected.pattern_statement) =>
+        {
+            if !selected.runtime_scalar_slots.contains(source) {
+                return Err(invalid(
+                    "closure pattern source is not a parameter staging slot",
+                ));
+            }
+        }
         PatternOperation::Open { source, .. } => {
             let scrutinee = selected.operands.iter().find_map(|operand| {
                 let node = body.nodes().get(operand.0 as usize)?;
                 (node.parent == Some(owner) && matches!(node.role, NodeRole::Expression(_)))
                     .then_some(node)
             });
-            let scrutinee =
-                scrutinee.ok_or_else(|| invalid("pattern scrutinee operand absent"))?;
+            let scrutinee = scrutinee.ok_or_else(|| invalid("pattern scrutinee operand absent"))?;
             if key.node != owner.0
                 || (scrutinee.value != Some(*source) && scrutinee.place != Some(*source))
             {
@@ -104,7 +120,9 @@ fn pattern_step(
                     .is_none_or(|node| node.role != NodeRole::Pattern)
                 || !pattern_descendant(body, tree.pattern(), owner)
             {
-                return Err(invalid("pattern test tree or result differs from its owner"));
+                return Err(invalid(
+                    "pattern test tree or result differs from its owner",
+                ));
             }
         }
         _ => {}
@@ -584,14 +602,51 @@ fn verify_inner(
                 super::op::HintRecipe::DefinitionResult
                     | super::op::HintRecipe::DefinitionWrittenResult
             )
-        )
-            && (draft.key.node != 0
-                || draft.key.phase != Phase::Entry.code()?
-                || !matches!(op, Op::SetHint { child, .. } if body.nodes()[0].value == Some(*child)))
+        ) && (draft.key.node != 0
+            || draft.key.phase != Phase::Entry.code()?
+            || !matches!(op, Op::SetHint { child, .. } if body.nodes()[0].value == Some(*child)))
         {
             return Err(invalid(
                 "definition result hint requires its exact owning root entry/result",
             ));
+        }
+        if let Some(super::op::HintRecipe::RelatedNumeric(plan)) = annotation {
+            if draft.key.phase != Phase::Entry.code()?
+                || !matches!(op, Op::Literal { literal, destination, .. }
+                    if node.value == Some(*destination)
+                        && matches!(literal.kind, super::op::LiteralKind::Integer
+                            | super::op::LiteralKind::NegativeInteger | super::op::LiteralKind::Float))
+                || plan.sources.is_empty()
+            {
+                return Err(invalid("related numeric hint requires its literal entry"));
+            }
+            let Op::Literal { literal, .. } = op else {
+                unreachable!()
+            };
+            if plan.floating != (literal.kind == super::op::LiteralKind::Float)
+                || !matches!(
+                    &literal.decoded,
+                    Some(
+                        super::op::DecodedLiteral::Integer { suffix: None, .. }
+                            | super::op::DecodedLiteral::InvalidInteger { suffix: None, .. }
+                            | super::op::DecodedLiteral::Float { suffix: None, .. }
+                    )
+                )
+            {
+                return Err(invalid(
+                    "related numeric hint requires its unsuffixed numeric family",
+                ));
+            }
+            for source in plan.sources.iter() {
+                if body
+                    .nodes()
+                    .get(source.node.0 as usize)
+                    .and_then(|node| node.value)
+                    .is_none()
+                {
+                    return Err(invalid("related numeric hint source value absent"));
+                }
+            }
         }
         if let Some(super::op::HintRecipe::DefinitionNumeric(context)) = annotation {
             // Structural bound only. The reached VM must still replay the actual
@@ -624,6 +679,16 @@ fn verify_inner(
             }
             slot(body, *reference, SlotKind::Value)?;
             slot(body, child, SlotKind::Value)?;
+        }
+        if let Some(super::op::HintRecipe::IndexOperand { base }) = annotation {
+            use crate::syntax::body_index::{ExpressionKind, NodeRole};
+            if !matches!(op, Op::SetHint { .. })
+                || node.role != NodeRole::Expression(ExpressionKind::Other)
+                || node.operands.len() != 2
+            {
+                return Err(invalid("index operand hint requires its index expression"));
+            }
+            slot(body, *base, SlotKind::Place)?;
         }
         if let Some(super::op::HintRecipe::Parameter(key)) = annotation
             && key.definition != draft.key.body.definition
@@ -749,8 +814,7 @@ fn verify_inner(
                             .0
                             .checked_add(1)
                             .ok_or_else(|| invalid("macro place slot overflow"))?;
-                if !scalar_macro
-                    && (node.place != Some(*place) || node.value != Some(*destination))
+                if !scalar_macro && (node.place != Some(*place) || node.value != Some(*destination))
                 {
                     return Err(invalid(
                         "place read requires its own place and result slots",
@@ -980,9 +1044,9 @@ fn verify_inner(
                 for capture in captures.iter() {
                     if !seen.insert(capture.source)
                         || matches!(capture.source, crate::ir::op::CaptureSource::Binding(binding)
-                            if body.nodes().get(binding.0 as usize).is_none_or(|binding| {
-                                binding.role != crate::syntax::body_index::NodeRole::Pattern
-                            }))
+                        if body.nodes().get(binding.0 as usize).is_none_or(|binding| {
+                            binding.role != crate::syntax::body_index::NodeRole::Pattern
+                        }))
                     {
                         return Err(invalid("closure capture is not a distinct binding"));
                     }
@@ -993,9 +1057,13 @@ fn verify_inner(
                         .len()
                         .checked_mul(std::mem::size_of::<crate::ir::op::ClosureCapture>())
                         .and_then(|n| {
-                            n.checked_add(parameters.len().checked_mul(std::mem::size_of::<
-                                crate::ir::op::ClosureParameter,
-                            >())?)
+                            n.checked_add(
+                                parameters
+                                    .len()
+                                    .checked_mul(std::mem::size_of::<
+                                        crate::ir::op::ClosureParameter,
+                                    >())?,
+                            )
                         })
                         .ok_or_else(|| invalid("closure capture size overflow"))?,
                 )?;
@@ -1321,6 +1389,20 @@ fn verify_inner(
                     return Err(invalid("comparison operand local lacks its binding"));
                 }
                 Some(*destination)
+            }
+            Op::CalleeDeref { place } => {
+                slot(body, *place, SlotKind::Place)?;
+                if node
+                    .operands
+                    .first()
+                    .and_then(|id| body.nodes().get(id.0 as usize))
+                    .and_then(|operand| operand.place)
+                    != Some(*place)
+                    || draft.key.phase != Phase::Operand(0).code()?
+                {
+                    return Err(invalid("callee autoderef requires its first operand place"));
+                }
+                None
             }
             Op::MethodReceiver {
                 place,
@@ -2078,9 +2160,7 @@ mod tests {
                     } => *reference = SlotId(0),
                     Op::ValuePlace { destination, .. }
                     | Op::PromotedPlace { destination, .. }
-                    | Op::Borrow { destination, .. } => {
-                        *destination = SlotId(0)
-                    }
+                    | Op::Borrow { destination, .. } => *destination = SlotId(0),
                     _ => panic!("original temporary borrow phase differs"),
                 }
                 assert!(verify_runtime_scalar_borrow(wrong, &index, &plan).is_err());

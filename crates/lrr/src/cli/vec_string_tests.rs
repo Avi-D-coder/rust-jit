@@ -1787,6 +1787,7 @@ true
 #[test]
 fn upstream_coercion_receiver_and_slice_pattern_witnesses_complete() {
     for path in [
+        "tests/ui/array-slice-vec/rcvr-borrowed-to-slice.rs",
         "tests/ui/autoref-autoderef/autoderef-vec-to-slice-by-value.rs",
         "tests/ui/coercion/coerce-reborrow-imm-ptr-arg.rs",
         "tests/ui/coercion/coerce-reborrow-imm-ptr-rcvr.rs",
@@ -1805,4 +1806,471 @@ fn upstream_coercion_receiver_and_slice_pattern_witnesses_complete() {
     ] {
         upstream_completes(path);
     }
+}
+
+/// Closure parameters are patterns matched against the call arguments by the
+/// shared pattern transaction with the closure as its owner: reference,
+/// tuple, array, record and nested patterns, `ref` and `mut` bindings,
+/// non-primitive annotations, patterns whose bindings type an open
+/// accumulator through the `Fn*` bound, and parameters that mix plain
+/// bindings with patterns.
+#[test]
+fn closure_parameter_patterns_run_the_shared_pattern_transaction() {
+    prints(
+        "closure-patterns",
+        r###"fn main() {
+    let v = vec![1isize, 2, 3];
+    let s: isize = v.iter().fold(0, |a, &b| a + b);
+    println!("{}", s);
+    let pairs = vec![(1, "a"), (2, "b")];
+    let mut out: Vec<(i32, &str)> = Vec::new();
+    pairs.iter().for_each(|&(n, t)| out.push((n * 2, t)));
+    println!("{:?}", out);
+    let f = |(a, b): (i32, i32), c: i32| a + b + c;
+    println!("{}", f((1, 2), 3));
+    let a = [1, 2, 3, 4];
+    let evens: Vec<&i32> = a.iter().filter(|&&x| x % 2 == 0).collect();
+    println!("{:?}", evens);
+    let g = |mut acc: Vec<i32>, &x: &i32| { acc.push(x); acc };
+    println!("{:?}", g(vec![0], &5));
+    let owned = vec![(String::from("k"), 1)];
+    for (i, (k, n)) in owned.into_iter().enumerate() {
+        println!("{} {} {}", i, k, n);
+    }
+    let h = |&x: &i32, ref y: i32, z: i32| x + *y + z;
+    println!("{}", h(&1, 2, 3));
+    let arr = |[a, b]: [i32; 2]| a - b;
+    println!("{}", arr([5, 3]));
+    struct P { x: i32, y: i32 }
+    let sp = |P { x, y }: P| x * y;
+    println!("{}", sp(P { x: 3, y: 4 }));
+    let mut total = 0;
+    vec![(1, 2), (3, 4)].iter().for_each(|&(x, y)| total += x * y);
+    println!("{}", total);
+    let nested = |((a, b), [c, d]): ((i32, i32), [i32; 2])| a + b + c + d;
+    println!("{}", nested(((1, 2), [3, 4])));
+    let strs = |(x, _): (&str, i32), (_, y): (i32, &str)| format!("{}{}", x, y);
+    println!("{}", strs(("p", 1), (2, "q")));
+}
+"###,
+        r###"6
+[(2, "a"), (4, "b")]
+6
+[2, 4]
+[0, 5]
+0 k 1
+6
+2
+12
+14
+10
+pq
+"###,
+    );
+}
+
+/// The same closure-pattern parameters emitted by user macros (an `$f:expr`
+/// closure applied through a macro, a macro producing a closure with a pattern
+/// parameter, a pattern closure nested in a macro-expanded `fold`) and nested
+/// in `assert_eq!`.
+#[test]
+fn closure_parameter_patterns_through_user_macros_and_assertions() {
+    prints(
+        "closure-patterns-macro",
+        r###"macro_rules! sum_pairs {
+    ($v:expr) => {
+        $v.iter().fold(0i32, |acc, &(a, b)| acc + a * b)
+    };
+}
+macro_rules! apply {
+    ($f:expr, $x:expr) => {
+        $f($x)
+    };
+}
+macro_rules! make_adder {
+    () => {
+        |(a, b): (i32, i32)| move |c: i32| a + b + c
+    };
+}
+
+fn main() {
+    let v: Vec<(i32, i32)> = vec![(1, 2), (3, 4)];
+    println!("{}", sum_pairs!(v));
+    println!("{}", apply!(|&(x, y): &(i32, i32)| x * 10 + y, &(4, 5)));
+    let adder = make_adder!();
+    let inner = adder((1, 2));
+    println!("{}", inner(3));
+    assert_eq!(sum_pairs!(vec![(2, 2)]), 4);
+    let shadow = |x: i32, (x2, _): (i32, i32)| x + x2;
+    println!("{}", shadow(1, (2, 3)));
+}
+"###,
+        r###"14
+45
+6
+3
+"###,
+    );
+}
+
+/// `base[idx]` of a user type with its own `Index<Idx>`/`IndexMut<Idx>` impls
+/// (tuple, `usize`, `&str` and `u8` indices, several impls selected by the
+/// operand, nested and delegating indexing, `&mut base[i]`, compound
+/// assignment through `index_mut`), `VecDeque` and `HashMap` indexing through
+/// the facade's impls, and a method returning a reference with an elided
+/// lifetime beside a `&str` parameter.
+#[test]
+fn user_index_impls_select_by_operand_and_index_mut_by_use() {
+    prints(
+        "user-index",
+        r###"use std::collections::{HashMap, VecDeque};
+use std::ops::{Index, IndexMut};
+
+struct Grid {
+    w: usize,
+    cells: Vec<i32>,
+}
+impl Index<(usize, usize)> for Grid {
+    type Output = i32;
+    fn index(&self, p: (usize, usize)) -> &i32 {
+        &self.cells[p.0 * self.w + p.1]
+    }
+}
+impl IndexMut<(usize, usize)> for Grid {
+    fn index_mut(&mut self, p: (usize, usize)) -> &mut i32 {
+        &mut self.cells[p.0 * self.w + p.1]
+    }
+}
+struct Table {
+    names: Vec<String>,
+}
+impl Index<usize> for Table {
+    type Output = String;
+    fn index(&self, i: usize) -> &String {
+        &self.names[i]
+    }
+}
+impl Index<&str> for Table {
+    type Output = String;
+    fn index(&self, key: &str) -> &String {
+        for n in &self.names {
+            if n == key {
+                return n;
+            }
+        }
+        panic!("missing {}", key)
+    }
+}
+struct Matrix {
+    rows: usize,
+    data: Vec<Vec<i64>>,
+}
+impl Index<usize> for Matrix {
+    type Output = Vec<i64>;
+    fn index(&self, r: usize) -> &Vec<i64> {
+        &self.data[r]
+    }
+}
+impl IndexMut<usize> for Matrix {
+    fn index_mut(&mut self, r: usize) -> &mut Vec<i64> {
+        &mut self.data[r]
+    }
+}
+struct Bits(u32);
+impl Index<u8> for Bits {
+    type Output = bool;
+    fn index(&self, i: u8) -> &bool {
+        if self.0 & (1 << i) != 0 { &true } else { &false }
+    }
+}
+struct Wrapper {
+    inner: Matrix,
+}
+impl Index<usize> for Wrapper {
+    type Output = Vec<i64>;
+    fn index(&self, r: usize) -> &Vec<i64> {
+        &self.inner[r]
+    }
+}
+impl Table {
+    fn lookup(&self, key: &str) -> &String {
+        &self[key]
+    }
+}
+
+fn main() {
+    let mut g = Grid { w: 2, cells: vec![0; 4] };
+    g[(1, 1)] = 5;
+    g[(0, 1)] += 2;
+    println!("{} {} {}", g[(1, 1)], g[(0, 1)], g[(0, 0)]);
+    let r = &g;
+    println!("{}", r[(1, 1)]);
+    let t = Table { names: vec![String::from("a"), String::from("bb")] };
+    println!("{} {}", t[1], t["a"]);
+    println!("{} {}", t[1].len(), t.lookup("bb"));
+    let mut m = Matrix { rows: 2, data: vec![vec![1, 2], vec![3, 4]] };
+    println!("{} {}", m[0][1], m[1][0]);
+    m[1][0] = 30;
+    m[0][1] += 5;
+    m[1].push(9);
+    println!("{:?} {}", m.data, m.rows);
+    let row = &mut m[0];
+    row.push(100);
+    println!("{:?} {}", m[0], m[0].len());
+    let b = Bits(0b101);
+    println!("{} {} {}", b[0], b[1], b[2]);
+    let w = Wrapper { inner: m };
+    println!("{:?}", w[1]);
+    let mut dq: VecDeque<i32> = VecDeque::new();
+    dq.push_back(4);
+    dq.push_back(5);
+    dq[0] += 10;
+    println!("{} {}", dq[0], dq[1]);
+    let mut hm: HashMap<String, i32> = HashMap::new();
+    hm.insert(String::from("a"), 1);
+    println!("{}", hm["a"]);
+}
+"###,
+        r###"5 2 0
+5
+bb a
+2 bb
+2 3
+[[1, 7], [30, 4, 9]] 2
+[1, 7, 100] 3
+true false true
+[30, 4, 9]
+14 5
+1
+"###,
+    );
+}
+
+/// The same indexing emitted by user macros (read, assignment, compound
+/// assignment, nested macro) and nested in `assert_eq!`/`assert_ne!`.
+#[test]
+fn user_index_through_user_macros_and_assertions() {
+    prints(
+        "user-index-macro",
+        r###"use std::ops::{Index, IndexMut};
+struct Grid {
+    w: usize,
+    cells: Vec<i32>,
+}
+impl Index<(usize, usize)> for Grid {
+    type Output = i32;
+    fn index(&self, p: (usize, usize)) -> &i32 {
+        &self.cells[p.0 * self.w + p.1]
+    }
+}
+impl IndexMut<(usize, usize)> for Grid {
+    fn index_mut(&mut self, p: (usize, usize)) -> &mut i32 {
+        &mut self.cells[p.0 * self.w + p.1]
+    }
+}
+macro_rules! at {
+    ($c:expr, $i:expr) => {
+        $c[$i]
+    };
+}
+macro_rules! set {
+    ($c:expr, $i:expr, $v:expr) => {
+        $c[$i] = $v
+    };
+}
+macro_rules! bump {
+    ($c:expr, $i:expr) => {
+        $c[$i] += 1
+    };
+}
+macro_rules! twice {
+    ($c:expr, $i:expr) => {
+        at!($c, $i) * 2
+    };
+}
+fn main() {
+    let mut g = Grid { w: 3, cells: vec![0; 9] };
+    set!(g, (1, 2), 7);
+    bump!(g, (1, 2));
+    bump!(g, (0, 0));
+    println!("{} {}", at!(g, (1, 2)), at!(g, (0, 0)));
+    println!("{}", twice!(g, (1, 2)));
+    assert_eq!(g[(1, 2)], 8);
+    assert_eq!(at!(g, (0, 0)), 1);
+    assert_ne!(twice!(g, (1, 2)), 0);
+    let mut total = 0;
+    for &p in [(0, 0), (1, 2)].iter() {
+        total += g[p];
+    }
+    println!("{}", total);
+}
+"###,
+        r###"8 1
+16
+9
+"###,
+    );
+}
+
+/// A `&mut` local passed on to a callee whose parameter is `&mut H` of a
+/// generic `H` is reborrowed, not moved (rustc's coercion site for any
+/// `&mut _` parameter), so a derived `Hash` can feed one hasher to every
+/// field and a generic helper can call another twice.
+#[test]
+fn mutable_reference_arguments_of_generic_parameters_are_reborrowed() {
+    prints(
+        "generic-reborrow",
+        r###"trait Sink {
+    fn put(&mut self, v: u32);
+}
+struct S(u32);
+impl Sink for S {
+    fn put(&mut self, v: u32) {
+        self.0 += v;
+    }
+}
+trait Feed {
+    fn feed<H: Sink>(&self, state: &mut H);
+}
+impl Feed for u32 {
+    fn feed<H: Sink>(&self, state: &mut H) {
+        state.put(*self);
+    }
+}
+struct Two {
+    a: u32,
+    b: u32,
+}
+impl Feed for Two {
+    fn feed<H: Sink>(&self, state: &mut H) {
+        Feed::feed(&self.a, state);
+        Feed::feed(&self.b, state);
+    }
+}
+struct Three {
+    a: u32,
+    b: u32,
+    c: u32,
+}
+impl Feed for Three {
+    fn feed<H: Sink>(&self, state: &mut H) {
+        self.a.feed(state);
+        self.b.feed(state);
+        self.c.feed(state)
+    }
+}
+fn gen<T: Sink>(t: &mut T) {
+    t.put(1);
+    t.put(2);
+}
+fn gen2<T: Sink>(t: &mut T) {
+    gen(t);
+    gen(t);
+}
+fn shared<T: Sink>(t: &mut T, n: &mut u32) {
+    bump(n);
+    bump(n);
+    gen(t);
+}
+fn bump(n: &mut u32) {
+    *n += 1;
+}
+fn main() {
+    let mut s = S(0);
+    gen2(&mut s);
+    println!("{}", s.0);
+    Two { a: 1, b: 2 }.feed(&mut s);
+    println!("{}", s.0);
+    Three { a: 10, b: 20, c: 30 }.feed(&mut s);
+    println!("{}", s.0);
+    let mut n = 0;
+    shared(&mut s, &mut n);
+    println!("{} {}", s.0, n);
+}
+"###,
+        r###"6
+9
+69
+72 2
+"###,
+    );
+}
+
+/// The real `Hash`/`Hasher` protocol: `DefaultHasher` is SipHash-1-3 with zero
+/// keys (std's `h(&42u64)` value), derived `Hash` feeds fields in order and
+/// enums an `isize` discriminant, `str` its bytes then `0xff`, sequences a
+/// length prefix; a user `Hasher` sees the same byte stream real std gives it.
+#[test]
+fn hash_protocol_streams_match_real_std_and_default_hasher_is_siphash13() {
+    prints(
+        "hash-protocol",
+        r###"use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+struct Key {
+    id: u32,
+    name: String,
+}
+#[derive(Hash)]
+struct Pair(i64, char);
+#[derive(Hash)]
+enum Shape {
+    Unit,
+    Tuple(u8, bool),
+    Named { w: u16, label: &'static str },
+}
+struct Manual(u32);
+impl Hash for Manual {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (self.0 % 10).hash(state);
+    }
+}
+// A user hasher that records the byte stream it is fed.
+struct Recorder {
+    bytes: Vec<u8>,
+}
+impl Hasher for Recorder {
+    fn finish(&self) -> u64 {
+        self.bytes.len() as u64
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.bytes.push(*b);
+        }
+    }
+}
+fn record<T: Hash>(t: &T) -> Vec<u8> {
+    let mut r = Recorder { bytes: Vec::new() };
+    t.hash(&mut r);
+    r.bytes
+}
+fn h<T: Hash + ?Sized>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+}
+fn main() {
+    println!("{:x}", h(&42u64));
+    println!("{:?}", record(&(1u8, 2u16, "ab")));
+    println!("{:?}", record(&Shape::Tuple(4, false)));
+    println!("{:?}", record(&Shape::Named { w: 9, label: "L" }));
+    println!("{:?} {:?}", record(&Manual(13)), record(&Manual(23)));
+    println!("{:?}", record(&Key { id: 7, name: String::from("k") }));
+    let k = Key { id: 7, name: String::from("seven") };
+    let mut m: HashMap<Key, i32> = HashMap::new();
+    m.insert(k.clone(), 1);
+    println!("{:?}", m.get(&k));
+}
+"###,
+        r###"7b3e724b36ebdf51
+[1, 2, 0, 97, 98, 255]
+[1, 0, 0, 0, 0, 0, 0, 0, 4, 0]
+[2, 0, 0, 0, 0, 0, 0, 0, 9, 0, 76, 255]
+[3, 0, 0, 0] [3, 0, 0, 0]
+[7, 0, 0, 0, 107, 255]
+Some(1)
+"###,
+    );
 }

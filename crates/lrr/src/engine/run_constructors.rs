@@ -81,8 +81,7 @@ impl RunMachine {
         let body = self.frame.body.body().clone();
         let mut owners = self.sources.iter().filter(|view| {
             view.outline()
-                .items
-                .iter()
+                .declaration_rows()
                 .filter_map(|item| item.body.as_ref())
                 .any(|handle| handle.key() == body)
         });
@@ -102,8 +101,7 @@ impl RunMachine {
                     source.require_constructor_plan(&self.frame.body, plan)?;
                     let declaration = source
                         .outline()
-                        .items
-                        .iter()
+                        .declaration_rows()
                         .find(|item| item.def_key.fingerprint() == caller)
                         .ok_or_else(|| call_fault("constructor caller declaration absent"))?;
                     if !matches!(db.input(&InputKey::DefinitionSource(caller)).as_deref(),

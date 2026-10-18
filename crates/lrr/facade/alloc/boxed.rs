@@ -87,3 +87,9 @@ pub fn box_assume_init_into_vec_unsafe<T, const N: usize>(
 ) -> crate::vec::Vec<T> {
     crate::vec::lrr_vec_from_array(*b, crate::vec::Vec::new())
 }
+
+impl<T: ?Sized + core::hash::Hash> core::hash::Hash for Box<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::hash::Hash::hash(&**self, state)
+    }
+}

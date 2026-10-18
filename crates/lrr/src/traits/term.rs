@@ -368,6 +368,45 @@ impl StableEncode for TyTerm {
 }
 
 impl TyTerm {
+    /// Whether this declared term admits `actual`: structurally equal up to
+    /// regions, where a `dyn Trait` position admits any concrete Type (values
+    /// keep their concrete runtime Type; see `TypeKey::Dyn`).
+    pub(crate) fn admits_dyn(&self, actual: &TyTerm) -> bool {
+        match (self, actual) {
+            (Self::Dyn(_), _) => true,
+            (Self::Tuple(a), Self::Tuple(b)) => {
+                a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.admits_dyn(y))
+            }
+            (Self::Array(a, n), Self::Array(b, m)) => n == m && a.admits_dyn(b),
+            (Self::Slice(a), Self::Slice(b)) => a.admits_dyn(b),
+            (Self::Ref(_, m, a), Self::Ref(_, n, b)) => m == n && a.admits_dyn(b),
+            (Self::Nominal(d, a), Self::Nominal(e, b)) => {
+                d == e
+                    && a.len() == b.len()
+                    && a.iter().zip(b).all(|pair| match pair {
+                        (GenericArg::Type(x), GenericArg::Type(y)) => x.admits_dyn(y),
+                        (GenericArg::Region(_), GenericArg::Region(_)) => true,
+                        (x, y) => x == y,
+                    })
+            }
+            (x, y) => x == y,
+        }
+    }
+    /// Whether a `dyn Trait` occurs in this term.
+    pub(crate) fn contains_dyn(&self) -> bool {
+        match self {
+            Self::Dyn(_) => true,
+            Self::Tuple(items) => items.iter().any(Self::contains_dyn),
+            Self::Array(inner, _) | Self::Slice(inner) | Self::Ref(_, _, inner) => {
+                inner.contains_dyn()
+            }
+            Self::Nominal(_, args) => args.iter().any(|arg| match arg {
+                GenericArg::Type(ty) => ty.contains_dyn(),
+                _ => false,
+            }),
+            _ => false,
+        }
+    }
     /// Check opaque capture arity/namespaces throughout this owned term.
     /// This structural guard does not resolve schemas or require bound terms
     /// to be closed: retained views may have a valid enclosing binder context.

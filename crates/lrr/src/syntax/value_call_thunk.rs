@@ -60,7 +60,9 @@ impl ParsedFile {
             );
         }
         let site = crate::ir::recipe::CallSiteId(id.0);
-        let result = node.value.ok_or_else(|| error("value call result absent"))?;
+        let result = node
+            .value
+            .ok_or_else(|| error("value call result absent"))?;
         let seal = |mut ops: Vec<Op>| {
             ops.push(Op::CallSeal {
                 site,
@@ -94,7 +96,7 @@ impl ParsedFile {
                 if child == callee_id {
                     // The callee place is published before the dispatcher
                     // selects the call from its type (at Commit).
-                    let ops = if intrinsic_place_receiver(callee) {
+                    let mut ops = if intrinsic_place_receiver(callee) {
                         Vec::new()
                     } else {
                         // A value callee gets a temporary place, as `&value`.
@@ -105,7 +107,15 @@ impl ParsedFile {
                             destination: callee_place,
                         }]
                     };
-                    return draft(index, key, ops, RecipeExit::Next(index.pc(id, Phase::Commit)?));
+                    ops.push(Op::CalleeDeref {
+                        place: callee_place,
+                    });
+                    return draft(
+                        index,
+                        key,
+                        ops,
+                        RecipeExit::Next(index.pc(id, Phase::Commit)?),
+                    );
                 }
                 let ordinal = arguments
                     .iter()

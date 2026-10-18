@@ -247,8 +247,20 @@ pub struct BodyHandle {
     pub body_hash: Digest,
     pub range: SourceRange,
     pub entry_blocked: bool,
+    /// Bytes of `range` before the body block: 0 except for a function with
+    /// a pattern parameter, whose handle also spans its parameter list
+    /// (E-R5-010).
+    #[serde(default)]
+    pub block_offset: u32,
 }
 impl BodyHandle {
+    /// The body block alone (what a declaration header excludes).
+    pub fn block_range(&self) -> SourceRange {
+        SourceRange {
+            start: self.range.start.saturating_add(self.block_offset),
+            end: self.range.end,
+        }
+    }
     pub fn key(&self) -> BodyKey {
         BodyKey {
             definition: self.def_key,
@@ -284,6 +296,13 @@ pub struct ItemOutline {
     /// namespace always, Value namespace for unit/tuple variants).
     #[serde(default)]
     pub variants: Vec<VariantOutline>,
+    /// Enum items only: one anonymous constant per cfg-enabled variant whose
+    /// explicit discriminant is not a plain integer literal (E-R5-013). Each
+    /// row is an ordinary initializer declaration (`ItemKind::Constant`,
+    /// body = the discriminant expression) published and run like any
+    /// `const`; it is never a namespace member.
+    #[serde(default)]
+    pub discriminants: Vec<ItemOutline>,
     pub body: Option<BodyHandle>,
     pub declaration_span: SourceRange,
     pub header_span: SourceRange,
@@ -305,6 +324,17 @@ impl VariantOutline {
     /// Unit and tuple variants also bind a constructor in the Value namespace.
     pub fn has_value_constructor(&self) -> bool {
         self.shape != VariantOutlineShape::Record
+    }
+}
+/// The definition key of an enum variant's anonymous discriminant constant
+/// (E-R5-013): the enum's key with a name no identifier can spell, so the
+/// runtime derives the identity from a type descriptor and the variant name.
+pub fn discriminant_def_key(enumeration: &DefKey, variant: &str) -> DefKey {
+    DefKey {
+        namespace: Namespace::Value,
+        item_kind: ItemKind::Constant,
+        declared_name: format!("{}::{variant}", enumeration.declared_name),
+        ..enumeration.clone()
     }
 }
 /// Stable namespace identity of an enum variant. It is derived from the
@@ -437,6 +467,12 @@ pub struct Outline {
     pub profile: ProfileIdentity,
 }
 impl ItemOutline {
+    /// Whether this row is an enum variant's anonymous discriminant constant
+    /// (E-R5-013) rather than a source item: its declaration syntax is the
+    /// variant and its name no identifier can spell.
+    pub fn is_discriminant_constant(&self) -> bool {
+        self.def_key.item_kind == ItemKind::Constant && self.def_key.declared_name.contains("::")
+    }
     pub fn constructor_field_bytes(&self) -> Result<usize, Diagnostic> {
         self.constructor_fields
             .iter()
@@ -476,6 +512,15 @@ impl StableEncode for Outline {
                 });
             }
             e.option(&item.body, |e, b| e.record(b));
+            // Discriminant constants (E-R5-013); non-enum and literal-only
+            // encodings are unchanged.
+            if !item.discriminants.is_empty() {
+                e.sequence(&item.discriminants, |e, row| {
+                    e.record(&row.def_key);
+                    e.record(&row.header);
+                    e.option(&row.body, |e, b| e.record(b));
+                });
+            }
         });
         e.sequence(&self.extern_crates, |e, row| e.record(row));
         e.map(&self.scopes, |e, key, members| {
@@ -485,6 +530,13 @@ impl StableEncode for Outline {
     }
 }
 impl Outline {
+    /// Every declaration row source preparation publishes: the items and,
+    /// after each enum, its anonymous discriminant constants (E-R5-013).
+    pub fn declaration_rows(&self) -> impl Iterator<Item = &ItemOutline> {
+        self.items
+            .iter()
+            .flat_map(|item| std::iter::once(item).chain(item.discriminants.iter()))
+    }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
             + self.item_invocations.capacity() * std::mem::size_of::<ItemInvocation>()
@@ -917,6 +969,83 @@ impl ParsedFile {
         let mut scope = parent.scope.clone();
         scope.owner = Some(owner);
         self.outline_in_root(scope, parent.header.tokens.clone(), cfg, root)
+    }
+    /// The anonymous discriminant constants of an enum item (E-R5-013): one
+    /// ordinary initializer declaration per cfg-enabled variant whose
+    /// explicit discriminant is not a plain integer literal (the literal fast
+    /// path needs no frame). Other items have none.
+    pub(super) fn discriminant_rows(
+        &self,
+        item: &ast::Item,
+        enumeration: &DefKey,
+        scope: &ScopeKey,
+        context: &[TokenRecipe],
+        cfg: &CfgSet,
+    ) -> Result<Vec<ItemOutline>, Diagnostic> {
+        let ast::Item::Enum(item) = item else {
+            return Ok(Vec::new());
+        };
+        let Some(list) = item.variant_list() else {
+            return Ok(Vec::new());
+        };
+        let mut rows = Vec::new();
+        for variant in list.variants() {
+            let (enabled, _) = super::attributes::effective_metas(
+                variant.attrs().filter_map(|a| a.meta()).collect(),
+                cfg,
+            )?;
+            let (true, Some(argument), Some(name)) = (enabled, variant.const_arg(), variant.name())
+            else {
+                continue;
+            };
+            let Some(expression) = argument.expr() else {
+                continue;
+            };
+            if crate::frontend::types::literal_discriminant(&tokens(argument.syntax(), None))
+                .is_some()
+            {
+                continue;
+            }
+            let name = super::ast_adapter::semantic_name(name.text()).ok_or_else(|| {
+                fault(
+                    "LRR-E-SOURCE-LIMIT",
+                    "semantic declaration name limit exceeded",
+                )
+            })?;
+            let def_key = discriminant_def_key(enumeration, &name);
+            let definition = def_key.fingerprint();
+            let declaration = range(variant.syntax().text_range());
+            let expression_span = range(expression.syntax().text_range());
+            rows.try_reserve(1)
+                .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "discriminant row allocation failed"))?;
+            rows.push(ItemOutline {
+                def_key,
+                scope: scope.clone(),
+                header: HeaderRecipe {
+                    profile: self.profile.clone(),
+                    tokens: tokens(variant.syntax(), Some(argument.syntax().text_range())),
+                    context: context.to_vec(),
+                    attributes: Vec::new(),
+                    visibility: Visibility::Private,
+                },
+                constructor_fields: Vec::new(),
+                variants: Vec::new(),
+                discriminants: Vec::new(),
+                body: Some(BodyHandle {
+                    def_key: definition,
+                    body_hash: self.fn_body_identity(expression.syntax())?,
+                    range: expression_span,
+                    entry_blocked: false,
+                    block_offset: 0,
+                }),
+                declaration_span: declaration,
+                header_span: SourceRange {
+                    start: declaration.start,
+                    end: expression_span.start,
+                },
+            });
+        }
+        Ok(rows)
     }
     fn outline_in_root(
         &self,
@@ -1364,9 +1493,10 @@ impl ParsedFile {
             let body = if let Some(body) = executable {
                 Some(BodyHandle {
                     def_key: definition,
-                    body_hash: self.body_content_identity(&body)?,
-                    range: range(body.text_range()),
+                    body_hash: self.fn_body_identity(&body)?,
+                    range: super::fn_parameters::body_range(&body),
                     entry_blocked: blocked,
+                    block_offset: super::fn_parameters::block_offset(&body),
                 })
             } else {
                 None
@@ -1513,12 +1643,15 @@ impl ParsedFile {
                 });
                 outline.scopes.entry(child).or_default();
             }
+            let discriminants =
+                self.discriminant_rows(&item, &def_key, &scope, &header.context, cfg)?;
             outline.items.push(ItemOutline {
                 def_key,
                 scope,
                 header,
                 constructor_fields: constructor_fields(&item, cfg)?,
                 variants: enum_variants(&item, cfg)?,
+                discriminants,
                 body,
                 declaration_span: span,
                 header_span,
@@ -1713,6 +1846,58 @@ mod tests {
                 .any(|a| a.class == AttributeClass::Test)
         );
         assert!(o.scopes.values().all(|s| s.blockers.is_empty()));
+    }
+    #[test]
+    fn non_literal_discriminants_are_unpublished_anonymous_constant_rows() {
+        let o = outline(
+            "const B: isize = 1; enum E { A = 1 << 3, L = 5, N = -2, C = B + 2, D, #[cfg(any())] G = 3 << 1 } enum P { Q }",
+        );
+        let enumeration = o
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "E")
+            .unwrap();
+        // Literals (even negated) take the table fast path; only the two
+        // expressions are rows, in declaration order, with the disabled
+        // variant absent.
+        let names = enumeration
+            .discriminants
+            .iter()
+            .map(|row| row.def_key.declared_name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["E::A", "E::C"]);
+        assert!(
+            o.items
+                .iter()
+                .find(|item| item.def_key.declared_name == "P")
+                .unwrap()
+                .discriminants
+                .is_empty()
+        );
+        for (row, variant) in enumeration.discriminants.iter().zip(["A", "C"]) {
+            assert_eq!(row.def_key.item_kind, ItemKind::Constant);
+            assert_eq!(
+                row.def_key.fingerprint(),
+                discriminant_def_key(&enumeration.def_key, variant).fingerprint()
+            );
+            assert_eq!(row.scope, enumeration.scope);
+            assert!(enumeration.declaration_span.contains(row.declaration_span));
+            assert!(row.body.as_ref().is_some_and(|body| !body.entry_blocked));
+        }
+        // Never a namespace member, and published after their enum.
+        let members = o.scopes.get(&o.root_scope).unwrap();
+        assert!(
+            members
+                .candidates
+                .keys()
+                .all(|(_, name)| !name.contains("::"))
+        );
+        assert_eq!(
+            o.declaration_rows()
+                .filter(|item| item.def_key.declared_name.contains("::"))
+                .count(),
+            2
+        );
     }
     #[test]
     fn unmatched_body_delimiter_blocks_only_entry() {

@@ -21,40 +21,78 @@ pub fn take<T: Default>(dest: &mut T) -> T {
     replace(dest, T::default())
 }
 
+// Layout queries (E-R5-012). The wrappers are ordinary generic functions, so
+// their frame binds `T`; the closed intrinsics read it from the calling frame
+// and answer from the interpreter's one layout algorithm.
 pub const fn size_of<T>() -> usize {
-    core::intrinsics::lrr_unsupported("core::mem::size_of")
+    core::intrinsics::lrr_size_of()
 }
 
-pub fn size_of_val<T: ?Sized>(val: &T) -> usize {
-    core::intrinsics::lrr_unsupported("core::mem::size_of_val")
+pub const fn size_of_val<T: ?Sized>(val: &T) -> usize {
+    core::intrinsics::lrr_size_of_val(val)
 }
 
 pub const fn align_of<T>() -> usize {
-    core::intrinsics::lrr_unsupported("core::mem::align_of")
+    core::intrinsics::lrr_align_of()
 }
 
-pub fn align_of_val<T: ?Sized>(val: &T) -> usize {
-    core::intrinsics::lrr_unsupported("core::mem::align_of_val")
+pub const fn align_of_val<T: ?Sized>(val: &T) -> usize {
+    core::intrinsics::lrr_align_of_val(val)
 }
 
 pub const fn needs_drop<T: ?Sized>() -> bool {
-    core::intrinsics::lrr_unsupported("core::mem::needs_drop")
+    core::intrinsics::lrr_needs_drop()
 }
 
-pub unsafe fn transmute<Src, Dst>(src: Src) -> Dst {
-    core::intrinsics::lrr_unsupported("core::mem::transmute")
+pub const fn variant_count<T>() -> usize {
+    core::intrinsics::lrr_variant_count()
 }
 
-pub unsafe fn zeroed<T>() -> T {
-    core::intrinsics::lrr_unsupported("core::mem::zeroed")
+// Between types of equal size that have a byte image (scalars, raw pointers,
+// arrays and tuples of them); anything else is refused naming the pair.
+pub const unsafe fn transmute<Src, Dst>(src: Src) -> Dst {
+    core::intrinsics::lrr_transmute(src)
 }
 
+pub const unsafe fn zeroed<T>() -> T {
+    core::intrinsics::lrr_zeroed()
+}
+
+// The discriminant value of an enum value (0 for any other value), compared,
+// hashed and printed as that value.
 pub struct Discriminant<T> {
+    value: isize,
     marker: crate::marker::PhantomData<T>,
 }
 
-pub fn discriminant<T>(v: &T) -> Discriminant<T> {
-    core::intrinsics::lrr_unsupported("core::mem::discriminant")
+pub const fn discriminant<T>(v: &T) -> Discriminant<T> {
+    Discriminant {
+        value: core::intrinsics::lrr_discriminant_value(v),
+        marker: crate::marker::PhantomData,
+    }
+}
+
+impl<T> crate::marker::Copy for Discriminant<T> {}
+impl<T> crate::clone::Clone for Discriminant<T> {
+    fn clone(&self) -> Discriminant<T> {
+        *self
+    }
+}
+impl<T> crate::cmp::PartialEq for Discriminant<T> {
+    fn eq(&self, rhs: &Discriminant<T>) -> bool {
+        self.value == rhs.value
+    }
+}
+impl<T> crate::cmp::Eq for Discriminant<T> {}
+impl<T> crate::hash::Hash for Discriminant<T> {
+    fn hash<H: crate::hash::Hasher>(&self, state: &mut H) {
+        crate::hash::Hash::hash(&self.value, state)
+    }
+}
+impl<T> crate::fmt::Debug for Discriminant<T> {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        f.debug_tuple("Discriminant").field(&self.value).finish()
+    }
 }
 
 // Inhibits the destructor of the wrapped value.

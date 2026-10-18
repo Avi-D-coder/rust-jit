@@ -79,6 +79,15 @@ impl<'a> Component<'a> {
         root: NodeId,
     ) -> QueryPoll<(Option<TyTerm>, usize)> {
         let plan = self.plan;
+        // A pattern function's parameter pattern matches its argument: the
+        // declared Type of that signature parameter (E-R5-010).
+        if let Some(ordinal) = plan.fact(root).and_then(|fact| fact.parameter()) {
+            let definition = self.key.body.definition;
+            return QueryPoll::Ready(Ok((
+                ready!(self.parameter_term(db, root, definition, ordinal)),
+                0,
+            )));
+        }
         let Some(edge) = plan.uses(root).first() else {
             return QueryPoll::Ready(Ok((None, 0)));
         };
@@ -120,6 +129,11 @@ impl<'a> Component<'a> {
                     None => None,
                 };
                 (matched, 0)
+            }
+            // A closure parameter pattern matches the call argument: its
+            // written Type, else the `Fn*(A, ..)` bound it is passed for.
+            FactKind::Closure if edge.ordinal >= 1 => {
+                (ready!(self.closure_parameter_type(db, root)), 0)
             }
             _ => (None, 0),
         }))

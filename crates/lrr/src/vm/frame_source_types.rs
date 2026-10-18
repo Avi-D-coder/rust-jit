@@ -12,7 +12,7 @@ impl Frame {
     }
     fn structural_source_shape(source: &TyTerm) -> bool {
         match source {
-            TyTerm::Primitive(_) | TyTerm::Str => true,
+            TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Dyn(_) => true,
             TyTerm::Tuple(members) => members.iter().all(Self::structural_source_shape),
             // A reference member (`(&K, &V)`): regions are not data.
             TyTerm::Ref(_, _, inner) => Self::structural_source_shape(inner),
@@ -50,6 +50,10 @@ impl Frame {
                 "structural source differs from its target descriptor".into(),
             )
         };
+        // A declared `dyn Trait` target position admits any source view.
+        if matches!(actual.key.as_ref(), TypeKey::Dyn { .. }) {
+            return Ok(());
+        }
         // A raw pointer or fn pointer view matches any descriptor of its
         // family; the pointee may differ after a pointer cast (E-R5-008).
         if crate::traits::pointer_terms::as_raw_pointer(source).is_some() {
@@ -65,6 +69,8 @@ impl Frame {
             };
         }
         match source {
+            // A declared `dyn Trait` position admits the value's concrete Type.
+            TyTerm::Dyn(_) => {}
             TyTerm::Primitive(primitive) => {
                 if crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id() != target
                 {

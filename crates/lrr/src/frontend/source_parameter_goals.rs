@@ -315,7 +315,19 @@ pub(crate) fn prepare_local_query(
         return QueryPoll::Ready(Err(fault("declared parameter owning plan differs")));
     };
     ready!(plan.require_current(db));
-    let goal = if parameter.receiver || parameter.variadic {
+    let local_receiver = if parameter.receiver {
+        ready!(plan.local_receiver_term(db, definition, &parameter.ty))
+    } else {
+        None
+    };
+    let goal = if let Some(term) = local_receiver {
+        ready!(classify(
+            definition,
+            selected.fingerprint,
+            ordinal as usize,
+            QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Type(term))))
+        ))
+    } else if parameter.receiver || parameter.variadic {
         ParameterTypeGoal::NeedType {
             definition,
             syntax: parameter.ty.clone(),

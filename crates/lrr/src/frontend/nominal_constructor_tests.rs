@@ -240,6 +240,15 @@ fn rustc_discriminant_tables_follow_declaration_order() {
         schema.literal_discriminants().unwrap().as_ref(),
         [Some(0), Some(16), Some(17), Some(7), None, None]
     );
+    // E-R5-013: an unknown entry counts from the nearest explicit expression
+    // before it, and an evaluated value completes exactly that run.
+    assert_eq!(schema.expression_anchor(3), None);
+    assert_eq!(schema.expression_anchor(4), Some(4));
+    assert_eq!(schema.expression_anchor(5), Some(4));
+    assert_eq!(
+        schema.anchored_discriminants(4, 4).as_ref(),
+        [None, None, None, None, Some(4), Some(5)]
+    );
 }
 
 #[test]

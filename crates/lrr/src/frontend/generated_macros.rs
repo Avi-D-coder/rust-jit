@@ -1053,6 +1053,7 @@ impl GeneratedMacroCatalog {
                     body: None,
                     constructor_fields: Vec::new(),
                     variants: Vec::new(),
+                    discriminants: Vec::new(),
                     declaration_span: item.declaration_span,
                     header_span: item.header_span,
                 };

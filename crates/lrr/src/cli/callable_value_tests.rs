@@ -241,8 +241,14 @@ fn annotated_destructuring_lets_take_the_selected_annotation_type() {
     // service's selection of a composite annotation (`let_annotations`):
     // `255 + 1` overflows exactly when the element Type is `u8`.
     for (text, panics) in [
-        ("fn main() { let [a, _b]: [u8; 2] = [255, 0]; let c = a + 1; assert!(c == 0); }\n", true),
-        ("fn main() { let &x: &u8 = &255; let y = x + 1; assert!(y == 0); }\n", true),
+        (
+            "fn main() { let [a, _b]: [u8; 2] = [255, 0]; let c = a + 1; assert!(c == 0); }\n",
+            true,
+        ),
+        (
+            "fn main() { let &x: &u8 = &255; let y = x + 1; assert!(y == 0); }\n",
+            true,
+        ),
         (
             "fn main() { let (p, q): (u16, i64) = (3, -4); assert!(p == 3 && q == -4); }\n",
             false,
@@ -255,5 +261,90 @@ fn annotated_destructuring_lets_take_the_selected_annotation_type() {
                 completed(text, edition);
             }
         }
+    }
+}
+
+#[test]
+fn rustc_autoderef_vec_box_fn_original_executes_unchanged() {
+    let path = std::path::PathBuf::from(format!(
+        "{}/../../fixtures/upstream/rustc-checkout/tests/ui/autoref-autoderef/autoderef-vec-box-fn-36786.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    match super::crate_graph::format_trait_facade_tests::run(
+        "rustc-callee-autoderef",
+        &std::fs::read_to_string(&path).unwrap(),
+        2015,
+    ) {
+        Ok(StandaloneOutcome::Completed(_)) => {}
+        Ok(_) => panic!("unchanged rustc callable autoderef original returned another outcome"),
+        Err(error) => panic!("unchanged rustc callable autoderef original: {error:?}"),
+    }
+}
+
+#[test]
+fn rustc_autoderef_arc_boxed_closure_original_executes_unchanged() {
+    let path = std::path::PathBuf::from(format!(
+        "{}/../../fixtures/upstream/rustc-checkout/tests/ui/autoref-autoderef/autoderef-arc-boxed-closure-call.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    match super::crate_graph::format_trait_facade_tests::run(
+        "rustc-callee-autoderef",
+        &std::fs::read_to_string(&path).unwrap(),
+        2015,
+    ) {
+        Ok(StandaloneOutcome::Completed(_)) => {}
+        Ok(_) => panic!("unchanged rustc callable autoderef original returned another outcome"),
+        Err(error) => panic!("unchanged rustc callable autoderef original: {error:?}"),
+    }
+}
+
+#[test]
+fn callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins() {
+    // An LRR route/effect control, outside imported originals. Each wrapper
+    // calls its ordinary Deref body; no runtime wrapper layout is inspected.
+    let prefix = r#"
+        use std::ops::Deref;
+        struct Wrap<T>(T);
+        impl<T> Deref for Wrap<T> {
+            type Target = T;
+            fn deref(&self) -> &T { println!("deref"); &self.0 }
+        }
+        fn argument() -> i32 { println!("argument"); 9 }
+        macro_rules! invoke { ($f:expr) => { $f(argument()) } }
+        macro_rules! wrapper { ($f:expr) => { invoke!($f) } }
+    "#;
+    for expression in [
+        "command(argument())",
+        "invoke!(command)",
+        "wrapper!(command)",
+    ] {
+        let text = format!(
+            "{prefix} fn main() {{
+                let command = Wrap(Wrap(|x: i32| {{ println!(\"call\"); x + 1 }}));
+                assert_eq!({expression}, 10);
+            }}"
+        );
+        let report = completed_with_standard_facade(&text, 2021);
+        assert_eq!(report.output.stdout, "deref\nderef\nargument\ncall\n");
+        assert!(
+            report.opcode_counters.started_by_opcode
+                [usize::from(crate::ir::op::CALLEE_DEREF_OPCODE)]
+                > 0
+        );
+    }
+    completed_with_standard_facade(
+        "use std::rc::Rc; fn main() { let f = Rc::new(|x: i32| x + 1); assert_eq!(f(9), 10); }",
+        2021,
+    );
+}
+
+fn completed_with_standard_facade(text: &str, edition: u16) -> crate::engine::run::RunReport {
+    match super::crate_graph::format_trait_facade_tests::run("callee-autoderef", text, edition) {
+        Ok(StandaloneOutcome::Completed(report)) => report,
+        Ok(StandaloneOutcome::Panicked(report)) => {
+            panic!("callee autoderef panicked: {:?}", report.panic)
+        }
+        Ok(_) => panic!("callee autoderef returned another outcome"),
+        Err(error) => panic!("callee autoderef faulted: {error:?}"),
     }
 }

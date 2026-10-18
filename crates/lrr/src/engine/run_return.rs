@@ -278,7 +278,10 @@ impl RunMachine {
                 source => source,
             };
             let returned = reached_argument_type(actual, source.cloned())?;
-            suspended.call.contracts.bind_return_parameter(&returned)?;
+            suspended
+                .call
+                .contracts
+                .bind_return_parameter_in(&returned, Some(&self.store))?;
         }
         self.check_source_return(db, &suspended.call, actual)?;
         let source_result = suspended.call.contracts.source_result.as_ref().map(|term| {

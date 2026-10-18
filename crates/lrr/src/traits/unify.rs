@@ -54,11 +54,11 @@ fn validate(term: &TyTerm, transaction: Digest, universe: u32) -> Result<usize, 
         }
         if matches!(
             term,
-            TyTerm::Bound { .. } | TyTerm::Projection(_) | TyTerm::Dyn(_) | TyTerm::Opaque(_, _)
+            TyTerm::Bound { .. } | TyTerm::Projection(_) | TyTerm::Opaque(_, _)
         ) || matches!(term, TyTerm::Function(function) if !function.variables.is_empty())
         {
             return Err(fault(
-                "symbolic function/bound/projection/dyn/opaque terms require ordered schema, universe or normalization integration",
+                "symbolic function/bound/projection/opaque terms require ordered schema, universe or normalization integration",
             ));
         }
         for key in placeholders(term) {
@@ -164,6 +164,9 @@ impl Unifier {
                 continue;
             }
             match (left, right) {
+                // A bare `dyn Trait` is a coercion target, never an inferred
+                // generic argument (`Box::new(8)` under `Box<dyn Foo>`).
+                (TyTerm::Infer(_), TyTerm::Dyn(_)) | (TyTerm::Dyn(_), TyTerm::Infer(_)) => {}
                 (TyTerm::Infer(v), t) | (t, TyTerm::Infer(v)) => {
                     if occurs(&staged, v, &t, &mut steps)? {
                         return Err(fault("recursive inference substitution"));
@@ -205,6 +208,8 @@ impl Unifier {
                         }
                     }
                 }
+                // A `dyn Trait` position admits the concrete value's Type.
+                (TyTerm::Dyn(_), _) | (_, TyTerm::Dyn(_)) => {}
                 (TyTerm::Slice(a), TyTerm::Slice(b)) => work.push((*a, *b)),
                 (TyTerm::Array(a, x), TyTerm::Array(b, y)) if x == y => work.push((*a, *b)),
                 // A const generic length (`[T; N]` of an impl's `const N`)

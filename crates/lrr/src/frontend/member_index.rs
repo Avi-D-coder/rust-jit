@@ -35,7 +35,7 @@ pub enum BuiltinSelf {
     Reference(bool),
 }
 impl BuiltinSelf {
-    fn named(name: &str) -> Option<Self> {
+    pub(crate) fn named(name: &str) -> Option<Self> {
         use crate::ir::op::PrimitiveType as P;
         Some(Self::Primitive(match name {
             "bool" => P::Bool,
@@ -81,6 +81,33 @@ pub(crate) struct MethodAlternatives {
     /// The probe took the array-to-slice unsizing step.
     pub(crate) unsize: bool,
 }
+/// A resolved block-local container of an entered body: an impl block with
+/// its associated functions, types and constants, or a trait with its
+/// declarations. The owning body resolved the headers through its lexical
+/// Type lookup; the index only records the result.
+#[derive(Debug, Clone)]
+pub(crate) enum LocalContainer {
+    Impl {
+        members: ImplMembers,
+        aliases: Vec<(Digest, AssociatedTypeAlias)>,
+    },
+    Trait {
+        definition: Digest,
+        /// Every function the trait declares, required or provided.
+        declarations: BTreeMap<String, Digest>,
+        /// The provided (bodied) functions.
+        defaults: BTreeMap<String, Digest>,
+        consts: BTreeMap<String, Digest>,
+    },
+}
+impl LocalContainer {
+    fn identity(&self) -> Digest {
+        match self {
+            Self::Impl { members, .. } => members.identity,
+            Self::Trait { definition, .. } => *definition,
+        }
+    }
+}
 /// One impl block.
 #[derive(Debug, Clone)]
 pub struct ImplMembers {
@@ -118,6 +145,15 @@ pub struct AssociatedTypeAlias {
 
 #[derive(Debug, Default)]
 pub struct MemberIndex {
+    /// The next layer of block-local impls and traits that an entered body
+    /// published after this index was built (`publish_local`). Layers are
+    /// append-only and shared through every handle to the world index, so
+    /// holders of the world see later publications without a refresh and
+    /// nothing of the world is copied; lookups read this layer, then `next`.
+    next: std::sync::OnceLock<std::sync::Arc<MemberIndex>>,
+    /// Identities of the block-local containers already published (kept on
+    /// the world index only), so a body entered again publishes once.
+    local_published: std::sync::Mutex<BTreeSet<Digest>>,
     impls: Vec<ImplMembers>,
     by_nominal: BTreeMap<Digest, Vec<usize>>,
     by_builtin: BTreeMap<BuiltinSelf, Vec<usize>>,
@@ -217,6 +253,74 @@ impl MemberIndex {
             index.add_outline(graph, source.outline(), &|identity| identity, None)?;
         }
         Ok(index)
+    }
+    /// Publish block-local impls and traits of an entered body into this
+    /// (world) index as one new layer. Containers already published are
+    /// skipped, so re-entering the body adds nothing. Callers hold the world
+    /// handle; later lookups through any clone of it see the layer.
+    pub(crate) fn publish_local(&self, rows: Vec<LocalContainer>) {
+        let mut published = self
+            .local_published
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let rows: Vec<LocalContainer> = rows
+            .into_iter()
+            .filter(|row| published.insert(row.identity()))
+            .collect();
+        if rows.is_empty() {
+            return;
+        }
+        let mut layer = Self::default();
+        for row in rows {
+            match row {
+                LocalContainer::Trait {
+                    definition,
+                    declarations,
+                    defaults,
+                    consts,
+                } => {
+                    layer.traits.insert(definition);
+                    layer.trait_declarations.insert(definition, declarations);
+                    layer.trait_defaults.insert(definition, defaults);
+                    layer.trait_consts.insert(definition, consts);
+                }
+                LocalContainer::Impl { members, aliases } => {
+                    let ordinal = layer.impls.len();
+                    for function in members.functions.values() {
+                        layer.function_owner.insert(*function, ordinal);
+                    }
+                    for (identity, alias) in aliases {
+                        layer.type_aliases.insert(identity, alias);
+                    }
+                    for name in members.types.keys() {
+                        layer
+                            .type_names
+                            .insert(associated_name_key(name), name.clone());
+                    }
+                    match (members.self_nominal, members.self_builtin) {
+                        (Some(nominal), _) => {
+                            layer.by_nominal.entry(nominal).or_default().push(ordinal)
+                        }
+                        (None, Some(builtin)) => {
+                            layer.by_builtin.entry(builtin).or_default().push(ordinal)
+                        }
+                        (None, None) => layer.unresolved.push(ordinal),
+                    }
+                    layer.impls.push(members);
+                }
+            }
+        }
+        let layer = std::sync::Arc::new(layer);
+        let mut tail = self;
+        loop {
+            match tail.next.get() {
+                Some(next) => tail = next,
+                None => match tail.next.set(layer.clone()) {
+                    Ok(()) => return,
+                    Err(_) => continue,
+                },
+            }
+        }
     }
     /// Index the impls/traits of a macro-generated item unit. Its published
     /// identities are the generated header keys, not outline fingerprints.
@@ -734,7 +838,7 @@ impl MemberIndex {
                     .or_else(|| {
                         members
                             .trait_definition
-                            .and_then(|definition| self.trait_defaults.get(&definition))
+                            .and_then(|definition| self.trait_defaults_of(definition))
                             .and_then(|defaults| defaults.get(name))
                     })
                     .map(|f| (members, *f))
@@ -787,13 +891,7 @@ impl MemberIndex {
         ty: BuiltinSelf,
         pointee: Option<Result<Digest, BuiltinSelf>>,
     ) -> Vec<Vec<&'a ImplMembers>> {
-        let impls: Vec<&ImplMembers> = self
-            .by_builtin
-            .get(&ty)
-            .into_iter()
-            .flatten()
-            .map(|ordinal| &self.impls[*ordinal])
-            .collect();
+        let impls: Vec<&ImplMembers> = self.builtin_impls(ty).collect();
         let Some(pointee) = pointee else {
             return vec![impls];
         };
@@ -825,7 +923,7 @@ impl MemberIndex {
                         .or_else(|| {
                             members
                                 .trait_definition
-                                .and_then(|definition| self.trait_defaults.get(&definition))
+                                .and_then(|definition| self.trait_defaults_of(definition))
                                 .and_then(|defaults| defaults.get(name))
                         })
                         .map(|function| (members.trait_definition, *function))
@@ -854,21 +952,14 @@ impl MemberIndex {
                 .functions
                 .get(name)
                 .or_else(|| {
-                    self.trait_defaults
-                        .get(&trait_key)
+                    self.trait_defaults_of(trait_key)
                         .and_then(|defaults| defaults.get(name))
                 })
                 .copied()
         };
         let direct: Vec<_> = match ty {
             Ok(nominal) => self.impls_of(nominal).collect::<Vec<_>>(),
-            Err(builtin) => self
-                .by_builtin
-                .get(&builtin)
-                .into_iter()
-                .flatten()
-                .map(|ordinal| &self.impls[*ordinal])
-                .collect(),
+            Err(builtin) => self.builtin_impls(builtin).collect(),
         }
         .into_iter()
         .filter(|members| members.trait_definition == Some(trait_key))
@@ -891,15 +982,15 @@ impl MemberIndex {
     }
     /// Whether `key` is a trait definition of the run's world.
     pub fn is_trait(&self, key: Digest) -> bool {
-        self.traits.contains(&key)
+        self.layers().any(|layer| layer.traits.contains(&key))
     }
     /// The associated function `name` trait `trait_key` declares (required
     /// or provided): the signature a trait-path call (`Trait::name(..)`) is
     /// written against before its self type selects the impl.
     pub fn trait_declaration(&self, trait_key: Digest, name: &str) -> Option<Digest> {
-        self.trait_declarations
-            .get(&trait_key)
-            .and_then(|declarations| declarations.get(name))
+        self.layers()
+            .filter_map(|layer| layer.trait_declarations.get(&trait_key))
+            .find_map(|declarations| declarations.get(name))
             .copied()
     }
     /// Trait-provided functions `name` for self type `ty`, as a path through
@@ -956,8 +1047,8 @@ impl MemberIndex {
     /// one trait (differing by the trait's arguments).
     pub fn same_trait_of(&self, functions: &[Digest]) -> Option<Digest> {
         let trait_of = |function: &Digest| {
-            self.impls
-                .iter()
+            self.layers()
+                .flat_map(|layer| layer.impls.iter())
                 .find(|members| members.functions.values().any(|f| f == function))
                 .and_then(|members| members.trait_definition)
         };
@@ -968,11 +1059,34 @@ impl MemberIndex {
             .then_some(first)
     }
     pub fn impls_of(&self, ty: Digest) -> impl Iterator<Item = &ImplMembers> {
-        self.by_nominal
-            .get(&ty)
-            .into_iter()
-            .flatten()
-            .map(|ordinal| &self.impls[*ordinal])
+        self.layers().flat_map(move |layer| {
+            layer
+                .by_nominal
+                .get(&ty)
+                .into_iter()
+                .flatten()
+                .map(move |ordinal| &layer.impls[*ordinal])
+        })
+    }
+    /// The world's index, then the local layer of entered bodies' impls.
+    fn layers(&self) -> impl Iterator<Item = &MemberIndex> {
+        std::iter::successors(Some(self), |layer| layer.next.get().map(|next| &**next))
+    }
+    /// The impls of a builtin self type, across layers.
+    fn builtin_impls(&self, ty: BuiltinSelf) -> impl Iterator<Item = &ImplMembers> {
+        self.layers().flat_map(move |layer| {
+            layer
+                .by_builtin
+                .get(&ty)
+                .into_iter()
+                .flatten()
+                .map(move |ordinal| &layer.impls[*ordinal])
+        })
+    }
+    /// The provided (default) functions of a trait, by name.
+    fn trait_defaults_of(&self, definition: Digest) -> Option<&BTreeMap<String, Digest>> {
+        self.layers()
+            .find_map(|layer| layer.trait_defaults.get(&definition))
     }
     /// Whether `ty` implements trait `trait_key`: a direct trait impl, or a
     /// blanket impl whose bounds it meets (rustc requires a unique candidate,
@@ -989,9 +1103,9 @@ impl MemberIndex {
             Ok(nominal) => self
                 .impls_of(nominal)
                 .any(|members| members.trait_definition == Some(trait_key)),
-            Err(builtin) => self.by_builtin.get(&builtin).into_iter().flatten().any(|ordinal| {
-                self.impls[*ordinal].trait_definition == Some(trait_key)
-            }),
+            Err(builtin) => self
+                .builtin_impls(builtin)
+                .any(|members| members.trait_definition == Some(trait_key)),
         };
         direct
             || self.unresolved().any(|members| {
@@ -1020,7 +1134,7 @@ impl MemberIndex {
                 members.functions.get(name).or_else(|| {
                     members
                         .trait_definition
-                        .and_then(|definition| self.trait_defaults.get(&definition))
+                        .and_then(|definition| self.trait_defaults_of(definition))
                         .and_then(|defaults| defaults.get(name))
                 })
             })
@@ -1195,13 +1309,7 @@ impl MemberIndex {
     ) -> Vec<(Digest, &AssociatedTypeAlias)> {
         let mut impls: Vec<&ImplMembers> = match ty {
             Ok(nominal) => self.impls_of(nominal).collect(),
-            Err(builtin) => self
-                .by_builtin
-                .get(&builtin)
-                .into_iter()
-                .flatten()
-                .map(|ordinal| &self.impls[*ordinal])
-                .collect(),
+            Err(builtin) => self.builtin_impls(builtin).collect(),
         };
         if let Some(pointee) = pointee {
             let named = impls
@@ -1242,7 +1350,7 @@ impl MemberIndex {
         }
         selected
             .into_iter()
-            .filter_map(|alias| self.type_aliases.get(&alias).map(|row| (alias, row)))
+            .filter_map(|alias| self.layers().find_map(|layer| layer.type_aliases.get(&alias)).map(|row| (alias, row)))
             .collect()
     }
     /// The associated constant `name` of a type (`Type::NAME`, `Self::NAME`):
@@ -1257,13 +1365,7 @@ impl MemberIndex {
     ) -> Result<Option<Digest>, Diagnostic> {
         let impls: Vec<&ImplMembers> = match ty {
             Ok(nominal) => self.impls_of(nominal).collect(),
-            Err(builtin) => self
-                .by_builtin
-                .get(&builtin)
-                .into_iter()
-                .flatten()
-                .map(|ordinal| &self.impls[*ordinal])
-                .collect(),
+            Err(builtin) => self.builtin_impls(builtin).collect(),
         };
         if trait_key.is_none()
             && let Some(found) = impls
@@ -1289,7 +1391,9 @@ impl MemberIndex {
             if let Some(constant) = members.consts.get(name).or_else(|| {
                 members
                     .trait_definition
-                    .and_then(|definition| self.trait_consts.get(&definition))
+                    .and_then(|definition| {
+                        self.layers().find_map(|layer| layer.trait_consts.get(&definition))
+                    })
                     .and_then(|defaults| defaults.get(name))
             }) {
                 found.push(*constant);
@@ -1306,7 +1410,9 @@ impl MemberIndex {
     }
     /// The name of a shorthand associated-type key.
     pub fn associated_type_name(&self, key: Digest) -> Option<&str> {
-        self.type_names.get(&key).map(String::as_str)
+        self.layers()
+            .find_map(|layer| layer.type_names.get(&key))
+            .map(String::as_str)
     }
     /// Whether some impl's self type did not resolve to a nominal declaration.
     /// rustc's impl candidates for an integer or float inference variable
@@ -1323,11 +1429,8 @@ impl MemberIndex {
             .iter()
             .copied()
             .filter(|primitive| {
-                self.by_builtin
-                    .get(&BuiltinSelf::Primitive(*primitive))
-                    .into_iter()
-                    .flatten()
-                    .any(|ordinal| self.impls[*ordinal].trait_definition == Some(trait_key))
+                self.builtin_impls(BuiltinSelf::Primitive(*primitive))
+                    .any(|members| members.trait_definition == Some(trait_key))
             })
             .collect();
         let mut blankets = Vec::new();
@@ -1360,18 +1463,14 @@ impl MemberIndex {
             members.functions.contains_key(name)
                 || members
                     .trait_definition
-                    .and_then(|definition| self.trait_defaults.get(&definition))
+                    .and_then(|definition| self.trait_defaults_of(definition))
                     .is_some_and(|defaults| defaults.contains_key(name))
         };
         let mut inherent = false;
         let mut traits = Vec::new();
-        let primitive_impls = family.iter().flat_map(|primitive| {
-            self.by_builtin
-                .get(&BuiltinSelf::Primitive(*primitive))
-                .into_iter()
-                .flatten()
-                .map(|ordinal| &self.impls[*ordinal])
-        });
+        let primitive_impls = family
+            .iter()
+            .flat_map(|primitive| self.builtin_impls(BuiltinSelf::Primitive(*primitive)));
         let blanket_impls = self.unresolved().filter(|members| members.blanket.is_some());
         for members in primitive_impls.chain(blanket_impls) {
             match (&members.trait_path, members.trait_definition) {
@@ -1387,44 +1486,55 @@ impl MemberIndex {
         (inherent, traits)
     }
     pub fn has_unresolved(&self) -> bool {
-        !self.unresolved.is_empty()
+        self.layers().any(|layer| !layer.unresolved.is_empty())
     }
     pub fn unresolved(&self) -> impl Iterator<Item = &ImplMembers> {
-        self.unresolved.iter().map(|ordinal| &self.impls[*ordinal])
+        self.layers().flat_map(|layer| {
+            layer
+                .unresolved
+                .iter()
+                .map(move |ordinal| &layer.impls[*ordinal])
+        })
     }
     /// The impl that owns associated function `function`, if indexed.
     pub fn owner_of(&self, function: Digest) -> Option<&ImplMembers> {
-        self.function_owner
-            .get(&function)
-            .map(|ordinal| &self.impls[*ordinal])
+        self.layers().find_map(|layer| {
+            layer
+                .function_owner
+                .get(&function)
+                .map(|ordinal| &layer.impls[*ordinal])
+        })
     }
     /// Whether a trait impl implements `Copy`: the core facade's
     /// `marker::Copy` by identity; a trait path that resolves to no source
     /// trait (a world without the facade) by its written spelling.
     fn implements_copy(&self, members: &ImplMembers) -> bool {
         match members.trait_definition {
-            Some(definition) => Some(definition) == self.lang_copy,
+            Some(definition) => Some(definition) == self.lang_item(|layer| layer.lang_copy),
             None => spelled(members, &[&["Copy"], &["marker", "Copy"]], "marker", "Copy"),
         }
     }
     /// Whether a trait impl implements `Drop` (as `implements_copy`).
     fn implements_drop(&self, members: &ImplMembers) -> bool {
         match members.trait_definition {
-            Some(definition) => Some(definition) == self.lang_drop,
+            Some(definition) => Some(definition) == self.lang_item(|layer| layer.lang_drop),
             None => spelled(members, &[&["Drop"], &["ops", "Drop"]], "ops", "Drop"),
         }
     }
+    fn lang_item(&self, read: impl Fn(&MemberIndex) -> Option<Digest>) -> Option<Digest> {
+        self.layers().find_map(read)
+    }
     /// The `owned_box` lang item: the alloc facade's `Box` declaration.
     pub fn owned_box(&self) -> Option<Digest> {
-        self.lang_box
+        self.lang_item(|layer| layer.lang_box)
     }
     /// The `unsafe_cell` lang item: the core facade's `UnsafeCell`.
     pub fn unsafe_cell(&self) -> Option<Digest> {
-        self.lang_unsafe_cell
+        self.lang_item(|layer| layer.lang_unsafe_cell)
     }
     /// The growable-array lang item: the alloc facade's `Vec` declaration.
     pub fn owned_vec(&self) -> Option<Digest> {
-        self.lang_vec
+        self.lang_item(|layer| layer.lang_vec)
     }
     /// Nominal declarations with a `Copy` impl. `None` when some trait impl's
     /// self type is unresolved and could be such an impl. The impl's own
@@ -1435,8 +1545,8 @@ impl MemberIndex {
             return None;
         }
         Some(
-            self.impls
-                .iter()
+            self.layers()
+                .flat_map(|layer| layer.impls.iter())
                 .filter(|members| self.implements_copy(members))
                 .filter_map(|members| members.self_nominal)
                 .collect(),
@@ -1449,8 +1559,8 @@ impl MemberIndex {
             return None;
         }
         Some(
-            self.impls
-                .iter()
+            self.layers()
+                .flat_map(|layer| layer.impls.iter())
                 .filter(|members| self.implements_drop(members))
                 .filter_map(|members| members.self_nominal)
                 .collect(),

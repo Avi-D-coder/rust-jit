@@ -52,8 +52,7 @@ impl Database {
             let invalid = |message| fault("LRR-E-EXPANSION-INPUT", message);
             let mut selected = context
                 .facts()
-                .items
-                .iter()
+                .declarations()
                 .filter(|row| row.item.def_key.fingerprint() == definition);
             let row = selected
                 .next()
@@ -75,16 +74,18 @@ impl Database {
             {
                 return Err(invalid("selected local declaration owning source differs"));
             }
+            // A block-local enum's discriminant constant is declared by its
+            // variant (E-R5-013).
             let syntax = source
                 .parsed()
                 .syntax_at(item.declaration_span, |node| {
-                    ast::Item::can_cast(node.kind())
+                    ast::Item::can_cast(node.kind()) || ast::Variant::can_cast(node.kind())
                 })?
                 .ok_or_else(|| invalid("selected local declaration exact syntax is absent"))?;
             let excluded = item
                 .body
                 .as_ref()
-                .map(|body| body.range)
+                .map(|body| body.block_range())
                 .or(row.container_range)
                 .map(|range| TextRange::new(range.start.into(), range.end.into()));
             if tokens(&syntax, excluded) != item.header.tokens {
@@ -113,6 +114,27 @@ impl Database {
                     }),
                 ),
             ];
+            let mut rows = rows.to_vec();
+            // Member functions and const/static initializers are selected by
+            // declaration identity. Retain their actual body locator without
+            // preparing or executing the body; initialization is a reached VM
+            // demand, just like a call to an impl member.
+            if let Some(body) = item.body.as_ref()
+                && (matches!(
+                    item.def_key.item_kind,
+                    crate::source::manifest::ItemKind::Constant
+                        | crate::source::manifest::ItemKind::Static
+                ) || context
+                    .facts()
+                    .members
+                    .iter()
+                    .any(|member| std::ptr::eq(member, row)))
+            {
+                rows.push((
+                    InputKey::DefinitionBody(definition),
+                    InputValue::DefinitionBody(body.clone()),
+                ));
+            }
             let mut staged = BTreeMap::new();
             let mut bytes = 0;
             for (key, value) in rows {
@@ -134,6 +156,7 @@ impl Database {
                         (InputValue::DeclarationContext(a), InputValue::DeclarationContext(b)) => {
                             a == b
                         }
+                        (InputValue::DefinitionBody(a), InputValue::DefinitionBody(b)) => a == b,
                         _ => false,
                     };
                     if !identical || current.fingerprint != value.fingerprint() {

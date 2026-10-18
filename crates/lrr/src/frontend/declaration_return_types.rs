@@ -19,11 +19,25 @@ impl PreparedSourceLocalPlan {
         {
             return QueryPoll::Ready(Err(error("return Type current signature differs")));
         }
+        // A block-local enum's discriminant constant (E-R5-013) declares no
+        // result syntax: its type is the enum's repr integer, which the
+        // signature states as a primitive.
+        if let Some(crate::traits::term::TyTerm::Primitive(primitive)) = &signature.result_symbolic
+            && self.context.facts().members.iter().any(|row| {
+                row.item.is_discriminant_constant()
+                    && row.item.def_key.fingerprint() == signature.definition
+                    && row.item.header == signature.header
+            })
+        {
+            return QueryPoll::Ready(
+                crate::frontend::source_types::SourceType::selected_primitive(*primitive)
+                    .map(NamedTypePreparation::Ready),
+            );
+        }
         let mut rows = self
             .context
             .facts()
-            .items
-            .iter()
+            .declarations()
             .filter(|row| row.item.def_key.fingerprint() == signature.definition);
         let row = checked!(
             rows.next()
@@ -31,7 +45,10 @@ impl PreparedSourceLocalPlan {
         );
         if rows.next().is_some()
             || row.attribute_input.is_some()
-            || row.item.def_key.item_kind != ItemKind::Function
+            || !matches!(
+                row.item.def_key.item_kind,
+                ItemKind::Function | ItemKind::Constant | ItemKind::Static
+            )
             || row.item.scope != signature.scope
             || row.item.header != signature.header
             || !matches!(db.input(&InputKey::LocalDeclarationOwner(signature.definition)).as_deref(),
@@ -70,47 +87,74 @@ impl PreparedSourceLocalPlan {
         }
         let source = self.context.source();
         let parsed = source.parsed();
-        let function = checked!(
+        let declaration = checked!(
             parsed
-                .syntax_at(item.declaration, |node| ast::Fn::can_cast(node.kind()))
+                .syntax_at(item.declaration, |node| ast::Item::can_cast(node.kind()))
                 .and_then(|node| node
-                    .and_then(ast::Fn::cast)
-                    .ok_or_else(|| error("return Type actual function syntax absent")))
+                    .ok_or_else(|| error("return Type actual declaration syntax absent")))
         );
-        let excluded = function
-            .syntax()
-            .children()
-            .find_map(ast::BlockExpr::cast)
-            .map(|body| body.syntax().text_range());
-        // HeaderItem already verified this immutable Fn's header at plan
-        // capture, and current signature/header rows were compared above. Do
-        // not collect the whole Fn token stream again to exclude its body.
+        let (ty, excluded, implicit_unit) = match row.item.def_key.item_kind {
+            ItemKind::Function => {
+                let function = checked!(
+                    ast::Fn::cast(declaration)
+                        .ok_or_else(|| error("return Type actual function syntax absent"))
+                );
+                let result = function.ret_type();
+                let implicit_unit = result.is_none();
+                let ty = result.and_then(|result| result.ty());
+                let excluded = function
+                    .syntax()
+                    .children()
+                    .find_map(ast::BlockExpr::cast)
+                    .map(|body| body.syntax().text_range());
+                (ty, excluded, implicit_unit)
+            }
+            ItemKind::Constant => {
+                let constant = checked!(
+                    ast::Const::cast(declaration)
+                        .ok_or_else(|| error("return Type actual const syntax absent"))
+                );
+                (
+                    constant.ty(),
+                    constant.body().map(|body| body.syntax().text_range()),
+                    false,
+                )
+            }
+            ItemKind::Static => {
+                let static_ = checked!(
+                    ast::Static::cast(declaration)
+                        .ok_or_else(|| error("return Type actual static syntax absent"))
+                );
+                (
+                    static_.ty(),
+                    static_.body().map(|body| body.syntax().text_range()),
+                    false,
+                )
+            }
+            _ => return QueryPoll::Ready(Err(error("return Type declaration has no result"))),
+        };
+        // The retained header already excluded the executable child. Resolve
+        // only this declaration's actual annotation, never its initializer.
         if row
             .item
             .body
             .as_ref()
-            .is_some_and(|body| excluded.is_none_or(|actual| range(actual) != body.range))
+            .is_some_and(|body| excluded.is_none_or(|actual| range(actual) != body.block_range()))
         {
-            return QueryPoll::Ready(Err(error("return Type actual function header differs")));
+            return QueryPoll::Ready(Err(error("return Type actual declaration body differs")));
         }
-        let Some(result) = function.ret_type() else {
+        if implicit_unit {
             if !signature.result.is_empty() {
                 return QueryPoll::Ready(Err(error("return Type implicit unit recipe differs")));
             }
-            // An absent return annotation is source unit syntax, with no Type
-            // NameRef whose spelling or namespace could grant primitive access.
             return QueryPoll::Ready(
                 crate::frontend::source_types::SourceType::selected_primitive(
                     crate::ir::op::PrimitiveType::Unit,
                 )
                 .map(NamedTypePreparation::Ready),
             );
-        };
-        let ty = checked!(
-            result
-                .ty()
-                .ok_or_else(|| error("return Type actual annotation is incomplete"))
-        );
+        }
+        let ty = checked!(ty.ok_or_else(|| error("return Type actual annotation is incomplete")));
         let result_range = range(ty.syntax().text_range());
         if !item.declaration.contains(result_range) {
             return QueryPoll::Ready(Err(error("return Type outside actual declaration")));

@@ -173,7 +173,9 @@ impl GuestStore {
         let value = self.peek_ticket(ticket)?;
         self.require_initialized_value(value)?;
         self.object_owner(value, ValueOwner::Ticket(ticket))?;
-        if TypeId(value.type_id) != expected {
+        if TypeId(value.type_id) != expected
+            && !self.contract_admits(Some(expected), Some(TypeId(value.type_id)))
+        {
             return Err(ownership());
         }
         self.cells.reserve(1, &mut self.budget)?;
@@ -276,7 +278,10 @@ impl AggregateCopy {
             return Err(ownership());
         }
         let value = store.admit_move(field)?;
-        if TypeId(value.type_id) != store.copy_member_type(&frame.destination, frame.next)? {
+        let member = store.copy_member_type(&frame.destination, frame.next)?;
+        if TypeId(value.type_id) != member
+            && !store.contract_admits(Some(member), Some(TypeId(value.type_id)))
+        {
             return Err(ownership());
         }
         if value.kind == 8 {

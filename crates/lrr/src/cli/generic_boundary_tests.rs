@@ -337,3 +337,186 @@ fn integer_try_from_errors_format_like_core() {
         "Err(TryFromIntError(PosOverflow)) Err(TryFromIntError(NegOverflow))\nnumber too large to fit in target type\n",
     );
 }
+
+#[test]
+fn range_patterns_take_constant_bounds() {
+    // Range bounds written as bare constants, module paths and half-open
+    // forms resolve through the ordinary Value namespace like constant
+    // patterns.
+    prints(
+        "range-pattern-constants",
+        "const LOW: i32 = 10;
+const HIGH: i32 = 20;
+mod limits {
+    pub const MAX: u8 = 200;
+    pub const MIN: u8 = 100;
+}
+const FIRST: char = 'a';
+const LAST: char = 'f';
+
+fn classify(n: i32) -> &'static str {
+    match n {
+        i32::MIN..=-1 => \"negative\",
+        0 => \"zero\",
+        1..LOW => \"small\",
+        LOW..=HIGH => \"medium\",
+        _ => \"large\",
+    }
+}
+
+fn byte(b: u8) -> &'static str {
+    match b {
+        0..limits::MIN => \"low\",
+        limits::MIN..=limits::MAX => \"mid\",
+        _ => \"high\",
+    }
+}
+
+fn letter(c: char) -> bool {
+    matches!(c, FIRST..=LAST)
+}
+
+fn main() {
+    for n in [-5, 0, 3, 10, 15, 20, 21] {
+        println!(\"{} {}\", n, classify(n));
+    }
+    for b in [0u8, 99, 100, 200, 201] {
+        println!(\"{} {}\", b, byte(b));
+    }
+    println!(\"{} {} {}\", letter('a'), letter('f'), letter('g'));
+    let x = 7u8;
+    if let ..=limits::MAX = x {
+        println!(\"upto\");
+    }
+    if let limits::MIN.. = 150u8 {
+        println!(\"from\");
+    }
+}
+",
+        "-5 negative\n0 zero\n3 small\n10 medium\n15 medium\n20 medium\n21 large\n0 low\n99 low\n100 mid\n200 mid\n201 high\ntrue true false\nupto\nfrom\n",
+    );
+}
+
+#[test]
+fn boxed_closures_are_called_through_the_box() {
+    // The callee operand autoderefs through `Box` like it does through
+    // references (`b(2)`, `foo()()`, `(*f)(2)`).
+    prints(
+        "boxed-closure-calls",
+        "fn foo() -> Box<dyn FnMut() -> isize + 'static> {
+    let r = || 22;
+    Box::new(r)
+}
+fn make(k: i32) -> Box<dyn Fn(i32) -> i32> {
+    Box::new(move |x| x + k)
+}
+fn main() {
+    let b: Box<dyn Fn(i32) -> i32> = Box::new(|x| x + 1);
+    println!(\"{}\", b(2));
+    println!(\"{}\", foo()());
+    let mut n = 0;
+    let mut c: Box<dyn FnMut()> = Box::new(|| n += 1);
+    c();
+    c();
+    drop(c);
+    println!(\"{}\", n);
+    let f = make(10);
+    println!(\"{} {}\", f(1), (*f)(2));
+}
+",
+        "3\n22\n2\n11 12\n",
+    );
+}
+
+#[test]
+fn closures_move_their_by_value_captures_out_when_called_once() {
+    // A closure body consuming a captured variable moves it out of the
+    // closure's own field (an `FnOnce` closure); the closure's remaining
+    // captures drop with the closure value.
+    prints(
+        "closure-capture-move-out",
+        "struct D(i32);
+impl Drop for D {
+    fn drop(&mut self) {
+        println!(\"drop {}\", self.0);
+    }
+}
+fn apply(f: impl FnOnce() -> String) -> String {
+    f()
+}
+fn main() {
+    let s = String::from(\"a\");
+    let f = move || s;
+    println!(\"{}\", f());
+    let t = String::from(\"bc\");
+    let g = || drop(t);
+    g();
+    println!(\"{}\", apply(move || String::from(\"z\")));
+    let u = String::from(\"u\");
+    println!(\"{}\", apply(move || u));
+    let d = D(1);
+    let e = D(2);
+    let h = move || {
+        let x = d;
+        println!(\"in {}\", x.0);
+    };
+    let k = move || println!(\"k {}\", e.0);
+    h();
+    k();
+    println!(\"end\");
+}
+",
+        "a\nz\nu\nin 1\ndrop 1\nk 2\nend\ndrop 2\n",
+    );
+}
+
+#[test]
+fn shorthand_projection_retains_the_declaring_bounds_type_arguments() {
+    // The common Type service must select Convert<u8>, not Convert<bool>,
+    // through a where-clause or an inline bound in every source context.
+    // This is a route control; unchanged stock projection tests remain the
+    // primary language witnesses, including sized/coinductive-2.rs.
+    prints(
+        "projection-bound-arguments",
+        r#"
+trait Marker {}
+trait Other<T> {}
+trait Convert<T> { type Error; }
+struct Target;
+impl Marker for Target {}
+impl Other<u16> for Target {}
+impl Convert<u8> for Target { type Error = u16; }
+impl Convert<bool> for Target { type Error = u32; }
+fn projected<U>(value: U::Error) -> U::Error
+where U: Other<U::Error> + Marker + Convert<u8> { value }
+fn inline<U: Marker + Convert<bool>>(value: U::Error) -> U::Error { value }
+fn open<T, U>(value: U::Error) -> U::Error where U: Convert<T> { value }
+struct Holder<U>(U);
+impl<U> Holder<U> where U: Marker + Convert<u8> {
+    fn inherited(&self, value: U::Error) -> U::Error { value }
+}
+macro_rules! declare {
+    () => {
+        fn generated<U>(value: U::Error) -> U::Error
+        where U: Other<U::Error> + Marker + Convert<u8> { value }
+    }
+}
+declare!();
+macro_rules! call { ($value:expr) => { projected::<Target>($value) }; }
+macro_rules! wrapper { ($value:expr) => { call!($value) }; }
+fn main() {
+    println!("{}", projected::<Target>(65535));
+    println!("{}", inline::<Target>(65536));
+    println!("{}", generated::<Target>(65534));
+    println!("{}", call!(65533));
+    println!("{}", wrapper!(65532));
+    assert_eq!(wrapper!(65531), 65531u16);
+    let holder = Holder(Target);
+    println!("{}", holder.inherited(65530));
+    println!("{}", open::<u8, Target>(65529));
+    println!("{}", open::<bool, Target>(65537));
+}
+"#,
+        "65535\n65536\n65534\n65533\n65532\n65530\n65529\n65537\n",
+    );
+}

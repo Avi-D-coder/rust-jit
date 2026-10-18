@@ -175,7 +175,10 @@ pub(super) fn associated(
             item.generic_param_list()
                 .map(|n| range(n.syntax().text_range())),
             item.where_clause().map(|n| range(n.syntax().text_range())),
-            item.body().map(|n| range(n.syntax().text_range())),
+            // The body handle's range: the block, or for a pattern function
+            // (E-R5-010) its parameter list through the block.
+            item.body()
+                .map(|n| crate::syntax::fn_parameters::body_range(n.syntax())),
         ),
         ast::AssocItem::Const(item) => (
             AssociatedDeclarationKind::Const,

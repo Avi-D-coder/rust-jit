@@ -66,6 +66,48 @@ pub struct SourceDeclarative {
     // Immutable token forest of this provider's shared source, tokenized once
     // and shared by snapshots of the same source.
     owned_forest: std::sync::Arc<std::sync::OnceLock<std::sync::Arc<TokenForest>>>,
+    // The last original-source route catalogue and the exact inputs it was
+    // computed from (see `original_routes`). Derived data only.
+    original_routes: std::sync::Mutex<Option<OriginalRoutes>>,
+}
+/// A memoized original-source route catalogue of one provider.
+struct OriginalRoutes {
+    key: OriginalRoutesKey,
+    routes: std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>,
+}
+/// Everything the original-source route catalogue reads. The catalogue is a
+/// pure function of the provider's source (never replaced), its macro index
+/// state, the index state of the parents it resolves through, and the shared
+/// handles below. Handles compare by identity and the key keeps them alive, so
+/// an address cannot be reused while the entry exists; index states compare by
+/// their process-unique stamps, which every index mutation replaces.
+struct OriginalRoutesKey {
+    index: u64,
+    parents: Vec<(usize, Digest, u64)>,
+    dependencies: std::sync::Arc<std::collections::BTreeMap<crate::expand::scopes::MacroName, Digest>>,
+    compiler: Option<std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>>,
+    procedural: Option<std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>>,
+    role: Option<std::sync::Arc<crate::db::memo::macro_export_inputs::MacroExportSourceObservation>>,
+    preparation:
+        Option<std::sync::Arc<compiler_attribute_preparation::CompilerAttributePreparation>>,
+}
+impl OriginalRoutesKey {
+    fn same(&self, other: &Self) -> bool {
+        fn handle<T>(a: &Option<std::sync::Arc<T>>, b: &Option<std::sync::Arc<T>>) -> bool {
+            match (a, b) {
+                (None, None) => true,
+                (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+                _ => false,
+            }
+        }
+        self.index == other.index
+            && self.parents == other.parents
+            && std::sync::Arc::ptr_eq(&self.dependencies, &other.dependencies)
+            && handle(&self.compiler, &other.compiler)
+            && handle(&self.procedural, &other.procedural)
+            && handle(&self.role, &other.role)
+            && handle(&self.preparation, &other.preparation)
+    }
 }
 #[derive(Clone, Copy)]
 pub(crate) struct CapturedMacroContext<'a> {
@@ -596,11 +638,6 @@ pub(crate) fn edition(n: u16) -> Result<wire::Edition, Diagnostic> {
     }
 }
 pub(crate) fn group(forest: &TokenForest, range: SourceRange) -> Result<TokenForest, Diagnostic> {
-    let spans = forest
-        .spans()
-        .iter()
-        .map(|s| (s.key(), s))
-        .collect::<std::collections::BTreeMap<_, _>>();
     let mut stack = forest.roots().iter().collect::<Vec<_>>();
     while let Some(token) = stack.pop() {
         if let TokenTree::Group {
@@ -610,19 +647,15 @@ pub(crate) fn group(forest: &TokenForest, range: SourceRange) -> Result<TokenFor
             ..
         } = token
         {
-            let first = spans.get(open).ok_or_else(|| {
+            let first = forest.span_by_key(open).ok_or_else(|| {
                 fault("LRR-E-EXPANSION-INPUT", "macro group opening origin absent")
             })?;
-            let last = spans.get(close).ok_or_else(|| {
+            let last = forest.span_by_key(close).ok_or_else(|| {
                 fault("LRR-E-EXPANSION-INPUT", "macro group closing origin absent")
             })?;
             if first.start == range.start && last.end == range.end {
-                return TokenForest::new(
-                    vec![token.clone()],
-                    forest.contexts().to_vec(),
-                    forest.spans().to_vec(),
-                )
-                .map_err(adapter);
+                // The same complete source tables with this group as the root.
+                return forest.with_roots(vec![token.clone()]).map_err(adapter);
             }
             stack.extend(children);
         }
@@ -636,11 +669,6 @@ pub(crate) fn tokens_for_source_range(
     forest: &TokenForest,
     selected: SourceRange,
 ) -> Result<TokenForest, Diagnostic> {
-    let spans = forest
-        .spans()
-        .iter()
-        .map(|span| (span.key(), span))
-        .collect::<std::collections::BTreeMap<_, _>>();
     let mut stack = forest.roots().iter().rev().collect::<Vec<_>>();
     let mut roots = Vec::new();
     while let Some(token) = stack.pop() {
@@ -650,13 +678,13 @@ pub(crate) fn tokens_for_source_range(
             | TokenTree::Literal { span, .. }
             | TokenTree::Punct { span, .. } => (*span, *span),
         };
-        let first = spans.get(&first).ok_or_else(|| {
+        let first = forest.span_by_key(&first).ok_or_else(|| {
             fault(
                 "LRR-E-EXPANSION-INPUT",
                 "argument token opening source absent",
             )
         })?;
-        let last = spans.get(&last).ok_or_else(|| {
+        let last = forest.span_by_key(&last).ok_or_else(|| {
             fault(
                 "LRR-E-EXPANSION-INPUT",
                 "argument token closing source absent",
@@ -708,17 +736,14 @@ pub(crate) fn tokens_for_source_range(
             .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "argument closing token absent"))?,
     )
     .1;
-    TokenForest::new(
-        vec![TokenTree::Group {
+    forest
+        .with_roots(vec![TokenTree::Group {
             delimiter: wire::Delimiter::Invisible,
             open,
             close,
             children: roots,
-        }],
-        forest.contexts().to_vec(),
-        forest.spans().to_vec(),
-    )
-    .map_err(adapter)
+        }])
+        .map_err(adapter)
 }
 
 /// Resolve a generated call path. A leading `$crate` names the defining crate
@@ -882,6 +907,7 @@ impl SourceDeclarative {
             derive_prefixes: std::collections::BTreeMap::new(),
             source_modules: std::collections::BTreeMap::new(),
             owned_forest: Default::default(),
+            original_routes: Default::default(),
         })
     }
     pub(crate) fn configure_captured_modules(providers: &mut [Self]) -> Result<(), Diagnostic> {
@@ -1306,6 +1332,7 @@ impl SourceDeclarative {
             source_modules: self.source_modules.clone(),
             generated: self.generated.clone(),
             owned_forest: self.owned_forest.clone(),
+            original_routes: Default::default(),
         }))
     }
     pub(crate) fn bind_macro_export_source(
@@ -3481,24 +3508,78 @@ impl SourceDeclarative {
         }
         Ok((dependencies, available))
     }
-    fn routes_using(
+    /// The route catalogue of this provider's own source. It is recomputed only
+    /// when one of the inputs in `OriginalRoutesKey` changed: every nested
+    /// expansion would otherwise rebuild the catalogue of every provider.
+    /// `LRR_VERIFY_ROUTE_CACHE` recomputes on each hit and faults on a stale one.
+    fn original_routes(
         &self,
-        context: CapturedMacroContext<'_>,
-    ) -> Result<
-        Vec<std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>>,
-        Diagnostic,
-    > {
-        context.require_provider(self)?;
-        let owners = context.owners;
-        let inherited = context.inherited;
-        let mut routes = Vec::new();
-        routes
-            .try_reserve_exact(
-                self.catalogs.len().checked_add(1).ok_or_else(|| {
-                    fault("LRR-E-METADATA-LIMIT", "route catalogue count overflow")
-                })?,
-            )
-            .map_err(|_| fault("LRR-E-METADATA-LIMIT", "route catalogue allocation failed"))?;
+        owners: &[Self],
+        inherited: Option<&InheritedMacroContext<'_>>,
+    ) -> Result<std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>, Diagnostic>
+    {
+        if inherited.is_some() {
+            return Ok(std::sync::Arc::new(
+                self.compute_original_routes(owners, inherited)?,
+            ));
+        }
+        let mut parents = Vec::new();
+        parents
+            .try_reserve_exact(self.parents.len())
+            .map_err(|_| fault("LRR-E-METADATA-LIMIT", "route parent allocation failed"))?;
+        for (ordinal, input) in &self.parents {
+            let parent = owners.get(*ordinal).ok_or_else(|| {
+                fault(
+                    "LRR-E-MACRO-SCOPE",
+                    "captured module parent catalogue absent",
+                )
+            })?;
+            parents.push((*ordinal, *input, parent.index.stamp()));
+        }
+        let key = OriginalRoutesKey {
+            index: self.index.stamp(),
+            parents,
+            dependencies: self.dependencies.clone(),
+            compiler: self.compiler.clone(),
+            procedural: self.procedural.clone(),
+            role: self.macro_export_role.clone(),
+            preparation: self.compiler_attribute_preparation.clone(),
+        };
+        let cached = self
+            .original_routes
+            .lock()
+            .map_err(|_| fault("LRR-E-INTERNAL", "original route cache poisoned"))?
+            .as_ref()
+            .filter(|entry| entry.key.same(&key))
+            .map(|entry| entry.routes.clone());
+        if let Some(routes) = cached {
+            static VERIFY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            if *VERIFY.get_or_init(|| std::env::var_os("LRR_VERIFY_ROUTE_CACHE").is_some())
+                && !routes.same_routes(&self.compute_original_routes(owners, None)?)
+            {
+                return Err(fault(
+                    "LRR-E-INTERNAL",
+                    "original route cache differs from a fresh computation",
+                ));
+            }
+            return Ok(routes);
+        }
+        let routes = std::sync::Arc::new(self.compute_original_routes(owners, None)?);
+        *self
+            .original_routes
+            .lock()
+            .map_err(|_| fault("LRR-E-INTERNAL", "original route cache poisoned"))? =
+            Some(OriginalRoutes {
+                key,
+                routes: routes.clone(),
+            });
+        Ok(routes)
+    }
+    fn compute_original_routes(
+        &self,
+        owners: &[Self],
+        inherited: Option<&InheritedMacroContext<'_>>,
+    ) -> Result<crate::frontend::source_macro_routes::SourceMacroRoutes, Diagnostic> {
         let policy = self.source_prelude_policy()?;
         let (dependencies, available) = self.route_dependency_sets_for_standard(policy.standard)?;
         let disabled = policy
@@ -3539,7 +3620,27 @@ impl SourceDeclarative {
             )?;
         original.export_pending = self.index.pending_producers().collect();
         original.include_restored_original_macros(self.source.outline(), &self.index)?;
-        routes.push(std::sync::Arc::new(original));
+        Ok(original)
+    }
+    fn routes_using(
+        &self,
+        context: CapturedMacroContext<'_>,
+    ) -> Result<
+        Vec<std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>>,
+        Diagnostic,
+    > {
+        context.require_provider(self)?;
+        let owners = context.owners;
+        let inherited = context.inherited;
+        let mut routes = Vec::new();
+        routes
+            .try_reserve_exact(
+                self.catalogs.len().checked_add(1).ok_or_else(|| {
+                    fault("LRR-E-METADATA-LIMIT", "route catalogue count overflow")
+                })?,
+            )
+            .map_err(|_| fault("LRR-E-METADATA-LIMIT", "route catalogue allocation failed"))?;
+        routes.push(self.original_routes(owners, inherited)?);
         let mut bytes = routes[0].metadata_bytes()?;
         for (invocation, catalog) in &self.catalogs {
             let (provider, before) =

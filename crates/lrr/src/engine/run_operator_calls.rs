@@ -142,9 +142,22 @@ impl RunMachine {
         // the boundary in their monomorphic views.
         let arguments: Vec<_> = formed
             .iter()
-            .map(|argument| ArgumentType {
-                source: self.frame.bound_view(&argument.source, &self.store),
-                descriptor: argument.descriptor,
+            .map(|argument| {
+                let view = self.frame.bound_view(&argument.source, &self.store);
+                // A view naming a declared `dyn Trait` position crosses the
+                // boundary as the value's concrete runtime Type.
+                let source = if view.contains_dyn() {
+                    self.store
+                        .descriptor_source_term(argument.descriptor)
+                        .filter(|term| !term.contains_dyn())
+                        .unwrap_or(view)
+                } else {
+                    view
+                };
+                ArgumentType {
+                    source,
+                    descriptor: argument.descriptor,
+                }
             })
             .collect();
         // Only closed reference parameters consume their actual evidence.

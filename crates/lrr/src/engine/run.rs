@@ -55,6 +55,8 @@ mod constructors;
 mod discarded_numeric_tests;
 #[path = "run_facade.rs"]
 mod facade;
+#[path = "run_layout.rs"]
+mod layout_facts;
 #[path = "run_nominal.rs"]
 mod nominal;
 #[path = "run_drop_inventory.rs"]
@@ -72,6 +74,8 @@ mod operator_calls;
 mod format_calls;
 #[path = "run_initializers.rs"]
 mod initializers;
+#[path = "run_enum_discriminants.rs"]
+mod enum_discriminants;
 #[path = "run_owner_arguments.rs"]
 mod owner_arguments;
 #[path = "run_trait_calls.rs"]
@@ -710,7 +714,7 @@ impl RunMachine {
         }
     }
     fn select_argument_call(
-        &self,
+        &mut self,
         db: &mut Database,
         name: &str,
         syntax: &[String],
@@ -862,6 +866,16 @@ impl RunMachine {
         if !name.starts_with('.') {
             match self.requires_lexical_callee_context(db, name) {
                 QueryPoll::Ready(Ok(true)) => {
+                    // `Root::function` where a block item or import binds
+                    // `Root` to a type: its associated function.
+                    match self.select_lexical_associated_call(db, name, syntax, arguments) {
+                        QueryPoll::Ready(Ok(Some(selected))) => {
+                            return QueryPoll::Ready(Ok(selected));
+                        }
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
                     return QueryPoll::Ready(Err(Diagnostic::new(
                         "LRR-E-CALL-CONTEXT",
                         "lexical callee requires exact entered source context".into(),
@@ -882,7 +896,7 @@ impl RunMachine {
         }
     }
     fn prepare_selected_argument_call(
-        &self,
+        &mut self,
         db: &mut Database,
         callee: Arc<SourceCallable>,
         syntax: &[String],
@@ -894,7 +908,7 @@ impl RunMachine {
     /// by other means (`extra`: the owner segment's arguments bound to the
     /// callee's impl parameters).
     fn prepare_selected_argument_call_with(
-        &self,
+        &mut self,
         db: &mut Database,
         callee: Arc<SourceCallable>,
         syntax: &[String],
@@ -944,41 +958,68 @@ impl RunMachine {
                     Ok(n) => n,
                     Err(e) => return QueryPoll::Ready(Err(e)),
                 };
-            for (text, parameter) in syntax.iter().zip(parameters) {
-                let term = match names.unqualified(text, None) {
-                    Ok(SignatureName::Primitive(p)) => crate::traits::term::TyTerm::Primitive(p),
-                    Ok(SignatureName::Parameter(key)) => crate::traits::term::TyTerm::Param(key),
-                    Ok(SignatureName::Source(found)) => {
-                        match normalizer.normalize(db, found.identity) {
-                            QueryPoll::Ready(Ok(
-                                crate::frontend::type_aliases::AliasTarget::Type(term),
-                            )) => term,
-                            QueryPoll::Ready(Ok(_)) => {
-                                return QueryPoll::Ready(Err(call_fault(
-                                    "explicit alias needs further type integration",
-                                )));
-                            }
-                            QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
-                            QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+            // A written compound or nominal Type argument (`Option<u8>`,
+            // `[u8; 4]`, `Foo`) is selected in the caller's declaration
+            // context by the same written-Type service a `let` annotation
+            // uses, then interned.
+            macro_rules! written_argument {
+                ($text:expr) => {{
+                    let tokens = [crate::syntax::ast_adapter::TokenRecipe {
+                        kind: 0,
+                        text: $text.clone(),
+                    }];
+                    let term = match crate::frontend::source_types::resolve_written_type(
+                        db,
+                        graph,
+                        &sources,
+                        caller_signature,
+                        &tokens,
+                    ) {
+                        QueryPoll::Ready(Ok(Some(term))) => term,
+                        QueryPoll::Ready(Ok(None)) => {
+                            return QueryPoll::Ready(Err(call_fault(
+                                "explicit type needs further source-view integration",
+                            )));
                         }
-                    }
-                    Ok(_) => {
-                        return QueryPoll::Ready(Err(call_fault(
-                            "explicit type needs further source-view integration",
-                        )));
-                    }
-                    Err(e) => return QueryPoll::Ready(Err(e)),
-                };
-                let descriptor = match &term {
-                    crate::traits::term::TyTerm::Primitive(p) => {
-                        match crate::frontend::call_contracts::primitive_runtime_id(*p) {
-                            Ok(ty) => ty,
+                        QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+                        QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+                    };
+                    let written = match crate::frontend::written_terms::closed_written_type(
+                        db, &sources, &term,
+                    ) {
+                        QueryPoll::Ready(Ok(Some(written))) => written,
+                        QueryPoll::Ready(Ok(None)) => {
+                            return QueryPoll::Ready(Err(call_fault(
+                                "explicit structural type requires layout integration",
+                            )));
+                        }
+                        QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+                        QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+                    };
+                    let descriptor = match written.materialize_in(&mut self.store, &[]) {
+                        Ok(Some(descriptor)) => descriptor,
+                        Ok(None) => {
+                            return QueryPoll::Ready(Err(call_fault(
+                                "explicit Type argument names no single runtime Type",
+                            )));
+                        }
+                        Err(e) => return QueryPoll::Ready(Err(e)),
+                    };
+                    (term, descriptor)
+                }};
+            }
+            for (text, parameter) in syntax.iter().zip(parameters) {
+                let (term, descriptor) = match names.unqualified(text, None) {
+                    Ok(SignatureName::Primitive(p)) => {
+                        let term = crate::traits::term::TyTerm::Primitive(p);
+                        match crate::frontend::call_contracts::primitive_runtime_id(p) {
+                            Ok(ty) => (term, ty),
                             Err(e) => return QueryPoll::Ready(Err(e)),
                         }
                     }
-                    crate::traits::term::TyTerm::Param(key) => {
-                        match self.frame.parameter_hint(*key) {
-                            Ok(Some(ty)) => ty,
+                    Ok(SignatureName::Parameter(key)) => {
+                        match self.frame.parameter_hint(key) {
+                            Ok(Some(ty)) => (crate::traits::term::TyTerm::Param(key), ty),
                             Ok(None) => {
                                 return QueryPoll::Ready(Err(Diagnostic::new(
                                     "LRR-E-TYPE-CONTEXT",
@@ -989,11 +1030,29 @@ impl RunMachine {
                             Err(e) => return QueryPoll::Ready(Err(e)),
                         }
                     }
-                    _ => {
-                        return QueryPoll::Ready(Err(call_fault(
-                            "explicit structural type requires layout integration",
-                        )));
+                    Ok(SignatureName::Source(found)) => {
+                        match normalizer.normalize(db, found.identity) {
+                            QueryPoll::Ready(Ok(
+                                crate::frontend::type_aliases::AliasTarget::Type(
+                                    term @ crate::traits::term::TyTerm::Primitive(_),
+                                ),
+                            )) => {
+                                let crate::traits::term::TyTerm::Primitive(p) = &term else {
+                                    unreachable!("matched a primitive alias target");
+                                };
+                                match crate::frontend::call_contracts::primitive_runtime_id(*p) {
+                                    Ok(ty) => (term, ty),
+                                    Err(e) => return QueryPoll::Ready(Err(e)),
+                                }
+                            }
+                            // A nominal, or an alias of a structure.
+                            QueryPoll::Ready(Ok(_)) => written_argument!(text),
+                            QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+                            QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+                        }
                     }
+                    // Text that is not a single name: the written-Type service.
+                    Ok(_) | Err(_) => written_argument!(text),
                 };
                 explicit.push((
                     parameter.ordinal,
@@ -1263,7 +1322,7 @@ impl RunMachine {
         fn reference_free(term: &crate::traits::term::TyTerm, nested: bool) -> bool {
             use crate::traits::term::{GenericArg, TyTerm};
             match term {
-                TyTerm::Primitive(_) | TyTerm::Str => true,
+                TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Dyn(_) => true,
                 TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
                     GenericArg::Type(ty) => reference_free(ty, true),
                     _ => true,
@@ -1798,7 +1857,7 @@ impl RunMachine {
             .filter(|proof| proof.has_result())
         {
             proof.validate_packet(call.callee.signature(), &call.contracts)?;
-            return call.contracts.check_return_descriptor(actual);
+            return call.contracts.check_return_descriptor_in(actual, Some(&self.store));
         }
         // An opaque/trait-object result accepts the returned concrete value.
         if call
@@ -1838,6 +1897,10 @@ impl RunMachine {
                 });
             if found.as_ref().map(crate::frontend::signature_subst::erase_regions)
                 != Some(crate::frontend::signature_subst::erase_regions(expected))
+                && !found.as_ref().is_some_and(|found| {
+                    crate::frontend::signature_subst::erase_regions(expected)
+                        .admits_dyn(&crate::frontend::signature_subst::erase_regions(found))
+                })
                 && !function_item
                 && !found.as_ref().is_some_and(|found| {
                     crate::traits::pointer_terms::same_pointer_family(found, expected)
@@ -1851,7 +1914,7 @@ impl RunMachine {
             return Ok(());
         }
         if call.contracts.result_descriptor.is_some() {
-            call.contracts.check_return_descriptor(actual)?;
+            call.contracts.check_return_descriptor_in(actual, Some(&self.store))?;
             if let (Some(expected @ crate::traits::term::TyTerm::Primitive(_)), Some(found)) = (
                 call.contracts.source_result.as_ref(),
                 self.frame.return_source.as_ref(),
@@ -2747,6 +2810,17 @@ impl RunMachine {
                 }
                 QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
             }
+            // An `as` cast of an enum value whose discriminant is an
+            // unevaluated expression demands that anonymous constant first
+            // (E-R5-013).
+            match self.prepare_enum_discriminants(db, id) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+                QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
+            }
             // A `ValuePath` naming a constant or static whose value is not
             // yet evaluated enters its initializer first.
             if self.initializer_demand.is_some() {
@@ -3114,6 +3188,18 @@ impl RunMachine {
                                 return RunPoll::Fault(error);
                             }
                         };
+                        // A reference parameter beside an open pointee (`&mut H`)
+                        // has no descriptor hint, but its argument is still a
+                        // reference coercion site (implicit reborrow).
+                        for (ordinal, slot) in arguments.iter().enumerate() {
+                            let expectation = selected.hints.get(ordinal).and_then(|hint| {
+                                match &hint.source {
+                                    crate::traits::term::TyTerm::Ref(_, mutable, _) => Some(*mutable),
+                                    _ => None,
+                                }
+                            });
+                            self.frame.expect_reference(*slot, expectation);
+                        }
                         self.frame.call_start = Some(crate::vm::call::CallStartFacts {
                             ordinary,
                             site: site.0,
@@ -3227,6 +3313,18 @@ impl RunMachine {
                         }
                         match self.select_facade_call(db, site.0, &name) {
                             QueryPoll::Ready(Ok(true)) => {
+                                // The declarations a layout intrinsic's type
+                                // needs (E-R5-009), before its arguments seal.
+                                match self.prepare_facade_layout(db, site.0, &arguments) {
+                                    QueryPoll::Ready(Ok(())) => {}
+                                    QueryPoll::Ready(Err(error)) => {
+                                        self.terminal = true;
+                                        return RunPoll::Fault(error);
+                                    }
+                                    QueryPoll::NeedInput(input) => {
+                                        return RunPoll::NeedInput(input);
+                                    }
+                                }
                                 if let Err(error) = self.seal_facade_call(site.0, &arguments) {
                                     self.terminal = true;
                                     return RunPoll::Fault(error);
@@ -3382,10 +3480,11 @@ impl RunMachine {
                                             "call argument requires a reached concrete type".into(),
                                         )
                                     })?;
-                                let view = match self.frame.source_view(slot)? {
-                                    Some(view) => Some(view),
-                                    None => self.store.descriptor_source_term(descriptor),
-                                };
+                                let view = self.frame.argument_source_view(
+                                    slot,
+                                    descriptor,
+                                    &self.store,
+                                )?;
                                 // The caller's own generic parameters are
                                 // its runtime instantiation at the boundary:
                                 // a callee contract never sees them rigid.

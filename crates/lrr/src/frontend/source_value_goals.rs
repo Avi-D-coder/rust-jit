@@ -821,11 +821,24 @@ fn qualified(
 ) -> QueryPoll<EnteredValueGoal> {
     let plan = Arc::clone(&goal.plan);
     let source = plan.context().source();
-    let Some(spelled) = checked!(
+    // A call's callee path leaves its final segment's explicit type
+    // arguments to the call.
+    let is_callee = expression
+        .syntax()
+        .parent()
+        .and_then(ast::CallExpr::cast)
+        .and_then(|call| call.expr())
+        .is_some_and(|callee| callee.syntax() == expression.syntax());
+    let spelling = if is_callee {
+        source
+            .parsed()
+            .written_callee_spelling(expression, source.index().cfg())
+    } else {
         source
             .parsed()
             .written_value_spelling(expression, source.index().cfg())
-    ) else {
+    };
+    let Some(spelled) = checked!(spelling) else {
         return goal.needs(ValueGoalDemand::PathAdjustment);
     };
     goal.qualified = true;
@@ -982,12 +995,18 @@ fn declaration(
         let InputValue::LocalDeclarationOwner(owner) = owner.as_ref() else {
             return QueryPoll::Ready(Err(error("Value goal declaration owner variant differs")));
         };
-        if owner != goal.plan.context().source().index().body() {
-            return goal.needs(ValueGoalDemand::DeclarationOwner(id));
+        // The declaring body is this body or one of its enclosing bodies (a
+        // nested `fn` or an impl member sees the block items of its parents).
+        let mut declaring = goal.plan.context();
+        let mut enclosing = declaring.source().local_parent();
+        while declaring.source().index().body() != owner {
+            let Some(parent) = enclosing else {
+                return goal.needs(ValueGoalDemand::DeclarationOwner(id));
+            };
+            declaring = parent.context();
+            enclosing = declaring.source().local_parent();
         }
-        let Some(row) = goal
-            .plan
-            .context()
+        let Some(row) = declaring
             .facts()
             .items
             .iter()

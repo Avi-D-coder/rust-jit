@@ -269,7 +269,7 @@ fn mentions_hole(term: &TyTerm) -> bool {
 
 impl<'a> Component<'a> {
     /// A trait of the core library facade, through the run's own name graph.
-    fn core_trait(
+    pub(super) fn core_trait(
         &mut self,
         db: &mut Database,
         module: &str,
@@ -396,6 +396,78 @@ impl<'a> Component<'a> {
             item if !paths.is_empty() => ItemAnswer::Structured { item, paths },
             _ => ItemAnswer::Unknown,
         }))
+    }
+    /// The static Type of the index expression `node` (`base[index]`) when
+    /// its base (through references) is a nominal with its own `Index<Idx>`
+    /// impl: `<Base as Index<Idx>>::Output`, `Idx` being the operand's static
+    /// Type. `None` for a builtin array/slice/`Vec` base or when the
+    /// selection is not stated (several impls the operand does not select).
+    pub(super) fn user_index_output(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+    ) -> QueryPoll<Option<TyTerm>> {
+        use crate::traits::term::GenericArg;
+        let fact = match self.fact(node) {
+            Ok(fact) => fact,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let (Some(base), Some(operand)) = (fact.operand(0), fact.operand(1)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(mut base_ty) = ready!(self.expression_type(db, base)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        while let TyTerm::Ref(_, _, inner) = base_ty {
+            base_ty = *inner;
+        }
+        if !matches!(base_ty, TyTerm::Nominal(..))
+            || ready!(self.vec_elements(db, &base_ty)).is_some()
+        {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let Some(index_ty) = ready!(self.expression_type(db, operand)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(trait_key) = ready!(self.core_trait(db, "ops", "Index")) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(environment) = ready!(self.environment(db)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let projection = TyTerm::Projection(Box::new(ProjectionKey {
+            trait_ref: TraitRef {
+                trait_key,
+                self_ty: base_ty,
+                args: vec![GenericArg::Type(index_ty)],
+            },
+            item: crate::frontend::member_index::associated_name_key("Output"),
+            item_args: Vec::new(),
+        }));
+        let sources: Vec<_> = environment.sources().iter().collect();
+        match crate::frontend::associated_types::normalize(
+            db,
+            environment.names(),
+            &sources,
+            &members,
+            &projection,
+        ) {
+            QueryPoll::Ready(Ok(Some(output))) if !matches!(output, TyTerm::Projection(_)) => {
+                QueryPoll::Ready(Ok(Some(output)))
+            }
+            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error))
+                if super::not_closed(&error) || error.code == "LRR-E-NAME-AMBIGUOUS" =>
+            {
+                QueryPoll::Ready(Ok(None))
+            }
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
     }
     /// The current member (`node`) holds `<T as IntoIterator>::Item` of its
     /// own static Type `T`, projected by the rest of the steps.

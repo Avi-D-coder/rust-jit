@@ -10,7 +10,11 @@ use super::*;
 
 impl GuestStore {
     /// The cell a reference to one sized location designates.
-    fn reference_cell(&self, reference: ValueRepr, mutable: bool) -> Result<CellId, Diagnostic> {
+    pub(super) fn reference_cell(
+        &self,
+        reference: ValueRepr,
+        mutable: bool,
+    ) -> Result<CellId, Diagnostic> {
         if reference.kind != 9 {
             return Err(invalid());
         }
@@ -141,7 +145,10 @@ impl GuestStore {
         let cell = self.new_cell(
             StorageContract::Exact(ty),
             false,
-            CellOwner::FrameSlot { frame: anchor, slot },
+            CellOwner::FrameSlot {
+                frame: anchor,
+                slot,
+            },
         )?;
         self.initialize(cell, ticket)?;
         Ok(cell)

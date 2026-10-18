@@ -28,6 +28,8 @@ pub mod attributes;
 
 pub mod body_index;
 
+pub(crate) mod fn_parameters;
+
 mod thunks;
 pub use thunks::pattern_plan;
 pub use thunks::pattern_tree;

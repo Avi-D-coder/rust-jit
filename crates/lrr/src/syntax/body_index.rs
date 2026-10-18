@@ -124,6 +124,10 @@ pub enum ScopeKind {
     /// A closure's parameters and body. Only the closure's own call frame
     /// enters it; the creating frame never does.
     Closure,
+    /// The root scope of a function with pattern parameters (E-R5-010): the
+    /// parameter bindings and their staged arguments live here, enclosing the
+    /// body block's scope, so they drop after the body's locals.
+    Parameters,
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StructuralNode {
@@ -170,6 +174,18 @@ pub struct StructuralNode {
     /// `$e:expr` fragment expands to): a transparent wrapper whose operand
     /// is the grouped expression.
     pub parenthesized: bool,
+}
+/// A closure parameter that is not a plain binding (`|&x|`, `|(a, b)|`,
+/// `|ref x|`, `|x @ ..|`): the closure's parameters run the shared pattern
+/// transaction against the call arguments.
+pub(crate) fn closure_pattern_parameter(parameter: &ast::Param) -> bool {
+    !matches!(parameter.pat(), Some(ast::Pat::IdentPat(pattern))
+        if pattern.ref_token().is_none() && pattern.at_token().is_none())
+}
+pub(crate) fn closure_runs_patterns(closure: &ast::ClosureExpr) -> bool {
+    closure
+        .param_list()
+        .is_some_and(|list| list.params().any(|parameter| closure_pattern_parameter(&parameter)))
 }
 /// `let` forms that need the shared pattern transaction. A plain identifier
 /// or wildcard declaration binds directly; every other pattern is matched.
@@ -311,6 +327,14 @@ impl BodyIndex {
             relative_end: node.range.end,
         })
     }
+    /// The parameter list owning a pattern function's parameter patterns
+    /// (E-R5-010), when this body is one.
+    pub(crate) fn parameter_owner(&self) -> Option<NodeId> {
+        self.scopes
+            .first()
+            .filter(|scope| scope.kind == ScopeKind::Parameters)
+            .map(|scope| scope.node)
+    }
     pub(crate) fn initializer_return_pc(&self) -> Result<Option<PcKey>, Diagnostic> {
         if self
             .scopes
@@ -430,6 +454,7 @@ impl StableEncode for BodyIndex {
                 ScopeKind::MatchGuard => 8,
                 ScopeKind::Initializer => 9,
                 ScopeKind::Closure => 10,
+                ScopeKind::Parameters => 11,
             });
             e.u32(s.range.start);
             e.u32(s.range.end);
@@ -511,6 +536,17 @@ fn expression_kind(expr: &ast::Expr) -> ExpressionKind {
         _ => ExpressionKind::Other,
     }
 }
+/// The declaration a non-block body root is the initializer of: a `const` or
+/// `static` item, or the `= expr` of an enum variant, an anonymous constant of
+/// the enum's representation type (E-R5-013).
+pub(crate) fn is_initializer_owner(owner: &SyntaxNode) -> bool {
+    ast::Const::can_cast(owner.kind())
+        || ast::Static::can_cast(owner.kind())
+        || (ast::ConstArg::can_cast(owner.kind())
+            && owner
+                .parent()
+                .is_some_and(|variant| ast::Variant::can_cast(variant.kind())))
+}
 impl ParsedFile {
     /// Reuse the exact pinned AST body boundary for function blocks and captured
     /// constant/static initializer expressions. This does not evaluate constants.
@@ -530,17 +566,18 @@ impl ParsedFile {
         let root = covered
             .ancestors()
             .find(|node| range(node.text_range()) == body.range && ast::Expr::can_cast(node.kind()))
+            // A function with a pattern parameter spans its parameter list
+            // through its block (E-R5-010): the root is the block.
+            .or_else(|| super::fn_parameters::pattern_function_block(&covered, body.range))
             .ok_or_else(|| fault("body expression syntax boundary absent"))?;
-        if range(root.text_range()) != body.range
+        if super::fn_parameters::body_range(&root) != body.range
             || !ast::Expr::can_cast(root.kind())
-            || self.body_content_identity(&root)? != body.body_hash
+            || self.fn_body_identity(&root)? != body.body_hash
         {
             return Err(fault("body source range/content mismatch"));
         }
         if !ast::BlockExpr::can_cast(root.kind())
-            && !root.parent().is_some_and(|parent| {
-                ast::Const::can_cast(parent.kind()) || ast::Static::can_cast(parent.kind())
-            })
+            && !root.parent().is_some_and(|parent| is_initializer_owner(&parent))
         {
             return Err(fault("non-block body is not a constant/static initializer"));
         }
@@ -627,13 +664,51 @@ impl ParsedFile {
             scope: Option<ScopeId>,
             target: Option<LabelId>,
         }
-        let mut stack = vec![Frame {
+        // A function with pattern parameters (E-R5-010): the parameter list is
+        // indexed after the block, in a root scope that encloses the block's.
+        let parameter_list = super::fn_parameters::pattern_list(&root);
+        let parameter_scope = if parameter_list.is_some() {
+            charge(&mut index.estimated_bytes, 64, limits.metadata_bytes)?;
+            index
+                .scopes
+                .try_reserve_exact(1)
+                .map_err(|_| limit("parameter scope allocation"))?;
+            let id = ScopeId(0);
+            index.scopes.push(LexicalScope {
+                id,
+                parent: None,
+                node: NodeId(0),
+                kind: ScopeKind::Parameters,
+                range: SourceRange {
+                    start: 0,
+                    end: body
+                        .range
+                        .end
+                        .checked_sub(body.range.start)
+                        .ok_or_else(|| fault("parameter body range is reversed"))?,
+                },
+            });
+            Some(id)
+        } else {
+            None
+        };
+        let mut stack = Vec::new();
+        if let Some(list) = &parameter_list {
+            stack.push(Frame {
+                syntax: list.syntax().clone(),
+                parent: None,
+                expression: None,
+                scope: parameter_scope,
+                target: None,
+            });
+        }
+        stack.push(Frame {
             syntax: root.clone(),
             parent: None,
             expression: None,
-            scope: initializer_scope,
+            scope: initializer_scope.or(parameter_scope),
             target: None,
-        }];
+        });
         let mut scope_roots = std::collections::BTreeMap::new();
         let mut clause_roots: std::collections::BTreeMap<(u32, u32), ScopeId> =
             std::collections::BTreeMap::new();
@@ -670,6 +745,15 @@ impl ParsedFile {
             }
             let expr = ast::Expr::cast(frame.syntax.clone());
             let kind = expr.as_ref().map(expression_kind);
+            // The pattern function's parameter list: the owner of the shared
+            // pattern transaction for its parameter patterns.
+            let parameter_owner = frame.parent.is_none()
+                && parameter_list
+                    .as_ref()
+                    .is_some_and(|list| list.syntax() == &frame.syntax);
+            if parameter_owner && let Some(parameters) = parameter_scope {
+                index.scopes[parameters.0 as usize].node = id;
+            }
             let item = ast::Item::can_cast(frame.syntax.kind());
             let role = if item {
                 NodeRole::OpaqueItem
@@ -1223,6 +1307,30 @@ impl ParsedFile {
                 let slots = [Some(SlotId(index.slots)), None];
                 index.slots = next;
                 slots
+            } else if parameter_owner {
+                // The shared pattern transaction's Bool test result for the
+                // function's pattern parameters, owned by its parameter scope.
+                let next = index
+                    .slots
+                    .checked_add(2)
+                    .filter(|n| *n <= limits.slots)
+                    .ok_or_else(|| limit("parameter pattern temporary slot budget"))?;
+                let slots = [Some(SlotId(index.slots)), None];
+                index.slots = next;
+                slots
+            } else if ast::ClosureExpr::cast(frame.syntax.clone())
+                .is_some_and(|closure| closure_runs_patterns(&closure))
+            {
+                // The shared pattern transaction's Bool test result for the
+                // closure's pattern parameters, owned by the closure frame.
+                let next = index
+                    .slots
+                    .checked_add(2)
+                    .filter(|n| *n <= limits.slots)
+                    .ok_or_else(|| limit("closure pattern temporary slot budget"))?;
+                let slots = [Some(SlotId(index.slots)), None];
+                index.slots = next;
+                slots
             } else {
                 [None, None]
             };
@@ -1264,6 +1372,21 @@ impl ParsedFile {
                     }
                     index.slots = next;
                     (slots, phases as u16)
+                } else if parameter_owner {
+                    // One staging value slot (with its place pair) per written
+                    // parameter, owned by the function's parameter scope.
+                    let count = u32::try_from(
+                        parameter_list.as_ref().map_or(0, |list| list.params().count()),
+                    )
+                    .map_err(|_| limit("function parameter count overflow"))?;
+                    let next = count
+                        .checked_mul(2)
+                        .and_then(|n| index.slots.checked_add(n))
+                        .filter(|n| *n <= limits.slots)
+                        .ok_or_else(|| limit("function parameter slot budget"))?;
+                    let slots = (0..count).map(|offset| SlotId(index.slots + offset * 2)).collect();
+                    index.slots = next;
+                    (slots, 0)
                 } else if let Some(closure) = ast::ClosureExpr::cast(frame.syntax.clone()) {
                     // One parameter staging value slot (with its place pair)
                     // per closure parameter, owned by the closure frame.
@@ -1339,9 +1462,12 @@ impl ParsedFile {
                 closure_scope,
                 extended_to: None,
                 opaque,
-                pattern_statement: frame.syntax.kind() == ra_ap_syntax::SyntaxKind::LET_STMT
+                pattern_statement: (frame.syntax.kind() == ra_ap_syntax::SyntaxKind::LET_STMT
                     && ast::LetStmt::cast(frame.syntax.clone())
-                        .is_some_and(|statement| pattern_statement(&statement)),
+                        .is_some_and(|statement| pattern_statement(&statement)))
+                    || ast::ClosureExpr::cast(frame.syntax.clone())
+                        .is_some_and(|closure| closure_runs_patterns(&closure))
+                    || parameter_owner,
                 parenthesized: frame.syntax.kind() == ra_ap_syntax::SyntaxKind::PAREN_EXPR,
             });
             if opaque {

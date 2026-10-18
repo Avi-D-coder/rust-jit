@@ -949,10 +949,10 @@ impl RunMachine {
                                 "call argument requires a reached concrete type".into(),
                             )
                         })?;
-                        let view = match self.frame.source_view(slot)? {
-                            Some(view) => Some(self.frame.bound_view(&view, &self.store)),
-                            None => self.store.descriptor_source_term(descriptor),
-                        };
+                        let view = self
+                            .frame
+                            .argument_source_view(slot, descriptor, &self.store)?
+                            .map(|view| self.frame.bound_view(&view, &self.store));
                         reached_argument_type(descriptor, view)
                     })();
                     match reached {

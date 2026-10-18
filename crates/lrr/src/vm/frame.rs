@@ -1,4 +1,6 @@
 //! Physical frame state. Syntax and query providers never mutate it.
+#[path = "frame_related_numeric.rs"]
+mod related_numeric_frame;
 #[path = "frame_aggregate_copy.rs"]
 mod aggregate_copy_frame;
 #[path = "frame_boxes.rs"]
@@ -28,6 +30,8 @@ mod slices_frame;
 mod coercions_frame;
 #[path = "frame_pointers.rs"]
 mod pointers_frame;
+#[path = "frame_type_arguments.rs"]
+mod type_arguments_frame;
 #[path = "frame_string_literals.rs"]
 mod string_literal_frame;
 #[path = "frame_partial_hints.rs"]
@@ -160,6 +164,10 @@ struct Slot {
     conditional_extension: Option<NodeId>,
     construction: Option<ActiveConstruction>,
     place: Option<crate::runtime::place::Place>,
+    /// A call argument's declared parameter is a reference (`&mut H` of a
+    /// generic callee): the mutability of the reference it expects, which
+    /// selects an implicit reborrow of a reference value read into it.
+    expects_reference: Option<bool>,
 }
 #[derive(Clone)]
 struct ActiveConstruction {
@@ -364,6 +372,10 @@ pub struct Frame {
     /// needs an overloaded `Deref` step first, and the references that step's
     /// calls returned (their places live until their scope ends).
     place_deref: Option<operator_calls_frame::PlaceDerefDemand>,
+    /// The index base place, at the recipe position the dispatcher found its
+    /// type takes an `Index<Idx>` impl: the index operand is then not typed
+    /// as a builtin `usize` index.
+    index_overload: Option<(crate::core::digest::Digest, SlotId, Option<TypeId>)>,
     deref_parked: Vec<(ScopeId, crate::runtime::cell::TicketId)>,
     /// A place operation to run again, from this operation index, over the
     /// base its overloaded `Deref` step produced.
@@ -480,6 +492,7 @@ impl Frame {
                 conditional_extension: None,
                 construction: None,
                 place: None,
+                expects_reference: None,
             });
         }
         for node in body.nodes() {
@@ -534,6 +547,9 @@ impl Frame {
                 {
                     // A `for` iteration's `next` result lives for one iteration.
                     node.condition_scope.unwrap_or(node.scope)
+                } else if let Some(closure) = node.closure_scope {
+                    // A closure's pattern-parameter test lives in its own frame.
+                    closure
                 } else {
                     node.scope
                 };
@@ -597,6 +613,7 @@ impl Frame {
             method_receivers: std::collections::BTreeMap::new(),
             trait_calls: std::collections::BTreeMap::new(),
             place_deref: None,
+            index_overload: None,
             deref_parked: Vec::new(),
             rerun_index: None,
             declined_coercion: None,
@@ -895,7 +912,11 @@ impl Frame {
             Some(source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)))
                 if crate::frontend::call_contracts::closed_term(source) =>
             {
-                if store.descriptor_source_term(ty).as_ref() != Some(source) {
+                if !store
+                    .descriptor_source_term(ty)
+                    .as_ref()
+                    .is_some_and(|actual| actual == source || source.admits_dyn(actual))
+                {
                     return Err(Diagnostic::new(
                         "LRR-E-OWNERSHIP",
                         "parameter descriptor differs from its closed source type".into(),
@@ -1551,8 +1572,10 @@ impl Frame {
             .slots
             .get(slot.0 as usize)
             .ok_or_else(|| invalid("literal source context slot absent"))?;
+        // A `dyn Trait` expectation is a coercion target: the literal keeps
+        // its own Type.
         Ok(if value.strict_hint {
-            value.source.as_ref()
+            value.source.as_ref().filter(|source| !source.contains_dyn())
         } else {
             None
         })
@@ -1562,9 +1585,9 @@ impl Frame {
     /// a descriptor cannot invent a missing source identity.
     fn supported_source(source: &crate::traits::term::TyTerm) -> bool {
         use crate::traits::term::TyTerm;
-        matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_))
+        matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_) | TyTerm::Dyn(_))
             || (matches!(source, TyTerm::Tuple(_)) && Self::supported_structural_source(source))
-            || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str)
+            || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Dyn(_))
                 || (matches!(target.as_ref(), TyTerm::Tuple(_)) && Self::supported_structural_source(target))
                 || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
                 || (matches!(target.as_ref(), TyTerm::Function(_))
@@ -1602,7 +1625,7 @@ impl Frame {
         match source {
             TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
                 GenericArg::Type(ty) => {
-                    matches!(ty, TyTerm::Primitive(_))
+                    matches!(ty, TyTerm::Primitive(_) | TyTerm::Dyn(_))
                         || (matches!(ty, TyTerm::Tuple(_))
                             && Self::supported_structural_source(ty))
                         // An array or slice argument (`Box<[i32; 3]>`,
@@ -1798,11 +1821,14 @@ impl Frame {
         if context.structural_result() == Some(&source) {
             // A structural result with nominal members (`-> (W<u8>, i32)`)
             // is interned from its written Type.
-            if let Some(written) = context.written_result() {
-                return written.find_in(store, &[]);
-            }
+            // Generic result parameters retain their reached descriptor,
+            // including closures and nominal instances. A written result
+            // with `Parameter` leaves cannot be materialized with no bindings.
             if let Some(found) = context.bound_result_descriptor_find(store)? {
                 return Ok(Some(found));
+            }
+            if let Some(written) = context.written_result() {
+                return written.find_in(store, &[]);
             }
             return Ok(store.find_structural_term(&source));
         }
@@ -1837,13 +1863,13 @@ impl Frame {
             .as_ref()
             .ok_or_else(|| invalid("reference result environment absent"))?;
         if context.structural_result() == Some(&source) {
+            if let Some(bound) = context.bound_result_descriptor_intern(store)? {
+                return Ok(bound);
+            }
             if let Some(written) = context.written_result() {
                 return written
                     .materialize_in(store, &[])?
                     .ok_or_else(|| invalid("structural result descriptor is not closed"));
-            }
-            if let Some(bound) = context.bound_result_descriptor_intern(store)? {
-                return Ok(bound);
             }
             return store
                 .intern_structural_term(&source)?
@@ -1883,7 +1909,9 @@ impl Frame {
         match hint {
             // Dynamic pointee hints are resolved from the reached result slot;
             // they never manufacture an annotation without that frame context.
-            HintRecipe::BorrowTarget { .. }
+            HintRecipe::RelatedNumeric(_)
+            | HintRecipe::BorrowTarget { .. }
+            | HintRecipe::IndexOperand { .. }
             | HintRecipe::DefinitionNumeric(_)
             | HintRecipe::DefinitionParameter(_)
             | HintRecipe::DefinitionResult
@@ -2934,6 +2962,14 @@ impl Frame {
             Some(source) => self.clone_source(Self::box_contents_source(source, store))?,
             _ => None,
         };
+        // A declared `dyn Trait` pointee (or a place without a retained view,
+        // such as the contents of a trait-object box) is viewed as the
+        // value's concrete runtime Type.
+        let source = if source.as_ref().is_none_or(|source| source.contains_dyn()) {
+            self.descriptor_view(&place, store).or(source.filter(|s| !s.contains_dyn()))
+        } else {
+            source
+        };
         // A box dereference extends its base place's projections.
         self.projection_bytes = self
             .projection_bytes
@@ -2943,6 +2979,21 @@ impl Frame {
         self.slots[destination.0 as usize].place = Some(place);
         self.clear_place(reference)?;
         Ok(())
+    }
+    /// The closed source view of the live value at `place`, read from its
+    /// concrete runtime descriptor; `None` where the descriptor names no
+    /// admitted closed view.
+    fn descriptor_view(
+        &self,
+        place: &crate::runtime::place::Place,
+        store: &GuestStore,
+    ) -> Option<crate::traits::term::TyTerm> {
+        let ty = store.live_place_type_id(place).ok()?;
+        let term = store.descriptor_source_term(ty)?;
+        (!term.contains_dyn()
+            && crate::frontend::call_contracts::closed_term(&term)
+            && Self::supported_source(&term))
+        .then_some(term)
     }
     pub(crate) fn preflight_read_place(
         &self,
@@ -3168,8 +3219,9 @@ impl Frame {
             Some(source) if crate::frontend::call_contracts::closed_term(source) => store
                 .descriptor_source_term(target)
                 .is_some_and(|actual| {
-                    crate::frontend::signature_subst::erase_regions(&actual)
-                        == crate::frontend::signature_subst::erase_regions(source)
+                    let actual = crate::frontend::signature_subst::erase_regions(&actual);
+                    let declared = crate::frontend::signature_subst::erase_regions(source);
+                    actual == declared || declared.admits_dyn(&actual)
                 }),
             _ => {
                 return Err(Diagnostic::new(
@@ -3264,7 +3316,7 @@ impl Frame {
         };
         if let Some(expected) = expected
             && Some(expected) != unsize
-            && !matches!(store.type_descriptor(expected)?.key.as_ref(), TypeKey::Ref { mutable, target: expected_target } if *mutable == (access == Access::Mutable) && *expected_target == target)
+            && !matches!(store.type_descriptor(expected)?.key.as_ref(), TypeKey::Ref { mutable, target: expected_target } if *mutable == (access == Access::Mutable) && (*expected_target == target || store.dyn_admits(*expected_target, target)))
             && !matches!(store.type_descriptor(expected)?.key.as_ref(), TypeKey::RawPtr { .. })
         {
             return Err(Diagnostic::new(
@@ -4102,7 +4154,7 @@ impl Frame {
                 if !self.active_scopes.contains(&slot.scope) {
                     return Err(invalid("generic constructor result scope inactive"));
                 }
-                if slot.strict_hint && slot.hint.is_some() {
+                if slot.strict_hint && slot.hint.is_some_and(|hint| !store.mentions_dyn(hint)) {
                     return Err(Diagnostic::new(
                         "LRR-E-OWNERSHIP",
                         "generic constructor conflicts with destination descriptor".into(),
@@ -4231,6 +4283,13 @@ impl Frame {
             return Err(invalid("hint applied after child storage was executed"));
         }
         Ok(())
+    }
+    /// The reference mutability a call argument's declared parameter expects
+    /// when its pointee is not closed (no descriptor hint).
+    pub(crate) fn expect_reference(&mut self, id: SlotId, mutable: Option<bool>) {
+        if let Some(slot) = self.slots.get_mut(id.0 as usize) {
+            slot.expects_reference = mutable;
+        }
     }
     pub(crate) fn set_hint(&mut self, id: SlotId, hint: Option<TypeId>) -> Result<(), Diagnostic> {
         self.preflight_hint(id)?;
@@ -4581,7 +4640,8 @@ impl Frame {
             && let (Some(expected), Some(actual)) = (self.hint(id)?, actual)
             && expected != actual
             && !matches!(value, Some((value, store))
-                if store.unsizing_coercion(value, expected)?.is_some())
+                if store.unsizing_coercion(value, expected)?.is_some()
+                    || store.dyn_admits(expected, actual))
         {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-RETURN-TYPE",
@@ -4608,13 +4668,18 @@ impl Frame {
             }
             if let StorageContract::Exact(expected) = store.declared(cell)?
                 && expected != ty
+                && !store.contract_admits(Some(expected), Some(ty))
             {
                 return Err(Diagnostic::new(
                     "LRR-E-OWNERSHIP",
                     "numeric result violates storage descriptor".into(),
                 ));
             }
-        } else if slot.strict_hint && slot.hint.is_some_and(|expected| expected != ty) {
+        } else if slot.strict_hint
+            && slot
+                .hint
+                .is_some_and(|expected| expected != ty && !store.contract_admits(Some(expected), Some(ty)))
+        {
             return Err(Diagnostic::new(
                 "LRR-E-OWNERSHIP",
                 "numeric result violates declared hint".into(),
@@ -5391,6 +5456,7 @@ impl Frame {
         };
         if let Some(expected) = self.hint(SlotId(0))?
             && actual.type_id != expected.0
+            && !store.dyn_admits(expected, TypeId(actual.type_id))
         {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-RETURN-TYPE",

@@ -59,8 +59,30 @@ pub enum DefinitionNumericContext {
         floating: bool,
     },
 }
+/// A source-proved structural projection from a related reached value's Type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub enum NumericTypeProjection {
+    Deref,
+    AutoDeref,
+    TupleField(u32),
+    Element,
+    TypeArgument(u32),
+}
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct RelatedNumericSource {
+    pub(crate) node: super::pc::NodeId,
+    pub(crate) projections: Box<[NumericTypeProjection]>,
+}
+/// Immutable equality relations from the ordinary source-constraint component.
+/// Runtime descriptors are observed per frame, never retained in this plan.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct RelatedNumericPlan {
+    pub(crate) floating: bool,
+    pub(crate) sources: Box<[RelatedNumericSource]>,
+}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum HintRecipe {
+    RelatedNumeric(std::sync::Arc<RelatedNumericPlan>),
     /// Actual prepared reference result of this definition, including the
     /// caller's instantiated source region. Root Entry only.
     DefinitionResult,
@@ -91,6 +113,13 @@ pub enum HintRecipe {
     /// The definition's declared nominal result (`-> Option<u32>`), when its
     /// call contract closed it; otherwise no context. Root Entry only.
     DefinitionWrittenResult,
+    /// An index expression's operand: `usize` for the builtin element and
+    /// window projections of an array, slice or vector, and no context when
+    /// the dispatcher found the base place's type takes its own `Index<Idx>`
+    /// impl (the impl's `Idx` types the operand, as a call argument).
+    IndexOperand {
+        base: SlotId,
+    },
 }
 /// Selected from definition-source types before either operand executes.
 /// Generic/overloaded assignment requires an exact trait-member recipe instead.
@@ -131,7 +160,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 13;
+pub const LRIR_RECIPE_SCHEMA: u32 = 15;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {
@@ -320,7 +349,9 @@ pub const PROMOTED_PLACE_OPCODE: u8 = 66;
 // Tag 67 converts an operand to a written raw-pointer or fn-pointer type
 // (`e as *const T`, `e as fn()`; E-R5-008).
 pub const POINTER_CAST_OPCODE: u8 = 67;
-pub const OPCODE_COUNT: usize = 68;
+// Tag 68 adjusts a once-evaluated value callee through ordinary Deref calls.
+pub const CALLEE_DEREF_OPCODE: u8 = 68;
+pub const OPCODE_COUNT: usize = 69;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -505,22 +536,14 @@ pub enum PatternOperation {
         retry: bool,
     },
     /// Publish the staged bindings as a guard view without moving the source.
-    Expose {
-        owner: super::pc::NodeId,
-    },
+    Expose { owner: super::pc::NodeId },
     /// Retire the guard view after its guard completed.
-    Conceal {
-        owner: super::pc::NodeId,
-    },
+    Conceal { owner: super::pc::NodeId },
     /// Validate, then transfer every staged binding (copy, move or borrow) in
     /// binding order.
-    Commit {
-        owner: super::pc::NodeId,
-    },
+    Commit { owner: super::pc::NodeId },
     /// Close the owner's transaction.
-    Close {
-        owner: super::pc::NodeId,
-    },
+    Close { owner: super::pc::NodeId },
 }
 
 /// The lang-item iterator method a `for` loop calls.
@@ -707,6 +730,10 @@ pub enum Op {
         scratch: SlotId,
         destination: SlotId,
     },
+    /// Autoderef a once-evaluated callee place, retaining it for call selection.
+    CalleeDeref {
+        place: SlotId,
+    },
     /// Explicit guest panic; emitted only after frontend intrinsic identity resolution.
     Panic {
         message: String,
@@ -885,6 +912,7 @@ impl Op {
             Self::ConstructFinish { .. } => 29,
             Self::FormatArguments { .. } => FORMAT_ARGUMENTS_OPCODE,
             Self::MethodReceiver { .. } => METHOD_RECEIVER_OPCODE,
+            Self::CalleeDeref { .. } => CALLEE_DEREF_OPCODE,
             Self::CompoundAssignPlace { .. } => COMPOUND_ASSIGN_PLACE_OPCODE,
             Self::ArrayRepeat { .. } => ARRAY_REPEAT_OPCODE,
             Self::ComparisonOperand { .. } => COMPARISON_OPERAND_OPCODE,
@@ -940,6 +968,7 @@ impl Op {
             | Self::ConstructField { .. }
             | Self::ConstructFinish { .. }
             | Self::MethodReceiver { .. }
+            | Self::CalleeDeref { .. }
             | Self::ComparisonOperand { .. }
             | Self::IteratorCall { .. }
             | Self::CompoundAssignPlace { .. }

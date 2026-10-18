@@ -402,7 +402,6 @@ fn normalized_return_does_not_erase_a_rigid_actual_source_at_equal_descriptor() 
     }
 }
 
-
 // Source-only preregistered regression: counters are database-local; an
 // immediate alias recipe does not cover a changed alias in another module file.
 fn transitive_return_world(terminal: &str) -> (Database, Vec<PreparedSourceView>, NameNamespaces) {

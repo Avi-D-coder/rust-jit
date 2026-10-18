@@ -616,6 +616,15 @@ impl<K: Clone, V: Clone> Clone for BTreeMap<K, V> {
         }
     }
 }
+impl<K, V, Q: ?Sized> core::ops::Index<&Q> for BTreeMap<K, V> {
+    type Output = V;
+    fn index(&self, key: &Q) -> &V {
+        match self.get(key) {
+            Option::Some(value) => value,
+            Option::None => panic!("no entry found for key"),
+        }
+    }
+}
 impl<K, V> Default for BTreeMap<K, V> {
     fn default() -> BTreeMap<K, V> {
         BTreeMap::new()

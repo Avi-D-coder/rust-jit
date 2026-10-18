@@ -71,6 +71,11 @@ pub(crate) struct BodyItemContext<'a> {
     pub profile: &'a crate::core::profile::ProfileIdentity,
     pub cfg: &'a crate::source::snapshot::CfgSet,
     pub header_context: &'a [TokenRecipe],
+    /// An associated item of a block-level `impl`/`trait`: the owning
+    /// container identity (the impl identity, or the trait definition), which
+    /// becomes the item's scope owner and enclosing impl exactly as for a
+    /// module-level member.
+    pub member_owner: Option<Digest>,
 }
 #[derive(Default)]
 pub(crate) struct BodyItemBudget {
@@ -100,6 +105,7 @@ impl BodyItemBudget {
             profile,
             cfg,
             header_context,
+            member_owner,
         } = context;
         let node = item.syntax();
         let (kind, namespace) = match item {
@@ -218,7 +224,7 @@ impl BodyItemBudget {
         let mut owner = StableEncoder::new("lrr/v2/body-item-scope");
         owner.digest(parent.def_key);
         owner.u32(scope);
-        let owner = owner.finish();
+        let owner = member_owner.unwrap_or_else(|| owner.finish());
         let enclosing = if kind == ItemKind::Impl {
             let mut e = StableEncoder::new("lrr/v2/body-impl-identity");
             e.digest(owner);
@@ -248,9 +254,10 @@ impl BodyItemBudget {
         let body = if let Some(n) = executable {
             Some(BodyHandle {
                 def_key: definition,
-                body_hash: parsed.body_content_identity(&n)?,
-                range: range(n.text_range()),
+                body_hash: parsed.fn_body_identity(&n)?,
+                range: super::fn_parameters::body_range(&n),
                 entry_blocked: attribute_input.is_some(),
+                block_offset: super::fn_parameters::block_offset(&n),
             })
         } else {
             None
@@ -292,6 +299,7 @@ impl BodyItemBudget {
                 header,
                 constructor_fields: super::outline::constructor_fields(item, cfg)?,
                 variants: super::outline::enum_variants(item, cfg)?,
+                discriminants: Vec::new(),
                 body,
                 declaration_span: range(node.text_range()),
                 header_span,
@@ -301,6 +309,41 @@ impl BodyItemBudget {
             container: container_handle,
             attribute_input,
         }))
+    }
+    /// The anonymous discriminant constants of a block-local enum row
+    /// (E-R5-013): declarations owned by the enum, like the associated items
+    /// of a block-level impl, so they publish and are admitted from their
+    /// declaration alone.
+    pub(crate) fn collect_discriminants(
+        &mut self,
+        item: &ast::Item,
+        row: &BodyItem,
+        parsed: &super::parse::ParsedFile,
+        cfg: &crate::source::snapshot::CfgSet,
+    ) -> Result<Vec<BodyItem>, Diagnostic> {
+        let rows = parsed.discriminant_rows(
+            item,
+            &row.item.def_key,
+            &row.item.scope,
+            &row.item.header.context,
+            cfg,
+        )?;
+        let mut result = Vec::new();
+        for item in rows {
+            self.charge(std::mem::size_of::<BodyItem>())?;
+            result
+                .try_reserve(1)
+                .map_err(|_| error("body discriminant row allocation failed"))?;
+            result.push(BodyItem {
+                scope: row.scope,
+                item,
+                namespaces: Vec::new(),
+                container_range: None,
+                container: None,
+                attribute_input: None,
+            });
+        }
+        Ok(result)
     }
     fn header_tokens(
         &mut self,

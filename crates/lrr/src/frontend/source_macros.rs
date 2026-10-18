@@ -43,6 +43,14 @@ pub struct SourceMacroIndex {
     facts: std::sync::Arc<HygieneFacts>,
     context: Key,
     ancestry: std::sync::Arc<ExpansionAncestry>,
+    /// Names this index state, process-wide: assigned at construction and
+    /// replaced by every `&mut self` method. Clones share a stamp only while
+    /// they hold identical state, so equal stamps imply equal state.
+    stamp: u64,
+}
+fn next_stamp() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 /// Borrowed actual declaration facts. This grants neither namespace selection
 /// nor a body/source entry; current selected-expansion authority is joined by
@@ -71,6 +79,10 @@ fn edition(value: Edition) -> u16 {
     }
 }
 impl SourceMacroIndex {
+    /// The process-unique name of this index state (see the `stamp` field).
+    pub(crate) fn stamp(&self) -> u64 {
+        self.stamp
+    }
     /// Explicit cold identity of the actual immutable macro environment. Cache
     /// the result at coordinator receipt mint; never rehash it during dispatch.
     pub(crate) fn prepare_semantic_identity(&self) -> Result<Digest, Diagnostic> {
@@ -235,6 +247,7 @@ impl SourceMacroIndex {
             facts: std::sync::Arc::new(facts),
             context,
             ancestry: std::sync::Arc::new(ExpansionAncestry::default()),
+            stamp: next_stamp(),
         };
         let mut attribute_bytes = 0usize;
         for item in &outline.items {
@@ -415,6 +428,7 @@ impl SourceMacroIndex {
         &mut self,
         call: &crate::syntax::outline::ItemInvocation,
     ) -> Result<(), Diagnostic> {
+        self.stamp = next_stamp();
         if self.producers.contains_key(&call.item_input) {
             return Err(error("test attribute already reserved"));
         }
@@ -444,6 +458,7 @@ impl SourceMacroIndex {
         at: u64,
         identity: Digest,
     ) -> Result<(), Diagnostic> {
+        self.stamp = next_stamp();
         if !matches!(
             self.producers.get(&identity),
             Some(ProducerKind::ItemMacro | ProducerKind::Attribute)
@@ -468,6 +483,7 @@ impl SourceMacroIndex {
         producer: Digest,
         proof: &crate::expand::source_derives::SourceEmptyDeriveProof,
     ) -> Result<bool, Diagnostic> {
+        self.stamp = next_stamp();
         let Some((ordinal, item, dialect)) = proof.original_macro(source, producer)? else {
             return Ok(false);
         };
@@ -555,6 +571,7 @@ impl SourceMacroIndex {
         identity: Digest,
         catalog: &super::generated_macros::GeneratedMacroCatalog,
     ) -> Result<(), Diagnostic> {
+        self.stamp = next_stamp();
         self.publish_generated_item_producer(scope, at, identity, catalog, false)
     }
     pub(crate) fn publish_derive_prefix(
@@ -565,6 +582,7 @@ impl SourceMacroIndex {
         occurrence: Digest,
         catalog: &super::generated_macros::GeneratedMacroCatalog,
     ) -> Result<(), Diagnostic> {
+        self.stamp = next_stamp();
         if catalog.invocation() != occurrence {
             return Err(error("derive prefix occurrence differs"));
         }
@@ -596,6 +614,7 @@ impl SourceMacroIndex {
         catalog: &super::generated_macros::GeneratedMacroCatalog,
         prefix: bool,
     ) -> Result<(), Diagnostic> {
+        self.stamp = next_stamp();
         if !matches!(
             self.producers.get(&identity),
             Some(ProducerKind::ItemMacro | ProducerKind::Attribute)
@@ -995,6 +1014,7 @@ impl SourceMacroIndex {
         input: Digest,
         child: &Self,
     ) -> Result<bool, Diagnostic> {
+        self.stamp = next_stamp();
         if self.producers.get(&input) != Some(&ProducerKind::ModuleSource) {
             return Ok(false);
         }
@@ -1023,6 +1043,7 @@ impl SourceMacroIndex {
         input: Digest,
         child: &Self,
     ) -> Result<bool, Diagnostic> {
+        self.stamp = next_stamp();
         if !self.pending_macro_use(input) {
             return Ok(false);
         }
@@ -1743,7 +1764,7 @@ impl EnteredMacroIndex<'_> {
                 "prepared nested body belongs to another entered parent",
             ));
         }
-        let mut rows = self.facts.items.iter().filter(|row| {
+        let mut rows = self.facts.declarations().filter(|row| {
             row.item.body.as_ref() == Some(source.body())
                 && row.item.def_key.fingerprint() == source.body().def_key
         });
@@ -2815,8 +2836,7 @@ impl PublishedMacroIndex {
         } else {
             let original = owner
                 .outline()
-                .items
-                .iter()
+                .declaration_rows()
                 .find(|item| item.def_key.fingerprint() == source.body().def_key)
                 .ok_or_else(|| error("admitted body module boundary declaration absent"))?;
             if original.scope != *source.scope() {

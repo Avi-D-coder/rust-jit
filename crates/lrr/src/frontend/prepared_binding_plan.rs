@@ -59,7 +59,8 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
     let guard = if matches!(
         constraints.state(),
         BindingConstraintState::Resolved(_) | BindingConstraintState::ResolvedType
-    ) {
+    ) || constraints.has_related_numeric()
+    {
         if !value.cacheable {
             return QueryPoll::Ready(Err(Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",

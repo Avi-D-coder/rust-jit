@@ -391,8 +391,37 @@ fn assign_kind(e: &mut StableEncoder, kind: &super::op::AssignKind) {
         }
     }
 }
+impl StableEncode for super::op::RelatedNumericPlan {
+    const DOMAIN: &'static str = "lrr/v1/related-numeric-plan";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.bool(self.floating);
+        e.sequence(&self.sources, |e, source| {
+            e.u32(source.node.0);
+            e.sequence(&source.projections, |e, step| {
+                use super::op::NumericTypeProjection as P;
+                match step {
+                    P::Deref => e.u8(0),
+                    P::AutoDeref => e.u8(1),
+                    P::TupleField(field) => {
+                        e.u8(2);
+                        e.u32(*field);
+                    }
+                    P::Element => e.u8(3),
+                    P::TypeArgument(position) => {
+                        e.u8(4);
+                        e.u32(*position);
+                    }
+                }
+            });
+        });
+    }
+}
 fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     match h {
+        HintRecipe::RelatedNumeric(plan) => {
+            e.u32(12);
+            e.record(plan.as_ref());
+        }
         HintRecipe::DefinitionResult => e.u32(8),
         HintRecipe::DefinitionParameter(ordinal) => {
             e.u32(7);
@@ -436,10 +465,14 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
             e.record(written.as_ref());
         }
         HintRecipe::DefinitionWrittenResult => e.u32(10),
+        HintRecipe::IndexOperand { base } => {
+            e.u32(11);
+            e.u32(base.0);
+        }
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v13/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v15/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
@@ -805,6 +838,10 @@ impl StableEncode for Recipe {
                     crate::ir::op::OperandRead::Place => e.u32(2),
                 }
                 e.u32(destination.0);
+            }
+            Op::CalleeDeref { place } => {
+                e.u32(68);
+                e.u32(place.0);
             }
             Op::MethodReceiver {
                 site,

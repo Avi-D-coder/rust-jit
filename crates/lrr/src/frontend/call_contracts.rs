@@ -706,6 +706,15 @@ pub(crate) fn primitive_runtime_id(p: PrimitiveType) -> Result<TypeId, Diagnosti
 impl PreparedCallContracts {
     /// Validate the reached return source identity and bind an unbound result parameter.
     pub fn bind_return_parameter(&mut self, actual: &ArgumentType) -> Result<(), Diagnostic> {
+        self.bind_return_parameter_in(actual, None)
+    }
+    /// As `bind_return_parameter`; with the store a declared `dyn Trait`
+    /// position in the prepared result admits the returned concrete Type.
+    pub fn bind_return_parameter_in(
+        &mut self,
+        actual: &ArgumentType,
+        store: Option<&crate::runtime::cell::GuestStore>,
+    ) -> Result<(), Diagnostic> {
         if actual.descriptor.0 == 0 || contains_transaction_term(&actual.source) {
             return Err(fault(
                 "LRR-E-CALL-CONTEXT",
@@ -727,7 +736,7 @@ impl PreparedCallContracts {
             ));
         }
         if self.result_descriptor.is_some() {
-            self.check_return_descriptor(actual.descriptor)?;
+            self.check_return_descriptor_in(actual.descriptor, store)?;
             let expected = match self.source_result.as_ref() {
                 Some(TyTerm::Param(key)) => {
                     Some(self.source_substitution.get(key).ok_or_else(|| {
@@ -740,7 +749,9 @@ impl PreparedCallContracts {
                 Some(TyTerm::Primitive(_)) => self.source_result.as_ref(),
                 _ => None,
             };
-            if expected.is_some_and(|expected| expected != &actual.source) {
+            if expected.is_some_and(|expected| {
+                expected != &actual.source && !expected.admits_dyn(&actual.source)
+            }) {
                 return Err(fault(
                     "LRR-E-GENERIC-BINDING",
                     "returned source identity differs from the retained result contract",
@@ -765,19 +776,29 @@ impl PreparedCallContracts {
             &mut self.source_substitution,
             key,
             actual,
+            None,
         )?;
         self.result_descriptor = Some(actual.descriptor);
         Ok(())
     }
     /// Only already-concrete return contracts; unresolved returns stay deferred.
     pub fn check_return_descriptor(&self, actual: TypeId) -> Result<(), Diagnostic> {
+        self.check_return_descriptor_in(actual, None)
+    }
+    /// As `check_return_descriptor`; with the store, a declared `dyn Trait`
+    /// position in the prepared result admits the returned concrete Type.
+    pub fn check_return_descriptor_in(
+        &self,
+        actual: TypeId,
+        store: Option<&crate::runtime::cell::GuestStore>,
+    ) -> Result<(), Diagnostic> {
         let expected = self.result_descriptor.ok_or_else(|| {
             fault(
                 "LRR-E-TYPE-CONTEXT",
                 "reached return requires deferred source type resolution",
             )
         })?;
-        if expected != actual {
+        if expected != actual && !store.is_some_and(|store| store.dyn_admits(expected, actual)) {
             return Err(fault(
                 "LRR-E-CALL-RETURN-TYPE",
                 "reached return descriptor differs from its prepared contract",
@@ -1086,7 +1107,23 @@ pub(crate) fn bind_runtime_parameters(
     use crate::runtime::shape::TypeKey;
     match template {
         TyTerm::Param(key) if key.definition == definition => {
-            if runtime.get(key).is_some_and(|prior| *prior != descriptor) {
+            // A bare `dyn Trait` is a coercion target (`Box::new(8)` under a
+            // `Box<dyn Foo>` result context), never a generic argument: the
+            // parameter binds from its value.
+            if matches!(
+                store.type_descriptor(descriptor)?.key.as_ref(),
+                crate::runtime::shape::TypeKey::Dyn { .. }
+            ) {
+                return Ok(());
+            }
+            if let Some(prior) = runtime.get(key).copied()
+                && prior != descriptor
+            {
+                // A declared `dyn Trait` position and the concrete Type of a
+                // value agree; the first binding stands.
+                if store.dyn_admits(prior, descriptor) || store.dyn_admits(descriptor, prior) {
+                    return Ok(());
+                }
                 return Err(fault(
                     "LRR-E-GENERIC-BINDING",
                     "reached generic runtime descriptors disagree",
@@ -1516,11 +1553,12 @@ fn prepare(
                 ordinal: *ordinal,
             },
             actual,
+            None,
         )?;
     }
     if let (Some(TyTerm::Param(key)), Some(hint)) = (&instantiated.result_symbolic, result_hint) {
         symbolic.bind_type_parameter(key.ordinal, &hint.source)?;
-        bind(&mut runtime, &mut source_bindings, *key, hint)?;
+        bind(&mut runtime, &mut source_bindings, *key, hint, None)?;
     }
     let store = match &evaluated {
         EvaluatedArguments::Ordinary(_, store) => *store,
@@ -1542,12 +1580,15 @@ fn prepare(
         match template {
             TyTerm::Param(key) if key.definition == definition => {
                 symbolic.constrain_argument(index, &actual.source)?;
-                bind(&mut runtime, &mut source_bindings, *key, actual)?;
+                bind(&mut runtime, &mut source_bindings, *key, actual, store)?;
                 descriptors.push(actual.descriptor);
             }
             TyTerm::Primitive(p) => {
                 let expected = primitive_runtime_id(*p)?;
                 if expected != actual.descriptor {
+                    if std::env::var_os("LRR_DBG_ARG").is_some() {
+                        eprintln!("DBG arg mismatch template={:?} expected={:?} actual={:?} src={:?} def={:?}", template, expected, actual.descriptor, actual.source, definition);
+                    }
                     return Err(fault(
                         "LRR-E-CALL-ARG-TYPE",
                         "argument descriptor differs from the reached concrete signature",
@@ -1817,6 +1858,12 @@ fn prepare(
                 if contains_transaction_term(bound) || !closed_term(bound) {
                     continue;
                 }
+                // A result context's `dyn Trait` is a coercion target, not the
+                // generic argument (`Box::new(8)` under `Box<dyn Foo>` binds
+                // `T` from its argument, not from the object type).
+                if matches!(bound, TyTerm::Dyn(_)) {
+                    continue;
+                }
                 source_bindings.insert(key, bound.clone());
                 runtime.insert(key, descriptor);
             }
@@ -1859,7 +1906,17 @@ fn bind(
     source: &mut BTreeMap<ParamKey, TyTerm>,
     key: ParamKey,
     actual: &ArgumentType,
+    store: Option<&crate::runtime::cell::GuestStore>,
 ) -> Result<(), Diagnostic> {
+    // A parameter already bound to a Type with a declared `dyn Trait` position
+    // (`Vec<Box<dyn T>>`'s `T`) admits the concrete Type of a later value; the
+    // first binding stands.
+    if let (Some(prior), Some(store)) = (runtime.get(&key).copied(), store)
+        && prior != actual.descriptor
+        && store.dyn_admits(prior, actual.descriptor)
+    {
+        return Ok(());
+    }
     if runtime
         .get(&key)
         .is_some_and(|prior| *prior != actual.descriptor)
@@ -2018,7 +2075,7 @@ pub(crate) fn unsized_reference_descriptor(
 /// identity alone determines the runtime value family.
 pub(crate) fn closed_term(term: &TyTerm) -> bool {
     match term {
-        TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Never => true,
+        TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Never | TyTerm::Dyn(_) => true,
         TyTerm::Ref(region, _, target) => {
             !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && closed_term(target)
         }

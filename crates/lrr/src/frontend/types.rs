@@ -143,6 +143,36 @@ impl NominalSchema {
         }
         Ok(table.into())
     }
+    /// The variant at or before `variant` whose discriminant is an explicit
+    /// expression that is not a plain integer literal (E-R5-013). When
+    /// `literal_discriminants` has no value for `variant`, every entry from
+    /// this anchor up to it is implicit, so `variant`'s discriminant is the
+    /// anchor's evaluated value plus the distance.
+    pub(crate) fn expression_anchor(&self, variant: usize) -> Option<usize> {
+        let last = variant.min(self.variants.len().checked_sub(1)?);
+        (0..=last).rev().find(|&index| {
+            let tokens = &self.variants[index].discriminant;
+            !tokens.is_empty() && literal_discriminant(tokens).is_none()
+        })
+    }
+    /// A discriminant table that knows only the anchor's evaluated `value`
+    /// and its implicit successors up to the next explicit discriminant;
+    /// the store merges it into the descriptor's table.
+    pub(crate) fn anchored_discriminants(
+        &self,
+        anchor: usize,
+        value: i128,
+    ) -> std::sync::Arc<[Option<i128>]> {
+        let mut table = vec![None; self.variants.len()];
+        table[anchor] = Some(value);
+        for index in anchor + 1..self.variants.len() {
+            if !self.variants[index].discriminant.is_empty() {
+                break;
+            }
+            table[index] = table[index - 1].and_then(|previous| previous.checked_add(1));
+        }
+        table.into()
+    }
     pub fn variant(&self, name: Option<&str>) -> Result<&VariantRecipe, Diagnostic> {
         let mut selected = self
             .variants
@@ -670,6 +700,54 @@ impl<'a> SchemaNames<'a> {
                     region: RegionTerm::Static,
                     mutable: reference.mut_token().is_some(),
                     target: Box::new(nested!(&target)),
+                }
+            }
+            // `dyn Trait`: the principal trait's object schema, as in a
+            // signature or a `let` annotation. A trait-object place keeps its
+            // value's concrete runtime type.
+            ast::Type::DynTraitType(object) => {
+                let principal = object.type_bound_list().and_then(|bounds| {
+                    bounds.bounds().find_map(|bound| match bound.ty() {
+                        Some(ast::Type::PathType(path)) => path.path(),
+                        _ => None,
+                    })
+                });
+                let Some((segments, absolute)) =
+                    principal.and_then(super::member_index::path_segments)
+                else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                match self.graph.lookup_source_path(
+                    crate::source::manifest::Namespace::Type,
+                    &segments,
+                    absolute,
+                    &self.schema.scope,
+                    self.schema.header.profile.edition,
+                ) {
+                    Ok(super::names::NameLookup::Defined(found)) => WrittenType::Dyn(
+                        crate::traits::term::DynSchemaKey(found.identity),
+                    ),
+                    // The closure traits are language items of the prelude:
+                    // their object schema is the builtin trait's identity
+                    // (as in `source_types::resolve_written_type`).
+                    Ok(super::names::NameLookup::Absent)
+                        if !absolute
+                            && matches!(segments.as_slice(),
+                                [crate::syntax::imports::ImportSegment::Name(name)]
+                                    if matches!(name.as_str(), "Fn" | "FnMut" | "FnOnce")) =>
+                    {
+                        let crate::syntax::imports::ImportSegment::Name(name) = &segments[0]
+                        else {
+                            return QueryPoll::Ready(Ok(None));
+                        };
+                        WrittenType::Dyn(crate::traits::term::DynSchemaKey(
+                            crate::core::digest::Digest::of_bytes(
+                                format!("lrr/v1/builtin-closure-trait/{name}").as_bytes(),
+                            ),
+                        ))
+                    }
+                    Ok(_) => return QueryPoll::Ready(Ok(None)),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
                 }
             }
             ast::Type::PathType(path) => {
@@ -2016,7 +2094,7 @@ impl BoundNominalVariant {
 }
 /// `[INT_NUMBER]` or `[-, INT_NUMBER]` with an optional integer suffix and any
 /// radix prefix, as written in an explicit enum discriminant.
-fn literal_discriminant(tokens: &[TokenRecipe]) -> Option<i128> {
+pub(crate) fn literal_discriminant(tokens: &[TokenRecipe]) -> Option<i128> {
     use ra_ap_syntax::SyntaxKind;
     let (negative, number) = match tokens {
         [number] => (false, number),

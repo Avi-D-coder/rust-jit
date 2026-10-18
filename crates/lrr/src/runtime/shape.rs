@@ -142,6 +142,13 @@ pub enum TypeKey {
         mutable: bool,
         target: TypeId,
     },
+    /// `dyn Trait`: the principal trait's object schema. It is the written
+    /// (declared) pointee of a trait-object reference, box or generic
+    /// argument; a value keeps its concrete runtime Type, so a declared
+    /// `dyn` position admits any actual Type (see `TypeRegistry::admits`).
+    Dyn {
+        schema: Digest,
+    },
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ShapeCategory {
@@ -195,6 +202,10 @@ pub struct TypeRegistry {
     /// The run's growable-array lang item: its `Vec<T>` Types have the same
     /// `[T]` element-window views as arrays.
     vec_lang: Option<Digest>,
+    /// Enum descriptors whose discriminant table still has an unevaluated
+    /// expression entry (E-R5-013); the dispatcher's cast pre-step is skipped
+    /// while none exists.
+    unevaluated_discriminants: usize,
 }
 /// Reserved primitive descriptors have no source or worker-dependent state.
 fn primitive_descriptors() -> &'static [TypeDescriptor; 16] {
@@ -378,6 +389,7 @@ impl TypeRegistry {
                 self.require(*target)?;
                 (ShapeCategory::Pointer, None, CopyStatus::Copy)
             }
+            TypeKey::Dyn { .. } => (ShapeCategory::Unsized, None, CopyStatus::NotCopy),
             TypeKey::Facade { family, args } => {
                 let arity = match family {
                     FacadeType::String => 0,
@@ -463,6 +475,11 @@ impl TypeRegistry {
         }
         Ok(id)
     }
+    /// Whether some enum descriptor still has an unevaluated discriminant
+    /// expression (E-R5-013).
+    pub(crate) fn has_unevaluated_discriminants(&self) -> bool {
+        self.unevaluated_discriminants > 0
+    }
     /// Attach a nominal enum's source-bound discriminant table. The table is a
     /// property of the declaration schema, so a second attachment must agree.
     pub(crate) fn attach_discriminants(
@@ -480,9 +497,41 @@ impl TypeRegistry {
             return Err(super::value::invalid());
         }
         match &descriptor.discriminants {
-            Some(existing) if existing != table => Err(super::value::invalid()),
-            Some(_) => Ok(()),
+            Some(existing) if existing == table => Ok(()),
+            // An explicit expression's value arrives after the first
+            // attachment (E-R5-013): a table agrees with another when every
+            // entry both know is equal, and the merge knows both's entries.
+            Some(existing) => {
+                if existing.len() != table.len() {
+                    return Err(super::value::invalid());
+                }
+                let mut merged = Vec::with_capacity(table.len());
+                let mut refined = false;
+                for (known, incoming) in existing.iter().zip(table.iter()) {
+                    match (known, incoming) {
+                        (Some(known), Some(incoming)) if known != incoming => {
+                            return Err(super::value::invalid());
+                        }
+                        (None, Some(_)) => {
+                            refined = true;
+                            merged.push(*incoming);
+                        }
+                        _ => merged.push(*known),
+                    }
+                }
+                if refined {
+                    let gap = |entries: &[Option<i128>]| entries.iter().any(Option::is_none);
+                    if gap(existing) && !gap(&merged) {
+                        self.unevaluated_discriminants -= 1;
+                    }
+                    descriptor.discriminants = Some(merged.into());
+                }
+                Ok(())
+            }
             None => {
+                if table.iter().any(Option::is_none) {
+                    self.unevaluated_discriminants += 1;
+                }
                 descriptor.discriminants = Some(table.clone());
                 Ok(())
             }
@@ -516,6 +565,7 @@ impl TypeKey {
             | Self::Ref { .. }
             | Self::RawPtr { .. }
             | Self::Slice { .. }
+            | Self::Dyn { .. }
             | Self::Array { .. } => Some(0),
             Self::Tuple(members) => ids(members),
             Self::Callable {
@@ -621,6 +671,10 @@ impl StableEncode for TypeKey {
                 e.bool(*mutable);
                 e.u32(target.0);
             }
+            Self::Dyn { schema } => {
+                e.u32(10);
+                e.digest(*schema);
+            }
         }
     }
 }
@@ -656,5 +710,64 @@ mod tests {
             TypeKey::Primitive(PrimitiveIdentity::new(TypeId(7)).unwrap()).fingerprint(),
             TypeKey::Primitive(PrimitiveIdentity::new(TypeId(8)).unwrap()).fingerprint()
         );
+    }
+
+    #[test]
+    fn evaluated_discriminants_refine_an_attached_table_and_must_agree() {
+        use crate::source::manifest::{DefKey, ItemKind, Namespace};
+        let mut types = TypeRegistry::default();
+        let definition = DefKey {
+            crate_key: Digest([1; 32]),
+            module_path: Vec::new(),
+            namespace: Namespace::Type,
+            item_kind: ItemKind::Enum,
+            declared_name: "E".into(),
+            enclosing_impl: None,
+            duplicate_ordinal: 0,
+        };
+        let ty = types
+            .intern(TypeKey::Nominal {
+                identity: definition.fingerprint(),
+                definition,
+                schema: Digest([2; 32]),
+                args: Box::new([]),
+                const_args: Box::new([]),
+            })
+            .unwrap();
+        let table = |entries: &[Option<i128>]| -> Arc<[Option<i128>]> { entries.into() };
+        assert!(!types.has_unevaluated_discriminants());
+        // The declaration's literal table: variant 1 is an unevaluated expression.
+        types
+            .attach_discriminants(ty, &table(&[Some(0), None, None]))
+            .unwrap();
+        assert!(types.has_unevaluated_discriminants());
+        // The first attachment's table again changes nothing.
+        types
+            .attach_discriminants(ty, &table(&[Some(0), None, None]))
+            .unwrap();
+        // An evaluated expression and its implicit successor complete it.
+        types
+            .attach_discriminants(ty, &table(&[None, Some(8), Some(9)]))
+            .unwrap();
+        assert_eq!(
+            types.descriptor(ty).unwrap().discriminants.as_deref(),
+            Some(&[Some(0), Some(8), Some(9)][..])
+        );
+        assert!(!types.has_unevaluated_discriminants());
+        // Re-attaching the declaration's partial table keeps what was evaluated.
+        types
+            .attach_discriminants(ty, &table(&[Some(0), None, None]))
+            .unwrap();
+        assert_eq!(
+            types.descriptor(ty).unwrap().discriminants.as_deref(),
+            Some(&[Some(0), Some(8), Some(9)][..])
+        );
+        // A disagreeing or differently sized table is refused.
+        assert!(
+            types
+                .attach_discriminants(ty, &table(&[Some(0), Some(7), None]))
+                .is_err()
+        );
+        assert!(types.attach_discriminants(ty, &table(&[Some(0)])).is_err());
     }
 }

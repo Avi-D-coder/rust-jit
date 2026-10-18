@@ -60,6 +60,10 @@ pub struct BodyImport {
 pub struct EnteredMacroFacts {
     pub bindings: Vec<super::local_bindings::LocalBindingRecipe>,
     pub items: Vec<super::body_items::BodyItem>,
+    /// The associated items of the block-level `impl`/`trait` rows of `items`.
+    /// They are declarations (published, signed, called) but never lexical
+    /// names of the block, so name-binding consumers read `items` only.
+    pub members: Vec<super::body_items::BodyItem>,
     pub imports: Vec<BodyImport>,
     pub invocations: Vec<BodyMacroInvocation>,
     pub scopes: Vec<BodyMacroScope>,
@@ -120,6 +124,7 @@ impl ParsedFile {
             body_hash: handle.key.content,
             range: handle.range,
             entry_blocked: false,
+            block_offset: 0,
         };
         self.lexical_facts(&root, &owner, cfg, containing, context)
     }
@@ -134,6 +139,7 @@ impl ParsedFile {
         let mut facts = EnteredMacroFacts {
             bindings: vec![],
             items: vec![],
+            members: vec![],
             imports: vec![],
             invocations: vec![],
             scopes: vec![BodyMacroScope {
@@ -162,7 +168,9 @@ impl ParsedFile {
                         &pattern,
                         body,
                         0,
-                        u64::from(body.range.start),
+                        // Parameters are visible from the body block on
+                        // (a pattern function's handle also spans them).
+                        u64::from(body.block_range().start),
                         super::local_bindings::BindingForm::Parameter,
                         &mut facts.bindings,
                     )?;
@@ -181,6 +189,7 @@ impl ParsedFile {
         stack.reverse();
         let mut producers = BTreeMap::<u32, u32>::new();
         let mut item_budget = super::body_items::BodyItemBudget::default();
+        let mut member_budget = super::body_items::BodyItemBudget::default();
         let mut import_budget = super::imports::ImportBudget::default();
         let mut import_scope = containing.clone();
         import_scope.owner = Some(body.def_key);
@@ -443,6 +452,7 @@ impl ParsedFile {
                         profile: &self.profile,
                         cfg,
                         header_context,
+                        member_owner: None,
                     },
                     &attrs,
                     attribute_input,
@@ -472,6 +482,32 @@ impl ParsedFile {
                                 attributes: attrs,
                             },
                         });
+                    }
+                    if !transform {
+                        collect_container_members(
+                            &mut facts.members,
+                            &mut member_budget,
+                            &item,
+                            &header,
+                            super::body_items::BodyItemContext {
+                                parsed: self,
+                                parent: body,
+                                containing,
+                                scope,
+                                profile: &self.profile,
+                                cfg,
+                                header_context: &[],
+                                member_owner: None,
+                            },
+                        )?;
+                        // A block-local enum's non-literal discriminants are
+                        // declarations of anonymous constants (E-R5-013).
+                        let rows = member_budget.collect_discriminants(&item, &header, self, cfg)?;
+                        facts
+                            .members
+                            .try_reserve(rows.len())
+                            .map_err(|_| error("body discriminant allocation failed"))?;
+                        facts.members.extend(rows);
                     }
                     facts
                         .items
@@ -780,7 +816,85 @@ mod tests {
     }
 }
 
+/// The associated items of a block-level `impl` or `trait` as declaration
+/// rows owned by that container. A macro call inside the container, a
+/// disabled item and an attribute-transformed item contribute no row here
+/// (their producers are separate entry demands); the rest are collected by the
+/// one `BodyItemBudget::collect`, so a member's identity, header and scope are
+/// derived exactly as for any other body item.
+fn collect_container_members(
+    members: &mut Vec<super::body_items::BodyItem>,
+    budget: &mut super::body_items::BodyItemBudget,
+    container: &ast::Item,
+    row: &super::body_items::BodyItem,
+    context: super::body_items::BodyItemContext<'_>,
+) -> Result<(), Diagnostic> {
+    use crate::source::manifest::ItemKind;
+    let list = match container {
+        ast::Item::Impl(item) => item.assoc_item_list(),
+        ast::Item::Trait(item) => item.assoc_item_list(),
+        _ => return Ok(()),
+    };
+    let Some(list) = list else {
+        return Ok(());
+    };
+    let owner = match row.item.def_key.item_kind {
+        ItemKind::Impl => row
+            .item
+            .def_key
+            .enclosing_impl
+            .ok_or_else(|| error("local impl identity is absent"))?,
+        _ => crate::core::digest::StableEncode::fingerprint(&row.item.def_key),
+    };
+    for assoc in list.assoc_items() {
+        let item = ast::Item::cast(assoc.syntax().clone())
+            .ok_or_else(|| error("local container member is not an item"))?;
+        if matches!(item, ast::Item::MacroCall(_)) {
+            continue;
+        }
+        let (enabled, attrs) = attributes(&item, context.cfg)?;
+        if !enabled
+            || attrs.iter().any(|a| {
+                matches!(
+                    a.class,
+                    AttributeClass::TransformUnsupported | AttributeClass::Derive
+                )
+            })
+        {
+            continue;
+        }
+        let member_context = super::body_items::BodyItemContext {
+            parsed: context.parsed,
+            parent: context.parent,
+            containing: context.containing,
+            scope: context.scope,
+            profile: context.profile,
+            cfg: context.cfg,
+            header_context: &row.item.header.tokens,
+            member_owner: Some(owner),
+        };
+        if let Some(member) = budget.collect(&item, member_context, &attrs, None)? {
+            members
+                .try_reserve(1)
+                .map_err(|_| error("local container member allocation failed"))?;
+            members.push(member);
+        }
+    }
+    Ok(())
+}
+
 impl EnteredMacroFacts {
+    /// Every declaration of the body: its block-level items, then the
+    /// associated items of its block-level impls and traits. Name binding
+    /// uses `items` alone.
+    pub(crate) fn declarations(
+        &self,
+    ) -> std::iter::Chain<
+        std::slice::Iter<'_, super::body_items::BodyItem>,
+        std::slice::Iter<'_, super::body_items::BodyItem>,
+    > {
+        self.items.iter().chain(self.members.iter())
+    }
     /// Owned lexical plan storage, including allocator capacity slack. Shared
     /// parser/index handles are accounted separately by their retaining owner.
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
@@ -826,6 +940,7 @@ impl EnteredMacroFacts {
         let mut bytes = std::mem::size_of::<Self>();
         add(&mut bytes, slots(&self.bindings)?)?;
         add(&mut bytes, slots(&self.items)?)?;
+        add(&mut bytes, slots(&self.members)?)?;
         add(&mut bytes, slots(&self.imports)?)?;
         add(&mut bytes, slots(&self.invocations)?)?;
         add(&mut bytes, slots(&self.scopes)?)?;
@@ -835,7 +950,7 @@ impl EnteredMacroFacts {
             add(&mut bytes, binding.name.capacity())?;
             add(&mut bytes, binding.raw_name.capacity())?;
         }
-        for row in &self.items {
+        for row in self.declarations() {
             add(&mut bytes, slots(&row.namespaces)?)?;
             let item = &row.item;
             add(&mut bytes, item.scope.heap_bytes())?;

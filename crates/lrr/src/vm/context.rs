@@ -60,71 +60,73 @@ impl GenericEnv {
             .closed_references
             .as_ref()
             .filter(|proof| proof.has_result());
-        let result_matches =
-            if let Some(proof) = reference_result {
-                proof.validate_result_packet(signature, contracts)?;
-                true
-            } else {
-                match signature.result_symbolic.as_ref() {
-                    Some(source) => {
-                        contracts.source_result.as_ref() == Some(source)
-                            || Self::instantiates(source, contracts)
-                    }
-                    None => match (
-                        contracts.source_result.as_ref(),
-                        contracts.result_descriptor,
-                    ) {
-                        (None, None) => true,
-                        (Some(TyTerm::Primitive(primitive)), Some(descriptor)) => {
-                            primitive_runtime_id(*primitive)? == descriptor
-                                && contracts.normalized_deferred_return.as_ref().is_some_and(
-                                    |proof| proof.validate_packet(signature, contracts).is_ok(),
-                                )
-                        }
-                        // A written name resolved to a closed nominal/tuple
-                        // declaration; the return boundary checks the value.
-                        // An opaque (`impl Trait`) or trait-object result keeps
-                        // the returned value's own type.
-                        (Some(source), None)
-                            if crate::frontend::call_contracts::contains_object(source) =>
-                        {
-                            true
-                        }
-                        (
-                            Some(source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..))),
-                            None,
-                        ) => {
-                            crate::frontend::call_contracts::closed_term(source)
-                        }
-                        // A closed `&[T]`/`&mut [T]` result: a slice reference
-                        // carries its own element window; the return boundary
-                        // checks the returned value against the source Type.
-                        (Some(source @ TyTerm::Ref(_, _, pointee)), None)
-                            if matches!(pointee.as_ref(), TyTerm::Slice(_) | TyTerm::Str) =>
-                        {
-                            crate::frontend::call_contracts::closed_term(source)
-                        }
-                        // A closed `&'static T` result names no parameter
-                        // region, so no closed-reference proof relates it to
-                        // an argument; the return boundary checks the value.
-                        (Some(source @ TyTerm::Ref(crate::traits::term::RegionTerm::Static, _, _)), None) => {
-                            crate::frontend::call_contracts::closed_term(source)
-                        }
-                        // A closed fn-pointer result (E-R5-008); the return
-                        // boundary checks the returned value against it.
-                        (Some(source @ TyTerm::Function(_)), None) => {
-                            crate::frontend::call_contracts::closed_term(source)
-                        }
-                        // A normalized associated-type result; the return
-                        // boundary checks the returned value against it.
-                        (Some(TyTerm::Primitive(_)), None) => {
-                            signature.result.len() > 1
-                                && contracts.normalized_deferred_return.is_none()
-                        }
-                        _ => false,
-                    },
+        let result_matches = if let Some(proof) = reference_result {
+            proof.validate_result_packet(signature, contracts)?;
+            true
+        } else {
+            match signature.result_symbolic.as_ref() {
+                Some(source) => {
+                    contracts.source_result.as_ref() == Some(source)
+                        || Self::instantiates(source, contracts)
                 }
-            };
+                None => match (
+                    contracts.source_result.as_ref(),
+                    contracts.result_descriptor,
+                ) {
+                    (None, None) => true,
+                    (Some(TyTerm::Primitive(primitive)), Some(descriptor)) => {
+                        primitive_runtime_id(*primitive)? == descriptor
+                            && contracts
+                                .normalized_deferred_return
+                                .as_ref()
+                                .is_some_and(|proof| {
+                                    proof.validate_packet(signature, contracts).is_ok()
+                                })
+                    }
+                    // A written name resolved to a closed nominal/tuple
+                    // declaration; the return boundary checks the value.
+                    // An opaque (`impl Trait`) or trait-object result keeps
+                    // the returned value's own type.
+                    (Some(source), None)
+                        if crate::frontend::call_contracts::contains_object(source) =>
+                    {
+                        true
+                    }
+                    (
+                        Some(
+                            source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)),
+                        ),
+                        None,
+                    ) => crate::frontend::call_contracts::closed_term(source),
+                    // A closed `&[T]`/`&mut [T]` result: a slice reference
+                    // carries its own element window; the return boundary
+                    // checks the returned value against the source Type.
+                    (Some(source @ TyTerm::Ref(_, _, pointee)), None)
+                        if matches!(pointee.as_ref(), TyTerm::Slice(_) | TyTerm::Str) =>
+                    {
+                        crate::frontend::call_contracts::closed_term(source)
+                    }
+                    // A closed `&'static T` result names no parameter
+                    // region, so no closed-reference proof relates it to
+                    // an argument; the return boundary checks the value.
+                    (
+                        Some(source @ TyTerm::Ref(crate::traits::term::RegionTerm::Static, _, _)),
+                        None,
+                    ) => crate::frontend::call_contracts::closed_term(source),
+                    // A closed fn-pointer result (E-R5-008); the return
+                    // boundary checks the returned value against it.
+                    (Some(source @ TyTerm::Function(_)), None) => {
+                        crate::frontend::call_contracts::closed_term(source)
+                    }
+                    // A normalized associated-type result; the return
+                    // boundary checks the returned value against it.
+                    (Some(TyTerm::Primitive(_)), None) => {
+                        signature.result.len() > 1 && contracts.normalized_deferred_return.is_none()
+                    }
+                    _ => false,
+                },
+            }
+        };
         if signature.definition != contracts.definition
             || signature.parameters.len() != contracts.source_parameters.len()
             || signature.parameters.len() != contracts.parameter_descriptors.len()
@@ -324,11 +326,8 @@ impl GenericEnv {
             bytes,
             normalized_return: contracts.normalized_deferred_return.clone(),
             closed_references: contracts.closed_references.clone(),
-            structural_result: contracts
-                .source_result
-                .clone()
-                .filter(|term| {
-                    (matches!(term, TyTerm::Tuple(_) | TyTerm::Array(..))
+            structural_result: contracts.source_result.clone().filter(|term| {
+                (matches!(term, TyTerm::Tuple(_) | TyTerm::Array(..))
                         // A reference bound structurally from generic arguments
                         // (`-> &'a mut V` with `V` the reached value type).
                         || (contracts.structural_references && matches!(term, TyTerm::Ref(..)))
@@ -338,8 +337,8 @@ impl GenericEnv {
                             term,
                             TyTerm::Ref(crate::traits::term::RegionTerm::Static, _, _)
                         ))
-                        && crate::frontend::call_contracts::closed_term(term)
-                }),
+                    && crate::frontend::call_contracts::closed_term(term)
+            }),
             structural_references: contracts.structural_references,
             written_result: None,
         })
@@ -410,33 +409,70 @@ impl GenericEnv {
         &self,
         store: &crate::runtime::cell::GuestStore,
     ) -> Result<Option<TypeId>, Diagnostic> {
+        // Source-resolved member results may not have a symbolic template
+        // on the original signature. The admitted structural result retains
+        // the resolved source shape for this same call.
         Ok(self
             .definition
             .result_symbolic
-            .as_ref()
-            .and_then(|term| self.bound_find(term, store)))
+            .iter()
+            .chain(self.structural_result.iter())
+            .find_map(|term| self.bound_find(term, store)))
     }
     /// `bound_result_descriptor_find`, interning the descriptor.
     pub(crate) fn bound_result_descriptor_intern(
         &self,
         store: &mut crate::runtime::cell::GuestStore,
     ) -> Result<Option<TypeId>, Diagnostic> {
-        match self.definition.result_symbolic.as_ref() {
-            Some(term) => self.bound_intern(term, store),
-            None => Ok(None),
+        for term in self
+            .definition
+            .result_symbolic
+            .iter()
+            .chain(self.structural_result.iter())
+        {
+            if let Some(descriptor) = self.bound_intern(term, store)? {
+                return Ok(Some(descriptor));
+            }
         }
+        Ok(None)
     }
+    /// The actual descriptor paired with an admitted source substitution.
+    /// Closed nominal/closure leaves cannot be reconstructed from a source
+    /// name: preserve the reached descriptor already bound by this call.
+    fn bound_source_descriptor(&self, term: &TyTerm) -> Option<TypeId> {
+        let mut found = None;
+        for (key, source) in self.symbolic.iter() {
+            if source != term {
+                continue;
+            }
+            let descriptor = self.runtime_binding(*key)?;
+            // Source views can erase dynamic/capture structure. Never pick
+            // an arbitrary runtime representation from equal source views.
+            if found.is_some_and(|prior| prior != descriptor) {
+                return None;
+            }
+            found = Some(descriptor);
+        }
+        found
+    }
+
     fn bound_find(
         &self,
         term: &TyTerm,
         store: &crate::runtime::cell::GuestStore,
     ) -> Option<TypeId> {
         use crate::runtime::shape::TypeKey;
+        if let Some(descriptor) = self.bound_source_descriptor(term) {
+            return Some(descriptor);
+        }
         match term {
             TyTerm::Param(key) => self.runtime_binding(*key),
             TyTerm::Ref(_, mutable, inner) => {
                 let target = self.bound_find(inner, store)?;
-                store.find_type(&TypeKey::Ref { mutable: *mutable, target })
+                store.find_type(&TypeKey::Ref {
+                    mutable: *mutable,
+                    target,
+                })
             }
             TyTerm::Slice(element) => {
                 let element = self.bound_find(element, store)?;
@@ -458,13 +494,19 @@ impl GenericEnv {
         store: &mut crate::runtime::cell::GuestStore,
     ) -> Result<Option<TypeId>, Diagnostic> {
         use crate::runtime::shape::TypeKey;
+        if let Some(descriptor) = self.bound_source_descriptor(term) {
+            return Ok(Some(descriptor));
+        }
         Ok(match term {
             TyTerm::Param(key) => self.runtime_binding(*key),
             TyTerm::Ref(_, mutable, inner) => {
                 let Some(target) = self.bound_intern(inner, store)? else {
                     return Ok(None);
                 };
-                Some(store.intern_type(TypeKey::Ref { mutable: *mutable, target })?)
+                Some(store.intern_type(TypeKey::Ref {
+                    mutable: *mutable,
+                    target,
+                })?)
             }
             TyTerm::Slice(element) => {
                 let Some(element) = self.bound_intern(element, store)? else {

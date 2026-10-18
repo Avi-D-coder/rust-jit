@@ -377,18 +377,27 @@ impl RunMachine {
         let local = declaration.owner().is_some();
         let kind = match declaration.owner() {
             // The owning body's actual entered item row, published with it.
-            Some(owner) if owner == &pc.body => goal
-                .retained_plan()
-                .context()
-                .facts()
-                .items
-                .iter()
-                .find(|row| row.item.def_key.fingerprint() == identity)
-                .map(|row| row.item.def_key.item_kind),
-            Some(_) => {
-                return QueryPoll::Ready(Err(call_fault(
-                    "lexical value declaration belongs to another body",
-                )));
+            // The declaring body is this body or an enclosing one (a nested
+            // `fn` or an impl member names its parents' block items).
+            Some(owner) => {
+                let mut declaring = Some(goal.retained_plan().context());
+                while let Some(context) = declaring {
+                    if context.source().index().body() == owner {
+                        break;
+                    }
+                    declaring = context.source().local_parent().map(|parent| parent.context());
+                }
+                let Some(declaring) = declaring else {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "lexical value declaration belongs to another body",
+                    )));
+                };
+                declaring
+                    .facts()
+                    .items
+                    .iter()
+                    .find(|row| row.item.def_key.fingerprint() == identity)
+                    .map(|row| row.item.def_key.item_kind)
             }
             // A variant has no outline row of its own: it is its enum's member.
             None if declaration.variant().is_some() => None,

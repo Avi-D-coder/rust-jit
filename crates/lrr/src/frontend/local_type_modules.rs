@@ -141,8 +141,7 @@ impl LexicalTypeModule {
         // identity was checked against GeneratedSyntaxInput at source capture;
         // an original-shaped outline DefKey must not replace it here.
         let mut rows = outline
-            .items
-            .iter()
+            .declaration_rows()
             .filter(|item| item.declaration_span == admitted.context().range);
         let row = rows
             .next()
@@ -158,6 +157,7 @@ impl LexicalTypeModule {
         {
             return Err(error("entered lexical declaration/header/body differs"));
         }
+        drop(rows);
         let goal = ScopeKey {
             crate_key: row.scope.crate_key,
             module_path: row.scope.module_path.clone(),
@@ -168,12 +168,15 @@ impl LexicalTypeModule {
             .get_key_value(&goal)
             .map(|(scope, _)| scope.clone())
             .ok_or_else(|| error("entered lexical module is absent from actual outline"))?;
+        // `outline` above proves the actual admitted lexical module, which
+        // can have been emitted inline into a generated unit. Its physical
+        // parent source need not contain that semantic module in its own
+        // outline. Keep the genuine parent selection; CurrentModuleName
+        // additionally requires the current seal's exact scope certificate
+        // before it can answer for a scope absent from the physical source.
         let selected = context
             .module_source()
-            .filter(|view| {
-                view.selection().outline.crate_key == scope.crate_key
-                    && view.outline().scopes.contains_key(&scope)
-            })
+            .filter(|view| view.selection().outline.crate_key == scope.crate_key)
             .map(|view| view.selection().clone());
         let key_bytes = key
             .parse

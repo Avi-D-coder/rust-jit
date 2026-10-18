@@ -494,15 +494,41 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
     // canonical key is the exact admitted local facts row, even when the body
     // parse also has a module-level GeneratedSyntax/RetainedSyntax publication.
     // Module maps cannot stand in for function-local declaration authority.
+    let mut declaring: Option<Arc<PreparedSourceLocalPlan>> = None;
     let canonical = if module.is_none() {
-        let Some(item) = prefix
+        let mut item = prefix
             .retained_plan()
             .context()
             .facts()
             .items
             .iter()
-            .find(|row| row.item.def_key.fingerprint() == identity)
-        else {
+            .find(|row| row.item.def_key.fingerprint() == identity);
+        // A block item of an enclosing body (a nested function names a type
+        // its declaring body introduced): the row belongs to the plan of the
+        // body that published the declaration (`LocalDeclarationOwner`).
+        if item.is_none() {
+            let Some(owner) = checked!(trace.input(db, InputKey::LocalDeclarationOwner(identity)))
+            else {
+                return pending(BodyTypeDemand::DeclarationOccurrence(identity));
+            };
+            let InputValue::LocalDeclarationOwner(owner) = owner.as_ref() else {
+                return QueryPoll::Ready(Err(error("body Type declaration owner variant differs")));
+            };
+            let plan = polled!(trace.query(db, QueryKey::SourceLocalPlan(owner.clone())));
+            let QueryValue::SourceLocalPlan(plan) = plan.as_ref() else {
+                return QueryPoll::Ready(Err(error("body Type declaring plan variant differs")));
+            };
+            declaring = Some(Arc::clone(plan));
+        }
+        if let Some(plan) = &declaring {
+            item = plan
+                .context()
+                .facts()
+                .items
+                .iter()
+                .find(|row| row.item.def_key.fingerprint() == identity);
+        }
+        let Some(item) = item else {
             return pending(BodyTypeDemand::DeclarationOccurrence(identity));
         };
         if *parse != prefix.retained_plan().context().source().parsed().key()
@@ -691,7 +717,9 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
         return pending(BodyTypeDemand::PinnedAdjustment(identity));
     }
     let mut declaration = BodyTypeDeclaration {
-        plan: Arc::clone(prefix.retained_plan()),
+        // The declaring body's plan owns the declaration's header, fields and
+        // schema, whichever (nested) body names it.
+        plan: declaring.unwrap_or_else(|| Arc::clone(prefix.retained_plan())),
         prefix: prefix.fingerprint(),
         selected: identity,
         definition: canonical,

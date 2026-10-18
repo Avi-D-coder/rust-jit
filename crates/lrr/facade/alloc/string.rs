@@ -254,3 +254,9 @@ impl core::borrow::Borrow<str> for String {
         self.as_str()
     }
 }
+
+impl core::hash::Hash for String {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state)
+    }
+}

@@ -169,13 +169,17 @@ impl Frame {
         Ok(())
     }
     fn bindings_first(&self, scope: ScopeId) -> Result<bool, Diagnostic> {
-        Ok(self
-            .body
-            .scopes()
-            .get(scope.0 as usize)
-            .ok_or_else(|| invalid("cleanup scope absent"))?
-            .kind
-            == crate::syntax::body_index::ScopeKind::Clause)
+        // A pattern clause's scrutinee temporary, and a pattern function's
+        // staged arguments, outlive the bindings taken from them.
+        Ok(matches!(
+            self.body
+                .scopes()
+                .get(scope.0 as usize)
+                .ok_or_else(|| invalid("cleanup scope absent"))?
+                .kind,
+            crate::syntax::body_index::ScopeKind::Clause
+                | crate::syntax::body_index::ScopeKind::Parameters
+        ))
     }
     fn first_cleanup_stage(&self, scope: ScopeId) -> Result<Stage, Diagnostic> {
         self.bindings_first(scope)?;

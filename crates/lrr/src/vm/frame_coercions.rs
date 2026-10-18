@@ -66,7 +66,7 @@ impl Frame {
                     TypeKey::Ref { mutable, .. } => Some(*mutable),
                     _ => None,
                 },
-                None => None,
+                None => slot.expects_reference,
             },
         };
         Ok(expected.map(|mutable| {

@@ -273,7 +273,7 @@ impl SourceDiscovery {
             let mut producers = scan.producers().iter().filter(|producer| {
                 producer.kind == DeclarationProducerKind::Macro
                     && producer.range == event.range
-                    && producer.containers.contains(&source.body().range)
+                    && producer.containers.contains(&source.body().block_range())
             });
             let Some(producer) = producers.next() else {
                 return Ok(need_occurrence());

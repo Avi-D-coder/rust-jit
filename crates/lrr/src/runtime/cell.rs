@@ -12,10 +12,14 @@ mod boxes;
 mod vecs;
 #[path = "cell_interior.rs"]
 mod interior;
+#[path = "cell_atomics.rs"]
+mod atomics;
 #[path = "cell_promoted.rs"]
 mod promoted;
 #[path = "cell_pointers.rs"]
 mod pointers;
+#[path = "cell_layout.rs"]
+pub(crate) mod layouts;
 #[path = "cell_constant_instantiation.rs"]
 pub mod constant_instantiation;
 #[path = "cell_construction_cleanup.rs"]
@@ -272,6 +276,9 @@ pub struct GuestStore {
     promoted: promoted::PromotedStorage,
     /// Synthetic addresses of cells, strings and functions (E-R5-008).
     pointers: pointers::PointerTable,
+    /// Declaration facts and instantiated field types for type layout
+    /// (E-R5-012).
+    layouts: layouts::LayoutTable,
 }
 impl GuestStore {
     // E-R5-006: ignored, remove at callers (`_max_handles`, `_max_bytes`).
@@ -303,6 +310,7 @@ impl GuestStore {
             leaked: 0,
             promoted: promoted::PromotedStorage::default(),
             pointers: pointers::PointerTable::default(),
+            layouts: layouts::LayoutTable::default(),
         })
     }
     pub(crate) fn drop_inventory_installed(&self) -> bool {
@@ -425,6 +433,7 @@ impl GuestStore {
                     self.descriptor_source_term(*result)?,
                 ),
             ),
+            TypeKey::Dyn { schema } => Some(TyTerm::Dyn(crate::traits::term::DynSchemaKey(*schema))),
             _ => None,
         }
     }
@@ -489,6 +498,7 @@ impl GuestStore {
                 Some(self.intern_type(TypeKey::Slice { element })?)
             }
             TyTerm::Str => Some(TypeId(16)),
+            TyTerm::Dyn(key) => Some(self.intern_type(TypeKey::Dyn { schema: key.0 })?),
             // A reference to a structural target (regions are not data).
             TyTerm::Ref(_, mutable, target) => {
                 let Some(target) = self.intern_structural_term(target)? else {
@@ -548,6 +558,7 @@ impl GuestStore {
                 self.find_type(&TypeKey::Slice { element })
             }
             TyTerm::Str => Some(TypeId(16)),
+            TyTerm::Dyn(key) => self.find_type(&TypeKey::Dyn { schema: key.0 }),
             TyTerm::Ref(_, mutable, target) => {
                 let target = self.find_structural_term(target)?;
                 self.find_type(&TypeKey::Ref {
@@ -638,6 +649,48 @@ impl GuestStore {
         if let Some(address) = self.pointer_address_operand(id)? {
             return Ok(Some(address));
         }
+        let Some((enumeration, variant)) = self.fieldless_enum_variant(id)? else {
+            return Ok(None);
+        };
+        let discriminant = self
+            .types
+            .descriptor(enumeration)?
+            .discriminants
+            .as_ref()
+            .and_then(|table| table.get(variant as usize).copied())
+            .ok_or_else(invalid)?
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "enum discriminant expression was not evaluated before its cast (E-R5-013)"
+                        .into(),
+                )
+            })?;
+        // The value is the discriminant in the enum's representation; every
+        // such value is exactly an `isize`, or (a `u64` above `i64::MAX`) a
+        // `u64`, so the cast to the written target sees the declared bits.
+        let value = match i64::try_from(discriminant) {
+            Ok(value) => ValueRepr::signed(TypeId(8), value),
+            Err(_) => ValueRepr::unsigned(
+                TypeId(12),
+                u64::try_from(discriminant).map_err(|_| {
+                    Diagnostic::new(
+                        "LRR-E-UNSUPPORTED",
+                        "enum discriminant outside the 64-bit integer representation".into(),
+                    )
+                })?,
+            ),
+        };
+        value.map(Some)
+    }
+    /// The enum type and active variant of a live fieldless enum value in
+    /// `id`, or `None` for any other value (which is not an enum cast
+    /// operand).
+    fn fieldless_enum_variant(&self, id: CellId) -> Result<Option<(TypeId, u32)>, Diagnostic> {
+        let cell = self.cells.get(id)?;
+        if cell.retired {
+            return Err(stale());
+        }
         let CellState::Live(value) = cell.state else {
             return Ok(None);
         };
@@ -666,24 +719,39 @@ impl GuestStore {
             ));
         }
         let variant = storage.variant.ok_or_else(invalid)?;
-        let discriminant = descriptor
+        Ok(Some((TypeId(value.type_id), variant)))
+    }
+    /// Whether any enum's discriminant expression is still unevaluated.
+    pub(crate) fn has_unevaluated_discriminants(&self) -> bool {
+        self.types.has_unevaluated_discriminants()
+    }
+    /// Merge evaluated discriminants into an enum descriptor's table
+    /// (E-R5-013); entries both tables know must agree.
+    pub(crate) fn attach_enum_discriminants(
+        &mut self,
+        ty: TypeId,
+        table: &std::sync::Arc<[Option<i128>]>,
+    ) -> Result<(), Diagnostic> {
+        self.types.attach_discriminants(ty, table)
+    }
+    /// The enum type and variant of a cast operand whose discriminant is an
+    /// explicit expression not evaluated yet (E-R5-013); the dispatcher
+    /// demands it before the cast runs.
+    pub(crate) fn pending_enum_discriminant(
+        &self,
+        id: CellId,
+    ) -> Result<Option<(TypeId, u32)>, Diagnostic> {
+        let Some((enumeration, variant)) = self.fieldless_enum_variant(id)? else {
+            return Ok(None);
+        };
+        let known = self
+            .types
+            .descriptor(enumeration)?
             .discriminants
             .as_ref()
             .and_then(|table| table.get(variant as usize).copied())
-            .ok_or_else(invalid)?
-            .ok_or_else(|| {
-                Diagnostic::new(
-                    "LRR-E-UNSUPPORTED",
-                    "enum discriminant expression requires constant evaluation".into(),
-                )
-            })?;
-        let discriminant = i64::try_from(discriminant).map_err(|_| {
-            Diagnostic::new(
-                "LRR-E-UNSUPPORTED",
-                "enum discriminant outside the default isize representation".into(),
-            )
-        })?;
-        ValueRepr::signed(TypeId(8), discriminant).map(Some)
+            .is_some_and(|value| value.is_some());
+        Ok((!known).then_some((enumeration, variant)))
     }
     /// A generic declaration's variant with no type context: concrete fields
     /// keep their bound Types and each parameter-typed field's completed value
@@ -946,7 +1014,23 @@ impl GuestStore {
             return Err(ownership());
         }
         let value = self.peek_ticket(ticket)?;
-        let expected = self.construction_field_type(guard, index, value)?;
+        let mut expected = self.construction_field_type(guard, index, value)?;
+        // Array elements of different pointer Types (`[Box::new(A), Box::new(B)]`
+        // where rustc coerces each to one trait object) share their join.
+        if value.type_id != expected.0
+            && !matches!(value.kind, 11 | 12)
+            && self.constructions.get(guard)?.observed_kind
+                == Some(StructuralConstructionKind::Array)
+            && !self.contract_admits(Some(expected), Some(TypeId(value.type_id)))
+            && let Some(join) = self.dyn_join(expected, TypeId(value.type_id))?
+        {
+            let record = self.constructions.get_mut(guard)?;
+            record.observed_element = Some(join);
+            for slot in record.expected.iter_mut().filter(|slot| slot.is_some()) {
+                *slot = Some(join);
+            }
+            expected = join;
+        }
         self.object_owner(value, ValueOwner::Ticket(ticket))?;
         self.require_initialized_value(value)?;
         let literal = matches!(value.kind, 11 | 12).then(|| LiteralId::from_bits(value.payload));
@@ -961,7 +1045,9 @@ impl GuestStore {
             }
             self.literal_value(value, expected)?
         } else {
-            if value.type_id != expected.0 {
+            if value.type_id != expected.0
+                && !self.contract_admits(Some(expected), Some(TypeId(value.type_id)))
+            {
                 return Err(ownership());
             }
             value
@@ -1014,7 +1100,11 @@ impl GuestStore {
                 return Err(ownership());
             }
             self.literal_value(value, expected)?;
-        } else if value.type_id != expected.0 {
+        } else if value.type_id != expected.0
+            && !self.contract_admits(Some(expected), Some(TypeId(value.type_id)))
+            && !(record.observed_kind == Some(StructuralConstructionKind::Array)
+                && self.dyn_joinable(expected, TypeId(value.type_id)))
+        {
             return Err(ownership());
         }
         Ok(())
@@ -1938,7 +2028,10 @@ impl GuestStore {
             return Err(lease_fault().into());
         }
         let expected = self.address_type(child)?;
-        if field_type.find_descriptor(self, args) != Some(expected) {
+        if !field_type
+            .find_descriptor(self, args)
+            .is_some_and(|declared| declared == expected || self.dyn_admits(declared, expected))
+        {
             return Err(Diagnostic::new(
                 "LRR-E-OWNERSHIP",
                 "field source type differs from its installed cell".into(),
@@ -2066,14 +2159,20 @@ impl GuestStore {
             return Err(ownership().into());
         }
         let incoming = self.admit_move(source)?;
+        // The location's declared contract (a `dyn Trait` field admits any
+        // concrete value) rather than the concrete Type it currently holds.
+        let contract_ty = match self.cells.get(resolved.target.cell)?.declared {
+            StorageContract::Exact(declared) => declared,
+            _ => resolved.ty,
+        };
         let value = match self.type_descriptor(resolved.ty)?.key.as_ref() {
             TypeKey::Primitive(_) => self.preview_scalar(source, Some(resolved.ty))?,
             TypeKey::Ref { .. } | TypeKey::RawPtr { .. } | TypeKey::Function { .. } => {
-                self.admit_new_contract(Some(resolved.ty), incoming)?;
+                self.admit_new_contract(Some(contract_ty), incoming)?;
                 incoming
             }
             TypeKey::Facade { .. } if self.types.is_string(resolved.ty) => {
-                self.admit_new_contract(Some(resolved.ty), incoming)?;
+                self.admit_new_contract(Some(contract_ty), incoming)?;
                 incoming
             }
             // Owning values: an old value is dropped by its ordinary glue.
@@ -2083,7 +2182,7 @@ impl GuestStore {
             | TypeKey::Callable { .. }
                 if incoming.kind == 8 =>
             {
-                self.admit_new_contract(Some(resolved.ty), incoming)?;
+                self.admit_new_contract(Some(contract_ty), incoming)?;
                 incoming
             }
             _ => {
@@ -2939,7 +3038,8 @@ impl GuestStore {
             || !matches!(cell.state, CellState::Uninit | CellState::Moved)
             || matches!(cell.state, CellState::Moved) && !cell.writable
             || !matches!(cell.declared, StorageContract::Unbound)
-                && !matches!(cell.declared, StorageContract::Exact(expected) if expected == ty)
+                && !matches!(cell.declared, StorageContract::Exact(expected)
+                    if expected == ty || self.dyn_admits(expected, ty))
         {
             return Err(ownership());
         }
@@ -3462,7 +3562,21 @@ impl GuestStore {
     pub(crate) fn admit_owning_read(&self, id: CellId) -> Result<IntrinsicRead, Diagnostic> {
         let mode = self.intrinsic_read_mode(id)?;
         let cell = self.cells.get(id)?;
+        // A closure body consuming a by-value capture moves the captured
+        // value out of the closure's own field (rustc's `FnOnce` closure): an
+        // ordinary field move of the closure aggregate.
+        let closure_capture = match cell.owner {
+            CellOwner::Field { object, .. } => matches!(
+                self.types
+                    .descriptor(self.objects.get(object)?.type_id)?
+                    .key
+                    .as_ref(),
+                TypeKey::Callable { .. }
+            ),
+            _ => false,
+        };
         if mode == IntrinsicRead::Move
+            && !closure_capture
             && !matches!(
                 cell.owner,
                 CellOwner::FrameSlot { .. } | CellOwner::Transfer(_)

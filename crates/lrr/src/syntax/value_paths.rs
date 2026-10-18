@@ -51,7 +51,26 @@ impl ParsedFile {
         let Some(source_path) = path.path() else {
             return Ok(WrittenValuePath::Refused("value path absent"));
         };
-        self.written_path(source_path, path.syntax(), cfg, true)
+        self.written_path(source_path, path.syntax(), cfg, true, false)
+    }
+    /// The spelling of a call's callee path. The explicit type arguments of
+    /// its final segment (`mem::size_of::<u32>`) belong to the call, which
+    /// carries them as its explicit arguments (`Op::CallSeal::explicit`), so
+    /// the Value goal selects the declaration by the module path alone, as it
+    /// does for a single-name callee. Generic arguments on any other segment
+    /// stay refused.
+    pub(crate) fn written_callee_spelling(
+        &self,
+        path: &ast::PathExpr,
+        cfg: &crate::source::snapshot::CfgSet,
+    ) -> Result<Option<String>, Diagnostic> {
+        let Some(source_path) = path.path() else {
+            return Ok(None);
+        };
+        Ok(match self.written_path(source_path, path.syntax(), cfg, true, true)? {
+            WrittenValuePath::Spelled(spelled) => Some(spelled),
+            WrittenValuePath::Refused(_) => None,
+        })
     }
     /// The same spelling for a path written in a pattern (path, tuple-struct
     /// or record pattern), so pattern paths resolve through the one route.
@@ -61,7 +80,7 @@ impl ParsedFile {
         cfg: &crate::source::snapshot::CfgSet,
     ) -> Result<WrittenValuePath, Diagnostic> {
         let anchor = path.syntax().clone();
-        self.written_path(path, &anchor, cfg, false)
+        self.written_path(path, &anchor, cfg, false, false)
     }
     /// The spelling of the Value written path; `lexical_value` admits a
     /// single-name expression path that a body-local item may bind.
@@ -71,9 +90,11 @@ impl ParsedFile {
         anchor: &ra_ap_syntax::SyntaxNode,
         cfg: &crate::source::snapshot::CfgSet,
         lexical_value: bool,
+        callee: bool,
     ) -> Result<WrittenValuePath, Diagnostic> {
         let mut components = Vec::new();
         let mut cursor = source_path;
+        let mut final_segment = true;
         let absolute;
         loop {
             let Some(part) = cursor.segment() else {
@@ -83,7 +104,12 @@ impl ParsedFile {
             // no runtime effect: the variant is selected by identity against
             // the scrutinee's own reached Type. An expression's arguments are
             // explicit type arguments of its value and are never dropped.
+            let call_arguments = callee
+                && final_segment
+                && matches!(part.kind(), Some(ast::PathSegmentKind::Name(_)));
+            final_segment = false;
             if part.generic_arg_list().is_some()
+                && !call_arguments
                 && (lexical_value || !matches!(part.kind(), Some(ast::PathSegmentKind::Name(_))))
             {
                 return Ok(WrittenValuePath::Refused(

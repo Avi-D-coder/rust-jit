@@ -319,6 +319,11 @@ fn retained_string(value: &str) -> Result<String, Diagnostic> {
 pub struct EnteredCallGoal {
     key: PcKey,
     selection: Selection,
+    /// The plan of the call's own body when the selected declaration belongs to
+    /// an enclosing body (a block item named from a nested function): the
+    /// admission's parent is then that declaring plan, while the call's index,
+    /// source and structure identities are the site's. Absent otherwise.
+    site: Option<Arc<PreparedSourceLocalPlan>>,
     target: Option<EnteredSourceName>,
     call_range: SourceRange,
     structure: Digest,
@@ -426,6 +431,9 @@ impl EnteredCallGoal {
         self.target.as_ref()
     }
     pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
+        if let Some(site) = &self.site {
+            return site;
+        }
         match &self.selection {
             Selection::Local(proof) => proof.parent(),
             Selection::Module(proof) => proof.parent(),
@@ -919,7 +927,9 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGo
     let guard = match &selected {
         EnteredLocalCall::Local(proof) => {
             checked!(proof.revalidate(db));
-            if proof.site() != key || !parent.same_environment(proof.parent()) {
+            if proof.site() != key
+                || (!proof.is_member() && !parent.same_environment(proof.parent()))
+            {
                 return QueryPoll::Ready(Err(fault("entered call local admission owner differs")));
             }
             Arc::clone(proof.guard())
@@ -944,8 +954,14 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGo
     let call_range = call.range;
     let structure = index.semantic_identity();
     let source = parent.context().source().identity();
+    let mut site = None;
     let selection = match selected {
-        EnteredLocalCall::Local(proof) => Selection::Local(Arc::from(proof)),
+        EnteredLocalCall::Local(proof) => {
+            if proof.is_member() {
+                site = Some(Arc::clone(&parent));
+            }
+            Selection::Local(Arc::from(proof))
+        }
         EnteredLocalCall::Module(declaration) => {
             match ready!(prepare_entered_module_function(
                 db,
@@ -984,6 +1000,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGo
         EnteredCallGoal {
             key: key.clone(),
             selection,
+            site,
             target,
             call_range,
             structure,

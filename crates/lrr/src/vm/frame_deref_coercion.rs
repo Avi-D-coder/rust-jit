@@ -102,7 +102,11 @@ impl Frame {
         expected: ExpectedPointee,
         store: &GuestStore,
     ) -> Result<Option<TyTerm>, Diagnostic> {
-        if expected.descriptor == Some(ty) {
+        if expected.descriptor == Some(ty)
+            || expected
+                .descriptor
+                .is_some_and(|expected| store.dyn_admits(expected, ty))
+        {
             return Ok(None);
         }
         if let Some(pointee) = expected.source.as_ref() {

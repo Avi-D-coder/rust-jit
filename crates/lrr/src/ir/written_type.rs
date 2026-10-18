@@ -74,14 +74,13 @@ impl WrittenType {
     /// is reached from a sized value through a coercion.
     pub(crate) fn exact(&self) -> bool {
         match self {
-            Self::Primitive(_) | Self::Nominal(_) | Self::Str => true,
+            Self::Primitive(_) | Self::Nominal(_) | Self::Str | Self::Dyn(_) => true,
             Self::Tuple(members) => members.iter().all(Self::exact),
             Self::Array(element, _) => element.exact(),
             Self::Ref { target, .. } => target.exact(),
             Self::Generic { args, .. } => args.iter().all(Self::exact),
             Self::Slice(_)
             | Self::Infer
-            | Self::Dyn(_)
             | Self::Parameter(_)
             | Self::Ptr { .. }
             | Self::FnPtr { .. } => false,
@@ -325,7 +324,8 @@ impl WrittenType {
                     result,
                 })
             }
-            Self::Infer | Self::Dyn(_) => None,
+            Self::Dyn(schema) => store.find_type(&TypeKey::Dyn { schema: schema.0 }),
+            Self::Infer => None,
         })
     }
     /// Intern the run-local descriptor of an exact annotation; `None` for a
@@ -438,7 +438,8 @@ impl WrittenType {
                     result,
                 })?
             }
-            Self::Infer | Self::Dyn(_) => return Ok(None),
+            Self::Dyn(schema) => store.intern_type(TypeKey::Dyn { schema: schema.0 })?,
+            Self::Infer => return Ok(None),
         }))
     }
     /// Whether a reached value of descriptor `ty` has this annotation's
@@ -460,7 +461,9 @@ impl WrittenType {
         Ok(match (self, key.as_ref()) {
             (Self::Infer | Self::Dyn(_), _) => true,
             (Self::Parameter(index), _) => match args.get_mut(*index as usize) {
-                Some(Some(fixed)) => *fixed == ty,
+                Some(Some(fixed)) => {
+                    *fixed == ty || store.dyn_admits(*fixed, ty) || store.dyn_admits(ty, *fixed)
+                }
                 Some(slot) => {
                     *slot = Some(ty);
                     true

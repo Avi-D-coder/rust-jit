@@ -92,6 +92,29 @@ fn id_for(index: &BodyIndex, body: &BodyHandle, syntax: &SyntaxNode) -> Result<N
         .map(|node| node.id)
         .ok_or_else(|| error("selected syntax has no structural phase identity"))
 }
+/// The PC a block's `Entry` continues to once its scope is entered: its first
+/// statement or tail expression, else its commit.
+fn block_first_pc(
+    index: &BodyIndex,
+    body: &BodyHandle,
+    block: &ast::BlockExpr,
+) -> Result<PcKey, Diagnostic> {
+    let id = id_for(index, body, block.syntax())?;
+    let first = block.stmt_list().and_then(|list| {
+        list.syntax()
+            .children()
+            .find(|node| ast::Stmt::can_cast(node.kind()) || ast::Expr::can_cast(node.kind()))
+    });
+    if let Some(first) = first {
+        if ast::Expr::can_cast(first.kind()) && index.nodes()[id.0 as usize].tail_scope.is_some() {
+            index.pc(id, Phase::Exit)
+        } else {
+            index.pc(id_for(index, body, &first)?, Phase::Entry)
+        }
+    } else {
+        index.pc(id, Phase::Commit)
+    }
+}
 fn draft(
     index: &BodyIndex,
     key: &PcKey,
@@ -582,9 +605,9 @@ fn initializer_result(
 ) -> Result<Option<crate::ir::pc::SlotId>, Diagnostic> {
     if super::ast_adapter::range(syntax.text_range()) != body.range
         || ast::BlockExpr::can_cast(syntax.kind())
-        || !syntax.parent().is_some_and(|parent| {
-            ast::Const::can_cast(parent.kind()) || ast::Static::can_cast(parent.kind())
-        })
+        || !syntax
+            .parent()
+            .is_some_and(|parent| super::body_index::is_initializer_owner(&parent))
     {
         return Ok(None);
     }
@@ -976,6 +999,24 @@ fn local_binding_at(
 ) -> Result<Option<NodeId>, Diagnostic> {
     for ancestor in syntax.ancestors() {
         let range = ancestor.text_range();
+        // A pattern function's parameter patterns bind for its whole block
+        // (E-R5-010), shadowed by any inner binding found before this point.
+        if let Some(function) = ast::Fn::cast(ancestor.clone())
+            && let Some(block) = function.body()
+            && block.syntax().text_range().contains_range(syntax.text_range())
+            && let Some(list) = super::fn_parameters::pattern_list(block.syntax())
+            && super::fn_parameters::body_range(block.syntax()) == body.range
+        {
+            for parameter in list.params() {
+                if let Some(pattern) = parameter.pat()
+                    && let Some(candidate) =
+                        pattern_binding_at(parsed, index, body, syntax, name, &pattern)?
+                {
+                    return Ok(Some(candidate));
+                }
+            }
+            break;
+        }
         if u32::from(range.start()) < body.range.start
             || u32::from(range.end()) > body.range.end
             || ast::Fn::can_cast(ancestor.kind())
@@ -1147,6 +1188,11 @@ fn parameter_from(
         // The receiver is parameter 0.
         if name.as_str() == "self" && params.self_param().is_some() {
             return Ok(Some(0));
+        }
+        // A pattern function binds every written parameter as a local at
+        // entry (E-R5-010): none is read as a frame parameter.
+        if super::fn_parameters::runs_patterns(&params) {
+            return Ok(None);
         }
         for (ordinal, param) in params.params().enumerate() {
             if let Some(ast::Pat::IdentPat(pattern)) = param.pat()
@@ -2116,7 +2162,7 @@ impl ParsedFile {
         literal: &PcKey,
         proof: &crate::frontend::binding_constraints::PreparedBindingConstraints,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        if proof.literal_primitive(index, literal)?.is_none() {
+        if proof.literal_hint(index, literal)?.is_none() {
             return Err(error("literal constraint admission is not resolved"));
         }
         self.initial_thunk_admission(
@@ -2543,20 +2589,7 @@ impl ParsedFile {
                 }) {
                     return unsupported("block attributes require cfg/macro integration");
                 }
-                let first = block.stmt_list().and_then(|list| {
-                    list.syntax().children().find(|node| {
-                        ast::Stmt::can_cast(node.kind()) || ast::Expr::can_cast(node.kind())
-                    })
-                });
-                let next = if let Some(first) = first {
-                    if ast::Expr::can_cast(first.kind()) && node.tail_scope.is_some() {
-                        index.pc(id, Phase::Exit)?
-                    } else {
-                        index.pc(id_for(index, body, &first)?, Phase::Entry)?
-                    }
-                } else {
-                    index.pc(id, Phase::Commit)?
-                };
+                let next = block_first_pc(index, body, &block)?;
                 let mut ops = vec![Op::ScopeEnter { scope: node.scope }];
                 if id == NodeId(0)
                     && let Some(params) = block
@@ -2576,6 +2609,23 @@ impl ParsedFile {
                             },
                         );
                     }
+                }
+                // A pattern function (E-R5-010) enters its parameter scope
+                // (the block's parent) first and binds its pattern parameters
+                // through the shared transaction before the block's first PC.
+                let parameter_owner = if id == NodeId(0) {
+                    index.parameter_owner()
+                } else {
+                    None
+                };
+                if parameter_owner.is_some() {
+                    let at = usize::from(matches!(ops.first(), Some(Op::CheckParameters { .. })));
+                    ops.insert(
+                        at,
+                        Op::ScopeEnter {
+                            scope: crate::syntax::body_index::ScopeId(0),
+                        },
+                    );
                 }
 
                 if id == NodeId(0)
@@ -2623,7 +2673,11 @@ impl ParsedFile {
                         operator: None,
                     });
                 }
-                draft(index, key, ops, RecipeExit::Next(next))
+                let exit = match parameter_owner {
+                    Some(owner) => index.pc(owner, Phase::Entry)?,
+                    None => next,
+                };
+                draft(index, key, ops, RecipeExit::Next(exit))
             }
             (SyntaxKind::BLOCK_EXPR, Phase::Exit) => {
                 let block = ast::BlockExpr::cast(syntax).expect("checked tail block");
@@ -4615,8 +4669,8 @@ impl ParsedFile {
                     // hint alone selects the representation.
                     match source_constraints {
                         Some(proof) => proof
-                            .literal_primitive(index, key)?
-                            .map_or(HintRecipe::None, HintRecipe::Primitive),
+                            .literal_hint(index, key)?
+                            .unwrap_or(HintRecipe::None),
                         None => HintRecipe::None,
                     },
                     node.value.expect("literal value"),
@@ -4927,7 +4981,7 @@ impl ParsedFile {
                             }
                             None => ops.push(Op::SetHint {
                                 child: index_value,
-                                hint: HintRecipe::Primitive(PrimitiveType::Usize),
+                                hint: HintRecipe::IndexOperand { base: base_place },
                             }),
                         }
                         draft(
@@ -5071,8 +5125,8 @@ impl ParsedFile {
                                         phase: 0,
                                     };
                                     proof
-                                        .literal_primitive(index, &literal)?
-                                        .map_or(HintRecipe::None, HintRecipe::Primitive)
+                                        .literal_hint(index, &literal)?
+                                        .unwrap_or(HintRecipe::None)
                                 }
                                 None => HintRecipe::None,
                             },

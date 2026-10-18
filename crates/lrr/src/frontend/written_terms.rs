@@ -81,7 +81,7 @@ fn written_type(
     {
         return QueryPoll::Ready(Ok(Some(WrittenType::Parameter(key.ordinal))));
     }
-    if template.is_some() && let TyTerm::Dyn(schema) = term {
+    if let TyTerm::Dyn(schema) = term {
         return QueryPoll::Ready(Ok(Some(WrittenType::Dyn(*schema))));
     }
     // `*const T` / `*mut T` are reserved-identity nominals with no catalogued

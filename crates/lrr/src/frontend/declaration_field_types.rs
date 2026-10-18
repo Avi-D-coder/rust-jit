@@ -182,7 +182,9 @@ impl HeaderShape {
                 |n, arg| n.saturating_add(arg.heap_bytes()),
             ),
             Self::Tuple(members) => members.iter().fold(
-                members.capacity().saturating_mul(std::mem::size_of::<Self>()),
+                members
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<Self>()),
                 |n, member| n.saturating_add(member.heap_bytes()),
             ),
             Self::Array(inner, _) | Self::Slice(inner) | Self::Ref(_, inner) => {
@@ -320,37 +322,68 @@ impl DeclarationFieldTypes {
         let mut items = BTreeMap::new();
         let mut bytes = 0;
         let mut fingerprint =
-            StableEncoder::new("lrr/v3/local-declaration-header-Type-occurrences");
+            StableEncoder::new("lrr/v4/local-declaration-header-Type-occurrences");
         fingerprint.digest(source.identity());
         fingerprint.u64(
             context
                 .facts()
-                .items
-                .iter()
+                .declarations()
                 .filter(|row| {
                     matches!(
                         row.item.def_key.item_kind,
-                        ItemKind::Struct | ItemKind::Enum | ItemKind::Union | ItemKind::Function
-                    )
+                        ItemKind::Struct
+                            | ItemKind::Enum
+                            | ItemKind::Union
+                            | ItemKind::Function
+                            | ItemKind::Impl
+                            | ItemKind::Constant
+                            | ItemKind::Static
+                    ) && !row.item.is_discriminant_constant()
                 })
                 .count() as u64,
         );
-        for row in &context.facts().items {
+        for row in context.facts().declarations() {
             if !matches!(
                 row.item.def_key.item_kind,
-                ItemKind::Struct | ItemKind::Enum | ItemKind::Union | ItemKind::Function
-            ) {
+                ItemKind::Struct
+                    | ItemKind::Enum
+                    | ItemKind::Union
+                    | ItemKind::Function
+                    | ItemKind::Impl
+                    | ItemKind::Constant
+                    | ItemKind::Static
+            ) || row.item.is_discriminant_constant()
+            {
                 continue;
             }
             let syntax = parsed
                 .syntax_at(row.item.declaration_span, |n| ast::Item::can_cast(n.kind()))?
                 .ok_or_else(|| error("declaration field owning syntax absent"))?;
             let function = ast::Fn::cast(syntax.clone());
+            let implementation = ast::Impl::cast(syntax.clone());
+            let constant = ast::Const::cast(syntax.clone());
+            let static_ = ast::Static::cast(syntax.clone());
             let excluded = function
                 .as_ref()
                 .and_then(|function| function.syntax().children().find_map(ast::BlockExpr::cast))
-                .map(|body| body.syntax().text_range());
+                .map(|body| body.syntax().text_range())
+                .or_else(|| {
+                    implementation
+                        .as_ref()
+                        .and_then(|implementation| implementation.assoc_item_list())
+                        .map(|list| list.syntax().text_range())
+                })
+                .or_else(|| {
+                    constant
+                        .as_ref()
+                        .and_then(|item| item.body())
+                        .or_else(|| static_.as_ref().and_then(|item| item.body()))
+                        .map(|body| body.syntax().text_range())
+                });
             if (row.item.def_key.item_kind == ItemKind::Function) != function.is_some()
+                || (row.item.def_key.item_kind == ItemKind::Impl) != implementation.is_some()
+                || (row.item.def_key.item_kind == ItemKind::Constant) != constant.is_some()
+                || (row.item.def_key.item_kind == ItemKind::Static) != static_.is_some()
                 || tokens(&syntax, excluded) != row.item.header.tokens
             {
                 return Err(error("declaration field header syntax differs"));
@@ -440,8 +473,22 @@ impl DeclarationFieldTypes {
                         types.push((Some(ordinal), ty));
                     }
                 }
-            } else {
-                // Confined to this exact nominal header.
+            } else if let Some(implementation) = &implementation {
+                // An impl header's Type occurrences are its self type and its
+                // trait path: each is entered at its leading name (the rest
+                // of a qualified path resolves in the module graph).
+                if let Some(trait_) = implementation.trait_() {
+                    types.push((None, trait_));
+                }
+                if let Some(self_ty) = implementation.self_ty() {
+                    types.push((None, self_ty));
+                }
+            } else if matches!(
+                row.item.def_key.item_kind,
+                ItemKind::Struct | ItemKind::Enum | ItemKind::Union
+            ) {
+                // Confined to this exact nominal header. Const/static result
+                // annotations are prepared on demand, without walking bodies.
                 let count = syntax
                     .descendants()
                     .filter(|node| {
@@ -487,7 +534,30 @@ impl DeclarationFieldTypes {
                 .map_err(|_| crate::runtime::arena::resource())?;
             for (parameter, field) in types {
                 let field_range = range(field.syntax().text_range());
-                let name = if let ast::Type::PathType(ty) = &field {
+                let name = if implementation.is_some() {
+                    // The leading segment of the written path, through one
+                    // reference (`impl Tr for &S`).
+                    let path_type = match &field {
+                        ast::Type::RefType(reference) => match reference.ty() {
+                            Some(ast::Type::PathType(inner)) => Some(inner),
+                            _ => None,
+                        },
+                        ast::Type::PathType(path) => Some(path.clone()),
+                        _ => None,
+                    };
+                    path_type
+                        .and_then(|ty| ty.path())
+                        .and_then(|mut path| {
+                            while let Some(qualifier) = path.qualifier() {
+                                path = qualifier;
+                            }
+                            path.segment()
+                        })
+                        .filter(|s| s.coloncolon_token().is_none())
+                        .and_then(|s| s.name_ref())
+                        .map(&use_name)
+                        .transpose()?
+                } else if let ast::Type::PathType(ty) = &field {
                     ty.path()
                         .filter(|p| p.qualifier().is_none())
                         .and_then(|p| p.segment())
@@ -760,8 +830,7 @@ impl PreparedSourceLocalPlan {
         let row = checked!(
             self.context
                 .facts()
-                .items
-                .iter()
+                .declarations()
                 .find(|row| row.item.def_key.fingerprint() == signature.definition)
                 .ok_or_else(|| error("parameter Type canonical local owner absent"))
         );
@@ -865,10 +934,13 @@ impl PreparedSourceLocalPlan {
                     NamedTypePreparation::Alias(AliasTarget::Nominal(nominal)) => {
                         TyTerm::Nominal(nominal, arguments)
                     }
-                    NamedTypePreparation::Alias(AliasTarget::Type(term)) if arguments.is_empty() => {
+                    NamedTypePreparation::Alias(AliasTarget::Type(term))
+                        if arguments.is_empty() =>
+                    {
                         term
                     }
-                    NamedTypePreparation::Parameter(_) | NamedTypePreparation::Alias(AliasTarget::Type(_)) => {
+                    NamedTypePreparation::Parameter(_)
+                    | NamedTypePreparation::Alias(AliasTarget::Type(_)) => {
                         return QueryPoll::Ready(Ok(NamedTypePreparation::Name(
                             crate::frontend::signature_names::SignatureName::NeedOwnerContext(
                                 scope.clone(),
@@ -978,6 +1050,17 @@ impl PreparedSourceLocalPlan {
                 SignatureName::NeedOwnerContext(scope.clone()),
             )));
         };
+        // `Self` in a member of a block-level impl is the impl's self type.
+        if name.name() == "Self"
+            && let super::DeclarationTypeSite::Return { definition, .. }
+            | super::DeclarationTypeSite::Parameter { definition, .. }
+            | super::DeclarationTypeSite::Field { definition, .. } = &identity
+            && let Some(term) = ready!(self.local_self_term(db, *definition))
+        {
+            return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                crate::frontend::type_aliases::AliasTarget::Type(term),
+            )));
+        }
         let site = crate::frontend::source_locals::OrdinaryNameSite {
             source: self.entered.parent.source(),
             body: self.context.source().index().body(),
@@ -1030,3 +1113,6 @@ mod tests;
 
 #[path = "declaration_return_types.rs"]
 mod returns;
+
+#[path = "local_containers.rs"]
+mod containers;

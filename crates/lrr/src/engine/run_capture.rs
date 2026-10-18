@@ -98,6 +98,7 @@ impl RunCapture {
                 | Op::Assert { .. }
                 | Op::FormatArguments { .. }
                 | Op::MethodReceiver { .. }
+                | Op::CalleeDeref { .. }
                 | Op::ComparisonOperand { .. }
                 | Op::IteratorCall { .. }
                 | Op::CompoundAssignPlace { .. }

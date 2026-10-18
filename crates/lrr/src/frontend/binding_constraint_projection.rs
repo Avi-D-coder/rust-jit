@@ -194,16 +194,14 @@ impl<'a> Component<'a> {
                     let Some(pattern) = ready!(self.binding_pattern(db, node, identity)) else {
                         return QueryPoll::Ready(Ok(None));
                     };
-                    plan.uses(pattern)
-                        .iter()
-                        .find_map(|edge| {
-                            let statement = plan.fact(edge.parent)?;
-                            (edge.ordinal == 0
-                                && statement.kind() == FactKind::Let
-                                && statement.annotation().is_none())
-                            .then(|| statement.operand(1))
-                            .flatten()
-                        })
+                    plan.uses(pattern).iter().find_map(|edge| {
+                        let statement = plan.fact(edge.parent)?;
+                        (edge.ordinal == 0
+                            && statement.kind() == FactKind::Let
+                            && statement.annotation().is_none())
+                        .then(|| statement.operand(1))
+                        .flatten()
+                    })
                 }
                 _ => None,
             };
@@ -237,15 +235,17 @@ impl<'a> Component<'a> {
         nested.deciding.push(literal);
         nested.expression(Some(literal));
         ready!(nested.solve(db));
-        QueryPoll::Ready(Ok(match (nested.concrete, nested.pending, nested.unrecorded) {
-            (Some((_, primitive)), _, _) => Some(primitive),
-            (None, None, false) => Some(if floating {
-                crate::ir::op::PrimitiveType::F64
-            } else {
-                crate::ir::op::PrimitiveType::I32
-            }),
-            _ => None,
-        }))
+        QueryPoll::Ready(Ok(
+            match (nested.concrete, nested.pending, nested.unrecorded) {
+                (Some((_, primitive)), _, _) => Some(primitive),
+                (None, None, false) => Some(if floating {
+                    crate::ir::op::PrimitiveType::F64
+                } else {
+                    crate::ir::op::PrimitiveType::I32
+                }),
+                _ => None,
+            },
+        ))
     }
 
     /// A selected function's declared parameter or result Type as the call
@@ -259,16 +259,17 @@ impl<'a> Component<'a> {
         definition: Digest,
         term: &TyTerm,
     ) -> QueryPoll<TyTerm> {
-        let bound = ready!(self.bound_callee_parameters(
-            db,
-            call,
-            definition,
-            contains_projection(term)
-        ));
+        let bound =
+            ready!(self.bound_callee_parameters(db, call, definition, contains_projection(term)));
+        // Written arguments fix parameters even when no value parameter
+        // states them (a parameter can itself be `U::Error`). Reuse the
+        // same explicit-Type query as declared results, before normalizing
+        // parameter or result projections.
+        let term = ready!(self.explicit_arguments(db, call, definition, term.clone()));
         let term = if bound.is_empty() {
-            term.clone()
+            term
         } else {
-            substitute(term, &bound)
+            substitute(&term, &bound)
         };
         self.normalize_projections(db, &term)
     }

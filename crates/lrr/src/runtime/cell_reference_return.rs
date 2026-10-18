@@ -111,8 +111,10 @@ impl GuestStore {
         self.validate_reference_record(record)?;
         let location = record.location()?;
         let prefix = expected.enclosing.len();
+        // The returned location extends the input's: one source-selected
+        // member edge, or a composed path (`&self.items[i]`) of several.
         if location.root != expected.root
-            || location.enclosing.len() != prefix.checked_add(1).ok_or_else(resource)?
+            || location.enclosing.len() <= prefix
             || location.enclosing.get(..prefix) != Some(expected.enclosing.as_slice())
             || record.target != pointee
             || (record.access == Access::Mutable) != mutable
@@ -121,7 +123,16 @@ impl GuestStore {
             return Err(ownership());
         }
         let edge = &location.enclosing[prefix];
-        if edge.parent != expected.final_cell || edge.child != location.final_cell.cell {
+        if edge.parent != expected.final_cell {
+            return Err(ownership());
+        }
+        if location.enclosing.len() != prefix.checked_add(1).ok_or_else(resource)? {
+            // The path below the input's field is the returned reference's
+            // own projection (an element of a field); its pointee is the
+            // checked record target.
+            return Ok(TypeId(value.type_id));
+        }
+        if edge.child != location.final_cell.cell {
             return Err(ownership());
         }
         let index = u32::try_from(prefix).map_err(|_| resource())?;

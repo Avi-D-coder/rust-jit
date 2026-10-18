@@ -52,7 +52,13 @@ pub(crate) fn normalize(
     }
     QueryPoll::Ready(Ok(Some(match term {
         TyTerm::Projection(key) => {
-            let self_ty = ready!(normalize(db, graph, sources, members, &key.trait_ref.self_ty));
+            let self_ty = ready!(normalize(
+                db,
+                graph,
+                sources,
+                members,
+                &key.trait_ref.self_ty
+            ));
             let selected: Result<Digest, BuiltinSelf> = match &self_ty {
                 TyTerm::Nominal(nominal, _) => Ok(*nominal),
                 TyTerm::Primitive(primitive) => Err(BuiltinSelf::Primitive(*primitive)),
@@ -96,7 +102,7 @@ pub(crate) fn normalize(
                     format!("associated type `{name}` is provided by several impls"),
                 )));
             }
-            if candidates.len() > 1 {
+            if !trait_arguments.is_empty() {
                 let mut matching = Vec::new();
                 for (alias, row) in candidates {
                     if ready!(impl_matches(
@@ -183,9 +189,9 @@ pub(crate) fn normalize(
             *mutable,
             Box::new(ready!(normalize(db, graph, sources, members, inner))),
         ),
-        TyTerm::Slice(inner) => {
-            TyTerm::Slice(Box::new(ready!(normalize(db, graph, sources, members, inner))))
-        }
+        TyTerm::Slice(inner) => TyTerm::Slice(Box::new(ready!(normalize(
+            db, graph, sources, members, inner
+        )))),
         TyTerm::Array(inner, len) => TyTerm::Array(
             Box::new(ready!(normalize(db, graph, sources, members, inner))),
             len.clone(),
@@ -445,7 +451,7 @@ pub(crate) fn substitute(
         TyTerm::Projection(key) => {
             let mut key = key.clone();
             key.trait_ref.self_ty = substitute(&key.trait_ref.self_ty, map);
-            for argument in &mut key.trait_ref.args {
+            for argument in key.trait_ref.args.iter_mut().chain(&mut key.item_args) {
                 if let GenericArg::Type(ty) = argument {
                     *ty = substitute(ty, map);
                 }
@@ -457,7 +463,9 @@ pub(crate) fn substitute(
         }
         TyTerm::Slice(inner) => TyTerm::Slice(Box::new(substitute(inner, map))),
         TyTerm::Array(inner, len) => TyTerm::Array(Box::new(substitute(inner, map)), len.clone()),
-        TyTerm::Tuple(items) => TyTerm::Tuple(items.iter().map(|item| substitute(item, map)).collect()),
+        TyTerm::Tuple(items) => {
+            TyTerm::Tuple(items.iter().map(|item| substitute(item, map)).collect())
+        }
         TyTerm::Nominal(nominal, args) => TyTerm::Nominal(
             *nominal,
             args.iter()

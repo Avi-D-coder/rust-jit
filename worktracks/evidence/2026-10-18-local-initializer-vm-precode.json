@@ -1,0 +1,35 @@
+{
+  "claim": "LOCAL-040",
+  "tasks": [
+    "T024",
+    "T032",
+    "M014",
+    "M018",
+    "M023"
+  ],
+  "direction": "E-R5-007: reached local const/static nominal/reference/call initialization uses existing ordinary VM initializer frames; do not extend pure evaluator, do not add static restrictions/resource accounting/sandbox.",
+  "invariant": "Moving a const/static from module scope to a reached body or macro-emitted body preserves ordinary initializer expression/call semantics and run-long storage/const fresh-value behavior.",
+  "upstream": "Unchanged consts/const-int-arithmetic.rs generated suite functions declare body-local const method-call initializers. Saved upstream run first reaches missing generated body environment; after that shared repair the source-only body-local refusal in CallResolver::initializer is the next known explicit gap. Simpler unchanged official const fixtures will be selected by actual source before validation; whole originals remain unchanged.",
+  "minimal": "fn main(){ const C: Option<u8> = Some(7); assert_eq!(C, Some(7)); } versus same C at module scope; local declaration has genuine expression BodyHandle but only header rows are published, resolver admits only anonymous enum discriminants.",
+  "ordinary_route": "body_items retains exact const/static initializer BodyHandle -> publish_local_declaration_checked actual Source/Header/Context/Owner -> shared ordinary local admission signature/guard/callable -> RunMachine::enter_initializer -> prepare_reached_local_source -> ordinary BodyStructure/Thunk/VM -> existing initializer continuation and run-long storage. Handwritten and generated bodies share PreparedSourceLocalPlan and capture_local.",
+  "extend": "Publish exact initializer locator with existing local declaration rows without indexing/lowering/executing body. Generalize the common local declaration-to-callable admission core to actual const/static items as well as container members; resolver initializer uses that shared admission, no discriminant-only exception. Reuse existing initializer frame/results/static cells and fresh const handling. Extend shared pending-body readiness ownership to actual function/const/static/variant initializer body kinds if required, no second evaluator.",
+  "remove": "Remove body-local no-executable-initializer route refusal when genuine local initializer body exists; remove discriminant-only initializer admission exception. Preserve actual missing-source/unsupported outcomes; no header/body identity bypass.",
+  "files": [
+    "crates/lrr/src/db/local_declaration_inputs.rs",
+    "crates/lrr/src/frontend/ordinary_local_callables.rs",
+    "crates/lrr/src/frontend/callables.rs",
+    "crates/lrr/src/engine/run_initializers.rs",
+    "crates/lrr/src/expand/source_declarative/body_selection.rs",
+    "crates/lrr/src/syntax/node_lookup.rs",
+    "crates/lrr/src/cli/initializer_tests.rs",
+    "crates/lrr/src/frontend/local_body_context.rs",
+    "crates/lrr/src/expand/source_declarative/retained_child_readiness_tests.rs",
+    "crates/lrr/src/frontend/declaration_return_types.rs",
+    "crates/lrr/src/frontend/declaration_field_types.rs"
+  ],
+  "dependencies": "Current generated module BodyEnvironment join and inline module Type scope repair are disjoint prerequisite candidates; do not claim complete stock witness from local route alone. Initializer contracts still use actual selected declaration/header/type/epoch/source identity; local lexical parent supplies same module and scopes. No producer execution/query publication side effect.",
+  "costs": "Declaration discovery publishes already-known locator only, no cold executable preparation. Admission uses same memoized signature/source local plan. Reached initializer uses existing continuation, at most per existing const/static value semantics. No added installed-operation parser/planner/full-world namespace scan/BodyIndex clone. Only checked arithmetic, no count or byte limits.",
+  "acceptance": "Build async directly in current checkout after current compilation releases writers. Unchanged whole upstream runtime fixtures primary; supplement same local initializer ordinary/user macro/wrapper/generated body and existing static lifetime/cold/exact-once controls. Separate source-aware all8 review and actual binary/source fingerprints; no pass or feature closure before terminals. Reached scalar pure fastpath outside this slice remains unreviewed against E007 preparation-only evaluator restriction; do not extend it.",
+  "actual_v4_frontier": "Current compiled CLI const-int-arithmetic.rs now reaches the exact known body-local initializer route refusal after generated source/inline scope fixes. Actual candidate-v4/stock0 capture; prior namespace/bodyenv failures removed, no whole-fixture pass yet.",
+  "actual_v5_frontier": "Local nominal const/static admission now reaches prepare_return_type; its Function-only owner/header catalog refuses genuine Const/Static. Extend same declaration header Type occurrence service to actual Const/Static annotations; exclude initializer expression from header token validation and do not scan its body for nominal fields. V5 new local matrix first ordinary2015 and stock const-int-arithmetic fail owning declaration differs. Existing initializer/readiness controls 5/5 pass."
+}

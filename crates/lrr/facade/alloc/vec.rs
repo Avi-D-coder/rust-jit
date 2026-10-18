@@ -397,3 +397,9 @@ impl<T, const N: usize> IntoIterator for [T; N] {
         elements.into_iter()
     }
 }
+
+impl<T: core::hash::Hash> core::hash::Hash for Vec<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::hash::Hash::hash(&**self, state)
+    }
+}

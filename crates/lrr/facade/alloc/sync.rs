@@ -29,3 +29,9 @@ impl<T: ?Sized> Deref for Arc<T> {
         core::intrinsics::lrr_unsupported("alloc::sync::Arc::deref")
     }
 }
+
+impl<T: ?Sized + core::hash::Hash> core::hash::Hash for Arc<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::hash::Hash::hash(&**self, state)
+    }
+}

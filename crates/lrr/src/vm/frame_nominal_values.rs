@@ -65,6 +65,17 @@ impl Frame {
                 if *identity == bound.identity()
                     && args.len() == bound.type_parameters() as usize =>
             {
+                // A bare `dyn Trait` argument is a coercion target
+                // (`&Fat<dyn T>` from `&Fat { ptr: Bar }`): the arguments are
+                // left to the constructed fields.
+                for arg in args.iter() {
+                    if matches!(
+                        store.type_descriptor(*arg)?.key.as_ref(),
+                        crate::runtime::shape::TypeKey::Dyn { .. }
+                    ) {
+                        return Ok(None);
+                    }
+                }
                 Some(args.to_vec())
             }
             _ => None,
@@ -257,7 +268,10 @@ impl Frame {
                 }
             };
             match actual {
-                Some(actual) if actual != expected => {
+                Some(actual)
+                    if actual != expected
+                        && !store.contract_admits(Some(expected), Some(actual)) =>
+                {
                     return Err(Diagnostic::new(
                         "LRR-E-CALL-ARGUMENT-TYPE",
                         "constructor argument differs from its declared field type".into(),

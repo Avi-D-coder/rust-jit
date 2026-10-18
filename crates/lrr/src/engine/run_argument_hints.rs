@@ -153,7 +153,9 @@ pub(super) fn retained_hint_bytes(hint: &ArgumentHint) -> Result<usize, Diagnost
     if let Some(written) = &hint.written {
         bytes = bytes
             .checked_add(written.heap_bytes())
-            .and_then(|n| n.checked_add(std::mem::size_of::<crate::ir::written_type::WrittenType>()))
+            .and_then(|n| {
+                n.checked_add(std::mem::size_of::<crate::ir::written_type::WrittenType>())
+            })
             .ok_or_else(crate::runtime::arena::resource)?;
     }
     if let Some(proof) = &hint.closed_reference {
@@ -191,11 +193,7 @@ pub(super) fn runtime_hint(
         // structural descriptor its fields construct against.
         let descriptor = match hint.descriptor {
             Some(descriptor) => Some(descriptor),
-            None if matches!(
-                hint.source,
-                TyTerm::Tuple(_) | TyTerm::Array(..)
-            ) =>
-            {
+            None if matches!(hint.source, TyTerm::Tuple(_) | TyTerm::Array(..)) => {
                 store.intern_structural_term(&hint.source)?
             }
             // A closed `&[T]`/`&mut [T]`/`&str` parameter: like a closed
@@ -442,7 +440,10 @@ impl RunMachine {
         // An associated-type projection (`T::V`) is normalized once the
         // generics it names are bound by the already evaluated arguments.
         let definition = selected.callee.signature().definition;
-        let needs_bound = hint.written.as_ref().is_some_and(|written| written.has_parameters())
+        let needs_bound = hint
+            .written
+            .as_ref()
+            .is_some_and(|written| written.has_parameters())
             || matches!(&hint.source, crate::traits::term::TyTerm::Param(key) if key.definition == definition)
             || crate::frontend::associated_types::contains_projection(&hint.source);
         let bound = if needs_bound {
@@ -464,8 +465,9 @@ impl RunMachine {
             let runtime = bound.clone();
             let mut bound = hint.source.clone();
             substitute_runtime_parameters(&mut bound, &runtime, &self.store);
-            match crate::frontend::associated_types::normalize(db, graph, &sources, &members, &bound)
-            {
+            match crate::frontend::associated_types::normalize(
+                db, graph, &sources, &members, &bound,
+            ) {
                 QueryPoll::Ready(Ok(Some(normalized))) => {
                     hint.descriptor = self.store.intern_structural_term(&normalized)?;
                     hint.source = normalized;
@@ -504,10 +506,18 @@ impl RunMachine {
         self.frame.preflight_source_view(slot, source.as_ref())?;
         // All checked admission precedes mutation. Inline prefix capacity was
         // reserved and charged at identity selection; this adds only its heap.
+        self.frame.expect_reference(
+            slot,
+            match &hint.source {
+                crate::traits::term::TyTerm::Ref(_, mutable, _) => Some(*mutable),
+                _ => None,
+            },
+        );
         self.frame.set_source_view(slot, source)?;
         self.frame.set_hint(slot, descriptor)?;
         if let WrittenArgumentHint::Partial(written, arguments) = written {
-            self.frame.set_partial_hint_with(slot, written, Some(arguments))?;
+            self.frame
+                .set_partial_hint_with(slot, written, Some(arguments))?;
         }
         let identity = self.frame.call_identity(site);
         let selected = self
@@ -531,34 +541,13 @@ fn substitute_runtime_parameters(
     runtime: &BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
     store: &GuestStore,
 ) {
-    use crate::traits::term::{GenericArg, TyTerm};
-    match term {
-        TyTerm::Param(key) => {
-            if let Some(actual) = runtime
-                .get(key)
-                .and_then(|ty| store.descriptor_source_term(*ty))
-            {
-                *term = actual;
-            }
-        }
-        TyTerm::Projection(key) => {
-            substitute_runtime_parameters(&mut key.trait_ref.self_ty, runtime, store)
-        }
-        TyTerm::Ref(_, _, inner) | TyTerm::Slice(inner) | TyTerm::Array(inner, _) => {
-            substitute_runtime_parameters(inner, runtime, store)
-        }
-        TyTerm::Tuple(items) => {
-            for item in items {
-                substitute_runtime_parameters(item, runtime, store);
-            }
-        }
-        TyTerm::Nominal(_, args) => {
-            for arg in args {
-                if let GenericArg::Type(ty) = arg {
-                    substitute_runtime_parameters(ty, runtime, store);
-                }
-            }
-        }
-        _ => {}
-    }
+    let bindings = runtime
+        .iter()
+        .filter_map(|(key, descriptor)| {
+            store
+                .descriptor_source_term(*descriptor)
+                .map(|term| (*key, term))
+        })
+        .collect();
+    *term = crate::frontend::associated_types::substitute(term, &bindings);
 }

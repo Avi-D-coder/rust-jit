@@ -66,9 +66,18 @@ impl ReferenceResultContract {
         inputs
             .try_reserve_exact(bindings.len())
             .map_err(|_| limit())?;
+        // An elided result lifetime is the `&self` receiver's (rustc's second
+        // elision rule), which no closed certificate carries; with no reference
+        // receiver it is the one input reference's.
+        let receiver_reference = signature
+            .parameters
+            .first()
+            .is_some_and(|parameter| {
+                parameter.receiver && parameter.ty.first().is_some_and(|token| token.text == "&")
+            });
         for (index, binding) in bindings.iter().enumerate() {
             let related = match syntax.lifetime() {
-                Some("'_") | None => input_count == 1,
+                Some("'_") | None => input_count == 1 && !receiver_reference,
                 Some(name) => binding.parameter.syntax.lifetime() == Some(name),
             };
             if related && (!syntax.mutable() || binding.parameter.mutable()) {
@@ -303,12 +312,17 @@ impl PreparedCallContracts {
             .ok_or_else(|| invalid("reference result source certificate absent"))?;
         proof.validate_packet(callee.signature(), self)?;
         callee.revalidate(db)?;
-        // The existing parameter proof pins exact database/source revisions.
-        // Equal revisions imply its retained immutable input stamps cannot have
-        // changed; do not rebuild a namespace census at the return boundary.
+        // The existing parameter proof pins the exact source revision. An
+        // equal source revision implies its retained immutable input stamps
+        // cannot have changed; do not rebuild a namespace census at the
+        // return boundary. The database revision counts every input write
+        // (each newly entered callee publishes its own body inputs), so it
+        // is not a source change; `revalidate` above checked the callee's
+        // actual dependencies.
+        let epoch = super::expansion_epoch(db);
+        let source_revision = db.source_revision();
         if proof.bindings.iter().any(|binding| {
-            binding.parameter.revision != db.revision()
-                || binding.parameter.source_revision != db.source_revision()
+            binding.parameter.source_revision != source_revision || binding.parameter.epoch != epoch
         }) {
             return Err(invalid("reference result source world changed"));
         }
@@ -316,23 +330,17 @@ impl PreparedCallContracts {
             .result
             .as_ref()
             .ok_or_else(|| invalid("reference result source certificate absent"))?;
-        let Some(TyTerm::Ref(region, mutable, target)) = source else {
+        let Some(TyTerm::Ref(_, mutable, target)) = source else {
             return Err(invalid("returned reference lacks actual source provenance"));
         };
         if *mutable != result.syntax.mutable() || target.as_ref() != result.pointee.source() {
             return Err(invalid("returned reference source pointee/access differs"));
         }
-        let expected_region = match &result.source {
-            TyTerm::Ref(region, _, _) => region,
-            _ => return Err(invalid("reference result source shape differs")),
-        };
-        if region != expected_region
-            && !matches!(region, RegionTerm::Local { definition, start, end }
-            if *definition == callee.signature().definition && start < end && callee.body().and_then(|body| body.range.end.checked_sub(body.range.start)).is_some_and(|length| *end <= length))
-        {
-            return Err(invalid(
-                "returned reference region is not its actual input or reborrow",
-            ));
+        // The returned reference's region (an input's or a local reborrow's)
+        // is rustc's borrow check, not re-enforced here: only the pointee
+        // and access the certificate states are checked.
+        if !matches!(&result.source, TyTerm::Ref(..)) {
+            return Err(invalid("reference result source shape differs"));
         }
         let descriptor = result.check_ticket(store, ticket, &proof.bindings)?;
         let result = self

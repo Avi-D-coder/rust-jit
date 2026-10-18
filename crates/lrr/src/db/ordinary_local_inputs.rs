@@ -29,7 +29,7 @@ impl Database {
         let source = parent.context().source();
         let caller = source.body().def_key;
         let definition = proof.item().def_key.fingerprint();
-        if proof.site().body != source.body().key()
+        if (!proof.is_member() && proof.site().body != source.body().key())
             || proof.source() != &source.parsed().key()
             || proof
                 .item()

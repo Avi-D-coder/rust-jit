@@ -2,21 +2,22 @@
 //! inference, executable shape checking, expansion or guest mutation occurs here.
 use super::*;
 use crate::{source::manifest::ItemKind, syntax::parse::ParsedFile};
+use lrr_expand_adapter::syntax_attachment::BodyOwners;
 
-fn function_owns_call(
+fn item_owns_call(
     parsed: &ParsedFile,
     body: SourceRange,
     call: &CallCapture,
 ) -> Result<bool, Diagnostic> {
     let call_range = SourceRange::checked(call.start, call.end)?;
-    Ok(body.contains(call_range) && parsed.macro_call_function_body(call_range)? == body)
+    Ok(body.contains(call_range) && parsed.macro_call_item_body(call_range)? == body)
 }
 
 impl PreparedSourceSyntax {
-    /// Cold structural closure proof for an actually selected local function.
+    /// Cold structural closure proof for an actually selected local declaration body.
     /// The caller must separately prove the declaration, source and parent
     /// authority. This does not broaden the assembly's scoped body permit.
-    pub(crate) fn require_closed_function_body(
+    pub(crate) fn require_closed_item_body(
         &self,
         parsed: &ParsedFile,
         body: SourceRange,
@@ -28,8 +29,8 @@ impl PreparedSourceSyntax {
             return Err(fault("local readiness retained tree/body differs"));
         }
         for call in &self.syntax.syntax().calls {
-            if function_owns_call(parsed, body, call)? {
-                return Err(fault("local function still has pending expansion calls"));
+            if item_owns_call(parsed, body, call)? {
+                return Err(fault("local body still has pending expansion calls"));
             }
         }
         let mut identity = StableEncoder::new("lrr/v1/retained-local-function-readiness");
@@ -42,6 +43,54 @@ impl PreparedSourceSyntax {
 }
 
 impl SourceSyntaxAssembly {
+    /// The first pending call, in tree order, lying anywhere inside `body`:
+    /// the function's own calls and the calls of every function, closure,
+    /// impl or trait member nested in it, macro-generated nested items
+    /// included. A block-local function shares its enclosing body's retained
+    /// tree (its identity, body handle and index are read from that text), so
+    /// its calls attach in the same transaction as the enclosing body's own.
+    /// A call with no declaration producer (cfg-disabled code) cannot be
+    /// expanded: it stays a pending marker and blocks only the body that owns
+    /// it directly (`owners` selects what owns a call), never an enclosing one.
+    /// Calls are sorted by their current coordinates, so this is a binary
+    /// search plus the calls inside the range; no snapshot is exported and no
+    /// source is replayed.
+    fn first_call_within(
+        &self,
+        body: SourceRange,
+        owners: BodyOwners,
+    ) -> Result<Option<usize>, Diagnostic> {
+        let index = self.calls.partition_point(|call| call.start < body.start);
+        for (offset, call) in self.calls[index..].iter().enumerate() {
+            if call.start >= body.end {
+                break;
+            }
+            if !body.contains(SourceRange::checked(call.start, call.end)?) {
+                continue;
+            }
+            if call.invocation.is_none() {
+                let owner = self
+                    .tree
+                    .call_owner_body(call.start, call.end, owners)
+                    .map_err(adapter)?
+                    .map(|(start, end)| SourceRange::checked(start, end))
+                    .transpose()?;
+                if owner != Some(body) {
+                    continue;
+                }
+            }
+            return Ok(Some(index + offset));
+        }
+        Ok(None)
+    }
+    fn binding_invocation(&self, index: usize) -> Result<(Digest, Digest), Diagnostic> {
+        let binding = &self.calls[index];
+        binding
+            .invocation
+            .map(|invocation| (binding.parent_identity, invocation))
+            .ok_or_else(|| fault("selected body call lacks an actual declaration producer"))
+    }
+
     /// Calls in nested functions belong to those functions, including generated
     /// functions that have no original declaration anchor. Resolve ownership
     /// from the actual retained tree after every structural edit.
@@ -67,22 +116,9 @@ impl SourceSyntaxAssembly {
             .find(|anchor| anchor.original_definition() == definition)
             .and_then(OriginalDeclarationAnchor::body_range)
             .ok_or_else(|| fault("selected assembly body anchor absent"))?;
-        let snapshot = self.tree.snapshot().map_err(adapter)?;
-        verify_calls(&self.calls, &snapshot.syntax().calls)?;
-        let parsed = ParsedFile::from_syntax_snapshot(
-            snapshot.clone(),
-            self.source.selection().outline.parse.profile.clone(),
-        )?;
-        for (binding, call) in self.calls.iter().zip(&snapshot.syntax().calls) {
-            if !function_owns_call(&parsed, range, call)? {
-                continue; // A nested function is independently prepared at entry.
-            }
-            return binding
-                .invocation
-                .map(|invocation| Some((binding.parent_identity, invocation)))
-                .ok_or_else(|| fault("selected body call lacks an actual declaration producer"));
-        }
-        Ok(None)
+        self.first_call_within(range, BodyOwners::Functions)?
+            .map(|index| self.binding_invocation(index))
+            .transpose()
     }
     /// A private scope tag is minted only after the exact translated function
     /// has no remaining function-owned calls. Other pending markers are kept.
@@ -101,7 +137,6 @@ impl SourceSyntaxAssembly {
     /// the producing record has been attached.
     fn locate_generated(
         &self,
-        parsed: &ParsedFile,
         target: &GeneratedBodyTarget,
     ) -> Result<Option<(SourceRange, SourceRange)>, Diagnostic> {
         if target.output.len() < 2 {
@@ -116,13 +151,13 @@ impl SourceSyntaxAssembly {
             return Ok(None);
         };
         let declaration = SourceRange::checked(first.start, last.end)?;
-        let node = parsed
-            .syntax_at(declaration, |node| entered_body(node).is_some())?
-            .ok_or_else(|| fault("generated function retained declaration node absent"))?;
-        let body = entered_body(&node)
-            .flatten()
+        let body = self
+            .tree
+            .declaration_body_at(declaration.start, declaration.end)
+            .map_err(adapter)?
+            .ok_or_else(|| fault("generated function retained declaration node absent"))?
             .ok_or_else(|| fault("generated function retained declaration has no body"))?;
-        Ok(Some((declaration, body)))
+        Ok(Some((declaration, SourceRange::checked(body.0, body.1)?)))
     }
 
     /// The selected generated function's current declaration/body location
@@ -132,26 +167,14 @@ impl SourceSyntaxAssembly {
         &self,
         target: &GeneratedBodyTarget,
     ) -> Result<(SourceRange, SourceRange, Option<(Digest, Digest)>), Diagnostic> {
-        let snapshot = self.tree.snapshot().map_err(adapter)?;
-        verify_calls(&self.calls, &snapshot.syntax().calls)?;
-        let parsed = ParsedFile::from_syntax_snapshot(
-            snapshot.clone(),
-            self.source.selection().outline.parse.profile.clone(),
-        )?;
         let (declaration, body) = self
-            .locate_generated(&parsed, target)?
+            .locate_generated(target)?
             .ok_or_else(|| fault("selected generated function is not attached"))?;
-        for (binding, call) in self.calls.iter().zip(&snapshot.syntax().calls) {
-            if !entered_body_owns_call(&parsed, body, call)? {
-                continue;
-            }
-            let next = binding
-                .invocation
-                .map(|invocation| (binding.parent_identity, invocation))
-                .ok_or_else(|| fault("selected body call lacks an actual declaration producer"))?;
-            return Ok((declaration, body, Some(next)));
-        }
-        Ok((declaration, body, None))
+        let next = self
+            .first_call_within(body, BodyOwners::Entered)?
+            .map(|index| self.binding_invocation(index))
+            .transpose()?;
+        Ok((declaration, body, next))
     }
     pub(crate) fn next_generated_body_invocation(
         &self,
@@ -183,42 +206,6 @@ impl SourceSyntaxAssembly {
     }
 }
 
-/// The entered body of a function, or the initializer of a constant/static
-/// (Some(None) when the declaration has no body); None for other nodes.
-fn entered_body(node: &ra_ap_syntax::SyntaxNode) -> Option<Option<SourceRange>> {
-    use ra_ap_syntax::{AstNode, ast};
-    let body = if let Some(function) = ast::Fn::cast(node.clone()) {
-        function.body().map(|body| body.syntax().text_range())
-    } else if let Some(constant) = ast::Const::cast(node.clone()) {
-        constant.body().map(|body| body.syntax().text_range())
-    } else if let Some(value) = ast::Static::cast(node.clone()) {
-        value.body().map(|body| body.syntax().text_range())
-    } else {
-        return None;
-    };
-    Some(body.map(crate::syntax::ast_adapter::range))
-}
-/// Structural ownership: the innermost function/initializer around the call
-/// is exactly `body`. Calls of nested functions belong to those functions.
-fn entered_body_owns_call(
-    parsed: &ParsedFile,
-    body: SourceRange,
-    call: &CallCapture,
-) -> Result<bool, Diagnostic> {
-    let call_range = SourceRange::checked(call.start, call.end)?;
-    if !body.contains(call_range) {
-        return Ok(false);
-    }
-    let syntax = parsed
-        .syntax_at(call_range, |node| {
-            <ra_ap_syntax::ast::MacroCall as ra_ap_syntax::AstNode>::can_cast(node.kind())
-        })?
-        .ok_or_else(|| fault("macro call syntax attachment absent"))?;
-    Ok(syntax
-        .ancestors()
-        .find_map(|node| entered_body(&node).flatten())
-        == Some(body))
-}
 /// One demanded macro-generated function: its declaration identity, the key
 /// fingerprint of the record that wrote it and its range in that output.
 #[derive(Clone, Copy, Debug)]

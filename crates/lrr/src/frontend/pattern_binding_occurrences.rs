@@ -212,6 +212,11 @@ fn owning_pattern(
         match node.role {
             NodeRole::Pattern if arm.is_none() => root = node.id,
             NodeRole::MatchArm if arm.is_none() => arm = Some(node.id),
+            // A pattern function's parameter list owns its parameter patterns
+            // (E-R5-010), bound at the function's entry.
+            NodeRole::Syntax if node.pattern_statement && arm.is_none() => {
+                return Ok(Some((root, node.id, None)));
+            }
             NodeRole::Syntax => {}
             NodeRole::Statement if arm.is_none() => return Ok(Some((root, node.id, None))),
             NodeRole::Expression(ExpressionKind::Match) if arm.is_some() => {
@@ -262,7 +267,11 @@ impl PreparedPatternBindingOccurrences {
         for binding in &source.facts().bindings {
             if !matches!(
                 binding.form,
-                BindingForm::Match | BindingForm::Condition | BindingForm::Let | BindingForm::For
+                BindingForm::Match
+                    | BindingForm::Condition
+                    | BindingForm::Let
+                    | BindingForm::For
+                    | BindingForm::Parameter
             ) {
                 continue;
             }
@@ -304,6 +313,7 @@ impl PreparedPatternBindingOccurrences {
                 == NodeRole::Expression(ExpressionKind::Closure);
             let for_owner = index.nodes()[owner.0 as usize].role
                 == NodeRole::Expression(ExpressionKind::For);
+            let parameter_owner = index.nodes()[owner.0 as usize].role == NodeRole::Syntax;
             if let_owner {
                 use ra_ap_syntax::{AstNode, ast};
                 // Statement role alone is not a let-owner certificate.
@@ -364,7 +374,10 @@ impl PreparedPatternBindingOccurrences {
                         ) || (closure_owner
                             && binding.form == BindingForm::Let
                             && arm.is_none())
-                            || (for_owner && binding.form == BindingForm::For && arm.is_none()))
+                            || (for_owner && binding.form == BindingForm::For && arm.is_none())
+                            || (parameter_owner
+                                && binding.form == BindingForm::Parameter
+                                && arm.is_none()))
                         && matches!(
                             (binding.classification, occurrence.uncertainty),
                             (

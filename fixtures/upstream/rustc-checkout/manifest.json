@@ -2034,6 +2034,12 @@
       "bytes": 21511
     },
     {
+      "path": "library/coretests/tests/atomic.rs",
+      "git_blob": "31fe7980510d39a69e764fc0731c83134da8c090",
+      "sha256": "f75866407e255ff72179d851218e41c9948eb8e8f87af3a66f4b140a1a731cfe",
+      "bytes": 18484
+    },
+    {
       "path": "library/portable-simd/crates/core_simd/src/alias.rs",
       "git_blob": "6dcfcb660c26a16209b45342483341a25e3356f4",
       "sha256": "94f7323f87a8b0c9b440747d1e393b41e33a68247a10b260e4db2c5039f22273",

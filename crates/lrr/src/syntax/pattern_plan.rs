@@ -89,12 +89,56 @@ struct ForPlan {
     body: NodeId,
     next: PcKey,
 }
+/// A call frame's parameters: each binds from its staged call argument, a
+/// plain closure identifier directly and every other pattern (`|&x|`,
+/// `|(a, b)|`, and a function's `fn f((a, b): T)`) through the shared
+/// transaction with the closure (or the function's parameter list) as owner.
+/// A function's plain parameters are not part of its plan: they stay frame
+/// parameters read at each use.
+#[derive(Debug)]
+struct ClosurePlan {
+    id: NodeId,
+    parameters: Vec<ClosureParameterPlan>,
+    /// Where execution continues once every parameter is bound.
+    after: PcKey,
+    /// The closure scope entered when the closure's call frame starts (its
+    /// Commit phase); a function's parameter scope is entered by its root
+    /// block together with the argument check (its owner starts at Entry).
+    scope: Option<crate::syntax::body_index::ScopeId>,
+}
+#[derive(Debug)]
+enum ClosureParameterPlan {
+    Binding {
+        binding: NodeId,
+        ordinal: u32,
+        staging: SlotId,
+        hint: HintRecipe,
+        writable: bool,
+    },
+    Pattern {
+        pattern: Root,
+        ordinal: u32,
+        staging: SlotId,
+    },
+}
+impl ClosurePlan {
+    fn pattern_roots(&self) -> Vec<&Root> {
+        self.parameters
+            .iter()
+            .filter_map(|parameter| match parameter {
+                ClosureParameterPlan::Pattern { pattern, .. } => Some(pattern),
+                ClosureParameterPlan::Binding { .. } => None,
+            })
+            .collect()
+    }
+}
 #[derive(Debug)]
 enum Prepared {
     Match(MatchPlan),
     Let(LetPlan),
     Condition(ConditionPlan),
     For(ForPlan),
+    Closure(ClosurePlan),
     Refused(Diagnostic),
     Disabled(Box<VerifiedRecipe>),
 }
@@ -132,6 +176,7 @@ impl PatternSourcePlan {
             Prepared::Let(plan) => vec![&plan.pattern],
             Prepared::Condition(plan) => vec![&plan.pattern],
             Prepared::For(plan) => vec![&plan.pattern],
+            Prepared::Closure(plan) => plan.pattern_roots(),
             Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
         };
         roots.into_iter().filter_map(|root| root.tree.as_ref().ok())
@@ -152,9 +197,19 @@ impl PatternSourcePlan {
             NodeRole::Expression(ExpressionKind::Match | ExpressionKind::For) => true,
             NodeRole::Expression(ExpressionKind::Other) => node.clause_scope.is_some(),
             NodeRole::Statement => node.pattern_statement,
+            // The closure's own call frame starts at its Commit phase; its
+            // creation (Entry) and return (Operand) are ordinary closure phases.
+            NodeRole::Expression(ExpressionKind::Closure) => node.pattern_statement,
+            // A function's parameter list owns its pattern parameters.
+            NodeRole::Syntax => node.pattern_statement,
             _ => false,
         };
         if owner(node) {
+            if node.role == NodeRole::Expression(ExpressionKind::Closure)
+                && Phase::from_code(key.phase) != Phase::Commit
+            {
+                return Ok(None);
+            }
             return index.pc(node.id, Phase::Entry).map(Some);
         }
         let parent = |node: &crate::syntax::body_index::StructuralNode| {
@@ -190,6 +245,25 @@ impl PatternSourcePlan {
                     )
                 {
                     return index.pc(direct.id, Phase::Entry).map(Some);
+                }
+                // A closure parameter's root pattern: pattern, `Param`, `ParamList`.
+                if direct.role == NodeRole::Syntax
+                    && let Some(list) = parent(direct)
+                    && list.role == NodeRole::Syntax
+                    && let Some(closure) = parent(list)
+                    && closure.role == NodeRole::Expression(ExpressionKind::Closure)
+                    && closure.pattern_statement
+                {
+                    return index.pc(closure.id, Phase::Entry).map(Some);
+                }
+                // A function parameter's root pattern: pattern, `Param`, the
+                // parameter list that owns it.
+                if direct.role == NodeRole::Syntax
+                    && let Some(list) = parent(direct)
+                    && list.role == NodeRole::Syntax
+                    && list.pattern_statement
+                {
+                    return index.pc(list.id, Phase::Entry).map(Some);
                 }
                 Ok(None)
             }
@@ -259,6 +333,7 @@ impl Lowering<'_> {
             Prepared::Let(plan) => self.lower_let(plan, key),
             Prepared::Condition(plan) => self.lower_condition(plan, key),
             Prepared::For(plan) => self.lower_for(plan, key),
+            Prepared::Closure(plan) => self.lower_closure(plan, key),
             Prepared::Disabled(recipe) if key == owner => Ok(recipe.as_ref().clone()),
             Prepared::Disabled(_) => Err(unsupported(
                 "disabled pattern owner has no evaluated continuation",
@@ -693,6 +768,134 @@ impl Lowering<'_> {
             _ => Err(unsupported("invalid for phase")),
         }
     }
+    /// Operations binding the call frame's parameters from `from` on, up to
+    /// and including the next pattern parameter's `Open`/`Test`; that
+    /// parameter's root pattern is returned. One `Test` per recipe keeps the
+    /// reached pattern names prepared per installed recipe.
+    fn closure_parameters_from<'p>(
+        &self,
+        plan: &'p ClosurePlan,
+        from: usize,
+        ops: &mut Vec<Op>,
+    ) -> Result<Option<&'p Root>, Diagnostic> {
+        let test = self.test_slot(plan.id)?;
+        for parameter in plan.parameters.iter().skip(from) {
+            let (staging, ordinal) = match parameter {
+                ClosureParameterPlan::Binding {
+                    staging, ordinal, ..
+                }
+                | ClosureParameterPlan::Pattern {
+                    staging, ordinal, ..
+                } => (*staging, *ordinal),
+            };
+            ops.push(Op::ReadParameter {
+                ordinal,
+                destination: staging,
+            });
+            match parameter {
+                ClosureParameterPlan::Binding {
+                    binding,
+                    hint,
+                    writable,
+                    ..
+                } => ops.push(Op::BindLocal {
+                    binding: *binding,
+                    source: staging,
+                    hint: hint.clone(),
+                    writable: *writable,
+                }),
+                ClosureParameterPlan::Pattern { pattern, .. } => {
+                    ops.push(Op::Pattern {
+                        operation: PatternOperation::Open {
+                            owner: plan.id,
+                            source: staging,
+                        },
+                    });
+                    ops.push(Op::Pattern {
+                        operation: PatternOperation::Test {
+                            owner: plan.id,
+                            tree: self.tree(pattern)?,
+                            result: test,
+                            retry: false,
+                        },
+                    });
+                    return Ok(Some(pattern));
+                }
+            }
+        }
+        Ok(None)
+    }
+    fn closure_continuation(
+        &self,
+        plan: &ClosurePlan,
+        reached: Option<&Root>,
+    ) -> Result<RecipeExit, Diagnostic> {
+        Ok(match reached {
+            Some(root) => RecipeExit::Branch {
+                condition: self.test_slot(plan.id)?,
+                yes: self.index.pc(root.node, Phase::Commit)?,
+                no: self.index.pc(root.node, Phase::Exit)?,
+            },
+            None => RecipeExit::Next(plan.after.clone()),
+        })
+    }
+    /// The call frame's parameters: a closure enters its scope and binds the
+    /// parameters in order; a function binds its pattern parameters in order
+    /// inside the parameter scope its root block entered. Each pattern
+    /// parameter commits before the next one is read.
+    fn lower_closure(&self, plan: &ClosurePlan, key: &PcKey) -> Result<VerifiedRecipe, Diagnostic> {
+        let owner = plan.id;
+        let test = self.test_slot(owner)?;
+        let pattern = |operation| Op::Pattern { operation };
+        let node = NodeId(key.node);
+        if node == owner {
+            if Phase::from_code(key.phase)
+                != if plan.scope.is_some() {
+                    Phase::Commit
+                } else {
+                    Phase::Entry
+                }
+            {
+                return Err(unsupported("invalid call frame parameter phase"));
+            }
+            let mut ops: Vec<Op> = plan
+                .scope
+                .map(|scope| Op::ScopeEnter { scope })
+                .into_iter()
+                .collect();
+            let reached = self.closure_parameters_from(plan, 0, &mut ops)?;
+            let exit = self.closure_continuation(plan, reached)?;
+            return self.emit(key, ops, exit);
+        }
+        let Some(position) = plan.parameters.iter().position(|parameter| {
+            matches!(parameter, ClosureParameterPlan::Pattern { pattern, .. } if pattern.node == node)
+        }) else {
+            return Err(unsupported("call frame pattern phase is outside its parameters"));
+        };
+        match Phase::from_code(key.phase) {
+            Phase::Commit => {
+                let mut ops = vec![
+                    Op::Discard { source: test },
+                    pattern(PatternOperation::Commit { owner }),
+                    pattern(PatternOperation::Close { owner }),
+                ];
+                let reached = self.closure_parameters_from(plan, position + 1, &mut ops)?;
+                let exit = self.closure_continuation(plan, reached)?;
+                self.emit(key, ops, exit)
+            }
+            Phase::Exit => self.emit(
+                key,
+                vec![
+                    Op::Discard { source: test },
+                    pattern(PatternOperation::Close { owner }),
+                ],
+                RecipeExit::Fault(crate::ir::op::DiagnosticTemplate {
+                    message: "irrefutable parameter pattern did not match its argument".into(),
+                }),
+            ),
+            _ => Err(unsupported("invalid call frame parameter pattern phase")),
+        }
+    }
     fn lower_condition(
         &self,
         plan: &ConditionPlan,
@@ -822,7 +1025,15 @@ impl ParsedFile {
         {
             return Err(error("pattern plan owning source/body/profile differs"));
         }
-        if PatternSourcePlan::owner_for(index, owner)?.as_ref() != Some(owner) {
+        // A closure owns only its Commit (call-frame entry) phase.
+        let probe = if index.nodes()[owner.node as usize].role
+            == NodeRole::Expression(ExpressionKind::Closure)
+        {
+            index.pc(NodeId(owner.node), Phase::Commit)?
+        } else {
+            owner.clone()
+        };
+        if PatternSourcePlan::owner_for(index, &probe)?.as_ref() != Some(owner) {
             return Err(error("pattern plan key is not its exact owning entry"));
         }
         // Preserve the ordinary entry admission when this match expression is
@@ -857,6 +1068,105 @@ impl ParsedFile {
                     Ok(plan) => Prepared::Match(plan),
                     Err(refused) => Prepared::Refused(refused),
                 }
+            } else if let Some(expression) = ast::ClosureExpr::cast(syntax.clone()) {
+                let (Some(list), Some(closure_body)) = (expression.param_list(), expression.body())
+                else {
+                    return Ok(Prepared::Refused(unsupported("closure syntax absent")));
+                };
+                let staging = &index.nodes()[owner.node as usize].runtime_scalar_slots;
+                let mut parameters = Vec::new();
+                for (position, parameter) in list.params().enumerate() {
+                    let ordinal = u32::try_from(position)
+                        .map_err(|_| error("closure parameter ordinal overflow"))?;
+                    let (Some(pattern), Some(staging)) = (parameter.pat(), staging.get(position))
+                    else {
+                        return Ok(Prepared::Refused(unsupported(
+                            "closure parameter pattern or staging slot absent",
+                        )));
+                    };
+                    let staging = *staging;
+                    parameters.push(
+                        if crate::syntax::body_index::closure_pattern_parameter(&parameter) {
+                            ClosureParameterPlan::Pattern {
+                                pattern: self.pattern_root(body, index, &local_items, &pattern)?,
+                                ordinal,
+                                staging,
+                            }
+                        } else {
+                            let ast::Pat::IdentPat(ident) = &pattern else {
+                                return Err(error("closure binding parameter is not an identifier"));
+                            };
+                            ClosureParameterPlan::Binding {
+                                binding: id_for(index, body, ident.syntax())?,
+                                ordinal,
+                                staging,
+                                // A written primitive annotation types the
+                                // argument; any other is not re-enforced.
+                                hint: super::hint(parameter.ty()).unwrap_or(HintRecipe::None),
+                                writable: ident.mut_token().is_some(),
+                            }
+                        },
+                    );
+                }
+                Prepared::Closure(ClosurePlan {
+                    id: NodeId(owner.node),
+                    parameters,
+                    after: index.pc(id_for(index, body, closure_body.syntax())?, Phase::Entry)?,
+                    scope: index.nodes()[owner.node as usize].closure_scope,
+                })
+            } else if let Some(list) = ast::ParamList::cast(syntax.clone()) {
+                // A pattern function's parameter list (E-R5-010). Every written
+                // parameter binds in order from its argument, `let PAT = arg;`
+                // for each, so drops follow rustc's reverse parameter order
+                // across plain and pattern parameters alike.
+                let staging = &index.nodes()[owner.node as usize].runtime_scalar_slots;
+                let receiver = u32::from(list.self_param().is_some());
+                let mut parameters = Vec::new();
+                for (position, parameter) in list.params().enumerate() {
+                    let (Some(pattern), Some(staging)) = (parameter.pat(), staging.get(position))
+                    else {
+                        return Ok(Prepared::Refused(unsupported(
+                            "function parameter pattern or staging slot absent",
+                        )));
+                    };
+                    let ordinal = u32::try_from(position)
+                        .ok()
+                        .and_then(|position| position.checked_add(receiver))
+                        .ok_or_else(|| error("function parameter ordinal overflow"))?;
+                    parameters.push(
+                        if crate::syntax::fn_parameters::pattern_parameter(&parameter) {
+                            ClosureParameterPlan::Pattern {
+                                pattern: self.pattern_root(body, index, &local_items, &pattern)?,
+                                ordinal,
+                                staging: *staging,
+                            }
+                        } else {
+                            // `x`, `mut x` or `_`: the argument is the local.
+                            ClosureParameterPlan::Binding {
+                                binding: id_for(index, body, pattern.syntax())?,
+                                ordinal,
+                                staging: *staging,
+                                hint: HintRecipe::None,
+                                writable: matches!(&pattern, ast::Pat::IdentPat(ident)
+                                    if ident.mut_token().is_some()),
+                            }
+                        },
+                    );
+                }
+                let Some(block) = list
+                    .syntax()
+                    .parent()
+                    .and_then(ast::Fn::cast)
+                    .and_then(|function| function.body())
+                else {
+                    return Ok(Prepared::Refused(unsupported("function body block absent")));
+                };
+                Prepared::Closure(ClosurePlan {
+                    id: NodeId(owner.node),
+                    parameters,
+                    after: super::block_first_pc(index, body, &block)?,
+                    scope: None,
+                })
             } else if let Some(expression) = ast::ForExpr::cast(syntax.clone()) {
                 let (Some(pattern), Some(head), Some(loop_body)) =
                     (expression.pat(), expression.iterable(), expression.loop_body())
@@ -1001,6 +1311,7 @@ impl PatternSourcePlan {
             Prepared::Let(plan) => vec![&plan.pattern],
             Prepared::Condition(plan) => vec![&plan.pattern],
             Prepared::For(plan) => vec![&plan.pattern],
+            Prepared::Closure(plan) => plan.pattern_roots(),
             Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
         };
         let mut bytes = std::mem::size_of::<Self>();
@@ -1145,8 +1456,20 @@ fn literal_scrutinee_hint<'a>(
             _ => None,
         }
     }
-    match patterns.into_iter().find_map(written) {
+    let patterns: Vec<&ast::Pat> = patterns.into_iter().collect();
+    // A pattern naming something (a constant `X`, a path, a binding) types the
+    // literal through the ordinary constraint service, never this fallback.
+    fn names(pattern: &ast::Pat) -> bool {
+        use ra_ap_syntax::AstNode;
+        pattern.syntax().descendants().any(|node| {
+            ast::IdentPat::can_cast(node.kind()) || ast::PathPat::can_cast(node.kind())
+        })
+    }
+    match patterns.iter().copied().find_map(written) {
         Some(suffix) => HintRecipe::Primitive(suffix),
+        None if found.unsuffixed && patterns.iter().any(|pattern| names(pattern)) => {
+            HintRecipe::None
+        }
         None if found.unsuffixed => HintRecipe::Primitive(if found.floating {
             PrimitiveType::F64
         } else {

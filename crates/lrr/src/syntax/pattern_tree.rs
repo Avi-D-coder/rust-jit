@@ -47,6 +47,29 @@ pub(crate) enum PatternLiteral {
     Str(String),
 }
 impl Eq for PatternLiteral {}
+
+/// One written bound of a range pattern: a literal, or a path/identifier that
+/// the pattern's name slot resolves (through the ordinary Value namespace) to
+/// a constant, exactly as a constant pattern's name does.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum RangeEndpoint {
+    Literal(PatternLiteral),
+    Constant(u32),
+}
+impl RangeEndpoint {
+    fn encode(&self, e: &mut StableEncoder) {
+        match self {
+            Self::Literal(literal) => {
+                e.u8(0);
+                literal.encode(e);
+            }
+            Self::Constant(slot) => {
+                e.u8(2);
+                e.u32(*slot);
+            }
+        }
+    }
+}
 impl PatternLiteral {
     fn encode(&self, e: &mut StableEncoder) {
         match self {
@@ -153,8 +176,8 @@ pub(crate) enum PatternNode {
     /// Each endpoint is tested in order when reached; an endpoint the
     /// engine cannot interpret yet faults only if its comparison is needed.
     Range {
-        start: Option<Result<PatternLiteral, String>>,
-        end: Option<Result<PatternLiteral, String>>,
+        start: Option<Result<RangeEndpoint, String>>,
+        end: Option<Result<RangeEndpoint, String>>,
         inclusive: bool,
     },
     Tuple {
@@ -220,10 +243,7 @@ impl PatternNode {
                 e.u8(3);
                 for endpoint in [start, end] {
                     e.option(endpoint, |e, endpoint| match endpoint {
-                        Ok(literal) => {
-                            e.u8(0);
-                            literal.encode(e);
-                        }
+                        Ok(endpoint) => endpoint.encode(e),
                         Err(message) => {
                             e.u8(1);
                             e.string(message);
@@ -299,9 +319,9 @@ impl PatternNode {
                 .into_iter()
                 .flatten()
                 .map(|endpoint| match endpoint {
-                    Ok(PatternLiteral::Str(text) | PatternLiteral::Float { decimal: text, .. }) => {
-                        text.capacity()
-                    }
+                    Ok(RangeEndpoint::Literal(
+                        PatternLiteral::Str(text) | PatternLiteral::Float { decimal: text, .. },
+                    )) => text.capacity(),
                     Ok(_) => 0,
                     Err(message) => message.capacity(),
                 })
@@ -510,14 +530,53 @@ impl Builder<'_> {
         self.parsed
             .token_edition(crate::syntax::ast_adapter::range(token.text_range()))
     }
-    fn endpoint(&self, pattern: Option<ast::Pat>) -> Option<Result<PatternLiteral, String>> {
-        match pattern {
+    /// A range bound is a literal or a constant named by a path or a bare
+    /// identifier; the name takes a slot resolved by the ordinary Value route
+    /// (an identifier that names no constant faults only if the bound is
+    /// reached, as for a constant pattern).
+    fn endpoint(
+        &mut self,
+        pattern: Option<ast::Pat>,
+    ) -> Result<Option<Result<RangeEndpoint, String>>, Diagnostic> {
+        Ok(match pattern {
             None => None,
-            Some(ast::Pat::LiteralPat(endpoint)) => Some(literal(&endpoint)),
+            Some(ast::Pat::LiteralPat(endpoint)) => {
+                Some(literal(&endpoint).map(RangeEndpoint::Literal))
+            }
+            Some(owner @ ast::Pat::PathPat(_)) => {
+                let ast::Pat::PathPat(path) = &owner else {
+                    unreachable!("matched path pattern");
+                };
+                Some(
+                    self.path_slot(&owner, path.path(), NameForm::Path)?
+                        .map(RangeEndpoint::Constant),
+                )
+            }
+            Some(owner @ ast::Pat::IdentPat(_)) => {
+                let ast::Pat::IdentPat(ident) = &owner else {
+                    unreachable!("matched identifier pattern");
+                };
+                match ident.name() {
+                    Some(name)
+                        if ident.ref_token().is_none()
+                            && ident.mut_token().is_none()
+                            && ident.pat().is_none() =>
+                    {
+                        let text = name.text().to_string();
+                        let slot = self.slot(&text, NameForm::Identifier)?;
+                        if self.local_items.may_name(text.trim_start_matches("r#")) {
+                            let occurrence = self.indexed(&owner)?;
+                            self.names[slot as usize].lexical = Some(occurrence);
+                        }
+                        Some(Ok(RangeEndpoint::Constant(slot)))
+                    }
+                    _ => Some(Err("range pattern endpoint is not a constant".into())),
+                }
+            }
             Some(_) => Some(Err(
                 "range pattern endpoint requires constant path integration".into(),
             )),
-        }
+        })
     }
     /// An identifier pattern. A plain identifier (no `ref`/`mut`/`@`) is a
     /// fresh binding unless ordinary resolution of its slot names a unit
@@ -644,7 +703,9 @@ impl Builder<'_> {
                         ));
                     }
                 };
-                match (self.endpoint(range.start()), self.endpoint(range.end())) {
+                let start = self.endpoint(range.start())?;
+                let end = self.endpoint(range.end())?;
+                match (start, end) {
                     (None, None) => {
                         PatternNode::Unsupported("range pattern has no endpoint".into())
                     }

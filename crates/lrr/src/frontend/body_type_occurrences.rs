@@ -6,8 +6,12 @@ use crate::{
         digest::{Digest, StableEncode},
     },
     db::{
-        dependency::InputValue, key::QueryKey, memo::Database, poll::QueryPoll,
-        provider::SyntaxProvider, value::QueryValue,
+        dependency::{InputKey, InputValue},
+        key::QueryKey,
+        memo::Database,
+        poll::QueryPoll,
+        provider::SyntaxProvider,
+        value::QueryValue,
     },
     expand::scopes::MacroName,
     expand::source_declarative::assembly::SourceOccurrence,
@@ -271,16 +275,33 @@ fn retained_original_origin(
         Ok(None) => return missing(),
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
-    let definition = source.body().def_key;
-    let Some(item) = original
-        .outline()
-        .items
-        .iter()
-        .find(|item| item.def_key.fingerprint() == definition)
-    else {
-        // A nested original body's exact original locator is a separate join;
-        // never guess its owner from a token span or a lexical source range.
-        return missing();
+    // The original definition whose retained body encloses this one: the
+    // body's own, or for a block-local function the outermost on its chain of
+    // declaring bodies (`LocalDeclarationOwner`, published with the nested
+    // declaration). Its anchor locates the retained body in the original
+    // source; a nested body is proved inside it, never by a token span alone.
+    let mut definition = source.body().def_key;
+    let mut nested = false;
+    let item = loop {
+        if let Some(item) = original
+            .outline()
+            .items
+            .iter()
+            .find(|item| item.def_key.fingerprint() == definition)
+        {
+            break item;
+        }
+        let Some(owner) = db.input(&InputKey::LocalDeclarationOwner(definition)) else {
+            return missing();
+        };
+        let InputValue::LocalDeclarationOwner(parent) = owner.as_ref() else {
+            return missing();
+        };
+        if parent.definition == definition {
+            return missing();
+        }
+        definition = parent.definition;
+        nested = true;
     };
     let Some(body) = &item.body else {
         return missing();
@@ -293,12 +314,16 @@ fn retained_original_origin(
     else {
         return missing();
     };
-    if anchor.original_range() != item.declaration_span
-        || anchor.declaration_range() != source.context().range
-        || anchor.body_range() != Some(source.body().range)
-        || item.scope != source.context().scope
-        || !body.range.contains(raw)
-    {
+    let encloses = if nested {
+        anchor
+            .body_range()
+            .is_some_and(|enclosing| enclosing.contains(source.body().range))
+    } else {
+        anchor.declaration_range() == source.context().range
+            && anchor.body_range() == Some(source.body().range)
+            && item.scope == source.context().scope
+    };
+    if anchor.original_range() != item.declaration_span || !encloses || !body.range.contains(raw) {
         return missing();
     }
     let parsed = match db.fetch(
@@ -347,11 +372,17 @@ fn retained_original_origin(
         let Some(current_path) = path(source.parsed(), occurrence.path_range())? else {
             return Ok(false);
         };
-        let owner = original_path.ancestors().find(|node| {
+        let definitions = |node: &ra_ap_syntax::SyntaxNode| {
             ast::Fn::can_cast(node.kind())
                 || ast::Const::can_cast(node.kind())
                 || ast::Static::can_cast(node.kind())
-        });
+        };
+        let owner = if nested {
+            // The outermost definition holds the nested ones.
+            original_path.ancestors().filter(definitions).last()
+        } else {
+            original_path.ancestors().find(definitions)
+        };
         if owner.is_none_or(|owner| range(owner.text_range()) != item.declaration_span) {
             return Ok(false);
         }
@@ -386,9 +417,7 @@ fn resource() -> Diagnostic {
     crate::runtime::arena::resource()
 }
 fn add(bytes: usize, extra: usize) -> Result<usize, Diagnostic> {
-    bytes
-        .checked_add(extra)
-        .ok_or_else(resource)
+    bytes.checked_add(extra).ok_or_else(resource)
 }
 impl PreparedBodyTypeOccurrences {
     pub(super) fn prepare(source: &AdmittedBodyContext) -> Result<Self, Diagnostic> {

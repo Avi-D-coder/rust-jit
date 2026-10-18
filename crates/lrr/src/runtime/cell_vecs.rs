@@ -119,7 +119,7 @@ impl GuestStore {
         self.validate_value(value)?;
         self.require_initialized_value(value)?;
         self.object_owner(value, ValueOwner::Ticket(element))?;
-        if self.effective_type(value)? != Some(at.element) {
+        if !self.contract_admits(Some(at.element), self.effective_type(value)?) {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-ARG-TYPE",
                 "vector element type differs from the stored value".into(),
@@ -317,7 +317,8 @@ impl GuestStore {
             return Err(invalid());
         }
         match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
-            TypeKey::Array { element, .. } if *element == at.element => {}
+            TypeKey::Array { element, .. }
+                if *element == at.element || self.dyn_admits(at.element, *element) => {}
             TypeKey::Array { .. } => {
                 return Err(Diagnostic::new(
                     "LRR-E-CALL-ARG-TYPE",

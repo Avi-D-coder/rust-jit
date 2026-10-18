@@ -78,6 +78,18 @@ struct CallBinding {
     parent: Arc<DeclarationScan>,
     parent_identity: Digest,
     anchor: Digest,
+    /// Current coordinates of the call in the retained tree. Calls are
+    /// disjoint and in increasing order, so `start` is sorted. Every
+    /// successful edit moves them through its `SyntaxEdit`; a replacement's
+    /// calls take the coordinates of the live tree. `finish_scope` compares
+    /// them (and every anchor) with a complete export, so a drifting row is
+    /// a typed fault before anything is published.
+    start: u32,
+    end: u32,
+    /// The call's tokens, taken from the tree once when the call entered it.
+    /// An edit elsewhere does not change them (a call is never split by a
+    /// splice), so no later step re-exports the call from the tree.
+    capture: Arc<CallCapture>,
 }
 
 pub struct SourceSyntaxAssembly {
@@ -268,7 +280,11 @@ impl SourceSyntaxAssembly {
             return Err(fault("source syntax assembly caller/scan/epoch differs"));
         }
         let tree = SyntaxAttachment::parse(forest, DeclarationGrammar::Items).map_err(adapter)?;
-        let captured = tree.materialize().map_err(adapter)?;
+        let mut captured = tree.materialize().map_err(adapter)?;
+        let captures = std::mem::take(&mut captured.calls)
+            .into_iter()
+            .map(Arc::new)
+            .collect::<Vec<_>>();
         let occurrences = SourceOccurrences::new(
             Digest(tree.syntax_identity().map_err(adapter)?.0),
             u32::try_from(captured.text.len())
@@ -283,8 +299,9 @@ impl SourceSyntaxAssembly {
         let mut seen = BTreeSet::new();
         let mut calls = Vec::new();
         let parent_identity = scan.fingerprint();
-        reserve_calls(&mut calls, captured.calls.len())?;
-        for call in &captured.calls {
+        reserve_calls(&mut calls, captures.len())?;
+        for capture in &captures {
+            let call = &**capture;
             let site = call
                 .input
                 .spans()
@@ -313,6 +330,9 @@ impl SourceSyntaxAssembly {
                 parent: scan.clone(),
                 parent_identity,
                 anchor: anchor(call)?,
+                start: call.start,
+                end: call.end,
+                capture: Arc::clone(capture),
             });
         }
         if seen.len() != producers.len() {
@@ -406,18 +426,20 @@ impl SourceSyntaxAssembly {
         {
             return Err(fault("source syntax output parent/grammar differs"));
         }
-        let before = self.tree.materialize().map_err(adapter)?;
-        verify_calls(&self.calls, &before.calls)?;
-        let call = &before.calls[position];
+        // The selected call's tokens were captured when it entered the tree and
+        // its coordinates follow every edit; nothing re-exports the tree here.
+        let call = Arc::clone(&selected.capture);
+        let (call_start, call_end) = (selected.start, selected.end);
         if call.site != receipt.site || call.edition != key.call_edition {
             return Err(fault("source syntax issued call tokens/site differ"));
         }
         receipt.require_call_roots(&call.input)?;
         let tokens = lrr_expand_adapter::token_wire::TokenForest::decode(output.record().wire())
             .map_err(adapter)?;
-        let generated = declaration_output::materialize(&tokens, declaration_grammar(key.grammar))
-            .map_err(adapter)?;
-        let replacement = generated_calls(&output, &generated.calls)?;
+        let mut generated =
+            declaration_output::materialize(&tokens, declaration_grammar(key.grammar))
+                .map_err(adapter)?;
+        let mut replacement = generated_calls(&output, std::mem::take(&mut generated.calls))?;
         let count = self
             .calls
             .len()
@@ -429,39 +451,37 @@ impl SourceSyntaxAssembly {
             std::mem::size_of::<Arc<GeneratedDeclarations>>(),
         )?;
         charge_calls(retained_bytes, count)?;
-        let mut calls = Vec::new();
-        reserve_calls(&mut calls, count)?;
         self.outputs
             .try_reserve(1)
             .map_err(|_| fault("source syntax output retention allocation"))?;
         let edit = match key.grammar {
             GrammarSlot::Expression => {
                 self.tree
-                    .attach_with_edit(call.start, call.end, &tokens, FragmentSlot::Expression)
+                    .attach_with_edit(call_start, call_end, &tokens, FragmentSlot::Expression)
             }
             GrammarSlot::Pattern => {
                 self.tree
-                    .attach_with_edit(call.start, call.end, &tokens, FragmentSlot::Pattern)
+                    .attach_with_edit(call_start, call_end, &tokens, FragmentSlot::Pattern)
             }
             GrammarSlot::Type => {
                 self.tree
-                    .attach_with_edit(call.start, call.end, &tokens, FragmentSlot::Type)
+                    .attach_with_edit(call_start, call_end, &tokens, FragmentSlot::Type)
             }
             GrammarSlot::Statements => {
                 self.tree
-                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::Statements)
+                    .attach_list_with_edit(call_start, call_end, &tokens, ListSlot::Statements)
             }
             GrammarSlot::Items => {
                 self.tree
-                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::Items)
+                    .attach_list_with_edit(call_start, call_end, &tokens, ListSlot::Items)
             }
             GrammarSlot::TraitItems => {
                 self.tree
-                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::TraitItems)
+                    .attach_list_with_edit(call_start, call_end, &tokens, ListSlot::TraitItems)
             }
             GrammarSlot::ImplItems => {
                 self.tree
-                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::ImplItems)
+                    .attach_list_with_edit(call_start, call_end, &tokens, ListSlot::ImplItems)
             }
         }
         .map_err(adapter)?;
@@ -480,23 +500,52 @@ impl SourceSyntaxAssembly {
         )?;
         self.originals = anchors::translate(self.originals, edit)?;
         self.macro_definitions = macro_anchors::translate(self.macro_definitions, edit)?;
-        let mut prior = self.calls.into_iter();
-        calls.extend(prior.by_ref().take(position));
-        prior
-            .next()
-            .ok_or_else(|| fault("source syntax pending call disappeared"))?;
-        calls.extend(replacement);
-        calls.extend(prior);
-        let after = self.tree.materialize().map_err(adapter)?;
-        verify_calls(&calls, &after.calls)?;
+        // The edit's own inserted range, exported from the live tree: its
+        // calls must be exactly the producers' planned calls (same tokens, in
+        // order) and take their coordinates from this tree. Everything outside
+        // the range is unchanged syntax; `finish_scope` compares the whole
+        // table with a complete export once per assembly.
+        let (inserted_start, inserted_end) = edit.inserted();
+        let live = self
+            .tree
+            .captures_in(inserted_start, inserted_end)
+            .map_err(adapter)?;
+        if live.calls.len() != replacement.len() {
+            return Err(fault("source syntax call topology differs"));
+        }
+        for (binding, live) in replacement.iter_mut().zip(live.calls) {
+            if binding.anchor != anchor(&live)? {
+                return Err(fault("source syntax call occurrence differs"));
+            }
+            binding.start = live.start;
+            binding.end = live.end;
+            binding.capture = Arc::new(live);
+        }
         macro_anchors::append_generated(
             &mut self.macro_definitions,
             &output,
             &generated,
-            &after,
+            &live.definitions,
             edit,
         )?;
-        macro_anchors::validate(&self.macro_definitions, &after)?;
+        let inserted = replacement.len();
+        if self
+            .calls
+            .splice(position..=position, replacement)
+            .count()
+            != 1
+        {
+            return Err(fault("source syntax pending call disappeared"));
+        }
+        // Calls after the replaced one keep their syntax and move with it.
+        for later in &mut self.calls[position + inserted..] {
+            let (start, end) = edit
+                .map_original_range(later.start, later.end)
+                .map_err(adapter)?
+                .ok_or_else(|| fault("source syntax pending call lost by the edit"))?;
+            later.start = start;
+            later.end = end;
+        }
         if let Some(definition) = &receipt.definition {
             let expansion = key.fingerprint();
             if self
@@ -521,9 +570,9 @@ impl SourceSyntaxAssembly {
                 )?,
                 expansion_metadata(self.expansion_definitions.len())?,
             )?,
-            calls.len(),
+            self.calls.len(),
         )?;
-        self.calls = calls;
+        debug_assert_eq!(self.calls.len(), count);
         self.retained_bytes = retained_bytes;
         self.outputs.push(output);
         Ok(self)
@@ -551,6 +600,10 @@ impl SourceSyntaxAssembly {
         // result. Its anchor records pending work; it grants no producer ID.
         pending.extend(self.calls.iter().map(|c| c.invocation.unwrap_or(c.anchor)));
         let syntax = self.tree.snapshot().map_err(adapter)?;
+        // The complete consistency check between the incrementally maintained
+        // tables and the tree, once per assembly instead of once per edit.
+        verify_calls(&self.calls, &syntax.syntax().calls)?;
+        macro_anchors::validate(&self.macro_definitions, syntax.syntax())?;
         self.occurrences.validate(
             u32::try_from(syntax.syntax().text.len())
                 .map_err(|_| fault("final occurrence root length overflow"))?,
@@ -649,15 +702,20 @@ fn verify_calls(bindings: &[CallBinding], captures: &[CallCapture]) -> Result<()
         return Err(fault("source syntax call topology differs"));
     }
     for (binding, capture) in bindings.iter().zip(captures) {
-        if binding.anchor != anchor(capture)? {
+        if binding.anchor != anchor(capture)?
+            || (binding.start, binding.end) != (capture.start, capture.end)
+        {
             return Err(fault("source syntax call occurrence differs"));
         }
     }
     Ok(())
 }
+/// The bindings a producer's output plans for its own calls. Coordinates are
+/// those of the output text until the output is attached; the caller then
+/// takes the tree's own coordinates and captures from the inserted range.
 fn generated_calls(
     output: &Arc<GeneratedDeclarations>,
-    calls: &[CallCapture],
+    calls: Vec<CallCapture>,
 ) -> Result<Vec<CallBinding>, Diagnostic> {
     let scan = output.scan();
     let producers = scan
@@ -674,7 +732,7 @@ fn generated_calls(
         let producer = producers.get(&(call.start, call.end));
         if let Some(p) = producer
             && (!seen.insert(p.identity)
-                || anchor(output.macro_call(p.identity)?)? != anchor(call)?)
+                || anchor(output.macro_call(p.identity)?)? != anchor(&call)?)
         {
             return Err(fault("generated syntax invocation owner differs"));
         }
@@ -683,7 +741,10 @@ fn generated_calls(
             grammar: producer.map(|p| p.grammar),
             parent: scan.clone(),
             parent_identity,
-            anchor: anchor(call)?,
+            anchor: anchor(&call)?,
+            start: call.start,
+            end: call.end,
+            capture: Arc::new(call),
         });
     }
     if seen.len() != producers.len() {

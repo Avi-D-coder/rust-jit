@@ -141,34 +141,12 @@ impl RunMachine {
                 )
             }
             None => {
-                // The selected declaration already supplies its exact owning
-                // scope. Reuse the completed ownership index; a reached call
-                // neither needs nor grants a census of all source roots.
-                let owner = match completed.scope_owner(&proof.declaration().context().scope) {
-                    SourceScopeOwner::Selected(owner) => owner,
-                    SourceScopeOwner::Ambiguous(_) => {
-                        return QueryPoll::Ready(Err(call_fault(
-                            "reached module source owner is ambiguous",
-                        )));
-                    }
-                    SourceScopeOwner::Missing => {
-                        return QueryPoll::Ready(Err(call_fault(
-                            "reached module source owner is absent",
-                        )));
-                    }
+                let Some(source) = ready!(Self::capture_module_source(db, completed, callee, body))
+                else {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "reached module source owner is absent",
+                    )));
                 };
-                let entry = match body.pc(NodeId(0), Phase::Entry) {
-                    Ok(entry) => entry,
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                };
-                let source = Arc::new(ready!(crate::frontend::source_body_context::capture(
-                    db,
-                    &[owner],
-                    body,
-                    &entry
-                )));
-                // The common source receipt requires a genuine generated outer
-                // boundary. Missing export remains held; never infer a parent.
                 let Some(owner) = source.module_source() else {
                     return QueryPoll::Ready(Err(call_fault(
                         "reached module requires its actual generated boundary",
@@ -229,43 +207,94 @@ impl RunMachine {
                 "selected module body differs from its callee",
             )));
         }
-        // An impl/trait member is owned by its enclosing module's source.
-        let scope = &callee.declaration_context().scope;
-        let module_scope;
-        let scope = if scope.owner.is_some()
-            && matches!(completed.scope_owner(scope), SourceScopeOwner::Missing)
-        {
-            module_scope = crate::syntax::outline::ScopeKey {
-                owner: None,
-                ..scope.clone()
-            };
-            &module_scope
-        } else {
-            scope
+        let Some(source) = ready!(Self::capture_module_source(db, completed, callee, body)) else {
+            return QueryPoll::Ready(Ok(()));
         };
-        let owner = match completed.scope_owner(scope) {
-            SourceScopeOwner::Selected(owner) => owner,
-            SourceScopeOwner::Ambiguous(_) => {
-                return QueryPoll::Ready(Err(call_fault(
-                    "selected module source owner is ambiguous",
-                )));
-            }
-            SourceScopeOwner::Missing => return QueryPoll::Ready(Ok(())),
-        };
-        let entry = match body.pc(NodeId(0), Phase::Entry) {
-            Ok(entry) => entry,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let source = Arc::new(ready!(crate::frontend::source_body_context::capture(
-            db,
-            &[owner],
-            body,
-            &entry
-        )));
         let Some(owner) = source.module_source() else {
             return QueryPoll::Ready(Ok(()));
         };
         let macros = ready!(completed.sealed_body_macro_environment(db, owner.selection()));
         db.prepare_selected_body_plan(&source, &macros)
+    }
+    fn capture_module_source(
+        db: &mut Database,
+        completed: &crate::expand::source_discovery::CompletedSourceEnvironment,
+        callee: &SourceCallable,
+        body: &Arc<BodyIndex>,
+    ) -> QueryPoll<Option<Arc<AdmittedBodyContext>>> {
+        macro_rules! ready {
+            ($value:expr) => {
+                match $value {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+        }
+        let Some(locator) = db.input(&InputKey::DefinitionSource(callee.identity())) else {
+            return QueryPoll::Ready(Err(call_fault("selected module source locator absent")));
+        };
+        let InputValue::DefinitionSource(parse) = locator.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("selected module source locator differs")));
+        };
+        let generated = match db.input(&InputKey::RetainedSyntax(parse.content)) {
+            Some(input) => match input.as_ref() {
+                InputValue::RetainedSyntax(unit) => unit.generated_unit().cloned(),
+                _ => None,
+            },
+            None => match db.input(&InputKey::GeneratedSyntax(parse.content)) {
+                Some(input) => match input.as_ref() {
+                    InputValue::GeneratedSyntax(unit) => Some(Arc::clone(unit)),
+                    _ => None,
+                },
+                None => None,
+            },
+        };
+        let boundary = match generated {
+            Some(unit) => match completed.generated_body_boundary(&unit) {
+                Ok(boundary) => Some(boundary),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            },
+            None => None,
+        };
+        let sources = if let Some(boundary) = &boundary {
+            // Generated inline modules need not have a physical source root at
+            // their module path. Their real insertion boundary owns the roots.
+            boundary.source_roots().iter().collect::<Vec<_>>()
+        } else {
+            let scope = &callee.declaration_context().scope;
+            let module_scope;
+            let scope = if scope.owner.is_some()
+                && matches!(completed.scope_owner(scope), SourceScopeOwner::Missing)
+            {
+                module_scope = crate::syntax::outline::ScopeKey {
+                    owner: None,
+                    ..scope.clone()
+                };
+                &module_scope
+            } else {
+                scope
+            };
+            match completed.scope_owner(scope) {
+                SourceScopeOwner::Selected(owner) => vec![owner],
+                SourceScopeOwner::Ambiguous(_) => {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "selected module source owner is ambiguous",
+                    )));
+                }
+                SourceScopeOwner::Missing => return QueryPoll::Ready(Ok(None)),
+            }
+        };
+        let entry = match body.pc(NodeId(0), Phase::Entry) {
+            Ok(entry) => entry,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut source = Arc::new(ready!(crate::frontend::source_body_context::capture(
+            db, &sources, body, &entry
+        )));
+        if let Some(boundary) = boundary {
+            source = ready!(source.attach_generated_boundary(db, boundary));
+        }
+        QueryPoll::Ready(Ok(Some(source)))
     }
 }

@@ -192,15 +192,28 @@ pub(super) fn parse(
         records.into_values().collect(),
     )
 }
+/// A table from stable span keys to upstream spans.
+pub(crate) trait SpanSlots {
+    fn slot(&self, key: &Key) -> Option<Span>;
+}
+impl SpanSlots for BTreeMap<Key, Span> {
+    fn slot(&self, key: &Key) -> Option<Span> {
+        self.get(key).copied()
+    }
+}
+impl SpanSlots for crate::span_store::SpanHashMap<Key, Span> {
+    fn slot(&self, key: &Key) -> Option<Span> {
+        self.get(key).copied()
+    }
+}
 pub(crate) fn emit(
     tokens: &[TokenTree],
     builder: &mut tt::TopSubtreeBuilder,
-    spans: &BTreeMap<Key, Span>,
+    spans: &impl SpanSlots,
 ) -> Result<(), AdapterError> {
     let get = |key: &Key| {
         spans
-            .get(key)
-            .copied()
+            .slot(key)
             .ok_or_else(|| error("unmapped stable span"))
     };
     for token in tokens {

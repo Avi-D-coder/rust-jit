@@ -26,7 +26,7 @@ use crate::{
         pc::{NodeId, PcKey},
     },
     syntax::{
-        pattern_tree::{PatternLiteral, PatternNode},
+        pattern_tree::{PatternLiteral, PatternNode, RangeEndpoint},
         source_constraints::{
             FactKind, PatternStep, SourceConstraintPlan, SourceOperator, TypeShape,
         },
@@ -129,6 +129,7 @@ pub struct PreparedBindingConstraints {
     // The callee's own generic parameters the same demand decided, stated as
     // a written turbofish would (`ResolvedType` of a source function call).
     arguments: Option<Arc<crate::ir::recipe::InferredArguments>>,
+    related_numeric: Option<Arc<crate::ir::op::RelatedNumericPlan>>,
 }
 impl PreparedBindingConstraints {
     pub(crate) fn key(&self) -> &PcKey {
@@ -142,9 +143,7 @@ impl PreparedBindingConstraints {
         self.written.as_deref()
     }
     /// The callee generic parameters an open call's demand decided.
-    pub(crate) fn inferred_arguments(
-        &self,
-    ) -> Option<&Arc<crate::ir::recipe::InferredArguments>> {
+    pub(crate) fn inferred_arguments(&self) -> Option<&Arc<crate::ir::recipe::InferredArguments>> {
         self.arguments.as_ref()
     }
     pub(crate) fn metadata_bytes(&self) -> usize {
@@ -224,6 +223,22 @@ impl PreparedBindingConstraints {
             BindingConstraintState::Resolved(primitive) => Some(primitive),
             _ => None,
         })
+    }
+    pub(crate) fn has_related_numeric(&self) -> bool {
+        self.related_numeric.is_some()
+    }
+    pub(crate) fn literal_hint(
+        &self,
+        index: &crate::syntax::body_index::BodyIndex,
+        key: &PcKey,
+    ) -> Result<Option<crate::ir::op::HintRecipe>, Diagnostic> {
+        if let Some(primitive) = self.literal_primitive(index, key)? {
+            return Ok(Some(crate::ir::op::HintRecipe::Primitive(primitive)));
+        }
+        Ok(self
+            .related_numeric
+            .as_ref()
+            .map(|plan| crate::ir::op::HintRecipe::RelatedNumeric(Arc::clone(plan))))
     }
     fn pending(mut self, node: NodeId, demand: ConstraintDemand) -> QueryPoll<Self> {
         self.state = BindingConstraintState::Pending { node, demand };
@@ -379,12 +394,12 @@ enum Step {
     /// The value's nominal Type's own type argument at this position.
     TypeArgument(u32),
 }
-#[path = "binding_constraint_comparison.rs"]
-mod comparison;
 #[path = "binding_constraint_bounds.rs"]
 mod bounds;
 #[path = "binding_constraint_callables.rs"]
 mod callables;
+#[path = "binding_constraint_comparison.rs"]
+mod comparison;
 #[path = "binding_constraint_deref.rs"]
 mod deref;
 #[path = "binding_constraint_generics.rs"]
@@ -399,6 +414,8 @@ mod methods;
 mod modes;
 #[path = "binding_constraint_nominal.rs"]
 mod nominal;
+#[path = "binding_constraint_observed.rs"]
+mod observed;
 #[path = "binding_constraint_open.rs"]
 mod open;
 #[path = "binding_constraint_patterns.rs"]
@@ -857,9 +874,13 @@ impl<'a> Component<'a> {
             // a primitive at its position is an operand the built-in
             // operators auto-reference (`&u32 * 2`), whose other operand has
             // the primitive's Type.
-            Some(TyTerm::Ref(_, _, inner)) if !self.open && matches!(*inner, TyTerm::Primitive(_)) => {
+            Some(TyTerm::Ref(_, _, inner))
+                if !self.open && matches!(*inner, TyTerm::Primitive(_)) =>
+            {
                 match *inner {
-                    TyTerm::Primitive(primitive) => QueryPoll::Ready(self.constrain(node, primitive)),
+                    TyTerm::Primitive(primitive) => {
+                        QueryPoll::Ready(self.constrain(node, primitive))
+                    }
                     _ => {
                         self.defer(node, demand);
                         QueryPoll::Ready(Ok(()))
@@ -946,18 +967,20 @@ impl<'a> Component<'a> {
             Some(TypeShape::Infer) => hole(),
             // A trait object is its principal trait's schema, as the
             // local annotation service reads it.
-            Some(TypeShape::Dyn(principal)) => match crate::frontend::nominal_constructors::dyn_annotation_principal(
-                db,
-                &self.key.body,
-                *principal,
-            ) {
-                QueryPoll::Ready(Ok(principal)) => TyTerm::Dyn(
-                    crate::traits::term::DynSchemaKey(principal.identity),
-                ),
-                QueryPoll::Ready(Err(error)) if entered_type_refusal(&error) => open(),
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            },
+            Some(TypeShape::Dyn(principal)) => {
+                match crate::frontend::nominal_constructors::dyn_annotation_principal(
+                    db,
+                    &self.key.body,
+                    *principal,
+                ) {
+                    QueryPoll::Ready(Ok(principal)) => {
+                        TyTerm::Dyn(crate::traits::term::DynSchemaKey(principal.identity))
+                    }
+                    QueryPoll::Ready(Err(error)) if entered_type_refusal(&error) => open(),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
             Some(TypeShape::Generic(base, arguments)) => {
                 // The local annotation service's own generic base selection.
                 match crate::frontend::nominal_constructors::generic_annotation_base(
@@ -1341,9 +1364,9 @@ impl<'a> Component<'a> {
             // The closure may sit in parentheses or as a block's tail value.
             let mut initializer = statement.operand(1);
             while let Some(node) = initializer
-                && plan
-                    .fact(node)
-                    .is_some_and(|fact| matches!(fact.kind(), FactKind::Parenthesis | FactKind::Block))
+                && plan.fact(node).is_some_and(|fact| {
+                    matches!(fact.kind(), FactKind::Parenthesis | FactKind::Block)
+                })
             {
                 initializer = plan.fact(node).and_then(|fact| fact.operand(0));
             }
@@ -1434,7 +1457,12 @@ impl<'a> Component<'a> {
         else {
             return QueryPoll::Ready(Ok(None));
         };
-        let mut segments: Vec<&str> = item.def_key.module_path.iter().map(String::as_str).collect();
+        let mut segments: Vec<&str> = item
+            .def_key
+            .module_path
+            .iter()
+            .map(String::as_str)
+            .collect();
         segments.push(&item.def_key.declared_name);
         let spelled = format!(
             "{}::{}::{member}",
@@ -1936,7 +1964,14 @@ impl<'a> Component<'a> {
             // `base[index]` is one element of the auto-dereferenced base
             // (a range index is `IndexRange`).
             FactKind::Index => {
-                if ready!(self.index_is_element(db, node)) {
+                if ready!(self.user_index_output(db, node)).is_some() {
+                    // The base's own `Index` impl states the result Type
+                    // (`static_candidate` above); no element step projects
+                    // the base, so a variable inside the result stays open.
+                    if !self.via.steps.is_empty() {
+                        self.mark_unrecorded();
+                    }
+                } else if ready!(self.index_is_element(db, node)) {
                     let via = self.via.wrap(Step::Element).wrap(Step::AutoDeref);
                     self.expression_via(fact.operand(0), via);
                 } else {
@@ -2335,7 +2370,13 @@ impl<'a> Component<'a> {
                 steps = steps[derefs + 1..].to_vec();
                 continue;
             }
-            return self.type_argument_field(db, access, nominal, position, steps[derefs + 1..].to_vec());
+            return self.type_argument_field(
+                db,
+                access,
+                nominal,
+                position,
+                steps[derefs + 1..].to_vec(),
+            );
         }
     }
     /// The access `base.f` of a dereferenced base: `steps[derefs]` is the
@@ -2380,6 +2421,15 @@ impl<'a> Component<'a> {
             }
             None => self.defer(root, ConstraintDemand::Binding),
         }
+        // A pattern function's parameter pattern: the current member is a
+        // part of the declared Type of the argument it matches.
+        if let Some(ordinal) = plan.fact(root).and_then(|fact| fact.parameter()) {
+            let definition = self.key.body.definition;
+            if let Some(term) = ready!(self.parameter_term(db, root, definition, ordinal)) {
+                ready!(self.constrain_term(db, root, &term, ConstraintDemand::ParameterType));
+            }
+            return QueryPoll::Ready(Ok(()));
+        }
         let uses = plan.uses(root);
         if uses.is_empty() {
             self.defer(root, ConstraintDemand::Binding);
@@ -2405,6 +2455,19 @@ impl<'a> Component<'a> {
                 }
                 FactKind::For if edge.ordinal == 1 => {
                     ready!(self.for_pattern(db, root, edge.parent))
+                }
+                // A closure parameter pattern: the argument's written Type,
+                // else the `Fn*(A, ..)` bound the closure is passed for.
+                FactKind::Closure if edge.ordinal >= 1 => {
+                    if self
+                        .plan
+                        .fact(root)
+                        .is_some_and(|fact| fact.annotation_node().is_some())
+                    {
+                        ready!(self.annotation(db, root));
+                    } else {
+                        ready!(self.closure_parameter_bound(db, root));
+                    }
                 }
                 _ => self.defer(root, ConstraintDemand::Binding),
             }
@@ -2435,12 +2498,7 @@ impl<'a> Component<'a> {
         self.peeled = peeled;
         result
     }
-    fn walk_node(
-        &mut self,
-        db: &mut Database,
-        root: NodeId,
-        node: &PatternNode,
-    ) -> QueryPoll<()> {
+    fn walk_node(&mut self, db: &mut Database, root: NodeId, node: &PatternNode) -> QueryPoll<()> {
         // Default binding modes: a pattern that is not a reference pattern
         // or a binding, matched against a reference, matches the referent
         // and binds its names by reference.
@@ -2485,7 +2543,9 @@ impl<'a> Component<'a> {
                             QueryKey::EnteredValue(entry(self.key, *binding))
                         ));
                         let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
-                            return QueryPoll::Ready(Err(fault("pattern name query variant differs")));
+                            return QueryPoll::Ready(Err(fault(
+                                "pattern name query variant differs",
+                            )));
                         };
                         match observed.declaration() {
                             Some(declaration)
@@ -2521,12 +2581,14 @@ impl<'a> Component<'a> {
             PatternNode::Range { start, end, .. } => {
                 for endpoint in [start, end].into_iter().flatten() {
                     match endpoint {
-                        Ok(literal) => {
+                        Ok(RangeEndpoint::Literal(literal)) => {
                             if let Err(error) = self.pattern_literal(root, literal) {
                                 return QueryPoll::Ready(Err(error));
                             }
                         }
-                        Err(_) => self.mark_unrecorded(),
+                        // A constant bound's Type is its declaration's; the
+                        // service draws no conclusion from it.
+                        Ok(RangeEndpoint::Constant(_)) | Err(_) => self.mark_unrecorded(),
                     }
                 }
             }
@@ -2680,6 +2742,25 @@ impl<'a> Component<'a> {
                     ready!(self.closure_parameter_bound(db, pattern));
                 }
             }
+            // A plain parameter of a pattern function (E-R5-010): its
+            // declared Type through the common parameter goal.
+            None if plan
+                .fact(pattern)
+                .is_some_and(|fact| fact.parameter().is_some()) =>
+            {
+                let definition = self.key.body.definition;
+                if let Some(ordinal) = plan.fact(pattern).and_then(|fact| fact.parameter())
+                    && let Some(term) =
+                        ready!(self.parameter_term(db, pattern, definition, ordinal))
+                {
+                    ready!(self.constrain_term(
+                        db,
+                        pattern,
+                        &term,
+                        ConstraintDemand::ParameterType
+                    ));
+                }
+            }
             // A parameter, loop or `if let` binding: its Type needs the
             // shared pattern relation of that owner.
             None => self.defer(pattern, ConstraintDemand::Binding),
@@ -2688,8 +2769,17 @@ impl<'a> Component<'a> {
             self.defer(pattern, ConstraintDemand::Binding);
             return QueryPoll::Ready(Ok(()));
         };
-        // An unindexed region after the declaration may read this local.
-        if row.hidden().iter().any(|region| *region > pattern) {
+        // An unindexed region after the declaration may read this local. A
+        // pattern function's parameter patterns are indexed after its block
+        // (E-R5-010) but are declared before every region of the body.
+        let parameter = plan
+            .fact(pattern)
+            .is_some_and(|fact| fact.parameter().is_some());
+        if row
+            .hidden()
+            .iter()
+            .any(|region| parameter || *region > pattern)
+        {
             self.mark_unrecorded();
         }
         for use_node in row.paths().iter().copied() {
@@ -2715,11 +2805,7 @@ impl<'a> Component<'a> {
     /// Whether the index expression `index` (`base[i]`) reads one element
     /// place: a literal index certainly does; another index operand does
     /// unless its static Type is a nominal (a `Range` value slices).
-    pub(super) fn index_is_element(
-        &mut self,
-        db: &mut Database,
-        index: NodeId,
-    ) -> QueryPoll<bool> {
+    pub(super) fn index_is_element(&mut self, db: &mut Database, index: NodeId) -> QueryPoll<bool> {
         let fact = match self.fact(index) {
             Ok(fact) => fact,
             Err(error) => return QueryPoll::Ready(Err(error)),
@@ -2737,11 +2823,7 @@ impl<'a> Component<'a> {
     }
     /// Whether the static Type of `node`, through references, is the
     /// growable array lang item.
-    pub(super) fn is_vec_expression(
-        &mut self,
-        db: &mut Database,
-        node: NodeId,
-    ) -> QueryPoll<bool> {
+    pub(super) fn is_vec_expression(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<bool> {
         let Some(mut term) = ready!(self.expression_type(db, node)) else {
             return QueryPoll::Ready(Ok(false));
         };
@@ -2925,6 +3007,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
         state: BindingConstraintState::NoNumericDemand,
         written: None,
         arguments: None,
+        related_numeric: None,
     };
     let Some(fact) = plan.fact(NodeId(key.node)) else {
         return QueryPoll::Ready(Err(fault("binding constraint node absent")));
@@ -2996,6 +3079,8 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
     };
     if matches!(result.state, BindingConstraintState::Resolved(_)) {
         result.members = component.members();
+    } else if component.literal_start {
+        result.related_numeric = component.related_numeric_plan();
     }
     QueryPoll::Ready(Ok(result))
 }
@@ -3004,12 +3089,13 @@ enum Start {
     Literal(NodeId),
 }
 impl StableEncode for PreparedBindingConstraints {
-    const DOMAIN: &'static str = "lrr/v1/prepared-binding-constraints";
+    const DOMAIN: &'static str = "lrr/v2/prepared-binding-constraints";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.structure);
         e.option(&self.binding, |e, id| e.digest(*id));
         e.sequence(&self.members, |e, node| e.u32(node.0));
+        e.option(&self.related_numeric, |e, plan| e.record(plan.as_ref()));
         e.option(&self.written, |e, written| e.record(written.as_ref()));
         e.option(&self.arguments, |e, inferred| {
             e.digest(inferred.definition);

@@ -67,16 +67,35 @@ pub(crate) struct OrdinaryLocalAdmission {
     guard: Arc<PreparedInputGuard>,
     query_revision: u64,
     metadata_bytes: usize,
+    /// The admission is not tied to a call in the declaring body: a member of
+    /// a block-level impl or trait (E-R5-009), selected through the member
+    /// index from any call site, or a block item of an enclosing body named
+    /// from a nested one. `site` is then the call or the declaring body's
+    /// entry, and the declaration's own parent plan owns the body context.
+    /// A reached const/static initializer likewise uses its declaration's
+    /// parent independently of the ValuePath that first demands it.
+    member: bool,
 }
 impl OrdinaryLocalAdmission {
+    pub(crate) fn is_member(&self) -> bool {
+        self.member
+    }
     pub(crate) fn parent(&self) -> &Arc<PreparedSourceLocalPlan> {
         &self.parent
     }
     pub(crate) fn item(&self) -> &ItemOutline {
-        &self.parent.context().facts().items[self.item_index].item
+        &self.row().item
     }
     pub(crate) fn scope(&self) -> u32 {
-        self.parent.context().facts().items[self.item_index].scope
+        self.row().scope
+    }
+    fn row(&self) -> &crate::syntax::body_items::BodyItem {
+        let facts = self.parent.context().facts();
+        facts
+            .items
+            .get(self.item_index)
+            .or_else(|| facts.members.get(self.item_index - facts.items.len()))
+            .expect("admitted local declaration row")
     }
     pub(crate) fn site(&self) -> &PcKey {
         &self.site
@@ -269,7 +288,7 @@ fn admit_entered_local(
     site: &PcKey,
     path: NodeId,
 ) -> QueryPoll<EnteredLocalCall> {
-    let source = parent.context().source();
+    let source_key = parent.context().source().parsed().key();
     let demand = QueryKey::EnteredValue(PcKey {
         body: site.body.clone(),
         node: path.0,
@@ -317,10 +336,24 @@ fn admit_entered_local(
     let Some(owner) = declaration.owner() else {
         return QueryPoll::Ready(Ok(EnteredLocalCall::Module(declaration.clone())));
     };
-    if owner != &site.body || declaration.source() != &source.parsed().key() {
+    if declaration.source() != &source_key {
         return QueryPoll::Ready(Err(fault(
             "ordinary callable actual local owner/source differs",
         )));
+    }
+    // A declaration of an enclosing body (a block item a nested body names):
+    // admitted against its declaring body's plan, from this call site.
+    let mut detached = false;
+    let mut parent = parent;
+    if owner != &site.body {
+        let enclosing =
+            polled!(db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(owner.clone())));
+        let QueryValue::SourceLocalPlan(declaring) = enclosing.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("ordinary callable declaring plan differs")));
+        };
+        parent = Arc::clone(declaring);
+        polled!(parent.require_current(db));
+        detached = true;
     }
     let mut rows = parent
         .context()
@@ -389,10 +422,10 @@ fn admit_entered_local(
             .and_then(|bytes| bytes.checked_add(signature.estimated_bytes()))
             .and_then(|bytes| bytes.checked_add(guard.metadata_bytes()))
             .and_then(|bytes| bytes.checked_add(2 * std::mem::size_of::<usize>()))
-            .and_then(|bytes| bytes.checked_add(source.parsed().key().profile.semantics.capacity()))
+            .and_then(|bytes| bytes.checked_add(source_key.profile.semantics.capacity()))
             .ok_or_else(crate::runtime::arena::resource)
     );
-    let source = source.parsed().key();
+    let source = source_key;
     QueryPoll::Ready(Ok(EnteredLocalCall::Local(Box::new(
         OrdinaryLocalAdmission {
             parent,
@@ -403,6 +436,109 @@ fn admit_entered_local(
             guard,
             query_revision: db.revision(),
             metadata_bytes,
+            member: detached,
         },
     ))))
+}
+
+/// The member of a block-level impl or trait that the member index selected,
+/// admitted from its declaration alone: the same signature fact, guard and
+/// callable a block-level `fn` yields, bound to the member row of the owning
+/// body's plan instead of an entered Value goal.
+pub(crate) fn admit_container_member(
+    db: &mut Database,
+    definition: crate::core::digest::Digest,
+) -> QueryPoll<Option<Arc<OrdinaryLocalAdmission>>> {
+    admit_declaration_body(db, definition, false)
+}
+
+/// Reached const/static initialization uses the same selected declaration,
+/// signature, source guard and ordinary callable as a container member.
+pub(crate) fn admit_initializer(
+    db: &mut Database,
+    definition: crate::core::digest::Digest,
+) -> QueryPoll<Option<Arc<OrdinaryLocalAdmission>>> {
+    admit_declaration_body(db, definition, true)
+}
+
+fn admit_declaration_body(
+    db: &mut Database,
+    definition: crate::core::digest::Digest,
+    initializer: bool,
+) -> QueryPoll<Option<Arc<OrdinaryLocalAdmission>>> {
+    let Some(owner) = db.input(&InputKey::LocalDeclarationOwner(definition)) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let InputValue::LocalDeclarationOwner(owner) = owner.as_ref() else {
+        return QueryPoll::Ready(Err(fault("local member owner input differs")));
+    };
+    let plan = polled!(db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(owner.clone())));
+    let QueryValue::SourceLocalPlan(parent) = plan.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("local member owning plan differs")));
+    };
+    let parent = Arc::clone(parent);
+    polled!(parent.require_current(db));
+    let facts = parent.context().facts();
+    let Some((item_index, row)) = facts
+        .items
+        .iter()
+        .chain(&facts.members)
+        .enumerate()
+        .find(|(_, row)| row.item.def_key.fingerprint() == definition)
+    else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let eligible = if initializer {
+        matches!(
+            row.item.def_key.item_kind,
+            ItemKind::Constant | ItemKind::Static
+        )
+    } else {
+        item_index >= facts.items.len()
+            && (row.item.def_key.item_kind == ItemKind::Function
+                || row.item.is_discriminant_constant())
+    };
+    if row.attribute_input.is_some() || !eligible || row.item.body.is_none() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let selected = polled!(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)));
+    let QueryValue::FunctionSignature(signature) = selected.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("local member signature variant differs")));
+    };
+    if signature.definition != definition
+        || signature.scope != row.item.scope
+        || signature.header.fingerprint() != row.item.header.fingerprint()
+    {
+        return QueryPoll::Ready(Err(fault("local member actual signature differs")));
+    }
+    let demand = QueryKey::FunctionSignature(definition);
+    let guard = Arc::new(polled!(db.prepare_input_guard(
+        &SyntaxProvider,
+        &demand,
+        selected.fingerprint
+    )));
+    let mut signature = signature.clone();
+    signature.header = row.item.header.clone();
+    let source = parent.context().source().parsed().key();
+    let site = checked!(
+        parent
+            .context()
+            .source()
+            .index()
+            .pc(NodeId(0), Phase::Entry)
+    );
+    let metadata_bytes = std::mem::size_of::<OrdinaryLocalAdmission>()
+        .saturating_add(signature.estimated_bytes())
+        .saturating_add(guard.metadata_bytes());
+    QueryPoll::Ready(Ok(Some(Arc::new(OrdinaryLocalAdmission {
+        parent,
+        item_index,
+        site,
+        source,
+        signature,
+        guard,
+        query_revision: db.revision(),
+        metadata_bytes,
+        member: true,
+    }))))
 }

@@ -57,7 +57,7 @@ impl RunMachine {
         let Some(callee) = poll!(resolver.initializer(db, demand.identity)) else {
             return QueryPoll::Ready(Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
-                "constant or static initializer outside the pure constant domain needs a module-level item (a body-local one has no executable initializer route yet)".into(),
+                "selected constant or static has no executable initializer body".into(),
             )));
         };
         let reference_result = callee
@@ -71,19 +71,14 @@ impl RunMachine {
             .tokens
             .windows(2)
             .any(|pair| pair[0].text == "static" && pair[1].text == "mut");
-        let call = poll!(self.prepare_selected_source_call(
-            db,
-            Arc::new(callee),
-            &[],
-            None,
-            &[],
-            &[],
-        ));
+        let call =
+            poll!(self.prepare_selected_source_call(db, Arc::new(callee), &[], None, &[], &[],));
         QueryPoll::Ready((|| {
             call.callee.revalidate(db)?;
             let args = crate::vm::call::ArgumentPacket::seal(&mut self.store, &[], &[])?;
             let entry = call.body.pc(NodeId(0), Phase::Entry)?;
-            let mut frame = crate::vm::frame::Frame::new(call.body.clone(), entry, &mut self.store)?;
+            let mut frame =
+                crate::vm::frame::Frame::new(call.body.clone(), entry, &mut self.store)?;
             frame.fuel = self.frame.fuel.share();
             frame.actions = self.frame.actions.share();
             self.enter_callee(

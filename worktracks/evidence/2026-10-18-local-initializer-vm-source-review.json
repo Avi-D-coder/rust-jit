@@ -1,0 +1,154 @@
+{
+  "at": "2026-10-18T08:48:31.662522+00:00",
+  "claim": "LOCAL-040",
+  "tasks": [
+    "T024",
+    "T032",
+    "M014",
+    "M018",
+    "M023"
+  ],
+  "status": "V6 exact source 3d5608832ad2a0610c3d3ff5be25d9657825fe0e058993e1cd1cd8eaacb8736e lib/CLI compiled; local nominal const/static matrix PASS ordinary/user/wrapper all4 editions repeated calls. Whole unchanged const arithmetic reaches60 source calls before unsupported128 integers; no whole fixture/feature closure.",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/local_declaration_inputs.rs",
+      "sha256": "d94ee2b3624af814e56589f38b47da6600538b0e6d46c23579387d6ee3c51c71"
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "fb2d51ecf61f375466bc32b2f22559ff6cc4f9664d386569ca13546552cb1617"
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "1ac5e244daaf826c57333484b4e7596f8c20c1c3bc105c9cbcf34bbf7c9d6e36"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_initializers.rs",
+      "sha256": "e845c67f239fbece0114267932a36a031655f6ea9cea3edff565e3231a84ad4f"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+      "sha256": "4a8cf106346f99be88d60f5f899283db9564df826e47624d1546671b2659eab0"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup.rs",
+      "sha256": "ffa5821926f6cd32a37f02efa74456109cd372733f828b13704823a124d44aae"
+    },
+    {
+      "path": "crates/lrr/src/cli/initializer_tests.rs",
+      "sha256": "7a47d33826ccc370cbe5feb6116375b296974ee9fe13b14c679875e0a20b8a85"
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_body_context.rs",
+      "sha256": "243564c08b03084839c6274ea0502fa97abeb30247ab324dfefe3c341803be51"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/retained_child_readiness_tests.rs",
+      "sha256": "9d6c54b1db3f222b195f93a64cf513fd94dc1a16bf5a6f7db46a6d131f029f51"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_return_types.rs",
+      "sha256": "07b1399e151e029cbdc6e0a11ba6ada32f71b79e371a7970561a626af2793094"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "0c83e69ae261d5a03435ce8e0808226a73eb57f10985e0509baabd17a809518f"
+    }
+  ],
+  "source_route": "body_items retains actual const/static expression BodyHandle -> local_declaration_inputs publishes exact locator (no BodyStructure/Thunk) -> ordinary_local::admit_initializer delegates admit_declaration_body shared with container members -> actual FunctionSignature initializer signature/header/context/guard -> callable_shared validates source/header/context/body -> existing RunMachine::enter_initializer -> prepare_reached_local_source/capture_local -> ordinary expression/thunk/VM -> existing initializer continuation/static storage. -> DeclarationFieldTypes retains Const/Static owning header excluding actual Expr; prepare_return_type reads exact declared ty through same HeaderTypeSite/HeaderShape, header stamp/source/owner/signature currentness; no body evaluation by Type service.",
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "admit_declaration_body; admit_initializer; CallResolver::initializer; RunMachine::enter_initializer",
+      "result": "No second evaluator or synthetic function/body. Reached local constant uses existing zero-parameter initializer signature/frame used by module constants and discriminants; pure evaluator not extended."
+    },
+    {
+      "mode": 2,
+      "symbols": "BodyHandle; capture_local; PreparedSourceLocalPlan",
+      "result": "Actual original/retained/generated local declaration body and context, no literal/break-only generated executor."
+    },
+    {
+      "mode": 3,
+      "symbols": "FunctionSignature; initializer declaration identity; admit_initializer",
+      "result": "Selection is actual item kind + exact DefKey/header/context, no macro/method spelling/integer width/fixture inference."
+    },
+    {
+      "mode": 4,
+      "symbols": "LocalDeclarationOwner; parent SourceLocalPlan; initializer body locator",
+      "result": "Original, macro-emitted and wrapper body declarations use same rows and admission; no original-only refusal. Depends on prior generated body environment and Type scope join, not a copied caller context."
+    },
+    {
+      "mode": 5,
+      "symbols": "publish_local_declaration_checked; macro_call_item_body; require_closed_item_body",
+      "result": "Publish only already-known locator, defer BodyStructure/Thunk until reached. Existing innermost declaration ownership now covers Fn/Const/Static/Variant initializer; same pending syntax proof, no duplicated pattern engine or eager executable branch checking. Const/Static header retention never scans initializer descendants for fields; only nominal headers scan fields. Actual initializer body range compared when result Type demanded."
+    },
+    {
+      "mode": 6,
+      "symbols": "FunctionSignature memo; SourceLocalPlan memo; local readiness identity",
+      "result": "Signature and local source plan shared; macro body ownership query follows indexed node attachment/ancestor chain once at cold local admission. No installed operation source planner added. Broader pure fastpath/source-type fallback and aggregate-template debt remain held. Shared header capture once; return syntax resolved by retained direct syntax_at declaration locator; no installed operation parser added."
+    },
+    {
+      "mode": 7,
+      "symbols": "parent source/cfg/body dependency guard; exact declaration lookup",
+      "result": "No whole-world namespace scan or guard change. Declaration scan local to actual entered body. No sandbox/permission/capability work or new resource limit."
+    },
+    {
+      "mode": 8,
+      "symbols": "Arc parent plan; actual body row clone; ParsedFile::syntax_at",
+      "result": "Shares immutable parser/body/index roots. BodyHandle metadata copied only; no BodyIndex deepclone or whole-file per-operation search."
+    }
+  ],
+  "authority": "Semantic source/header/body/owner correspondence, same selected signature and memo/current epoch/hygiene remain. No runtime static-rule rejection added, no source/runtime sandbox extended (E006).",
+  "cost": "Header phase publishes existing body locator only. Common admission scans actual owning declaration rows and uses memoized signature; same existing declaration guard. First reached initializer prepares shared body index; normal operations use installed recipes. No budgets/count caps.",
+  "scope_limits": [
+    "New scoped local initializer matrix passes V6; full E007 run-once/template cleanup and whole upstream fixture remain open.",
+    "Existing resume_initializer re-evaluates nonprimitive/nonreference const values per use and reached scalar pure-evaluator fastpath remains; this local admission does not establish full E007 run-once template contract.",
+    "Suspension existing demand retry behavior source-inspected but no new exact-once fault-injection evidence; no full initializer cleanup gate claim.",
+    "Official const-int-arithmetic includes further i128/library/typing cases; import or partial advance is not whole-fixture/runtime-contract pass.",
+    "No full architecture/MA closure, milestone, performance or JIT gate acceptance."
+  ],
+  "prior_reviews": [
+    {
+      "at": "2026-10-18T08:40:16.040288+00:00",
+      "files": [
+        {
+          "path": "crates/lrr/src/db/local_declaration_inputs.rs",
+          "sha256": "d94ee2b3624af814e56589f38b47da6600538b0e6d46c23579387d6ee3c51c71"
+        },
+        {
+          "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+          "sha256": "fb2d51ecf61f375466bc32b2f22559ff6cc4f9664d386569ca13546552cb1617"
+        },
+        {
+          "path": "crates/lrr/src/frontend/callables.rs",
+          "sha256": "1ac5e244daaf826c57333484b4e7596f8c20c1c3bc105c9cbcf34bbf7c9d6e36"
+        },
+        {
+          "path": "crates/lrr/src/engine/run_initializers.rs",
+          "sha256": "e845c67f239fbece0114267932a36a031655f6ea9cea3edff565e3231a84ad4f"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+          "sha256": "4a8cf106346f99be88d60f5f899283db9564df826e47624d1546671b2659eab0"
+        },
+        {
+          "path": "crates/lrr/src/syntax/node_lookup.rs",
+          "sha256": "ffa5821926f6cd32a37f02efa74456109cd372733f828b13704823a124d44aae"
+        },
+        {
+          "path": "crates/lrr/src/cli/initializer_tests.rs",
+          "sha256": "7a47d33826ccc370cbe5feb6116375b296974ee9fe13b14c679875e0a20b8a85"
+        },
+        {
+          "path": "crates/lrr/src/frontend/local_body_context.rs",
+          "sha256": "243564c08b03084839c6274ea0502fa97abeb30247ab324dfefe3c341803be51"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_declarative/retained_child_readiness_tests.rs",
+          "sha256": "9d6c54b1db3f222b195f93a64cf513fd94dc1a16bf5a6f7db46a6d131f029f51"
+        }
+      ],
+      "status": "Separate source-aware post-edit review; exact fingerprints below. Async candidate validation pending, no acceptance or task closure."
+    }
+  ]
+}

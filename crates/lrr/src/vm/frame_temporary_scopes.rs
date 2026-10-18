@@ -104,7 +104,12 @@ impl Frame {
             // `&[T]` expects its operand only like an unsized rvalue (rustc's
             // `ExpectRvalueLikeUnsized`): the retained `[T]` view gives an
             // array operand its element Type, never a `[T]` descriptor.
-            if matches!(store.type_descriptor(*target)?.key.as_ref(), TypeKey::Slice { .. }) {
+            // `&dyn Trait` expects its operand only like an unsized rvalue:
+            // the operand keeps its own concrete Type.
+            if matches!(
+                store.type_descriptor(*target)?.key.as_ref(),
+                TypeKey::Slice { .. } | TypeKey::Dyn { .. }
+            ) {
                 return Ok(None);
             }
             return Ok(Some(*target));

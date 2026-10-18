@@ -30,24 +30,55 @@ pub(super) fn limit(message: &str) -> WireError {
 /// Content key, computed from explicitly encoded semantic records, never allocation order.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct Key(pub [u8; 32]);
-struct Encoder(blake3::Hasher);
+/// Identity hashing of many tiny fields: gathered in a small inline buffer and
+/// hashed in one call unless the input outgrows it (then streamed). BLAKE3 is
+/// defined on the byte stream, so the digest is the same either way.
+struct Encoder {
+    buffer: [u8; ENCODER_BUFFER],
+    len: usize,
+    streaming: Option<Box<blake3::Hasher>>,
+}
+const ENCODER_BUFFER: usize = 512;
 impl Encoder {
     fn new(domain: &str) -> Self {
-        let mut e = Self(blake3::Hasher::new());
+        let mut e = Self {
+            buffer: [0; ENCODER_BUFFER],
+            len: 0,
+            streaming: None,
+        };
         e.text(domain);
         e
     }
+    fn put(&mut self, bytes: &[u8]) {
+        // Once an input outgrows the buffer it is a stream: every later field
+        // goes straight to the hasher.
+        if let Some(hasher) = &mut self.streaming {
+            hasher.update(bytes);
+            return;
+        }
+        if bytes.len() <= ENCODER_BUFFER - self.len {
+            self.buffer[self.len..self.len + bytes.len()].copy_from_slice(bytes);
+            self.len += bytes.len();
+            return;
+        }
+        let hasher = self
+            .streaming
+            .get_or_insert_with(|| Box::new(blake3::Hasher::new()));
+        hasher.update(&self.buffer[..self.len]);
+        self.len = 0;
+        hasher.update(bytes);
+    }
     fn byte(&mut self, v: u8) {
-        self.0.update(&[v]);
+        self.put(&[v]);
     }
     fn u32(&mut self, v: u32) {
-        self.0.update(&v.to_le_bytes());
+        self.put(&v.to_le_bytes());
     }
     fn count(&mut self, v: usize) {
-        self.0.update(&(v as u64).to_le_bytes());
+        self.put(&(v as u64).to_le_bytes());
     }
     fn key(&mut self, v: Key) {
-        self.0.update(&v.0);
+        self.put(&v.0);
     }
     fn optional(&mut self, v: Option<Key>) {
         match v {
@@ -60,10 +91,16 @@ impl Encoder {
     }
     fn text(&mut self, v: &str) {
         self.count(v.len());
-        self.0.update(v.as_bytes());
+        self.put(v.as_bytes());
     }
     fn finish(self) -> Key {
-        Key(*self.0.finalize().as_bytes())
+        match self.streaming {
+            None => Key(*blake3::hash(&self.buffer[..self.len]).as_bytes()),
+            Some(mut hasher) => {
+                hasher.update(&self.buffer[..self.len]);
+                Key(*hasher.finalize().as_bytes())
+            }
+        }
     }
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -320,13 +357,63 @@ impl std::fmt::Debug for SpanKeyIndex {
         f.write_str("SpanKeyIndex")
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+/// The stable key of every context record, in table order (see `SpanKeyIndex`).
+#[derive(Default, Clone)]
+struct ContextKeyIndex(std::sync::OnceLock<Vec<Key>>);
+impl PartialEq for ContextKeyIndex {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for ContextKeyIndex {}
+impl std::hash::Hash for ContextKeyIndex {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+impl std::fmt::Debug for ContextKeyIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ContextKeyIndex")
+    }
+}
+/// Set once a forest has passed `validate`. A forest is immutable after
+/// construction, so the result holds for every later call and for clones. A
+/// derived cache: it takes no part in equality, hashing or identity.
+#[derive(Default, Clone)]
+struct ValidatedFlag(std::sync::OnceLock<()>);
+impl PartialEq for ValidatedFlag {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for ValidatedFlag {}
+impl std::hash::Hash for ValidatedFlag {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+impl std::fmt::Debug for ValidatedFlag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ValidatedFlag")
+    }
+}
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TokenForest {
     schema: u32,
     roots: Vec<TokenTree>,
     contexts: Vec<ContextRecord>,
     spans: Vec<SpanRecord>,
     span_keys: SpanKeyIndex,
+    context_keys: ContextKeyIndex,
+    validated: ValidatedFlag,
+}
+/// Equal forests hash equally. Only the roots and the table sizes are hashed:
+/// a forest used as a hash key (the parsed-definition cache) routinely carries
+/// the complete source tables of its file, and hashing those for every lookup
+/// costs far more than the equality check that follows a bucket hit.
+impl std::hash::Hash for TokenForest {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.schema.hash(state);
+        self.roots.hash(state);
+        self.contexts.len().hash(state);
+        self.spans.len().hash(state);
+    }
 }
 impl TokenForest {
     pub fn new(
@@ -346,15 +433,81 @@ impl TokenForest {
             contexts,
             spans,
             span_keys: SpanKeyIndex::default(),
+            context_keys: ContextKeyIndex::default(),
+            validated: ValidatedFlag::default(),
         };
         f.validate()?;
         Ok(f)
+    }
+    /// `new` for rows whose stable keys are already known and strictly
+    /// ascending (the order `new` sorts into), as every table drawn from a
+    /// key-ordered store is. Nothing is re-hashed or re-sorted; `validate`
+    /// still rejects duplicate or misordered rows. The caller vouches that each
+    /// key is its record's key.
+    pub(crate) fn new_keyed(
+        roots: Vec<TokenTree>,
+        contexts: Vec<(Key, ContextRecord)>,
+        spans: Vec<(Key, SpanRecord)>,
+    ) -> Result<Self, WireError> {
+        let mut source_text = 0;
+        for (_, span) in &spans {
+            add_text(&mut source_text, &span.source.path)?;
+        }
+        #[cfg(test)]
+        {
+            assert!(contexts.iter().all(|(key, record)| *key == record.key()));
+            assert!(spans.iter().all(|(key, record)| *key == record.key()));
+        }
+        let (context_keys, contexts): (Vec<_>, Vec<_>) = contexts.into_iter().unzip();
+        let (span_keys, spans): (Vec<_>, Vec<_>) = spans.into_iter().unzip();
+        let f = Self {
+            schema: 2,
+            roots,
+            contexts,
+            spans,
+            span_keys: SpanKeyIndex::default(),
+            context_keys: ContextKeyIndex::default(),
+            validated: ValidatedFlag::default(),
+        };
+        let _ = f.span_keys.0.set(span_keys);
+        let _ = f.context_keys.0.set(context_keys);
+        f.validate()?;
+        Ok(f)
+    }
+    /// The same canonical context and span tables with other roots. The tables
+    /// are already sorted and validated, so only the new roots are checked;
+    /// the result equals `TokenForest::new(roots, contexts, spans)` of these
+    /// tables without re-hashing, re-sorting or re-validating them.
+    pub fn with_roots(&self, roots: Vec<TokenTree>) -> Result<Self, WireError> {
+        self.validate()?;
+        let f = Self {
+            schema: self.schema,
+            roots,
+            contexts: self.contexts.clone(),
+            spans: self.spans.clone(),
+            span_keys: self.span_keys.clone(),
+            context_keys: self.context_keys.clone(),
+            validated: ValidatedFlag::default(),
+        };
+        f.validate_roots()?;
+        let _ = f.validated.0.set(());
+        Ok(f)
+    }
+    /// The span record with `key`, found by binary search of the cached keys.
+    pub fn span_by_key(&self, key: &Key) -> Option<&SpanRecord> {
+        self.span_position(key).map(|index| &self.spans[index])
     }
     /// The stable key of each span record, in table order (computed once).
     pub fn span_keys(&self) -> &[Key] {
         self.span_keys
             .0
             .get_or_init(|| self.spans.iter().map(SpanRecord::key).collect())
+    }
+    /// The stable key of each context record, in table order (computed once).
+    pub fn context_keys(&self) -> &[Key] {
+        self.context_keys
+            .0
+            .get_or_init(|| self.contexts.iter().map(ContextRecord::key).collect())
     }
     /// The position of the span record with `key` in the key-ordered table.
     pub fn span_position(&self, key: &Key) -> Option<usize> {
@@ -419,11 +572,19 @@ impl TokenForest {
         Ok(bytes)
     }
     pub fn validate(&self) -> Result<(), WireError> {
+        if self.validated.0.get().is_some() {
+            return Ok(());
+        }
+        self.validate_tables_and_roots()?;
+        let _ = self.validated.0.set(());
+        Ok(())
+    }
+    fn validate_tables_and_roots(&self) -> Result<(), WireError> {
         if self.schema != 2 {
             return Err(error("unsupported token schema"));
         }
         // Each stable key is one hash; compute it once per record.
-        let context_keys: Vec<Key> = self.contexts.iter().map(ContextRecord::key).collect();
+        let context_keys = self.context_keys();
         let span_keys = self.span_keys();
         let contexts: BTreeMap<_, _> = context_keys.iter().copied().zip(&self.contexts).collect();
         let spans: std::collections::BTreeSet<Key> = span_keys.iter().copied().collect();
@@ -457,6 +618,14 @@ impl TokenForest {
             }
             add_text(&mut text, &s.source.path)?;
         }
+        self.validate_roots_with(text)
+    }
+    /// The root checks alone: every referenced span exists, token spellings
+    /// and punctuation are well-formed. The tables are checked separately.
+    fn validate_roots(&self) -> Result<(), WireError> {
+        self.validate_roots_with(0)
+    }
+    fn validate_roots_with(&self, mut text: usize) -> Result<(), WireError> {
         let mut stack: Vec<_> = self.roots.iter().map(|t| (t, 0usize)).collect();
         let mut count = 0usize;
         while let Some((t, depth)) = stack.pop() {
@@ -464,7 +633,7 @@ impl TokenForest {
                 .checked_add(1)
                 .ok_or_else(|| error("token count overflow"))?;
             let exists = |key: &Key| {
-                if spans.contains(key) {
+                if self.span_position(key).is_some() {
                     Ok(())
                 } else {
                     Err(error("token references unknown span"))
@@ -989,6 +1158,8 @@ mod codec {
             contexts,
             spans,
             span_keys: cache,
+            context_keys: ContextKeyIndex::default(),
+            validated: ValidatedFlag::default(),
         };
         f.validate()?;
         Ok(f)

@@ -273,8 +273,14 @@ impl<'a> Component<'a> {
     /// services only and records no relation; an unstated or still-open
     /// part states nothing.
     pub(super) fn static_candidate(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<()> {
-        let Some(term) = ready!(self.expression_type(db, node)) else {
-            return QueryPoll::Ready(Ok(()));
+        let term = match ready!(self.expression_type(db, node)) {
+            Some(term) => term,
+            // A user type's `Index<Idx>` impl states the index expression's
+            // Type (`assert_eq!(grid[(1, 2)], 8)`).
+            None => match ready!(self.user_index_output(db, node)) {
+                Some(output) => output,
+                None => return QueryPoll::Ready(Ok(())),
+            },
         };
         let steps = self.via.steps.clone();
         let saved = (self.pending, self.unrecorded);

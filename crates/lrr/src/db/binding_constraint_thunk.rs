@@ -172,7 +172,8 @@ fn literal(
         return QueryPoll::Ready(Err(fault("binding constraint query variant differs")));
     };
     let proof = plan.constraints();
-    if !matches!(proof.state(), BindingConstraintState::Resolved(_)) {
+    if !matches!(proof.state(), BindingConstraintState::Resolved(_)) && !proof.has_related_numeric()
+    {
         return QueryPoll::Ready(Ok(None));
     }
     let Some(guard) = plan.guard().filter(|_| prepared.cacheable) else {

@@ -32,9 +32,7 @@ fn limit() -> Diagnostic {
     )
 }
 fn add(bytes: usize, n: usize) -> Result<usize, Diagnostic> {
-    bytes
-        .checked_add(n)
-        .ok_or_else(limit)
+    bytes.checked_add(n).ok_or_else(limit)
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ModuleNameCompletion {
@@ -84,12 +82,22 @@ impl CurrentModuleNameObservation {
         namespace: Namespace,
         name: &str,
     ) -> QueryPoll<Arc<Self>> {
-        let mut observation = match Self::source_receipt(db, source, scope, namespace, name) {
-            Ok(observation) => observation,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
+        // Selection (including absence) is a dependency before retaining an
+        // answer. A generated inline module belongs to the genuine parent's
+        // semantic namespace even though its physical outline lacks it.
         let certificate = match db.current_scope_certificate(source.selection(), scope, namespace) {
             Ok(certificate) => certificate,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut observation = match Self::source_receipt(
+            db,
+            source,
+            scope,
+            namespace,
+            name,
+            certificate.as_deref(),
+        ) {
+            Ok(observation) => observation,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         if let Some(certificate) = certificate {
@@ -161,10 +169,7 @@ impl CurrentModuleNameObservation {
                     Ok(bytes) => bytes,
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 };
-                if extra
-                    .checked_add(lookup_bytes)
-                    .is_none()
-                {
+                if extra.checked_add(lookup_bytes).is_none() {
                     return QueryPoll::Ready(Err(limit()));
                 }
                 // One cold copy of the selected bucket answer. Cached query
@@ -200,6 +205,7 @@ impl CurrentModuleNameObservation {
         scope: &ScopeKey,
         namespace: Namespace,
         name: &str,
+        certificate: Option<&InputValue>,
     ) -> Result<Self, Diagnostic> {
         // The opaque view supplies exact immutable source/outline identity.
         // A closed answer additionally requires genuine published discovery,
@@ -208,7 +214,17 @@ impl CurrentModuleNameObservation {
         // name answer and grants no declaration or absence authority.
         let selected = source.selection();
         selected.outline.parse.profile.validate_source()?;
-        if scope.owner.is_some() || !source.outline().scopes.contains_key(scope) || scope.crate_key != selected.outline.crate_key || source.outline().profile != selected.outline.parse.profile {
+        let certified_scope = match certificate {
+            Some(InputValue::DiscoverySeal(input)) if input.sources.contains(selected) => input
+                .scope_certificate(scope, namespace, &selected.outline.parse.profile)?
+                .is_some(),
+            _ => false,
+        };
+        if scope.owner.is_some()
+            || (!source.outline().scopes.contains_key(scope) && !certified_scope)
+            || scope.crate_key != selected.outline.crate_key
+            || source.outline().profile != selected.outline.parse.profile
+        {
             return Err(fault(
                 "module name request is outside actual selected source scope",
             ));

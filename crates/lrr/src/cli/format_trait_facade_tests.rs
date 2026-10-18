@@ -30,7 +30,7 @@ impl Drop for Temp {
     }
 }
 
-pub(super) fn run(
+pub(in crate::cli) fn run(
     label: &str,
     source: &str,
     edition: u16,

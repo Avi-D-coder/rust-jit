@@ -484,6 +484,37 @@ fn require_origin(
     }
     Ok(())
 }
+/// The admitted context of an executing frame's body. A body whose owning
+/// environment is published (an entered body, a local function or a member of
+/// a block-level impl) reuses that environment's one admitted context; any
+/// other body is captured as a module body.
+pub(crate) fn frame_context(
+    db: &mut Database,
+    sources: &[&PreparedSourceView],
+    index: &BodyIndex,
+    pc: &PcKey,
+) -> QueryPoll<Arc<AdmittedBodyContext>> {
+    if let Some(input) = db.input(&InputKey::BodyEnvironment(index.body().clone())) {
+        let InputValue::BodyEnvironment(environment) = input.as_ref() else {
+            return QueryPoll::Ready(Err(fault("frame body environment variant differs")));
+        };
+        if environment.body() == index.body() && environment.source().index().body() == index.body()
+        {
+            match environment.require_current(db) {
+                QueryPoll::Ready(Ok(())) => {
+                    return QueryPoll::Ready(Ok(Arc::clone(environment.source())));
+                }
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
+    }
+    match capture(db, sources, index, pc) {
+        QueryPoll::Ready(Ok(owner)) => QueryPoll::Ready(Ok(Arc::new(owner))),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
+}
 pub(crate) fn capture(
     db: &mut Database,
     sources: &[&PreparedSourceView],
@@ -844,8 +875,7 @@ fn capture_inner(
             source.selection().outline.parse == *parse
                 && source
                     .outline()
-                    .items
-                    .iter()
+                    .declaration_rows()
                     .any(|item| item.def_key.fingerprint() == definition)
         });
         let owner = owners
@@ -860,7 +890,7 @@ fn capture_inner(
             .prepared_source(selection)?
             .ok_or_else(|| fault("entered source original source lease absent"))?;
         if !owner.same_publication(&current)
-            || !owner.outline().items.iter().any(|item| {
+            || !owner.outline().declaration_rows().any(|item| {
                 item.def_key.fingerprint() == definition
                     && item.header == *header
                     && item.scope == declaration.scope

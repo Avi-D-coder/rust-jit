@@ -143,6 +143,7 @@ impl Frame {
             let current = self.executed_place(place)?;
             let ty = store.place_type_id(current).map_err(fault)?;
             if expected == Some(ty)
+                || expected.is_some_and(|expected| store.dyn_admits(expected, ty))
                 || source.as_ref().is_some_and(|pointee| {
                     Self::require_borrow_source_target(Some(pointee), ty, store).is_ok()
                 })

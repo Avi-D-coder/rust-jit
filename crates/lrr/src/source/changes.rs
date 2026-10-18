@@ -36,10 +36,12 @@ pub(crate) struct PublishedFile {
     /// The outline's ordinary namespace pairing proof, hashed once per
     /// publication instead of at every resolver construction.
     pub(crate) source_proof: std::sync::OnceLock<crate::core::digest::Digest>,
-    /// Canonical declaration identity to its first outline item, built once
-    /// per publication for identity lookups.
-    pub(crate) item_index:
-        std::sync::OnceLock<std::collections::BTreeMap<crate::core::digest::Digest, usize>>,
+    /// Canonical declaration identity to its first outline item (and, for an
+    /// enum's anonymous discriminant constant, its row position inside that
+    /// item), built once per publication for identity lookups.
+    pub(crate) item_index: std::sync::OnceLock<
+        std::collections::BTreeMap<crate::core::digest::Digest, (usize, Option<usize>)>,
+    >,
     /// The file's live macro prelude policy under its crate's captured cfg.
     pub(crate) macro_prelude: std::sync::OnceLock<crate::syntax::macro_prelude::MacroPreludePolicy>,
 }
@@ -331,7 +333,7 @@ impl PreparedSourceView {
             InputKey::SourceDependencies,
             InputValue::SourceDependencies(caller.source_dependencies()?),
         )?;
-        for item in &outline.items {
+        for item in outline.declaration_rows() {
             let id = item.def_key.fingerprint();
             insert_input(
                 &mut inputs,
@@ -847,8 +849,7 @@ impl PreparedSourceView {
             .expect("selected immutable source context");
         let item = file
             .outline
-            .items
-            .iter()
+            .declaration_rows()
             .find(|item| item.body.as_ref().is_some_and(|body| body.key() == *key))
             .ok_or_else(|| publication_fault("selected body is absent or changed"))?;
         let body = item.body.as_ref().expect("matching entered body");
@@ -924,8 +925,7 @@ impl PreparedSourceView {
             .expect("selected immutable source context");
         let body = file
             .outline
-            .items
-            .iter()
+            .declaration_rows()
             .filter_map(|item| item.body.as_ref())
             .find(|body| body.key() == *key)
             .ok_or_else(|| publication_fault("body index selection absent or changed"))?;
@@ -945,8 +945,7 @@ impl PreparedSourceView {
             .ok_or_else(|| publication_fault("initializer source lease absent"))?;
         let mut selected = file
             .outline
-            .items
-            .iter()
+            .declaration_rows()
             .filter(|item| item.body.as_ref().is_some_and(|body| body.key() == *key));
         let item = selected
             .next()
@@ -989,8 +988,7 @@ impl PreparedSourceView {
             .ok_or_else(|| publication_fault("constructor source lease absent"))?;
         let mut bodies = file
             .outline
-            .items
-            .iter()
+            .declaration_rows()
             .filter_map(|item| item.body.as_ref())
             .filter(|body| &body.key() == index.body());
         let body = bodies.next().ok_or_else(|| {
@@ -1020,8 +1018,7 @@ impl PreparedSourceView {
             .ok_or_else(|| publication_fault("constructor source lease absent"))?;
         let body = file
             .outline
-            .items
-            .iter()
+            .declaration_rows()
             .filter_map(|item| item.body.as_ref())
             .find(|body| &body.key() == index.body())
             .ok_or_else(|| {
@@ -1043,8 +1040,7 @@ impl PreparedSourceView {
             .ok_or_else(|| publication_fault("field source lease absent"))?;
         let mut bodies = file
             .outline
-            .items
-            .iter()
+            .declaration_rows()
             .filter_map(|item| item.body.as_ref())
             .filter(|body| &body.key() == index.body());
         let body = bodies
@@ -1259,11 +1255,24 @@ impl PreparedSourceView {
             for (ordinal, item) in file.outline.items.iter().enumerate() {
                 index
                     .entry(crate::core::digest::StableEncode::fingerprint(&item.def_key))
-                    .or_insert(ordinal);
+                    .or_insert((ordinal, None));
+                for (row, discriminant) in item.discriminants.iter().enumerate() {
+                    index
+                        .entry(crate::core::digest::StableEncode::fingerprint(
+                            &discriminant.def_key,
+                        ))
+                        .or_insert((ordinal, Some(row)));
+                }
             }
             index
         });
-        index.get(&identity).map(|ordinal| &file.outline.items[*ordinal])
+        index.get(&identity).map(|(ordinal, row)| {
+            let item = &file.outline.items[*ordinal];
+            match row {
+                Some(row) => &item.discriminants[*row],
+                None => item,
+            }
+        })
     }
 }
 pub struct PreparedSourceInputs {
@@ -1405,7 +1414,7 @@ impl PreparedSourceInputs {
                 InputKey::CapturedSource(selection.location_identity()),
                 InputValue::CapturedSource(selection),
             )?;
-            for item in &outline.items {
+            for item in outline.declaration_rows() {
                 let definition = item.def_key.fingerprint();
                 if !definitions.insert(definition) {
                     return Err(publication_fault(

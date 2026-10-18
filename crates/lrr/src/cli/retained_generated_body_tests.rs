@@ -107,3 +107,33 @@ fn unreached_generated_body_with_macro_calls_is_never_lowered() {
         assert_eq!(completed(SOURCE, edition).output.stdout, "hot\n");
     }
 }
+
+/// Generated module functions enter the same source-local plan as ordinary
+/// functions before their nested items are demanded. The assertion itself is
+/// an actual standard macro expansion in each source form.
+#[test]
+fn generated_module_functions_publish_their_nested_item_environment() {
+    const BODY: &str = "fn outer(x: i32) -> i32 { fn inner(v: i32) -> i32 { v + 1 } inner(x) }";
+    for edition in [2015, 2018, 2021, 2024] {
+        let main = "fn main() { assert_eq!(outer(1), 2); assert_eq!(outer(4), 5); }";
+        let ordinary = completed(&format!("{BODY}\n{main}"), edition);
+        for source in [
+            format!("macro_rules! make {{ () => {{ {BODY} }} }} make!(); {main}"),
+            format!(
+                "macro_rules! make {{ () => {{ {BODY} }} }} macro_rules! wrap {{ () => {{ make!(); }} }} wrap!(); {main}"
+            ),
+        ] {
+            let generated = completed(&source, edition);
+            assert_eq!(generated.output.stdout, ordinary.output.stdout);
+            assert_eq!(
+                generated.opcode_counters.started_by_opcode,
+                ordinary.opcode_counters.started_by_opcode,
+                "edition {edition}"
+            );
+        }
+        completed(
+            "macro_rules! emit { () => { mod generated { pub fn f() -> u8 { fn child() -> u8 { 7 } child() } } } } emit!(); fn main() { assert_eq!(generated::f(), 7); }",
+            edition,
+        );
+    }
+}

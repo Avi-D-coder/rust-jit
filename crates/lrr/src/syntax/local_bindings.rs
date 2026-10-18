@@ -89,7 +89,7 @@ impl BindingBudget {
             raw_name: "self".into(),
             name_range: range(name.syntax().text_range()),
             pattern_range: range(receiver.syntax().text_range()),
-            visible_from: u64::from(owner.range.start),
+            visible_from: u64::from(owner.block_range().start),
             form: BindingForm::Receiver,
             classification: PatternNameKind::ExplicitBinding,
         });

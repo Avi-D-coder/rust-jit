@@ -15,6 +15,8 @@ mod snapshot;
 pub use snapshot::SyntaxSnapshot;
 mod edit;
 pub use edit::SyntaxEdit;
+mod queries;
+pub use queries::{BodyOwners, RangeCaptures};
 mod seed;
 pub use seed::SyntaxAttachmentSeed;
 
@@ -68,7 +70,10 @@ pub struct SyntaxAttachment {
 struct PreparedFragment {
     root: SyntaxNode,
     origins: SpanMap,
-    store: SpanStore,
+    /// A private copy of a store that other holders (a seed, sibling forks)
+    /// still share. `None` when the attachment owned its store and extended it
+    /// in place.
+    store: Option<SpanStore>,
     retained_input_bytes: usize,
 }
 
@@ -76,6 +81,28 @@ fn error(message: &str) -> AdapterError {
     AdapterError {
         code: "LRR-E-MACRO-OUTPUT",
         message: message.into(),
+    }
+}
+
+/// The outermost node whose range is exactly `target` and which satisfies
+/// `selected`, descending by the tree's binary child lookup.
+fn outermost_at(
+    root: &SyntaxNode,
+    target: TextRange,
+    mut selected: impl FnMut(&SyntaxNode) -> bool,
+) -> Option<SyntaxNode> {
+    if target.is_empty() || !root.text_range().contains_range(target) {
+        return None;
+    }
+    let mut node = root.clone();
+    loop {
+        if node.text_range() == target && selected(&node) {
+            return Some(node);
+        }
+        match node.child_or_token_at_range(target) {
+            Some(syntax::NodeOrToken::Node(child)) => node = child,
+            _ => return None,
+        }
     }
 }
 
@@ -158,10 +185,8 @@ fn replace_node(target: &SyntaxNode, replacement: &SyntaxNode) -> Result<SyntaxN
     // inside its parent before rebuilding the unchanged-kind ancestor chain.
     let green = replacement.green().to_owned();
     Ok(if let Some(parent) = target.parent() {
-        let index = parent
-            .children_with_tokens()
-            .position(|element| element.as_node() == Some(target))
-            .ok_or_else(|| error("attachment target lost its parent position"))?;
+        // The node's slot among its parent's children (tokens included).
+        let index = target.index();
         let green = parent.green().replace_child(index, green.into());
         SyntaxNode::new_root(parent.replace_with(green))
     } else {
@@ -225,19 +250,20 @@ impl SyntaxAttachment {
         })
     }
 
+    /// The outermost macro-call node with exactly this range, found by the
+    /// tree's binary child lookup (a path of `O(depth * log width)`), never by
+    /// a walk of every earlier node.
     fn select_call(&self, start: u32, end: u32) -> Result<SyntaxNode, AdapterError> {
         if start >= end || end > u32::from(self.root.text_range().len()) {
             return Err(error("attachment range is outside the current syntax"));
         }
         let range = TextRange::new(start.into(), end.into());
-        self.root
-            .descendants()
-            .find(|node| ast::MacroCall::can_cast(node.kind()) && node.text_range() == range)
+        outermost_at(&self.root, range, |node| ast::MacroCall::can_cast(node.kind()))
             .ok_or_else(|| error("attachment range does not select a macro call"))
     }
 
     fn prepare(
-        &self,
+        &mut self,
         output: &TokenForest,
         grammar: DeclarationGrammar,
     ) -> Result<PreparedFragment, AdapterError> {
@@ -245,14 +271,30 @@ impl SyntaxAttachment {
             .retained_input_bytes
             .checked_add(output.allocated_bytes()?)
             .ok_or_else(|| error("attachment retained input budget"))?;
-        // A fork shares the original store. Only importing an actual new
-        // output needs the existing transaction's private mutable copy.
-        let mut store = self
-            .store
-            .lock()
-            .map_err(|_| error("attachment span store lock poisoned"))?
-            .clone();
-        let (root, origins) = declaration_output::parse_root(output, grammar, &mut store)?;
+        // A store shared with a seed or another fork is copied first, so a
+        // failed edit can never reach another holder. A store this attachment
+        // owns alone is extended in place instead of copied for every edit; a
+        // failed edit may then leave unreferenced records in it, which no tree
+        // refers to (records are content-addressed and only ever added).
+        let (root, origins, store) = match Arc::get_mut(&mut self.store) {
+            Some(owned) => {
+                let store = owned
+                    .get_mut()
+                    .map_err(|_| error("attachment span store lock poisoned"))?;
+                let (root, origins) = declaration_output::parse_root(output, grammar, store)?;
+                (root, origins, None)
+            }
+            None => {
+                let mut store = self
+                    .store
+                    .lock()
+                    .map_err(|_| error("attachment span store lock poisoned"))?
+                    .clone();
+                let (root, origins) =
+                    declaration_output::parse_root(output, grammar, &mut store)?;
+                (root, origins, Some(store))
+            }
+        };
         check_tree(&root)?;
         check_origins(&origins, u32::from(root.text_range().len()))?;
         Ok(PreparedFragment {
@@ -285,7 +327,10 @@ impl SyntaxAttachment {
             final_len,
         )?;
         let root = rebuild(&prepared.root)?;
-        check_tree(&root)?;
+        // The retained tree and the replacement were each validated complete
+        // (no ERROR node) and a splice adds only the replacement's nodes, so
+        // the whole-tree walk is not repeated for every edit; every export of
+        // the tree (`materialize`, `into_seed`) still runs it.
         if u32::from(root.text_range().len()) != final_len {
             return Err(error(
                 "attached syntax length differs from the origin splice",
@@ -294,7 +339,9 @@ impl SyntaxAttachment {
         let edit = SyntaxEdit::new(range, replacement_len, old_len, final_len)?;
         self.root = root;
         self.origins = Arc::new(origins);
-        self.store = Arc::new(Mutex::new(prepared.store));
+        if let Some(store) = prepared.store {
+            self.store = Arc::new(Mutex::new(store));
+        }
         self.retained_input_bytes = prepared.retained_input_bytes;
         self.snapshot_cache = std::sync::OnceLock::new();
         Ok(edit)
@@ -351,6 +398,7 @@ impl SyntaxAttachment {
     /// Replay these owned events; `text` is for display, not reparsing or body
     /// cache identity. Source publication must also retain admission/epoch proof.
     pub fn materialize(&self) -> Result<DeclarationSyntax, AdapterError> {
+        check_tree(&self.root)?;
         let store = self
             .store
             .lock()

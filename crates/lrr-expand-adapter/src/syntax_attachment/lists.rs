@@ -143,11 +143,7 @@ impl SyntaxAttachment {
         }
         let range = target.node.text_range();
         self.apply(range, prepared, |replacement| {
-            let index = target
-                .container
-                .children_with_tokens()
-                .position(|element| element.as_node() == Some(&target.node))
-                .ok_or_else(|| error("list attachment target lost its parent position"))?;
+            let index = target.node.index();
             // Flatten only the parser's list container, never an actual block.
             let children = replacement.green().children().map(|child| child.to_owned());
             let green = target

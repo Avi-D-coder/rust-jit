@@ -28,44 +28,36 @@ impl RunMachine {
             return QueryPoll::Ready(Ok(false));
         }
         let callee = (|| {
-            let (mut place, mut ty) = self.frame.value_callee(site, &self.store)?;
-            let place_fault = |failure: crate::runtime::place::PlaceFailure| match failure {
-                crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
-                crate::runtime::place::PlaceFailure::GuestPanic(_) => {
-                    call_fault("callee dereference panicked")
-                }
-            };
-            // `(&f)(x)`: a reference to a callable calls its referent.
-            loop {
-                let key = self.store.type_descriptor(ty)?.key.clone();
-                match key.as_ref() {
-                    TypeKey::Ref { target, .. } => {
-                        place = self.store.dereference_place(&place).map_err(place_fault)?;
-                        ty = *target;
-                    }
-                    TypeKey::Callable { identity, .. } => return Ok(*identity),
-                    // A fn pointer (E-R5-008): its code address names the
-                    // function item it was made from; the call proceeds as a
-                    // call of that item.
-                    TypeKey::Function { .. } => {
-                        let value = self.store.read_place(&place).map_err(place_fault)?;
-                        let address = self.store.pointer_address_peek(value)?.ok_or_else(|| {
-                            call_fault("fn pointer value holds no code address")
+            // CalleeDeref has already adjusted the once-evaluated place,
+            // including ordinary source `Deref` calls, before Commit.
+            let (place, ty) = self.frame.value_callee(site, &self.store)?;
+            match self.store.type_descriptor(ty)?.key.as_ref() {
+                TypeKey::Callable { identity, .. } => Ok(*identity),
+                TypeKey::Function { .. } => {
+                    let value = self
+                        .store
+                        .read_place(&place)
+                        .map_err(|failure| match failure {
+                            crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                            crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                                call_fault("callee read panicked")
+                            }
                         })?;
-                        return self.store.function_at(address).ok_or_else(|| {
-                            Diagnostic::new(
-                                "LRR-E-POINTER-DANGLING",
-                                "call through a fn pointer that designates no function".into(),
-                            )
-                        });
-                    }
-                    _ => {
-                        return Err(Diagnostic::new(
-                            "LRR-E-OP-TYPE",
-                            "called value is not a function item or closure".into(),
-                        ));
-                    }
+                    let address = self
+                        .store
+                        .pointer_address_peek(value)?
+                        .ok_or_else(|| call_fault("fn pointer value holds no code address"))?;
+                    self.store.function_at(address).ok_or_else(|| {
+                        Diagnostic::new(
+                            "LRR-E-POINTER-DANGLING",
+                            "call through a fn pointer that designates no function".into(),
+                        )
+                    })
                 }
+                _ => Err(Diagnostic::new(
+                    "LRR-E-OP-TYPE",
+                    "called value is not a function item or closure".into(),
+                )),
             }
         })();
         let callee = match callee {
@@ -89,7 +81,8 @@ impl RunMachine {
                 Ok(callee) => callee,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
-            return match self.prepare_selected_argument_call(db, Arc::from(callee), &[], arguments) {
+            return match self.prepare_selected_argument_call(db, Arc::from(callee), &[], arguments)
+            {
                 QueryPoll::Ready(Ok(call)) => {
                     self.pending_bytes = self.pending_bytes.saturating_add(call.bytes);
                     self.pending.insert(identity, call);
@@ -172,12 +165,17 @@ impl RunMachine {
         // Only a closure expression's own entry creates its value.
         let pc = self.frame.pc();
         if pc.phase != crate::ir::pc::Phase::Entry.code()?
-            || !self.frame.body.nodes().get(pc.node as usize).is_some_and(|node| {
-                node.role
-                    == crate::syntax::body_index::NodeRole::Expression(
-                        crate::syntax::body_index::ExpressionKind::Closure,
-                    )
-            })
+            || !self
+                .frame
+                .body
+                .nodes()
+                .get(pc.node as usize)
+                .is_some_and(|node| {
+                    node.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Closure,
+                        )
+                })
         {
             return Ok(());
         }
@@ -228,25 +226,12 @@ impl RunMachine {
                 "closure called with a different number of arguments than its parameters".into(),
             ));
         }
-        let (mut closure, mut ty) = self.frame.value_callee(site, &self.store)?;
-        loop {
-            let key = self.store.type_descriptor(ty)?.key.clone();
-            match key.as_ref() {
-                TypeKey::Ref { target, .. } => {
-                    closure = self
-                        .store
-                        .dereference_place(&closure)
-                        .map_err(|failure| match failure {
-                            crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
-                            crate::runtime::place::PlaceFailure::GuestPanic(_) => {
-                                call_fault("closure callee dereference panicked")
-                            }
-                        })?;
-                    ty = *target;
-                }
-                TypeKey::Callable { .. } => break,
-                _ => return Err(call_fault("closure callee type differs")),
-            }
+        let (closure, ty) = self.frame.value_callee(site, &self.store)?;
+        if !matches!(
+            self.store.type_descriptor(ty)?.key.as_ref(),
+            TypeKey::Callable { .. }
+        ) {
+            return Err(call_fault("closure callee type differs"));
         }
         let identity = self.frame.call_identity(site);
         self.closures
@@ -272,7 +257,9 @@ impl RunMachine {
             match parameter.hint {
                 Some(primitive) => hints.push((
                     *slot,
-                    Some(crate::frontend::call_contracts::primitive_runtime_id(primitive)?),
+                    Some(crate::frontend::call_contracts::primitive_runtime_id(
+                        primitive,
+                    )?),
                     Some(crate::traits::term::TyTerm::Primitive(primitive)),
                 )),
                 None => hints.push((*slot, None, None)),
@@ -312,7 +299,8 @@ impl RunMachine {
             let mut cells = Vec::with_capacity(arguments.len());
             let mut types = Vec::with_capacity(arguments.len());
             for slot in arguments {
-                self.frame.materialize_fallback_argument(*slot, &mut self.store)?;
+                self.frame
+                    .materialize_fallback_argument(*slot, &mut self.store)?;
                 let cell = self.frame.cell(*slot)?;
                 let value = self.store.admit_move(cell)?;
                 let ty = self.store.effective_type(value)?.ok_or_else(|| {
@@ -333,7 +321,15 @@ impl RunMachine {
         // The closure body is part of its creating function's source.
         if let Some(owner) = self.closures.owners.get(target.body.body()) {
             let owner = owner.clone();
-            return self.finish_closure_seal(db, site, target, selected.closure, owner, cells, types);
+            return self.finish_closure_seal(
+                db,
+                site,
+                target,
+                selected.closure,
+                owner,
+                cells,
+                types,
+            );
         }
         let Some(graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(

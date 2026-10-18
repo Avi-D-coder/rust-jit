@@ -77,11 +77,7 @@ fn group(
                 children,
                 ..
             },
-        ] if children.len() == 1 => TokenForest::new(
-            vec![children[0].clone()],
-            forest.contexts().to_vec(),
-            forest.spans().to_vec(),
-        ),
+        ] if children.len() == 1 => forest.with_roots(vec![children[0].clone()]),
         _ => Ok(forest),
     }
 }
@@ -172,14 +168,61 @@ pub(crate) fn materialize_root(
         return Err(error("declaration origin coverage is incomplete"));
     }
     let syntax = owned_syntax(root)?;
+    let Captures {
+        definitions,
+        calls,
+    } = capture_nodes(root, map, store, None)?;
+    Ok(DeclarationSyntax {
+        text: root.text().to_string(),
+        origins,
+        syntax,
+        definitions,
+        calls,
+    })
+}
+
+/// Definitions and calls captured by one structural walk.
+pub(crate) struct Captures {
+    pub(crate) definitions: Vec<DefinitionCapture>,
+    pub(crate) calls: Vec<CallCapture>,
+}
+
+/// The one capture walk shared by whole-tree materialization and by the
+/// incremental edit path. With `within`, subtrees disjoint from the range are
+/// pruned at their top, so the work is proportional to the selected range plus
+/// the width of the ancestors along its path; a capture must lie wholly inside
+/// the range. Preorder order and skip rules are identical in both modes.
+pub(crate) fn capture_nodes(
+    root: &syntax::SyntaxNode,
+    map: &span::SpanMap,
+    store: &SpanStore,
+    within: Option<span::TextRange>,
+) -> Result<Captures, AdapterError> {
     let mut definitions = Vec::new();
     let mut calls = Vec::new();
     let mut bytes = 0usize;
+    if within.is_some_and(|range| range.is_empty()) {
+        return Ok(Captures { definitions, calls });
+    }
     let mut walk = root.preorder();
     while let Some(event) = walk.next() {
         let syntax::WalkEvent::Enter(node) = event else {
             continue;
         };
+        if let Some(within) = within {
+            let range = node.text_range();
+            if range.end() <= within.start() || within.end() <= range.start() {
+                walk.skip_subtree();
+                continue;
+            }
+            if !within.contains_range(range) {
+                if ast::MacroRules::can_cast(node.kind()) || ast::MacroCall::can_cast(node.kind())
+                {
+                    return Err(error("captured declaration crosses the selected range"));
+                }
+                continue;
+            }
+        }
         if let Some(definition) = ast::MacroRules::cast(node.clone()) {
             let name = definition
                 .name()
@@ -258,11 +301,5 @@ pub(crate) fn materialize_root(
             walk.skip_subtree();
         }
     }
-    Ok(DeclarationSyntax {
-        text: root.text().to_string(),
-        origins,
-        syntax,
-        definitions,
-        calls,
-    })
+    Ok(Captures { definitions, calls })
 }

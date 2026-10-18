@@ -7972,6 +7972,7 @@ impl SourceDiscovery {
                     body,
                     constructor_fields: vec![],
                     variants: vec![],
+                    discriminants: vec![],
                     declaration_span: context.range,
                     header_span: context.range,
                 },
@@ -8622,7 +8623,20 @@ impl SourceDiscovery {
             }
         }
         if let Some(environment) = &self.completed_source_environment {
-            environment.admit_generated_units(generated_units)?;
+            let mut boundaries = BTreeMap::new();
+            for unit in &generated_units {
+                if unit.definitions.values().any(|item| matches!(item.item_kind,
+                    crate::source::manifest::ItemKind::Function
+                    | crate::source::manifest::ItemKind::Constant
+                    | crate::source::manifest::ItemKind::Static))
+                {
+                    // A cold body's unavailable insertion context is retained as a
+                    // typed outcome. It is reported only when that body is
+                    // reached, just as unsupported executable syntax is.
+                    boundaries.insert(unit.key.content, self.generated_body_macro_boundary(unit));
+                }
+            }
+            environment.admit_generated_units(generated_units, boundaries)?;
         }
         let type_scopes = self.type_scope_receipts(db, &sources, &descriptors, &derived)?;
         let value_scopes = self.value_scope_receipts(db, &sources, &descriptors, &derived)?;

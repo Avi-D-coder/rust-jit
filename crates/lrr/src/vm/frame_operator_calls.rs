@@ -37,6 +37,9 @@ pub(crate) enum OperatorKind {
     /// A method receiver's overloaded autoderef step: `Deref::deref`, or
     /// `DerefMut::deref_mut` when `true`.
     Deref(bool),
+    /// An index expression whose base takes its own `Index<Idx>` impl:
+    /// `Index::index`, or `IndexMut::index_mut` when `true`.
+    Index(bool),
 }
 impl OperatorKind {
     /// The lang-item trait (`core::<module>::<Trait>`) and its method.
@@ -83,6 +86,8 @@ impl OperatorKind {
             Self::Iterator(crate::ir::op::IteratorCall::Next) => ("iter", "Iterator", "next"),
             Self::Deref(false) => ("ops", "Deref", "deref"),
             Self::Deref(true) => ("ops", "DerefMut", "deref_mut"),
+            Self::Index(false) => ("ops", "Index", "index"),
+            Self::Index(true) => ("ops", "IndexMut", "index_mut"),
         }
     }
     /// Stable key of the operator (selection cache identity).
@@ -93,6 +98,7 @@ impl OperatorKind {
             Self::Compound(operator) => 64 + operator.tag(),
             Self::Iterator(call) => 96 + call.tag(),
             Self::Deref(mutable) => 128 + u32::from(mutable),
+            Self::Index(mutable) => 130 + u32::from(mutable),
         }
     }
     fn comparison(self) -> bool {
@@ -178,6 +184,9 @@ impl ValueCoercion {
 pub(crate) struct PlaceDerefDemand {
     pub(crate) base: SlotId,
     pub(crate) mutable: bool,
+    /// The base takes its own `Index<Idx>` impl (`base[idx]`), not a `Deref`
+    /// step: the `index` call's returned reference is the element place.
+    pub(crate) index: bool,
     /// The recipe position the demand was made at.
     pub(crate) pc: crate::core::digest::Digest,
 }
@@ -352,7 +361,9 @@ impl Frame {
             } => self
                 .overloaded_operand(*source, false, store)?
                 .then_some(OperatorKind::Unary(*operator)),
-            Op::CompoundAssignPlace { operator, place, .. } => {
+            Op::CompoundAssignPlace {
+                operator, place, ..
+            } => {
                 let ty = store
                     .place_type_id(self.executed_place(*place)?)
                     .map_err(place_error)?;
@@ -363,14 +374,29 @@ impl Frame {
                     .then_some(OperatorKind::Compound(*operator))
             }
             Op::IteratorCall { call, .. } => Some(OperatorKind::Iterator(*call)),
+            Op::CalleeDeref { place } => {
+                let ty = self.place_type(*place, store)?;
+                match store.type_descriptor(ty)?.key.as_ref() {
+                    TypeKey::Callable { .. } | TypeKey::Function { .. } => None,
+                    _ => Some(OperatorKind::Deref(false)),
+                }
+            }
             // A place operation whose base takes an overloaded `Deref` step.
-            Op::DerefPlace { reference: base, .. }
+            Op::DerefPlace {
+                reference: base, ..
+            }
             | Op::ProjectField { base, .. }
             | Op::ProjectTuple { base, .. }
             | Op::ProjectIndex { base, .. } => self
                 .place_deref
                 .filter(|demand| demand.base == *base && demand.pc == self.pc.fingerprint())
-                .map(|demand| OperatorKind::Deref(demand.mutable)),
+                .map(|demand| {
+                    if demand.index {
+                        OperatorKind::Index(demand.mutable)
+                    } else {
+                        OperatorKind::Deref(demand.mutable)
+                    }
+                }),
             // A borrow whose result expects a reference to another Type than
             // the nominal value it borrows takes rustc's deref coercion: a
             // `Deref` step, then the borrow of its referent.
@@ -441,7 +467,12 @@ impl Frame {
             destination,
         } = op
         {
-            return self.begin_receiver_overload(index, op, (site.0, *place, *scratch, *destination), store);
+            return self.begin_receiver_overload(
+                index,
+                op,
+                (site.0, *place, *scratch, *destination),
+                store,
+            );
         }
         let mut place_deref = None;
         let mut value_coercion = None;
@@ -452,7 +483,10 @@ impl Frame {
             | Op::IteratorCall { destination, .. } => *destination,
             // The step's result lands in a dispatcher-owned location; the
             // base place stands for the operation.
-            Op::DerefPlace { reference: base, .. }
+            Op::CalleeDeref { place: base }
+            | Op::DerefPlace {
+                reference: base, ..
+            }
             | Op::ProjectField { base, .. }
             | Op::ProjectTuple { base, .. }
             | Op::ProjectIndex { base, .. }
@@ -611,9 +645,7 @@ impl Frame {
         }
         let reference = crate::runtime::cell::RefId::from_bits(value.payload);
         progress.parked.push(ticket);
-        if progress.remaining.is_empty()
-            && progress.mode != ReceiverMode::Value
-            && !progress.unsize
+        if progress.remaining.is_empty() && progress.mode != ReceiverMode::Value && !progress.unsize
         {
             // `&*reference` is the reference itself.
             let ticket = progress
@@ -640,7 +672,11 @@ impl Frame {
         self.slots[progress.other.0 as usize].place = Some(place);
         self.set_source_view(progress.other, pointee)?;
         std::mem::swap(&mut progress.current, &mut progress.other);
-        if progress.remaining.iter().any(|step| matches!(step, ReceiverStep::Overloaded { .. })) {
+        if progress
+            .remaining
+            .iter()
+            .any(|step| matches!(step, ReceiverStep::Overloaded { .. }))
+        {
             // Walk to the next overloaded step.
             return Ok(!self.walk_receiver(index, op, destination, progress, store)?);
         }
@@ -707,7 +743,9 @@ impl Frame {
             return Err(invalid("operator call resumed at a different operation"));
         }
         if activation.stage != Stage::Returned {
-            return Err(invalid("operator operation resumed before its method returned"));
+            return Err(invalid(
+                "operator operation resumed before its method returned",
+            ));
         }
         self.operator_activation = None;
         Ok(())
@@ -750,7 +788,10 @@ impl Frame {
             Op::CompoundAssignPlace { place, .. } => store
                 .place_type_id(self.executed_place(*place)?)
                 .map_err(place_error)?,
-            Op::DerefPlace { reference: base, .. }
+            Op::CalleeDeref { place: base }
+            | Op::DerefPlace {
+                reference: base, ..
+            }
             | Op::ProjectField { base, .. }
             | Op::ProjectTuple { base, .. }
             | Op::ProjectIndex { base, .. }
@@ -801,6 +842,10 @@ impl Frame {
         };
         let right = match activation.expected {
             Op::NumericBinary { right, .. } | Op::CompoundAssignPlace { right, .. } => right,
+            // `Index<Idx>`: the index operand is the trait's argument.
+            Op::ProjectIndex { index, .. } if matches!(activation.kind, OperatorKind::Index(_)) => {
+                index
+            }
             _ => return Ok(None),
         };
         let CellState::Live(value) = store.state(self.cell(right)?)? else {
@@ -810,7 +855,10 @@ impl Frame {
     }
     /// An unresolved numeric literal right operand: `Some(true)` for an
     /// integer literal, `Some(false)` for a float literal.
-    pub(crate) fn operator_right_literal(&self, store: &GuestStore) -> Result<Option<bool>, Diagnostic> {
+    pub(crate) fn operator_right_literal(
+        &self,
+        store: &GuestStore,
+    ) -> Result<Option<bool>, Diagnostic> {
         let Some(activation) = self
             .operator_activation
             .as_ref()
@@ -820,13 +868,18 @@ impl Frame {
         };
         let right = match activation.expected {
             Op::NumericBinary { right, .. } | Op::CompoundAssignPlace { right, .. } => right,
+            Op::ProjectIndex { index, .. } if matches!(activation.kind, OperatorKind::Index(_)) => {
+                index
+            }
             _ => return Ok(None),
         };
         let CellState::Live(value) = store.state(self.cell(right)?)? else {
             return Err(invalid("operator operand not live"));
         };
-        Ok((matches!(value.kind, 11 | 12) && store.effective_type(value)?.is_none())
-            .then_some(value.kind == 11))
+        Ok(
+            (matches!(value.kind, 11 | 12) && store.effective_type(value)?.is_none())
+                .then_some(value.kind == 11),
+        )
     }
     /// Whether the demanded method is a comparison (its `Rhs` is passed by
     /// reference).
@@ -837,14 +890,20 @@ impl Frame {
     }
     /// The right operand's reached type, which (with the self type) fixes
     /// the impl selected at a site.
-    pub(crate) fn operator_right_type(&self, store: &GuestStore) -> Result<Option<TypeId>, Diagnostic> {
+    pub(crate) fn operator_right_type(
+        &self,
+        store: &GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
         Ok(self.operator_right(store)?.map(|(_, ty)| ty))
     }
     /// The source view of the argument the right operand becomes, exactly
     /// as `form_operator_arguments` forms it (a comparison passes `&Rhs`:
     /// an autoref'd operand already holds it, any other is borrowed), for
     /// selecting among several impls by their `Rhs`.
-    pub(crate) fn operator_right_view(&self, store: &GuestStore) -> Result<Option<TyTerm>, Diagnostic> {
+    pub(crate) fn operator_right_view(
+        &self,
+        store: &GuestStore,
+    ) -> Result<Option<TyTerm>, Diagnostic> {
         let Some((slot, ty)) = self.operator_right(store)? else {
             return Ok(None);
         };
@@ -853,15 +912,21 @@ impl Frame {
             .as_ref()
             .is_some_and(|activation| activation.kind.comparison());
         let view = self.value_view(slot, ty, store)?;
-        Ok(Some(if comparison && !self.autoref_operands.contains(&slot) {
-            self.formed_reference_source(false, view)?
-        } else {
-            view
-        }))
+        Ok(Some(
+            if comparison && !self.autoref_operands.contains(&slot) {
+                self.formed_reference_source(false, view)?
+            } else {
+                view
+            },
+        ))
     }
     /// Reference source of a location this operation forms: its pointee's
     /// view, under this operator node's local region.
-    fn formed_reference_source(&self, mutable: bool, pointee: TyTerm) -> Result<TyTerm, Diagnostic> {
+    fn formed_reference_source(
+        &self,
+        mutable: bool,
+        pointee: TyTerm,
+    ) -> Result<TyTerm, Diagnostic> {
         let range = self
             .body
             .nodes()
@@ -892,7 +957,12 @@ impl Frame {
         }
         self.value_view(slot, ty, store)
     }
-    fn value_view(&self, slot: SlotId, ty: TypeId, store: &GuestStore) -> Result<TyTerm, Diagnostic> {
+    fn value_view(
+        &self,
+        slot: SlotId,
+        ty: TypeId,
+        store: &GuestStore,
+    ) -> Result<TyTerm, Diagnostic> {
         match self.source_view(slot)? {
             Some(view) => Ok(view),
             None => store.descriptor_source_term(ty).ok_or_else(|| {
@@ -1051,7 +1121,9 @@ impl Frame {
                 self.value_argument(left, expected(0), store)?,
                 self.value_argument(right, expected(1), store)?,
             ],
-            Op::NumericUnary { source, .. } => vec![self.value_argument(source, expected(0), store)?],
+            Op::NumericUnary { source, .. } => {
+                vec![self.value_argument(source, expected(0), store)?]
+            }
             Op::CompoundAssignPlace { place, right, .. } => {
                 let executed = {
                     let executed = self.executed_place(place)?;
@@ -1070,7 +1142,8 @@ impl Frame {
                         )
                     })?,
                 };
-                let receiver = self.formed_reference(&executed, Access::Mutable, pointee, 0, store)?;
+                let receiver =
+                    self.formed_reference(&executed, Access::Mutable, pointee, 0, store)?;
                 self.clear_place(place)?;
                 vec![receiver, self.value_argument(right, expected(1), store)?]
             }
@@ -1082,6 +1155,7 @@ impl Frame {
             // `Deref::deref(&place)` / `DerefMut::deref_mut(&mut place)` of the
             // receiver walk's current place.
             Op::MethodReceiver { .. }
+            | Op::CalleeDeref { .. }
             | Op::DerefPlace { .. }
             | Op::ProjectField { .. }
             | Op::ProjectTuple { .. }
@@ -1111,10 +1185,12 @@ impl Frame {
                         .ok_or_else(|| invalid("operator activation absent"))?
                         .result_cell = Some(cell);
                 }
-                let coerced = self
-                    .operator_activation
-                    .as_ref()
-                    .and_then(|activation| activation.value_coercion.as_ref().map(ValueCoercion::duplicate));
+                let coerced = self.operator_activation.as_ref().and_then(|activation| {
+                    activation
+                        .value_coercion
+                        .as_ref()
+                        .map(ValueCoercion::duplicate)
+                });
                 let (current, executed, ty) = match coerced {
                     // The referent of the reference being coerced.
                     Some(coercion) => (None, coercion.current, coercion.referent_type),
@@ -1152,16 +1228,24 @@ impl Frame {
                         )
                     })?,
                 };
-                let access = if matches!(kind, OperatorKind::Deref(true)) {
-                    Access::Mutable
-                } else {
-                    Access::Shared
-                };
+                let access =
+                    if matches!(kind, OperatorKind::Deref(true) | OperatorKind::Index(true)) {
+                        Access::Mutable
+                    } else {
+                        Access::Shared
+                    };
                 let reference = self.formed_reference(&executed, access, pointee, 0, store)?;
                 if let Some(current) = current {
                     self.clear_place(current)?;
                 }
-                vec![reference]
+                match op {
+                    // `Index::index(&base, idx)`: the index operand follows.
+                    Op::ProjectIndex { index, .. } if matches!(kind, OperatorKind::Index(_)) => {
+                        let index = self.value_argument(index, expected(1), store)?;
+                        vec![reference, index]
+                    }
+                    _ => vec![reference],
+                }
             }
             // `Iterator::next(&mut iter)`: the loop-owned iterator in place.
             Op::IteratorCall {
@@ -1170,14 +1254,22 @@ impl Frame {
                 ..
             } => {
                 let cell = self.cell(source)?;
-                let ty = store.effective_type(store.admit_move(cell)?)?.ok_or_else(|| {
-                    Diagnostic::new(
-                        "LRR-E-TYPE-CONTEXT",
-                        "`for` iterator requires its reached concrete type".into(),
-                    )
-                })?;
+                let ty = store
+                    .effective_type(store.admit_move(cell)?)?
+                    .ok_or_else(|| {
+                        Diagnostic::new(
+                            "LRR-E-TYPE-CONTEXT",
+                            "`for` iterator requires its reached concrete type".into(),
+                        )
+                    })?;
                 let pointee = self.value_view(source, ty, store)?;
-                vec![self.formed_reference(&Place::cell(cell), Access::Mutable, pointee, 0, store)?]
+                vec![self.formed_reference(
+                    &Place::cell(cell),
+                    Access::Mutable,
+                    pointee,
+                    0,
+                    store,
+                )?]
             }
             _ => return Err(invalid("operator activation lost its operation")),
         };
@@ -1218,9 +1310,7 @@ impl Frame {
     pub(crate) fn operator_result_slot(&self) -> Option<SlotId> {
         self.operator_activation
             .as_ref()
-            .filter(|activation| {
-                activation.stage == Stage::Entered && !activation.holds_result()
-            })
+            .filter(|activation| activation.stage == Stage::Entered && !activation.holds_result())
             .map(|activation| activation.destination)
     }
     /// The entered operator method is a `Deref` step of a place operation or
@@ -1289,7 +1379,10 @@ impl Frame {
         Ok(())
     }
     /// The method unwound: this operation becomes the panicking operation.
-    pub(crate) fn unwind_operator_call(&mut self, store: &mut GuestStore) -> Result<(), Diagnostic> {
+    pub(crate) fn unwind_operator_call(
+        &mut self,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
         let activation = self
             .operator_activation
             .take()
@@ -1313,8 +1406,37 @@ impl Frame {
         self.place_deref = Some(PlaceDerefDemand {
             base,
             mutable,
+            index: false,
             pc: self.pc.fingerprint(),
         });
+    }
+    /// The dispatcher found that the index expression's base place takes its
+    /// own `Index<Idx>` impl (`IndexMut` when `mutable`).
+    pub(crate) fn demand_place_index(&mut self, base: SlotId, mutable: bool) {
+        self.place_deref = Some(PlaceDerefDemand {
+            base,
+            mutable,
+            index: true,
+            pc: self.pc.fingerprint(),
+        });
+    }
+    /// The dispatcher found that the index operand about to be hinted is
+    /// the operand of an overloaded `Index<Idx>`.
+    /// `parameter` is the operand's closed type when one impl provides the
+    /// `index` method.
+    pub(crate) fn note_index_operand_overloaded(
+        &mut self,
+        base: SlotId,
+        parameter: Option<TypeId>,
+    ) {
+        self.index_overload = Some((self.pc.fingerprint(), base, parameter));
+    }
+    /// `Some(parameter type)` when the index operand of `base` is the
+    /// argument of an overloaded `Index<Idx>`.
+    pub(crate) fn index_operand_overloaded(&self, base: SlotId) -> Option<Option<TypeId>> {
+        self.index_overload
+            .filter(|(pc, slot, _)| *pc == self.pc.fingerprint() && *slot == base)
+            .map(|(_, _, parameter)| parameter)
     }
     pub(crate) fn has_place_deref_demand(&self) -> bool {
         self.place_deref.is_some()
@@ -1324,7 +1446,10 @@ impl Frame {
         self.rerun_index.map(|index| index as usize)
     }
     pub(crate) fn clear_rerun(&mut self, index: usize) {
-        if self.rerun_index.is_some_and(|rerun| rerun as usize == index) {
+        if self
+            .rerun_index
+            .is_some_and(|rerun| rerun as usize == index)
+        {
             self.rerun_index = None;
         }
     }
@@ -1365,12 +1490,15 @@ impl Frame {
             .operator_activation
             .take()
             .ok_or_else(|| invalid("place dereference activation absent"))?;
+        let indexed = matches!(activation.kind, OperatorKind::Index(_));
         if activation.pc != self.pc.fingerprint()
             || activation.operation_index as usize != index
             || activation.expected != *op
             || activation.stage != Stage::Returned
         {
-            return Err(invalid("place dereference resumed before its method returned"));
+            return Err(invalid(
+                "place dereference resumed before its method returned",
+            ));
         }
         let base = activation
             .place_deref
@@ -1395,7 +1523,9 @@ impl Frame {
         let place = Place::deref(reference);
         let bytes = place.projection_bytes()?;
         match op {
-            Op::DerefPlace { destination, .. } => {
+            Op::DerefPlace { destination, .. } | Op::ProjectIndex { destination, .. }
+                if indexed || matches!(op, Op::DerefPlace { .. }) =>
+            {
                 self.projection_bytes = self
                     .projection_bytes
                     .checked_add(bytes)
@@ -1419,7 +1549,8 @@ impl Frame {
                 self.set_source_view(base, pointee)?;
                 self.slots[base.0 as usize].place = Some(place);
                 self.rerun_index = Some(
-                    u32::try_from(index).map_err(|_| invalid("operator operation index overflow"))?,
+                    u32::try_from(index)
+                        .map_err(|_| invalid("operator operation index overflow"))?,
                 );
                 Ok(false)
             }
@@ -1455,7 +1586,8 @@ impl Frame {
         loop {
             let place = self.executed_place(base)?;
             let ty = store.place_type_id(place)?;
-            let is_reference = matches!(store.type_descriptor(ty)?.key.as_ref(), TypeKey::Ref { .. });
+            let is_reference =
+                matches!(store.type_descriptor(ty)?.key.as_ref(), TypeKey::Ref { .. });
             if !is_reference && store.box_contents_type(ty)?.is_none() {
                 return Ok(());
             }
@@ -1605,7 +1737,9 @@ impl Frame {
             || activation.expected != *op
             || activation.stage != Stage::Returned
         {
-            return Err(invalid("reference coercion resumed before its method returned"));
+            return Err(invalid(
+                "reference coercion resumed before its method returned",
+            ));
         }
         let coercion = activation
             .value_coercion
@@ -1623,7 +1757,8 @@ impl Frame {
         if value.kind != 9 {
             return Err(invalid("a Deref method returned a non-reference"));
         }
-        let TypeKey::Ref { target, .. } = store.type_descriptor(TypeId(value.type_id))?.key.as_ref()
+        let TypeKey::Ref { target, .. } =
+            store.type_descriptor(TypeId(value.type_id))?.key.as_ref()
         else {
             return Err(invalid("a Deref method returned a non-reference"));
         };

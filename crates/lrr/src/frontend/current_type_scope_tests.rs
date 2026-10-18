@@ -138,9 +138,16 @@ fn inline_type_bucket_retains_actual_value_parent_and_exact_namespace_all_editio
             "a Type receipt alone grants no Value completeness"
         );
         assert!(
-            matches!(db.fetch(&SyntaxProvider, QueryKey::SealedName(Box::new(
-            SealedNameKey { seal: bucket.seal.clone(), bucket: wrong }))),
-            QueryPoll::Ready(Ok(_))),
+            matches!(
+                db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::SealedName(Box::new(SealedNameKey {
+                        seal: bucket.seal.clone(),
+                        bucket: wrong
+                    }))
+                ),
+                QueryPoll::Ready(Ok(_))
+            ),
             "the inline Value facet answers its own namespace"
         );
         let mut absent = bucket.bucket.clone();

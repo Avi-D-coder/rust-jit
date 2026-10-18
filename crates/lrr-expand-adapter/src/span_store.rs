@@ -7,16 +7,55 @@ use crate::{
 };
 use span::{EditionedFileId, FileId, ROOT_ERASED_FILE_AST_ID, Span, SpanAnchor, TextRange};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+/// A multiplicative hasher for the small integer records a `Span` is made of
+/// (ranges, slot ids, context ids) and for stable keys, which are themselves
+/// uniformly distributed hashes. The tables below are only probed by key,
+/// never iterated for an observable result, and hold no untrusted keys, so
+/// the keyed SipHash default buys nothing and dominates their cost.
+#[derive(Default, Clone, Copy)]
+pub(crate) struct SpanHashBuilder;
+pub(crate) struct SpanHasher(u64);
+impl std::hash::BuildHasher for SpanHashBuilder {
+    type Hasher = SpanHasher;
+    fn build_hasher(&self) -> SpanHasher {
+        SpanHasher(0)
+    }
+}
+impl std::hash::Hasher for SpanHasher {
+    /// Only fixed-size integer records and stable keys are hashed here. A key
+    /// is a BLAKE3 output, so its first eight bytes are uniformly distributed
+    /// and the rest add nothing; byte writes use at most eight bytes.
+    fn write(&mut self, bytes: &[u8]) {
+        let mut word = [0u8; 8];
+        let n = bytes.len().min(8);
+        word[..n].copy_from_slice(&bytes[..n]);
+        self.write_u64(u64::from_le_bytes(word));
+    }
+    /// Length prefixes (of keys' byte arrays) carry no information here.
+    fn write_usize(&mut self, _: usize) {}
+    fn write_u32(&mut self, value: u32) {
+        self.write_u64(u64::from(value));
+    }
+    fn write_u64(&mut self, value: u64) {
+        const K: u64 = 0x517c_c1b7_2722_0a95;
+        self.0 = (self.0.rotate_left(5) ^ value).wrapping_mul(K);
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+pub(crate) type SpanHashMap<K, V> = HashMap<K, V, SpanHashBuilder>;
 #[path = "span_store/proc_callbacks.rs"]
 mod proc_callbacks;
 #[derive(Clone, Default)]
 pub(crate) struct SpanStore {
     hygiene: HygieneStore,
-    contexts: BTreeMap<Key, ContextRecord>,
-    records: BTreeMap<Key, SpanRecord>,
-    slots: BTreeMap<Key, Span>,
-    reverse: HashMap<Span, Key>,
-    anchors: HashMap<SpanAnchor, Key>,
+    contexts: SpanHashMap<Key, ContextRecord>,
+    records: SpanHashMap<Key, SpanRecord>,
+    slots: SpanHashMap<Key, Span>,
+    reverse: SpanHashMap<Span, Key>,
+    anchors: SpanHashMap<SpanAnchor, Key>,
     next_slot: u32,
     proc_contexts: Option<BTreeMap<Key, span::SyntaxContext>>,
 }
@@ -78,7 +117,7 @@ impl SpanStore {
         forest: &TokenForest,
     ) -> Result<tt::TopSubtree, AdapterError> {
         forest.validate()?;
-        self.hygiene.import(forest.contexts())?;
+        self.hygiene.import_validated(forest)?;
         let labels = self.proc_contexts.get_or_insert_with(BTreeMap::new);
         for record in forest.contexts() {
             let key = record.key();
@@ -99,10 +138,11 @@ impl SpanStore {
     }
     pub(crate) fn import(&mut self, forest: &TokenForest) -> Result<tt::TopSubtree, AdapterError> {
         forest.validate()?;
-        self.hygiene.import(forest.contexts())?;
+        self.hygiene.import_validated(forest)?;
         self.sync_contexts();
-        for record in forest.spans() {
-            let key = record.key();
+        // The forest caches each record's key; hashing it again per import is
+        // the cost of every attachment and expansion.
+        for (record, &key) in forest.spans().iter().zip(forest.span_keys()) {
             if self.slots.contains_key(&key) {
                 continue;
             }
@@ -234,13 +274,19 @@ impl SpanStore {
     pub(crate) fn database(&self) -> &dyn salsa::Database {
         self.hygiene.database()
     }
+    /// Mirror the hygiene store's context table. That table only grows, so an
+    /// equal length means nothing was added; otherwise only the new rows are
+    /// copied (no record is re-hashed).
     fn sync_contexts(&mut self) {
-        self.contexts = self
-            .hygiene
-            .records()
-            .into_iter()
-            .map(|record| (record.key(), record))
-            .collect();
+        let table = self.hygiene.record_table();
+        if self.contexts.len() == table.len() {
+            return;
+        }
+        for (key, record) in table {
+            if !self.contexts.contains_key(key) {
+                self.contexts.insert(*key, record.clone());
+            }
+        }
     }
     pub(crate) fn context_parent(&self, key: [u8; 32]) -> Result<mbe::ContextParent, AdapterError> {
         let record = self
@@ -269,7 +315,7 @@ impl SpanStore {
         call_site: Key,
         site: DeclarativeSite,
         transparency: crate::token_wire::Transparency,
-    ) -> Result<HashMap<Span, Span>, AdapterError> {
+    ) -> Result<SpanHashMap<Span, Span>, AdapterError> {
         let call_context = self
             .records
             .get(&call_site)
@@ -294,8 +340,8 @@ impl SpanStore {
         staged
             .try_reserve(definition.spans().len())
             .map_err(|_| error("marked span allocation failed"))?;
-        for record in definition.spans() {
-            let old = self.span(record.key())?;
+        for (record, &old_key) in definition.spans().iter().zip(definition.span_keys()) {
+            let old = self.span(old_key)?;
             let mut record = record.clone();
             record.context = *marked_contexts
                 .get(&record.context)
@@ -310,7 +356,7 @@ impl SpanStore {
             .iter()
             .filter(|(key, ..)| !self.records.contains_key(key))
             .count();
-        let mut substitutions = HashMap::new();
+        let mut substitutions = SpanHashMap::default();
         substitutions
             .try_reserve(staged.len())
             .map_err(|_| error("marked span preview allocation failed"))?;
@@ -375,13 +421,14 @@ impl SpanStore {
     ) -> Result<TokenForest, AdapterError> {
         let mut contexts = BTreeSet::new();
         let mut records = Vec::new();
+        // `used` iterates in key order, which is the order a forest keeps.
         for key in used {
             let record = self
                 .records
                 .get(&key)
                 .ok_or_else(|| error("unknown exported span"))?;
             contexts.insert(record.context);
-            records.push(record.clone());
+            records.push((key, record.clone()));
         }
         let mut pending: Vec<_> = contexts.iter().copied().collect();
         while let Some(key) = pending.pop() {
@@ -401,12 +448,13 @@ impl SpanStore {
                 self.contexts
                     .get(&key)
                     .cloned()
+                    .map(|record| (key, record))
                     .ok_or_else(|| error("unknown exported context"))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let forest = TokenForest::new(roots, contexts, records)?;
-        forest.encoded_len()?; // Enforce the complete output-record budget without allocating wire.
-        Ok(forest)
+        // No byte budget applies (E-R5-006): the forest is not re-encoded just
+        // to measure it.
+        Ok(TokenForest::new_keyed(roots, contexts, records)?)
     }
 
     /// The matched server can return actual ranged/resolved/located variants.

@@ -67,6 +67,9 @@ fn frame_hint(
     required: bool,
     store: &GuestStore,
 ) -> Result<Option<TypeId>, Diagnostic> {
+    if let HintRecipe::RelatedNumeric(plan) = hint {
+        return frame.related_numeric_hint(plan, store);
+    }
     if matches!(hint, HintRecipe::DefinitionResult) {
         frame.definition_result_descriptor(store)
     } else if matches!(hint, HintRecipe::DefinitionWrittenResult) {
@@ -84,6 +87,11 @@ fn frame_hint(
         ))
     } else if let HintRecipe::BorrowTarget { reference } = hint {
         frame.borrow_target_descriptor(*reference, store)
+    } else if let HintRecipe::IndexOperand { base } = hint {
+        match frame.index_operand_overloaded(*base) {
+            Some(parameter) => Ok(parameter),
+            None => concrete(&HintRecipe::Primitive(crate::ir::op::PrimitiveType::Usize)),
+        }
     } else if let HintRecipe::Parameter(key) = hint {
         let descriptor = frame.parameter_hint(*key)?;
         if required && descriptor.is_none() {
@@ -131,7 +139,10 @@ fn written_binding_admission(
     let value = store.admit_move(frame.cell(source)?)?;
     let admitted = match store.effective_type(value)? {
         Some(ty) => written.admits(ty, store)?,
-        None => matches!(written.as_ref(), crate::ir::written_type::WrittenType::Infer),
+        None => matches!(
+            written.as_ref(),
+            crate::ir::written_type::WrittenType::Infer
+        ),
     };
     // A typed `let` is a coercion site: `&[T; N]` meets `&[T]` by unsizing.
     if admitted || frame.written_unsizing(source, written, store)?.is_some() {
@@ -1254,7 +1265,7 @@ fn execute(
         Op::Panic { .. } => Err(invalid(
             "explicit panic bypassed its guest outcome boundary",
         )),
-        Op::Declaration => Ok(()),
+        Op::Declaration | Op::CalleeDeref { .. } => Ok(()),
         Op::CheckParameters { count } => frame.check_parameters(*count),
         Op::ReadParameter {
             ordinal,
@@ -1495,9 +1506,7 @@ fn execute(
         | Op::AssignPlace { .. } => Err(invalid(
             "place opcode bypassed its typed execution boundary",
         )),
-        Op::IteratorCall { .. } => Err(invalid(
-            "iterator call bypassed its trait method dispatch",
-        )),
+        Op::IteratorCall { .. } => Err(invalid("iterator call bypassed its trait method dispatch")),
         Op::PointerCast {
             source,
             target,
@@ -1690,6 +1699,16 @@ pub(crate) fn step_with_constant(
             } = op
             {
                 frame.box_deref_coercion(*place, *destination, store)?;
+            }
+            if let Op::CalleeDeref { place } = op {
+                frame
+                    .peel_builtin_derefs(*place, store)
+                    .map_err(|failure| match failure {
+                        crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                        crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                            invalid("callee autoderef panicked")
+                        }
+                    })?;
             }
             // Non-primitive operands select the operator's trait method.
             let overloaded = if read_op {

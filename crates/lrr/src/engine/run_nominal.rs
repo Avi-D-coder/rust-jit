@@ -127,7 +127,7 @@ impl RunMachine {
             return QueryPoll::Ready(Err(call_fault("field requires a checked source catalogue")));
         };
         let sources: Vec<_> = self.sources.iter().collect();
-        let owner = match crate::frontend::source_body_context::capture(
+        let owner = match crate::frontend::source_body_context::frame_context(
             db,
             &sources,
             &self.frame.body,
@@ -743,5 +743,64 @@ impl RunMachine {
             return QueryPoll::Ready(Err(call_fault("lexical callee goal variant differs")));
         };
         QueryPoll::Ready(Ok(goal.rooted().is_some()))
+    }
+    /// `Root::function(..)` where the entered Value goal bound `Root`
+    /// lexically (a block-local type, or an imported one): the associated
+    /// function the member index selects for that type, exactly as a module
+    /// type's `Type::function` selects it.
+    pub(super) fn select_lexical_associated_call(
+        &mut self,
+        db: &mut Database,
+        name: &str,
+        syntax: &[String],
+        arguments: &[SlotId],
+    ) -> QueryPoll<Option<SelectedArgumentCall>> {
+        let Some(path) = self
+            .frame
+            .body
+            .nodes()
+            .get(self.frame.pc().node as usize)
+            .and_then(|call| call.operands.first().copied())
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let key = PcKey {
+            body: self.frame.pc().body.clone(),
+            node: path.0,
+            phase: 0,
+        };
+        let goal = match db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key)) {
+            QueryPoll::Ready(Ok(goal)) => goal,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::EnteredValue(goal) = goal.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("lexical callee goal variant differs")));
+        };
+        let (Some(member), Some(declaration)) = (goal.rooted(), goal.declaration()) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if declaration.variant().is_some() || name.split("::").count() != 2 {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let root = declaration.identity();
+        let (Some(members), Some(graph)) = (self.members.clone(), &self.graph) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
+        let selection = match CallResolver::new(graph, &sources) {
+            Ok(resolver) => resolver
+                .with_members(Some(&members))
+                .associated_of(db, &members, Ok(root), member),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        match selection {
+            QueryPoll::Ready(Ok(Some(CallSelection::Source(callee)))) => self
+                .prepare_selected_argument_call(db, Arc::from(callee), syntax, arguments)
+                .map(Some),
+            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
     }
 }

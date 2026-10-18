@@ -15,7 +15,7 @@ use crate::{
     },
     syntax::{
         body_index::ScopeId,
-        pattern_tree::{ConstructorForm, PatternLiteral, PatternNode, PatternTree},
+        pattern_tree::{ConstructorForm, PatternLiteral, PatternNode, PatternTree, RangeEndpoint},
     },
     traits::term::TyTerm,
 };
@@ -385,17 +385,27 @@ impl<'s> Search<'s> {
     }
     fn within(
         &self,
-        start: Option<&Result<PatternLiteral, String>>,
-        end: Option<&Result<PatternLiteral, String>>,
+        start: Option<&Result<RangeEndpoint, String>>,
+        end: Option<&Result<RangeEndpoint, String>>,
         inclusive: bool,
         value: ValueRepr,
     ) -> Result<bool, Diagnostic> {
         use std::cmp::Ordering;
         let actual = self.number(value)?;
         let compare =
-            |endpoint: &Result<PatternLiteral, String>| -> Result<Option<Ordering>, Diagnostic> {
-                let literal = endpoint.as_ref().map_err(|message| unsupported(message))?;
-                actual.compare(self.literal(literal, value)?)
+            |endpoint: &Result<RangeEndpoint, String>| -> Result<Option<Ordering>, Diagnostic> {
+                match endpoint.as_ref().map_err(|message| unsupported(message))? {
+                    RangeEndpoint::Literal(literal) => {
+                        actual.compare(self.literal(literal, value)?)
+                    }
+                    RangeEndpoint::Constant(slot) => match self.target(*slot)? {
+                        PatternTarget::Constant(bound) => {
+                            actual.compare(self.number(*bound)?)
+                        }
+                        PatternTarget::Refused(refusal) => Err(refusal.clone()),
+                        _ => Err(mismatch("range pattern bound is not a constant")),
+                    },
+                }
             };
         if let Some(start) = start {
             match compare(start)? {

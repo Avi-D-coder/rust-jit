@@ -1,0 +1,60 @@
+{
+  "claim": "LOCAL-040",
+  "reviewer": "/root/closure_callable_resume",
+  "scope": "Independent source review of two actual Const/Static declared-Type header joins only; initializer execution and whole contribution remain outside this bounded review.",
+  "at": "2026-10-18T08:49:38.289784+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/declaration_return_types.rs",
+      "sha256": "07b1399e151e029cbdc6e0a11ba6ada32f71b79e371a7970561a626af2793094"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "0c83e69ae261d5a03435ce8e0808226a73eb57f10985e0509baabd17a809518f"
+    }
+  ],
+  "pinned_ast": {
+    "path": "/Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ra_ap_syntax-0.0.356/src/ast/expr_ext.rs",
+    "symbols": "Const::body at500; Fn::body at505; Static::body at510; all use immediate support::child. Const/Static ty are immediate Type children in ast/generated/nodes.rs.",
+    "result": "Actual initializer Expr selected; nested expressions within annotation are not mistaken for body. Matches outline.rs immediate Expr child selection and existing BodyHandle.block_range."
+  },
+  "shared_route": "DeclarationFieldTypes::prepare retains same HeaderItem with header stamp/source identity; PreparedSourceLocalPlan::prepare_return_type validates current exact FunctionSignature/LocalDeclarationOwner/DefinitionSource/DeclarationContext/DefinitionHeader, locates actual Fn/Const/Static AST declaration and declared ty, then uses unchanged HeaderTypeSite/HeaderShape -> prepare_header_type/prepare_compound_header_type.",
+  "all8": [
+    {
+      "mode": 1,
+      "result": "No evaluator/compiler added. This prepares only declared Type evidence for the ordinary VM initializer route; the two reviewed files contain no runtime expression evaluation."
+    },
+    {
+      "mode": 2,
+      "result": "No generated literal/break special route. Same actual retained declaration and name-context/owning-token-edition APIs are used for every source origin."
+    },
+    {
+      "mode": 3,
+      "result": "No macro name/method whitelist/numeric inference exception. Const/Static annotation token recipe must exactly equal the actual current signature result; aliases/generics continue common header Type selection."
+    },
+    {
+      "mode": 4,
+      "result": "No new original-only source test. Currentness/body/source/header consistency checks apply equally to admitted generated syntax. Existing attributed/unresolved-type holds are not claimed repaired."
+    },
+    {
+      "mode": 5,
+      "result": "No patterns or eager executable lowering. Const/static body Expr is excluded from header tokens; nominal field descendant collection now only applies to Struct/Enum/Union. Missing const/static annotation does not become implicit unit; only Fn with no ret_type does."
+    },
+    {
+      "mode": 6,
+      "result": "HeaderItem capture is retained source preparation. Demanded return Type captures actual annotation leaves only, not initializer execution or a complete executable plan. No new parsing inside VM installed operations."
+    },
+    {
+      "mode": 7,
+      "result": "No namespace/global invalidation service added. Existing exact header input stamp/source/current signature and header prefix resolution remain owners of dependencies."
+    },
+    {
+      "mode": 8,
+      "result": "No BodyIndex clone or new repeated whole-file search. syntax_at locates declaration in existing retained parsed syntax; no body execution walk for Type preparation. See cold token traversal note below."
+    }
+  ],
+  "discriminants": "HeaderItem publication count and insertion both explicitly exclude ItemOutline::is_discriminant_constant. Existing early discriminant repr-primitive path is retained separately and was not newly implemented here.",
+  "cost_note": "tokens(&syntax, excluded) filters initializer tokens but ast_adapter::tokens still traverses descendants_with_tokens before filtering. Therefore semantic/body lowering exclusion is established; strict no-initializer-token-traversal or O(header-only) cost is NOT established. This is inherited helper behavior, now also called for Const/Static during cold retained plan capture, not installed execution. No performance/scaling claim.",
+  "findings": [],
+  "validation": "No Cargo/test executed by reviewer. Actual async build, existing function implicit/explicit-unit tests, Const/Static annotation/alias/macro matrices, stale-source controls and whole upstream witnesses are still required. This review does not count any runtime or full-fixture pass."
+}

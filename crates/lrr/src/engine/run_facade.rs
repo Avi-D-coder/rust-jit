@@ -159,13 +159,8 @@ impl RunMachine {
         if sealed != site.0 || site.0 != self.frame.pc().node {
             return Err(call_fault("facade Call site changed after sealing"));
         }
-        let consumed = action.consume(
-            &self.frame.actions,
-            self.frame.pc(),
-            site,
-            &resume,
-            result,
-        )?;
+        let consumed =
+            action.consume(&self.frame.actions, self.frame.pc(), site, &resume, result)?;
         let packet = self
             .frame
             .call_arguments
@@ -175,9 +170,15 @@ impl RunMachine {
         self.frame.facade_calls.remove(&identity);
         let tickets = packet.take_tickets(&mut self.store)?;
         let mut moved_in = Vec::new();
+        // A type-argument intrinsic reads the enclosing function's type
+        // parameters (`size_of::<T>` is `size_of<T>() { lrr_size_of() }`).
+        let type_arguments = self
+            .frame
+            .enclosing_type_arguments(function.type_arguments())?;
         let outcome = execute(
             function,
             &tickets,
+            &type_arguments,
             &mut self.store,
             &mut self.output,
             &mut self.format_sinks,
@@ -205,8 +206,12 @@ impl RunMachine {
                         .and_then(|ty| self.frame.constructed_source(ty, &self.store)),
                     _ => None,
                 };
-                self.frame
-                    .resume_call(consumed.resume, consumed.result, ticket, &mut self.store)?;
+                self.frame.resume_call(
+                    consumed.resume,
+                    consumed.result,
+                    ticket,
+                    &mut self.store,
+                )?;
                 match view {
                     Some(view) => self.frame.set_source_view(consumed.result, Some(view)),
                     None => Ok(()),
@@ -275,6 +280,7 @@ macro_rules! host_float_math {
 fn execute(
     function: LibraryFunction,
     tickets: &[TicketId],
+    type_arguments: &[crate::runtime::shape::TypeId],
     store: &mut GuestStore,
     output: &mut GuestOutput,
     sinks: &mut super::format_calls::FormatSinks,
@@ -305,7 +311,9 @@ fn execute(
         }
         LibraryFunction::PanicDisplay => {
             let value = store.peek_ticket(argument()?)?;
-            Ok(FacadeOutcome::Panic(display_through_reference(store, value)?))
+            Ok(FacadeOutcome::Panic(display_through_reference(
+                store, value,
+            )?))
         }
         LibraryFunction::UnreachableDisplay => {
             let value = store.peek_ticket(argument()?)?;
@@ -368,9 +376,9 @@ fn execute(
                 Some(message) => format!(
                     "assertion `left {op} right` failed: {message}\n  left: {left}\n right: {right}"
                 ),
-                None => format!(
-                    "assertion `left {op} right` failed\n  left: {left}\n right: {right}"
-                ),
+                None => {
+                    format!("assertion `left {op} right` failed\n  left: {left}\n right: {right}")
+                }
             }))
         }
         // `<[T]>::len` / `str::len`: the referent's element or byte count.
@@ -387,8 +395,11 @@ fn execute(
             let [left, right] = tickets else {
                 return Err(facade_fault("str equality arguments differ"));
             };
-            let equal = store.str_reference_contents(*left)? == store.str_reference_contents(*right)?;
-            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::boolean(equal))?))
+            let equal =
+                store.str_reference_contents(*left)? == store.str_reference_contents(*right)?;
+            Ok(FacadeOutcome::Value(
+                store.ticket(ValueRepr::boolean(equal))?,
+            ))
         }
         // `Formatter::write_str`: append to the request's buffer.
         LibraryFunction::FmtWrite => {
@@ -464,7 +475,9 @@ fn execute(
         LibraryFunction::FmtTake => {
             let sink = store.peek_ticket(argument()?)?.payload;
             let text = sinks.take(sink)?;
-            Ok(FacadeOutcome::Value(store.immutable_str_ticket(text.as_bytes())?))
+            Ok(FacadeOutcome::Value(
+                store.immutable_str_ticket(text.as_bytes())?,
+            ))
         }
         // One byte of a str referent.
         LibraryFunction::StrByte => {
@@ -526,7 +539,10 @@ fn execute(
                 return Err(facade_fault("slice swap arguments differ"));
             };
             let slice = store.peek_ticket(*slice)?;
-            let (a, b) = (store.peek_ticket(*a)?.payload, store.peek_ticket(*b)?.payload);
+            let (a, b) = (
+                store.peek_ticket(*a)?.payload,
+                store.peek_ticket(*b)?.payload,
+            );
             store.slice_swap(slice, a, b)?;
             Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
         }
@@ -544,13 +560,18 @@ fn execute(
                 .ok()
                 .and_then(char::from_u32)
                 .ok_or_else(|| facade_fault("value is not a Unicode scalar value"))?;
-            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::character(code))?))
+            Ok(FacadeOutcome::Value(
+                store.ticket(ValueRepr::character(code))?,
+            ))
         }
         LibraryFunction::StrSlice => {
             let [text, start, end] = tickets else {
                 return Err(facade_fault("str slice arguments differ"));
             };
-            let (start, end) = (store.peek_ticket(*start)?.payload, store.peek_ticket(*end)?.payload);
+            let (start, end) = (
+                store.peek_ticket(*start)?.payload,
+                store.peek_ticket(*end)?.payload,
+            );
             Ok(match store.str_slice_ticket(*text, start, end)? {
                 Ok(slice) => FacadeOutcome::Value(slice),
                 Err(message) => FacadeOutcome::Panic(message),
@@ -566,11 +587,13 @@ fn execute(
             };
             let reference = store.peek_ticket(*place)?;
             moved_in.push(*incoming);
-            Ok(FacadeOutcome::Value(if function == LibraryFunction::MemReplace {
-                store.mem_replace(reference, *incoming)?
-            } else {
-                store.cell_replace(reference, *incoming)?
-            }))
+            Ok(FacadeOutcome::Value(
+                if function == LibraryFunction::MemReplace {
+                    store.mem_replace(reference, *incoming)?
+                } else {
+                    store.cell_replace(reference, *incoming)?
+                },
+            ))
         }
         LibraryFunction::MemSwap => {
             let [a, b] = tickets else {
@@ -579,6 +602,21 @@ fn execute(
             let (a, b) = (store.peek_ticket(*a)?, store.peek_ticket(*b)?);
             store.mem_swap(a, b)?;
             Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
+        }
+        LibraryFunction::AtomicOp => {
+            let [reference, incoming, operation, ordering] = tickets else {
+                return Err(facade_fault("atomic arguments differ"));
+            };
+            let reference = store.peek_ticket(*reference)?;
+            let incoming = store.peek_ticket(*incoming)?;
+            let operation = store.peek_ticket(*operation)?.payload;
+            let ordering = store.peek_ticket(*ordering)?.payload;
+            Ok(
+                match store.atomic_op(reference, incoming, operation, ordering)? {
+                    Ok(value) => FacadeOutcome::Value(value),
+                    Err(message) => FacadeOutcome::Panic(message.into()),
+                },
+            )
         }
         LibraryFunction::CellTake => {
             let reference = store.peek_ticket(argument()?)?;
@@ -607,7 +645,9 @@ fn execute(
                 (6, crate::runtime::shape::TypeId(11))
             };
             if value.kind != kind {
-                return Err(facade_fault("float bits argument is not the expected float"));
+                return Err(facade_fault(
+                    "float bits argument is not the expected float",
+                ));
             }
             Ok(FacadeOutcome::Value(
                 store.ticket(ValueRepr::unsigned(result, value.payload)?)?,
@@ -616,7 +656,9 @@ fn execute(
         LibraryFunction::F64FromBits | LibraryFunction::F32FromBits => {
             let value = store.peek_ticket(argument()?)?;
             if value.kind != 5 {
-                return Err(facade_fault("float from_bits argument is not an unsigned integer"));
+                return Err(facade_fault(
+                    "float from_bits argument is not an unsigned integer",
+                ));
             }
             Ok(FacadeOutcome::Value(store.ticket(
                 if function == LibraryFunction::F64FromBits {
@@ -669,7 +711,9 @@ fn execute(
                 return Err(facade_fault("reference comparison arguments differ"));
             };
             let (a, b) = (store.peek_ticket(*a)?, store.peek_ticket(*b)?);
-            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::boolean(store.ref_eq(a, b)?))?))
+            Ok(FacadeOutcome::Value(
+                store.ticket(ValueRepr::boolean(store.ref_eq(a, b)?))?,
+            ))
         }
         LibraryFunction::VecAsStr => {
             let reference = store.peek_ticket(argument()?)?;
@@ -726,11 +770,85 @@ fn execute(
         LibraryFunction::PtrRetype => Ok(FacadeOutcome::Value(argument()?)),
         LibraryFunction::SliceAsPtr | LibraryFunction::SliceAsMutPtr => {
             let reference = store.peek_ticket(argument()?)?;
-            let pointer = store.elements_pointer(
-                reference,
-                function == LibraryFunction::SliceAsMutPtr,
-            )?;
+            let pointer =
+                store.elements_pointer(reference, function == LibraryFunction::SliceAsMutPtr)?;
             Ok(FacadeOutcome::Value(store.ticket(pointer)?))
+        }
+        // `core::mem` layout queries (E-R5-009): one layout algorithm in
+        // `runtime/layout.rs`, fed by `runtime/cell_layout.rs`.
+        LibraryFunction::SizeOf | LibraryFunction::AlignOf => {
+            let [ty] = type_arguments else {
+                return Err(facade_fault("layout intrinsic lacks its type argument"));
+            };
+            let layout = store.layout_of(*ty)?;
+            let answer = if function == LibraryFunction::SizeOf {
+                layout.size
+            } else {
+                layout.align
+            };
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unsigned(
+                crate::runtime::shape::TypeId(13),
+                answer,
+            )?)?))
+        }
+        LibraryFunction::NeedsDrop => {
+            let [ty] = type_arguments else {
+                return Err(facade_fault("needs_drop lacks its type argument"));
+            };
+            let answer = store.needs_drop_type(*ty)?;
+            Ok(FacadeOutcome::Value(
+                store.ticket(ValueRepr::boolean(answer))?,
+            ))
+        }
+        LibraryFunction::VariantCount => {
+            let [ty] = type_arguments else {
+                return Err(facade_fault("variant_count lacks its type argument"));
+            };
+            let answer = store.variant_count_of(*ty)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unsigned(
+                crate::runtime::shape::TypeId(13),
+                answer,
+            )?)?))
+        }
+        LibraryFunction::SizeOfVal | LibraryFunction::AlignOfVal => {
+            let value = store.peek_ticket(argument()?)?;
+            let (size, align) = store.referent_layout(value)?;
+            let answer = if function == LibraryFunction::SizeOfVal {
+                size
+            } else {
+                align
+            };
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unsigned(
+                crate::runtime::shape::TypeId(13),
+                answer,
+            )?)?))
+        }
+        LibraryFunction::DiscriminantValue => {
+            let value = store.peek_ticket(argument()?)?;
+            let answer = store.referent_discriminant(value)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::signed(
+                crate::runtime::shape::TypeId(8),
+                answer,
+            )?)?))
+        }
+        LibraryFunction::Zeroed => {
+            let [ty] = type_arguments else {
+                return Err(facade_fault("zeroed lacks its type argument"));
+            };
+            Ok(FacadeOutcome::Value(store.zeroed_value(*ty)?))
+        }
+        LibraryFunction::Transmute => {
+            let [source, destination] = type_arguments else {
+                return Err(facade_fault("transmute lacks its type arguments"));
+            };
+            let ticket = argument()?;
+            let value = store.peek_ticket(ticket)?;
+            moved_in.push(ticket);
+            Ok(FacadeOutcome::Value(store.transmute_value(
+                value,
+                *source,
+                *destination,
+            )?))
         }
         LibraryFunction::Unsupported => Err(Diagnostic::new(
             "LRR-E-FACADE-MISSING",

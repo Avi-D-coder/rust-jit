@@ -158,7 +158,7 @@ impl Database {
         // These are already-admitted declaration headers, not executable
         // preparation or TypeSchema demands. Opaque attribute owners remain
         // pending in the same prefix index and acquire no declaration rows.
-        for row in &plan.context().facts().items {
+        for row in plan.context().facts().declarations() {
             if row.attribute_input.is_some() {
                 continue;
             }
@@ -174,7 +174,39 @@ impl Database {
                 }
             }
         }
+        ready!(self.publish_local_containers(&plan));
         QueryPoll::Ready(Ok(plan))
+    }
+    /// Publish the body's block-level impls and traits into the run's member
+    /// index (E-R5-009). The index holds one entry per container identity, so
+    /// entering the body again publishes nothing new.
+    fn publish_local_containers(
+        &mut self,
+        plan: &Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>,
+    ) -> QueryPoll<()> {
+        let facts = plan.context().facts();
+        let any = facts.items.iter().any(|row| {
+            matches!(
+                row.item.def_key.item_kind,
+                crate::source::manifest::ItemKind::Impl | crate::source::manifest::ItemKind::Trait
+            )
+        });
+        let Some(environment) = plan.environment() else {
+            return QueryPoll::Ready(Ok(()));
+        };
+        if !any {
+            return QueryPoll::Ready(Ok(()));
+        }
+        let containers = match plan.local_containers(self) {
+            QueryPoll::Ready(Ok(containers)) => containers,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        match environment.macros().source_environment().member_index() {
+            Ok(members) => members.publish_local(containers),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        }
+        QueryPoll::Ready(Ok(()))
     }
     /// Cold coordinator publication from two opaque, current source receipts.
     /// Replacing a completed environment is a derived revision, never a query
@@ -397,7 +429,7 @@ impl Database {
                 "reached local plan source differs",
             )));
         }
-        for row in &plan.context().facts().items {
+        for row in plan.context().facts().declarations() {
             if row.attribute_input.is_some() {
                 continue;
             }
@@ -413,6 +445,7 @@ impl Database {
                 }
             }
         }
+        ready!(self.publish_local_containers(plan));
         QueryPoll::Ready(Ok(()))
     }
 }

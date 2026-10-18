@@ -106,6 +106,7 @@ impl Namespace {
         let mut facts = EnteredMacroFacts {
             bindings: vec![],
             items: vec![],
+            members: vec![],
             imports: vec![],
             invocations: vec![],
             scopes: vec![],

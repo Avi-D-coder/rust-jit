@@ -267,7 +267,13 @@ impl GeneratedBodyBoundary {
             value::QueryValue,
         };
         let check = || -> Result<(), Diagnostic> {
-            if self.seal != unit.seal
+            // Type and Value discovery can publish the same generated source
+            // record under different completion domains. Like same_unit and
+            // retained generated admission, source correspondence is tied to
+            // its graph/epoch, scope and actual record. The boundary's own
+            // full discovery seal is still validated below.
+            if self.seal.unit_graph != unit.seal.unit_graph
+                || self.seal.epoch != unit.seal.epoch
                 || self.scope != unit.scope
                 || !self.output.record().same_record(unit.items.record())
             {

@@ -21,7 +21,7 @@ use ra_ap_syntax::{
     AstNode, TextRange,
     ast::{self, HasName},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 struct DeclarationName {
     name: MacroName,
@@ -68,6 +68,34 @@ impl LocalTypeNames {
         };
         let mut items = BTreeMap::new();
         let mut item_bytes = 0usize;
+        // The block items of every enclosing body are names of this body too
+        // (a nested `fn` or an impl member sees its parents' items). Each
+        // one's declaration occurrence is read from its own plan, which
+        // admitted that declaration.
+        let mut sources: Vec<(&PreparedBodyContext, Key, Arc<HygieneFacts>)> = Vec::new();
+        let mut parent = source.local_parent();
+        while let Some(plan) = parent {
+            let (parent_root, parent_hygiene) = plan.entered.local_hygiene();
+            sources.push((&**plan.context(), parent_root, parent_hygiene));
+            parent = plan.context().source().local_parent();
+        }
+        let own_hygiene = Arc::new(hygiene.clone());
+        sources.insert(0, (context, root, own_hygiene));
+        for (context, root, hygiene) in &sources {
+        let source = context.source();
+        let parsed = source.parsed();
+        let capture = |name: ast::Name| -> Result<DeclarationName, Diagnostic> {
+            let actual = range(name.syntax().text_range());
+            let edition = parsed.token_edition(actual)?;
+            let raw = source.identifier_context_or_original(actual, *root)?;
+            Ok(DeclarationName {
+                name: MacroName::parse(name.text(), edition)?,
+                context: hygiene.name_item(raw)?,
+                raw,
+                edition,
+                range: actual,
+            })
+        };
         for row in &context.facts().items {
             if row.item.def_key.declared_name.is_empty()
                 || row
@@ -86,7 +114,7 @@ impl LocalTypeNames {
                 .item
                 .body
                 .as_ref()
-                .map(|body| body.range)
+                .map(|body| body.block_range())
                 .or(row.container_range)
                 .map(|span| TextRange::new(span.start.into(), span.end.into()));
             if tokens(&syntax, excluded) != row.item.header.tokens {
@@ -119,12 +147,17 @@ impl LocalTypeNames {
                 return Err(error("local declaration occurrence identity repeats"));
             }
         }
+        }
+        // An enum variant is the declaration of its anonymous discriminant
+        // constant (E-R5-013); its body is the `= expr` argument.
         let declaration = parsed
             .syntax_at(source.context().range, |node| {
-                ast::Item::can_cast(node.kind())
+                ast::Item::can_cast(node.kind()) || ast::Variant::can_cast(node.kind())
             })?
             .ok_or_else(|| error("owning generic declaration exact syntax absent"))?;
-        let body = source.body().range;
+        // The header excludes the body block alone (a pattern function's
+        // handle also spans its parameter list, E-R5-010).
+        let body = source.body().block_range();
         if !declaration
             .children()
             .any(|node| range(node.text_range()) == body)

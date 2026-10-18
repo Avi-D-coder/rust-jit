@@ -164,14 +164,11 @@ pub(super) fn append_generated(
     anchors: &mut Vec<MacroDefinitionAnchor>,
     output: &GeneratedDeclarations,
     fragment: &DeclarationSyntax,
-    after: &DeclarationSyntax,
-    edit: SyntaxEdit,
+    inserted: &[DefinitionCapture],
+    _edit: SyntaxEdit,
 ) -> Result<(), Diagnostic> {
-    let (start, end) = edit.inserted();
-    let inserted = after
-        .definitions
-        .iter()
-        .filter(|capture| start <= capture.start && capture.end <= end);
+    // `inserted` is what the live tree holds in the edit's inserted range.
+    let inserted = inserted.iter();
     if inserted.clone().count() != fragment.definitions.len() {
         return Err(fault(
             "inserted macro declaration occurrence inventory differs",

@@ -9,8 +9,8 @@ use crate::core::{
     digest::{Digest, StableEncode, StableEncoder},
 };
 use ra_ap_syntax::{
-    AstNode,
-    ast::{self, HasGenericParams, HasName, HasTypeBounds},
+    AstNode, SyntaxNode,
+    ast::{self, HasAttrs, HasGenericParams, HasName, HasTypeBounds},
 };
 use std::collections::BTreeSet;
 
@@ -76,9 +76,7 @@ impl ParsedFile {
         {
             let text = if token.text() == "$crate" {
                 match self.dollar_crate_root(super::ast_adapter::range(token.text_range()))? {
-                    Some((unit, _)) => {
-                        crate::frontend::callables::dollar_crate_type_segment(unit)
-                    }
+                    Some((unit, _)) => crate::frontend::callables::dollar_crate_type_segment(unit),
                     None => token.text().to_owned(),
                 }
             } else {
@@ -144,6 +142,18 @@ impl ParsedFile {
         let item = root
             .parent()
             .ok_or_else(|| fault("initializer declaration absent"))?;
+        // An enum variant's discriminant constant declares no generics of its
+        // own (E-R5-013); its declaration is the variant.
+        if let Some(variant) = item.parent().filter(|variant| {
+            super::body_index::is_initializer_owner(&item) && ast::Variant::can_cast(variant.kind())
+        }) {
+            if super::ast_adapter::range(variant.text_range()) != context.range
+                || tokens(&variant, Some(item.text_range())) != header.tokens
+            {
+                return Err(fault("initializer declaration/header/source mismatch"));
+            }
+            return Ok(Vec::new());
+        }
         if !(ast::Const::can_cast(item.kind()) || ast::Static::can_cast(item.kind()))
             || super::ast_adapter::range(item.text_range()) != context.range
             || tokens(&item, Some(root.text_range())) != header.tokens
@@ -161,6 +171,15 @@ impl ParsedFile {
         header: &HeaderRecipe,
         context: &DeclarationContext,
     ) -> Result<Option<FunctionSignature>, Diagnostic> {
+        // An enum variant's `= expr` is an anonymous constant of the enum's
+        // representation type, declared in the enum's scope (E-R5-013).
+        if let Ok(Some(variant)) =
+            self.syntax_at(context.range, |node| ast::Variant::can_cast(node.kind()))
+        {
+            return Ok(Some(Self::discriminant_signature(
+                definition, header, context, &variant,
+            )?));
+        }
         let Ok(Some(item)) = self.syntax_at(context.range, |node| {
             ast::Const::can_cast(node.kind()) || ast::Static::can_cast(node.kind())
         }) else {
@@ -183,6 +202,70 @@ impl ParsedFile {
             parameters: Vec::new(),
             predicates: Vec::new(),
         }))
+    }
+    /// The zero-parameter signature of an enum variant's discriminant
+    /// constant: its result is the enum's `#[repr(<integer>)]` type, `isize`
+    /// without one (E-R5-013).
+    fn discriminant_signature(
+        definition: Digest,
+        header: &HeaderRecipe,
+        context: &DeclarationContext,
+        variant: &SyntaxNode,
+    ) -> Result<FunctionSignature, Diagnostic> {
+        use crate::ir::op::PrimitiveType as P;
+        let enumeration = variant
+            .parent()
+            .and_then(|list| list.parent())
+            .and_then(ast::Enum::cast)
+            .ok_or_else(|| fault("discriminant variant lacks its enum"))?;
+        let mut primitive = P::Isize;
+        let mut spelling = "isize";
+        for attribute in enumeration.attrs() {
+            let Some(meta) = attribute.meta() else {
+                continue;
+            };
+            if meta
+                .path()
+                .is_none_or(|path| path.syntax().text().to_string() != "repr")
+            {
+                continue;
+            }
+            for token in meta
+                .syntax()
+                .descendants_with_tokens()
+                .filter_map(|element| element.into_token())
+            {
+                let (name, found) = match token.text() {
+                    "i8" => ("i8", P::I8),
+                    "i16" => ("i16", P::I16),
+                    "i32" => ("i32", P::I32),
+                    "i64" => ("i64", P::I64),
+                    "i128" => ("i128", P::I128),
+                    "isize" => ("isize", P::Isize),
+                    "u8" => ("u8", P::U8),
+                    "u16" => ("u16", P::U16),
+                    "u32" => ("u32", P::U32),
+                    "u64" => ("u64", P::U64),
+                    "u128" => ("u128", P::U128),
+                    "usize" => ("usize", P::Usize),
+                    _ => continue,
+                };
+                (spelling, primitive) = (name, found);
+            }
+        }
+        Ok(FunctionSignature {
+            definition,
+            scope: context.scope.clone(),
+            header: header.clone(),
+            result_symbolic: Some(crate::traits::term::TyTerm::Primitive(primitive)),
+            result: vec![TokenRecipe {
+                kind: ra_ap_syntax::SyntaxKind::IDENT as u16,
+                text: spelling.into(),
+            }],
+            generics: Vec::new(),
+            parameters: Vec::new(),
+            predicates: Vec::new(),
+        })
     }
     pub fn function_signature(
         &self,
@@ -208,7 +291,7 @@ impl ParsedFile {
         let block = function.syntax().children().find_map(ast::BlockExpr::cast);
         let excluded = block.as_ref().map(|b| b.syntax().text_range());
         if body.is_some_and(|handle| {
-            excluded.is_none_or(|r| super::ast_adapter::range(r) != handle.range)
+            excluded.is_none_or(|r| super::ast_adapter::range(r) != handle.block_range())
         }) || tokens(function.syntax(), excluded) != header.tokens
         {
             return Err(fault(
@@ -280,6 +363,29 @@ impl ParsedFile {
         if function.ret_type().is_some_and(|ret| ret.ty().is_none()) {
             return Err(fault("explicit function result lacks its declared type"));
         }
+        // The associated item's Type scope includes predicates of its
+        // actual impl/trait owner. Keep them with the same captured source
+        // signature, not a separate body/member lookup at call time.
+        let mut predicates =
+            self.type_tokens(function.where_clause().map(|n| n.syntax().clone()))?;
+        let owner = function.syntax().parent().and_then(|items| items.parent());
+        let inherited_where = owner.and_then(|owner| {
+            ast::Impl::cast(owner.clone())
+                .and_then(|owner| owner.where_clause())
+                .or_else(|| ast::Trait::cast(owner).and_then(|owner| owner.where_clause()))
+        });
+        let inherited = self.type_tokens(inherited_where.map(|clause| clause.syntax().clone()))?;
+        if predicates.is_empty() {
+            predicates = inherited;
+        } else if !inherited.is_empty() {
+            if !predicates.last().is_some_and(|token| token.text == ",") {
+                predicates.push(TokenRecipe {
+                    kind: ra_ap_syntax::SyntaxKind::COMMA as u16,
+                    text: ",".into(),
+                });
+            }
+            predicates.extend(inherited.into_iter().skip(1));
+        }
         let signature = FunctionSignature {
             definition,
             scope: context.scope.clone(),
@@ -302,7 +408,7 @@ impl ParsedFile {
                     .and_then(|r| r.ty())
                     .map(|n| n.syntax().clone()),
             )?,
-            predicates: self.type_tokens(function.where_clause().map(|n| n.syntax().clone()))?,
+            predicates,
         };
         Ok(signature)
     }
@@ -508,7 +614,6 @@ pub(crate) fn canonical_lifetime(name: &str) -> Option<String> {
     semantic_name(name.strip_prefix('\'')?).map(|name| format!("'{name}"))
 }
 
-
 /// Pure owned metadata capture. Check token counts and bytes before reserving
 /// syntax-dependent storage; this neither resolves names nor evaluates syntax.
 fn generic_tokens(
@@ -573,15 +678,18 @@ pub(crate) fn owner_generics(
         return Ok(generics);
     };
     let (inherited, implicit_self) = if let Some(implementation) = ast::Impl::cast(owner.clone()) {
-        (capture_generics(implementation.generic_param_list())?, false)
+        (
+            capture_generics(implementation.generic_param_list())?,
+            false,
+        )
     } else if let Some(definition) = ast::Trait::cast(owner) {
         (capture_generics(definition.generic_param_list())?, true)
     } else {
         return Ok(generics);
     };
     for mut parameter in inherited {
-        parameter.ordinal = u32::try_from(generics.len())
-            .map_err(|_| fault("generic parameter index overflow"))?;
+        parameter.ordinal =
+            u32::try_from(generics.len()).map_err(|_| fault("generic parameter index overflow"))?;
         generics.push(parameter);
     }
     if implicit_self {

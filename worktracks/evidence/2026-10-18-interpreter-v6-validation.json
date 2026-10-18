@@ -1,0 +1,263 @@
+{
+  "schema": "lrr-local/resumed-interpreter-validation/v1",
+  "head": "b97c954c86712c3b9c005af39902459f2bcfe11f",
+  "source_sha256": "3d5608832ad2a0610c3d3ff5be25d9657825fe0e058993e1cd1cd8eaacb8736e",
+  "source_changes_during_builds": [],
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "seconds": 30.45,
+      "binary_sha256": "4e6624bc0d6fa36155380c1b8d9e694362076fdac38ff1b3cff146754e6ac74a"
+    },
+    "cli": {
+      "exit": 0,
+      "seconds": 22.12,
+      "binary_sha256": "b045d2cc8a4bd8c9afedeb942151ff6d4390d1c35433c4cf6fdf121b778b12de"
+    }
+  },
+  "controls": [
+    {
+      "selector": "cli::callable_value_tests::callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins",
+      "exit": 0,
+      "seconds": 18.06,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v6/control-0.log"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::local_initializers_share_the_vm_across_source_origins",
+      "exit": 0,
+      "seconds": 53.415,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v6/control-1.log"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::shorthand_projection_retains_the_declaring_bounds_type_arguments",
+      "exit": 0,
+      "seconds": 21.813,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v6/control-2.log"
+    }
+  ],
+  "regressions": [
+    {
+      "selector": "cli::crate_graph::numeric_constraint_facade_tests::array_iteration_nested_in_a_standard_macro",
+      "exit": 0,
+      "seconds": 18.599,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v6/regression-0.log"
+    },
+    {
+      "selector": "ir::recipe::definition_numeric_wire_tests::recipe_schema_separates_definition_context_from_prior_cache_world",
+      "exit": 0,
+      "seconds": 0.007,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v6/regression-1.log"
+    },
+    {
+      "selector": "ir::recipe::definition_numeric_wire_tests::definition_numeric_hint_uses_explicit_context_tags",
+      "exit": 0,
+      "seconds": 0.005,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v6/regression-2.log"
+    }
+  ],
+  "stock_captures": [
+    {
+      "path": "tests/ui/consts/const-int-arithmetic.rs",
+      "sha256": "cf844bc9af69330fe438c5c430970af61b48f36fcdd5b70bda7d9db700d2dfc9",
+      "edition": 2015,
+      "exit": 2,
+      "terminal": {
+        "code": "LRR-E-UNSUPPORTED",
+        "diagnostic": {
+          "code": "LRR-E-UNSUPPORTED",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "ce47cddff35d07ab7673551bf6ab65339343a78c9e56658df92dea9470c9246a",
+                    "exact_body_bytes": "c579bf0042082d7f4abdb4cb5b7329f4fb1449fc6b81d596572173a5bde4815c"
+                  },
+                  "relative_end": 80,
+                  "relative_start": 68
+                },
+                "locations": [],
+                "pc": "1b9fbfb1f59c258b165eaf7abfe8523dcc6d4395d5ea4003059d46be0159768a"
+              },
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "f6221f8beba5f858a44f3108d266f36c020fa233b44ae0bfd875dd30cd21da07",
+                    "exact_body_bytes": "d6fc613dd1b48032bc65d897668431816197229f8181db2cef7d44222de8e01b"
+                  },
+                  "relative_end": 25,
+                  "relative_start": 11
+                },
+                "locations": [],
+                "pc": "a7839195a2eea09e08dae2a054214ee96020c8dbef720c23d43b51a85b838aa0"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "128-bit guest integers are outside the live profile",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        },
+        "message": "128-bit guest integers are outside the live profile",
+        "phase": "executor",
+        "status": "fault"
+      },
+      "capture": {
+        "complete": false,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 17270,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 60,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 8231,
+          "vm_outcomes": 8231
+        },
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+      }
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+      "sha256": "9dce5eb0efe1907b2f19703697952721eda352a53365bb9f725486c29614f881",
+      "edition": 2015,
+      "exit": 2,
+      "terminal": {
+        "code": "LRR-E-UNSUPPORTED",
+        "diagnostic": {
+          "code": "LRR-E-UNSUPPORTED",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "7579623506bdfa7260cf5e584ac48c6240edcb32c07e944fdfe3764d1fc9492b",
+                    "exact_body_bytes": "73947e221f1b598d2c2f6c110e5334cdb995170a12f6e33f78e6a8933ee17958"
+                  },
+                  "relative_end": 136,
+                  "relative_start": 115
+                },
+                "locations": [],
+                "pc": "510e58686b1bb83cf5973f29ae5e76335ad2b84f04acc915f088a2d198612be7"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "generic value path requires generic context integration",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        },
+        "message": "generic value path requires generic context integration",
+        "phase": "executor",
+        "status": "fault"
+      },
+      "capture": {
+        "complete": false,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 493,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 27,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 375,
+          "vm_outcomes": 374
+        },
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+      }
+    }
+  ],
+  "summary": {
+    "focused_bodies": 6,
+    "focused_passed": 6,
+    "focused_failed": 0,
+    "whole_ui_stock_faults": 2,
+    "new_distinct_upstream_runtime_passes_claimed": 0,
+    "full_fixture_passes_claimed": 0
+  },
+  "notes": [
+    "Exact unsuffixed sourceDeref ordinary/user/wrapper+Rc source control nowpasses.",
+    "Localconst/static initializer ordinary/user/wrapper all4editions matrixpasses; inherited purefastpath/runonce templateholds remain.",
+    "New projectionmatrix, arrayiteration standardmacro regression and2recipewire controls pass.",
+    "Constarithmetic firstchecked body proceeds to separate i128 profile unsupported;17270classifiedops8231dispatches60sourcecallboundaries beforefault.",
+    "Viawhere advances atomicfacade/explicitgoal gaps to genericvaluepath context;493classifiedops375dispatches27calls beforefault.",
+    "Bothterminalgueststackslackphysicalsourceorigin locations. ActualrelativeBodyKeyspans retained, no physicalmapping inferred asverified.",
+    "No expensiveatomiclibraryreruns thiscandidate. Prior V5 actualfailures preserved.",
+    "Bothbinaries compiledfromsameunchanged3319leafsource. Later successor edits do not alterattached evidence."
+  ],
+  "raw_report_sha256": "3990a1ca66e065bdcb736d96e1bc024c091cb4045329d9c42d6fd5081f81242e",
+  "raw_report": "artifacts/validation-resume-2026-10-18/candidate-v6/report.json",
+  "reproduce": {
+    "build_lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run",
+    "build_cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "run_selected": "target/debug/deps/lrr-<build-hash> --exact SELECTOR --nocapture --test-threads=1",
+    "note": "Stock argv below are actual captured commands; paths are made checkout-relative. Environment LRR_EMBEDDED_FACADE=1. Never count rustc metadata as interpreter execution.",
+    "stock_commands": [
+      {
+        "argv": [
+          "target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "fixtures/upstream/rustc-checkout/tests/ui/consts/const-int-arithmetic.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "38cd5d6716b94a720f68c5499f91f967650bab994193d05ca75898d6c24b11e1"
+        ],
+        "env": {
+          "LRR_EMBEDDED_FACADE": "1"
+        }
+      },
+      {
+        "argv": [
+          "target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "507ad8a3b054045ebac5006db3984e9c9c071af2b5e514c7ab2154502f762d1d"
+        ],
+        "env": {
+          "LRR_EMBEDDED_FACADE": "1"
+        }
+      }
+    ]
+  },
+  "checkpoint_delta": "The staged source matches compiled V6 except removal of one trailing blank line in lexical_numeric_callees_tests.rs (no tokens changed). Successor semantic edits remain unstaged; this is a WIP checkpoint, not integration."
+}

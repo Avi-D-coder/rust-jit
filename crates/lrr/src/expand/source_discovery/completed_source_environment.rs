@@ -9,6 +9,13 @@ pub(crate) enum SourceScopeOwner<'a> {
     Ambiguous(&'a [u32]),
     Missing,
 }
+struct CompletedGeneratedSources {
+    units: Vec<Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>>,
+    boundaries: BTreeMap<
+        Digest,
+        Result<Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>, Diagnostic>,
+    >,
+}
 pub struct CompletedSourceEnvironment {
     names: Arc<NameNamespaces>,
     sources: Arc<Vec<PreparedSourceView>>,
@@ -26,7 +33,7 @@ pub struct CompletedSourceEnvironment {
     members: std::sync::OnceLock<Arc<crate::frontend::member_index::MemberIndex>>,
     // Macro-generated item units of this sealed discovery, admitted when it
     // publishes them (after the environment itself is completed).
-    generated: std::sync::OnceLock<Vec<Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>>>,
+    generated: std::sync::OnceLock<CompletedGeneratedSources>,
 }
 impl std::fmt::Debug for CompletedSourceEnvironment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -47,7 +54,12 @@ impl CompletedSourceEnvironment {
         }
         let sources: Vec<_> = self.sources.iter().collect();
         let mut built = crate::frontend::member_index::MemberIndex::build(&self.names, &sources)?;
-        for unit in self.generated.get().into_iter().flatten() {
+        for unit in self
+            .generated
+            .get()
+            .into_iter()
+            .flat_map(|sources| &sources.units)
+        {
             built.add_generated(&self.names, unit)?;
         }
         // Associated functions written by impl/trait-item expansions into
@@ -71,14 +83,49 @@ impl CompletedSourceEnvironment {
     pub(crate) fn admit_generated_units(
         &self,
         units: Vec<Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>>,
+        boundaries: BTreeMap<
+            Digest,
+            Result<Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>, Diagnostic>,
+        >,
     ) -> Result<(), Diagnostic> {
         if self.members.get().is_some() && !units.is_empty() {
             return Err(fault(
                 "completed member index was demanded before generated publication",
             ));
         }
-        let _ = self.generated.set(units);
+        if let Some(current) = self.generated.get() {
+            if current.units.len() != units.len()
+                || current
+                    .units
+                    .iter()
+                    .zip(&units)
+                    .any(|(old, new)| !old.same_unit(new))
+            {
+                return Err(fault("completed generated source publication changed"));
+            }
+            return Ok(());
+        }
+        self.generated
+            .set(CompletedGeneratedSources { units, boundaries })
+            .map_err(|_| fault("completed generated sources published concurrently"))?;
         Ok(())
+    }
+    /// The insertion context was prepared by the actual discovery while its
+    /// provider arenas were still present. Entry only borrows that result;
+    /// it does not rebuild macro scopes or infer them from the caller.
+    pub(crate) fn generated_body_boundary(
+        &self,
+        unit: &crate::expand::generated_syntax::GeneratedSyntaxInput,
+    ) -> Result<Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>, Diagnostic> {
+        let generated = self
+            .generated
+            .get()
+            .ok_or_else(|| fault("completed generated sources are not published"))?;
+        generated
+            .boundaries
+            .get(&unit.key.content)
+            .cloned()
+            .ok_or_else(|| fault("completed generated body boundary absent"))?
     }
     pub fn names(&self) -> &NameNamespaces {
         &self.names
@@ -242,8 +289,7 @@ impl SourceDiscovery {
             {
                 continue;
             }
-            self.graph
-                .require_view(source)?;
+            self.graph.require_view(source)?;
             sources.push(source.share());
         }
         for module in self.staged_modules.values() {
@@ -260,8 +306,7 @@ impl SourceDiscovery {
                     ));
                 }
                 let source = module.syntax.prepared_source();
-                self.graph
-                    .require_view(source)?;
+                self.graph.require_view(source)?;
                 sources.push(source.share());
             }
         }

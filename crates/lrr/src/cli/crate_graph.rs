@@ -551,7 +551,7 @@ mod numeric_constraint_facade_tests;
 mod builtin_derive_tests;
 #[cfg(test)]
 #[path = "format_trait_facade_tests.rs"]
-mod format_trait_facade_tests;
+pub(super) mod format_trait_facade_tests;
 #[cfg(test)]
 #[path = "vec_string_tests.rs"]
 mod vec_string_tests;
@@ -562,11 +562,29 @@ mod generic_boundary_tests;
 #[path = "initializer_tests.rs"]
 mod initializer_tests;
 #[cfg(test)]
+#[path = "enum_discriminant_tests.rs"]
+mod enum_discriminant_tests;
+#[cfg(test)]
+#[path = "mem_layout_tests.rs"]
+mod mem_layout_tests;
+#[cfg(test)]
+#[path = "fn_param_pattern_tests.rs"]
+mod fn_param_pattern_tests;
+#[cfg(test)]
+#[path = "nested_body_tests.rs"]
+mod nested_body_tests;
+#[cfg(test)]
+#[path = "trait_object_tests.rs"]
+mod trait_object_tests;
+#[cfg(test)]
 #[path = "pointer_tests.rs"]
 mod pointer_tests;
 #[cfg(test)]
 #[path = "local_item_tests.rs"]
 mod local_item_tests;
+#[cfg(test)]
+#[path = "local_impl_tests.rs"]
+mod local_impl_tests;
 #[cfg(test)]
 #[path = "int_method_tests.rs"]
 mod int_method_tests;

@@ -5,11 +5,32 @@ use super::*;
 use crate::traits::term::TyTerm;
 
 impl Frame {
+    /// The source Type a call argument reaches the boundary with: the slot's
+    /// retained view, or the value's own closed runtime descriptor where the
+    /// slot has none or its view names a declared `dyn Trait` position (a
+    /// value keeps its concrete Type).
+    pub(crate) fn argument_source_view(
+        &self,
+        slot: SlotId,
+        descriptor: crate::runtime::shape::TypeId,
+        store: &crate::runtime::cell::GuestStore,
+    ) -> Result<Option<TyTerm>, Diagnostic> {
+        let reached = || {
+            store
+                .descriptor_source_term(descriptor)
+                .filter(|term| !term.contains_dyn())
+        };
+        Ok(match self.source_view(slot)? {
+            Some(view) if view.contains_dyn() => reached().or(Some(view)),
+            Some(view) => Some(view),
+            None => store.descriptor_source_term(descriptor),
+        })
+    }
     /// Closed retained source shapes have an allocation-free checked measure.
     /// This inspects source terms, never source syntax or a runtime descriptor.
     fn retained_source_heap(source: &TyTerm) -> Option<usize> {
         match source {
-            TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Param(_) => Some(0),
+            TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Param(_) | TyTerm::Dyn(_) => Some(0),
             TyTerm::Nominal(_, args) => {
                 let mut bytes = args
                     .capacity()

@@ -105,6 +105,15 @@ impl<K: Clone, V: Clone> Clone for HashMap<K, V> {
         }
     }
 }
+impl<K, V, Q: ?Sized> core::ops::Index<&Q> for HashMap<K, V> {
+    type Output = V;
+    fn index(&self, key: &Q) -> &V {
+        match self.get(key) {
+            Option::Some(value) => value,
+            Option::None => panic!("no entry found for key"),
+        }
+    }
+}
 impl<K, V> Default for HashMap<K, V> {
     fn default() -> HashMap<K, V> {
         HashMap {
@@ -407,8 +416,130 @@ pub mod hash_map {
             RandomState::new()
         }
     }
+    impl core::hash::BuildHasher for RandomState {
+        type Hasher = DefaultHasher;
+        fn build_hasher(&self) -> DefaultHasher {
+            DefaultHasher::new()
+        }
+    }
+    /// SipHash-1-3 with zero keys, as std's `DefaultHasher::new()`.
     pub struct DefaultHasher {
-        state: u64,
+        v0: u64,
+        v1: u64,
+        v2: u64,
+        v3: u64,
+        length: usize,
+        tail: u64,
+        ntail: usize,
+    }
+    impl DefaultHasher {
+        pub fn new() -> DefaultHasher {
+            DefaultHasher {
+                v0: 0x736f6d6570736575,
+                v1: 0x646f72616e646f6d,
+                v2: 0x6c7967656e657261,
+                v3: 0x7465646279746573,
+                length: 0,
+                tail: 0,
+                ntail: 0,
+            }
+        }
+    }
+    impl Clone for DefaultHasher {
+        fn clone(&self) -> DefaultHasher {
+            DefaultHasher {
+                v0: self.v0,
+                v1: self.v1,
+                v2: self.v2,
+                v3: self.v3,
+                length: self.length,
+                tail: self.tail,
+                ntail: self.ntail,
+            }
+        }
+    }
+    impl Default for DefaultHasher {
+        fn default() -> DefaultHasher {
+            DefaultHasher::new()
+        }
+    }
+    impl core::fmt::Debug for DefaultHasher {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.write_str("DefaultHasher(SipHasher13 { hasher: Hasher { .. } })")
+        }
+    }
+    fn sip_round(v0: &mut u64, v1: &mut u64, v2: &mut u64, v3: &mut u64) {
+        *v0 = v0.wrapping_add(*v1);
+        *v2 = v2.wrapping_add(*v3);
+        *v1 = v1.rotate_left(13);
+        *v1 ^= *v0;
+        *v3 = v3.rotate_left(16);
+        *v3 ^= *v2;
+        *v0 = v0.rotate_left(32);
+        *v2 = v2.wrapping_add(*v1);
+        *v0 = v0.wrapping_add(*v3);
+        *v1 = v1.rotate_left(17);
+        *v1 ^= *v2;
+        *v3 = v3.rotate_left(21);
+        *v3 ^= *v0;
+        *v2 = v2.rotate_left(32);
+    }
+    /// The little-endian value of `len` (< 8) bytes of `buf` from `start`.
+    fn load_le(buf: &[u8], start: usize, len: usize) -> u64 {
+        let mut out: u64 = 0;
+        let mut i = 0;
+        while i < len {
+            out |= (buf[start + i] as u64) << (8 * i);
+            i += 1;
+        }
+        out
+    }
+    impl core::hash::Hasher for DefaultHasher {
+        fn write(&mut self, msg: &[u8]) {
+            let length = msg.len();
+            self.length += length;
+            let mut needed = 0;
+            if self.ntail != 0 {
+                needed = 8 - self.ntail;
+                let take = if length < needed { length } else { needed };
+                self.tail |= load_le(msg, 0, take) << (8 * self.ntail);
+                if length < needed {
+                    self.ntail += length;
+                    return;
+                }
+                self.v3 ^= self.tail;
+                sip_round(&mut self.v0, &mut self.v1, &mut self.v2, &mut self.v3);
+                self.v0 ^= self.tail;
+                self.ntail = 0;
+            }
+            let len = length - needed;
+            let left = len & 7;
+            let mut i = needed;
+            while i < length - left {
+                let mi = load_le(msg, i, 7) | ((msg[i + 7] as u64) << 56);
+                self.v3 ^= mi;
+                sip_round(&mut self.v0, &mut self.v1, &mut self.v2, &mut self.v3);
+                self.v0 ^= mi;
+                i += 8;
+            }
+            self.tail = load_le(msg, i, left);
+            self.ntail = left;
+        }
+        fn finish(&self) -> u64 {
+            let mut v0 = self.v0;
+            let mut v1 = self.v1;
+            let mut v2 = self.v2;
+            let mut v3 = self.v3;
+            let b: u64 = (((self.length as u64) & 0xff) << 56) | self.tail;
+            v3 ^= b;
+            sip_round(&mut v0, &mut v1, &mut v2, &mut v3);
+            v0 ^= b;
+            v2 ^= 0xff;
+            sip_round(&mut v0, &mut v1, &mut v2, &mut v3);
+            sip_round(&mut v0, &mut v1, &mut v2, &mut v3);
+            sip_round(&mut v0, &mut v1, &mut v2, &mut v3);
+            v0 ^ v1 ^ v2 ^ v3
+        }
     }
 }
 pub mod hash_set {

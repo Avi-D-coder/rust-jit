@@ -141,3 +141,28 @@ fn main() {
         "104 104 9 3\n1\n7 1\n[3, 1, 2] [9, 1, 2]\n[3, 1, 2] 7\ndrop 4\n4\n",
     );
 }
+
+#[test]
+fn local_initializers_share_the_vm_across_source_origins() {
+    const FUNCTION: &str = "fn local() -> u8 {
+        const C: Option<u8> = Some(7);
+        static S: Option<u8> = Some(9);
+        C.unwrap() + S.unwrap()
+    }";
+    const MAIN: &str = "fn main() { println!(\"{} {}\", local(), local()); }";
+    for (label, source) in [
+        ("local-init", format!("{FUNCTION}\n{MAIN}")),
+        (
+            "local-init-generated",
+            format!("macro_rules! make {{ () => {{ {FUNCTION} }} }} make!(); {MAIN}"),
+        ),
+        (
+            "local-init-wrapper",
+            format!(
+                "macro_rules! make {{ () => {{ {FUNCTION} }} }} macro_rules! wrap {{ () => {{ make!(); }} }} wrap!(); {MAIN}"
+            ),
+        ),
+    ] {
+        prints(label, &source, "16 16\n");
+    }
+}

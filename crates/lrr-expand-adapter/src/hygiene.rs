@@ -174,6 +174,11 @@ impl HygieneStore {
     pub fn records(&self) -> Vec<ContextRecord> {
         self.records.values().cloned().collect()
     }
+    /// The registered context records by stable key. Records are only ever
+    /// added, never changed or removed.
+    pub(crate) fn record_table(&self) -> &BTreeMap<Key, ContextRecord> {
+        &self.records
+    }
     fn context(&self, key: Key) -> Result<SyntaxContext, AdapterError> {
         self.contexts
             .get(&key)
@@ -399,10 +404,16 @@ impl HygieneStore {
             .map_err(|_| error("hygiene import allocation failed"))?;
         owned.extend_from_slice(records);
         let forest = TokenForest::new(Vec::new(), owned, Vec::new())?;
-        forest.encoded_len()?;
+        self.import_validated(&forest)
+    }
+    /// Import the contexts of a forest. A forest is validated once when it is
+    /// built (canonical order, unique keys, complete parent chains), so its
+    /// context table is not rebuilt, re-hashed and re-validated here.
+    pub(crate) fn import_validated(&mut self, forest: &TokenForest) -> Result<(), AdapterError> {
+        forest.validate()?;
         let mut incoming = BTreeMap::new();
         let mut units = BTreeMap::new();
-        for record in forest.contexts() {
+        for (record, &key) in forest.contexts().iter().zip(forest.context_keys()) {
             if let Some(expansion) = record.expansion {
                 if self
                     .marks
@@ -420,7 +431,7 @@ impl HygieneStore {
             } else if record.transparency != Transparency::Opaque {
                 return Err(error("root hygiene context must be opaque"));
             }
-            incoming.insert(record.key(), record);
+            incoming.insert(key, record);
         }
         let _new_contexts = incoming
             .keys()

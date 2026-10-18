@@ -20,6 +20,8 @@ fn role_matches(node: &SyntaxNode, role: NodeRole) -> bool {
         // planner/verifier owns supported forms and binding/phase authority.
         NodeRole::Pattern => ast::Pat::can_cast(node.kind()),
         NodeRole::OpaqueItem => ast::Item::can_cast(node.kind()),
+        // A pattern function's parameter list is its parameters' pattern owner.
+        NodeRole::Syntax => ast::ParamList::can_cast(node.kind()),
         _ => false,
     }
 }
@@ -75,21 +77,33 @@ impl ParsedFile {
 
     /// Structural ownership only. The coordinator chooses expansion demand;
     /// this AST query supplies no name, type, body-entry or producer authority.
-    pub(crate) fn macro_call_function_body(
+    pub(crate) fn macro_call_item_body(
         &self,
         call: SourceRange,
     ) -> Result<SourceRange, Diagnostic> {
         let syntax = self
             .syntax_at(call, |node| ast::MacroCall::can_cast(node.kind()))?
             .ok_or_else(|| invalid("macro call syntax attachment absent"))?;
-        let function = syntax
-            .ancestors()
-            .find_map(ast::Fn::cast)
-            .ok_or_else(|| invalid("macro call function owner absent"))?;
-        let body = function
-            .body()
-            .ok_or_else(|| invalid("macro call function body absent"))?;
-        Ok(super::ast_adapter::range(body.syntax().text_range()))
+        for owner in syntax.ancestors() {
+            if let Some(function) = ast::Fn::cast(owner.clone()) {
+                let body = function
+                    .body()
+                    .ok_or_else(|| invalid("macro call function body absent"))?;
+                return Ok(super::fn_parameters::body_range(body.syntax()));
+            }
+            if ast::Const::can_cast(owner.kind())
+                || ast::Static::can_cast(owner.kind())
+                || ast::Variant::can_cast(owner.kind())
+            {
+                let body = owner
+                    .children()
+                    .find_map(ast::Expr::cast)
+                    .ok_or_else(|| invalid("macro call initializer body absent"))?;
+                let range = body.syntax().text_range();
+                return SourceRange::checked(range.start().into(), range.end().into());
+            }
+        }
+        Err(invalid("macro call declaration body owner absent"))
     }
 
     /// The indexed interval chooses a tree path; the role disambiguates nodes

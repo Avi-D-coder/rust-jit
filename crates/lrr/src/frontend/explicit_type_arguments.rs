@@ -114,7 +114,9 @@ impl ExplicitType {
                 "explicit caller parameter needs its calling frame's binding".into(),
             )),
             Self::Selected(source) => source.materialize(store),
-            Self::Written { written, .. } => written.materialize(store)?.ok_or_else(|| {
+            // A type argument is one concrete Type even where the same written
+            // structure at a coercion site is not (`&[u8]`, `Option<fn()>`).
+            Self::Written { written, .. } => written.materialize_in(store, &[])?.ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
                     "explicit Type argument names no single runtime Type".into(),

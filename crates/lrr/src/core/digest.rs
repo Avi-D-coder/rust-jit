@@ -69,37 +69,71 @@ impl<'de> Deserialize<'de> for Digest {
 }
 
 /// Control-plane hashing only; updates a hash state without allocating guest memory.
-pub struct StableEncoder(blake3::Hasher);
+///
+/// Most identities are a few dozen bytes written as many tiny fields. Those are
+/// gathered in a small inline buffer and hashed in one call; only an input
+/// larger than the buffer starts a streaming `blake3::Hasher`. BLAKE3 is
+/// defined on the byte stream, so the digest is the same either way.
+pub struct StableEncoder {
+    buffer: [u8; ENCODER_BUFFER],
+    len: usize,
+    streaming: Option<Box<blake3::Hasher>>,
+}
+const ENCODER_BUFFER: usize = 512;
 impl StableEncoder {
     pub fn new(domain: &'static str) -> Self {
-        let mut encoder = Self(blake3::Hasher::new());
+        let mut encoder = Self {
+            buffer: [0; ENCODER_BUFFER],
+            len: 0,
+            streaming: None,
+        };
         encoder.string(domain);
         encoder
     }
+    fn put(&mut self, bytes: &[u8]) {
+        // Once an input outgrows the buffer it is a stream: every later field
+        // goes straight to the hasher, as it did before buffering existed.
+        if let Some(hasher) = &mut self.streaming {
+            hasher.update(bytes);
+            return;
+        }
+        let room = ENCODER_BUFFER - self.len;
+        if bytes.len() <= room {
+            self.buffer[self.len..self.len + bytes.len()].copy_from_slice(bytes);
+            self.len += bytes.len();
+            return;
+        }
+        let hasher = self
+            .streaming
+            .get_or_insert_with(|| Box::new(blake3::Hasher::new()));
+        hasher.update(&self.buffer[..self.len]);
+        self.len = 0;
+        hasher.update(bytes);
+    }
     pub fn u8(&mut self, value: u8) {
-        self.0.update(&[value]);
+        self.put(&[value]);
     }
     pub fn u16(&mut self, value: u16) {
-        self.0.update(&value.to_le_bytes());
+        self.put(&value.to_le_bytes());
     }
     pub fn u32(&mut self, value: u32) {
-        self.0.update(&value.to_le_bytes());
+        self.put(&value.to_le_bytes());
     }
     pub fn u64(&mut self, value: u64) {
-        self.0.update(&value.to_le_bytes());
+        self.put(&value.to_le_bytes());
     }
     pub fn bool(&mut self, value: bool) {
         self.u8(u8::from(value));
     }
     pub fn bytes(&mut self, bytes: &[u8]) {
         self.u64(bytes.len() as u64);
-        self.0.update(bytes);
+        self.put(bytes);
     }
     pub fn string(&mut self, text: &str) {
         self.bytes(text.as_bytes());
     }
     pub fn digest(&mut self, digest: Digest) {
-        self.0.update(&digest.0);
+        self.put(&digest.0);
     }
     pub fn option<T>(&mut self, value: &Option<T>, encode: impl FnOnce(&mut Self, &T)) {
         match value {
@@ -131,7 +165,13 @@ impl StableEncoder {
         value.encode_fields(self);
     }
     pub fn finish(self) -> Digest {
-        Digest(*self.0.finalize().as_bytes())
+        match self.streaming {
+            None => Digest(*blake3::hash(&self.buffer[..self.len]).as_bytes()),
+            Some(mut hasher) => {
+                hasher.update(&self.buffer[..self.len]);
+                Digest(*hasher.finalize().as_bytes())
+            }
+        }
     }
 }
 pub trait StableEncode {
@@ -156,6 +196,38 @@ mod tests {
         assert!(serde_json::from_str::<Digest>(&json.to_uppercase()).is_err());
         assert!(serde_json::from_str::<Digest>("\"ab\"").is_err());
         assert!(serde_json::from_str::<Digest>(&format!("\"{}\"", "z".repeat(64))).is_err());
+    }
+    #[test]
+    fn buffered_and_streamed_encodings_hash_the_same_byte_stream() {
+        // Fields small enough for the inline buffer, a field that exactly
+        // fills it, and fields that overflow it in several ways.
+        for sizes in [
+            vec![0usize, 3, 40],
+            vec![400, 112],
+            vec![512],
+            vec![511, 1, 1],
+            vec![200, 600, 5],
+            vec![1500],
+            vec![100, 100, 100, 100, 100, 100, 100],
+        ] {
+            let mut encoder = StableEncoder::new("lrr/v2/buffer-test");
+            let mut expected = Vec::new();
+            expected.extend(18_u64.to_le_bytes());
+            expected.extend(b"lrr/v2/buffer-test");
+            for (index, size) in sizes.iter().enumerate() {
+                let bytes = vec![index as u8 + 1; *size];
+                encoder.bytes(&bytes);
+                expected.extend((*size as u64).to_le_bytes());
+                expected.extend(&bytes);
+                encoder.u16(0x0a0b);
+                expected.extend(0x0a0b_u16.to_le_bytes());
+            }
+            assert_eq!(
+                encoder.finish(),
+                Digest(*blake3::hash(&expected).as_bytes()),
+                "{sizes:?}"
+            );
+        }
     }
     #[test]
     fn stable_encoding_has_explicit_widths_and_lengths() {

@@ -128,6 +128,8 @@ enum PlaceNeed {
     Positional(u32),
     /// `base[i]`
     Index,
+    /// The hint of `base[i]`'s operand, before the operand runs.
+    IndexOperand,
 }
 
 impl RunMachine {
@@ -174,6 +176,10 @@ impl RunMachine {
                         Some((*base, PlaceNeed::Positional(*field)))
                     }
                     Op::ProjectIndex { base, .. } => Some((*base, PlaceNeed::Index)),
+                    Op::SetHint {
+                        hint: crate::ir::op::HintRecipe::IndexOperand { base },
+                        ..
+                    } => Some((*base, PlaceNeed::IndexOperand)),
                     _ => None,
                 })
         };
@@ -205,7 +211,7 @@ impl RunMachine {
         };
         let identity = *identity;
         if !matches!(need, PlaceNeed::Explicit) && self.store.is_vec_type(ty)? {
-            if matches!(need, PlaceNeed::Index) {
+            if matches!(need, PlaceNeed::Index | PlaceNeed::IndexOperand) {
                 return Ok(QueryPoll::Ready(Ok(())));
             }
         }
@@ -215,7 +221,7 @@ impl RunMachine {
         // Whether the nominal value serves the operation itself.
         let serves = match need {
             PlaceNeed::Explicit => false,
-            PlaceNeed::Index => self.store.is_vec_type(ty)?,
+            PlaceNeed::Index | PlaceNeed::IndexOperand => self.store.is_vec_type(ty)?,
             PlaceNeed::Named | PlaceNeed::Positional(_) => {
                 let captured = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(identity)) {
                     QueryPoll::Ready(Ok(captured)) => captured,
@@ -261,6 +267,60 @@ impl RunMachine {
         if serves {
             return Ok(QueryPoll::Ready(Ok(())));
         }
+        // rustc indexes the first autoderef step whose type has an
+        // `Index<Idx>` impl: the base's own, before any `Deref` step.
+        if matches!(need, PlaceNeed::Index | PlaceNeed::IndexOperand) {
+            let index_trait = match self.operator_trait(db, "ops", "Index") {
+                QueryPoll::Ready(Ok(index_trait)) => Some(index_trait),
+                QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => None,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+            };
+            if index_trait
+                .is_some_and(|index_trait| !members.trait_method(Ok(identity), index_trait, "index").is_empty())
+            {
+                if matches!(need, PlaceNeed::IndexOperand) {
+                    let parameter = match self.single_index_parameter(db, ty, index_trait) {
+                        QueryPoll::Ready(Ok(parameter)) => parameter,
+                        QueryPoll::Ready(Err(error)) => return Err(error),
+                        QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+                    };
+                    self.frame.note_index_operand_overloaded(base, parameter);
+                    return Ok(QueryPoll::Ready(Ok(())));
+                }
+                let index_mut = match self.operator_trait(db, "ops", "IndexMut") {
+                    QueryPoll::Ready(Ok(index_mut)) => Some(index_mut),
+                    QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => None,
+                    QueryPoll::Ready(Err(error)) => return Err(error),
+                    QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+                };
+                let mutable_capable = index_mut.is_some_and(|index_mut| {
+                    !members.trait_method(Ok(identity), index_mut, "index_mut").is_empty()
+                });
+                let mutable = if mutable_capable {
+                    match self.place_used_mutably(db) {
+                        QueryPoll::Ready(Ok(mutable)) => mutable,
+                        QueryPoll::Ready(Err(error)) => return Err(error),
+                        QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+                    }
+                } else {
+                    false
+                };
+                self.frame
+                    .peel_builtin_derefs(base, &self.store)
+                    .map_err(|failure| match failure {
+                        crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                        crate::runtime::place::PlaceFailure::GuestPanic(panic) => {
+                            Diagnostic::new("LRR-E-INTERNAL-IR", panic.message())
+                        }
+                    })?;
+                self.frame.demand_place_index(base, mutable);
+                return Ok(QueryPoll::Ready(Ok(())));
+            }
+        }
+        if matches!(need, PlaceNeed::IndexOperand) {
+            return Ok(QueryPoll::Ready(Ok(())));
+        }
         let deref = match self.operator_trait(db, "ops", "Deref") {
             QueryPoll::Ready(Ok(deref)) => deref,
             QueryPoll::Ready(Err(error)) if error.code == "LRR-E-NAME-MISSING" => {
@@ -301,6 +361,49 @@ impl RunMachine {
         }
         self.frame.demand_place_deref(base, mutable);
         Ok(QueryPoll::Ready(Ok(())))
+    }
+    /// The closed type of the `index` method's operand when the nominal `ty`
+    /// has one `Index` impl (as an ordinary call's argument is typed by its
+    /// callee's parameter); with several impls the evaluated operand selects.
+    fn single_index_parameter(
+        &mut self,
+        db: &mut Database,
+        ty: crate::runtime::shape::TypeId,
+        index_trait: Option<crate::core::digest::Digest>,
+    ) -> QueryPoll<Option<crate::runtime::shape::TypeId>> {
+        let (Some(index_trait), Some(members)) = (index_trait, self.members.clone()) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let self_type = match self.reached_self_type(ty) {
+            Ok(self_type) => self_type,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut functions = Vec::new();
+        for (_, function) in members.trait_method(self_type, index_trait, "index") {
+            if !functions.contains(&function) {
+                functions.push(function);
+            }
+        }
+        let [function] = functions.as_slice() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let callee = match self.member_callee(db, *function) {
+            QueryPoll::Ready(Ok(callee)) => callee,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let hints = match self.operator_parameter_hints(db, &callee) {
+            QueryPoll::Ready(Ok(hints)) => hints,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let Some(Some(hint)) = hints.get(1) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(match hint.descriptor {
+            Some(descriptor) => Ok(Some(descriptor)),
+            None => self.store.intern_structural_term(&hint.source),
+        })
     }
     /// Whether a pattern matched against the scrutinee of the `match`, `let`
     /// statement or `let` clause at `node` has a `ref mut` binding. Cold: read

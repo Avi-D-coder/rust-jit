@@ -20,6 +20,7 @@ use crate::{
         shape::{FacadeType, Primitive, primitive},
     },
 };
+use crate::runtime::layout as algorithm;
 use std::collections::BTreeMap;
 
 /// First synthetic data address and first code address. Any values would do;
@@ -45,14 +46,28 @@ fn align_up(value: u64, align: u64) -> u64 {
     let align = align.max(1);
     value.div_ceil(align).saturating_mul(align)
 }
-/// Declaration-order layout with padding: (size, alignment).
+/// (size, alignment) of fields given in declaration order, placed as rustc
+/// places `repr(Rust)` fields (`runtime/layout.rs`, E-R5-012).
 fn struct_layout(fields: impl Iterator<Item = (u64, u64)>) -> (u64, u64) {
-    let (mut offset, mut widest) = (0u64, 1u64);
-    for (size, align) in fields {
-        offset = align_up(offset, align).saturating_add(size);
-        widest = widest.max(align.max(1));
-    }
-    (align_up(offset, widest), widest)
+    let layout = algorithm::univariant(
+        &plain_layouts(fields),
+        &algorithm::Repr::default(),
+        algorithm::StructKind::Sized,
+    )
+    .layout;
+    (layout.size, layout.align)
+}
+fn plain_layouts(
+    fields: impl Iterator<Item = (u64, u64)>,
+) -> Vec<algorithm::Layout> {
+    fields
+        .map(|(size, align)| algorithm::Layout {
+            size,
+            align: align.max(1),
+            niche: None,
+            uninhabited: false,
+        })
+        .collect()
 }
 fn dangling() -> Diagnostic {
     Diagnostic::new(
@@ -111,6 +126,163 @@ impl GuestStore {
     pub(crate) fn contract_admits(&self, expected: Option<TypeId>, actual: Option<TypeId>) -> bool {
         expected == actual
             || matches!((expected, actual), (Some(e), Some(a)) if self.pointer_family_interchange(e, a))
+            || matches!((expected, actual), (Some(e), Some(a)) if self.dyn_admits(e, a))
+    }
+    /// The common Type two array elements of different pointer Types coerce
+    /// to (`[Box::new(A), Box::new(B)]` under a `Box<dyn T>` expectation the
+    /// literal itself does not see): the same pointer shape over an
+    /// unnamed-trait `dyn` pointee. Only valid programs reach here (rustc
+    /// accepted the coercions), so no trait check is made.
+    pub(crate) fn dyn_join(&mut self, a: TypeId, b: TypeId) -> Result<Option<TypeId>, Diagnostic> {
+        if a == b {
+            return Ok(Some(a));
+        }
+        if self.dyn_admits(a, b) {
+            return Ok(Some(a));
+        }
+        if self.dyn_admits(b, a) {
+            return Ok(Some(b));
+        }
+        let (ka, kb) = (
+            self.types.descriptor(a)?.key.clone(),
+            self.types.descriptor(b)?.key.clone(),
+        );
+        let any_dyn = |this: &mut Self| this.types.intern(TypeKey::Dyn { schema: Digest([0; 32]) });
+        match (ka.as_ref(), kb.as_ref()) {
+            (
+                TypeKey::Ref { mutable: m1, target: t1 },
+                TypeKey::Ref { mutable: m2, target: t2 },
+            ) if m1 == m2 => {
+                let target = match self.dyn_join(*t1, *t2)? {
+                    Some(target) if !matches!(self.types.descriptor(*t1)?.key.as_ref(), TypeKey::Primitive(_)) => target,
+                    _ => any_dyn(self)?,
+                };
+                Ok(Some(self.types.intern(TypeKey::Ref { mutable: *m1, target })?))
+            }
+            (
+                TypeKey::Nominal { identity: i1, definition, schema, args: a1, const_args },
+                TypeKey::Nominal { identity: i2, args: a2, .. },
+            ) if i1 == i2 && self.owned_box == Some(*i1) && a1.len() == 1 && a2.len() == 1 => {
+                let pointee = self.dyn_join(a1[0], a2[0])?;
+                let pointee = match pointee {
+                    Some(pointee) => pointee,
+                    None => any_dyn(self)?,
+                };
+                Ok(Some(self.types.intern(TypeKey::Nominal {
+                    identity: *i1,
+                    definition: definition.clone(),
+                    schema: *schema,
+                    args: Box::new([pointee]),
+                    const_args: const_args.clone(),
+                })?))
+            }
+            (TypeKey::Tuple(m1), TypeKey::Tuple(m2)) if m1.len() == m2.len() => {
+                let mut members = Vec::with_capacity(m1.len());
+                for (x, y) in m1.iter().zip(m2.iter()) {
+                    match self.dyn_join(*x, *y)? {
+                        Some(joined) => members.push(joined),
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(self.types.intern(TypeKey::Tuple(members.into_boxed_slice()))?))
+            }
+            _ => Ok(None),
+        }
+    }
+    /// Whether a declared `dyn Trait` occurs anywhere in this descriptor.
+    pub(crate) fn mentions_dyn(&self, ty: TypeId) -> bool {
+        let Ok(descriptor) = self.types.descriptor(ty) else {
+            return false;
+        };
+        match descriptor.key.as_ref() {
+            TypeKey::Dyn { .. } => true,
+            TypeKey::Ref { target, .. } | TypeKey::RawPtr { target, .. } => {
+                self.mentions_dyn(*target)
+            }
+            TypeKey::Slice { element } | TypeKey::Array { element, .. } => {
+                self.mentions_dyn(*element)
+            }
+            TypeKey::Tuple(members) => members.iter().any(|member| self.mentions_dyn(*member)),
+            TypeKey::Nominal { args, .. } => args.iter().any(|arg| self.mentions_dyn(*arg)),
+            TypeKey::Function { params, result } => {
+                params.iter().any(|param| self.mentions_dyn(*param)) || self.mentions_dyn(*result)
+            }
+            _ => false,
+        }
+    }
+    /// Pure counterpart of `dyn_join`'s admissibility: both Types are
+    /// references of one mutability, or boxes.
+    pub(crate) fn dyn_joinable(&self, a: TypeId, b: TypeId) -> bool {
+        let (Ok(a), Ok(b)) = (self.types.descriptor(a), self.types.descriptor(b)) else {
+            return false;
+        };
+        match (a.key.as_ref(), b.key.as_ref()) {
+            (TypeKey::Ref { mutable: m1, .. }, TypeKey::Ref { mutable: m2, .. }) => m1 == m2,
+            (TypeKey::Nominal { identity: i1, args: a1, .. }, TypeKey::Nominal { identity: i2, args: a2, .. }) => {
+                i1 == i2 && self.owned_box == Some(*i1) && a1.len() == 1 && a2.len() == 1
+            }
+            (TypeKey::Tuple(m1), TypeKey::Tuple(m2)) => {
+                m1.len() == m2.len()
+                    && m1
+                        .iter()
+                        .zip(m2.iter())
+                        .all(|(x, y)| x == y || self.dyn_admits(*x, *y) || self.dyn_admits(*y, *x) || self.dyn_joinable(*x, *y))
+            }
+            _ => false,
+        }
+    }
+    /// A declared `dyn Trait` position admits the concrete Type of any value
+    /// (values keep their concrete runtime Type; methods dispatch on it).
+    /// Structure around it matches position by position: `Box<dyn T>` admits
+    /// `Box<A>`, `&dyn T` admits `&A`, `Vec<Box<dyn T>>` admits `Vec<Box<A>>`.
+    pub(crate) fn dyn_admits(&self, expected: TypeId, actual: TypeId) -> bool {
+        if expected == actual {
+            return true;
+        }
+        let (Ok(e), Ok(a)) = (self.types.descriptor(expected), self.types.descriptor(actual))
+        else {
+            return false;
+        };
+        match (e.key.as_ref(), a.key.as_ref()) {
+            (TypeKey::Dyn { .. }, _) => true,
+            (
+                TypeKey::Ref { mutable: m1, target: t1 },
+                TypeKey::Ref { mutable: m2, target: t2 },
+            )
+            | (
+                TypeKey::RawPtr { mutable: m1, target: t1 },
+                TypeKey::RawPtr { mutable: m2, target: t2 },
+            ) => m1 == m2 && self.dyn_admits(*t1, *t2),
+            (TypeKey::Slice { element: e1 }, TypeKey::Slice { element: e2 }) => {
+                self.dyn_admits(*e1, *e2)
+            }
+            (
+                TypeKey::Array { element: e1, len: l1 },
+                TypeKey::Array { element: e2, len: l2 },
+            ) => l1 == l2 && self.dyn_admits(*e1, *e2),
+            (TypeKey::Tuple(m1), TypeKey::Tuple(m2)) => {
+                m1.len() == m2.len() && m1.iter().zip(m2.iter()).all(|(x, y)| self.dyn_admits(*x, *y))
+            }
+            (
+                TypeKey::Nominal { identity: i1, schema: s1, args: a1, const_args: c1, .. },
+                TypeKey::Nominal { identity: i2, schema: s2, args: a2, const_args: c2, .. },
+            ) => {
+                i1 == i2
+                    && s1 == s2
+                    && c1 == c2
+                    && a1.len() == a2.len()
+                    && a1.iter().zip(a2.iter()).all(|(x, y)| self.dyn_admits(*x, *y))
+            }
+            (
+                TypeKey::Function { params: p1, result: r1 },
+                TypeKey::Function { params: p2, result: r2 },
+            ) => {
+                p1.len() == p2.len()
+                    && p1.iter().zip(p2.iter()).all(|(x, y)| self.dyn_admits(*x, *y))
+                    && self.dyn_admits(*r1, *r2)
+            }
+            _ => false,
+        }
     }
     /// Apply an admitted pointer coercion to a reference or callable value
     /// (the pointer arm of `coerce_unsized_value`). A consumed `&mut`
@@ -151,6 +323,11 @@ impl GuestStore {
     }
     /// Best-effort (size, alignment) of a type with no live cell.
     pub(crate) fn type_layout(&self, ty: TypeId) -> (u64, u64) {
+        // The one layout algorithm, once the declarations its type needs are
+        // known (a prior `size_of`); a structural estimate otherwise.
+        if let Ok(layout) = self.layout_of(ty) {
+            return (layout.size, layout.align);
+        }
         if let Ok(scalar) = primitive(ty) {
             return match scalar {
                 Primitive::Unit | Primitive::Str => (0, 1),
@@ -177,6 +354,7 @@ impl GuestStore {
                 (size.saturating_mul(u64::from(*len)), align)
             }
             TypeKey::Slice { element } => (0, self.type_layout(*element).1),
+            TypeKey::Dyn { .. } => (0, 1),
             TypeKey::Tuple(members) => struct_layout(members.iter().map(|m| self.type_layout(*m))),
             TypeKey::Callable { captures, .. } => {
                 struct_layout(captures.iter().map(|m| self.type_layout(*m)))
@@ -211,6 +389,9 @@ impl GuestStore {
                     ObjectStorage::String(_) => (24, 8),
                     ObjectStorage::Constructing => (8, 8),
                     ObjectStorage::Aggregate(storage) => {
+                        if let Ok(layout) = self.layout_of(TypeId(value.type_id)) {
+                            return (layout.size, layout.align);
+                        }
                         if let Ok(TypeKey::Nominal { identity, .. }) = self
                             .types
                             .descriptor(TypeId(value.type_id))
@@ -223,11 +404,20 @@ impl GuestStore {
                                 return (8, 8);
                             }
                         }
-                        let tag = storage.variant.map(|_| (1u64, 1u64));
-                        struct_layout(
-                            tag.into_iter()
-                                .chain(storage.fields.iter().map(|f| self.cell_layout(*f))),
+                        let fields =
+                            plain_layouts(storage.fields.iter().map(|f| self.cell_layout(*f)));
+                        let kind = if storage.variant.is_some() {
+                            algorithm::StructKind::Prefixed { size: 1, align: 1 }
+                        } else {
+                            algorithm::StructKind::Sized
+                        };
+                        let layout = algorithm::univariant(
+                            &fields,
+                            &self.declared_repr(TypeId(value.type_id)),
+                            kind,
                         )
+                        .layout;
+                        (layout.size, layout.align)
                     }
                 }
             }
@@ -283,15 +473,26 @@ impl GuestStore {
                     .collect()
             }
             _ => {
-                let mut offsets = Vec::with_capacity(storage.fields.len());
-                let mut offset = u64::from(storage.variant.is_some());
-                for field in &storage.fields {
-                    let (size, align) = self.cell_layout(*field);
-                    offset = align_up(offset, align);
-                    offsets.push((*field, offset));
-                    offset = offset.saturating_add(size);
-                }
-                offsets
+                // The same placement the layout module gives a struct, tuple
+                // or enum variant (a one-byte tag prefix for the latter).
+                let fields =
+                    plain_layouts(storage.fields.iter().map(|f| self.cell_layout(*f)));
+                let kind = if storage.variant.is_some() {
+                    algorithm::StructKind::Prefixed { size: 1, align: 1 }
+                } else {
+                    algorithm::StructKind::Sized
+                };
+                let placed = algorithm::univariant(
+                    &fields,
+                    &self.declared_repr(TypeId(value.type_id)),
+                    kind,
+                );
+                storage
+                    .fields
+                    .iter()
+                    .copied()
+                    .zip(placed.offsets)
+                    .collect()
             }
         }
     }

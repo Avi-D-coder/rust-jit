@@ -6,7 +6,6 @@
 //! array/slice index Type. An expression whose Type those services do not
 //! state yields no selection, which stays a missing goal.
 use super::{Component, ConstraintDemand, Step, entry, fault};
-use std::collections::BTreeMap;
 use crate::{
     core::digest::Digest,
     db::{
@@ -19,6 +18,7 @@ use crate::{
     syntax::source_constraints::{FactKind, SourceOperator},
     traits::term::{ConstTerm, InferVarKey, PlaceholderKey, RegionTerm, TyTerm},
 };
+use std::collections::BTreeMap;
 
 macro_rules! ready {
     ($value:expr) => {
@@ -98,16 +98,11 @@ pub(super) fn bind_parameters(
             bind_parameters(declared, actual, definition, out)
         }
         // An auto-ref'd argument or receiver.
-        (TyTerm::Ref(_, _, declared), actual) => {
-            bind_parameters(declared, actual, definition, out)
-        }
-        (declared, TyTerm::Ref(_, _, actual)) => {
-            bind_parameters(declared, actual, definition, out)
-        }
+        (TyTerm::Ref(_, _, declared), actual) => bind_parameters(declared, actual, definition, out),
+        (declared, TyTerm::Ref(_, _, actual)) => bind_parameters(declared, actual, definition, out),
         (TyTerm::Nominal(left, declared), TyTerm::Nominal(right, actual)) if left == right => {
             for (declared, actual) in declared.iter().zip(actual) {
-                if let (GenericArg::Type(declared), GenericArg::Type(actual)) = (declared, actual)
-                {
+                if let (GenericArg::Type(declared), GenericArg::Type(actual)) = (declared, actual) {
                     bind_parameters(declared, actual, definition, out);
                 }
             }
@@ -266,7 +261,8 @@ impl<'a> Component<'a> {
                     Some(super::Callee::Source(definition)) => {
                         match ready!(self.result_term(db, node, definition)) {
                             Some(result) => {
-                                let result = ready!(self.explicit_arguments(db, node, definition, result));
+                                let result =
+                                    ready!(self.explicit_arguments(db, node, definition, result));
                                 let result =
                                     ready!(self.instantiate_result(db, node, definition, result));
                                 Some(ready!(self.decided(db, node, result)))
@@ -312,11 +308,16 @@ impl<'a> Component<'a> {
                     None => None,
                 }
             }
-            FactKind::Index if ready!(self.index_is_element(db, node)) => match fact.operand(0) {
-                Some(base) => match ready!(self.expression_type(db, base)) {
-                    Some(base) => {
-                        ready!(self.project_term(db, &base, &[Step::AutoDeref, Step::Element]))
-                    }
+            // A user type's own `Index<Idx>` impl states the result.
+            FactKind::Index => match ready!(self.user_index_output(db, node)) {
+                Some(output) => Some(output),
+                None if ready!(self.index_is_element(db, node)) => match fact.operand(0) {
+                    Some(base) => match ready!(self.expression_type(db, base)) {
+                        Some(base) => {
+                            ready!(self.project_term(db, &base, &[Step::AutoDeref, Step::Element]))
+                        }
+                        None => None,
+                    },
                     None => None,
                 },
                 None => None,
@@ -324,12 +325,10 @@ impl<'a> Component<'a> {
             // `base[range]`: the slice of the base's element Type.
             FactKind::IndexRange => match fact.operand(0) {
                 Some(base) => match ready!(self.expression_type(db, base)) {
-                    Some(base) => ready!(self.project_term(
-                        db,
-                        &base,
-                        &[Step::AutoDeref, Step::Element]
-                    ))
-                    .map(|element| TyTerm::Slice(Box::new(element))),
+                    Some(base) => {
+                        ready!(self.project_term(db, &base, &[Step::AutoDeref, Step::Element]))
+                            .map(|element| TyTerm::Slice(Box::new(element)))
+                    }
                     None => None,
                 },
                 None => None,
@@ -392,7 +391,7 @@ impl<'a> Component<'a> {
     }
     /// `result` with the callee's type parameters that the call writes
     /// explicitly (`f::<u8>(..)`) replaced by those Types.
-    fn explicit_arguments(
+    pub(super) fn explicit_arguments(
         &mut self,
         db: &mut Database,
         call: NodeId,
@@ -400,6 +399,27 @@ impl<'a> Component<'a> {
         result: TyTerm,
     ) -> QueryPoll<TyTerm> {
         if !self.fact(call).is_ok_and(|fact| fact.flag()) || !mentions_parameter(&result) {
+            return QueryPoll::Ready(Ok(result));
+        }
+        // This is optional inference, not admission of an actual call.
+        // Type-relative/binding callees can be selected at reached dispatch
+        // while Q44 still has an explicitly unanswered signature goal. Do
+        // not turn that state into Q47's strict admission refusal.
+        let selected = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::EnteredCall(entry(self.key, call))
+        ));
+        let QueryValue::EnteredCall(goal) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint call Type query differs")));
+        };
+        if let Err(error) = goal.require_current(db) {
+            return QueryPoll::Ready(Err(error));
+        }
+        if matches!(
+            goal.selection(),
+            crate::frontend::entered_call_goals::EnteredCallSelection::Pending(_)
+                | crate::frontend::entered_call_goals::EnteredCallSelection::Binding(_)
+        ) {
             return QueryPoll::Ready(Ok(result));
         }
         let explicit = match db.fetch(
@@ -416,6 +436,9 @@ impl<'a> Component<'a> {
         let QueryValue::PreparedExplicitTypeArguments(explicit) = explicit.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("constraint explicit Type query differs")));
         };
+        if explicit.definition() != definition {
+            return QueryPoll::Ready(Err(fault("constraint explicit Type callee differs")));
+        }
         let bound: BTreeMap<crate::traits::term::ParamKey, TyTerm> = explicit
             .rows()
             .iter()
@@ -487,11 +510,13 @@ impl<'a> Component<'a> {
         let Some(matched) = ready!(self.expression_type(db, matched)) else {
             return QueryPoll::Ready(Ok(None));
         };
-        QueryPoll::Ready(Ok(match ready!(self.project_term(db, &matched, &consumed)) {
-            Some(TyTerm::Tuple(items)) => Some(items.len()),
-            Some(TyTerm::Primitive(PrimitiveType::Unit)) => Some(0),
-            _ => None,
-        }))
+        QueryPoll::Ready(Ok(
+            match ready!(self.project_term(db, &matched, &consumed)) {
+                Some(TyTerm::Tuple(items)) => Some(items.len()),
+                Some(TyTerm::Primitive(PrimitiveType::Unit)) => Some(0),
+                _ => None,
+            },
+        ))
     }
     /// The written annotation of a fact as its Type term.
     pub(super) fn annotation_term(
@@ -687,13 +712,9 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(None));
         };
         let projected = ready!(self.project_term(db, &matched, &steps[skipped..]));
-        QueryPoll::Ready(Ok(projected.map(|term| {
-            if by_reference {
-                borrowed(term)
-            } else {
-                term
-            }
-        })))
+        QueryPoll::Ready(Ok(
+            projected.map(|term| if by_reference { borrowed(term) } else { term })
+        ))
     }
     /// The method a method call selects: the dispatcher's probe rule over
     /// the receiver's static Type.
@@ -1018,8 +1039,45 @@ impl<'a> Component<'a> {
                     self.constrain(index, PrimitiveType::Usize)
                 ));
             }
+            // A user type with one `Index<Idx>` impl: the operand is that
+            // impl's `index` argument, as a method call's is.
+            Some(TyTerm::Nominal(identity, _)) if !vector => {
+                let identity = *identity;
+                match ready!(self.single_index_method(db, identity)) {
+                    Some(function) => ready!(self.declared_parameter(db, index, function, 1)),
+                    None => self.mark_unrecorded(),
+                }
+            }
             _ => self.mark_unrecorded(),
         }
         QueryPoll::Ready(Ok(()))
+    }
+    /// The `index` method of the one `Index<Idx>` impl of the nominal type
+    /// `identity`; several impls (the operand selects) state nothing here.
+    fn single_index_method(
+        &mut self,
+        db: &mut Database,
+        identity: Digest,
+    ) -> QueryPoll<Option<Digest>> {
+        let Some(trait_key) = ready!(self.core_trait(db, "ops", "Index")) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(environment) = ready!(self.environment(db)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut functions = Vec::new();
+        for (_, function) in members.trait_method(Ok(identity), trait_key, "index") {
+            if !functions.contains(&function) {
+                functions.push(function);
+            }
+        }
+        QueryPoll::Ready(Ok(match functions.as_slice() {
+            [function] => Some(*function),
+            _ => None,
+        }))
     }
 }

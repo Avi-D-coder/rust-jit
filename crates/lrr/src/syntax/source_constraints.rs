@@ -227,6 +227,10 @@ pub(crate) struct SourceFact {
     // A closure parameter's root pattern: bound from its call argument, with
     // its written Type (if any) in `annotation`.
     closure_parameter: bool,
+    // A parameter root pattern of a pattern function (E-R5-010), plain
+    // identifier or not: the signature ordinal (receiver first) of the
+    // argument it matches, whose declared Type is the matched value's Type.
+    parameter: Option<u32>,
 }
 
 /// One structural step from a matched value's Type into a subpattern's.
@@ -344,6 +348,9 @@ impl SourceFact {
     pub(crate) fn closure_parameter(&self) -> bool {
         self.closure_parameter
     }
+    pub(crate) fn parameter(&self) -> Option<u32> {
+        self.parameter
+    }
     fn opaque() -> Self {
         Self {
             kind: FactKind::Opaque,
@@ -359,6 +366,7 @@ impl SourceFact {
             member: None,
             flag: false,
             closure_parameter: false,
+            parameter: None,
         }
     }
 }
@@ -549,6 +557,26 @@ impl SourceConstraintPlan {
                         fact.closure_parameter = true;
                         annotate(body, index, parameter.ty(), &mut fact, &mut type_shapes)?;
                     }
+                    // A pattern function's parameter: the root pattern of the
+                    // argument with that signature ordinal.
+                    if let Some(parameter) = syntax.parent().and_then(ast::Param::cast)
+                        && let Some(list) = parameter.syntax().parent().and_then(ast::ParamList::cast)
+                        && index.parameter_owner().is_some_and(|owner| {
+                            node.parent
+                                .and_then(|param| index.nodes().get(param.0 as usize))
+                                .and_then(|param| param.parent)
+                                == Some(owner)
+                        })
+                    {
+                        let position = list
+                            .params()
+                            .position(|candidate| candidate.syntax() == parameter.syntax())
+                            .and_then(|position| u32::try_from(position).ok());
+                        fact.parameter = position
+                            .and_then(|position| {
+                                position.checked_add(u32::from(list.self_param().is_some()))
+                            });
+                    }
                 } else if !matches!(node.role, NodeRole::OpaqueItem) {
                     classify(
                         body,
@@ -617,7 +645,7 @@ impl SourceConstraintPlan {
             }));
         // Owner root patterns: a `let` pattern, every match-arm pattern and a
         // `for` pattern (whose tree is the loop's `Some(PAT)` test).
-        let roots: Vec<(NodeId, bool)> = facts
+        let roots: Vec<(NodeId, bool, bool)> = facts
             .iter()
             .flat_map(|fact| match fact.kind {
                 FactKind::Let => fact
@@ -625,7 +653,7 @@ impl SourceConstraintPlan {
                     .first()
                     .copied()
                     .flatten()
-                    .map(|root| (root, false))
+                    .map(|root| (root, false, false))
                     .into_iter()
                     .collect(),
                 FactKind::For => fact
@@ -633,7 +661,7 @@ impl SourceConstraintPlan {
                     .get(1)
                     .copied()
                     .flatten()
-                    .map(|root| (root, true))
+                    .map(|root| (root, true, false))
                     .into_iter()
                     .collect(),
                 FactKind::Match => fact
@@ -641,10 +669,26 @@ impl SourceConstraintPlan {
                     .iter()
                     .skip(1)
                     .step_by(2)
-                    .filter_map(|root| root.map(|root| (root, false)))
+                    .filter_map(|root| root.map(|root| (root, false, false)))
+                    .collect(),
+                // A closure's parameter patterns, matched against its
+                // call arguments (the body is operand 0).
+                FactKind::Closure => fact
+                    .operands
+                    .iter()
+                    .skip(1)
+                    .filter_map(|root| root.map(|root| (root, false, true)))
                     .collect(),
                 _ => Vec::new(),
             })
+            // A pattern function's parameter root patterns (E-R5-010).
+            .chain(
+                facts
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, fact)| fact.parameter.is_some())
+                    .filter_map(|(node, _)| Some((NodeId(u32::try_from(node).ok()?), false, true))),
+            )
             .collect();
         let mut trees = BTreeMap::new();
         let mut occurrences = BTreeMap::new();
@@ -672,13 +716,21 @@ impl SourceConstraintPlan {
             .count();
         if !roots.is_empty() {
             let items = LocalItems::collect(parsed, body)?;
-            for (root, for_loop) in roots {
+            for (root, for_loop, closure_parameter) in roots {
                 let Some(pattern) = parsed
                     .entered_node_syntax(body, index, root)?
                     .and_then(ast::Pat::cast)
                 else {
                     continue;
                 };
+                // A plain identifier parameter is its own declaration
+                // (`closure_parameter`), not an occurrence in a root pattern.
+                if closure_parameter
+                    && matches!(&pattern, ast::Pat::IdentPat(ident)
+                        if ident.ref_token().is_none() && ident.at_token().is_none())
+                {
+                    continue;
+                }
                 // A root the engine cannot index has no tree; its bindings
                 // stay unanswered rather than re-derived here.
                 let tree = if for_loop {
@@ -1548,6 +1600,7 @@ impl StableEncode for SourceConstraintPlan {
             e.option(&fact.member, |e, row| e.u32(*row));
             e.bool(fact.flag);
             e.bool(fact.closure_parameter);
+            e.option(&fact.parameter, |e, ordinal| e.u32(*ordinal));
         });
         e.sequence(&self.trees.iter().collect::<Vec<_>>(), |e, (root, tree)| {
             e.u32(root.0);

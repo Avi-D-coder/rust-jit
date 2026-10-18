@@ -56,13 +56,22 @@ pub(super) fn closure_parameter(
         return Ok(None);
     };
     for (ordinal, param) in list.params().enumerate() {
-        if let Some(ast::Pat::IdentPat(pattern)) = param.pat()
-            && let Some(candidate) = pattern.name()
-            && binding_name_matches(parsed, reference, name, &candidate)?
+        // Every identifier a parameter pattern binds (`|&(a, b)|`).
+        let Some(pattern) = param.pat() else {
+            continue;
+        };
+        for candidate in pattern
+            .syntax()
+            .descendants()
+            .filter_map(ast::IdentPat::cast)
+            .filter_map(|ident| ident.name())
         {
-            return Ok(Some(
-                u32::try_from(ordinal).map_err(|_| error("closure parameter ordinal overflow"))?,
-            ));
+            if binding_name_matches(parsed, reference, name, &candidate)? {
+                return Ok(Some(
+                    u32::try_from(ordinal)
+                        .map_err(|_| error("closure parameter ordinal overflow"))?,
+                ));
+            }
         }
     }
     Ok(None)
@@ -287,20 +296,27 @@ impl ParsedFile {
             return Ok(Err("closure parameter list absent"));
         };
         for param in list.params() {
+            // A pattern parameter matches its argument through the shared
+            // pattern transaction (`pattern_plan`), the closure as its owner.
             let Some(ast::Pat::IdentPat(pattern)) = param.pat() else {
-                return Ok(Err("closure parameter pattern awaits parameter pattern integration"));
+                parameters.push(ClosureParameter {
+                    mutable: false,
+                    hint: None,
+                });
+                continue;
             };
             if pattern.ref_token().is_some() || pattern.at_token().is_some() {
-                return Ok(Err("closure parameter pattern awaits parameter pattern integration"));
+                parameters.push(ClosureParameter {
+                    mutable: false,
+                    hint: None,
+                });
+                continue;
             }
+            // A written primitive annotation types the argument; another
+            // annotation is not re-enforced (rustc checked it).
             let hint = match super::hint(param.ty()) {
                 Some(crate::ir::op::HintRecipe::Primitive(primitive)) => Some(primitive),
-                Some(crate::ir::op::HintRecipe::None) => None,
-                _ => {
-                    return Ok(Err(
-                        "closure parameter type annotation awaits non-primitive parameter types",
-                    ));
-                }
+                _ => None,
             };
             parameters.push(ClosureParameter {
                 mutable: pattern.mut_token().is_some(),
@@ -369,11 +385,8 @@ impl ParsedFile {
                                 "closure parameter pattern awaits parameter pattern integration",
                             );
                         };
-                        let Some(hint) = super::hint(parameter.ty()) else {
-                            return unsupported(
-                                "closure parameter type annotation awaits non-primitive parameter types",
-                            );
-                        };
+                        let hint = super::hint(parameter.ty())
+                            .unwrap_or(crate::ir::op::HintRecipe::None);
                         let staging = *node
                             .runtime_scalar_slots
                             .get(ordinal)
@@ -398,16 +411,27 @@ impl ParsedFile {
                     RecipeExit::Next(index.pc(body_id, Phase::Entry)?),
                 )
             }
-            Phase::Operand(0) => draft(
-                index,
-                key,
-                Vec::new(),
-                RecipeExit::Control(ControlRecipe::Return {
-                    value: index.nodes()[body_id.0 as usize]
-                        .value
-                        .ok_or_else(|| error("closure body value absent"))?,
-                }),
-            ),
+            // The body's value returns from the closure's call frame. Other
+            // indexed operands (a parameter type's array length) are never run.
+            Phase::Operand(n)
+                if node
+                    .operands
+                    .iter()
+                    .position(|operand| *operand == body_id)
+                    .and_then(|position| u16::try_from(position).ok())
+                    == Some(n) =>
+            {
+                draft(
+                    index,
+                    key,
+                    Vec::new(),
+                    RecipeExit::Control(ControlRecipe::Return {
+                        value: index.nodes()[body_id.0 as usize]
+                            .value
+                            .ok_or_else(|| error("closure body value absent"))?,
+                    }),
+                )
+            }
             _ => unsupported("invalid closure phase"),
         }
     }

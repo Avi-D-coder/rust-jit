@@ -225,3 +225,9 @@ impl<T> core::fmt::Debug for Weak<T> {
         f.write_str("(Weak)")
     }
 }
+
+impl<T: ?Sized + core::hash::Hash> core::hash::Hash for Rc<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::hash::Hash::hash(&**self, state)
+    }
+}

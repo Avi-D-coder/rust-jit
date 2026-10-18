@@ -9,7 +9,7 @@ use crate::{
 };
 pub(super) struct FieldSource {
     site: NamedFieldSite,
-    owner: AdmittedBodyContext,
+    owner: std::sync::Arc<AdmittedBodyContext>,
 }
 impl FieldSource {
     pub(super) fn member(&self) -> &str {
@@ -25,7 +25,7 @@ pub(super) fn capture(
     index: &BodyIndex,
     pc: &PcKey,
 ) -> QueryPoll<FieldSource> {
-    let owner = match source_body_context::capture(db, sources, index, pc) {
+    let owner = match source_body_context::frame_context(db, sources, index, pc) {
         QueryPoll::Ready(Ok(owner)) => owner,
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),

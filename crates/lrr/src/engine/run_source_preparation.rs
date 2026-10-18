@@ -35,8 +35,16 @@ impl ReachedLocalBody<'_> {
                 .callee
                 .local_source_contract()
                 .ok_or_else(|| call_fault("reached local source admission absent"))?;
-            if contract.site().body != *self.caller.body()
-                || contract.site().node != self.site.0
+            // A member of a block-level impl or trait is selected through the
+            // member index at any expression that calls it (method call,
+            // operator, path): its admission is the declaration, not a site.
+            let member = self
+                .callee
+                .ordinary_local_contract()
+                .is_some_and(|contract| contract.is_member());
+            if (!member
+                && (contract.site().body != *self.caller.body()
+                    || contract.site().node != self.site.0))
                 || self.callee.body() != Some(self.source.body())
                 || self.callee.signature().header != *self.source.header()
             {
@@ -72,10 +80,11 @@ impl ReachedLocalBody<'_> {
                     .nodes()
                     .get(self.site.0 as usize)
                     .is_some_and(|node| {
-                        matches!(
-                            node.role,
-                            NodeRole::Expression(ExpressionKind::Call | ExpressionKind::Path)
-                        )
+                        member
+                            || matches!(
+                                node.role,
+                                NodeRole::Expression(ExpressionKind::Call | ExpressionKind::Path)
+                            )
                     })
             {
                 return Err(call_fault("reached local caller source changed"));
@@ -158,12 +167,16 @@ impl RunMachine {
             )));
         }
         let site = NodeId(self.frame.pc().node);
-        if !self
-            .frame
-            .body
-            .nodes()
-            .get(site.0 as usize)
-            .is_some_and(|node| node.role == NodeRole::Expression(ExpressionKind::Call))
+        let member = callee
+            .ordinary_local_contract()
+            .is_some_and(|contract| contract.is_member());
+        if !member
+            && !self
+                .frame
+                .body
+                .nodes()
+                .get(site.0 as usize)
+                .is_some_and(|node| node.role == NodeRole::Expression(ExpressionKind::Call))
         {
             return QueryPoll::Ready(Err(call_fault(
                 "local body preparation requires reached ordinary call",
@@ -176,7 +189,8 @@ impl RunMachine {
             .map(|contract| contract.site().clone());
         let (caller, site) = match admitted {
             Some(admitted)
-                if admitted.body != *self.frame.body.body() || admitted.node != site.0 =>
+                if !member
+                    && (admitted.body != *self.frame.body.body() || admitted.node != site.0) =>
             {
                 let caller = if admitted.body == *self.frame.body.body() {
                     Arc::clone(&self.frame.body)

@@ -1,0 +1,112 @@
+{
+  "at": "2026-10-18T08:16:49.398847+00:00",
+  "claim": "LOCAL-036",
+  "tasks": [
+    "T024",
+    "T063",
+    "M014"
+  ],
+  "baseline": "b97c954c86712c3b9c005af39902459f2bcfe11f",
+  "scope": "Separate post-edit root source-review of generated module body environment join, not all inherited code or whole architecture. Independent validator review also requested. Exact-source tests pending; no acceptance inferred.",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+      "sha256": "e257e478dae336109a10ae6c2b4886ac2035c6d48c37aa53fe5dec104a4eb3b0"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "e35430b56398a577fac68d0d59adea6747c77057716b9fc8566fcf2e6d65d8a9"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_module_source_preparation.rs",
+      "sha256": "b384c74addf352e89c407755d0cd010bd9c6bf478e77a6701512b943a43b0a26"
+    },
+    {
+      "path": "crates/lrr/src/cli/retained_generated_body_tests.rs",
+      "sha256": "608ceeb4f6a7103fde2eeb097c53c2f326c7f8c0f117b48836696c35f18e3cbb"
+    },
+    {
+      "path": "crates/lrr/src/expand/body_macro_boundary.rs",
+      "sha256": "4ad668f400727c10e13370ebe21dd016380329b90a0113d6273f2f80ab5b1d1b"
+    }
+  ],
+  "route": "SourceDiscovery::publish retains per-generated-unit insertion boundary Result in CompletedSourceEnvironment alongside actual GeneratedSyntaxInput. RunMachine::capture_module_source reads actual generated/retained locator, uses same boundary source roots -> source_body_context::capture -> attach_generated_boundary -> prepare_selected_body_plan. Both existing module entry preparation paths reuse it. Typed cold failure surfaced at reached use. Non-generated paths retain direct scope-owner lookup.",
+  "all8": [
+    {
+      "mode": 1,
+      "inspection": "capture_module_source; prepare_selected_module_source; prepare_reached_module_source",
+      "conclusion": "No macro/assertion-specific evaluator or synthetic wrapper; same source-local plan, expression lowering, call VM and local declarations. Legacy routes not removed/closed here."
+    },
+    {
+      "mode": 2,
+      "inspection": "GeneratedSyntaxInput; GeneratedBodyBoundary; attach_generated_boundary",
+      "conclusion": "Actual generated body/index and source context, no scalar/literal/break executor. Real generated scopes/caller identity preserved."
+    },
+    {
+      "mode": 3,
+      "inspection": "callee.declaration_context, actual DefinitionSource, completed.scope_owner",
+      "conclusion": "Common selected source identity only; no method name, macro identity or numeric inference policy."
+    },
+    {
+      "mode": 4,
+      "inspection": "generated locator before scope_owner; boundary.source_roots; shared capture helper",
+      "conclusion": "Generated inline modules need not have physical source at generated path. This joins actual insertion owner; original/retained/generated reuse common context. Selected unit, seal, cfg, record, declaration context checked by existing capture/attach."
+    },
+    {
+      "mode": 5,
+      "inspection": "publish per-unit Result; no BodyStructure/Thunk fetch in boundary publication",
+      "conclusion": "Cold executable bodies remain unlowered/unexecuted; unavailable boundary is typed deferred outcome. Existing ordinary source patterns/commit engine untouched. No eager unselected result preparation added."
+    },
+    {
+      "mode": 6,
+      "inspection": "CompletedGeneratedSources OnceLock; BodyEnvironment reuse",
+      "conclusion": "One cold boundary prepare per executable output unit at publication, one indexed Result lookup and shared source-plan admission on first reached body. No new installed runtime source parsing or per-phase planning. Existing broader per-call source-type fallbacks outside changed slice remain unreviewed debt, not a hotpath acceptance claim."
+    },
+    {
+      "mode": 7,
+      "inspection": "boundary map content key; scope_owners map; source_roots relevant ancestry",
+      "conclusion": "No whole-source or global namespace scan at call entry; generated ancestors are exact retained insertion roots. Query/currentness preserves existing semantic dependencies. No sandbox/resource policy extended."
+    },
+    {
+      "mode": 8,
+      "inspection": "Arc boundary clone; shared AdmittedBodyContext parser/index; vec of borrowed root handles",
+      "conclusion": "No BodyIndex clone or whole-file node search; first-entry root-handle projection is proportional to actual insertion ancestry, memoized published context used after."
+    }
+  ],
+  "prior_review_findings_addressed": [
+    "SourceScopeOwner::Missing no longer skips genuine generated inline module source.",
+    "Both reached module preparation paths share capture_module_source.",
+    "Cold boundary errors stored in Result rather than failing unrelated main; checked only at reached lookup.",
+    "OnceLock repeat publication checks actual unit equivalence and set failure is reported."
+  ],
+  "cost": "Cold publication proportional to executable generated units and their existing boundary preparation; lookup O(log outputs), first-entry context roots O(actual ancestry), no artificial caps. No performance measurement or global source preparation claim.",
+  "witnesses": [
+    "unchanged tests/ui/consts/const-int-arithmetic.rs (saved v16 first failure BODYENV; later local initializer/i128 gaps remain potential blockers)",
+    "generated_module_functions_publish_their_nested_item_environment compares ordinary/user/wrapper output+ordinary op counters across all4 editions and generated inline module",
+    "existing generated_free_functions_and_methods_execute_their_body_macro_calls, generated_body_uses_the_same_operations_as_the_handwritten_body, unreached_generated_body_with_macro_calls_is_never_lowered"
+  ],
+  "acceptance": "Pending async current-checkout compile/tests. No runtime/fullfixture/newstock/MA closure or JIT gate claim. Follow E-R5-006/007 no copies/resourcecaps/sandbox/static checker.",
+  "candidate_v1": "Both lib/CLI builds pass. Four generated route controls fail actual source unit correspondence; unchanged const-int-arithmetic same first failure. No acceptance; record candidate-v1 report/failures.",
+  "namespace_source_review": {
+    "symbols": [
+      "GeneratedSyntaxInput::same_unit",
+      "db::retained_syntax::generated_input",
+      "GeneratedBodyBoundary::require_current",
+      "AdmittedBodyContext::attach_generated_boundary"
+    ],
+    "conclusion": "Type/Value discovery domains identify separate completion queries over same actual output record. Source correspondence uses existing same_unit graph+epoch+scope+record semantics, while boundary own fullseal fingerprint and actual current unit/source/record checks stay unchanged. Old full-domain equality was context-specific stricter refusal, now removed. This is no removal of hygiene/currentness constraints.",
+    "independent_review": "artifacts/validation-resume-2026-10-18/namespace-and-bound-result-review-v2.json",
+    "independent_review_sha256": "00f05c87f5a3492cafd30130cefb83d1628215983e3c38bb932e534a1fce610d",
+    "actual_matrix": "Pending corrected candidate runtime; no macro/user/wrapper acceptance inferred yet."
+  },
+  "scoped_v4_evidence": {
+    "source": "a841b6b91668cb3d3d581bc85d4e1a307b23a34701148a5d4d19f9c6f634bbd3",
+    "test_binary": "ade5e621dd7adae4ab354e6bdb0b0e95fde4d8871b348e379ae0d13084b0d67c",
+    "scope": "Generated module function local-item ordinary/user/wrapper and generated inline module matrix all4 editions PASS; relevant CurrentModuleName epoch-refresh/source-removal PASS. Existing three generated controls and boundary expiry passed prior V3 source; keep distinct source evidence. V4 other namespace ambiguity assertion FAIL unattributed; callable2FAIL separate.",
+    "artifact_report": "artifacts/validation-resume-2026-10-18/candidate-v4/report.json",
+    "sha256": "e8ad225d734300b3d8dafd1e64743520b1075e40c461fa711d4f7ccd7c70b17f",
+    "stock_delta": 0,
+    "official_frontier": "const-int-arithmetic now body-local initializer route missing; const-fn-nested complete nonregression only",
+    "holds": "Full matrix/milestone/architecture/MA gates incomplete."
+  }
+}

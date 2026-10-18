@@ -434,9 +434,9 @@ impl<'a> CallResolver<'a> {
         }
         // `Self`, a nominal declaration, or an unshadowed primitive type
         // name (`i64::from`, `u8::max_value`).
-        let self_type = match self.resolve_written_type(
-            members, caller, scope, edition, prefix, absolute, true,
-        ) {
+        let self_type = match self
+            .resolve_written_type(members, caller, scope, edition, prefix, absolute, true)
+        {
             Ok(self_type) => self_type,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
@@ -456,7 +456,14 @@ impl<'a> CallResolver<'a> {
         db: &mut Database,
         caller: Digest,
         spelled: &str,
-    ) -> QueryPoll<Option<(Digest, Digest, Vec<Digest>, Option<crate::traits::term::TyTerm>)>> {
+    ) -> QueryPoll<
+        Option<(
+            Digest,
+            Digest,
+            Vec<Digest>,
+            Option<crate::traits::term::TyTerm>,
+        )>,
+    > {
         use crate::syntax::imports::ImportSegment;
         let Some(members) = self.members else {
             return QueryPoll::Ready(Ok(None));
@@ -484,12 +491,13 @@ impl<'a> CallResolver<'a> {
         if prefix.is_empty() {
             return QueryPoll::Ready(Ok(None));
         }
-        let self_type =
-            match self.resolve_written_type(members, caller, &scope, edition, prefix, false, true) {
-                Ok(Some(self_type)) => self_type,
-                Ok(None) => return QueryPoll::Ready(Ok(None)),
-                Err(_) => return QueryPoll::Ready(Ok(None)),
-            };
+        let self_type = match self
+            .resolve_written_type(members, caller, &scope, edition, prefix, false, true)
+        {
+            Ok(Some(self_type)) => self_type,
+            Ok(None) => return QueryPoll::Ready(Ok(None)),
+            Err(_) => return QueryPoll::Ready(Ok(None)),
+        };
         if let Ok(nominal) = self_type
             && members.is_trait(nominal)
         {
@@ -536,7 +544,7 @@ impl<'a> CallResolver<'a> {
         QueryPoll::Ready(Ok(Some((trait_key, declaration, functions, self_term))))
     }
     /// The associated function `name` of a resolved self type or trait.
-    fn associated_of(
+    pub(crate) fn associated_of(
         &self,
         db: &mut Database,
         members: &super::member_index::MemberIndex,
@@ -657,45 +665,50 @@ impl<'a> CallResolver<'a> {
         let resolve_type = |segments: &[ImportSegment],
                             absolute: bool,
                             anchored: bool|
-         -> Result<Option<Result<Digest, super::member_index::BuiltinSelf>>, Diagnostic> {
-            self.resolve_written_type(members, caller, &scope, edition, segments, absolute, anchored)
+         -> Result<
+            Option<Result<Digest, super::member_index::BuiltinSelf>>,
+            Diagnostic,
+        > {
+            self.resolve_written_type(
+                members, caller, &scope, edition, segments, absolute, anchored,
+            )
         };
         let result = (|| -> Result<Option<Digest>, Diagnostic> {
-            let (ty, trait_key, name) = if let Some((ty, tr, rest)) = split_qualified_anchor(spelled)
-            {
-                if rest.contains("::") {
-                    return Ok(None);
-                }
-                let (absolute, segments) = segments_of(ty)?;
-                let Some(ty) = resolve_type(&segments, absolute, true)? else {
-                    return Ok(None);
-                };
-                let trait_key = match tr {
-                    Some(tr) => {
-                        let (absolute, segments) = segments_of(tr)?;
-                        match resolve_type(&segments, absolute, false)? {
-                            Some(Ok(definition)) => Some(definition),
-                            _ => return Ok(None),
-                        }
+            let (ty, trait_key, name) =
+                if let Some((ty, tr, rest)) = split_qualified_anchor(spelled) {
+                    if rest.contains("::") {
+                        return Ok(None);
                     }
-                    None => None,
+                    let (absolute, segments) = segments_of(ty)?;
+                    let Some(ty) = resolve_type(&segments, absolute, true)? else {
+                        return Ok(None);
+                    };
+                    let trait_key = match tr {
+                        Some(tr) => {
+                            let (absolute, segments) = segments_of(tr)?;
+                            match resolve_type(&segments, absolute, false)? {
+                                Some(Ok(definition)) => Some(definition),
+                                _ => return Ok(None),
+                            }
+                        }
+                        None => None,
+                    };
+                    (ty, trait_key, rest)
+                } else {
+                    let Some((prefix, name)) = spelled.rsplit_once("::") else {
+                        return Ok(None);
+                    };
+                    if prefix.is_empty() || prefix.starts_with("$crate@") {
+                        return Ok(None);
+                    }
+                    let (absolute, segments) = segments_of(prefix)?;
+                    // An unshadowed primitive name is a type prefix too
+                    // (`u8::MAX`, `f64::EPSILON`), as for associated functions.
+                    let Some(ty) = resolve_type(&segments, absolute, true)? else {
+                        return Ok(None);
+                    };
+                    (ty, None, name)
                 };
-                (ty, trait_key, rest)
-            } else {
-                let Some((prefix, name)) = spelled.rsplit_once("::") else {
-                    return Ok(None);
-                };
-                if prefix.is_empty() || prefix.starts_with("$crate@") {
-                    return Ok(None);
-                }
-                let (absolute, segments) = segments_of(prefix)?;
-                // An unshadowed primitive name is a type prefix too
-                // (`u8::MAX`, `f64::EPSILON`), as for associated functions.
-                let Some(ty) = resolve_type(&segments, absolute, true)? else {
-                    return Ok(None);
-                };
-                (ty, None, name)
-            };
             members.associated_const(ty, trait_key, name)
         })();
         QueryPoll::Ready(result)
@@ -725,10 +738,13 @@ impl<'a> CallResolver<'a> {
             }));
         }
         Ok(
-            match self
-                .graph
-                .lookup_source_path(Namespace::Type, segments, absolute, scope, edition)?
-            {
+            match self.graph.lookup_source_path(
+                Namespace::Type,
+                segments,
+                absolute,
+                scope,
+                edition,
+            )? {
                 NameLookup::Defined(definition) => Some(Ok(definition.identity)),
                 NameLookup::Absent if anchored && !absolute => match segments {
                     [ImportSegment::Name(name)] => primitive_self(name).map(Err),
@@ -766,9 +782,13 @@ impl<'a> CallResolver<'a> {
                 },
             ));
         }
-        QueryPoll::Ready(written_segments(spelled, edition).and_then(|(absolute, segments)| {
-            self.resolve_written_type(members, caller, &scope, edition, &segments, absolute, true)
-        }))
+        QueryPoll::Ready(
+            written_segments(spelled, edition).and_then(|(absolute, segments)| {
+                self.resolve_written_type(
+                    members, caller, &scope, edition, &segments, absolute, true,
+                )
+            }),
+        )
     }
     /// Type-namespace lookup of a written path spelling from `scope`,
     /// including a generated `$crate@<unit>` root.
@@ -819,7 +839,9 @@ impl<'a> CallResolver<'a> {
                 NameNamespaces::path(unit, &tail, edition)
                     .and_then(|path| self.graph.lookup(Namespace::Type, &path, &scope))
                     .map(|found| match found {
-                        NameLookup::Defined(definition) if members.is_trait(definition.identity) => {
+                        NameLookup::Defined(definition)
+                            if members.is_trait(definition.identity) =>
+                        {
                             Some(definition.identity)
                         }
                         _ => None,
@@ -975,7 +997,8 @@ impl<'a> CallResolver<'a> {
         if !absolute
             && matches!(segments.first(), Some(crate::syntax::imports::ImportSegment::Name(n)) if n == "Self")
         {
-            return match self.associated_function(db, caller, &segments, absolute, &scope, edition) {
+            return match self.associated_function(db, caller, &segments, absolute, &scope, edition)
+            {
                 QueryPoll::Ready(Ok(Some(selection))) => QueryPoll::Ready(Ok(selection)),
                 QueryPoll::Ready(Ok(None)) => self.associated_value_or_absent(db, caller, name),
                 QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
@@ -1012,7 +1035,10 @@ impl<'a> CallResolver<'a> {
         if owner.is_empty() || owner.contains("::") || owner.starts_with('$') {
             return QueryPoll::Ready(Ok(false));
         }
-        if self.item(caller).is_none_or(|(_, item)| item.def_key.item_kind != ItemKind::Function) {
+        if self
+            .item(caller)
+            .is_none_or(|(_, item)| item.def_key.item_kind != ItemKind::Function)
+        {
             return QueryPoll::Ready(Ok(false));
         }
         match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(caller)) {
@@ -1139,9 +1165,10 @@ impl<'a> CallResolver<'a> {
             owner: None,
         };
         if !name.contains("::") {
-            return QueryPoll::Ready(self.graph.lookup_unqualified(
-                namespace, name, &module, edition, None,
-            ));
+            return QueryPoll::Ready(
+                self.graph
+                    .lookup_unqualified(namespace, name, &module, edition, None),
+            );
         }
         // A qualified type anchor or `Self` names no module member.
         if name.starts_with('<') || name.starts_with("Self::") {
@@ -1221,19 +1248,27 @@ impl<'a> CallResolver<'a> {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
             }
-            return QueryPoll::Ready(Ok((module(item.scope.clone()), item.header.profile.edition)));
+            return QueryPoll::Ready(Ok((
+                module(item.scope.clone()),
+                item.header.profile.edition,
+            )));
         }
         // A body-local function: a module-graph path from its body resolves in
         // its enclosing module (a lexical item is selected by the entered body
         // context before this route), at the local declaration's own edition.
-        if db
-            .input(&InputKey::LocalDeclarationOwner(caller))
-            .is_some()
-        {
-            let (Some(InputValue::DeclarationContext(context)), Some(InputValue::DefinitionHeader(header))) = (
-                db.input(&InputKey::DeclarationContext(caller)).as_deref().cloned(),
-                db.input(&InputKey::DefinitionHeader(caller)).as_deref().cloned(),
-            ) else {
+        if db.input(&InputKey::LocalDeclarationOwner(caller)).is_some() {
+            let (
+                Some(InputValue::DeclarationContext(context)),
+                Some(InputValue::DefinitionHeader(header)),
+            ) = (
+                db.input(&InputKey::DeclarationContext(caller))
+                    .as_deref()
+                    .cloned(),
+                db.input(&InputKey::DefinitionHeader(caller))
+                    .as_deref()
+                    .cloned(),
+            )
+            else {
                 return QueryPoll::Ready(Err(fault("local caller declaration context absent")));
             };
             let mut scope = context.scope;
@@ -1385,11 +1420,9 @@ impl<'a> CallResolver<'a> {
         &self,
         definition: Digest,
     ) -> Option<(&PreparedSourceView, &crate::syntax::outline::ItemOutline)> {
-        self.sources.iter().find_map(|source| {
-            source
-                .outline_item(definition)
-                .map(|item| (*source, item))
-        })
+        self.sources
+            .iter()
+            .find_map(|source| source.outline_item(definition).map(|item| (*source, item)))
     }
     fn current(
         &self,
@@ -1409,13 +1442,21 @@ impl<'a> CallResolver<'a> {
         identity: Digest,
     ) -> QueryPoll<Option<SourceCallable>> {
         let Some((source, item)) = self.item(identity) else {
-            // A body-local item publishes its header only; its initializer
-            // needs the local declaration body route (not yet available).
+            // A body-local item uses its actual owning lexical plan. This
+            // is the same zero-parameter initializer signature and ordinary
+            // callable used for module items and enum discriminants.
             if db
                 .input(&InputKey::LocalDeclarationOwner(identity))
                 .is_some()
             {
-                return QueryPoll::Ready(Ok(None));
+                return match ordinary_local::admit_initializer(db, identity) {
+                    QueryPoll::Ready(Ok(Some(admission))) => {
+                        QueryPoll::Ready(admission.callable_shared(db).map(|callee| Some(*callee)))
+                    }
+                    QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(None)),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
             }
             // A macro-emitted item's initializer joins the same route through
             // its published generated inputs.
@@ -1430,7 +1471,10 @@ impl<'a> CallResolver<'a> {
                 QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
             };
         };
-        if !matches!(item.def_key.item_kind, ItemKind::Constant | ItemKind::Static) {
+        if !matches!(
+            item.def_key.item_kind,
+            ItemKind::Constant | ItemKind::Static
+        ) {
             return QueryPoll::Ready(Ok(None));
         }
         let retained = match self.current(db, source, identity) {
@@ -1469,9 +1513,12 @@ impl<'a> CallResolver<'a> {
         let QueryValue::FunctionSignature(signature) = outcome.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("initializer signature query result mismatch")));
         };
-        if signature.scope != context.scope || signature.header.fingerprint() != header.fingerprint()
+        if signature.scope != context.scope
+            || signature.header.fingerprint() != header.fingerprint()
         {
-            return QueryPoll::Ready(Err(fault("initializer signature source declaration mismatch")));
+            return QueryPoll::Ready(Err(fault(
+                "initializer signature source declaration mismatch",
+            )));
         }
         let mut signature = signature.clone();
         signature.header = header;
@@ -1525,6 +1572,31 @@ impl<'a> CallResolver<'a> {
                     )
                     .map(CallSelection::Constructor),
                 );
+            }
+            // A member of a block-level impl or trait is admitted from its
+            // declaration in the owning body (E-R5-009).
+            match ordinary_local::admit_container_member(db, selected.identity) {
+                QueryPoll::Ready(Ok(Some(admission))) => {
+                    return QueryPoll::Ready(
+                        admission.callable_shared(db).map(CallSelection::Source),
+                    );
+                }
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            if let Some(InputValue::DeclarationContext(context)) = db
+                .input(&InputKey::DeclarationContext(selected.identity))
+                .as_deref()
+                && db
+                    .input(&InputKey::LocalDeclarationOwner(selected.identity))
+                    .is_some()
+            {
+                // A required member (a trait's bodiless declaration) has no
+                // body to call; the reached self type selects the impl.
+                return QueryPoll::Ready(Ok(CallSelection::NeedOwnerContext(
+                    context.scope.clone(),
+                )));
             }
             return self.select_generated(db, selected.identity);
         };

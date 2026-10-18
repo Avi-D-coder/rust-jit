@@ -1,0 +1,31 @@
+{
+  "claim": "LOCAL-036",
+  "tasks": [
+    "T024",
+    "T063",
+    "M014"
+  ],
+  "invariant": "A reached macro-generated module function must publish the same body/source/local-item environment as a handwritten module function, using its actual retained generated insertion context. No body lowering or execution for an uncalled function.",
+  "witness": "Unchanged tests/ui/consts/const-int-arithmetic.rs: generated suite functions contain body-local const items and saved raw-v16-facade outcome is LRR-E-BODY-ENVIRONMENT owning source environment is not published. Supplemental equivalent handwritten/user/wrapper emitted outer function with inner fn isolates the source join without the stock witness's independent i128/local-initializer gaps.",
+  "existing_route": "SourceDiscovery publishes GeneratedSyntaxInput and CompletedSourceEnvironment; CallResolver selects same SourceCallable; RunMachine::prepare_selected_module_source captures AdmittedBodyContext then Database::prepare_selected_body_plan, SourceLocalPlan, ordinary body items, call lowering/VM. Cold Database::prepare_source_local_plan already attaches SourceDiscovery::generated_body_macro_boundary; reached module path currently omits that join and returns Ok without environment.",
+  "change": "Retain actual generated insertion boundaries with the already published generated-unit collection once per completed environment. Reached generated capture attaches that exact boundary using existing AdmittedBodyContext::attach_generated_boundary before existing common selected-body publication. Preserve semantic unit/record/epoch/context checks; no source text replay, caller-context substitution, synthetic body or macro-specific evaluator.",
+  "ownership": [
+    "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
+    "crates/lrr/src/expand/source_discovery.rs narrow publication call site",
+    "crates/lrr/src/engine/run_module_source_preparation.rs",
+    "crates/lrr/src/cli/retained_generated_body_tests.rs"
+  ],
+  "authority": "E-R5-006: no sandbox/resource caps or static rejection added. Syntax identity, hygiene, actual output/declaration context and memo dependencies remain semantic correctness facts. Source reads follow rustc.",
+  "costs": "Cold publication retains actual immutable boundary once per generated executable item unit; no executable BodyIndex/Thunk prepared for cold functions. Reached body attaches retained Arc and existing memoized source plan once. Dispatch unchanged; no global namespace census, parsing, plan reconstruction or BodyIndex clone per operation.",
+  "alternates": "No alternative evaluator added. Existing cold generated-body boundary factory reused. Old no-module-source early success must no longer hide missing generated environment. Legacy macro evaluators untouched, not closed by this repair.",
+  "acceptance": "Initial source compile b44744/0; focused current-source baseline controlled by sole test agent. Unchanged official witness first failure retained, no pass claim before full main succeeds. Run ordinary/emitted/wrapper local-item equivalent plus existing generated-body route/cold-body controls. All8 separate source review, exact tested source hashes. Interpreter/JIT gates remain incomplete. Build directly here, no frozen copies/worktrees.",
+  "review_driven_refinement": "Independent review identified generated inline modules may lack physical scope owner, entered Module-contract path shared join missing, cold boundary errors eager, and ignored repeat publication. Implement one capture_module_source helper: generated unit or retained-generated locator -> actual saved boundary roots -> existing capture+attach, else original owner lookup. Boundary preparation stores typed Result and only reached use reports an unavailable context. Repeat publication checks actual unit equivalence. No executable preparation added.",
+  "actual_candidate_failure": {
+    "source": "e4d3d1c49c48dba49f544d00b2c1f16a8c47b72c93869e8f7d771728d5660be5",
+    "compile": "615b45/0; CLI da7e4f/0",
+    "result": "Four generated-body controls and actual unchanged const-int-arithmetic all fail generated owning boundary source unit differs",
+    "cause": "GeneratedSyntaxInput::same_unit and db::retained_syntax::generated_input intentionally identify actual unit by parse/cfg/scope/epoch/unit_graph/record, independent of namespace seal domain. Type and Value discovery may republish same record/content under separate completion seals. GeneratedBodyBoundary::require_current compares full seal and rejects genuine same-source namespace republication.",
+    "repair": "Use existing same-generation semantics for source match (same unit_graph/epoch, actual scope, same_record); retain all current parent-source, ExpansionRecord, GeneratedSyntax same_unit, and boundary own actual DiscoverySeal fingerprint dependencies. SourceBodyContext separately validates current unit receipt seal. No synthetic context or unchecked source bypass.",
+    "additional_path": "crates/lrr/src/expand/body_macro_boundary.rs"
+  }
+}

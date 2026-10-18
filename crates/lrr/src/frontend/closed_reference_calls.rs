@@ -42,9 +42,20 @@ pub struct ClosedReferenceParameter {
     region: DeclaredRegion,
     source: TyTerm,
     pointee: super::super::source_types::SourceType,
-    revision: u64,
+    /// The expansion epoch the proof was captured in. The database revision
+    /// counts every input write (each newly entered callee publishes its
+    /// body inputs), so it is not a change of the source world; the epoch
+    /// and the lexical namespace stamps are.
+    epoch: u64,
     source_revision: u64,
     inputs: Arc<BTreeMap<InputKey, Digest>>,
+}
+/// The database's current expansion epoch (`0` before any begins).
+pub(super) fn expansion_epoch(db: &mut Database) -> u64 {
+    match db.input(&InputKey::ExpansionEpoch).as_deref() {
+        Some(InputValue::ExpansionEpoch(epoch)) => *epoch,
+        _ => 0,
+    }
 }
 impl ClosedReferenceParameter {
     pub(super) fn capture(
@@ -117,6 +128,7 @@ impl ClosedReferenceParameter {
             syntax.mutable(),
             Box::new(pointee.source().clone()),
         );
+        let epoch = expansion_epoch(db);
         let proof = Self {
             syntax,
             plan,
@@ -125,7 +137,7 @@ impl ClosedReferenceParameter {
             region,
             source,
             pointee,
-            revision: db.revision(),
+            epoch,
             source_revision: db.source_revision(),
             inputs,
         };
@@ -151,9 +163,10 @@ impl ClosedReferenceParameter {
         callee.revalidate(db)?;
         self.syntax.require(callee.signature())?;
         self.plan.require(callee.signature(), self.syntax.parse())?;
+        let epoch = expansion_epoch(db);
         if self.definition != callee.signature().definition
             || self.signature != callee.signature().fingerprint()
-            || self.revision != db.revision()
+            || self.epoch != epoch
             || self.source_revision != db.source_revision()
             || db.lexical_namespace_stamps()? != self.inputs
         {
@@ -255,10 +268,11 @@ impl ClosedReferenceArgument {
         max_bytes: usize,
     ) -> Result<Self, Diagnostic> {
         frame.require_store(store)?;
+        let cell = frame.cell(slot)?;
         let source = frame
             .source_view_ref(slot)?
             .ok_or_else(|| invalid("reference argument has no retained caller source identity"))?;
-        Self::admit(store, frame.cell(slot)?, source, max_bytes)
+        Self::admit(store, cell, source, max_bytes)
     }
     /// Drop glue's receiver: the `&mut` to the value being dropped, formed by
     /// the dropping frame in its own argument location. Its source view is
@@ -287,6 +301,25 @@ impl ClosedReferenceArgument {
         source: &TyTerm,
         _max_bytes: usize,
     ) -> Result<Self, Diagnostic> {
+        // A view naming a declared `dyn Trait` position: the reference value's
+        // own runtime descriptor (its concrete referent Type) is the caller's
+        // reached Type there.
+        let derived;
+        let source = if source.contains_dyn() {
+            let value = store.admit_move(cell)?;
+            derived = (value.kind == 9)
+                .then(|| store.descriptor_source_term(TypeId(value.type_id)))
+                .flatten()
+                .filter(|term| {
+                    !term.contains_dyn() && matches!(term, TyTerm::Ref(..)) && closed_term(term)
+                })
+                .ok_or_else(|| {
+                    invalid("reference argument has no retained caller source identity")
+                })?;
+            &derived
+        } else {
+            source
+        };
         let TyTerm::Ref(region, _, target) = source else {
             return Err(invalid(
                 "reference argument source is not an admitted reference",
@@ -1147,10 +1180,12 @@ mod tests {
             .recheck_result_ticket(&c.store, ticket)
             .unwrap();
         let value = c.store.peek_ticket(ticket).unwrap();
+        // The returned reference's pointee is certified; its region is
+        // rustc's borrow check, which LRR does not repeat.
         let forged = TyTerm::Ref(
             RegionTerm::Static,
             false,
-            Box::new(TyTerm::Primitive(PrimitiveType::Bool)),
+            Box::new(TyTerm::Primitive(PrimitiveType::U8)),
         );
         assert!(
             packet

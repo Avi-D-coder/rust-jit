@@ -112,6 +112,9 @@ pub enum LibraryFunction {
     /// `core::intrinsics::lrr_cell_replace<T>(&T, T) -> T`: replace the value
     /// at a shared reference's location (interior mutability).
     CellReplace,
+    /// One indivisible atomic scalar access/RMW, with explicit operation and
+    /// validated Ordering tags; serialized GuestStore execution is SeqCst.
+    AtomicOp,
     /// `core::intrinsics::lrr_cell_take<T>(&T) -> T`: move the value out of a
     /// shared reference's location.
     CellTake,
@@ -165,21 +168,58 @@ pub enum LibraryFunction {
     F64Math,
     /// `core::intrinsics::lrr_f32_math(op: u32, a: f32, b: f32, c: f32) -> f32`.
     F32Math,
+    /// `core::intrinsics::lrr_size_of() -> usize`: the size of the enclosing
+    /// function's first type parameter (`mem::size_of::<T>`; E-R5-012).
+    SizeOf,
+    /// `core::intrinsics::lrr_align_of() -> usize`.
+    AlignOf,
+    /// `core::intrinsics::lrr_needs_drop() -> bool`.
+    NeedsDrop,
+    /// `core::intrinsics::lrr_variant_count() -> usize`.
+    VariantCount,
+    /// `core::intrinsics::lrr_size_of_val<T: ?Sized>(&T) -> usize`.
+    SizeOfVal,
+    /// `core::intrinsics::lrr_align_of_val<T: ?Sized>(&T) -> usize`.
+    AlignOfVal,
+    /// `core::intrinsics::lrr_discriminant_value<T>(&T) -> isize`: the
+    /// discriminant of the enum value a reference designates (0 otherwise).
+    DiscriminantValue,
+    /// `core::intrinsics::lrr_zeroed<T>() -> T` for a type with a byte image.
+    Zeroed,
+    /// `core::intrinsics::lrr_transmute<Src, Dst>(Src) -> Dst` between types of
+    /// equal size that both have a byte image.
+    Transmute,
 }
 
 /// (function, owning library crate, path within that crate).
 const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
     (LibraryFunction::Panic, "core", &["panicking", "panic"]),
-    (LibraryFunction::PanicFmt, "core", &["panicking", "panic_fmt"]),
-    (LibraryFunction::PanicDisplay, "core", &["panicking", "panic_display"]),
-    (LibraryFunction::PanicStr2015, "core", &["panicking", "panic_str_2015"]),
+    (
+        LibraryFunction::PanicFmt,
+        "core",
+        &["panicking", "panic_fmt"],
+    ),
+    (
+        LibraryFunction::PanicDisplay,
+        "core",
+        &["panicking", "panic_display"],
+    ),
+    (
+        LibraryFunction::PanicStr2015,
+        "core",
+        &["panicking", "panic_str_2015"],
+    ),
     (
         LibraryFunction::UnreachableDisplay,
         "core",
         &["panicking", "unreachable_display"],
     ),
     // std::rt reexports core's panic_display/panic_fmt.
-    (LibraryFunction::PanicDisplay, "std", &["rt", "panic_display"]),
+    (
+        LibraryFunction::PanicDisplay,
+        "std",
+        &["rt", "panic_display"],
+    ),
     (LibraryFunction::PanicFmt, "std", &["rt", "panic_fmt"]),
     (LibraryFunction::BeginPanic, "std", &["rt", "begin_panic"]),
     (LibraryFunction::Print, "std", &["io", "_print"]),
@@ -190,36 +230,96 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
         "core",
         &["intrinsics", "lrr_unsupported"],
     ),
-    (LibraryFunction::AssertFailed, "core", &["panicking", "assert_failed"]),
+    (
+        LibraryFunction::AssertFailed,
+        "core",
+        &["panicking", "assert_failed"],
+    ),
     (
         LibraryFunction::SliceLen,
         "core",
         &["intrinsics", "lrr_slice_len"],
     ),
-    (LibraryFunction::StrLen, "core", &["intrinsics", "lrr_str_len"]),
-    (LibraryFunction::StrEq, "core", &["intrinsics", "lrr_str_eq"]),
-    (LibraryFunction::FmtWrite, "core", &["intrinsics", "lrr_fmt_write"]),
-    (LibraryFunction::FmtValue, "core", &["intrinsics", "lrr_fmt_value"]),
-    (LibraryFunction::FmtSink, "core", &["intrinsics", "lrr_fmt_sink"]),
+    (
+        LibraryFunction::StrLen,
+        "core",
+        &["intrinsics", "lrr_str_len"],
+    ),
+    (
+        LibraryFunction::StrEq,
+        "core",
+        &["intrinsics", "lrr_str_eq"],
+    ),
+    (
+        LibraryFunction::FmtWrite,
+        "core",
+        &["intrinsics", "lrr_fmt_write"],
+    ),
+    (
+        LibraryFunction::FmtValue,
+        "core",
+        &["intrinsics", "lrr_fmt_value"],
+    ),
+    (
+        LibraryFunction::FmtSink,
+        "core",
+        &["intrinsics", "lrr_fmt_sink"],
+    ),
     (
         LibraryFunction::FmtPadAdapter,
         "core",
         &["intrinsics", "lrr_fmt_pad_adapter"],
     ),
-    (LibraryFunction::FmtTake, "core", &["intrinsics", "lrr_fmt_take"]),
-    (LibraryFunction::StrByte, "core", &["intrinsics", "lrr_str_byte"]),
-    (LibraryFunction::VecLen, "core", &["intrinsics", "lrr_vec_len"]),
-    (LibraryFunction::VecPush, "core", &["intrinsics", "lrr_vec_push"]),
-    (LibraryFunction::VecInsert, "core", &["intrinsics", "lrr_vec_insert"]),
-    (LibraryFunction::VecRemove, "core", &["intrinsics", "lrr_vec_remove"]),
-    (LibraryFunction::VecAsSlice, "core", &["intrinsics", "lrr_vec_as_slice"]),
+    (
+        LibraryFunction::FmtTake,
+        "core",
+        &["intrinsics", "lrr_fmt_take"],
+    ),
+    (
+        LibraryFunction::StrByte,
+        "core",
+        &["intrinsics", "lrr_str_byte"],
+    ),
+    (
+        LibraryFunction::VecLen,
+        "core",
+        &["intrinsics", "lrr_vec_len"],
+    ),
+    (
+        LibraryFunction::VecPush,
+        "core",
+        &["intrinsics", "lrr_vec_push"],
+    ),
+    (
+        LibraryFunction::VecInsert,
+        "core",
+        &["intrinsics", "lrr_vec_insert"],
+    ),
+    (
+        LibraryFunction::VecRemove,
+        "core",
+        &["intrinsics", "lrr_vec_remove"],
+    ),
+    (
+        LibraryFunction::VecAsSlice,
+        "core",
+        &["intrinsics", "lrr_vec_as_slice"],
+    ),
     (
         LibraryFunction::VecAsMutSlice,
         "core",
         &["intrinsics", "lrr_vec_as_mut_slice"],
     ),
-    (LibraryFunction::VecAsStr, "core", &["intrinsics", "lrr_vec_as_str"]),
-    (LibraryFunction::SliceSwap, "core", &["intrinsics", "lrr_slice_swap"]),
+    (
+        LibraryFunction::VecAsStr,
+        "core",
+        &["intrinsics", "lrr_vec_as_str"],
+    ),
+    (
+        LibraryFunction::SliceSwap,
+        "core",
+        &["intrinsics", "lrr_slice_swap"],
+    ),
     (
         LibraryFunction::VecAppendArray,
         "core",
@@ -230,33 +330,191 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
         "core",
         &["intrinsics", "lrr_char_from_u32"],
     ),
-    (LibraryFunction::StrSlice, "core", &["intrinsics", "lrr_str_slice"]),
-    (LibraryFunction::BytesAsStr, "core", &["intrinsics", "lrr_bytes_as_str"]),
-    (LibraryFunction::MemReplace, "core", &["intrinsics", "lrr_mem_replace"]),
-    (LibraryFunction::MemSwap, "core", &["intrinsics", "lrr_mem_swap"]),
-    (LibraryFunction::CellReplace, "core", &["intrinsics", "lrr_cell_replace"]),
-    (LibraryFunction::CellTake, "core", &["intrinsics", "lrr_cell_take"]),
-    (LibraryFunction::SharedToMut, "core", &["intrinsics", "lrr_shared_to_mut"]),
-    (LibraryFunction::BoxLeak, "core", &["intrinsics", "lrr_box_leak"]),
-    (LibraryFunction::RefEq, "core", &["intrinsics", "lrr_ref_eq"]),
-    (LibraryFunction::Forget, "core", &["intrinsics", "lrr_forget"]),
-    (LibraryFunction::PtrNull, "core", &["intrinsics", "lrr_ptr_null"]),
-    (LibraryFunction::PtrOffset, "core", &["intrinsics", "lrr_ptr_offset"]),
-    (LibraryFunction::PtrOffsetFrom, "core", &["intrinsics", "lrr_ptr_offset_from"]),
-    (LibraryFunction::PtrRead, "core", &["intrinsics", "lrr_ptr_read"]),
-    (LibraryFunction::PtrWrite, "core", &["intrinsics", "lrr_ptr_write"]),
-    (LibraryFunction::PtrRetype, "core", &["intrinsics", "lrr_ptr_retype"]),
-    (LibraryFunction::SliceAsPtr, "core", &["intrinsics", "lrr_slice_as_ptr"]),
-    (LibraryFunction::SliceAsMutPtr, "core", &["intrinsics", "lrr_slice_as_mut_ptr"]),
-    (LibraryFunction::PtrNullMut, "core", &["intrinsics", "lrr_ptr_null_mut"]),
-    (LibraryFunction::PtrAsConst, "core", &["intrinsics", "lrr_ptr_as_const"]),
-    (LibraryFunction::PtrAsMut, "core", &["intrinsics", "lrr_ptr_as_mut"]),
-    (LibraryFunction::F64Bits, "core", &["intrinsics", "lrr_f64_bits"]),
-    (LibraryFunction::F64FromBits, "core", &["intrinsics", "lrr_f64_from_bits"]),
-    (LibraryFunction::F32Bits, "core", &["intrinsics", "lrr_f32_bits"]),
-    (LibraryFunction::F32FromBits, "core", &["intrinsics", "lrr_f32_from_bits"]),
-    (LibraryFunction::F64Math, "core", &["intrinsics", "lrr_f64_math"]),
-    (LibraryFunction::F32Math, "core", &["intrinsics", "lrr_f32_math"]),
+    (
+        LibraryFunction::StrSlice,
+        "core",
+        &["intrinsics", "lrr_str_slice"],
+    ),
+    (
+        LibraryFunction::BytesAsStr,
+        "core",
+        &["intrinsics", "lrr_bytes_as_str"],
+    ),
+    (
+        LibraryFunction::MemReplace,
+        "core",
+        &["intrinsics", "lrr_mem_replace"],
+    ),
+    (
+        LibraryFunction::MemSwap,
+        "core",
+        &["intrinsics", "lrr_mem_swap"],
+    ),
+    (
+        LibraryFunction::CellReplace,
+        "core",
+        &["intrinsics", "lrr_cell_replace"],
+    ),
+    (
+        LibraryFunction::AtomicOp,
+        "core",
+        &["intrinsics", "lrr_atomic_op"],
+    ),
+    (
+        LibraryFunction::CellTake,
+        "core",
+        &["intrinsics", "lrr_cell_take"],
+    ),
+    (
+        LibraryFunction::SharedToMut,
+        "core",
+        &["intrinsics", "lrr_shared_to_mut"],
+    ),
+    (
+        LibraryFunction::BoxLeak,
+        "core",
+        &["intrinsics", "lrr_box_leak"],
+    ),
+    (
+        LibraryFunction::RefEq,
+        "core",
+        &["intrinsics", "lrr_ref_eq"],
+    ),
+    (
+        LibraryFunction::Forget,
+        "core",
+        &["intrinsics", "lrr_forget"],
+    ),
+    (
+        LibraryFunction::PtrNull,
+        "core",
+        &["intrinsics", "lrr_ptr_null"],
+    ),
+    (
+        LibraryFunction::PtrOffset,
+        "core",
+        &["intrinsics", "lrr_ptr_offset"],
+    ),
+    (
+        LibraryFunction::PtrOffsetFrom,
+        "core",
+        &["intrinsics", "lrr_ptr_offset_from"],
+    ),
+    (
+        LibraryFunction::PtrRead,
+        "core",
+        &["intrinsics", "lrr_ptr_read"],
+    ),
+    (
+        LibraryFunction::PtrWrite,
+        "core",
+        &["intrinsics", "lrr_ptr_write"],
+    ),
+    (
+        LibraryFunction::PtrRetype,
+        "core",
+        &["intrinsics", "lrr_ptr_retype"],
+    ),
+    (
+        LibraryFunction::SliceAsPtr,
+        "core",
+        &["intrinsics", "lrr_slice_as_ptr"],
+    ),
+    (
+        LibraryFunction::SliceAsMutPtr,
+        "core",
+        &["intrinsics", "lrr_slice_as_mut_ptr"],
+    ),
+    (
+        LibraryFunction::PtrNullMut,
+        "core",
+        &["intrinsics", "lrr_ptr_null_mut"],
+    ),
+    (
+        LibraryFunction::PtrAsConst,
+        "core",
+        &["intrinsics", "lrr_ptr_as_const"],
+    ),
+    (
+        LibraryFunction::PtrAsMut,
+        "core",
+        &["intrinsics", "lrr_ptr_as_mut"],
+    ),
+    (
+        LibraryFunction::F64Bits,
+        "core",
+        &["intrinsics", "lrr_f64_bits"],
+    ),
+    (
+        LibraryFunction::F64FromBits,
+        "core",
+        &["intrinsics", "lrr_f64_from_bits"],
+    ),
+    (
+        LibraryFunction::F32Bits,
+        "core",
+        &["intrinsics", "lrr_f32_bits"],
+    ),
+    (
+        LibraryFunction::F32FromBits,
+        "core",
+        &["intrinsics", "lrr_f32_from_bits"],
+    ),
+    (
+        LibraryFunction::F64Math,
+        "core",
+        &["intrinsics", "lrr_f64_math"],
+    ),
+    (
+        LibraryFunction::F32Math,
+        "core",
+        &["intrinsics", "lrr_f32_math"],
+    ),
+    (
+        LibraryFunction::SizeOf,
+        "core",
+        &["intrinsics", "lrr_size_of"],
+    ),
+    (
+        LibraryFunction::AlignOf,
+        "core",
+        &["intrinsics", "lrr_align_of"],
+    ),
+    (
+        LibraryFunction::NeedsDrop,
+        "core",
+        &["intrinsics", "lrr_needs_drop"],
+    ),
+    (
+        LibraryFunction::VariantCount,
+        "core",
+        &["intrinsics", "lrr_variant_count"],
+    ),
+    (
+        LibraryFunction::SizeOfVal,
+        "core",
+        &["intrinsics", "lrr_size_of_val"],
+    ),
+    (
+        LibraryFunction::AlignOfVal,
+        "core",
+        &["intrinsics", "lrr_align_of_val"],
+    ),
+    (
+        LibraryFunction::DiscriminantValue,
+        "core",
+        &["intrinsics", "lrr_discriminant_value"],
+    ),
+    (
+        LibraryFunction::Zeroed,
+        "core",
+        &["intrinsics", "lrr_zeroed"],
+    ),
+    (
+        LibraryFunction::Transmute,
+        "core",
+        &["intrinsics", "lrr_transmute"],
+    ),
 ];
 
 const LIBRARY_EDITION: u16 = 2024;
@@ -299,6 +557,7 @@ impl LibraryFunction {
             Self::MemReplace => 33,
             Self::MemSwap => 34,
             Self::CellReplace => 35,
+            Self::AtomicOp => 129,
             Self::CellTake => 36,
             Self::SharedToMut => 37,
             Self::BoxLeak => 38,
@@ -321,9 +580,18 @@ impl LibraryFunction {
             Self::F32FromBits => 103,
             Self::F64Math => 104,
             Self::F32Math => 105,
+            Self::SizeOf => 120,
+            Self::AlignOf => 121,
+            Self::NeedsDrop => 122,
+            Self::VariantCount => 123,
+            Self::SizeOfVal => 124,
+            Self::AlignOfVal => 125,
+            Self::DiscriminantValue => 126,
+            Self::Zeroed => 127,
+            Self::Transmute => 128,
         }
     }
-    const ALL: [Self; 57] = [
+    const ALL: &'static [Self] = &[
         Self::Panic,
         Self::PanicFmt,
         Self::PanicDisplay,
@@ -359,6 +627,7 @@ impl LibraryFunction {
         Self::MemReplace,
         Self::MemSwap,
         Self::CellReplace,
+        Self::AtomicOp,
         Self::CellTake,
         Self::SharedToMut,
         Self::BoxLeak,
@@ -381,6 +650,15 @@ impl LibraryFunction {
         Self::F32FromBits,
         Self::F64Math,
         Self::F32Math,
+        Self::SizeOf,
+        Self::AlignOf,
+        Self::NeedsDrop,
+        Self::VariantCount,
+        Self::SizeOfVal,
+        Self::AlignOfVal,
+        Self::DiscriminantValue,
+        Self::Zeroed,
+        Self::Transmute,
     ];
     /// Number of written arguments of the library signature.
     pub(crate) fn arity(self) -> usize {
@@ -400,10 +678,17 @@ impl LibraryFunction {
             | Self::PtrOffsetFrom
             | Self::PtrWrite
             | Self::RefEq => 2,
-            Self::F64Math | Self::F32Math => 4,
+            Self::F64Math | Self::F32Math | Self::AtomicOp => 4,
             Self::VecInsert | Self::SliceSwap | Self::StrSlice => 3,
             Self::FmtValue => 7,
-            Self::FmtSink | Self::PtrNull | Self::PtrNullMut => 0,
+            Self::FmtSink
+            | Self::PtrNull
+            | Self::PtrNullMut
+            | Self::SizeOf
+            | Self::AlignOf
+            | Self::NeedsDrop
+            | Self::VariantCount
+            | Self::Zeroed => 0,
             _ => 1,
         }
     }
@@ -438,6 +723,7 @@ impl LibraryFunction {
                 | Self::MemReplace
                 | Self::MemSwap
                 | Self::CellReplace
+                | Self::AtomicOp
                 | Self::CellTake
                 | Self::SharedToMut
                 | Self::BoxLeak
@@ -460,7 +746,29 @@ impl LibraryFunction {
                 | Self::F32FromBits
                 | Self::F64Math
                 | Self::F32Math
+                | Self::SizeOf
+                | Self::AlignOf
+                | Self::NeedsDrop
+                | Self::VariantCount
+                | Self::SizeOfVal
+                | Self::AlignOfVal
+                | Self::DiscriminantValue
+                | Self::Zeroed
+                | Self::Transmute
         )
+    }
+
+    /// Number of leading type parameters of the enclosing (calling) generic
+    /// function this intrinsic reads, in declaration order. The wrapper
+    /// `pub const fn size_of<T>() -> usize { lrr_size_of() }` is an ordinary
+    /// generic function, so the frame already binds `T`; the intrinsic names no
+    /// type of its own (E-R5-012).
+    pub(crate) fn type_arguments(self) -> usize {
+        match self {
+            Self::SizeOf | Self::AlignOf | Self::NeedsDrop | Self::VariantCount | Self::Zeroed => 1,
+            Self::Transmute => 2,
+            _ => 0,
+        }
     }
     /// Identity of this function as defined in `unit`. A reexport (e.g.
     /// `std::rt::panic_display`) has its own identity selecting the same body.
@@ -482,7 +790,10 @@ impl LibraryFunction {
 
 /// Add the table's value definitions to the ordinary namespace graph for the
 /// library crates of this compile input.
-pub(crate) fn install(graph: &mut NameNamespaces, library: &LibraryMacros) -> Result<(), Diagnostic> {
+pub(crate) fn install(
+    graph: &mut NameNamespaces,
+    library: &LibraryMacros,
+) -> Result<(), Diagnostic> {
     for (function, krate, path) in ENTRIES {
         let Some(unit) = library.unit(krate) else {
             continue;
@@ -512,6 +823,7 @@ pub(crate) fn select(definition: &NameDefinition) -> Option<LibraryFunction> {
         return None;
     }
     LibraryFunction::ALL
-        .into_iter()
+        .iter()
+        .copied()
         .find(|function| function.definition(definition.defining_unit) == *definition)
 }
