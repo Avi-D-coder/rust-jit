@@ -1164,7 +1164,6 @@
         "crates/lrr/src/frontend/signature_subst.rs",
         "crates/lrr/src/db/key.rs",
         "crates/lrr/src/db/value.rs",
-        "crates/lrr/src/db/provider.rs",
         "crates/lrr/src/frontend/mod.rs",
         "crates/lrr/src/frontend/declaration_field_types.rs",
         "crates/lrr/src/frontend/source_local_plan.rs",
@@ -1175,15 +1174,16 @@
         "crates/lrr/src/syntax/declaration_scan.rs",
         "crates/lrr/src/syntax/imports.rs",
         "crates/lrr/src/syntax/entered_macros.rs",
-        "crates/lrr/src/syntax/declaration_scope_plan.rs",
-        "crates/lrr/src/syntax/mod.rs"
+        "crates/lrr/src/syntax/declaration_scope_plan.rs"
       ],
       "issue": null,
       "pull_request": null,
       "updated_at": "2026-10-18T16:03:38.349529+00:00",
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
-        "crates/lrr/src/frontend/associated_types.rs"
+        "crates/lrr/src/frontend/associated_types.rs",
+        "crates/lrr/src/db/provider.rs",
+        "crates/lrr/src/syntax/mod.rs"
       ]
     },
     {
@@ -1208,8 +1208,7 @@
         "crates/lrr/src/frontend/prepared_binding_plan.rs",
         "crates/lrr/src/vm/frame_related_numeric.rs",
         "crates/lrr/src/frontend/body_type_occurrences.rs",
-        "crates/lrr/src/frontend/qualified_type_names.rs",
-        "crates/lrr/src/frontend/source_locals.rs"
+        "crates/lrr/src/frontend/qualified_type_names.rs"
       ],
       "issue": null,
       "pull_request": null,
@@ -1219,7 +1218,8 @@
         "crates/lrr/src/ir/op.rs",
         "crates/lrr/src/frontend/binding_constraints.rs",
         "crates/lrr/src/syntax/thunks.rs",
-        "crates/lrr/src/vm/context.rs"
+        "crates/lrr/src/vm/context.rs",
+        "crates/lrr/src/frontend/source_locals.rs"
       ]
     },
     {
@@ -1337,7 +1337,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "E007 ordinary VM initializer and shared Search constant patterns. V22 scalar/origin matrices pass; non-scalar constant patterns fail explicitly. Root extends checked nonconsuming structural storage comparison using actual retained cell/ticket; root LOCAL043 owns cell.rs module declaration. Aggregate template/runonce and generic initializer keys held independently. V26 exact source context crosses singleton array to EMPTY initializer; successor retains actual prepared WrittenType in common result hints, source-only. See retained-result-written-context.md. No acceptance/oncecache closure. Next source-only E007 physical prerequisite: replace shared AggregateCopy private ownerless destination implementation with existing checked ConstructionId guards, retaining Copy admission and source stamps; full template purpose/cleanup integration separate holds. Next source-only actual nongeneric plain-data VM template through same AggregateCopy private seal; no global Copy override. Full generic/Drop/heap/cancellation holds; precode plain-data-evaluated-template.md. Shared live Drop facts from MemberIndex publication replace stale store snapshot; relevant-key NoDrop proof guards private template. Independent/source/runtime acceptance pending. Initial non-local impl completeness discovered; false NoDropProof removed, owned nominal template caching held. Actual structural-only template class remains source-only pending review. V34 bounded shared-borrow projection literal-temporary root promotion via existing PromotedPlace; unchanged static-ref-to-const-array-element witness, no new evaluator. See shared-borrow-projection-promotion-precode.md. V41 solo root separates private constant-data replication from borrow promotion; same AggregateCopy and shared copy_value_layout.19/19controls including unchanged expected3 structural16-waymatrix,10/11selectedupstream runtime pass. ArrayRepeat,generic application/heap/mutable-reference/cancellation,globalDrop completeness,fullmilestone remain held. See constant-replication-versus-promotion precode and V41 evidence. V42 solo root adds ordinary aggregate-Copy repetition through the same AggregateCopy/ConstructionId path. Exact 13/13 controls, 16/16 origin/edition runs and 3/5 selected stock contracts pass; nested-array repeat is newly passing versus measured V41. Non-Copy const evaluation policy/zero coldness, full cancellation and interpreter/JIT gates remain held. V51 solo root: source-selected named non-Copy constant repetition and zero-count coldness use retained ConstructorPlan/Type hints, ordinary child PCs and construction guards. Both exact macOS builds, 38/38 focused controls, 3/3 selected unchanged upstream runtime contracts and all16 origin/edition controls pass. Two whole-main improvements versus measured V44; no refreshed suite total. Inline const/generic/member applications, valid internal-reference relocation/opaque graph storage, full cancellation/failure atomicity and current milestone remain incomplete; no feature/JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v51-validation.json. Next bounded common matcher repair T050: byte-string literal patterns through pinned AST decoding, retained PatternTree bytes and actual checked array/slice element reads. V52 byte-literals baseline fails in common literal syntax; all other acceptance held until actual terminals. V53/V54 solo root held WIP: common PatternLiteral byte strings decode through pinned AST and Search reads actual checked u8 array/slice places. V53 exact CLI4/4unchanged runtime contracts and16/16origin/edition controls pass; byte-literals newly passes versus measured V52. V54 host-only successor leaves CLI bytes identical, but 5/6focused controls pass: strengthened definition-site-shadowing runtime control fails at edition2015; later editions unexecuted. Separate CLI reproduction fails LRR-E-NAME-MISSING at generated x. Preserve failed control; next priority shared source-binding/rib join. No full feature, architecture, milestone, suite total or JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v54-validation.json.",
+      "scope": "E007 ordinary VM initializer and shared Search constant patterns. V22 scalar/origin matrices pass; non-scalar constant patterns fail explicitly. Root extends checked nonconsuming structural storage comparison using actual retained cell/ticket; root LOCAL043 owns cell.rs module declaration. Aggregate template/runonce and generic initializer keys held independently. V26 exact source context crosses singleton array to EMPTY initializer; successor retains actual prepared WrittenType in common result hints, source-only. See retained-result-written-context.md. No acceptance/oncecache closure. Next source-only E007 physical prerequisite: replace shared AggregateCopy private ownerless destination implementation with existing checked ConstructionId guards, retaining Copy admission and source stamps; full template purpose/cleanup integration separate holds. Next source-only actual nongeneric plain-data VM template through same AggregateCopy private seal; no global Copy override. Full generic/Drop/heap/cancellation holds; precode plain-data-evaluated-template.md. Shared live Drop facts from MemberIndex publication replace stale store snapshot; relevant-key NoDrop proof guards private template. Independent/source/runtime acceptance pending. Initial non-local impl completeness discovered; false NoDropProof removed, owned nominal template caching held. Actual structural-only template class remains source-only pending review. V34 bounded shared-borrow projection literal-temporary root promotion via existing PromotedPlace; unchanged static-ref-to-const-array-element witness, no new evaluator. See shared-borrow-projection-promotion-precode.md. V41 solo root separates private constant-data replication from borrow promotion; same AggregateCopy and shared copy_value_layout.19/19controls including unchanged expected3 structural16-waymatrix,10/11selectedupstream runtime pass. ArrayRepeat,generic application/heap/mutable-reference/cancellation,globalDrop completeness,fullmilestone remain held. See constant-replication-versus-promotion precode and V41 evidence. V42 solo root adds ordinary aggregate-Copy repetition through the same AggregateCopy/ConstructionId path. Exact 13/13 controls, 16/16 origin/edition runs and 3/5 selected stock contracts pass; nested-array repeat is newly passing versus measured V41. Non-Copy const evaluation policy/zero coldness, full cancellation and interpreter/JIT gates remain held. V51 solo root: source-selected named non-Copy constant repetition and zero-count coldness use retained ConstructorPlan/Type hints, ordinary child PCs and construction guards. Both exact macOS builds, 38/38 focused controls, 3/3 selected unchanged upstream runtime contracts and all16 origin/edition controls pass. Two whole-main improvements versus measured V44; no refreshed suite total. Inline const/generic/member applications, valid internal-reference relocation/opaque graph storage, full cancellation/failure atomicity and current milestone remain incomplete; no feature/JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v51-validation.json. Next bounded common matcher repair T050: byte-string literal patterns through pinned AST decoding, retained PatternTree bytes and actual checked array/slice element reads. V52 byte-literals baseline fails in common literal syntax; all other acceptance held until actual terminals. V53/V54 solo root held WIP: common PatternLiteral byte strings decode through pinned AST and Search reads actual checked u8 array/slice places. V53 exact CLI4/4unchanged runtime contracts and16/16origin/edition controls pass; byte-literals newly passes versus measured V52. V54 host-only successor leaves CLI bytes identical, but 5/6focused controls pass: strengthened definition-site-shadowing runtime control fails at edition2015; later editions unexecuted. Separate CLI reproduction fails LRR-E-NAME-MISSING at generated x. Preserve failed control; next priority shared source-binding/rib join. No full feature, architecture, milestone, suite total or JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v54-validation.json. Next bounded T050/H003 repair: actual shared local lookup is correct; source-selected EnteredValue access now feeds common PATH_EXPR read/place lowering and preserves ordinary open constraints via joined prepared guards. Unsealed AST selector remains held. Full coordinator hygiene test replaces invalid raw single-poll setup; runtime validation pending. V64 solo held component: published Value paths use actual EnteredValue selection for ordinary local read/place/parameter lowering; existing open Type/argument constraints and relevant input guards are composed. Private compiler prelude receipts now cover exactly already-certified module Value scopes, with owning-root/module policy and cached actual parse/cfg indexes; macro-export-only roots excluded. Both exact macOS builds pass;21/22focused controls and11/12distinct unchanged upstream runtime contracts pass on one CLI. Definition-site shadowing passes all4editions. Full hygiene still fails generic constructor inference; older V63 macro-stmt/macro-2 place-scope failures remain blockers. Parent/unsealed AST helper removal, broad context/invalidation matrix and current milestone remain open; no full suite/JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v64-validation.json.",
       "paths": [
         "crates/lrr/src/engine/run_initializers.rs",
         "crates/lrr/src/engine/run_pattern_tests.rs",
@@ -1374,11 +1374,22 @@
         "worktracks/04-calls-source-views/2026-10-18-constant-repeat-source-policy.md",
         "crates/lrr/src/syntax/pattern_tree.rs",
         "crates/lrr/src/service/common_pattern_route_tests.rs",
-        "tools/check_byte_pattern_origins.py"
+        "tools/check_byte_pattern_origins.py",
+        "crates/lrr/src/cli/reached_pattern_nominal_tests.rs",
+        "crates/lrr/src/db/binding_constraint_thunk.rs",
+        "crates/lrr/src/db/entered_value_thunk.rs",
+        "crates/lrr/src/db/mod.rs",
+        "crates/lrr/src/db/provider.rs",
+        "crates/lrr/src/frontend/source_locals.rs",
+        "worktracks/04-calls-source-views/2026-10-18-definition-site-local-join.md",
+        "crates/lrr/src/facade/value_binding_prelude.rs",
+        "crates/lrr/src/syntax/scalar_pattern_binding.rs",
+        "crates/lrr/src/syntax/mod.rs",
+        "crates/lrr/src/expand/source_discovery.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T18:27:29.429286+00:00",
+      "updated_at": "2026-10-18T19:04:47.310848+00:00",
       "review_after": "2026-10-18T09:15:07.352169+00:00",
       "transferred_paths": [
         "crates/lrr/src/engine/run_value_items.rs"
@@ -1394,7 +1405,6 @@
       "scope": "V22 common selected-kind origin matrix passes all four contexts/editions; ancestry setup still Incomplete. Completed-catalogue actual retained prefix/provider projection successor reviewed, unexecuted; no source authority bypass or full architecture closure.",
       "paths": [
         "crates/lrr/src/frontend/names.rs",
-        "crates/lrr/src/expand/source_discovery.rs",
         "crates/lrr/src/frontend/pattern_names.rs",
         "crates/lrr/src/service/retained_body_tests.rs",
         "crates/lrr/src/syntax/lexical_hygiene.rs"
@@ -1402,7 +1412,10 @@
       "issue": null,
       "pull_request": null,
       "updated_at": "2026-10-18T12:24:16.642631+00:00",
-      "review_after": "2026-10-18T09:44:05.987318+00:00"
+      "review_after": "2026-10-18T09:44:05.987318+00:00",
+      "transferred_paths": [
+        "crates/lrr/src/expand/source_discovery.rs"
+      ]
     },
     {
       "id": "LOCAL-046",
@@ -1430,10 +1443,8 @@
         "crates/lrr/src/frontend/prepared_constructor_tests.rs",
         "crates/lrr/src/frontend/binding_constraint_generics.rs",
         "crates/lrr/src/frontend/binding_constraint_open.rs",
-        "crates/lrr/src/db/binding_constraint_thunk.rs",
         "crates/lrr/src/vm/frame_pattern_engine.rs",
         "crates/lrr/src/vm/pattern.rs",
-        "crates/lrr/src/cli/reached_pattern_nominal_tests.rs",
         "crates/lrr/src/frontend/constructors.rs",
         "crates/lrr/src/engine/install.rs",
         "crates/lrr/src/vm/frame_record_update.rs",
@@ -1455,7 +1466,9 @@
         "crates/lrr/src/vm/frame.rs",
         "crates/lrr/src/vm/frame_aggregate_copy.rs",
         "crates/lrr/src/syntax/thunks.rs",
-        "crates/lrr/src/syntax/constructors.rs"
+        "crates/lrr/src/syntax/constructors.rs",
+        "crates/lrr/src/db/binding_constraint_thunk.rs",
+        "crates/lrr/src/cli/reached_pattern_nominal_tests.rs"
       ]
     },
     {

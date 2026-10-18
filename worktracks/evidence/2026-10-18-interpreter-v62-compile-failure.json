@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "candidate": "V62",
+  "source_sha256": "0e77e526486a425e3f26f0aff4ce7510f93585349246101f0ded42233b5ad9f8",
+  "head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
+  "lib_build": {
+    "exit": 101,
+    "session": 86704,
+    "error": "E0282: annotate the retained attribute-policy BTreeMap value type before clone lookup"
+  },
+  "cli_built": false,
+  "runtime_executed": false
+}

@@ -38,6 +38,7 @@ fn fault(message: &str) -> Diagnostic {
 #[derive(Debug, Clone)]
 pub(crate) struct ValueBindingPrelude {
     source: SourceSelection,
+    policy_source: SourceSelection,
     scope: ScopeKey,
     compiler: Digest,
     facet: Digest,
@@ -46,42 +47,45 @@ pub(crate) struct ValueBindingPrelude {
 }
 impl ValueBindingPrelude {
     pub(crate) fn prepare(
+        root: &PreparedSourceView,
         source: &PreparedSourceView,
         catalog: &CompileInputCatalog,
         scope: &ScopeKey,
-    ) -> Result<Option<Self>, Diagnostic> {
+        policies: (
+            &crate::syntax::BindingPreludePolicies,
+            &crate::syntax::BindingPreludePolicies,
+        ),
+    ) -> Result<Self, Diagnostic> {
+        root.require_original_hygiene()?;
         source.require_original_hygiene()?;
-        if !source.selection().outline.module_path.is_empty() {
-            return Ok(None); // Owning-crate policy join remains a typed consumer prerequisite.
+        let owner = &root.selection().outline;
+        let target = &source.selection().outline;
+        if !owner.module_path.is_empty()
+            || owner.crate_key != target.crate_key
+            || owner.parse.profile != target.parse.profile
+            || owner.cfg != target.cfg
+            || scope.crate_key != target.crate_key
+            || scope.owner.is_some()
+            || !scope.module_path.starts_with(&target.module_path)
+        {
+            return Err(fault("Value prelude owning crate/module differs"));
         }
-        // Conservative bounded structural work before parse/header selection.
-        let profile = &source.selection().outline.parse.profile;
+        let profile = &owner.parse.profile;
         let facet = catalog.value_binding_facet(profile)?;
         let compiler = catalog.owning_profile_identity()?;
-        if scope.crate_key != source.selection().outline.crate_key
-            || scope.owner.is_some()
-            || !scope
-                .module_path
-                .starts_with(&source.selection().outline.module_path)
-        {
-            return Err(fault("Value prelude owning source/module differs"));
-        }
-        let parsed = crate::syntax::parse::ParsedFile::parse(
-            source.captured_macro_blob()?,
-            profile.clone(),
-        )?;
-        let Some(policy) = parsed.binding_prelude_policy(source.captured_macro_cfg()?, scope)?
-        else {
-            return Ok(None);
-        };
-        Ok(Some(Self {
+        let policy = policies.0.for_scope(&owner.parse, owner.cfg, scope)?;
+        let mut relative = scope.clone();
+        relative.module_path = scope.module_path[target.module_path.len()..].to_vec();
+        let local = policies.1.for_scope(&target.parse, target.cfg, &relative)?;
+        Ok(Self {
             source: source.selection().clone(),
+            policy_source: root.selection().clone(),
             scope: scope.clone(),
             compiler,
             facet,
             standard: policy.standard(),
-            disabled: policy.disabled(),
-        }))
+            disabled: policy.disabled() || local.disabled(),
+        })
     }
     pub(crate) fn source(&self) -> &SourceSelection {
         &self.source
@@ -89,40 +93,20 @@ impl ValueBindingPrelude {
     pub(crate) fn scope(&self) -> &ScopeKey {
         &self.scope
     }
-    pub(crate) fn require_absent(
-        &self,
-        source: &PreparedSourceView,
-        scope: &ScopeKey,
-        name: &str,
-    ) -> Result<(), Diagnostic> {
-        if self.source != *source.selection() || &self.scope != scope {
-            return Err(fault("Value prelude source or owning scope differs"));
-        }
-        // Replay the real source policy and the exact privately minted compiler
-        // generation. It cannot be manufactured by a partial custom catalogue.
-        let catalog = CompileInputCatalog::standalone(&self.source.outline.parse.profile)?;
-        let actual = Self::prepare(source, &catalog, scope)?
-            .ok_or_else(|| fault("Value prelude selected policy remains unestablished"))?;
-        if actual.fingerprint() != self.fingerprint() {
-            return Err(fault("Value prelude source/compiler policy changed"));
-        }
-        if !self.disabled && VALUES.contains(&name) {
-            return Err(fault(
-                "plain pattern has a selected Value prelude declaration",
-            ));
-        }
-        Ok(())
-    }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        let policy_bytes = self.policy_source.metadata_bytes()?;
         std::mem::size_of::<Self>()
             .checked_add(self.source.metadata_bytes()?)
+            .and_then(|n| n.checked_add(policy_bytes))
             .and_then(|n| n.checked_add(self.scope.heap_bytes()))
             .ok_or_else(|| fault("Value prelude receipt metadata overflow"))
     }
 }
 impl StableEncode for ValueBindingPrelude {
-    const DOMAIN: &'static str = "lrr/v1/source-selected-value-binding-prelude";
+    const DOMAIN: &'static str = "lrr/v2/source-selected-value-binding-prelude";
     fn encode_fields(&self, e: &mut StableEncoder) {
+        e.string(self.policy_source.path.as_str());
+        e.record(&self.policy_source.outline);
         e.string(self.source.path.as_str());
         e.record(&self.source.outline.parse);
         e.digest(self.source.outline.crate_key);

@@ -1,0 +1,411 @@
+{
+  "schema_version": 1,
+  "candidate": "V58",
+  "head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
+  "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729",
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "lib_build": {
+    "session": 82125,
+    "terminal": "6008d4",
+    "exit": 0,
+    "seconds": 9.19,
+    "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c"
+  },
+  "cli_build": {
+    "session": 94826,
+    "terminal": "84bd5b",
+    "exit": 0,
+    "binary_sha256": "b004e18b1e75ca46219ced39c2c5cb36387a81bfffd5cd61726efcd40ca79d35"
+  },
+  "controls": [
+    {
+      "selector": "cli::reached_pattern_nominal_tests::generated_condition_uses_definition_site_binding_despite_caller_shadowing",
+      "exit": 0,
+      "seconds": 16.68,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::reached_pattern_nominal_tests::generated_condition_uses_definition_site_binding_despite_caller_shadowing",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::actual_constant_pattern_is_not_mislabeled_as_a_local_binding_and_bad_pc_is_refused",
+      "exit": 0,
+      "seconds": 0.15,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::actual_constant_pattern_is_not_mislabeled_as_a_local_binding_and_bad_pc_is_refused",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::emitted_and_wrapper_value_goals_use_actual_indexed_context_and_epoch",
+      "exit": 0,
+      "seconds": 0.64,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::emitted_and_wrapper_value_goals_use_actual_indexed_context_and_epoch",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::unchanged_function_name_is_shadowed_by_actual_binding_all_editions_and_source_modes",
+      "exit": 0,
+      "seconds": 0.58,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::unchanged_function_name_is_shadowed_by_actual_binding_all_editions_and_source_modes",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::unchanged_suffix_value_headers_and_shadowed_binding_identities_share_ordinary_goals_all_editions",
+      "exit": 0,
+      "seconds": 0.451,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::source_locals::owned_plan::field_types::tests::source_value_goal_tests::unchanged_suffix_value_headers_and_shadowed_binding_identities_share_ordinary_goals_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+      "exit": 0,
+      "seconds": 0.842,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::conditional_pending_bindings_commit_once_through_the_shared_transaction_owner",
+      "exit": 0,
+      "seconds": 0.598,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-6.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::conditional_pending_bindings_commit_once_through_the_shared_transaction_owner",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+      "exit": 0,
+      "seconds": 0.81,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-7.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::reached_scalar_condition_chains_share_test_and_clause_cleanup_routes",
+      "exit": 0,
+      "seconds": 0.161,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-8.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::reached_scalar_condition_chains_share_test_and_clause_cleanup_routes",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    },
+    {
+      "selector": "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+      "exit": 0,
+      "seconds": 1.584,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-9.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "fb05924f9e66375136124614a95d0621732e0c8e40e54004d8829fa3d51d012c",
+      "source_sha256": "83d1a203b0dd1f6b7f11348e892193d88f0de91176d33cf784ff2644c17c2729"
+    }
+  ],
+  "stock": [
+    {
+      "path": "tests/ui/hygiene/hygiene.rs",
+      "pass": false,
+      "exit": 2,
+      "fault": "numeric source constraint requires a missing common source goal: Binding at source node 3",
+      "facts": {
+        "classified_operation_candidates": 919,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 3,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 562,
+        "vm_outcomes": 562
+      }
+    },
+    {
+      "path": "tests/ui/array-slice-vec/byte-literals.rs",
+      "pass": true,
+      "exit": 0,
+      "fault": null,
+      "facts": {
+        "classified_operation_candidates": 15860,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 4,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 161,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 8029,
+        "vm_outcomes": 8029
+      }
+    },
+    {
+      "path": "tests/ui/match/pattern-deref-miscompile.rs",
+      "pass": true,
+      "exit": 0,
+      "fault": null,
+      "facts": {
+        "classified_operation_candidates": 347,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 186,
+        "vm_outcomes": 186
+      }
+    },
+    {
+      "path": "tests/ui/consts/const-blocks/const-repeat.rs",
+      "pass": true,
+      "exit": 0,
+      "fault": null,
+      "facts": {
+        "classified_operation_candidates": 45,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 1,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 2,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 31,
+        "vm_outcomes": 31
+      }
+    },
+    {
+      "path": "tests/ui/consts/const-blocks/run-pass.rs",
+      "pass": true,
+      "exit": 0,
+      "fault": null,
+      "facts": {
+        "classified_operation_candidates": 377,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 2,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 8,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 257,
+        "vm_outcomes": 257
+      }
+    },
+    {
+      "path": "tests/ui/array-slice-vec/repeated-vector-syntax.rs",
+      "pass": false,
+      "exit": 2,
+      "fault": "reached direct function identity is absent before argument evaluation (value path `item`)",
+      "facts": {
+        "classified_operation_candidates": 151,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 4,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 119,
+        "vm_outcomes": 119
+      }
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-ref-from-struct.rs",
+      "pass": true,
+      "exit": 0,
+      "fault": null,
+      "facts": {
+        "classified_operation_candidates": 138,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 8,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 108,
+        "vm_outcomes": 108
+      }
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i128.rs",
+      "pass": false,
+      "exit": 2,
+      "fault": "reached direct function identity is absent before argument evaluation (value path `n`)",
+      "facts": {
+        "classified_operation_candidates": 72098,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 14,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 30651,
+        "vm_outcomes": 30651
+      }
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u128.rs",
+      "pass": false,
+      "exit": 2,
+      "fault": "reached direct function identity is absent before argument evaluation (value path `n`)",
+      "facts": {
+        "classified_operation_candidates": 34859,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 6,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 14883,
+        "vm_outcomes": 14883
+      }
+    }
+  ],
+  "scope": "10/10focused controls including full coordinator definition-site control all4editions pass. 5/9selected unchanged whole mains pass: hygiene advances through f/g then generated foo::f numeric binding, while nested-array and i128/u128 regress at ordinary locals in facade submodules. Integration held; current private compiler prelude proof only handles root source, so newly shared consumer exposes the real missing module-policy join. Do not restore AST fallback or fabricate binding absence.",
+  "queues": {
+    "controls": {
+      "session": 52886,
+      "terminal": "742fa5",
+      "exit": 0
+    },
+    "stock": {
+      "session": 93634,
+      "terminal": "84802d",
+      "exit": 0
+    }
+  }
+}

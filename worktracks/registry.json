@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T18:27:29.429286+00:00",
+  "updated_at": "2026-10-18T19:04:47.310848+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -226,7 +226,8 @@
           "acceptance_scope": "V5 b4472867 compiled; whole unchanged nested statement main owning2015 test fails body-environment publication, all4 unexecuted; zero new stock/fullfixture passes. Common retained Type/target component source review only; general call planning/body joins/fullmatrix/milestone/JIT held. Separate same-source guard/type-use controls8PASS/0FAIL terminal324d56/0; no runtime count increment. V41 bounded solo checkpoint: 19/19 focused controls and 10/11 selected unchanged runtime contracts pass, including repaired expected-three pattern retry across 16 origin/edition combinations. This does not close call/member/generic initializer, array-repeat, full milestone or JIT acceptance.",
           "status_note": " V6: unchanged nested-statement main all4 runtime pass; +1 distinct witness, no fullfixture. Ordinary shadowing regression blocks integration; actual child source lease/readiness next. V7 b69405c8:20/20focusedPASS including repairedplain, unchangednestedmain all4 and5readiness/lease controls. No architecture/milestone closure; next actualshiftbaseline.",
           "evidence": [
-            "worktracks/evidence/2026-10-18-interpreter-v41-validation.json"
+            "worktracks/evidence/2026-10-18-interpreter-v41-validation.json",
+            "worktracks/evidence/2026-10-18-interpreter-v64-validation.json"
           ]
         },
         {
@@ -730,19 +731,19 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "1c977b9a9658bcafb2d8bfbaaf6657369fa26f38",
+    "baseline_git_head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
     "working_tree": "inherited_dirty_plus_current_source_components",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V53/V54 solo root held WIP: common PatternLiteral byte strings decode through pinned AST and Search reads actual checked u8 array/slice places. V53 exact CLI4/4unchanged runtime contracts and16/16origin/edition controls pass; byte-literals newly passes versus measured V52. V54 host-only successor leaves CLI bytes identical, but 5/6focused controls pass: strengthened definition-site-shadowing runtime control fails at edition2015; later editions unexecuted. Separate CLI reproduction fails LRR-E-NAME-MISSING at generated x. Preserve failed control; next priority shared source-binding/rib join. No full feature, architecture, milestone, suite total or JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v54-validation.json.",
+    "validation": "V64 solo held component: published Value paths use actual EnteredValue selection for ordinary local read/place/parameter lowering; existing open Type/argument constraints and relevant input guards are composed. Private compiler prelude receipts now cover exactly already-certified module Value scopes, with owning-root/module policy and cached actual parse/cfg indexes; macro-export-only roots excluded. Both exact macOS builds pass;21/22focused controls and11/12distinct unchanged upstream runtime contracts pass on one CLI. Definition-site shadowing passes all4editions. Full hygiene still fails generic constructor inference; older V63 macro-stmt/macro-2 place-scope failures remain blockers. Parent/unsealed AST helper removal, broad context/invalidation matrix and current milestone remain open; no full suite/JIT closure. Evidence worktracks/evidence/2026-10-18-interpreter-v64-validation.json.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "1c977b9a9658bcafb2d8bfbaaf6657369fa26f38",
+    "source_checkpoint_pushed": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

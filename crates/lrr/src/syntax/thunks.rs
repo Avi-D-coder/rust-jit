@@ -61,6 +61,7 @@ struct EnteredAdmissions<'a> {
     type_use: Option<&'a crate::frontend::entered_type_goals::EnteredTypeGoal>,
     call: Option<&'a crate::frontend::entered_call_goals::EnteredCallGoal>,
     let_annotation: Option<&'a let_annotations::LetAnnotation>,
+    value_goal: Option<&'a crate::frontend::source_value_goals::EnteredValueGoal>,
 }
 
 fn error(message: &str) -> Diagnostic {
@@ -2191,6 +2192,27 @@ impl ParsedFile {
     ) -> Result<VerifiedRecipe, Diagnostic> {
         self.initial_thunk_admission(body, index, key, EnteredAdmissions::default())
     }
+    pub(crate) fn initial_thunk_with_value_goal(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        goal: &crate::frontend::source_value_goals::EnteredValueGoal,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        if goal.key() != key || goal.retained_plan().context().source().parsed().key() != self.key()
+        {
+            return Err(error("Value access source/PC differs"));
+        }
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                value_goal: Some(goal),
+                ..Default::default()
+            },
+        )
+    }
     pub(crate) fn runtime_macro_numeric_request(
         &self,
         body: &BodyHandle,
@@ -2458,6 +2480,7 @@ impl ParsedFile {
             type_use,
             call,
             let_annotation,
+            value_goal,
         } = admissions;
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
@@ -2553,7 +2576,14 @@ impl ParsedFile {
                 | SyntaxKind::PAREN_EXPR
                 | SyntaxKind::PATH_EXPR
         ) {
-            return self.initial_place_thunk(body, index, key, syntax, source_constraints);
+            return self.initial_place_thunk(
+                body,
+                index,
+                key,
+                syntax,
+                source_constraints,
+                value_goal,
+            );
         }
         match syntax.kind() {
             SyntaxKind::FN
@@ -4821,6 +4851,7 @@ impl ParsedFile {
         source_constraints: Option<
             &crate::frontend::binding_constraints::PreparedBindingConstraints,
         >,
+        value_goal: Option<&crate::frontend::source_value_goals::EnteredValueGoal>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -5412,35 +5443,45 @@ impl ParsedFile {
             }
             (SyntaxKind::PATH_EXPR, Phase::Entry) => {
                 let path = ast::PathExpr::cast(syntax).expect("checked path");
-                let binding = local_binding(self, index, body, &path)?;
-                let Some(binding) = binding else {
+                use crate::frontend::source_value_goals::LocalValueAccess;
+                let access = if let Some(goal) = value_goal {
+                    goal.indexed_local_access(index, key)?
+                } else if let Some(binding) = local_binding(self, index, body, &path)? {
+                    Some(LocalValueAccess::Binding(binding))
+                } else {
+                    // Held unsealed route: published source uses only its
+                    // retained lexical selection above, including parameters.
                     let name =
                         MacroName::local(&path.syntax().text().to_string(), self.edition).ok();
-                    if let Some(ordinal) = name
-                        .as_ref()
+                    name.as_ref()
                         .map(|name| parameter_at(self, path.syntax(), name))
                         .transpose()?
                         .flatten()
-                    {
-                        return draft(
-                            index,
-                            key,
-                            vec![if place_context(path.syntax()) {
-                                Op::ParameterPlace {
-                                    ordinal,
-                                    destination: node
-                                        .place
-                                        .ok_or_else(|| error("parameter receiver place absent"))?,
-                                }
-                            } else {
-                                Op::ReadParameter {
-                                    ordinal,
-                                    destination: node.value.expect("parameter path value"),
-                                }
-                            }],
-                            RecipeExit::Next(return_pc(index, body, path.syntax())?),
-                        );
-                    }
+                        .map(LocalValueAccess::Parameter)
+                };
+                if let Some(LocalValueAccess::Parameter(ordinal)) = access {
+                    return draft(
+                        index,
+                        key,
+                        vec![if place_context(path.syntax()) {
+                            Op::ParameterPlace {
+                                ordinal,
+                                destination: node
+                                    .place
+                                    .ok_or_else(|| error("parameter receiver place absent"))?,
+                            }
+                        } else {
+                            Op::ReadParameter {
+                                ordinal,
+                                destination: node
+                                    .value
+                                    .ok_or_else(|| error("parameter path value absent"))?,
+                            }
+                        }],
+                        RecipeExit::Next(return_pc(index, body, path.syntax())?),
+                    );
+                }
+                let Some(LocalValueAccess::Binding(binding)) = access else {
                     // A non-local value path is selected by the dispatcher
                     // through the ordinary Value namespace (constants were
                     // already routed to SourceConstant). Its value continues

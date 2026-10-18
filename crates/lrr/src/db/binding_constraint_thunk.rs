@@ -204,6 +204,18 @@ pub(super) struct PreparedOpenExpression {
     guard: std::sync::Arc<crate::db::memo::PreparedInputGuard>,
 }
 impl PreparedOpenExpression {
+    pub(super) fn apply_with_inputs(
+        mut self,
+        index: &BodyIndex,
+        recipe: crate::ir::recipe::VerifiedRecipe,
+        inputs: std::sync::Arc<super::memo::PreparedInputGuard>,
+    ) -> Result<Provided, Diagnostic> {
+        self.guard = std::sync::Arc::new(super::memo::PreparedInputGuard::join(&[
+            &self.guard,
+            &inputs,
+        ])?);
+        self.apply(index, recipe)
+    }
     /// Decorate the owning lowering's already verified recipe. No syntax is
     /// reparsed or lowered here, including constructor phases.
     pub(super) fn apply(

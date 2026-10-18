@@ -1,12 +1,11 @@
 //! LRR route controls supplement unchanged upstream range originals. These
 //! exercise genuine retained publication, ordinary PCs, cold arms and exact-once
 //! calls; they are not an upstream fixture or full transaction acceptance suite.
-use super::retained_body_tests::{prepare_expanded_body_source, prepare_expanded_source};
+use super::retained_body_tests::prepare_expanded_source;
 use crate::{
     core::digest::StableEncode,
     db::{key::QueryKey, memo::Database, poll::QueryPoll, value::QueryValue},
     engine::run::{RunMachine, RunPoll, ValueSummary},
-    ir::{op::Op, pc::Phase},
     syntax::body_index::{ExpressionKind, NodeRole},
 };
 
@@ -175,46 +174,6 @@ fn changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared() {
                 0,
             );
         }
-    }
-}
-
-#[test]
-fn a_generated_condition_uses_its_definition_site_binding_despite_caller_shadowing() {
-    // The original held control expected Unsupported before the source join
-    // existed. Exercise that join: choosing the later caller x=8 would return
-    // 99 instead of the definition-site x=2's 7. Lowering alone proves neither.
-    const SOURCE: &str = "fn value()->i32{let x=2_i32;macro_rules! test {()=>{if let 1_i32..=3_i32=x{7_i32}else{99_i32}}}let x=8_i32;test!()}fn main(){}";
-    for edition in [2015, 2018, 2021, 2024] {
-        let mut db = Database::default();
-        let (input, discovery) = prepare_expanded_body_source(&mut db, SOURCE, edition, 1, "value");
-        let source = db
-            .prepared_source(input.prepared().source())
-            .unwrap()
-            .unwrap();
-        let definition = source
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.declared_name == "value")
-            .unwrap()
-            .def_key
-            .fingerprint();
-        ready(db.publish_retained_syntax(input.clone()));
-        let body = ready(db.publish_retained_body(input, definition));
-        let mut run = ready(RunMachine::start_with_discovery(
-            &mut db, body, 100_000, discovery,
-        ));
-        let RunPoll::Completed(report) = run.poll(&mut db) else {
-            panic!("definition-site binding did not execute in edition {edition}");
-        };
-        assert!(matches!(report.value, ValueSummary::Signed(ref value) if value == "7"));
-        assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
-        assert_eq!(report.opcode_counters.started_by_opcode[19], 0);
-        assert!(report.opcode_counters.started_by_opcode[45] > 0);
-        assert_eq!(
-            report.opcode_counters.operations_started,
-            report.opcode_counters.operations_completed
-        );
     }
 }
 

@@ -1206,6 +1206,12 @@ impl Provider for SyntaxProvider {
                         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                         QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
                     }
+                    match super::entered_value_thunk::thunk(db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => return QueryPoll::Ready(Ok(provided)),
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
                     match super::entered_call_thunk::thunk(db, parsed, handle, index, pc) {
                         QueryPoll::Ready(Ok(Some(provided))) => {
                             return QueryPoll::Ready(Ok(provided));

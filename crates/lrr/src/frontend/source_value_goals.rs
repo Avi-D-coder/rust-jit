@@ -101,6 +101,13 @@ impl BindingTarget {
         self.classification
     }
 }
+/// Existing ordinary frame storage selected by the shared lexical goal.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum LocalValueAccess {
+    Binding(NodeId),
+    Parameter(u32),
+}
+
 /// Actual selected source header projection. No callee body or callable proof
 /// is retained or inferred from this result.
 #[derive(Debug, Clone)]
@@ -198,6 +205,82 @@ impl EnteredValueGoal {
     }
     pub(crate) fn local_binding(&self) -> Option<Digest> {
         self.local
+    }
+    /// Bridge the selected lexical identity to the ordinary frame operation.
+    /// No name lookup or spelling fallback occurs after source selection.
+    pub(crate) fn indexed_local_access(
+        &self,
+        index: &crate::syntax::body_index::BodyIndex,
+        key: &PcKey,
+    ) -> Result<Option<LocalValueAccess>, Diagnostic> {
+        use crate::frontend::pattern_binding_occurrences::PatternLocalOccurrence;
+        use crate::syntax::local_bindings::BindingForm;
+        if &self.key != key
+            || self.body() != index.body()
+            || !std::ptr::eq(index, self.plan.context().source().index().as_ref())
+        {
+            return Err(error("selected local access body/PC differs"));
+        }
+        let Some(identity) = self.local else {
+            return Ok(None);
+        };
+        if self.demand.is_some() {
+            return Err(error("selected local access remains pending"));
+        }
+        if let Some(occurrence) = self.plan.pattern_occurrences.for_local(identity) {
+            if !matches!(occurrence.local_source(), PatternLocalOccurrence::Joined { identity: actual, .. } if actual == identity)
+                || !occurrence.conflicts().is_resolved()
+            {
+                return Err(error("selected local lacks its actual pattern occurrence"));
+            }
+            let node = occurrence
+                .canonical_candidate()
+                .ok_or_else(|| error("selected local canonical pattern absent"))?;
+            if index
+                .nodes()
+                .get(node.0 as usize)
+                .is_none_or(|node| node.role != NodeRole::Pattern)
+            {
+                return Err(error("selected local canonical node differs"));
+            }
+            return Ok(Some(LocalValueAccess::Binding(node)));
+        }
+        let adapter = self.plan.adapter();
+        let recipe = adapter
+            .parameter_recipe(identity)
+            .ok_or_else(|| error("selected local has no indexed pattern or parameter"))?;
+        let source = self.plan.context().source();
+        let root = source
+            .parsed()
+            .entered_node_syntax(source.body(), index, NodeId(0))?
+            .ok_or_else(|| error("selected parameter owning root absent"))?;
+        let function = root
+            .ancestors()
+            .find_map(ast::Fn::cast)
+            .ok_or_else(|| error("selected parameter owning function absent"))?;
+        let parameters = function
+            .param_list()
+            .ok_or_else(|| error("selected parameter list absent"))?;
+        if recipe.form == BindingForm::Receiver
+            && parameters.self_param().is_some_and(|parameter| {
+                range(parameter.syntax().text_range()) == recipe.pattern_range
+            })
+        {
+            return Ok(Some(LocalValueAccess::Parameter(0)));
+        }
+        for (ordinal, parameter) in parameters.params().enumerate() {
+            if parameter
+                .pat()
+                .is_some_and(|pattern| range(pattern.syntax().text_range()) == recipe.pattern_range)
+            {
+                let ordinal = ordinal
+                    .checked_add(usize::from(parameters.self_param().is_some()))
+                    .and_then(|n| u32::try_from(n).ok())
+                    .ok_or_else(|| error("selected parameter ordinal overflow"))?;
+                return Ok(Some(LocalValueAccess::Parameter(ordinal)));
+            }
+        }
+        Err(error("selected parameter actual declaration range differs"))
     }
     pub(crate) fn binding_target(&self) -> Option<&BindingTarget> {
         self.target.as_ref()

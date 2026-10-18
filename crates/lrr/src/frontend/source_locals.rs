@@ -790,7 +790,7 @@ impl SourceLocalIndex<'_> {
     ) -> Option<&crate::syntax::local_bindings::LocalBindingRecipe> {
         self.entered.facts.bindings.iter().find(|binding| {
             binding.identity == identity
-                && binding.form == crate::syntax::local_bindings::BindingForm::Parameter
+                && matches!(binding.form, crate::syntax::local_bindings::BindingForm::Parameter | crate::syntax::local_bindings::BindingForm::Receiver)
         })
     }
     pub(in crate::frontend::source_locals) fn binding_recipe(

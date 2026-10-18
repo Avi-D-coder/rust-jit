@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "candidate": "candidate-v60-trace",
+      "source_sha256": "7c3cfd4c79e5dab092919fee0b831fcd62ed67e395f410c86062e53ec5829539",
+      "head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
+      "lib_build": {
+        "session": 44446,
+        "terminal": "4ba0ff",
+        "exit": 0,
+        "binary_sha256": "8a1a3b89f4c6e445836464e67eba9e5770de57207a2be94177b9e395a8d9c2f2"
+      },
+      "cli_built": false,
+      "logs": [
+        {
+          "name": "hygiene-facade.log",
+          "sha256": "1508631ee39d837965f732a6518710d3b4251113c74a70affe4dd1e003eb08bf",
+          "outcome": "failed exact one-body diagnostic run",
+          "scope": "First edition2015 only; later editions unexecuted",
+          "pending_lines": 1,
+          "missing_receipt_lines": 0
+        },
+        {
+          "name": "hygiene.log",
+          "sha256": "1cea8c7e484997d1038f2a19bd2688e5bde84726bbf94227c027d7be6ff39299",
+          "outcome": "failed exact one-body diagnostic run",
+          "scope": "First edition2015 only; later editions unexecuted",
+          "pending_lines": 0,
+          "missing_receipt_lines": 0
+        },
+        {
+          "name": "repetition-facade.log",
+          "sha256": "bc7c24e4a90d54bd5ed294c05b1f73a68139e76fc6dd1d87517220872dc3d513",
+          "outcome": "failed exact one-body diagnostic run",
+          "scope": "First edition2015 only; later editions unexecuted",
+          "pending_lines": 2,
+          "missing_receipt_lines": 0
+        },
+        {
+          "name": "repetition.log",
+          "sha256": "083e69df2736ea0726fb99160a3c85be50f37030d4bcf2f362c6aaf55aae14f2",
+          "outcome": "failed exact one-body diagnostic run",
+          "scope": "First edition2015 only; later editions unexecuted",
+          "pending_lines": 0,
+          "missing_receipt_lines": 0
+        }
+      ]
+    },
+    {
+      "candidate": "candidate-v61-trace",
+      "source_sha256": "a4c7d7254e7ce084a915512b58dbf02f765b0279f354f029a7ab68f8dbcc5e81",
+      "head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
+      "lib_build": {
+        "session": 79813,
+        "terminal": "62dd75",
+        "exit": 0,
+        "binary_sha256": "7035a26f8647b2d2e35b0a253228b969623345e0fac7a73158f026e957f494ec"
+      },
+      "cli_built": false,
+      "logs": [
+        {
+          "name": "hygiene.log",
+          "sha256": "cc3ee87b26392de9eb23214cf80ef2c940ae4bb75f3ad66a8d3de47182bf148a",
+          "outcome": "failed exact one-body diagnostic run",
+          "scope": "First edition2015 only; later editions unexecuted",
+          "pending_lines": 1,
+          "missing_receipt_lines": 1
+        },
+        {
+          "name": "repetition.log",
+          "sha256": "3e5e7df95a34b605017362f57c516e40cae07bf9221b934bc6fed07f8b6f4fa9",
+          "outcome": "failed exact one-body diagnostic run",
+          "scope": "First edition2015 only; later editions unexecuted",
+          "pending_lines": 2,
+          "missing_receipt_lines": 1
+        }
+      ]
+    }
+  ],
+  "findings": [
+    "V60 first standalone controls did not install the explicit facade world and failed earlier; repeated under LRR_EMBEDDED_FACADE=1 exposed the intended Prelude pending. Preserve both attempts.",
+    "V61 host controls use existing full facade/coordinator helper and unchanged original source bytes. Existing certificate available includes target module Value scope but only primary guest-root prelude receipt. Both diagnostic runs fail; no passes inferred.",
+    "Successor publishes exact privately minted prelude receipts only for already-certified Value scopes, caching actual file/cfg attribute policies; never invents namespace completion."
+  ],
+  "scope": "Preserved diagnostic/component evidence. No full fixture, runtime milestone or JIT acceptance."
+}

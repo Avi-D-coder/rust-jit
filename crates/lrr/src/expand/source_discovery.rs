@@ -8934,44 +8934,47 @@ impl SourceDiscovery {
         let mut value_binding_preludes = Vec::new();
         if self.namespace == Namespace::Value
             && let Some((_, _, providers)) = &self.declarative
+            && let Some(environment) = &self.completed_source_environment
         {
-            let mut bytes = 0usize;
+            let mut roots = BTreeMap::new();
             for provider in providers {
-                let source = provider.module_source();
-                if !source.selection().outline.module_path.is_empty()
-                    || source.selection().outline.crate_key != self.scope.crate_key
-                    || !self
-                        .scope
-                        .module_path
-                        .starts_with(&source.selection().outline.module_path)
-                {
-                    continue;
+                let root = provider.module_source();
+                if !root.selection().outline.module_path.is_empty()
+                    || provider.macro_export_source_role().is_some() { continue; }
+                let completed_source_environment::SourceScopeOwner::Selected(actual_root) =
+                    environment.scope_owner(&root.outline().root_scope) else { continue; };
+                if actual_root.selection() != root.selection() { continue; }
+                let Some(catalog) = provider.compiler.as_ref() else { continue; };
+                if catalog.canonical_standalone_member(&root.selection().outline.parse.profile)?.is_none() { continue; }
+                if let Some((previous, _)) = roots.insert(root.selection().outline.crate_key, (root, catalog)) {
+                    if previous.selection() != root.selection() {
+                        return Err(fault("Value prelude owning root is ambiguous"));
+                    }
                 }
-                let Some(catalog) = provider.compiler.as_ref() else {
-                    continue;
-                };
-                if catalog
-                    .canonical_standalone_member(&source.selection().outline.parse.profile)?
-                    .is_none()
-                {
-                    continue;
-                }
-                let Some(proof) =
-                    crate::facade::value_binding_prelude::ValueBindingPrelude::prepare(
-                        source,
-                        catalog,
-                        &self.scope,
-                    )?
-                else {
-                    continue;
-                };
-                bytes = bytes
-                    .checked_add(proof.metadata_bytes()?)
-                    .and_then(|n| n.checked_add(128))
-                    .ok_or_else(|| fault("Value binding prelude publication metadata limit"))?;
-                value_binding_preludes
-                    .try_reserve(1)
-                    .map_err(|_| fault("Value binding prelude publication allocation"))?;
+            }
+            let mut policies: BTreeMap<(Digest, Digest), Option<std::sync::Arc<crate::syntax::BindingPreludePolicies>>> = BTreeMap::new();
+            let mut policy_for = |source: &PreparedSourceView| -> Result<_, Diagnostic> {
+                let key = (source.selection().outline.parse.fingerprint(), source.selection().outline.cfg);
+                if let Some(policy) = policies.get(&key) { return Ok(policy.clone()); }
+                let policy = source.retained_declaration_parser()?
+                    .prepare_binding_prelude_policies(source.captured_macro_cfg()?)?
+                    .map(std::sync::Arc::new);
+                policies.insert(key, policy.clone());
+                Ok(policy)
+            };
+            let mut scopes = BTreeSet::from([self.scope.clone()]);
+            scopes.extend(value_scopes.iter().map(|receipt| receipt.scope().scope.clone()));
+            let mut bytes = 0usize;
+            for scope in &scopes {
+                let Some((root, catalog)) = roots.get(&scope.crate_key).copied() else { continue; };
+                let completed_source_environment::SourceScopeOwner::Selected(target) = environment.scope_owner(scope) else { continue; };
+                let (Some(root_policy), Some(target_policy)) = (policy_for(root)?, policy_for(target)?) else { continue; };
+                let proof = crate::facade::value_binding_prelude::ValueBindingPrelude::prepare(
+                    root, target, catalog, scope, (&root_policy, &target_policy),
+                )?;
+                bytes = bytes.checked_add(proof.metadata_bytes()?).and_then(|n| n.checked_add(128))
+                    .ok_or_else(|| fault("Value binding prelude publication metadata overflow"))?;
+                value_binding_preludes.try_reserve(1).map_err(|_| fault("Value binding prelude publication allocation"))?;
                 value_binding_preludes.push(proof);
             }
         }

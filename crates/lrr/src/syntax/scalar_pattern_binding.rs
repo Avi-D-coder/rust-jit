@@ -1,6 +1,9 @@
 //! Prelude-header source selection for pattern names; no name authority.
 use crate::{
-    core::diagnostic::Diagnostic,
+    core::{
+        diagnostic::Diagnostic,
+        digest::{Digest, StableEncode},
+    },
     source::snapshot::CfgSet,
     syntax::{outline::ScopeKey, parse::ParsedFile},
 };
@@ -24,12 +27,36 @@ impl BindingPreludePolicy {
         self.disabled
     }
 }
+pub(crate) struct BindingPreludePolicies {
+    source: crate::syntax::parse::ParseKey,
+    cfg: Digest,
+    standard: bool,
+    disabled: Vec<Vec<String>>,
+}
+impl BindingPreludePolicies {
+    pub(crate) fn for_scope(
+        &self,
+        source: &crate::syntax::parse::ParseKey,
+        cfg: Digest,
+        scope: &ScopeKey,
+    ) -> Result<BindingPreludePolicy, Diagnostic> {
+        if &self.source != source || self.cfg != cfg {
+            return Err(fault("Value prelude policy source/cfg differs"));
+        }
+        Ok(BindingPreludePolicy {
+            standard: self.standard,
+            disabled: self
+                .disabled
+                .iter()
+                .any(|prefix| scope.module_path.starts_with(prefix)),
+        })
+    }
+}
 impl ParsedFile {
-    pub(crate) fn binding_prelude_policy(
+    pub(crate) fn prepare_binding_prelude_policies(
         &self,
         cfg: &CfgSet,
-        scope: &ScopeKey,
-    ) -> Result<Option<BindingPreludePolicy>, Diagnostic> {
+    ) -> Result<Option<BindingPreludePolicies>, Diagnostic> {
         if self.generated_origin.is_some() {
             return Err(fault(
                 "generated Value prelude policy requires actual owning-crate origin",
@@ -37,11 +64,7 @@ impl ParsedFile {
         }
         let policy = self.live_macro_prelude_policy(cfg)?;
         let mut stack = vec![self.parsed.tree().syntax().clone()];
-        let mut work = 0usize;
         while let Some(node) = stack.pop() {
-            work = work
-                .checked_add(1)
-                .ok_or_else(|| fault("Value prelude header work limit"))?;
             if let Some(module) = ast::Module::cast(node.clone()) {
                 let mut attrs: Vec<_> = module.attrs().collect();
                 if let Some(list) = module.item_list() {
@@ -84,12 +107,11 @@ impl ParsedFile {
                 stack.push(child);
             }
         }
-        Ok(Some(BindingPreludePolicy {
+        Ok(Some(BindingPreludePolicies {
+            source: self.key(),
+            cfg: cfg.fingerprint(),
             standard: policy.standard,
-            disabled: policy
-                .disabled
-                .iter()
-                .any(|prefix| scope.module_path.starts_with(prefix)),
+            disabled: policy.disabled,
         }))
     }
 }

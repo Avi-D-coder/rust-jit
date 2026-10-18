@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "name": "candidate-v55-trace",
+      "source_sha256": "8fff38a4f11f4fe828de9017c5ff999becdaa7f34cea79d19531d4ad883a8cbf",
+      "head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
+      "lib_build": {
+        "session": 25270,
+        "terminal": "90f921",
+        "exit": 0,
+        "seconds": null,
+        "binary_sha256": "33bb5c19161009b5521924c571147694b9df58572528a1f4ab1179f56ec36704"
+      },
+      "cli_built": false,
+      "whole_upstream_main_executed": false,
+      "control": {
+        "exit": 101,
+        "scope": "One exact body failed at first edition; later editions unexecuted",
+        "raw_log_sha256": "e1aa30a3191126b6de54da617c725d7293b2bcafa8f0813dbc4f8001ead94140",
+        "trace_lines": 0
+      }
+    },
+    {
+      "name": "candidate-v56-trace",
+      "source_sha256": "0d48b784ce9c15cae1d8cbed36ee96e0bc479a94f4feaeab4c610c336388be95",
+      "head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
+      "lib_build": {
+        "session": 12440,
+        "terminal": "3e5a7a",
+        "exit": 0,
+        "seconds": 10.27,
+        "binary_sha256": "b7f1d2220903332145c8ddd395e857831f869e4f37c33cfa58848f51928abd79"
+      },
+      "cli_built": false,
+      "whole_upstream_main_executed": false,
+      "control": {
+        "exit": 101,
+        "scope": "One exact body failed at first edition; later editions unexecuted",
+        "raw_log_sha256": "2b58603105bc3ba0a061b687887458fed218014f78205901fc63a8cfb2c8750f",
+        "trace_lines": 12
+      }
+    },
+    {
+      "name": "candidate-v57",
+      "source_sha256": "3b2e083716c411063469c807b7ad1c9a899b889178dd85c64ce44c6e2a0d4a47",
+      "head": "0afdd1e09c7d400b596f68a820e678bb60a608b1",
+      "lib_build": {
+        "session": 62544,
+        "terminal": "cb909d",
+        "exit": 0,
+        "seconds": 27.68,
+        "binary_sha256": "b641dae85b727785dde8c0cf8c29e47e9dd6c61b34fc3e8f1dc1d3ba0f20c941"
+      },
+      "cli_built": false,
+      "whole_upstream_main_executed": false
+    }
+  ],
+  "baseline": "tests/ui/hygiene/hygiene.rs",
+  "baseline_fault": "LRR-E-NAME-MISSING at generated x",
+  "findings": [
+    "V55 low-level control never reaches LocalScopes; no trace lines. Bare RunMachine may request coordinator source input. It is an invalid full-runtime harness.",
+    "V56 moved same source to existing full CLI coordinator harness: actual rib/context traversal correctly selects earlier binding. Full runtime still fails at x; raw trace preserved.",
+    "V57 wires retained Value selection to ordinary path lowering; only library built. Rustfmt traversed16childmodules; restore their format-only changes before final source validation. No runtime evidence for V57."
+  ],
+  "scope": "Diagnostic/component evidence only; no compatibility, milestone or JIT acceptance."
+}
