@@ -340,11 +340,89 @@ pub(crate) fn resolve_written_type(
     let Some(ty) = alias.ty() else {
         return QueryPoll::Ready(Ok(None));
     };
+    resolve_actual_type(
+        db,
+        graph,
+        sources,
+        &WrittenTypeDeclaration::function(signature),
+        &ty,
+    )
+}
+
+/// The actual declaration facts needed by the common Type walk. This is a
+/// borrowed header context, not an invented function/signature/body.
+pub(super) struct WrittenTypeDeclaration<'a> {
+    definition: crate::core::digest::Digest,
+    scope: &'a crate::syntax::outline::ScopeKey,
+    header: &'a crate::syntax::outline::HeaderRecipe,
+    generics: &'a [crate::syntax::signatures::DefinitionParameter],
+    predicates: &'a [crate::syntax::ast_adapter::TokenRecipe],
+    function: Option<&'a FunctionSignature>,
+    syntax: Option<&'a ra_ap_syntax::SyntaxNode>,
+}
+impl<'a> WrittenTypeDeclaration<'a> {
+    fn function(signature: &'a FunctionSignature) -> Self {
+        Self {
+            definition: signature.definition,
+            scope: &signature.scope,
+            header: &signature.header,
+            generics: &signature.generics,
+            predicates: &signature.predicates,
+            function: Some(signature),
+            syntax: None,
+        }
+    }
+    pub(super) fn nominal(
+        schema: &'a super::types::NominalSchema,
+        syntax: &'a ra_ap_syntax::SyntaxNode,
+    ) -> Self {
+        Self {
+            definition: schema.definition,
+            scope: &schema.scope,
+            header: &schema.header,
+            generics: &schema.generics,
+            predicates: &[],
+            function: None,
+            syntax: Some(syntax),
+        }
+    }
+    fn resolve_name(
+        &self,
+        db: &mut Database,
+        graph: &NameNamespaces,
+        sources: &[&PreparedSourceView],
+        name: &str,
+    ) -> QueryPoll<SignatureName> {
+        if let Some(signature) = self.function {
+            return resolve_named(db, graph, sources, signature, name);
+        }
+        super::type_name_namespace::resolve_declaration_name(
+            db,
+            super::type_name_namespace::SourceTypeOwner {
+                definition: self.definition,
+                scope: self.scope,
+                header: self.header,
+            },
+            self.generics,
+            sources,
+            name,
+        )
+    }
+}
+/// Resolve an actual retained Type occurrence through the same walk as legacy
+/// written signature Types. The caller proves its declaration/span/currentness.
+pub(super) fn resolve_actual_type(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    signature: &WrittenTypeDeclaration<'_>,
+    ty: &ra_ap_syntax::ast::Type,
+) -> QueryPoll<Option<TyTerm>> {
     fn walk(
         db: &mut Database,
         graph: &NameNamespaces,
         sources: &[&PreparedSourceView],
-        signature: &FunctionSignature,
+        signature: &WrittenTypeDeclaration<'_>,
         ty: &ra_ap_syntax::ast::Type,
     ) -> QueryPoll<Option<TyTerm>> {
         use ra_ap_syntax::{AstNode, ast};
@@ -396,7 +474,7 @@ pub(crate) fn resolve_written_type(
                 };
                 let scope = crate::syntax::outline::ScopeKey {
                     owner: None,
-                    ..signature.scope.clone()
+                    ..(*signature.scope).clone()
                 };
                 match graph.lookup_source_path(
                     Namespace::Type,
@@ -602,7 +680,7 @@ pub(crate) fn resolve_written_type(
                     if signature.generics.iter().any(|p| {
                         p.kind == crate::syntax::signatures::GenericKind::Type && p.name == "Self"
                     }) {
-                        return match resolve_named(db, graph, sources, signature, "Self") {
+                        return match signature.resolve_name(db, graph, sources, "Self") {
                             QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => {
                                 QueryPoll::Ready(Ok(Some(TyTerm::Param(key))))
                             }
@@ -634,7 +712,7 @@ pub(crate) fn resolve_written_type(
                     return QueryPoll::Ready(Ok(None));
                 };
                 let name = name_ref.text().to_string();
-                let selected = match resolve_named(db, graph, sources, signature, &name) {
+                let selected = match signature.resolve_name(db, graph, sources, &name) {
                     QueryPoll::Ready(Ok(selected)) => selected,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -677,7 +755,7 @@ pub(crate) fn resolve_written_type(
         db: &mut Database,
         graph: &NameNamespaces,
         sources: &[&PreparedSourceView],
-        signature: &FunctionSignature,
+        signature: &WrittenTypeDeclaration<'_>,
         path: &ra_ap_syntax::ast::Path,
     ) -> QueryPoll<Option<TyTerm>> {
         use ra_ap_syntax::ast;
@@ -686,7 +764,7 @@ pub(crate) fn resolve_written_type(
         };
         let scope = crate::syntax::outline::ScopeKey {
             owner: None,
-            ..signature.scope.clone()
+            ..(*signature.scope).clone()
         };
         let found = match graph.lookup_source_path(
             Namespace::Type,
@@ -746,7 +824,7 @@ pub(crate) fn resolve_written_type(
         db: &mut Database,
         graph: &NameNamespaces,
         sources: &[&PreparedSourceView],
-        signature: &FunctionSignature,
+        signature: &WrittenTypeDeclaration<'_>,
         qualifier: &ra_ap_syntax::ast::Path,
         path: &ra_ap_syntax::ast::Path,
     ) -> QueryPoll<Option<TyTerm>> {
@@ -818,7 +896,7 @@ pub(crate) fn resolve_written_type(
                 None => return QueryPoll::Ready(Ok(None)),
             }
         };
-        let self_ty = match resolve_named(db, graph, sources, signature, &base_name) {
+        let self_ty = match signature.resolve_name(db, graph, sources, &base_name) {
             QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => TyTerm::Param(key),
             QueryPoll::Ready(Ok(_)) if base_name == "Self" => {
                 let Some(owner) = signature.scope.owner else {
@@ -862,7 +940,7 @@ pub(crate) fn resolve_written_type(
         db: &mut Database,
         graph: &NameNamespaces,
         sources: &[&PreparedSourceView],
-        signature: &FunctionSignature,
+        signature: &WrittenTypeDeclaration<'_>,
         path: &ra_ap_syntax::ast::Path,
     ) -> QueryPoll<
         Option<(
@@ -905,7 +983,7 @@ pub(crate) fn resolve_written_type(
     }
     fn projection_trait_key(
         graph: &NameNamespaces,
-        signature: &FunctionSignature,
+        signature: &WrittenTypeDeclaration<'_>,
         path: &ra_ap_syntax::ast::Path,
     ) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
         let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
@@ -913,7 +991,7 @@ pub(crate) fn resolve_written_type(
         };
         let scope = crate::syntax::outline::ScopeKey {
             owner: None,
-            ..signature.scope.clone()
+            ..(*signature.scope).clone()
         };
         match graph.lookup_source_path(
             Namespace::Type,
@@ -936,7 +1014,7 @@ pub(crate) fn resolve_written_type(
         db: &mut Database,
         graph: &NameNamespaces,
         sources: &[&PreparedSourceView],
-        signature: &FunctionSignature,
+        signature: &WrittenTypeDeclaration<'_>,
         parameter: &str,
         item: &str,
     ) -> QueryPoll<
@@ -945,7 +1023,7 @@ pub(crate) fn resolve_written_type(
             Vec<crate::traits::term::GenericArg>,
         )>,
     > {
-        use ra_ap_syntax::ast::{self, HasTypeBounds};
+        use ra_ap_syntax::ast::{self, HasModuleItem, HasTypeBounds};
         let Some(parameter) = signature
             .generics
             .iter()
@@ -953,117 +1031,166 @@ pub(crate) fn resolve_written_type(
         else {
             return QueryPoll::Ready(Ok(None));
         };
-        let mut lists = vec![parameter.bounds.as_slice()];
-        let predicates = match signature.predicates.split_first() {
-            Some((first, rest)) if first.text == "where" => rest,
-            _ => &signature.predicates[..],
-        };
-        // Commas nested inside a trait's arguments do not split predicates.
-        let mut depth = 0i32;
-        let mut start = 0;
-        for end in 0..=predicates.len() {
-            let separator = end == predicates.len() || (predicates[end].text == "," && depth == 0);
-            if separator {
-                if let [subject, colon, bounds @ ..] = &predicates[start..end]
-                    && subject.text == parameter.name
-                    && colon.text == ":"
-                {
-                    lists.push(bounds);
+        let mut paths = Vec::new();
+        if let Some(owner) = signature.syntax {
+            use ra_ap_syntax::{AstNode, ast::HasName};
+            let mut append = |list: Option<ast::TypeBoundList>| {
+                for bound in list.into_iter().flat_map(|list| list.bounds()) {
+                    if bound.question_mark_token().is_some() || bound.lifetime().is_some() {
+                        continue;
+                    }
+                    if let Some(ast::Type::PathType(ty)) = bound.ty()
+                        && let Some(path) = ty.path()
+                    {
+                        paths.push(path);
+                    }
                 }
-                start = end + 1;
-            } else {
-                match predicates[end].text.as_str() {
-                    "<" | "(" | "[" => depth += 1,
-                    ">" | ")" | "]" => depth -= 1,
-                    _ => {}
+            };
+            if let Some(list) = owner.children().find_map(ast::GenericParamList::cast) {
+                for actual in list
+                    .generic_params()
+                    .filter_map(|parameter| match parameter {
+                        ast::GenericParam::TypeParam(parameter) => Some(parameter),
+                        _ => None,
+                    })
+                    .filter(|actual| {
+                        actual
+                            .name()
+                            .is_some_and(|name| name.text() == parameter.name)
+                    })
+                {
+                    append(actual.type_bound_list());
+                }
+            }
+            if let Some(clause) = owner.children().find_map(ast::WhereClause::cast) {
+                for predicate in clause.predicates() {
+                    if matches!(predicate.ty(), Some(ast::Type::PathType(ty))
+                        if ty.path().is_some_and(|path| path.qualifier().is_none()
+                            && path.segment().and_then(|segment| segment.name_ref())
+                                .is_some_and(|name| name.text() == parameter.name)))
+                    {
+                        append(predicate.type_bound_list());
+                    }
+                }
+            }
+        } else {
+            let mut lists = vec![parameter.bounds.as_slice()];
+            let predicates = match signature.predicates.split_first() {
+                Some((first, rest)) if first.text == "where" => rest,
+                _ => &signature.predicates[..],
+            };
+            // Commas nested inside a trait's arguments do not split predicates.
+            let mut depth = 0i32;
+            let mut start = 0;
+            for end in 0..=predicates.len() {
+                let separator =
+                    end == predicates.len() || (predicates[end].text == "," && depth == 0);
+                if separator {
+                    if let [subject, colon, bounds @ ..] = &predicates[start..end]
+                        && subject.text == parameter.name
+                        && colon.text == ":"
+                    {
+                        lists.push(bounds);
+                    }
+                    start = end + 1;
+                } else {
+                    match predicates[end].text.as_str() {
+                        "<" | "(" | "[" => depth += 1,
+                        ">" | ")" | "]" => depth -= 1,
+                        _ => {}
+                    }
+                }
+            }
+            let edition = match signature.header.profile.edition {
+                2015 => ra_ap_syntax::Edition::Edition2015,
+                2018 => ra_ap_syntax::Edition::Edition2018,
+                2021 => ra_ap_syntax::Edition::Edition2021,
+                _ => ra_ap_syntax::Edition::Edition2024,
+            };
+            for list in lists {
+                if list.is_empty() {
+                    continue;
+                }
+                let text = crate::syntax::ast_adapter::token_text(list);
+                let parsed =
+                    ast::SourceFile::parse(&format!("type LrrBound = dyn {text};"), edition);
+                let Some(ast::Item::TypeAlias(alias)) = parsed.tree().items().next() else {
+                    continue;
+                };
+                let Some(ast::Type::DynTraitType(object)) = alias.ty() else {
+                    continue;
+                };
+                for bound in object
+                    .type_bound_list()
+                    .into_iter()
+                    .flat_map(|list| list.bounds())
+                {
+                    let Some(ast::Type::PathType(path)) = bound.ty() else {
+                        continue;
+                    };
+                    let Some(path) = path.path() else {
+                        continue;
+                    };
+                    paths.push(path);
                 }
             }
         }
-        let edition = match signature.header.profile.edition {
-            2015 => ra_ap_syntax::Edition::Edition2015,
-            2018 => ra_ap_syntax::Edition::Edition2018,
-            2021 => ra_ap_syntax::Edition::Edition2021,
-            _ => ra_ap_syntax::Edition::Edition2024,
-        };
         let mut selected = None;
-        for list in lists {
-            if list.is_empty() {
-                continue;
-            }
-            let text = crate::syntax::ast_adapter::token_text(list);
-            let parsed = ast::SourceFile::parse(&format!("type LrrBound = dyn {text};"), edition);
-            let Some(ast::Item::TypeAlias(alias)) = parsed.tree().items().next() else {
+        for path in paths {
+            let trait_key = match projection_trait_key(graph, signature, &path) {
+                Ok(Some(key)) => key,
+                Ok(None) => continue,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let context = db.input(&InputKey::DeclarationContext(trait_key));
+            let Some(InputValue::DeclarationContext(context)) = context.as_deref() else {
                 continue;
             };
-            let Some(ast::Type::DynTraitType(object)) = alias.ty() else {
-                continue;
+            let scope = crate::syntax::outline::ScopeKey {
+                owner: Some(trait_key),
+                ..context.scope.clone()
             };
-            for bound in object
-                .type_bound_list()
-                .into_iter()
-                .flat_map(|list| list.bounds())
-            {
-                let Some(ast::Type::PathType(path)) = bound.ty() else {
-                    continue;
-                };
-                let Some(path) = path.path() else {
-                    continue;
-                };
-                let trait_key = match projection_trait_key(graph, signature, &path) {
-                    Ok(Some(key)) => key,
-                    Ok(None) => continue,
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                };
-                let context = db.input(&InputKey::DeclarationContext(trait_key));
-                let Some(InputValue::DeclarationContext(context)) = context.as_deref() else {
-                    continue;
-                };
-                let scope = crate::syntax::outline::ScopeKey {
-                    owner: Some(trait_key),
-                    ..context.scope.clone()
-                };
-                // Some imported declaration-only contexts do not publish
-                // their associated scope yet. Preserve the existing unknown
-                // projection rather than imposing a new static rejection.
-                if db.input(&InputKey::ScopeBlockers(scope.clone())).is_none() {
-                    continue;
-                }
-                let key = crate::db::key::BucketKey {
-                    scope,
-                    namespace: Namespace::Type,
-                    name: item.into(),
-                };
-                let outcome = match db.fetch(&SyntaxProvider, QueryKey::ScopeBucket(key)) {
-                    QueryPoll::Ready(Ok(outcome)) => outcome,
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                };
-                let QueryValue::ScopeBucket(bucket) = outcome.value.as_ref() else {
-                    return QueryPoll::Ready(Err(fault(
-                        "associated declaration bucket result mismatch",
-                    )));
-                };
-                if !bucket.blockers.is_empty() || bucket.candidates.is_empty() {
-                    continue;
-                }
-                // Do not inspect arguments of unrelated bounds. They may
-                // themselves name this projection (Other<T::Item>).
-                let candidate = match projection_trait(db, graph, sources, signature, &path) {
-                    QueryPoll::Ready(Ok(Some(candidate))) => candidate,
-                    QueryPoll::Ready(Ok(None)) => continue,
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                };
-                if selected.as_ref().is_some_and(|prior| prior != &candidate) {
-                    return QueryPoll::Ready(Ok(None));
-                }
-                selected = Some(candidate);
+            // Some imported declaration-only contexts do not publish
+            // their associated scope yet. Preserve the existing unknown
+            // projection rather than imposing a new static rejection.
+            if db.input(&InputKey::ScopeBlockers(scope.clone())).is_none() {
+                continue;
             }
+            let key = crate::db::key::BucketKey {
+                scope,
+                namespace: Namespace::Type,
+                name: item.into(),
+            };
+            let outcome = match db.fetch(&SyntaxProvider, QueryKey::ScopeBucket(key)) {
+                QueryPoll::Ready(Ok(outcome)) => outcome,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let QueryValue::ScopeBucket(bucket) = outcome.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault(
+                    "associated declaration bucket result mismatch",
+                )));
+            };
+            if !bucket.blockers.is_empty() || bucket.candidates.is_empty() {
+                continue;
+            }
+            // Do not inspect arguments of unrelated bounds. They may
+            // themselves name this projection (Other<T::Item>).
+            let candidate = match projection_trait(db, graph, sources, signature, &path) {
+                QueryPoll::Ready(Ok(Some(candidate))) => candidate,
+                QueryPoll::Ready(Ok(None)) => continue,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            if selected.as_ref().is_some_and(|prior| prior != &candidate) {
+                return QueryPoll::Ready(Ok(None));
+            }
+            selected = Some(candidate);
         }
         QueryPoll::Ready(Ok(selected))
     }
 
-    walk(db, graph, sources, signature, &ty)
+    walk(db, graph, sources, signature, ty)
 }
 /// The written self type of impl `owner`.
 pub(crate) fn impl_self_type(

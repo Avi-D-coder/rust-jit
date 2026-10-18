@@ -1806,6 +1806,12 @@ impl Frame {
                 "reference result hint belongs to another definition/root entry",
             ));
         }
+        if let Some((primitive, _)) = context.normalized_result() {
+            return Ok(crate::traits::term::TyTerm::Primitive(primitive));
+        }
+        if let Some(source) = context.written_result_source() {
+            return Ok(source.clone());
+        }
         if context
             .closed_reference_contracts()
             .is_none_or(|proof| !proof.has_result())
@@ -1834,6 +1840,16 @@ impl Frame {
             .context
             .as_ref()
             .ok_or_else(|| invalid("reference result environment absent"))?;
+        if let Some((_, descriptor)) = context.normalized_result() {
+            store.type_descriptor(descriptor)?;
+            return Ok(Some(descriptor));
+        }
+        if context.written_result_source() == Some(&source)
+            && let Some(descriptor) = context.written_result_descriptor()
+        {
+            store.type_descriptor(descriptor)?;
+            return Ok(Some(descriptor));
+        }
         if context.structural_result() == Some(&source) {
             // A structural result with nominal members (`-> (W<u8>, i32)`)
             // is interned from its written Type.
@@ -1878,6 +1894,16 @@ impl Frame {
             .context
             .as_ref()
             .ok_or_else(|| invalid("reference result environment absent"))?;
+        if let Some((_, descriptor)) = context.normalized_result() {
+            store.type_descriptor(descriptor)?;
+            return Ok(descriptor);
+        }
+        if context.written_result_source() == Some(&source)
+            && let Some(descriptor) = context.written_result_descriptor()
+        {
+            store.type_descriptor(descriptor)?;
+            return Ok(descriptor);
+        }
         if context.structural_result() == Some(&source) {
             if let Some(bound) = context.bound_result_descriptor_intern(store)? {
                 return Ok(bound);
@@ -3666,6 +3692,45 @@ impl Frame {
         let prepared = source.prepared();
         if prepared.key() != &self.pc {
             return Err(invalid("installed constructor source PC differs"));
+        }
+        // Explicit constructor arguments are retained source selections. Their
+        // descriptors are read under this activation, never from a prior call
+        // frame cached at the same source PC.
+        if !prepared.arguments().is_empty() {
+            let bound = prepared.bound().variant();
+            if prepared.arguments().len() != bound.type_parameters() as usize {
+                return Err(Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "record Type arguments require their complete declaration/default context"
+                        .into(),
+                ));
+            }
+            let mut args = Vec::new();
+            let mut source_args = Vec::new();
+            for argument in prepared.arguments() {
+                let Some(argument) = argument else {
+                    return Err(Diagnostic::new(
+                        "LRR-E-TYPE-CONTEXT",
+                        "explicit record Type argument holes require shared field/result inference"
+                            .into(),
+                    ));
+                };
+                args.push(argument.descriptor(self, store)?);
+                source_args.push(crate::traits::term::GenericArg::Type(
+                    self.bound_view(argument.source(), store),
+                ));
+            }
+            let result = self
+                .body
+                .nodes()
+                .get(self.pc.node as usize)
+                .and_then(|node| node.value)
+                .ok_or_else(|| invalid("record constructor result absent"))?;
+            let source = crate::traits::term::TyTerm::Nominal(bound.identity(), source_args);
+            self.preflight_source_view(result, Some(&source))?;
+            let descriptor = store.intern_nominal_with(bound, &args)?;
+            self.declared_hint(result, Some(descriptor))?;
+            self.set_source_view(result, Some(source))?;
         }
         let (guard, hints, partial) = self.prepare_nominal_hints(
             prepared.plan(),

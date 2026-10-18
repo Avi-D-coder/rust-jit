@@ -77,3 +77,22 @@ Own source fingerprints at this review (API consumer intentionally awaits parall
 - `crates/lrr/src/frontend/constructors.rs`: `88290f0a81b0530c7b067b67116429cccd90883baa707575eb7b79fc492024da`
 - `crates/lrr/src/frontend/prepared_constructors.rs`: `3a10f8ef9adf0a5db1107b801230cec6b7fd922ed5b79c0c4b9ae591706547ec`
 - `crates/lrr/src/vm/frame.rs`: `6c478cea1496e748f61c3c6c70b6b391b35e4d40c5b862e2e868988379559370`
+
+Record API producer landed and caller join source-reviewed: `declaration_nominal_types::bind_record_constructor_current_with_arguments` receives the agreed selected Type arguments and retained MemberIndex. It binds real filtered generic ordinals, substitutes source arguments before shared associated-type normalization and written field-template creation. Actual field schema/header/range/token checks precede shared actual-AST Type walking; the old `type LrrField` parser/walker was removed by the disjoint worker. That worker owns its own full source-review receipt; this paragraph reviews only the producer/consumer agreement, without runtime evidence. Current own transport READY, waiting combined validation.
+
+Current hashes after shared API landing:
+
+- `crates/lrr/src/frontend/constructors.rs`: `88290f0a81b0530c7b067b67116429cccd90883baa707575eb7b79fc492024da`
+- `crates/lrr/src/frontend/prepared_constructors.rs`: `3a10f8ef9adf0a5db1107b801230cec6b7fd922ed5b79c0c4b9ae591706547ec`
+- `crates/lrr/src/vm/frame.rs`: `6c478cea1496e748f61c3c6c70b6b391b35e4d40c5b862e2e868988379559370`
+- `crates/lrr/src/frontend/declaration_nominal_types.rs`: `4675395cd6fffc21482b2a86c147bbb9ac6d8fa1fc960b69d6b03148866313b2`
+
+Pre-build source-review correction: `prepare_arguments` explicitly reports a pending indexed owner-context integration when any qualifier segment writes generic arguments. It never silently erases owner arguments while selecting a final record head. Prior syntax already refused that form; owner/enum applications remain required backlog. This changes only prepared_constructors.rs from the prior joined review, updated SHA256 `7ec8c85371ac143151b518afc412e13acd17a8a7a5df7ee9df38a4ce9191b3d7`; direct final-segment service unchanged.
+
+V8 source-freeze race disclosed immediately: qualifier-argument guard was written after own READY and before the worker received root's build-freeze message, while root reports V8 library build was already running. Only prepared_constructors.rs changed, prior3a10f8ef9adf0a5db1107b801230cec6b7fd922ed5b79c0c4b9ae591706547ec -> current7ec8c85371ac143151b518afc412e13acd17a8a7a5df7ee9df38a4ce9191b3d7. Root and sole validator informed; no revert or further Rust edit during active build. V8 must preserve this race and may not be labeled a clean frozen candidate. Successor validation on stationary sources is required for acceptance. Following own READY, await an explicit write window before any later source-review correction.
+
+## V9 actual joined runtime terminal
+
+Clean V9 compiled source set `462e11a293d49c1f11592251cfcde6d7c4227f187a7d73e880176019f6940c5a` (root HEAD at capture `b6aa9706bc72d4a5c8f69e30fe7124992f23d8fd`). Sole validator ran the unchanged original `tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs`, SHA256 `9dce5eb0efe1907b2f19703697952721eda352a53365bb9f725486c29614f881`, owning2015, standard facade enabled, no auxiliaries or source adaptations. Actual exit0 in7.153s, terminal completed, capture.complete=true, cleanup observed, final counter assertion completed after49source call boundaries and722VM dispatches. Guest stdout/stderr empty under the declared closed external-effect capture scope; this does not claim a complete memory trace.
+
+Canonical local terminal: `artifacts/validation-resume-2026-10-18/candidate-v9/stock-1.stdout`; invocation/hashes in `stock-results.json` and `before.json`. This is a newly established unchanged upstream runtime-contract pass for this owning root. Full generic record/field/projection/default/edition/macro/suspension matrices remain incomplete; no whole task/architecture/full-suite gate closes. Held V8 race evidence remains held and is not used for this acceptance.

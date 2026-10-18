@@ -1,0 +1,74 @@
+{
+  "claim": "LOCAL-044",
+  "at": "2026-10-18T09:15:07.351315+00:00",
+  "status": "V9 exact-source scoped review/build/runtime evidence. No complete E007 or all-origin matrix closure.",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "57f4cbfafcd12ed99cc958957bddfc10db30da86b097773df843671044214d29"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_initializers.rs",
+      "sha256": "21291796e5d6a1fae8a79c56a583ce1b5511e3090afb7050c03bd0cc35ae2f29"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "6c478cea1496e748f61c3c6c70b6b391b35e4d40c5b862e2e868988379559370"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "add3dcb107d21471541e610957ff1fd5de2bfc320a104d2b291f66548aae6869"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "17e863a52dcad525c217cd32ec6043ffac41532fa372af0b3e5694a60d639867"
+    },
+    {
+      "path": "crates/lrr/src/vm/context.rs",
+      "sha256": "2299414a0a84c2e19bdad17abd9f4b30f1d6e4add3d93d37533b2e0ba70d6215"
+    }
+  ],
+  "shared_route": "Reached item -> const/static caches or ordinary initializer demand -> CallResolver signature/body -> shared GenericEnv declared result -> Frame DefinitionResult -> ordinary literal/expression VM -> existing continuation/storage. Removed constant_item/static_cell/constant_layout pure runtime helpers and catch-all-error-to-fallback in this route.",
+  "all8": [
+    {
+      "mode": 1,
+      "result": "Deleted runtime pure scalar/array alternate executor, no replacement evaluator."
+    },
+    {
+      "mode": 2,
+      "result": "Same item selection/admission for handwritten/generated source; no generated scalar executor."
+    },
+    {
+      "mode": 3,
+      "result": "Actual source selected result proof from GenericEnv, no macro/method/integer-specific rule."
+    },
+    {
+      "mode": 4,
+      "result": "No original-only/generated scope bypass; existing local/module current source admission retained."
+    },
+    {
+      "mode": 5,
+      "result": "No new pattern machinery or cold executable traversal. Initializer only on reached demand."
+    },
+    {
+      "mode": 6,
+      "result": "Cache lookup/demand/retained result descriptor runtime reads only. No new parse/planning inside installed operation; source-call prep existing service."
+    },
+    {
+      "mode": 7,
+      "result": "No namespace census/invalidation/capability work added."
+    },
+    {
+      "mode": 8,
+      "result": "No immutable body cloning/fullfile search added; shared frame/environment handles used."
+    }
+  ],
+  "holds": [
+    "Nonprimitive fresh const execution still re-evaluates; run-once template instantiation not delivered by this slice.",
+    "Preparation constant patterns/array lengths remain pure query users; no broad E007 closure.",
+    "Generic associated const cache instantiation identity not audited here.",
+    "Existing exact-once/suspension/cleanup and all source origin controls need actual terminals."
+  ],
+  "closed_result_join": "engine/run.rs captures existing supported closed WrittenType result shapes; vm/context.rs delegates actual declaration result hints to the owning Frame service instead of syntactic Primitive equality. Same service for ordinary functions and initializers, not a context-specific executor.",
+  "validation": "worktracks/evidence/2026-10-18-interpreter-v9-validation.json; six controls, four whole-main runtime captures, narrower scope than remaining holds."
+}

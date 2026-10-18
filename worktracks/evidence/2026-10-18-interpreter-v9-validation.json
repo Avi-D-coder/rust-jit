@@ -1,0 +1,470 @@
+{
+  "candidate": "v9",
+  "head": "b6aa9706bc72d4a5c8f69e30fe7124992f23d8fd",
+  "source_sha256": "462e11a293d49c1f11592251cfcde6d7c4227f187a7d73e880176019f6940c5a",
+  "compiled_source_leaves": 3324,
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "terminal": "b83b99/0",
+      "seconds": 9.87,
+      "binary_sha256": "294227caff4dc850ece935afbe27ff07819a2e7ab9be2fcafef30eca94af4a3d"
+    },
+    "cli": {
+      "exit": 0,
+      "terminal": "4d5f5b/0",
+      "seconds": 13.94,
+      "binary_sha256": "e5b6b9980061dc47c6bfa94972b3339244787e9b2a03c7f40e6bbc8e67f0a5eb"
+    }
+  },
+  "source_frozen_through_both_builds": true,
+  "runtime_scope": "Exact V9 compiled binary after writers released; subsequent source edits excluded. Unchanged imported root+actualaux provenance checked original-provenance.json. No native aux compilation.",
+  "controls": [
+    {
+      "selector": "cli::crate_graph::initializer_tests::const_initializers_build_nominal_values_and_call_const_fns",
+      "exit": 0,
+      "seconds": 34.367,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v9/control-0.log"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::static_initializers_are_run_long_storage_with_mutation",
+      "exit": 0,
+      "seconds": 19.116,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v9/control-1.log"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::promoted_borrows_byte_strings_and_copy_receivers",
+      "exit": 0,
+      "seconds": 23.484,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v9/control-2.log"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::shared_const_borrows_promote_plain_data_only",
+      "exit": 0,
+      "seconds": 18.799,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v9/control-3.log"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+      "exit": 0,
+      "seconds": 0.093,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v9/control-4.log"
+    },
+    {
+      "selector": "vm::context::return_tests::genuine_primitive_shadow_alias_return_keeps_bool_through_root_set_hint_all_editions",
+      "exit": 0,
+      "seconds": 0.009,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v9/control-5.log"
+    }
+  ],
+  "actual_focused_bodies": 6,
+  "passed_focused_bodies": 6,
+  "stock": [
+    {
+      "path": "tests/ui/consts/const-int-arithmetic.rs",
+      "sha256": "cf844bc9af69330fe438c5c430970af61b48f36fcdd5b70bda7d9db700d2dfc9",
+      "edition": 2015,
+      "aux": [],
+      "exit": 0,
+      "seconds": 30.335,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/consts/const-int-arithmetic.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "a6a8f225a3a5d697a83f91835ccd0494bdf981ae8a4fef50f96e78b27113f074"
+      ],
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "runtime_contract_pass": true,
+      "terminal": "completed",
+      "code": null,
+      "diagnostic": null,
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 36547,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 134,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 18352,
+        "vm_outcomes": 18352
+      }
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+      "sha256": "9dce5eb0efe1907b2f19703697952721eda352a53365bb9f725486c29614f881",
+      "edition": 2015,
+      "aux": [],
+      "exit": 0,
+      "seconds": 7.153,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "688d605b2b2439cca5139764d24e812a7a6c81bbbb3cc96bf5f1da385f56848e"
+      ],
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "runtime_contract_pass": true,
+      "terminal": "completed",
+      "code": null,
+      "diagnostic": null,
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 963,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 49,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 722,
+        "vm_outcomes": 722
+      }
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i128.rs",
+      "sha256": "6d53dcadc07da4c66441f2d40bd4e6c9e375aa30076b6872f7489935d1096fb6",
+      "edition": 2015,
+      "aux": [],
+      "exit": 2,
+      "seconds": 10.816,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/i128.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "a15d8cb2d301f5953a572869ea8274f4123f28e723d264585d621a7a4b4082a1"
+      ],
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "runtime_contract_pass": false,
+      "terminal": "fault",
+      "code": "LRR-E-VALUE-REPR",
+      "diagnostic": "guest value kind, descriptor, or payload invariant failed",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 25897,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 11059,
+        "vm_outcomes": 11058
+      }
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u128.rs",
+      "sha256": "fb753fd396f254766c3d2b3f247a1064cef73f73638775b0caecd017024a8e9d",
+      "edition": 2015,
+      "aux": [],
+      "exit": 2,
+      "seconds": 10.898,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/u128.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "986b97f86cba1bcd4be02b80bb3c395071d91041ce3595015f0d1df6ae9af314"
+      ],
+      "stdout": "stock-3.stdout",
+      "stderr": "stock-3.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "runtime_contract_pass": false,
+      "terminal": "fault",
+      "code": "LRR-E-GENERIC-BINDING",
+      "diagnostic": "reached structural type contracts disagree",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 36570,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 70,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 15995,
+        "vm_outcomes": 15995
+      }
+    },
+    {
+      "path": "tests/ui/consts/issue-17718.rs",
+      "sha256": "12efc2f4f1636ee274e09c1d4afd6486b02f2f8c822aec344f8569319fe84601",
+      "edition": 2015,
+      "aux": [
+        {
+          "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/auxiliary/issue-17718-aux.rs",
+          "sha256": "0337a60e8e1be0f17a795a78e20e765663144c027fd036db115d425e9ce149db",
+          "edition": 2015
+        }
+      ],
+      "exit": 2,
+      "seconds": 2.417,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "--extern",
+        "issue_17718_aux=fixtures/upstream/rustc-checkout/tests/ui/consts/auxiliary/issue-17718-aux.rs",
+        "--extern-edition",
+        "issue_17718_aux=2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/consts/issue-17718.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "ba5e5a10ca26481da35705b1eff2428182e8becce14f1ae35801ebf3d1783301"
+      ],
+      "stdout": "stock-4.stdout",
+      "stderr": "stock-4.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "runtime_contract_pass": false,
+      "terminal": "fault",
+      "code": "LRR-E-CATALOG-INCOMPLETE",
+      "diagnostic": "fixed point retains unresolved import or macro producers; blocked import `{use std::sync::atomic::Ordering}`",
+      "capture_complete": false,
+      "facts": null
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+      "sha256": "d6298ddfc5b48c1c75d513b9e09add7b60ca69e447843c1af9f2810cf67eb8c6",
+      "edition": 2015,
+      "aux": [],
+      "exit": 0,
+      "seconds": 3.616,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "be53fa84a80d29618e4ea60c1d818339b8f9b8450ac837aba7611ae82bb3fda2"
+      ],
+      "stdout": "stock-5.stdout",
+      "stderr": "stock-5.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "runtime_contract_pass": true,
+      "terminal": "completed",
+      "code": null,
+      "diagnostic": null,
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 7,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 5,
+        "vm_outcomes": 5
+      }
+    },
+    {
+      "path": "tests/ui/autoref-autoderef/autoderef-vec-box-fn-36786.rs",
+      "sha256": "ddaa934c7ed95a0f20304e81aa832c81bef2c7a98f18e4d2b7f84798823c9972",
+      "edition": 2015,
+      "aux": [],
+      "exit": 0,
+      "seconds": 4.088,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/autoref-autoderef/autoderef-vec-box-fn-36786.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "237f099b39b3b3bd9613f245326db5f3dd6b5587cc4dfc115a6b0d58230127e3"
+      ],
+      "stdout": "stock-6.stdout",
+      "stderr": "stock-6.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "runtime_contract_pass": true,
+      "terminal": "completed",
+      "code": null,
+      "diagnostic": null,
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 116,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 11,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 82,
+        "vm_outcomes": 82
+      }
+    }
+  ],
+  "wholemain_runtime_passes": 4,
+  "new_distinct_wholemain_passes_vs_v7": [
+    "tests/ui/consts/const-int-arithmetic.rs",
+    "tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs"
+  ],
+  "targeted_distinct_passes_vs_historical_v16": [
+    {
+      "path": "tests/ui/consts/const-int-arithmetic.rs",
+      "prior": "fault",
+      "prior_diagnostic": "owning source environment is not published",
+      "evidence": "stock-0.stdout"
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+      "prior": "fault",
+      "prior_diagnostic": "library item `core::sync::atomic::AtomicUsize::fetch_add` is declared by the LRR facade but not executable yet",
+      "evidence": "stock-1.stdout"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+      "prior": "fault",
+      "prior_diagnostic": "128-bit guest integers are outside the live profile",
+      "evidence": "stock-5.stdout"
+    },
+    {
+      "path": "tests/ui/autoref-autoderef/autoderef-vec-box-fn-36786.rs",
+      "prior": "fault",
+      "prior_diagnostic": "generic unit variant requires its type context",
+      "evidence": "stock-6.stdout"
+    }
+  ],
+  "comparison_inventory_sha256": "3535f0644b8ea743c3a0e8a35420344e1c843fda7ea69bb14ab1cd07936afe91",
+  "historical_binary_sha256": "732aec123f8f5de8cf465c9c5ccd757970908ae62bba3dfd68f61a260b27650b",
+  "terminal_sessions": {
+    "controls": "9dfb28/0",
+    "stock7": "57c5ac/0"
+  },
+  "binaries_after_execution": {
+    "target/debug/lrr": "e5b6b9980061dc47c6bfa94972b3339244787e9b2a03c7f40e6bbc8e67f0a5eb",
+    "target/debug/deps/lrr-5ae916bc286087fa": "294227caff4dc850ece935afbe27ff07819a2e7ab9be2fcafef30eca94af4a3d"
+  },
+  "gaps": [
+    "i128 VALUE-REPR invariant runtime failure; u128 structural generic binding runtime failure. Stack relative spans retained but actual physical source locations absent, no manual offset mapping accepted.",
+    "Properaux issue17718 fails before execution on unresolved std::sync::atomic::Ordering import, so no runtime fnptr initializer evidence from that fixture.",
+    "FullE007 run-once template/generic-cache identity, all-origin/currentness/suspension/fullfixture/interpreter-runtime gate remain incomplete.",
+    "No global inventory refresh/total count update, atomic repeat or JIT acceptance. V8 invalid-freeze compile remains separately preserved."
+  ],
+  "local_report_sha256": "9892b544f65192a4e05f78f901cb56dc30b64b5ef342f3b94392b6e5bbbd5240",
+  "changed_source_files_from_baseline": [
+    {
+      "path": "crates/lrr/facade/test/bench.rs",
+      "sha256": "0159ce2a92d3573adfa099dd5f49a83181594a7a23034423dca98b1b28f39805"
+    },
+    {
+      "path": "crates/lrr/facade/test/lib.rs",
+      "sha256": "f49189f69712157dcd0e10b34736fda74224b5674ad2cd382db862659eb31d98"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "17e863a52dcad525c217cd32ec6043ffac41532fa372af0b3e5694a60d639867"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_initializers.rs",
+      "sha256": "21291796e5d6a1fae8a79c56a583ce1b5511e3090afb7050c03bd0cc35ae2f29"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "57f4cbfafcd12ed99cc958957bddfc10db30da86b097773df843671044214d29"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constructors.rs",
+      "sha256": "88290f0a81b0530c7b067b67116429cccd90883baa707575eb7b79fc492024da"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_nominal_types.rs",
+      "sha256": "95feaa0410a05bc2e9094dff8889fe9dbdb44f62397ec8852dbaf897ba64d072"
+    },
+    {
+      "path": "crates/lrr/src/frontend/prepared_constructors.rs",
+      "sha256": "7ec8c85371ac143151b518afc412e13acd17a8a7a5df7ee9df38a4ce9191b3d7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "90bc1bfd7d1a0d7543b4491f7cbccbbc8fa4f7749703841b18feeeb9e61a6b53"
+    },
+    {
+      "path": "crates/lrr/src/frontend/types.rs",
+      "sha256": "9eeac9c59949306064bb79c7271c2c2666ddb2c00152d8d598ab5ffce20f5361"
+    },
+    {
+      "path": "crates/lrr/src/source/embedded_crates.rs",
+      "sha256": "c961a7476b0396ecaf6eaa68a1a36a424f7aa3d4e993f935d8a13e7d9a5ab7a2"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "719295c2fcc4d738d5d283808d6ec0ba3b991cdc663587f3119931100e045e7c"
+    },
+    {
+      "path": "crates/lrr/src/vm/context.rs",
+      "sha256": "2299414a0a84c2e19bdad17abd9f4b30f1d6e4add3d93d37533b2e0ba70d6215"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "6c478cea1496e748f61c3c6c70b6b391b35e4d40c5b862e2e868988379559370"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "add3dcb107d21471541e610957ff1fd5de2bfc320a104d2b291f66548aae6869"
+    }
+  ],
+  "checkpoint_scope": "Exact staged V9 source only. Later runtime literal, diagnostic and generic field-read successors are excluded. No feature/task/full-suite/JIT closure."
+}

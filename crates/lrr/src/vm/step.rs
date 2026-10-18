@@ -151,10 +151,9 @@ fn written_binding_admission(
     ))
 }
 /// Descriptor publication is an executed VM action, never pure preflight work.
-/// An initializer frame's root value takes its declared reference result
-/// as context, as a function body's root block does
-/// (`HintRecipe::DefinitionResult`), so its coercions (`&[u8; 2]` to
-/// `&[u8]`) apply at the root (E-R5-007).
+/// An initializer root takes its actual admitted declared result as context,
+/// using the same DefinitionResult service as ordinary function roots. Widths,
+/// nominal arguments and reference coercions apply before reached operations.
 pub(crate) fn initializer_root_hint(
     frame: &mut Frame,
     store: &mut GuestStore,

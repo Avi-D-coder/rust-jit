@@ -13,6 +13,8 @@ use crate::{
 };
 use std::{borrow::Cow, collections::BTreeMap};
 
+#[path = "declaration_nominal_types.rs"]
+mod nominal_header_types;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum FieldShape {
@@ -459,30 +461,16 @@ impl<'a> SchemaNames<'a> {
         field: &FieldRecipe,
     ) -> crate::db::poll::QueryPoll<Option<crate::ir::written_type::WrittenType>> {
         use crate::db::poll::QueryPoll;
-        use ra_ap_syntax::ast::{self, HasModuleItem};
-        // A body-local declaration's field Types are selected by its owning
-        // body plan, at each actual leaf occurrence of the compound Type.
         if self.schema.scope.owner.is_some() {
             return self.local_compound(db, sources, field);
         }
-        let text = crate::syntax::ast_adapter::token_text(&field.ty);
-        let parser = match self.schema.header.profile.edition {
-            2015 => ra_ap_syntax::Edition::Edition2015,
-            2018 => ra_ap_syntax::Edition::Edition2018,
-            2021 => ra_ap_syntax::Edition::Edition2021,
-            _ => ra_ap_syntax::Edition::Edition2024,
+        let term = match self.actual_field_type(db, sources, field) {
+            QueryPoll::Ready(Ok(Some(term))) => term,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let parsed = ast::SourceFile::parse(&format!("type LrrField = {text};"), parser);
-        if !parsed.errors().is_empty() {
-            return QueryPoll::Ready(Ok(None));
-        }
-        let Some(ast::Item::TypeAlias(alias)) = parsed.tree().items().next() else {
-            return QueryPoll::Ready(Ok(None));
-        };
-        let Some(ty) = alias.ty() else {
-            return QueryPoll::Ready(Ok(None));
-        };
-        self.compound_type(db, sources, &ty)
+        self.written_field_type(db, sources, &term)
     }
     /// A body-local declaration's compound field Type, selected by its owning
     /// body plan's header service; its own type parameters become their
@@ -493,7 +481,7 @@ impl<'a> SchemaNames<'a> {
         sources: &[&crate::source::changes::PreparedSourceView],
         field: &FieldRecipe,
     ) -> crate::db::poll::QueryPoll<Option<crate::ir::written_type::WrittenType>> {
-        use crate::{db::poll::QueryPoll, ir::written_type::WrittenType};
+        use crate::db::poll::QueryPoll;
         let Some(plan) = self
             .body_type
             .map(|ty| ty.declaration().retained_plan())
@@ -509,17 +497,23 @@ impl<'a> SchemaNames<'a> {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let written = match super::written_terms::written_template(
-            db,
-            sources,
-            &term,
-            self.schema.definition,
-        ) {
-            QueryPoll::Ready(Ok(Some(written))) => written,
-            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        };
+        self.written_field_type(db, sources, &term)
+    }
+    fn written_field_type(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        term: &TyTerm,
+    ) -> crate::db::poll::QueryPoll<Option<crate::ir::written_type::WrittenType>> {
+        use crate::{db::poll::QueryPoll, ir::written_type::WrittenType};
+        let written =
+            match super::written_terms::written_template(db, sources, term, self.schema.definition)
+            {
+                QueryPoll::Ready(Ok(Some(written))) => written,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
         // Generic ordinals become indexes among the type parameters; a part
         // left to inference is not a field Type.
         fn index(written: WrittenType, schema: &NominalSchema) -> Option<WrittenType> {
@@ -542,7 +536,9 @@ impl<'a> SchemaNames<'a> {
                 WrittenType::Array(element, len) => {
                     WrittenType::Array(Box::new(index(*element, schema)?), len)
                 }
-                WrittenType::Slice(element) => WrittenType::Slice(Box::new(index(*element, schema)?)),
+                WrittenType::Slice(element) => {
+                    WrittenType::Slice(Box::new(index(*element, schema)?))
+                }
                 WrittenType::Ptr { mutable, target } => WrittenType::Ptr {
                     mutable,
                     target: Box::new(index(*target, schema)?),
@@ -581,368 +577,6 @@ impl<'a> SchemaNames<'a> {
             })
         }
         QueryPoll::Ready(Ok(index(written, self.schema)))
-    }
-    fn compound_type(
-        &self,
-        db: &mut crate::db::memo::Database,
-        sources: &[&crate::source::changes::PreparedSourceView],
-        ty: &ra_ap_syntax::ast::Type,
-    ) -> crate::db::poll::QueryPoll<Option<crate::ir::written_type::WrittenType>> {
-        use crate::{
-            db::poll::QueryPoll,
-            ir::written_type::WrittenType,
-            traits::term::RegionTerm,
-        };
-        use ra_ap_syntax::{
-            AstNode, AstToken, SyntaxKind,
-            ast::{self, HasGenericArgs},
-        };
-        macro_rules! nested {
-            ($value:expr) => {
-                match self.compound_type(db, sources, $value) {
-                    QueryPoll::Ready(Ok(Some(written))) => written,
-                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                }
-            };
-        }
-        QueryPoll::Ready(Ok(Some(match ty {
-            ast::Type::ParenType(paren) => {
-                let Some(inner) = paren.ty() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                nested!(&inner)
-            }
-            ast::Type::TupleType(tuple) => {
-                let mut members = Vec::new();
-                for member in tuple.fields() {
-                    members.push(nested!(&member));
-                }
-                // `()` is the unit primitive, the one canonical spelling.
-                if members.is_empty() {
-                    WrittenType::Primitive(crate::ir::op::PrimitiveType::Unit)
-                } else {
-                    WrittenType::Tuple(members)
-                }
-            }
-            ast::Type::SliceType(slice) => {
-                let Some(element) = slice.ty() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                WrittenType::Slice(Box::new(nested!(&element)))
-            }
-            ast::Type::ArrayType(array) => {
-                let Some(element) = array.ty() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                // A literal length only; a const parameter or expression
-                // needs the pure constant evaluator's length demand.
-                let Some(ast::Expr::Literal(length)) =
-                    array.const_arg().and_then(|arg| arg.expr())
-                else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                let Some(number) = length
-                    .syntax()
-                    .children_with_tokens()
-                    .filter_map(|item| item.into_token())
-                    .find(|token| token.kind() == SyntaxKind::INT_NUMBER)
-                    .and_then(ast::IntNumber::cast)
-                else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                if !matches!(number.suffix(), None | Some("usize")) {
-                    return QueryPoll::Ready(Ok(None));
-                }
-                let Some(len) = number.value().ok().and_then(|len| u32::try_from(len).ok()) else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                WrittenType::Array(Box::new(nested!(&element)), len)
-            }
-            // `*const T` / `*mut T` and `fn(A) -> R` fields (E-R5-008).
-            ast::Type::PtrType(pointer) => {
-                let Some(target) = pointer.ty() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                WrittenType::Ptr {
-                    mutable: pointer.mut_token().is_some(),
-                    target: Box::new(nested!(&target)),
-                }
-            }
-            ast::Type::FnPtrType(function) => {
-                let Some(list) = function.param_list() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                let mut params = Vec::new();
-                for parameter in list.params() {
-                    let Some(ty) = parameter.ty() else {
-                        return QueryPoll::Ready(Ok(None));
-                    };
-                    params.push(nested!(&ty));
-                }
-                let result = match function.ret_type().and_then(|ret| ret.ty()) {
-                    Some(ty) => nested!(&ty),
-                    None => WrittenType::Primitive(crate::ir::op::PrimitiveType::Unit),
-                };
-                WrittenType::FnPtr {
-                    params,
-                    result: Box::new(result),
-                }
-            }
-            // A field's region is a declaration lifetime parameter; regions
-            // are not runtime data, so the projected view names it erased.
-            ast::Type::RefType(reference) => {
-                let Some(target) = reference.ty() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                WrittenType::Ref {
-                    region: RegionTerm::Static,
-                    mutable: reference.mut_token().is_some(),
-                    target: Box::new(nested!(&target)),
-                }
-            }
-            // `dyn Trait`: the principal trait's object schema, as in a
-            // signature or a `let` annotation. A trait-object place keeps its
-            // value's concrete runtime type.
-            ast::Type::DynTraitType(object) => {
-                let principal = object.type_bound_list().and_then(|bounds| {
-                    bounds.bounds().find_map(|bound| match bound.ty() {
-                        Some(ast::Type::PathType(path)) => path.path(),
-                        _ => None,
-                    })
-                });
-                let Some((segments, absolute)) =
-                    principal.and_then(super::member_index::path_segments)
-                else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                match self.graph.lookup_source_path(
-                    crate::source::manifest::Namespace::Type,
-                    &segments,
-                    absolute,
-                    &self.schema.scope,
-                    self.schema.header.profile.edition,
-                ) {
-                    Ok(super::names::NameLookup::Defined(found)) => WrittenType::Dyn(
-                        crate::traits::term::DynSchemaKey(found.identity),
-                    ),
-                    // The closure traits are language items of the prelude:
-                    // their object schema is the builtin trait's identity
-                    // (as in `source_types::resolve_written_type`).
-                    Ok(super::names::NameLookup::Absent)
-                        if !absolute
-                            && matches!(segments.as_slice(),
-                                [crate::syntax::imports::ImportSegment::Name(name)]
-                                    if matches!(name.as_str(), "Fn" | "FnMut" | "FnOnce")) =>
-                    {
-                        let crate::syntax::imports::ImportSegment::Name(name) = &segments[0]
-                        else {
-                            return QueryPoll::Ready(Ok(None));
-                        };
-                        WrittenType::Dyn(crate::traits::term::DynSchemaKey(
-                            crate::core::digest::Digest::of_bytes(
-                                format!("lrr/v1/builtin-closure-trait/{name}").as_bytes(),
-                            ),
-                        ))
-                    }
-                    Ok(_) => return QueryPoll::Ready(Ok(None)),
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                }
-            }
-            ast::Type::PathType(path) => {
-                let Some(path) = path.path() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                let Some(segment) = path.segment() else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                let selected = if path.qualifier().is_some() {
-                    match self.qualified_leaf(db, sources, &path) {
-                        QueryPoll::Ready(Ok(Some(selected))) => selected,
-                        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                    }
-                } else {
-                    let Some(name) = segment.name_ref().map(|name| name.text().to_string())
-                    else {
-                        return QueryPoll::Ready(Ok(None));
-                    };
-                    match self.current_name(db, sources, &name, None) {
-                        QueryPoll::Ready(Ok(selected)) => selected,
-                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                    }
-                };
-                let Some(arguments) = segment.generic_arg_list() else {
-                    return QueryPoll::Ready(Ok(self.compound_leaf(selected)));
-                };
-                let Some(super::signature_names::SignatureName::Source(found)) = selected.name
-                else {
-                    return QueryPoll::Ready(Ok(None));
-                };
-                let base = match self.generic_application(db, sources, found.identity) {
-                    QueryPoll::Ready(Ok(Some(base))) => base,
-                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                };
-                let mut args = Vec::new();
-                for argument in arguments.generic_args() {
-                    match argument {
-                        // Regions are not runtime data.
-                        ast::GenericArg::LifetimeArg(_) => {}
-                        ast::GenericArg::TypeArg(argument) => {
-                            let Some(ty) = argument.ty() else {
-                                return QueryPoll::Ready(Ok(None));
-                            };
-                            args.push(nested!(&ty));
-                        }
-                        _ => return QueryPoll::Ready(Ok(None)),
-                    }
-                }
-                if args.len() != base.2 {
-                    return QueryPoll::Ready(Err(Diagnostic::new(
-                        "LRR-E-GENERIC-BINDING",
-                        "field type argument count differs from the declaration".into(),
-                    )));
-                }
-                WrittenType::Generic {
-                    identity: found.identity,
-                    definition: base.0,
-                    schema: base.1,
-                    args,
-                }
-            }
-            _ => return QueryPoll::Ready(Ok(None)),
-        })))
-    }
-    /// A qualified field Type path (`m::S`, `m::W<T>`) selected through the
-    /// declaration scope's source path lookup. A shorthand projection on a
-    /// type parameter (`T::V`) needs its trait/impl normalization: `None`.
-    fn qualified_leaf(
-        &self,
-        db: &mut crate::db::memo::Database,
-        sources: &[&crate::source::changes::PreparedSourceView],
-        path: &ra_ap_syntax::ast::Path,
-    ) -> crate::db::poll::QueryPoll<Option<SchemaTypeName>> {
-        use super::signature_names::SignatureName;
-        use crate::db::poll::QueryPoll;
-        let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
-            return QueryPoll::Ready(Ok(None));
-        };
-        if let Some(crate::syntax::imports::ImportSegment::Name(first)) = segments.first()
-            && !absolute
-            && self
-                .schema
-                .generics
-                .iter()
-                .any(|parameter| parameter.kind == GenericKind::Type && &parameter.name == first)
-        {
-            return QueryPoll::Ready(Ok(None));
-        }
-        let found = match self.graph.lookup_source_path(
-            crate::source::manifest::Namespace::Type,
-            &segments,
-            absolute,
-            &self.schema.scope,
-            self.schema.header.profile.edition,
-        ) {
-            Ok(super::names::NameLookup::Defined(found)) => found,
-            Ok(_) => return QueryPoll::Ready(Ok(None)),
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let selected = SignatureName::Source(found);
-        let concrete = match super::source_types::prepare_selected(
-            db,
-            self.graph,
-            sources,
-            selected.clone(),
-        ) {
-            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Ready(proof))) => {
-                Some(proof)
-            }
-            QueryPoll::Ready(Ok(_)) => None,
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        };
-        QueryPoll::Ready(Ok(Some(SchemaTypeName {
-            name: Some(selected),
-            concrete,
-            written: None,
-        })))
-    }
-    /// One selected single-name leaf of a compound field Type.
-    fn compound_leaf(&self, selected: SchemaTypeName) -> Option<crate::ir::written_type::WrittenType> {
-        use super::signature_names::SignatureName;
-        use crate::ir::written_type::WrittenType;
-        if let Some(SignatureName::Parameter(key)) = &selected.name {
-            if key.definition != self.schema.definition {
-                return None;
-            }
-            return self
-                .schema
-                .generics
-                .iter()
-                .filter(|parameter| parameter.kind == GenericKind::Type)
-                .position(|parameter| parameter.ordinal == key.ordinal)
-                .and_then(|index| u32::try_from(index).ok())
-                .map(WrittenType::Parameter);
-        }
-        let Some(concrete) = selected.concrete else {
-            return selected.written;
-        };
-        Some(match concrete.source() {
-            TyTerm::Primitive(primitive) => WrittenType::Primitive(*primitive),
-            TyTerm::Str => WrittenType::Str,
-            TyTerm::Nominal(_, args) if args.is_empty() => WrittenType::Nominal(Box::new(concrete)),
-            _ => return None,
-        })
-    }
-    /// The declaration key, schema identity and type-parameter count of a
-    /// generic struct/enum named by a compound field Type.
-    fn generic_application(
-        &self,
-        db: &mut crate::db::memo::Database,
-        sources: &[&crate::source::changes::PreparedSourceView],
-        identity: Digest,
-    ) -> crate::db::poll::QueryPoll<Option<(crate::source::manifest::DefKey, Digest, usize)>> {
-        use crate::db::poll::QueryPoll;
-        let definition = match super::source_types::nominal_definition(db, sources, identity) {
-            Ok(definition) => definition,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        if !matches!(
-            definition.item_kind,
-            crate::source::manifest::ItemKind::Struct | crate::source::manifest::ItemKind::Enum
-        ) {
-            return QueryPoll::Ready(Ok(None));
-        }
-        let captured = match db.fetch(
-            &crate::db::provider::SyntaxProvider,
-            crate::db::key::QueryKey::TypeSchema(identity),
-        ) {
-            QueryPoll::Ready(Ok(value)) => value,
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        };
-        let crate::db::value::QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
-            return QueryPoll::Ready(Err(schema_fault("field generic schema outcome differs")));
-        };
-        if schema
-            .generics
-            .iter()
-            .any(|parameter| parameter.kind == GenericKind::Const)
-        {
-            return QueryPoll::Ready(Ok(None));
-        }
-        let parameters = schema
-            .generics
-            .iter()
-            .filter(|parameter| parameter.kind == GenericKind::Type)
-            .count();
-        QueryPoll::Ready(Ok(Some((definition, schema.fingerprint(), parameters))))
     }
     pub fn from_database(
         db: &mut crate::db::memo::Database,
@@ -1344,9 +978,7 @@ impl<'a> SchemaNames<'a> {
         sources: &[&crate::source::changes::PreparedSourceView],
         name: Option<&str>,
     ) -> crate::db::poll::QueryPoll<NominalBinding> {
-        match self.bind_variant_with(name, |query| {
-            self.current_query(db, sources, query)
-        }) {
+        match self.bind_variant_with(name, |query| self.current_query(db, sources, query)) {
             Ok(poll) => poll,
             Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
         }
@@ -1445,8 +1077,7 @@ impl<'a> SchemaNames<'a> {
                 if selected.shape != FieldShape::Record {
                     return Err(schema_fault("named field requires a record variant"));
                 }
-                let member =
-                    super::names::owned_name(member, self.schema.header.profile.edition)?;
+                let member = super::names::owned_name(member, self.schema.header.profile.edition)?;
                 let mut matching = selected
                     .fields
                     .iter()
@@ -1939,9 +1570,8 @@ impl NominalFieldType {
         match self {
             Self::Concrete(source) => source.materialize(store).map(Some),
             Self::Parameter(index) => Ok(args.get(*index as usize).copied().flatten()),
-            Self::Compound(written) => {
-                written.materialize_with(store, &|index| args.get(index as usize).copied().flatten())
-            }
+            Self::Compound(written) => written
+                .materialize_with(store, &|index| args.get(index as usize).copied().flatten()),
         }
     }
     pub(crate) fn find_descriptor(
@@ -2117,8 +1747,18 @@ pub(crate) fn literal_discriminant(tokens: &[TokenRecipe]) -> Option<i128> {
     let suffix = &digits[end..];
     if !matches!(
         suffix,
-        "" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64"
-            | "u128" | "usize"
+        "" | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
     ) {
         return None;
     }

@@ -382,6 +382,16 @@ impl GenericEnv {
         &self,
         hint: &crate::ir::op::HintRecipe,
     ) -> Result<Option<(crate::ir::op::PrimitiveType, TypeId)>, Diagnostic> {
+        // Declaration-selected results use their own exact source/descriptor
+        // service. They are not printed primitive syntax to be remapped.
+        // Frame's DefinitionResult/WrittenResult consumers check the current
+        // definition/root and the same retained call environment.
+        if matches!(hint, crate::ir::op::HintRecipe::DefinitionResult)
+            || (matches!(hint, crate::ir::op::HintRecipe::DefinitionWrittenResult)
+                && self.written_result.is_some())
+        {
+            return Ok(None);
+        }
         match &self.normalized_return {
             Some(proof) => proof.for_written_hint(hint),
             None => Ok(None),

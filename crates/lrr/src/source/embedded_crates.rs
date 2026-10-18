@@ -23,7 +23,7 @@ pub struct EmbeddedFile {
 /// One LRR-provided source crate.
 #[derive(Debug, Clone)]
 pub struct EmbeddedCrate {
-    /// Extern-prelude / `extern crate` name (`core`, `alloc`, `std`).
+    /// Extern-prelude / `extern crate` name (`core`, `alloc`, `std`, `test`).
     pub name: &'static str,
     /// Crate unit; for the standard facades `crate::facade::unit(profile, name)`,
     /// the same unit the compiler-injected `std`/`core` imports target.
@@ -44,10 +44,11 @@ macro_rules! facade_file {
     };
 }
 
-/// The standard facade crates (`core`, `alloc`, `std`) as LRR-provided Rust
+/// The standard facade crates (`core`, `alloc`, `std`, `test`) as LRR-provided Rust
 /// source (Section 17). Their units are the same `crate::facade::unit`
 /// identities the library macro definitions and closed facade functions use,
-/// so all three join one crate per name.
+/// so each facade joins one crate per name. The partial `test` facade exposes
+/// its ordinary `bench::black_box` reexport; full libtest remains separate.
 ///
 /// The facade unit (and the compiler catalogue that owns it) is keyed by the
 /// owning profile, edition included, so the facade sources are captured in
@@ -138,6 +139,13 @@ pub fn standard_facade_crates(profile: &ProfileIdentity) -> Vec<EmbeddedCrate> {
                 facade_file!(["sync"], "std/sync.rs"),
                 facade_file!(["thread"], "std/thread.rs"),
                 facade_file!(["time"], "std/time.rs"),
+            ],
+        ),
+        krate(
+            "test",
+            vec![
+                facade_file!([], "test/lib.rs"),
+                facade_file!(["bench"], "test/bench.rs"),
             ],
         ),
     ]

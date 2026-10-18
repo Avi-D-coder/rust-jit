@@ -1,6 +1,6 @@
 //! Reached `const` and `static` initializers run through the ordinary
-//! interpreter (E-R5-007). A `ValuePath` naming such an item, whose value the
-//! pure evaluator does not produce, demands the item's initializer; the
+//! interpreter (E-R5-007). A reached `ValuePath` naming an uninitialized item
+//! demands the item's initializer through this one route; the
 //! dispatcher enters its body as a zero-parameter source call
 //! (`CallResolver::initializer`) and the returned value becomes:
 //! - a static's run-long cell, installed once and read or borrowed in place;
@@ -60,11 +60,6 @@ impl RunMachine {
                 "selected constant or static has no executable initializer body".into(),
             )));
         };
-        let reference_result = callee
-            .signature()
-            .result
-            .first()
-            .is_some_and(|token| token.text == "&");
         let writable = callee
             .signature()
             .header
@@ -91,12 +86,10 @@ impl RunMachine {
                     writable,
                 },
             )?;
-            // The entered initializer frame runs in its root scope; a
-            // reference result is its root value's coercion context.
+            // The declared result supplies the ordinary root value context,
+            // including primitive widths, nominal arguments and references.
             self.frame.enter_initializer_root()?;
-            if reference_result {
-                crate::vm::step::initializer_root_hint(&mut self.frame, &mut self.store)?;
-            }
+            crate::vm::step::initializer_root_hint(&mut self.frame, &mut self.store)?;
             Ok(())
         })())
     }

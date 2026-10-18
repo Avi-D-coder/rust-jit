@@ -333,6 +333,8 @@ fn primitive_argument_type(
         13 => Usize,
         14 => F32,
         15 => F64,
+        17 => I128,
+        18 => U128,
         _ => {
             return Err(call_fault(
                 "source view requires further value-family integration",
@@ -1309,7 +1311,7 @@ impl RunMachine {
         }
         // These are the fixed builtin source IDs handled by the same ordinary
         // primitive conversion.
-        if matches!(descriptor.0, 1..=15) {
+        if matches!(descriptor.0, 1..=15 | 17 | 18) {
             return primitive_argument_type(descriptor).map(Some);
         }
         // A written nominal/tuple/array context (`let v: Option<u16> = ..`)
@@ -1733,7 +1735,6 @@ impl RunMachine {
             // a closure capture tuple nested under a nominal result).
             let context = match contracts.source_result.as_ref().filter(|term| {
                 crate::frontend::call_contracts::closed_term(term)
-                    && crate::frontend::written_terms::contains_nominal(term)
             }) {
                 Some(term) => {
                     let mut written = match crate::frontend::written_terms::closed_written_type(

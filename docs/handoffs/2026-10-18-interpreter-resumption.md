@@ -13,6 +13,30 @@ handoffs' clean-tree, missing-readiness and source-copy statements are historica
 Follow the current AGENTS E-R5-006/E-R5-007 overrides: no sandbox/resource caps,
 no static compiler checks, VM-backed reached initializers, and direct builds.
 
+## Current V9 checkpoint
+
+Exact compiled source `462e11a293d49c1f11592251cfcde6d7c4227f187a7d73e880176019f6940c5a`
+passes both builds (lib `b83b99/0`, CLI `4d5f5b/0`) with source unchanged.
+Six selected controls pass and four of seven unchanged whole-main attempts
+complete. New since V7: const-int-arithmetic (134 calls / 18,352 dispatches)
+and associated-types-project-from-type-param-via-bound-in-where (49 / 722).
+MIN and Vec autoderef remain passing. All four were faults in saved v16; this is
+a targeted delta, not a refreshed global total. Whole i128 fails VALUE-REPR;
+u128 fails structural generic binding. Proper issue-17718 aux preparation stops
+on unresolved Ordering import, before runtime. [Exact source/evidence](../../worktracks/evidence/2026-10-18-interpreter-v9-validation.json).
+
+V8 lib returned exit 0 but a source changed during compilation; its freeze is
+invalid. No CLI or runtime acceptance is attributed to V8. V9 explicitly froze
+all writers through both builds. Source-only successors (overflowing literals,
+actual mismatch diagnostics, retained-origin diagnostics, generic field reads)
+are separate from the staged V9 source. E007 still lacks nonprimitive run-once
+templates and generic cache audit; pure constant patterns remain held debt.
+No full milestone, interpreter runtime gate, JIT or full-fixture closure.
+
+Current implementation branch checkpoints b6aa9706bc72d4a5c8f69e30fe7124992f23d8fd
+and its predecessor 9d4c588ea279ca3c25ff19d99b4e4cdd5b21b112 were pushed.
+Only source, fixtures, plans and compact evidence were included.
+
 ## Ownership and validation
 
 Root implements generated body environments and local const/static admission.
@@ -35,8 +59,8 @@ execution. Imports are not passes. Both upstream license texts remain retained.
 The older local inventory `artifacts/runs/inventory/raw-v16-facade.json` reports
 1,429 runtime-contract passes on its own binary (SHA-256
 `732aec123f8f5de8cf465c9c5ccd757970908ae62bba3dfd68f61a260b27650b`).
-That is historical evidence, not a current-source/full-fixture count. No newly
-passing whole upstream fixture has been verified in this resumption yet.
+That is historical evidence, not a current-source/full-fixture count. At the historical V6 checkpoint, no new whole-main runtime gain had been
+verified; V7 and V9 gains below supersede that dated observation.
 
 All resumption raw terminals, source manifests and reports are local under
 `artifacts/validation-resume-2026-10-18/`; do not commit build products or these

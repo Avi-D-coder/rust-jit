@@ -1,10 +1,5 @@
-//! Value-namespace items read through an ordinary `ValuePath`.
-//!
-//! A written value path that selects no unit constructor is resolved once per
-//! PC through the run's completed namespace graph (`CallResolver` Value
-//! lookup, shared with pattern names). A constant is evaluated by the pure
-//! constant evaluator through the same admission constant patterns use; the
-//! VM receives only the evaluated value (`Frame::prepare_item_value`).
+//! Reached item values use the ordinary interpreter and run-long initializer
+//! storage. Preparation-time pure constant queries are not a runtime fast path.
 use super::*;
 use crate::{
     frontend::names::NameLookup,
@@ -617,9 +612,8 @@ impl RunMachine {
             definition_edition: 0,
         };
         let value = match item_kind {
-            // E-R5-007: a constant the pure evaluator does not produce runs
-            // its initializer through the interpreter (demanded here, entered
-            // by the dispatcher, then prepared again at this PC).
+            // Every reached constant uses the same initializer-frame route;
+            // its prepared value is installed before this PC is retried.
             Some(ItemKind::Constant) => {
                 // `&CONST` is rustc's promotable borrow of an rvalue; any other
                 // use of the constant as a place (a `&mut`, a method autoref)
@@ -644,33 +638,21 @@ impl RunMachine {
                 if let Some((cell, view)) = self.const_cells.get(&definition.identity).cloned() {
                     promote(ItemValue::ConstCell { cell, view })
                 } else {
-                    match self.constant_item(db, definition.identity) {
-                        QueryPoll::Ready(Ok(value)) => promote(value),
-                        QueryPoll::Ready(Err(_)) => {
-                            self.demand_initializer(definition.identity, false);
-                            return QueryPoll::Ready(Ok(()));
-                        }
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                    }
+                    self.demand_initializer(definition.identity, false);
+                    return QueryPoll::Ready(Ok(()));
                 }
             }
-            // An immutable static read by value observes its initializer's
-            // const-evaluated value. Its place (a borrow, projection or a
-            // `static mut` access) has an address identity this copy lacks.
+            // A static's VM-initialized storage has a stable run-long address.
+            // Reads and places use that same location, including mutation.
             Some(ItemKind::Static) => {
                 let place = match self.path_forms_place(db, &pc) {
                     QueryPoll::Ready(Ok(place)) => place,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 };
-                let cell = match self.static_cell(db, definition.identity) {
-                    QueryPoll::Ready(Ok(cell)) => cell,
-                    // E-R5-007: its initializer runs through the interpreter.
-                    QueryPoll::Ready(Err(_)) => {
-                        self.demand_initializer(definition.identity, true);
-                        return QueryPoll::Ready(Ok(()));
-                    }
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                let Some(cell) = self.static_cells.get(&definition.identity).copied() else {
+                    self.demand_initializer(definition.identity, true);
+                    return QueryPoll::Ready(Ok(()));
                 };
                 if place {
                     let view = match self.store.state(cell) {
@@ -734,136 +716,6 @@ impl RunMachine {
     }
 }
 
-/// The guest layout and source view of an evaluated constant's wire type.
-fn constant_layout(
-    store: &mut crate::runtime::cell::GuestStore,
-    wire: &crate::ir::constant_data::wire::ConstantWireType,
-) -> Result<(crate::runtime::shape::TypeId, crate::traits::term::TyTerm), Diagnostic> {
-    use crate::{
-        ir::constant_data::wire::ConstantWireType,
-        runtime::shape::{PrimitiveIdentity, TypeKey},
-        traits::term::{ConstTerm, TyTerm},
-    };
-    match wire {
-        ConstantWireType::Scalar(primitive) => Ok((
-            PrimitiveIdentity::from_recipe(*primitive)?.id(),
-            TyTerm::Primitive(*primitive),
-        )),
-        ConstantWireType::Array { element, length } => {
-            let (element_ty, element_view) = constant_layout(store, element)?;
-            let len = u32::try_from(*length).map_err(|_| {
-                Diagnostic::new(
-                    "LRR-E-CONST-INSTANTIATION",
-                    "constant array length overflow".into(),
-                )
-            })?;
-            let ty = store.intern_type(TypeKey::Array {
-                element: element_ty,
-                len,
-            })?;
-            Ok((
-                ty,
-                TyTerm::Array(Box::new(element_view), ConstTerm::Value(*length)),
-            ))
-        }
-    }
-}
-
-impl RunMachine {
-    /// A constant item read by value: a scalar, or an aggregate instantiated
-    /// afresh at each read from its one evaluated immutable value.
-    fn constant_item(
-        &mut self,
-        db: &mut Database,
-        identity: crate::core::digest::Digest,
-    ) -> QueryPoll<ItemValue> {
-        let (value, wire) = match self.constant_item_data(db, identity) {
-            QueryPoll::Ready(Ok(data)) => data,
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        };
-        if let Some(scalar) = value.scalar() {
-            return QueryPoll::Ready(Ok(ItemValue::Scalar {
-                view: primitive_view(&scalar),
-                value: scalar,
-            }));
-        }
-        QueryPoll::Ready(constant_layout(&mut self.store, &wire).map(|(ty, view)| {
-            ItemValue::Aggregate {
-                value,
-                wire,
-                ty,
-                view: Some(view),
-            }
-        }))
-    }
-    /// The run-global cell of static `identity`, allocated and initialized
-    /// from its const-evaluated initializer on first use.
-    fn static_cell(
-        &mut self,
-        db: &mut Database,
-        identity: crate::core::digest::Digest,
-    ) -> QueryPoll<crate::runtime::cell::CellId> {
-        if let Some(cell) = self.static_cells.get(&identity) {
-            return QueryPoll::Ready(Ok(*cell));
-        }
-        let (value, wire) = match self.constant_item_data(db, identity) {
-            QueryPoll::Ready(Ok(data)) => data,
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        };
-        // The published header of the module or body-local static.
-        let writable = matches!(
-            db.input(&crate::db::dependency::InputKey::DefinitionHeader(identity)).as_deref(),
-            Some(crate::db::dependency::InputValue::DefinitionHeader(header))
-                if header
-                    .tokens
-                    .windows(2)
-                    .any(|pair| pair[0].text == "static" && pair[1].text == "mut")
-        );
-        let result = (|| -> Result<crate::runtime::cell::CellId, Diagnostic> {
-            let anchor = match self.static_anchor {
-                Some(anchor) => anchor,
-                None => {
-                    let anchor = self.store.new_frame_anchor()?;
-                    self.static_anchor = Some(anchor);
-                    anchor
-                }
-            };
-            let slot = self.next_static_slot()?;
-            let (ty, _) = constant_layout(&mut self.store, &wire)?;
-            let cell = self.store.new_cell(
-                crate::runtime::cell::StorageContract::Exact(ty),
-                writable,
-                crate::runtime::cell::CellOwner::FrameSlot {
-                    frame: anchor,
-                    slot,
-                },
-            )?;
-            // A scalar initializer is its value; an aggregate one is
-            // instantiated once into the static's own storage.
-            let ticket = match value.scalar() {
-                Some(scalar) => self.store.ticket(scalar)?,
-                None => {
-                    let plan = self
-                        .store
-                        .prepare_constant_instantiation(&value, &wire, ty)?;
-                    self.store
-                        .instantiate_constant_value(plan, &mut self.frame.fuel)?
-                }
-            };
-            self.store.initialize(cell, ticket)?;
-            Ok(cell)
-        })();
-        match result {
-            Ok(cell) => {
-                self.static_cells.insert(identity, cell);
-                QueryPoll::Ready(Ok(cell))
-            }
-            Err(error) => QueryPoll::Ready(Err(error)),
-        }
-    }
-}
 /// A macro-generated declaration's kind, from its canonical owner (its
 /// published unit, or the retained admission of an associated item).
 fn generated_item_kind(

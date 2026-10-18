@@ -1321,14 +1321,14 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "E007 remove reached scalar/array pure evaluator fallback; shared DefinitionResult primitive/written source context join. Nonprimitive template/instantiation remains held; source-only nextcandidate.",
+      "scope": "E007 reached item-value pure fallback removed; actual declared result shared Frame join. V9 4 initializer controls and whole constarith pass. Nonprimitive run-once template/generic cache/pure pattern debt remains held; no feature closure.",
       "paths": [
         "crates/lrr/src/engine/run_value_items.rs",
         "crates/lrr/src/engine/run_initializers.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T09:15:07.352169+00:00",
+      "updated_at": "2026-10-18T09:35:10.556551+00:00",
       "review_after": "2026-10-18T09:15:07.352169+00:00"
     }
   ]

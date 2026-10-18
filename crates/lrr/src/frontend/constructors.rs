@@ -59,6 +59,8 @@ pub(crate) fn bind_prepared_record_constructor(
     sources: &[&PreparedSourceView],
     body: &BodyIndex,
     plan: &ConstructorPlan,
+    arguments: &[Option<crate::traits::term::TyTerm>],
+    members: Option<&super::member_index::MemberIndex>,
 ) -> QueryPoll<RecordConstructorBinding> {
     use super::source_locals::owned_plan::type_declarations::BodyTypeOutcome;
     if plan.origin().body_key != *body.body() || plan.profile() != body.profile() {
@@ -87,7 +89,7 @@ pub(crate) fn bind_prepared_record_constructor(
             locals.context().source().scope(),
         );
     }
-    let selected = match locals.prepare_body_type(db, plan.node()) {
+    let selected = match locals.generic_base_body_type(db, plan.node()) {
         QueryPoll::Ready(Ok(BodyTypeOutcome::Ready(selected))) => selected,
         QueryPoll::Ready(Ok(BodyTypeOutcome::Pending(demand))) => {
             // A record path may name an enum variant (`E::B { .. }`), which is
@@ -98,7 +100,7 @@ pub(crate) fn bind_prepared_record_constructor(
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
             if let Some(variant) = variant {
-                return bind_variant_record_constructor(
+                return bind_variant_record_constructor_with_arguments(
                     db,
                     graph,
                     sources,
@@ -106,28 +108,26 @@ pub(crate) fn bind_prepared_record_constructor(
                     variant.enumeration,
                     Some(&variant.name),
                     locals.context().source().scope(),
+                    arguments,
+                    members,
                 );
             }
             // A generic struct named without arguments: the ordinary Type
             // service selected the declaration; its constructor infers the
             // arguments from its fields or result context.
-            if let super::source_locals::owned_plan::type_declarations::BodyTypeDemand::GenericArguments(identity) = demand
-                && sources.iter().any(|source| {
-                    source.outline().items.iter().any(|item| {
-                        item.def_key.fingerprint() == identity
-                            && item.def_key.item_kind == ItemKind::Struct
-                    })
-                })
-            {
-                return bind_variant_record_constructor(
-                    db,
-                    graph,
-                    sources,
-                    plan,
-                    identity,
-                    None,
-                    locals.context().source().scope(),
-                );
+            if let super::source_locals::owned_plan::type_declarations::BodyTypeDemand::GenericArguments(identity) = demand {
+                // The exact Type occurrence selected this declaration, including
+                // a body-local nominal. An outline census is not local authority.
+                let declaration = match super::source_types::nominal_definition(db, sources, identity) {
+                    Ok(declaration) => declaration,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                if declaration.item_kind == ItemKind::Struct {
+                    return bind_variant_record_constructor_with_arguments(
+                        db, graph, sources, plan, identity, None,
+                        locals.context().source().scope(), arguments, members,
+                    );
+                }
             }
             // `Root::Variant { .. }` whose root a block item or import binds
             // (a block-local enum): the entered lexical Value goal of this
@@ -149,7 +149,7 @@ pub(crate) fn bind_prepared_record_constructor(
                 && goal.pending().is_none()
                 && let (Some(member), Some(declaration)) = (goal.rooted(), goal.declaration())
             {
-                return bind_variant_record_constructor(
+                return bind_variant_record_constructor_with_arguments(
                     db,
                     graph,
                     sources,
@@ -157,6 +157,8 @@ pub(crate) fn bind_prepared_record_constructor(
                     declaration.identity(),
                     Some(member),
                     locals.context().source().scope(),
+                    arguments,
+                    members,
                 );
             }
             return deferred(RecordConstructorDemand::TypeContext);
@@ -184,13 +186,25 @@ pub(crate) fn bind_prepared_record_constructor(
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
-    match names.bind_record_constructor_current(
-        db,
-        sources,
-        None,
-        plan,
-        locals.context().source().scope(),
-    ) {
+    let binding = match members {
+        Some(members) => names.bind_record_constructor_current_with_arguments(
+            db,
+            sources,
+            None,
+            plan,
+            locals.context().source().scope(),
+            arguments,
+            members,
+        ),
+        None => names.bind_record_constructor_current(
+            db,
+            sources,
+            None,
+            plan,
+            locals.context().source().scope(),
+        ),
+    };
+    match binding {
         QueryPoll::Ready(Ok(NominalConstructorBinding::Ready(bound))) => {
             QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(Box::new(bound))))
         }
@@ -285,6 +299,29 @@ fn bind_variant_record_constructor(
     variant: Option<&str>,
     caller: &ScopeKey,
 ) -> QueryPoll<RecordConstructorBinding> {
+    bind_variant_record_constructor_with_arguments(
+        db,
+        graph,
+        sources,
+        plan,
+        owner,
+        variant,
+        caller,
+        &[],
+        None,
+    )
+}
+fn bind_variant_record_constructor_with_arguments(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    plan: &ConstructorPlan,
+    owner: crate::core::digest::Digest,
+    variant: Option<&str>,
+    caller: &ScopeKey,
+    arguments: &[Option<crate::traits::term::TyTerm>],
+    members: Option<&super::member_index::MemberIndex>,
+) -> QueryPoll<RecordConstructorBinding> {
     let schema = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(owner)) {
         QueryPoll::Ready(Ok(value)) => value,
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -298,7 +335,13 @@ fn bind_variant_record_constructor(
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
-    match names.bind_record_constructor_current(db, sources, variant, plan, caller) {
+    let binding = match members {
+        Some(members) => names.bind_record_constructor_current_with_arguments(
+            db, sources, variant, plan, caller, arguments, members,
+        ),
+        None => names.bind_record_constructor_current(db, sources, variant, plan, caller),
+    };
+    match binding {
         QueryPoll::Ready(Ok(NominalConstructorBinding::Ready(bound))) => {
             QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(Box::new(bound))))
         }
@@ -349,8 +392,10 @@ fn bind_generated_record_inner(
         return Err(fault("constructor plan/owning body differs"));
     }
     let caller = body.body().definition;
-    let Some(InputValue::DefinitionSource(parse)) =
-        db.input(&InputKey::DefinitionSource(caller)).as_deref().cloned()
+    let Some(InputValue::DefinitionSource(parse)) = db
+        .input(&InputKey::DefinitionSource(caller))
+        .as_deref()
+        .cloned()
     else {
         return Err(fault("generated constructor caller source absent"));
     };
@@ -360,13 +405,17 @@ fn bind_generated_record_inner(
             "constructor source owner absent".into(),
         ));
     };
-    let Some(InputValue::DefinitionBody(handle)) =
-        db.input(&InputKey::DefinitionBody(caller)).as_deref().cloned()
+    let Some(InputValue::DefinitionBody(handle)) = db
+        .input(&InputKey::DefinitionBody(caller))
+        .as_deref()
+        .cloned()
     else {
         return Err(fault("generated constructor caller body absent"));
     };
-    let Some(InputValue::DeclarationContext(context)) =
-        db.input(&InputKey::DeclarationContext(caller)).as_deref().cloned()
+    let Some(InputValue::DeclarationContext(context)) = db
+        .input(&InputKey::DeclarationContext(caller))
+        .as_deref()
+        .cloned()
     else {
         return Err(fault("generated constructor caller context absent"));
     };
@@ -378,8 +427,10 @@ fn bind_generated_record_inner(
             "constructor caller source revision differs from database",
         ));
     }
-    let Some(InputValue::CrateCfg(cfg)) =
-        db.input(&InputKey::CrateCfg(context.scope.crate_key)).as_deref().cloned()
+    let Some(InputValue::CrateCfg(cfg)) = db
+        .input(&InputKey::CrateCfg(context.scope.crate_key))
+        .as_deref()
+        .cloned()
     else {
         return Err(fault("generated constructor cfg absent"));
     };
@@ -389,7 +440,9 @@ fn bind_generated_record_inner(
         ..context.scope.clone()
     };
     if plan.lang_record().is_some() {
-        return Ok(bind_lang_record_constructor(db, graph, sources, plan, &scope));
+        return Ok(bind_lang_record_constructor(
+            db, graph, sources, plan, &scope,
+        ));
     }
     let parsed = ready!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(parse.clone())));
     let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
