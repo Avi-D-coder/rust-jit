@@ -19916,7 +19916,9 @@
         "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
         "worktracks/04-calls-source-views/2026-10-18-symbolic-parameter-places.md",
         "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
-        "worktracks/04-calls-source-views/2026-10-18-open-reference-coercions.md"
+        "worktracks/04-calls-source-views/2026-10-18-open-reference-coercions.md",
+        "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json",
+        "worktracks/04-calls-source-views/2026-10-18-receiver-name-origin.md"
       ],
       "title": "SourceView propagation",
       "acceptance_contract": "TR003\u2013TR005, alias/field/return/default-Self variants. Depends: M017.",
@@ -19959,7 +19961,7 @@
           "scope": "Actual live Type/prelude/alias/query consumers; unconsumed future generated constant/full-role models retained as prototypes. Shared Type/Value proof merge and real qualified consumer Value/module export replay remain required. No task or runtime acceptance."
         }
       ],
-      "latest_component_scope": "V100 solo held M018 reference-coercion repair: actual open WrittenType/PartialHint targets share the existing binder traversal and ordinary Deref/DerefMut calls/continuations. Both builds pass. Focused controls18/19pass; the aggregate upstream coercion control fails at or-patterns/slice-patterns.rs with invalid r#self macro-name admission; later entries unexecuted. Stock sample7/8runtime contracts pass (conditional method2 remains ambiguous); regions-infer-borrow-scope-view newly completes versus measured V97 failure, in all4editions. Its body emitted by arbitrary user macro, wrapper and nested in standard macros passes12/12adaptation runs with cleanup, no output and12source-call boundaries each. One new distinct upstream runtime gain; no refreshed suite total or full-fixture/architecture/M018/interpreter/JIT gate completion."
+      "latest_component_scope": "V101 solo held source-name admission component: names::owned_name shares existing MacroName::local receiver validation instead of rejecting self as r#self. Both builds pass;2/4derive/source controls pass, two derive controls fail constructor source/member binding (baseline attribution unverified). Stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals advance past invalid-name admission then fail self Value-path resolution after17/33source calls. Zero additional distinct upstream gains. Full receiver source/parameter join, constructor binding, M018/architecture/interpreter/JIT gates remain open."
     },
     {
       "id": "M019",

@@ -20,7 +20,9 @@ use crate::{
 use std::sync::Arc;
 pub type NamePath = MacroPath;
 pub(crate) fn owned_name(name: &str, edition: u16) -> Result<MacroName, Diagnostic> {
-    MacroName::parse(name, edition).or_else(|_| super::source_macro_routes::semantic(name, edition))
+    // Source names include the receiver keyword, as in ordinary local lookup.
+    // Macro definition names still use MacroName::parse at their own boundary.
+    MacroName::local(name, edition).or_else(|_| super::source_macro_routes::semantic(name, edition))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]

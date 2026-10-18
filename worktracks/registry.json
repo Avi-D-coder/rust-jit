@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T22:03:55.167069+00:00",
+  "updated_at": "2026-10-18T22:09:44.658866+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -234,11 +234,12 @@
           "id": "WT04-02",
           "title": "Expression source views",
           "status": "in_progress",
-          "candidate": "worktracks/04-calls-source-views/2026-10-18-open-reference-coercions.md",
-          "acceptance_scope": "V100 solo held M018 reference-coercion repair: actual open WrittenType/PartialHint targets share the existing binder traversal and ordinary Deref/DerefMut calls/continuations. Both builds pass. Focused controls18/19pass; the aggregate upstream coercion control fails at or-patterns/slice-patterns.rs with invalid r#self macro-name admission; later entries unexecuted. Stock sample7/8runtime contracts pass (conditional method2 remains ambiguous); regions-infer-borrow-scope-view newly completes versus measured V97 failure, in all4editions. Its body emitted by arbitrary user macro, wrapper and nested in standard macros passes12/12adaptation runs with cleanup, no output and12source-call boundaries each. One new distinct upstream runtime gain; no refreshed suite total or full-fixture/architecture/M018/interpreter/JIT gate completion.",
+          "candidate": "worktracks/04-calls-source-views/2026-10-18-receiver-name-origin.md",
+          "acceptance_scope": "V101 solo held source-name admission component: names::owned_name shares existing MacroName::local receiver validation instead of rejecting self as r#self. Both builds pass;2/4derive/source controls pass, two derive controls fail constructor source/member binding (baseline attribution unverified). Stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals advance past invalid-name admission then fail self Value-path resolution after17/33source calls. Zero additional distinct upstream gains. Full receiver source/parameter join, constructor binding, M018/architecture/interpreter/JIT gates remain open.",
           "evidence": [
             "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
-            "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json"
+            "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
+            "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json"
           ]
         },
         {
@@ -752,7 +753,7 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V100 solo held M018 reference-coercion repair: actual open WrittenType/PartialHint targets share the existing binder traversal and ordinary Deref/DerefMut calls/continuations. Both builds pass. Focused controls18/19pass; the aggregate upstream coercion control fails at or-patterns/slice-patterns.rs with invalid r#self macro-name admission; later entries unexecuted. Stock sample7/8runtime contracts pass (conditional method2 remains ambiguous); regions-infer-borrow-scope-view newly completes versus measured V97 failure, in all4editions. Its body emitted by arbitrary user macro, wrapper and nested in standard macros passes12/12adaptation runs with cleanup, no output and12source-call boundaries each. One new distinct upstream runtime gain; no refreshed suite total or full-fixture/architecture/M018/interpreter/JIT gate completion.",
+    "validation": "V101 solo held source-name admission component: names::owned_name shares existing MacroName::local receiver validation instead of rejecting self as r#self. Both builds pass;2/4derive/source controls pass, two derive controls fail constructor source/member binding (baseline attribution unverified). Stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals advance past invalid-name admission then fail self Value-path resolution after17/33source calls. Zero additional distinct upstream gains. Full receiver source/parameter join, constructor binding, M018/architecture/interpreter/JIT gates remain open.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
@@ -764,7 +765,8 @@
     ],
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
-      "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json"
+      "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
+      "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json"
     ]
   }
 }

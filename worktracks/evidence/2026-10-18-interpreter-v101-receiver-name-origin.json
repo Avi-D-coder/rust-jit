@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-18T22:09:44.658866+00:00",
+  "candidate": "V101",
+  "owner": "solo root; no subagents",
+  "head": "4c4e56f2cc911b1ffcd2240d9a83e0751cf101dd",
+  "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4",
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "source_frozen_through_terminals": true,
+  "scope": "V101 solo held source-name admission component: names::owned_name shares existing MacroName::local receiver validation instead of rejecting self as r#self. Both builds pass;2/4derive/source controls pass, two derive controls fail constructor source/member binding (baseline attribution unverified). Stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals advance past invalid-name admission then fail self Value-path resolution after17/33source calls. Zero additional distinct upstream gains. Full receiver source/parameter join, constructor binding, M018/architecture/interpreter/JIT gates remain open.",
+  "lib_build": {
+    "session": 5640,
+    "terminal": "c62c39",
+    "exit": 0,
+    "seconds": 6.1,
+    "binary_sha256": "90d0b4f0646eb24f06350dc49bb8b3e03eaccddced2ae6654ac1af14b3f4265f"
+  },
+  "cli_build": {
+    "session": 32699,
+    "terminal": "70b15b",
+    "exit": 0,
+    "seconds": 4.86,
+    "binary_sha256": "ac415fd24ebc7a2ae8fea7872342408f1f39d934d6965112a8c0268c7cd0e339"
+  },
+  "controls_queue": {
+    "session": 17523,
+    "terminal": "9e10cf",
+    "runner_exit": 0,
+    "passed": 2,
+    "total": 4
+  },
+  "stock_queue": {
+    "session": 55329,
+    "terminal": "fc3f5e",
+    "runner_exit": 0,
+    "passed": 1,
+    "total": 3
+  },
+  "controls": [
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::rustc_unchanged_copy_derive_fixtures_complete_without_the_facade",
+      "exit": 0,
+      "seconds": 0.727,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::builtin_derive_tests::rustc_unchanged_copy_derive_fixtures_complete_without_the_facade",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "90d0b4f0646eb24f06350dc49bb8b3e03eaccddced2ae6654ac1af14b3f4265f",
+      "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::derived_impls_run_like_handwritten_and_user_macro_impls",
+      "exit": 101,
+      "seconds": 5.747,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::builtin_derive_tests::derived_impls_run_like_handwritten_and_user_macro_impls",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "90d0b4f0646eb24f06350dc49bb8b3e03eaccddced2ae6654ac1af14b3f4265f",
+      "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::derived_clone_partial_eq_and_default_cover_struct_enum_and_generic_shapes",
+      "exit": 101,
+      "seconds": 11.405,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::builtin_derive_tests::derived_clone_partial_eq_and_default_cover_struct_enum_and_generic_shapes",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "90d0b4f0646eb24f06350dc49bb8b3e03eaccddced2ae6654ac1af14b3f4265f",
+      "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4"
+    },
+    {
+      "selector": "vm::frame::symbolic_place_source_tests::ordinary_generic_parameter_alias_borrow_and_deref_keep_rigid_source_all_editions",
+      "exit": 0,
+      "seconds": 0.384,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::symbolic_place_source_tests::ordinary_generic_parameter_alias_borrow_and_deref_keep_rigid_source_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "90d0b4f0646eb24f06350dc49bb8b3e03eaccddced2ae6654ac1af14b3f4265f",
+      "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4"
+    }
+  ],
+  "stock": [
+    {
+      "path": "tests/ui/or-patterns/slice-patterns.rs",
+      "sha256": "054e6ee60670edf6f27892d8968783e5c68aecac8a5110f6b56914e74c7347d7",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "ac415fd24ebc7a2ae8fea7872342408f1f39d934d6965112a8c0268c7cd0e339",
+      "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4",
+      "exit": 2,
+      "seconds": 7.956,
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/or-patterns/slice-patterns.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "b28dc2528686f8ab2e5237e8d1f1ea1f215fe310af683302908ac776a36dbd84"
+      ],
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-NAME-MISSING",
+        "message": "reached direct function identity is absent before argument evaluation (value path `self`)"
+      },
+      "facts": {
+        "classified_operation_candidates": 235,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 17,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 165,
+        "vm_outcomes": 165
+      }
+    },
+    {
+      "path": "tests/ui/pattern/bindings-after-at/slice-patterns.rs",
+      "sha256": "51fc3dd5a98f7cd50a528b04417bf95033b7179b824e7dfdb12d0f2b4d28398b",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "ac415fd24ebc7a2ae8fea7872342408f1f39d934d6965112a8c0268c7cd0e339",
+      "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4",
+      "exit": 2,
+      "seconds": 7.58,
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/pattern/bindings-after-at/slice-patterns.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "f3a0403319616df1a6d9bdb9c0916351b6497b36fad95c1e6729ccb56219f7a7"
+      ],
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-NAME-MISSING",
+        "message": "reached direct function identity is absent before argument evaluation (value path `self`)"
+      },
+      "facts": {
+        "classified_operation_candidates": 1265,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 33,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 822,
+        "vm_outcomes": 822
+      }
+    },
+    {
+      "path": "tests/ui/regions/regions-infer-borrow-scope-view.rs",
+      "sha256": "1ebe0df25f8c4cc4046832445feae03b090f7abd5eaa511c791dcc683caa91e7",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "ac415fd24ebc7a2ae8fea7872342408f1f39d934d6965112a8c0268c7cd0e339",
+      "source_sha256": "8d62813bc27657e731af3193b8683c8054035cc959781bff0de7a13a4836e5f4",
+      "exit": 0,
+      "seconds": 4.153,
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-borrow-scope-view.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "bb6c0f0adda0f0c8a6ae4e0d79ad1b77c58c03de47fec2404872131264bef551"
+      ],
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "facts": {
+        "classified_operation_candidates": 221,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 12,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 148,
+        "vm_outcomes": 148
+      }
+    }
+  ],
+  "architecture_review": "worktracks/04-calls-source-views/2026-10-18-receiver-name-origin.md",
+  "new_distinct_upstream_runtime_gains": 0,
+  "full_fixture_acceptance_claimed": false,
+  "guest_jit_allowed": false
+}
