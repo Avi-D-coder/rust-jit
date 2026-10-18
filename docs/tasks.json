@@ -2766,7 +2766,9 @@
         "worktracks/evidence/2026-10-14-reference-parameter-runtime.json",
         "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json",
         "worktracks/evidence/2026-10-14-byte-scalar-components.json",
-        "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json"
+        "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
+        "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json"
       ],
       "release_complete": false,
       "validation_scope": "Original-source call component accepted under E-57-001: 763 actual macOS Rust1.99 host/doc tests and all 81 selected controls, Gate00/01/02 and strict audits pass. Each task-card acceptance clause has observed test evidence. Lexical/generated catalogs, full source/context/dictionary IDs, traits/member/composite/coercion semantics and native/JIT/service integration remain mandatory and unverified; release_complete is false.",
@@ -2867,7 +2869,8 @@
         "old_macro_specific_passes_establish_common_engine": false,
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
         "guest_jit_authorized": false
-      }
+      },
+      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
     },
     {
       "id": "T033",
@@ -5923,7 +5926,9 @@
         "artifacts/macos-first/root-constant-length-refusal-v1/task-invariant.txt",
         "worktracks/candidates/root-constant-local-inference-v1/REVIEW.md",
         "worktracks/candidates/root-constant-local-length-context-v1/REVIEW.md",
-        "worktracks/evidence/2026-10-14-reached-numeric-call-components.json"
+        "worktracks/evidence/2026-10-14-reached-numeric-call-components.json",
+        "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json"
       ],
       "release_complete": false,
       "validation_scope": "Pure scalar/array evaluator, declared result shape, checked wire/memo payload now component tested/integrated. Existing ConstantKey/i128 query value/provider and current-source/type/macro/foreign/generic admission remain incomplete; fresh guest instantiation, loops/tuples/strings and full runtime contracts pending. October14 v69 configured macOS milestone accepted: exact e06102b7, actual21897/cc6067/0, all2952 listed/named/summary bodies passed, nofail/ignore/filter/unexecuted, gates00-03 passed,470 raw originals exact. Root promoted206 exact source/test/fixture paths to MAIN after release (a65c91/0), preserving current spec/docs/plans. Fresh MAIN milestone pending. Inventory292 cases remains pending; zero new full-stock runtime cases. Private successor899 library controls passed; later assertion-call source remains separately under scoped validation. Full task/runtime/JIT/Linux/release acceptance incomplete.",
@@ -6461,7 +6466,8 @@
           "task_complete": false,
           "full_stock_fixture_passes": 0
         }
-      }
+      },
+      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
     },
     {
       "id": "T060",
@@ -19895,7 +19901,9 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [
-        "worktracks/candidates/sol-type-alias-prelude-integration-v1/HANDOFF.md"
+        "worktracks/candidates/sol-type-alias-prelude-integration-v1/HANDOFF.md",
+        "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json"
       ],
       "title": "SourceView propagation",
       "acceptance_contract": "TR003\u2013TR005, alias/field/return/default-Self variants. Depends: M017.",
@@ -19937,7 +19945,8 @@
           "withdrawn_original_provenance": "a38d0fff:19 formatted assets quarantined before publication; source38 code unchanged, all52 restored from pinned Git blobs after guarded formatting",
           "scope": "Actual live Type/prelude/alias/query consumers; unconsumed future generated constant/full-role models retained as prototypes. Shared Type/Value proof merge and real qualified consumer Value/module export replay remain required. No task or runtime acceptance."
         }
-      ]
+      ],
+      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
     },
     {
       "id": "M019",
@@ -20018,10 +20027,14 @@
       "acceptance_tests": [],
       "commands": [],
       "fixture_ids": [],
-      "artifact_paths": [],
+      "artifact_paths": [
+        "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
+        "worktracks/evidence/2026-10-18-interpreter-v38-validation.json"
+      ],
       "title": "Source member identification",
       "acceptance_contract": "TR003/TR019/TR020; mutability failure never picks lower-ranked member. Depends: M024.",
-      "release_complete": false
+      "release_complete": false,
+      "latest_component_scope": "V37 actualselected11/14runtimecontracts and17/19controls; V38test-onlyoraclecorrection3/3focused, CLIunchanged. Source-selectedParameter route andsharedprojectionroot extendordinaryVM; genericapplicationpacket/coldnonlocalimplpublication/once4vs3/fulloriginmatrixandtaskrelease remainheld. No task completion/status promotion."
     },
     {
       "id": "M026",

@@ -481,6 +481,14 @@ impl RunMachine {
         if self.frame.has_cached_item_value() {
             return self.prepare_item_value_path(db, path);
         }
+        // A genuine source Type parameter shadows module/constructor names.
+        // Only the retained hygienic qualifier proof can establish that fact.
+        match self.prepare_parameter_associated_value(db, path) {
+            QueryPoll::Ready(Ok(true)) => return QueryPoll::Ready(Ok(())),
+            QueryPoll::Ready(Ok(false)) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
         // A static read by value: its selection is cached per PC; only the
         // cell's current contents are read on each execution.
         if let Some((cell, view)) = self.static_reads.get(&pc).cloned() {

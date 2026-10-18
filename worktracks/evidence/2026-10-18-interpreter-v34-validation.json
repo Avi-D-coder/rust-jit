@@ -1,0 +1,102 @@
+{
+  "candidate": "V34",
+  "status": "BUILD PASS, SELECTOR GATE FAIL: associated declaration component absent from module tree,2requested bodies absent; runtime unexecuted",
+  "head": "b933a599414daaacbbd791c0533c9e819533b7ff",
+  "source_sha256": "b8a21507b5899d4a9af4e48481b93c68147208b50958e0610726bc6d9f998c99",
+  "source_file_count": 3335,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "Rust1.99.0",
+  "source_generator_head_frozen_both_builds": true,
+  "builds": {
+    "lib": {
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "--no-run"
+      ],
+      "exit": 0,
+      "seconds": 13.39,
+      "log": "compile.log",
+      "session_id": 98635,
+      "initial_chunk": "f9892f",
+      "terminal_chunk": "21e3c0"
+    },
+    "cli": {
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--bin",
+        "lrr"
+      ],
+      "exit": 0,
+      "seconds": 10.146,
+      "log": "cli-compile.log",
+      "session_id": 38994,
+      "initial_chunk": "9f53f8",
+      "terminal_chunk": "690579"
+    }
+  },
+  "binaries": {
+    "test_binary": {
+      "path": "target/debug/deps/lrr-5ae916bc286087fa",
+      "sha256": "38a7479e00b1a9f2c5ce2b8b959bb19c81300c818c89f764bc1cad96cd8cffd9"
+    },
+    "cli_binary": {
+      "path": "target/debug/lrr",
+      "sha256": "de7f70405acd4e3bc6902d79a168201ea865bade427a6a11cab543618054ecd7"
+    }
+  },
+  "selector_proof": {
+    "path": "artifacts/validation-resume-2026-10-18/candidate-v34/selector-proof.json",
+    "sha256": "48d41cfef84f19cbd46fd773b287e7cc19bbeb456afd6f0264fa22ea83e3ea85",
+    "requested": 18,
+    "present_exact1": 16,
+    "missing": [
+      {
+        "selector": "frontend::associated_declarations::tests::unchanged_local_drop_impl_joins_canonical_declaration_plan_without_body_entry",
+        "matching_bodies": 0
+      },
+      {
+        "selector": "frontend::associated_declarations::tests::actual_direct_members_keep_distinct_canonical_owners_and_cold_local_attachment",
+        "matching_bodies": 0
+      }
+    ]
+  },
+  "source_discovery": {
+    "file": "crates/lrr/src/frontend/mod.rs",
+    "sha256": "9a3a3ca9fddb4dacc9158f3e1408bb69ff6076a9b0c5adc1439b2d2a6d6ddafb",
+    "fact": "No associated_declarations module declaration. Entire associated_declarations.rs/declaration_impl_owners.rs/associated_declaration_tests.rs component absent from compiler module tree and test binary. Files are included in broad source manifest but their compilation is not established by build success.",
+    "affected_reviewed_files": {
+      "crates/lrr/src/frontend/associated_declarations.rs": "44a25344d96b94ac8a460e0785ee82a54710d33cfc7ba9f5f99f45405e53286b",
+      "crates/lrr/src/frontend/declaration_impl_owners.rs": "8b66a4995a950e5ac2431b8bb94f3bd6b98eccd49516b826a7e0d70d80c0a8d8",
+      "crates/lrr/src/frontend/associated_declaration_tests.rs": "99833ac2a17fce4294899c73efb02074443c6c006c2e7e9b4028680826bc056d"
+    }
+  },
+  "runtime": {
+    "stock_executed": 0,
+    "controls_executed": 0,
+    "passes": 0,
+    "reason": "Stopped after exactselector gate; no rootstageack or runtime release. Test --list metadata only, not execution."
+  },
+  "prior_evidence": "V33 runtime5/8+15/16 preserved on different binary. No counts transferred.",
+  "holds": [
+    "Missing module hookup assigned to owner under root freeze coordination, not validator autoedit. Actual next compile can expose latent API mismatches in previously uncompiled sourcecomponent.",
+    "No fullfeature/architecture/interpreter/JIT or fixture acceptance. Source fingerprint inventory is not proof every Rust file is compiled.",
+    "No Rust/index/HEAD mutation or Cargo beyond two authorized build commands; no runtime/testbody launches."
+  ],
+  "schema": "lrr/focused-validation/v1",
+  "raw_report_sha256": "9cc7469b4a394eacf88c12a99c02bce14f1e3222d26db8b5b4ad7b394472944f",
+  "raw_artifact_index_sha256": "93fe27cd2f2a70581c5fb62656b17809e39041283da67eae217fba37a7aed81f"
+}

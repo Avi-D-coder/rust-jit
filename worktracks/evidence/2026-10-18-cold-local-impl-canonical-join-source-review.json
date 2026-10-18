@@ -1,10 +1,10 @@
 {
-  "status": "READY after accidental rustfmt stdout filename prefix removal; independent semantic review continues, compile/runtime unexecuted",
+  "status": "READY after dormant E006 cleanup; V35 actual module compile failed obsolete MAX_ROWS/MAX_BYTES, no successor acceptance",
   "precode": "worktracks/evidence/2026-10-18-cold-local-impl-canonical-join-precode.md",
   "sources": [
     {
       "path": "crates/lrr/src/frontend/associated_declarations.rs",
-      "sha256": "44a25344d96b94ac8a460e0785ee82a54710d33cfc7ba9f5f99f45405e53286b"
+      "sha256": "1ddd50179ace717af96593554ca8261479c51ac59124406bda3f0522655a75d8"
     },
     {
       "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
@@ -12,7 +12,11 @@
     },
     {
       "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
-      "sha256": "99833ac2a17fce4294899c73efb02074443c6c006c2e7e9b4028680826bc056d"
+      "sha256": "d75a3495e30df071af4d0b12f66619ca51156e6297a22c02f6ce23493e632394"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "c25f06b7792c2c6cb8fe9a942edb54b3a853490538f3f32bd21615ceaec175ca"
     }
   ],
   "actual_consumer": [
@@ -77,11 +81,14 @@
     }
   ],
   "holds": [
+    "New module hook first compiles previously dead inherited associated/generated helper/test sources; actual compiler API errors may remain. No source-only claim that inherited files compile.",
     "Existing PreparedOriginalAssociatedDeclarations/generated associated consumer itself is still a source component, not general runtime member publication. No feature closure from metadata attachment.",
     "Cross-preparation declaration-plan memo retention/query and ordinary entered production adoption remain unimplemented; helper caches only within actual prepared source join.",
     "Cold local trait owners and nested Fn/method parents/opaque attributes/generated actual parent completion not added by this slice; typed pending remains.",
     "Header Type resolution, generic applicability, MemberIndex publication, configured-world macro/declaration closure and common tabled trait goal/negative Drop proof remain held.",
     "No new Cargo/tests/guest execution by implementation owner; successor compile/runtime all unexecuted."
   ],
-  "mechanical_correction": "Removed invalid two-line filename prefix introduced when selectively applying rustfmt --emit stdout output. Prior68c42f1c source receipt retained held; no semantic source edits. Future formatter output must omit wrapper filename header or format actual owned file directly."
+  "mechanical_correction": "Removed invalid two-line filename prefix introduced when selectively applying rustfmt --emit stdout output. Prior68c42f1c source receipt retained held; no semantic source edits. Future formatter output must omit wrapper filename header or format actual owned file directly.",
+  "validation_correction": "V34 wholelib/CLI builds passed but fresh --list returned ZERO for both new canonical selectors: frontend/mod.rs omitted associated_declarations entirely. Therefore neither old associated component nor new three leaves were compiler checked. Root explicitly granted narrow frontend module hook. Adds pub(crate) mod associated_declarations only; no other feature work. Existing component remains test/self-referenced metadata, not a production runtime consumer. V35 first actual enabled-module compilation failed only obsolete undefined cap references. Four-leaf E006 cleanup follows explicit post-terminal release; source-only until successor terminal.",
+  "e006_cleanup": "worktracks/evidence/2026-10-18-associated-declaration-e006-cleanup-source-review.json"
 }

@@ -1,0 +1,81 @@
+{
+  "status": "read_only_source_cache_identity_investigation_no_code_no_runtime_tests",
+  "sources": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "85b754b60fa7ff8e8b3550a7b461d0464cbe7a7256ebd79d12e2d3d274dfe806"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "d3822ffe2078a8f2bf9beda51648d4837ff55061547cfb96804cb72e0f101396"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_pattern_names.rs",
+      "sha256": "6b64d813cfd09d0167b616dae8f3f142d0a0c9cacfe0f0de871d67ba577df77e"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "720ea5a400a2bff7b0d70bae757dfa69ceaef64237b504605fbdbed9dc9acc81"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_initializers.rs",
+      "sha256": "493d80d3ade988615a5146d516fb987894bc0d50a6e5a2da582bd252d350bf8f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/pattern_names.rs",
+      "sha256": "8c0f8f603df5b3cc43e83db4616a0dff0f3c9bc73ec602523ba265f36aba38ee"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_pattern_engine.rs",
+      "sha256": "cf5a453aa6ea51f98829fa2d965fc14b999df986d86c69c96482210538b45d24"
+    }
+  ],
+  "witnesses": [
+    {
+      "path": "rustc/rust/tests/ui/statics/inner-static.rs",
+      "sha256": "22c7524db56ed4e0975b5603a18814f0f4eadde46d2199836de38cf82bab7236",
+      "imported": false
+    },
+    {
+      "path": "rustc/rust/tests/ui/statics/auxiliary/inner_static.rs",
+      "sha256": "93fe0771bf20a0499e9048766a3fdba04abbe88e6cd3d554316f0bc5ab8db93a",
+      "imported": false
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/statics/static-function-pointer.rs",
+      "sha256": "7a1417351cec568127fbafd19f9a46637ff1cb5af97429333d3499c715fff35d",
+      "imported": true
+    },
+    {
+      "path": "rustc/rust/tests/ui/associated-consts/associated-const-match-patterns.rs",
+      "sha256": "a88603b0578d0961a7045ff4561e71931e9ac06dbab9dcd3f54b95792654fdb4",
+      "imported": false
+    },
+    {
+      "path": "rustc/rust/tests/ui/associated-consts/associated-const-type-parameter-pattern.rs",
+      "sha256": "a2b60e56cd45bda69b74b737e1e34f2c58197062ab51c9b75eac307f284c00b7",
+      "imported": false
+    },
+    {
+      "path": "rustc/rust/tests/ui/statics/static-generic-param-soundness.rs",
+      "sha256": "0f89653d7577552c8210b557594ec1bcb928d4e784872e3e52447b54ac22a667",
+      "imported": false
+    }
+  ],
+  "static_reads": {
+    "producers": "run_value_items::prepare_selected_item_value Static by-value branch caches pc -> (actual static cell, static declared source view); static_cells/static_views are selected by real declaration identity; initializer uses ordinary VM/run-long cell.",
+    "consumer": "run_nominal::prepare_value_path reads static_reads after frame item and actual Param route, and calls read_static_value on current cell state. It does not reuse a captured value snapshot; mutation should be observed.",
+    "generic_identity": "For code compiled by Rust, an ordinary static declaration has one storage location across enclosing generic instantiations, and cannot capture enclosing Type parameters. Same static in same generic function therefore should not be keyed by whole caller GenericEnv or result TypeId. Distinct method-local statics require actual distinct source declaration identity; upstream inner-static+auxiliary covers A<T>::foo/bar, B<T>::foo/bar and module test::A<T>::foo/bar with different values.",
+    "witness_limits": "inner-static is source-inspected, not newly imported/run; stock static-function-pointer is already imported and checks actual mutable static current value f->g. No cross-activation pass claimed. static-generic-param-soundness is a compiler-rejection test with empty main, not runtime storage evidence or permission to add static checking.",
+    "currentness_limit": "static_reads carries no PreparedInputGuard/selected declaration identity alongside cell. If relevant external source/declaration publication may change while same caller PC survives, raw cell cache reuse has no visible local invalidation check; broader Run/source publication invariants must establish safety. This is a source suspicion, not an executed mutation regression. Do not fix with global namespace census or caller-type cachekey."
+  },
+  "pattern_names": {
+    "producer_consumer": "prepare_pattern_names caches pc/tree.identity -> Arc<[PatternTarget]>. Source constructor/variant templates are immutable; reached nominal field specialization is separately demanded by Search using full actual source GenericArgs plus runtime Type guard and stored in active frame/open-pattern, not run-global target cache. Existing mixed W<u8>/W<u32> route control belongs to that separation, not a new run here.",
+    "runtime_hydration": "Initializer(definition) is replaced in run-global targets by ConstantRoot::Cell(const_cells[definition]) or Ticket(initialized_values[(pc,definition)]). These roots are run-owned retained storage/tickets, rather than arbitrary current frame operand slots. Plain nongeneric source selection remains reusable; future frame-bound constant applications must retain canonical application identity and cannot hydrate one global PC target from the first instantiation.",
+    "generic_limits": "Currently generic A::X patterns are rejected by official associated-const-type-parameter-pattern (empty main), so they are diagnostic compatibility rather than an applicable runtime witness of existing behavior. Same-trait nongeneric anchored associated-const-match-patterns is run-pass with real aux-build empty-struct; it can steer common pattern member selection separately. Current pattern frontend still uses legacy CallResolver::associated_value, not actual query51/source-param route. That missing source-bound selection is a prerequisite, not proof of current wrong dynamic-cache reuse.",
+    "currentness_limit": "Global target reuse checks only PC/tree.identity and the separately active nominal guard; source-name positive/negative outcomes, refused targets and hydrated constant roots have no explicit namespace/source-version guard in this local map. Relevant namespace publication with unchanged tree may need genuine prepared dependency invalidation. No exact upstream runtime witness/source-edit reproduction executed in this review."
+  },
+  "conclusion": "No new confirmed runtime-bound cross-activation static/pattern cache failure was isolated. Distinguish reusable static declaration/canonical pattern template facts from future bound constant application identity and actual currentness. Preserve generic nominal specialization in active frame; investigate relevant source-version guard before any cache redesign. No whole-caller env/result-TypeId cachekey or static checker proposed.",
+  "all8": "No production edits: reviewed same ordinary source/member/VM cache consumers, no evaluator, macro-only route, context inference, generated-source exception, duplicate matcher/eager branch admission, source replan, world scan or body clone proposed. Existing source-only/currentness gaps explicitly held.",
+  "validation": "Read-only source investigation only, no Cargo/tests/import mutations. Upstream run-pass/directives/auxiliary requirements inspected; compile-fail witnesses separately labeled. Requires authorized exact fixture execution and LRR source invalidation controls before any acceptance claim."
+}

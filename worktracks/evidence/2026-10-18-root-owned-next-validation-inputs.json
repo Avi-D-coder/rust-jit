@@ -1,0 +1,51 @@
+{
+  "status": "Root-owned next validation only; no V36/build/runtime launched by validator",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "stock_roots": [
+    "tests/ui/traits/default-method/macro.rs",
+    "tests/ui/associated-consts/associated-const-type-parameters.rs",
+    "tests/ui/structs-enums/functional-struct-upd.rs",
+    "tests/ui/consts/const_in_pattern/custom-eq-branch-pass.rs",
+    "tests/ui/consts/const-struct.rs",
+    "tests/ui/associated-consts/associated-const-resolution-order.rs",
+    "tests/ui/associated-consts/associated-const-use-impl-of-same-trait.rs",
+    "tests/ui/consts/static-ref-to-const-array-element.rs",
+    "tests/ui/consts/promote_borrowed_field.rs",
+    "tests/ui/privacy/required-pub-in-blocks.rs"
+  ],
+  "stock_count": 10,
+  "selected_controls": [
+    "cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins",
+    "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+    "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+    "runtime::drop_facts::tests::published_drop_facts_track_related_and_unrelated_additions",
+    "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+    "cli::crate_graph::initializer_tests::promoted_borrows_byte_strings_and_copy_receivers",
+    "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+    "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+    "vm::frame::aggregate_copy_tests::rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects",
+    "vm::frame::aggregate_copy_tests::rustc_copy_place_activation_skips_completed_recipe_prefix_and_clears_place_once",
+    "vm::frame::aggregate_copy_tests::rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells",
+    "db::memo::prepared_inputs::tests::positive_changes_and_wrong_root_fingerprint_cannot_refresh_guard",
+    "syntax::declaration_scope_plan::tests::unchanged_local_drop_headers_keep_canonical_identity_without_binding_preparation",
+    "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_committed_child_ticket_for_retry",
+    "frontend::source_locals::owned_plan::type_declarations::tests::qualified_type_tests::unchanged_qualified_type_uses_shared_kernel_certified_read_footprint_and_declaration_all_editions",
+    "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+    "frontend::associated_declarations::tests::unchanged_local_drop_impl_joins_canonical_declaration_plan_without_body_entry",
+    "frontend::associated_declarations::tests::actual_direct_members_keep_distinct_canonical_owners_and_cold_local_attachment",
+    "syntax::body_index::tests::rustc_projected_borrow_roots_share_indexed_context_without_promoting_index_operands"
+  ],
+  "control_count": 19,
+  "owning_edition": 2015,
+  "aux": "All10actualcases have noaux; retain originaldirectives/provenance and verifybytes before execution",
+  "env": {
+    "LRR_EMBEDDED_FACADE": "1"
+  },
+  "limits": "No time/fuel/count/memory caps added; OS bounds. Rust1.99offline locked macOS first.",
+  "sequence": "Root establishes source/generator/HEAD stationary, captures freshbeforemanifest, libno-run thenCLI, aftereachmanifest, fresh--list19each1body, exactindexstaging/release. Onlythenimmutablebinary10stock+19control async queues.",
+  "fixture_limits": [
+    "promote_borrowed_field main binds unusedstaticref; const_ unentered, oldrawv16pass. Runtimecontract only, no fullfixture/staticlifetime/newhistoricalpass.",
+    "required-pub-in-blocks main actually calls coldnonlocal S.s andS2.pull fromuncalledf bodies; no privacydiagnostic assertion.",
+    "Existing promotion controls ordinarysource, new indexcontrol4ed metadata; no four-origin projection matrix claim."
+  ]
+}

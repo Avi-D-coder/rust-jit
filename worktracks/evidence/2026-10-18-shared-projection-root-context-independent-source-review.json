@@ -1,0 +1,52 @@
+{
+  "status": "CLEAR bounded shared indexed projection context; uncompiled/unexecuted successor",
+  "files": {
+    "crates/lrr/src/syntax/body_index.rs": "7fad1f503866fdb60fb29e808aef20d9a0822812fb782e512b6a1630e9748bb2",
+    "crates/lrr/src/syntax/thunks.rs": "f52fb01a01bd81aeb38cb84ee72ab1dac753f2dcf995aa5fdd285b9c2e712245",
+    "crates/lrr/src/engine/run_value_items.rs": "947d5fce6e247f0ff450aa918ca12e9a19cf5f5ac6d8363533f930a3c2fa1c25"
+  },
+  "owner_receipt": {
+    "path": "worktracks/evidence/2026-10-18-shared-projection-root-context-source-review.json",
+    "sha256": "8865162cee5eb35b6f309f3a044a5f1a47fe13f5d6ccefb16225540300db7d77"
+  },
+  "baseline": "HEADb933a599414daaacbbd791c0533c9e819533b7ff, V35failedcompile retained; no successful candidate containing these3finalhashes.",
+  "actual_route": [
+    "ParsedFile::index_body captures actual FieldExpr/IndexExpr projection_base and shared nonraw/nonmut RefExpr shared_borrow flags once on immutable structural nodes; synthetic nodes false.",
+    "BodyIndex::shared_borrow_owner follows genuine parent edge only when current node is actual first operand; traverses only parenthesized/projection base nodes until actual shared Borrow. Index operand1, calls, dereferences and other contexts stop.",
+    "FIELD_EXPR/INDEX_EXPR Operand0 temporary conversion uses existing promotable_constant + same indexed shared_borrow_owner -> existing PromotedPlace; other phases retain ordinary paths.",
+    "RunMachine::path_is_shared_borrow_operand reads same immutable Frame BodyIndex for ConstItem root; same ItemValue::Promotable and existing initializer/static storage/frame aggregate-copy/promotion route.",
+    "Removed provisional AST shared_borrowed_projection ancestor walker and old immediate-parent-only Borrow recipe fetch; one context classification shared by literal and constant paths."
+  ],
+  "all8": {
+    "1": "No parser/evaluator/assertion compiler. Same existing ValuePath/PromotedPlace/projection/index/Borrow VM operations.",
+    "2": "Actual common BodyIndex source capture applies equally to original/generated AST. No scalar/break-only output or opaque execution phase.",
+    "3": "No macro/member/type/fixture/numeric-name rule. Actual syntax borrow access/base position supplies source context, runtime reached value/Type still governs promotion eligibility.",
+    "4": "No origin exclusion or source grant. Genuine frame/index/body keys and existing recipe/input/lease guards retained; shared raw/mut borrows explicitly do not supply this promotion context.",
+    "5": "No matcher/cold branch executable lowering. Added flags are structural metadata captured in existing index pass; index expression evaluation/panic remains same reached sequence.",
+    "6": "Two flags captured once; direct indexed ancestry lookup O(depth) on reached recipe/item preparation, no parsing/full-plan/source-tree reconstruction. Literal subtree predicate only actual Operand0 conversion, not Entry/Commit. Installed VM promotion code unchanged.",
+    "7": "No namespace/world census/version-map/new broad invalidation. Promotion site/physical Type key and existing mutable/glue checks retained with explicit completeness holds.",
+    "8": "Two immutable bool flags explicitly stableencoded under BodyIndex domainv6. Existing AST handles/direct node links; no BodyIndex clone/new source search/accounting. Test-only fullfile RefExpr search is not production."
+  },
+  "checks": [
+    "All StructuralNode actual/synthetic constructors updated; synthetic opaque nodes cannot accidentally grant shared promotion.",
+    "BodyIndex parent structure is private immutable canonical index; lookup uses actual operand0 equality and boundschecked nodes, no arbitrary source proof minted.",
+    "Root engine helper private sole caller passes current Frame PC; no different BodyKey accepted from external caller.",
+    "In-memory restoring only old immediate-Borrow method/comment and caller from HEAD to current run_value_items reconstructs exact prior worker free-owner proof SHA4c6d0a6a8bcab352a3622c4f8e0bf6262886d9bdea2c5e2101af948383f58e36. Thus source qualifier/owner absence logic unchanged outside agreed root hunk.",
+    "Both metadata flags encoded and domain bumped v5->v6; no new opcode/wire evaluator.",
+    "Actual runtime value_promotable, store site/Type promotion and source-view/lease contracts unchanged. Owned nominal initial Drop absence and full generic application identity are not proved by source flags."
+  ],
+  "control": {
+    "selector": "syntax::body_index::tests::rustc_projected_borrow_roots_share_indexed_context_without_promoting_index_operands",
+    "scope": "New metadata control uses unchanged imported static-ref-to-const-array-element AST array/tuple roots across4editions, checks indexargument absence and genuine sharedBorrow owner. Uncompiled/unexecuted; no four-origin or wholemain claim."
+  },
+  "cost": "O(1) new source flags per indexed node; O(projection ancestry) reached preparation; existing literal subtree scan only Operand0 recipe; no new accounting/cap or measured performance claim",
+  "holds": [
+    "V34/V35 ran no runtime bodies",
+    "secondpath source diagnosis not actual recorded fault",
+    "nominal Drop absence completeness",
+    "full generic application identity",
+    "four-origin projection matrix unexecuted",
+    "full promotion/interpreter/JIT gates"
+  ],
+  "review_actions": "Read-only exact source/diff review plus portable receipt; no Rust/index/HEAD/Cargo/test changes."
+}

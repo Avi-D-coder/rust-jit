@@ -115,7 +115,6 @@ fn actual_stock_trait_and_inherent_outputs_keep_real_canonical_owner_and_generat
                 ));
                 assert_eq!(prepared.fingerprint(), before);
             }
-            assert!(prepared.metadata_bytes() > std::mem::size_of_val(&prepared));
         }
         assert_eq!(identities.len(), 2);
         assert_ne!(identities[0], identities[1]);

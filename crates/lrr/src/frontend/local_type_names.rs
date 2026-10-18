@@ -201,14 +201,18 @@ impl LocalTypeNames {
         }
         // An impl or trait member also sees its owner's generic parameters,
         // inherited after its own exactly as the common signature capture
-        // (`owner_generics`) numbers them. With the owner's actual declaration
+        // (`owner_generics`/`initializer_parameters`) numbers them. With the
+        // owner's actual declaration
         // tokens captured, an owner parameter selects its inherited parameter
         // and every other name continues to the enclosing module, as for a
         // free function. An owner this syntax does not reach stays pending.
         let mut need_owner = !source.header().context.is_empty();
         if need_owner
-            && let Some(function) = ast::Fn::cast(declaration.clone())
-            && let Some(owner) = function.syntax().parent().and_then(|items| items.parent())
+            && let Some(items) = declaration
+                .parent()
+                .filter(|items| ast::AssocItemList::can_cast(items.kind()))
+            && let Some(owner) = items.parent()
+            && tokens(&owner, Some(items.text_range())) == source.header().context
         {
             let owner_list = if let Some(implementation) = ast::Impl::cast(owner.clone()) {
                 Some(ast::HasGenericParams::generic_param_list(&implementation))
@@ -218,60 +222,80 @@ impl LocalTypeNames {
             };
             if let Some(owner_list) = owner_list {
                 let own = crate::syntax::signatures::capture_generics(
-                    ast::HasGenericParams::generic_param_list(&function),
+                    declaration.children().find_map(ast::GenericParamList::cast),
                 )?;
-                let combined = crate::syntax::signatures::owner_generics(&function, own.clone())?;
-                let mut inherited = Vec::new();
-                let captured = owner_list.iter().flat_map(|list| list.generic_params()).enumerate().try_for_each(
-                    |(index, parameter)| -> Result<(), Diagnostic> {
-                        let ast::GenericParam::TypeParam(parameter) = parameter else {
-                            return Ok(());
-                        };
-                        let name = parameter
-                            .name()
-                            .ok_or_else(|| error("owner generic Type declaration name absent"))?;
-                        let at = range(name.syntax().text_range());
-                        let edition = parsed.token_edition(at)?;
-                        let raw = source
-                            .owner_identifier_context(at, root)?
-                            .ok_or_else(|| error("owner generic lacks its actual syntax context"))?;
-                        let actual = DeclarationName {
-                            name: MacroName::parse(name.text(), edition)?,
-                            context: hygiene.name_item(raw)?,
-                            raw,
-                            edition,
-                            range: at,
-                        };
-                        let common = own
-                            .len()
-                            .checked_add(index)
-                            .and_then(|ordinal| combined.get(ordinal))
-                            .filter(|parameter| {
-                                parameter.kind == crate::syntax::signatures::GenericKind::Type
-                                    && parameter.name == actual.name.as_str()
-                            })
-                            .ok_or_else(|| {
-                                error("owner generic differs from common signature capture")
+                let combined = if let Some(function) = ast::Fn::cast(declaration.clone()) {
+                    Some(crate::syntax::signatures::owner_generics(
+                        &function,
+                        own.clone(),
+                    )?)
+                } else if ast::Const::can_cast(declaration.kind())
+                    || ast::Static::can_cast(declaration.kind())
+                {
+                    Some(parsed.initializer_parameters(
+                        source.header(),
+                        source.context(),
+                        source.body(),
+                    )?)
+                } else {
+                    None
+                };
+                if let Some(combined) = combined {
+                    let mut inherited = Vec::new();
+                    let captured = owner_list
+                        .iter()
+                        .flat_map(|list| list.generic_params())
+                        .enumerate()
+                        .try_for_each(|(index, parameter)| -> Result<(), Diagnostic> {
+                            let ast::GenericParam::TypeParam(parameter) = parameter else {
+                                return Ok(());
+                            };
+                            let name = parameter.name().ok_or_else(|| {
+                                error("owner generic Type declaration name absent")
                             })?;
-                        inherited
-                            .try_reserve(1)
-                            .map_err(|_| crate::runtime::arena::resource())?;
-                        inherited.push(GenericName {
-                            declaration: actual,
-                            parameter: ParamKey {
-                                definition: source.body().def_key,
-                                ordinal: common.ordinal,
-                            },
+                            let at = range(name.syntax().text_range());
+                            let edition = parsed.token_edition(at)?;
+                            let raw =
+                                source.owner_identifier_context(at, root)?.ok_or_else(|| {
+                                    error("owner generic lacks its actual syntax context")
+                                })?;
+                            let actual = DeclarationName {
+                                name: MacroName::parse(name.text(), edition)?,
+                                context: hygiene.name_item(raw)?,
+                                raw,
+                                edition,
+                                range: at,
+                            };
+                            let common = own
+                                .len()
+                                .checked_add(index)
+                                .and_then(|ordinal| combined.get(ordinal))
+                                .filter(|parameter| {
+                                    parameter.kind == crate::syntax::signatures::GenericKind::Type
+                                        && parameter.name == actual.name.as_str()
+                                })
+                                .ok_or_else(|| {
+                                    error("owner generic differs from common signature capture")
+                                })?;
+                            inherited
+                                .try_reserve(1)
+                                .map_err(|_| crate::runtime::arena::resource())?;
+                            inherited.push(GenericName {
+                                declaration: actual,
+                                parameter: ParamKey {
+                                    definition: source.body().def_key,
+                                    ordinal: common.ordinal,
+                                },
+                            });
+                            Ok(())
                         });
-                        Ok(())
-                    },
-                );
-                if captured.is_ok() {
-                    generics
-                        .try_reserve(inherited.len())
-                        .map_err(|_| crate::runtime::arena::resource())?;
-                    generics.extend(inherited);
-                    need_owner = false;
+                    if captured.is_ok() {
+                        generics
+                            .try_reserve(inherited.len())
+                            .map_err(|_| crate::runtime::arena::resource())?;
+                        generics.extend(inherited);
+                        need_owner = false;
+                    }
                 }
             }
         }

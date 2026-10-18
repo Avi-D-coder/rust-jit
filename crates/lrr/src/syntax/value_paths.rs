@@ -202,7 +202,10 @@ impl ParsedFile {
                     "lexical item value path requires body namespace integration",
                 ));
             }
-            if components.len() > 1 && generic_parameter_named(anchor, &root, self.edition) {
+            // Expression/callee qualifiers are interpreted by the ordinary
+            // source Type service, which retains their real parameter binder
+            // and hygiene. A written spelling is not that interpretation.
+            if !lexical_value && components.len() > 1 && generic_parameter_named(anchor, &root, self.edition) {
                 return Ok(WrittenValuePath::Refused(
                     "generic source owner requires associated-item integration",
                 ));

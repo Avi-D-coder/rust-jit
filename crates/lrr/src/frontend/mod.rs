@@ -1,4 +1,5 @@
 pub(crate) mod associated_constant_applications;
+pub(crate) mod associated_declarations;
 pub(crate) mod initializer_owner_templates;
 pub(crate) mod associated_types;
 pub mod builtin_attributes;

@@ -1,0 +1,66 @@
+{
+  "status": "source_only_successor_for_independent_review_no_type_owner_proof",
+  "predecessor_review": "worktracks/evidence/2026-10-18-generic-associated-value-route-source-review.json",
+  "predecessor_status": "Held by independent review: unconditional query51 added BodyEnvironment demand for ordinary legacy module value paths. Exact old four-leaf source evidence remains attached.",
+  "delta_source": {
+    "path": "crates/lrr/src/engine/run_value_items.rs",
+    "sha256": "720ea5a400a2bff7b0d70bae757dfa69ceaef64237b504605fbdbed9dc9acc81"
+  },
+  "unchanged_candidates": [
+    {
+      "path": "crates/lrr/src/syntax/value_paths.rs",
+      "sha256": "f2cc66c13acc23ea631f1828b7e50cda6770f6fca517e69c0bfc93970a6c1f92"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nominal.rs",
+      "sha256": "d3822ffe2078a8f2bf9beda51648d4837ff55061547cfb96804cb72e0f101396"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "fff72fbaf02e6ca07bea61baeb3fc865133aeace06f6f31d971c58903e494710"
+    }
+  ],
+  "proof": [
+    "prepare_parameter_associated_value first queries actual FunctionSignature currentbody.definition; same pure source signature provider reads genuine source/header/context/parse and own+owner canonical binder, with no target BodyEnvironment.",
+    "Cacheable signature.definition matches current entered body definition; exact current DefinitionBody.key matches frame body. Query/NeedInput/error propagation retained; missing or mismatched proof never converted to false.",
+    "No actual GenericKind::Type binder (including real impl/trait owner and implicit Self) means parameter-relative qualifier impossible; preserve ordinary module/constructor route before any query51.",
+    "If a Type binder exists, same actual hygienic qualifier/member path remains. No rawname matching, runtimeGenericEnv emptiness or descriptor-derived source absence proof."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "Source signature metadata only; no assertion/evaluator route."
+    },
+    {
+      "mode": 2,
+      "review": "Same ordinary ValuePath and genuine source signature for original/generated entry, no scalar macro engine."
+    },
+    {
+      "mode": 3,
+      "review": "Whole canonical binder absence, no spelling/numeric/member-name policy."
+    },
+    {
+      "mode": 4,
+      "review": "No generated-source exclusion/bypass; real source signature supports every existing admitted source class."
+    },
+    {
+      "mode": 5,
+      "review": "No pattern/arm execution or body lowering; existing signature header token traversal cost inherited."
+    },
+    {
+      "mode": 6,
+      "review": "Existing FunctionSignature owning memo, no new source planner or repeated operand reconstruction; query observations per qualified preparation explicit."
+    },
+    {
+      "mode": 7,
+      "review": "Relevant signature source/header/context inputs only, no global namespace scan or unrelated census."
+    },
+    {
+      "mode": 8,
+      "review": "Retained query Arc/body key, no deep BodyIndex copy or whole-file node search."
+    }
+  ],
+  "cost": "Adds existing FunctionSignature memo observation and exact current body input comparison before optional query51. Cold signature capture may enumerate excluded body/header subtree tokens as existing helper; hot no parser/newplan. Existing positive Parameter path remains unchanged.",
+  "residual_hold": "A legacy generic function containing an ordinary module path still has Type binders and cannot use this whole-signature absence proof. No genuine no-parameter prefix proof or completed BodyEnvironment bridge has been added. This source-only successor must not claim all legacy module-path regressions closed; parent/reviewer informed.",
+  "validation": "No Cargo/tests by implementation worker; exact source review pending. Existing primary witness and legacy module controls need actual terminals. No acceptance/gate claim."
+}

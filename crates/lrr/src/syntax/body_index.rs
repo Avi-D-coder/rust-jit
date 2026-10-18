@@ -174,6 +174,11 @@ pub struct StructuralNode {
     /// `$e:expr` fragment expands to): a transparent wrapper whose operand
     /// is the grouped expression.
     pub parenthesized: bool,
+    /// Actual field/index source node: its first expression operand is the
+    /// projected base. Index operands never inherit that base's promotion.
+    projection_base: bool,
+    /// Actual shared, non-raw source borrow, independent of its result type.
+    shared_borrow: bool,
 }
 /// A closure parameter that is not a plain binding (`|&x|`, `|(a, b)|`,
 /// `|ref x|`, `|x @ ..|`): the closure's parameters run the shared pattern
@@ -253,6 +258,26 @@ impl BodyIndex {
     }
     pub fn nodes(&self) -> &[StructuralNode] {
         &self.nodes
+    }
+    /// The enclosing shared borrow of this exact root place. Only base edges
+    /// and transparent parentheses carry the root into a borrow; calls,
+    /// dereferences, index operands and unrelated enclosing syntax do not.
+    pub(crate) fn shared_borrow_owner(&self, root: NodeId) -> Option<NodeId> {
+        let mut current = root;
+        loop {
+            let parent = self.nodes.get(current.0 as usize)?.parent?;
+            let node = self.nodes.get(parent.0 as usize)?;
+            if node.operands.first() != Some(&current) {
+                return None;
+            }
+            if node.shared_borrow {
+                return Some(parent);
+            }
+            if !node.parenthesized && !node.projection_base {
+                return None;
+            }
+            current = parent;
+        }
     }
     pub(crate) fn pattern_bindings(&self) -> &super::pattern_bindings::PatternBindings {
         &self.pattern_bindings
@@ -383,7 +408,7 @@ impl BodyIndex {
     }
 }
 impl StableEncode for BodyIndex {
-    const DOMAIN: &'static str = "lrr/v5/original-body-structure";
+    const DOMAIN: &'static str = "lrr/v6/original-body-structure";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.body);
         e.record(&self.profile);
@@ -443,6 +468,8 @@ impl StableEncode for BodyIndex {
             e.bool(n.opaque);
             e.bool(n.pattern_statement);
             e.bool(n.parenthesized);
+            e.bool(n.projection_base);
+            e.bool(n.shared_borrow);
         });
         e.sequence(&self.scopes, |e, s| {
             e.u32(s.id.0);
@@ -1479,6 +1506,12 @@ impl ParsedFile {
                         .is_some_and(|closure| closure_runs_patterns(&closure))
                     || parameter_owner,
                 parenthesized: frame.syntax.kind() == ra_ap_syntax::SyntaxKind::PAREN_EXPR,
+                projection_base: matches!(
+                    expr.as_ref(),
+                    Some(ast::Expr::FieldExpr(_) | ast::Expr::IndexExpr(_))
+                ),
+                shared_borrow: matches!(expr.as_ref(), Some(ast::Expr::RefExpr(reference))
+                    if reference.mut_token().is_none() && reference.raw_token().is_none()),
             });
             if opaque {
                 continue;
@@ -1610,6 +1643,8 @@ impl ParsedFile {
                 opaque: true,
                 pattern_statement: false,
                 parenthesized: false,
+                projection_base: false,
+                shared_borrow: false,
             });
             index.slots = next_slots;
         }
@@ -1696,6 +1731,60 @@ impl ParsedFile {
 mod tests {
     use super::*;
     use crate::core::digest::Digest;
+    #[test]
+    fn rustc_projected_borrow_roots_share_indexed_context_without_promoting_index_operands() {
+        use crate::source::snapshot::{CfgSet, SourceBlob};
+        const ORIGINAL: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/static-ref-to-const-array-element.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let mut profile = ProfileIdentity::current();
+            profile.edition = edition;
+            let parsed = ParsedFile::parse(
+                &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+                profile,
+            )
+            .unwrap();
+            let outline = parsed
+                .outline(Digest([149; 32]), vec![], &CfgSet::guest_default())
+                .unwrap();
+            for name in ["array", "tuple_field"] {
+                let body = outline.items.iter()
+                    .find(|item| item.def_key.declared_name == name)
+                    .unwrap().body.as_ref().unwrap();
+                let index = parsed.index_body(body, Default::default()).unwrap();
+                let reference = parsed.parsed.tree().syntax().descendants()
+                    .filter_map(ast::RefExpr::cast)
+                    .find(|reference| body.range.contains(range(reference.syntax().text_range())))
+                    .unwrap();
+                let node = |syntax: &SyntaxNode| {
+                    let actual = range(syntax.text_range());
+                    let relative = SourceRange {
+                        start: actual.start - body.range.start,
+                        end: actual.end - body.range.start,
+                    };
+                    index.nodes_at_range(relative)
+                        .find(|node| matches!(node.role, NodeRole::Expression(_)))
+                        .unwrap().id
+                };
+                let borrowed = reference.expr().unwrap();
+                let root = match borrowed {
+                    ast::Expr::FieldExpr(field) => field.expr().unwrap(),
+                    ast::Expr::IndexExpr(projected) => {
+                        let selector = projected.index().unwrap();
+                        assert_eq!(index.shared_borrow_owner(node(selector.syntax())), None);
+                        projected.base().unwrap()
+                    }
+                    _ => panic!("upstream borrowed projection changed"),
+                };
+                assert_eq!(
+                    index.shared_borrow_owner(node(root.syntax())),
+                    Some(node(reference.syntax())),
+                    "{edition} {name}",
+                );
+            }
+        }
+    }
     #[test]
     fn rustc_single_token_const_initializer_uses_exact_expression_scope() {
         use crate::source::snapshot::{CfgSet, SourceBlob};

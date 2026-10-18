@@ -1,0 +1,90 @@
+{
+  "status": "READY narrow E-R5-006 cleanup after actual V35 compile failure; no successor compile/runtime acceptance",
+  "precode": "worktracks/evidence/2026-10-18-associated-declaration-e006-cleanup-precode.json",
+  "actual_previous_failure": "V35 e74cb1/101, 15.854s, two E0425 MAX_ROWS/MAX_BYTES; before/after sourcee02d1170 unchanged, no CLI/runtime. V34 zero-selector discovery preserved.",
+  "sources": {
+    "crates/lrr/src/frontend/associated_declarations.rs": "1ddd50179ace717af96593554ca8261479c51ac59124406bda3f0522655a75d8",
+    "crates/lrr/src/frontend/generated_associated_declarations.rs": "a5a0df73782d8425264a4c9db3d1f742ca8268d44f6445b5c5b2122ffe82b903",
+    "crates/lrr/src/frontend/associated_declaration_tests.rs": "d75a3495e30df071af4d0b12f66619ca51156e6297a22c02f6ce23493e632394",
+    "crates/lrr/src/frontend/generated_associated_declaration_tests.rs": "98a3a9fc277867aa19e40f7fce8329c5042f673787ba127c6b49e47ae8ef60d5"
+  },
+  "unchanged_module_hook": {
+    "path": "crates/lrr/src/frontend/mod.rs",
+    "sha256": "c25f06b7792c2c6cb8fe9a942edb54b3a853490538f3f32bd21615ceaec175ca"
+  },
+  "unchanged_local_helper": {
+    "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
+    "sha256": "8b66a4995a950e5ac2431b8bb94f3bd6b98eccd49516b826a7e0d70d80c0a8d8"
+  },
+  "delta": [
+    "Removed original ARC_HEADER, byte-summing helper, metadata_bytes field/accessor/final retained capacity census, scan/Arc budget and reserve byte census.",
+    "Removed generated metadata_bytes field/accessor, SyntaxRequestReceipt heap census, header/context/scan/outline byte preflight, capacities and receipt_heap census. Actual issued receipt capture remains.",
+    "reserve<T>(count) uses only actual Vec::try_reserve_exact and same typed OS/allocation failure; every reserve caller updated.",
+    "Removed only two metadata-size oracle assertions and undefined MAX_ROWS/MAX_BYTES cap assertions. Preserved usize::MAX allocation failure; renamed test to original_component_rejects_generated_slot_scan_and_allocation_failure.",
+    "No changed source fingerprint encodings: removed sizes were never semantic identity fields. No source proof/currentness/identity checks removed."
+  ],
+  "remaining_checks": [
+    "Actual checked trait+impl count and associated-slot count sums",
+    "All u32::try_from canonical index/ordinal conversions",
+    "Actual try_reserve_exact allocation error",
+    "Same original captured source/parse/path/scope/cfg/profile/header/body/name/owner checks and duplicate identities",
+    "Same actual generated issued request/producer/record/grammar/epoch/cfg/parent/direct fragment/span/header/context/body/edition checks"
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "PreparedOriginalAssociatedDeclarations::from_scan; PreparedGeneratedAssociatedDeclarations::prepare",
+      "review": "Metadata cleanup only; no expression/assertion compiler or evaluator."
+    },
+    {
+      "mode": 2,
+      "symbols": "PreparedGeneratedAssociatedDeclarations::prepare",
+      "review": "Actual issued output route unchanged; no generated executor/literal/break route."
+    },
+    {
+      "mode": 3,
+      "symbols": "reserve<T> and its callers",
+      "review": "No method/numeric/context selection changes or source spelling cases."
+    },
+    {
+      "mode": 4,
+      "symbols": "Original source proof and generated issued chain checks",
+      "review": "No source-origin exclusions or containment/currentness relaxation added; existing genuine missing parent proof holds unchanged."
+    },
+    {
+      "mode": 5,
+      "symbols": "LocalImplOwners unchanged; original/generated metadata preparation",
+      "review": "No executable pattern/body admission or new eager preparation; only accounting deleted."
+    },
+    {
+      "mode": 6,
+      "symbols": "Cold preparation reserve and byte census removal",
+      "review": "Deleted cold byte/capacity traversal; actual Outline/canonical preparation unchanged. No installed execution integration or new parsing/planning. Memo consumer integration still held."
+    },
+    {
+      "mode": 7,
+      "symbols": "Original publication and generated chain checks unchanged",
+      "review": "No namespace scan/invalidation/negative completeness/Drop changes. Metadata only, no runtime grant."
+    },
+    {
+      "mode": 8,
+      "symbols": "Arc source/scan/output handles, retained local declaration plan unchanged",
+      "review": "No immutable structure cloning or node search added; no new resource accounting. Actual allocations and index checks preserved."
+    }
+  ],
+  "tests": [
+    {
+      "selector": "frontend::associated_declarations::tests::original_component_rejects_generated_slot_scan_and_allocation_failure",
+      "scope": "Retains generated scan/source mismatch and real usize::MAX allocation failure; arbitrary cap oracles removed."
+    },
+    {
+      "selector": "frontend::associated_declarations::tests::unchanged_local_drop_impl_joins_canonical_declaration_plan_without_body_entry",
+      "scope": "Unchanged all4edition metadata control; pending actual discovered/executed terminal."
+    }
+  ],
+  "holds": [
+    "No Cargo/tests/CLI by implementation owner. Next actual build/list/controls unexecuted.",
+    "Associated-declaration component still has no production runtime member consumer; no runtime/Drop-completeness or feature closure.",
+    "Prior V34 absent-module and V35 failed compile preserved; source review is bounded, not compile acceptance."
+  ]
+}

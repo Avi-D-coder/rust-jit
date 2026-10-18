@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "candidate": "V36",
+  "source_sha256": "5b19e06f2a9e64a90cf2e8748af02e24cb94d53ef51ccac6b53d1ec001d2b8e2",
+  "head": "b933a599414daaacbbd791c0533c9e819533b7ff",
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "source_unchanged": true,
+  "build": {
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "test",
+      "--offline",
+      "--locked",
+      "-p",
+      "lrr",
+      "--lib",
+      "--no-run"
+    ],
+    "session_id": 46413,
+    "initial_chunk": "4b7f9f",
+    "terminal_chunk": "04a818",
+    "exit": 101,
+    "seconds": 13.82,
+    "log_sha256": "a5316227667a70e0c0bcd2dfffce21c27b6907757fab671a91369b32a7f1c25a",
+    "errors": [
+      {
+        "code": "E0599",
+        "path": "crates/lrr/src/syntax/body_index.rs",
+        "line": 1756,
+        "message": "Test uses nonexistent ParsedFile::tree; actual retained parser field is ParsedFile::parsed."
+      }
+    ]
+  },
+  "cli_build": "UNEXECUTED",
+  "runtime": "UNEXECUTED",
+  "selected_controls": "UNEXECUTED",
+  "acceptance": "No runtime/feature/fullfixture/interpreter/JIT pass."
+}

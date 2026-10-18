@@ -1,0 +1,82 @@
+{
+  "status": "independent_source_review_clear_bounded_component_uncompiled_unexecuted",
+  "reviewed_receipt": "worktracks/evidence/2026-10-18-cold-local-impl-canonical-join-source-review.json",
+  "reviewed_receipt_sha256": "86b420d2ec24297f5e13d968bc043afe2c2e30c718bf97727ff11e67db26266f",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/associated_declarations.rs",
+      "sha256": "44a25344d96b94ac8a460e0785ee82a54710d33cfc7ba9f5f99f45405e53286b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
+      "sha256": "8b66a4995a950e5ac2431b8bb94f3bd6b98eccd49516b826a7e0d70d80c0a8d8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+      "sha256": "99833ac2a17fce4294899c73efb02074443c6c006c2e7e9b4028680826bc056d"
+    }
+  ],
+  "supporting_source": [
+    {
+      "path": "crates/lrr/src/syntax/declaration_scope_plan.rs",
+      "sha256": "e6d2f227670f510bbb26ec9aeec752a07e9c0e0d8d97fa26e4dfa3cef40b9ec8"
+    },
+    {
+      "path": "crates/lrr/src/syntax/entered_macros.rs",
+      "sha256": "c36254ee3261a450f729766b1c1841b3935d77849510fc942a306e92fc086bae"
+    }
+  ],
+  "findings": [
+    "No new concrete blocker found in the bounded original-source cold local impl attachment. This is source component clearance, not runtime/member publication or negative Drop authority.",
+    "LocalImplOwners selects only actual Outline Function declaration ranges on ScannedImpl.containers. publication(source,function) verifies the real captured DefinitionSource/Header/DeclarationContext/Body and profile/crate/module. Transform entry-blocked owner is skipped as pending before plan.",
+    "Canonical producer is existing ParsedFile::declaration_scope_plan, with actual BodyHandle/hash/root/scope/cfg checks and deferred bindings. It never calls prepare_entered/BindingBudget apply. Canonical items come from the same BodyItemBudget/collect_container_members used at normal entry, not a reconstructed DefKey.",
+    "Actual local impl must match a direct plan.items row by exact range/header/profile/kind/Type namespace/crate/module, with genuine enclosing_impl and attribute_input absent. Nested functions are opaque items in the shared lexical collector; their executable bodies are not descended into, so outer plan cannot fabricate nested impl canonical rows.",
+    "Members are indexed by actual canonical enclosing_impl plus exact range; parent-child identity/header.context/header tokens/source scope/kind/namespace/name/body checks shared by module/local locations. No fake global DefinitionBody/Header publication of local rows.",
+    "Prepared result retains Arc DeclarationScopePlan; repeated owner/slot access borrows same canonical row. CanonicalLocation discriminant and stable domain v2 distinguish original/local source identity.",
+    "Missing source-owner/opaque-member/nested-parent cases remain typed NeedCanonicalOwner. Existing generated-origin outcome remains NeedGeneratedParent and is not converted to global unsupported or an original-only runtime semantic rule. Genuine generated parent/record bridge remains separate held work."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "PreparedOriginalAssociatedDeclarations::from_scan/LocalImplOwners::prepare",
+      "review": "Source header/owner attachment only; no expression/assertion evaluator."
+    },
+    {
+      "mode": 2,
+      "symbols": "CanonicalLocation/local shared collector",
+      "review": "No literal/break macro executor or opaque runtime phase; same existing declaration source preparation."
+    },
+    {
+      "mode": 3,
+      "symbols": "actual scanned owner/canonical BodyItem/header identity",
+      "review": "No Drop/type/member/function spelling whitelist; uses canonical source IDs, no numeric inference."
+    },
+    {
+      "mode": 4,
+      "symbols": "prepare NeedGeneratedParent/SlotTarget::NeedCanonicalOwner",
+      "review": "Generated owner proof gap stays typed, preexisting route unchanged. No source-origin bypass/rejection added; no generated acceptance inferred."
+    },
+    {
+      "mode": 5,
+      "symbols": "declaration_scope_plan/lexical_declarations deferred requests/item continue",
+      "review": "Pure scoped declarations only; no BindingBudget apply/PatternTree/BodyIndex/SourceLocalPlan/BodyEnv. Nested executable item bodies opaque, unsupported pattern bindings remain deferred."
+    },
+    {
+      "mode": 6,
+      "symbols": "LocalImplOwners by_function/plans/member maps/owner()/associated()",
+      "review": "Parent plans constructed at most once within this source join; same retained canonical rows on access, no installed source planner. Cross-preparation owning memo/adoption remains held."
+    },
+    {
+      "mode": 7,
+      "symbols": "publication/actual captured source/plan guards",
+      "review": "No global namespace/Drop census or negative completeness; source publication checked against actual parent. Live DB freshness remains consumer guard responsibility."
+    },
+    {
+      "mode": 8,
+      "symbols": "Arc DeclarationScopePlan/LocalDeclarationLocation/direct BTree indexes",
+      "review": "No immutable BodyIndex copy or per-row whole-file search. Initial cold Outline/function and plan item/member index enumeration explicit."
+    }
+  ],
+  "cost": "One cold O(Outline items) parent range map, one shared declaration-only plan per relevant actual parent Function and local row/member index, O(log index) lookups plus actual container depth. The shared collector may enumerate body syntax/declaration/macro-producer structure but not lower executable bodies or apply pattern bindings. No hot dispatch integration/performance claim. Existing source cache lifetimes and unintegrated cross-preparation memo sharing held.",
+  "validation": "Read-only exact-source independent review only; no Cargo/tests executed by reviewer. New unchanged-original all-four-edition metadata control source was inspected, including missing fabricated published local inputs and stable repeated canonical row pointer. Actual command terminals pending sole validator. No runtime/full-fixture/feature/gate closure."
+}

@@ -4905,6 +4905,7 @@ impl ParsedFile {
                     return unsupported("field base absent");
                 };
                 let base_is_place = intrinsic_place_receiver(&base);
+                let base_expression = base.clone();
                 let Some(member) = expression.name_ref() else {
                     return unsupported("field selector absent");
                 };
@@ -4927,11 +4928,23 @@ impl ParsedFile {
                     Phase::Operand(0) if !base_is_place => draft(
                         index,
                         key,
-                        vec![Op::ValuePlace {
-                            source: index.nodes()[base.0 as usize]
+                        vec![{
+                            let source = index.nodes()[base.0 as usize]
                                 .value
-                                .ok_or_else(|| error("temporary field receiver value absent"))?,
-                            destination: base_place,
+                                .ok_or_else(|| error("temporary field receiver value absent"))?;
+                            if promotable_constant(&base_expression)
+                                && index.shared_borrow_owner(base).is_some()
+                            {
+                                Op::PromotedPlace {
+                                    source,
+                                    destination: base_place,
+                                }
+                            } else {
+                                Op::ValuePlace {
+                                    source,
+                                    destination: base_place,
+                                }
+                            }
                         }],
                         RecipeExit::Next(index.pc(node.id, Phase::Commit)?),
                     ),
@@ -4971,6 +4984,7 @@ impl ParsedFile {
                     return unsupported("index operand absent");
                 };
                 let base_is_place = intrinsic_place_receiver(&base);
+                let base_expression = base.clone();
                 // `base[a..b]` selects `Index<Range*<usize>>`: the range's
                 // endpoints, not the range value, take the usize context.
                 let range_bounds = match &evaluated {
@@ -5005,11 +5019,21 @@ impl ParsedFile {
                     Phase::Operand(0) => {
                         let mut ops = Vec::new();
                         if !base_is_place {
-                            ops.push(Op::ValuePlace {
-                                source: index.nodes()[base.0 as usize].value.ok_or_else(|| {
-                                    error("temporary index receiver value absent")
-                                })?,
-                                destination: base_place,
+                            let source = index.nodes()[base.0 as usize].value.ok_or_else(|| {
+                                error("temporary index receiver value absent")
+                            })?;
+                            ops.push(if promotable_constant(&base_expression)
+                                && index.shared_borrow_owner(base).is_some()
+                            {
+                                Op::PromotedPlace {
+                                    source,
+                                    destination: base_place,
+                                }
+                            } else {
+                                Op::ValuePlace {
+                                    source,
+                                    destination: base_place,
+                                }
                             });
                         }
                         match &range_bounds {

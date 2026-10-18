@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-044",
+  "status": "source-reviewed-uncompiled-unexecuted",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "sha256": "7fad1f503866fdb60fb29e808aef20d9a0822812fb782e512b6a1630e9748bb2"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "f52fb01a01bd81aeb38cb84ee72ab1dac753f2dcf995aa5fdd285b9c2e712245"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "947d5fce6e247f0ff450aa918ca12e9a19cf5f5ac6d8363533f930a3c2fa1c25"
+    }
+  ],
+  "entry_points": [
+    "BodyIndex::shared_borrow_owner",
+    "ParsedFile::index_body structural node capture",
+    "ParsedFile::initial_place_thunk FIELD_EXPR/INDEX_EXPR Operand(0)",
+    "RunMachine::path_is_shared_borrow_operand",
+    "RunMachine::prepare_selected_item_value"
+  ],
+  "removed_routes": [
+    "syntax shared_borrowed_projection AST ancestor walker",
+    "ValuePath immediate Ref-only Borrow recipe demand"
+  ],
+  "review": [
+    {
+      "mode": 1,
+      "finding": "No new parser/evaluator; existing initializer/ItemValue/PromotedPlace/VM routes unchanged."
+    },
+    {
+      "mode": 2,
+      "finding": "Same actual indexed AST original/generated flags; no macro payload executor."
+    },
+    {
+      "mode": 3,
+      "finding": "No inference/member/macro identity change. Current generic qualifier proof remains prior worker delta."
+    },
+    {
+      "mode": 4,
+      "finding": "No origin restriction; flags captured by common index."
+    },
+    {
+      "mode": 5,
+      "finding": "No pattern route/cold executable prep. Only projection firstoperand can reach borrow, indexargument cannot."
+    },
+    {
+      "mode": 6,
+      "finding": "Actual AST flags captured once; index ancestry checked at reached recipe/value preparation; no installed source planning. Removed old ancestry walker and Borrow recipe fetch."
+    },
+    {
+      "mode": 7,
+      "finding": "No namespace scans/version census/new broad invalidation."
+    },
+    {
+      "mode": 8,
+      "finding": "Small immutable node flags, retained handles/direct node links; no BodyIndex clone or full-file production search."
+    }
+  ],
+  "encoding": "BodyIndex stable domain advanced lrr/v5/original-body-structure to lrr/v6/original-body-structure; both metadata flags explicitly encoded",
+  "control": "syntax::body_index::tests::rustc_projected_borrow_roots_share_indexed_context_without_promoting_index_operands: actual unchanged upstream tuple/array AST roots and indexargument absence, all4editions; unexecuted",
+  "holds": [
+    "V34/V35 ran no runtime bodies",
+    "secondpath source diagnosis not actual recorded fault",
+    "nominal Drop absence completeness",
+    "full generic application identity",
+    "four-origin projection matrix unexecuted",
+    "full promotion/interpreter/JIT gates"
+  ],
+  "cost": "O(1) new source flags per indexed node; O(projection ancestry) reached preparation; existing literal subtree scan only Operand0 recipe; no new accounting/cap or measured performance claim",
+  "prior_worker_source_proof": {
+    "reconstructed_sha256": "4c6d0a6a8bcab352a3622c4f8e0bf6262886d9bdea2c5e2101af948383f58e36",
+    "result": "Restoring only prior path_is_shared_borrow_operand+caller exactly reconstructs independently reviewed worker free-owner proof; generic route otherwise byte-identical."
+  }
+}

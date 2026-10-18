@@ -35,7 +35,6 @@ pub(crate) struct PreparedGeneratedAssociatedDeclarations<'a> {
     outline: Outline,
     slots: Vec<GeneratedSlot>,
     fingerprint: Digest,
-    metadata_bytes: usize,
 }
 pub(crate) struct GeneratedAssociatedHeader<'a> {
     pub(crate) source: &'a AssociatedDeclarationHeader,
@@ -89,19 +88,11 @@ impl<'a> PreparedGeneratedAssociatedDeclarations<'a> {
         if !matches!(grammar, GrammarSlot::TraitItems | GrammarSlot::ImplItems) {
             return Err(generated_fault("associated root grammar differs"));
         }
-        let mut budget = std::mem::size_of::<Self>();
-        let mut outputs = reserve::<Arc<GeneratedDeclarations>>(chain.len(), &mut budget)?;
-        let mut receipts = reserve::<SyntaxRequestReceipt>(chain.len(), &mut budget)?;
-        let mut receipt_heap = 0usize;
+        let mut outputs = reserve::<Arc<GeneratedDeclarations>>(chain.len())?;
+        let mut receipts = reserve::<SyntaxRequestReceipt>(chain.len())?;
         let mut parent = original.scan().as_ref();
         for (ordinal, issued) in chain.iter().enumerate() {
             let receipt = SyntaxRequestReceipt::capture(issued.request)?;
-            let heap = receipt
-                .metadata_bytes()?
-                .checked_sub(std::mem::size_of::<SyntaxRequestReceipt>())
-                .ok_or_else(resource)?;
-            budget = checked_add(budget, heap)?;
-            receipt_heap = checked_add(receipt_heap, heap)?;
             let output = issued.output.as_ref();
             let key = receipt.key();
             let producer = parent
@@ -148,31 +139,17 @@ impl<'a> PreparedGeneratedAssociatedDeclarations<'a> {
                     ));
                 }
             }
-            // The owned output is already bounded/accounted by its admission.
-            // Only shared handles are new here; callers must retain those roots.
+            // Retain shared output handles; callers must retain those roots.
             outputs.push(Arc::clone(&issued.output));
             receipts.push(receipt);
             parent = output.scan().as_ref();
         }
         let output = outputs.last().expect("nonempty checked associated chain");
         let rows = output.scan().associated_fragments();
-        // Ordinary Outline duplicates the genuine parent header context in
-        // direct members; bound this retained metadata before asking it to walk.
-        let context = owner
-            .header
-            .estimated_bytes()
-            .checked_add(owner.scope.heap_bytes())
-            .ok_or_else(resource)?;
-        let preflight = context
-            .checked_mul(rows.len().checked_add(1).ok_or_else(resource)?)
-            .and_then(|n| n.checked_add(output.scan().retained_bytes().checked_mul(4)?))
-            .ok_or_else(resource)?;
-        checked_add(budget, preflight)?;
         let outline = output
             .admitted_parsed()
             .outline_associated_fragment(owner, cfg)?;
-        budget = checked_add(budget, outline.estimated_bytes())?;
-        let mut headers = reserve::<((u32, u32), u32)>(output.headers().len(), &mut budget)?;
+        let mut headers = reserve::<((u32, u32), u32)>(output.headers().len())?;
         for (i, row) in output.headers().iter().enumerate() {
             headers.push((
                 (row.start, row.end),
@@ -180,7 +157,7 @@ impl<'a> PreparedGeneratedAssociatedDeclarations<'a> {
             ));
         }
         headers.sort_unstable_by_key(|row| row.0);
-        let mut declarations = reserve::<((u32, u32), u32)>(outline.items.len(), &mut budget)?;
+        let mut declarations = reserve::<((u32, u32), u32)>(outline.items.len())?;
         for (i, item) in outline.items.iter().enumerate() {
             declarations.push((
                 key(item.declaration_span),
@@ -188,7 +165,7 @@ impl<'a> PreparedGeneratedAssociatedDeclarations<'a> {
             ));
         }
         declarations.sort_unstable_by_key(|row| row.0);
-        let mut spans = reserve::<(Digest, u32)>(output.tokens().spans().len(), &mut budget)?;
+        let mut spans = reserve::<(Digest, u32)>(output.tokens().spans().len())?;
         for (i, span) in output.tokens().spans().iter().enumerate() {
             spans.push((
                 Digest(span.key().0),
@@ -201,7 +178,7 @@ impl<'a> PreparedGeneratedAssociatedDeclarations<'a> {
                 "associated actual span identity duplicated",
             ));
         }
-        let mut slots = reserve::<GeneratedSlot>(rows.len(), &mut budget)?;
+        let mut slots = reserve::<GeneratedSlot>(rows.len())?;
         for (ordinal, row) in rows.iter().enumerate() {
             if !matches!(row.owner,AssociatedDeclarationOwner::Fragment{grammar:g,..} if g==grammar)
             {
@@ -293,31 +270,6 @@ impl<'a> PreparedGeneratedAssociatedDeclarations<'a> {
         }
         // Slots already follow actual retained AST order, which is an attachment
         // locator, not a member lookup order or a negative namespace answer.
-        let metadata_bytes = checked_add(
-            checked_add(std::mem::size_of::<Self>(), outline.estimated_bytes())?,
-            receipt_heap,
-        )?
-        .checked_add(
-            outputs
-                .capacity()
-                .checked_mul(std::mem::size_of::<Arc<GeneratedDeclarations>>())
-                .ok_or_else(resource)?,
-        )
-        .and_then(|n| {
-            n.checked_add(
-                receipts
-                    .capacity()
-                    .checked_mul(std::mem::size_of::<SyntaxRequestReceipt>())?,
-            )
-        })
-        .and_then(|n| {
-            n.checked_add(
-                slots
-                    .capacity()
-                    .checked_mul(std::mem::size_of::<GeneratedSlot>())?,
-            )
-        })
-        .ok_or_else(resource)?;
         let mut encoded = StableEncoder::new("lrr/v1/generated-associated-declaration-source-join");
         encoded.digest(original.fingerprint());
         encoded.digest(owner.def_key.fingerprint());
@@ -347,14 +299,10 @@ impl<'a> PreparedGeneratedAssociatedDeclarations<'a> {
             outline,
             slots,
             fingerprint: encoded.finish(),
-            metadata_bytes,
         })
     }
     pub(crate) fn fingerprint(&self) -> Digest {
         self.fingerprint
-    }
-    pub(crate) fn metadata_bytes(&self) -> usize {
-        self.metadata_bytes
     }
     pub(crate) fn source(&self) -> &PreparedSourceView {
         self.source

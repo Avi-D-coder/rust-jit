@@ -1,0 +1,11 @@
+{
+  "status": "READY one-line module-tree repair, othersourcesfrozen",
+  "source": "crates/lrr/src/frontend/mod.rs",
+  "sha256": "c25f06b7792c2c6cb8fe9a942edb54b3a853490538f3f32bd21615ceaec175ca",
+  "change": "declare existing associated_declarations privatecrate module, bringing its privatechild/helper/tests into actual compilation",
+  "actual_failure": "V34 fresh libtest --list zero selectors; prior build not component compile evidence",
+  "prior_sources": "corrected44a25344/helper8b66a499/tests99833ac2 unchanged",
+  "scope": "metadata component only, no production interpreter runtime consumer added",
+  "validation": "solevalidator nextactualcompile/--list/test terminal pending",
+  "all8": "same semantic source paths unchanged; one module declaration enables compilation. No evaluator/name/context fallback/staticchecker/authority/accounting introduced."
+}

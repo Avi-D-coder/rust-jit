@@ -1148,10 +1148,10 @@
       "id": "LOCAL-037",
       "track": "WT05",
       "item": "WT05-04",
-      "owner": "/root/generic_projection_resume",
+      "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Actual declaration import-alias producer prerequisite via retained full leaf-identity import plan and existing hygienic textual target callback; source/generated scope/context classes retained, alias/self/cycle comparisons use full SourceImport fingerprint. Source-only review correction after grouped-leaf collision; cross-output alias export/argument producer held. V32 bounded successor reservation: single canonical declaration-only scope plan/deferred bindings, no new memory accounting; cold-header/member integration held.",
+      "scope": "Actual declaration import-alias producer prerequisite via retained full leaf-identity import plan and existing hygienic textual target callback; source/generated scope/context classes retained, alias/self/cycle comparisons use full SourceImport fingerprint. Source-only review correction after grouped-leaf collision; cross-output alias export/argument producer held. V32 bounded successor reservation: single canonical declaration-only scope plan/deferred bindings, no new memory accounting; cold-header/member integration held. October18 user stopped subagents after current handoffs; implementing lead now owns this existing dirty source reservation and asynchronous validation. Prior acceptance unchanged.",
       "paths": [
         "crates/lrr/src/frontend/source_types.rs",
         "crates/lrr/src/syntax/signatures.rs",
@@ -1180,7 +1180,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T14:57:11.772216+00:00",
+      "updated_at": "2026-10-18T16:03:38.349529+00:00",
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
         "crates/lrr/src/frontend/associated_types.rs"
@@ -1190,10 +1190,10 @@
       "id": "LOCAL-038",
       "track": "WT04",
       "item": "WT04-04",
-      "owner": "/root/closure_callable_resume",
+      "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "T032/T033/M025 ordinary source Deref callable adjustment, existing VM operator continuation and bound result descriptors; evidence worktracks/04-calls-source-views/2026-10-18-callable-autoderef.md. Async validation pending; Arc constructor dependency remains unsupported. M030 source Deref continuation plus retained ordinary type-equality/runtime numeric fact join; actual sourceDeref numeric witness pending V6. No assertion-specific inference. See observed-numeric-constraints.md. V32 bounded successor reservation: actual hygienic DollarCrate Type occurrence and existing observed qualified lookup root; no MacroName relaxation. Source reviewed, runtime pending.",
+      "scope": "T032/T033/M025 ordinary source Deref callable adjustment, existing VM operator continuation and bound result descriptors; evidence worktracks/04-calls-source-views/2026-10-18-callable-autoderef.md. Async validation pending; Arc constructor dependency remains unsupported. M030 source Deref continuation plus retained ordinary type-equality/runtime numeric fact join; actual sourceDeref numeric witness pending V6. No assertion-specific inference. See observed-numeric-constraints.md. V32 bounded successor reservation: actual hygienic DollarCrate Type occurrence and existing observed qualified lookup root; no MacroName relaxation. Source reviewed, runtime pending. October18 user stopped subagents after current handoffs; implementing lead now owns this existing dirty source reservation and asynchronous validation. Prior acceptance unchanged.",
       "paths": [
         "crates/lrr/src/ir/recipe.rs",
         "crates/lrr/src/ir/validate.rs",
@@ -1213,7 +1213,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T14:57:11.772276+00:00",
+      "updated_at": "2026-10-18T16:03:38.349589+00:00",
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
         "crates/lrr/src/ir/op.rs",
@@ -1249,27 +1249,27 @@
       "id": "LOCAL-039",
       "track": "WT04",
       "item": "WT04-01",
-      "owner": "/root/generic_projection_resume",
+      "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Generated inline module Type/source-scope join. V4 four-edition source/macro/wrapper/inline matrix and epoch refresh pass; unrelated existing ambiguity test failure remains unclassified. Evidence worktracks/evidence/2026-10-18-generated-inline-module-type-join.md; component only, no gate closure.",
+      "scope": "Generated inline module Type/source-scope join. V4 four-edition source/macro/wrapper/inline matrix and epoch refresh pass; unrelated existing ambiguity test failure remains unclassified. Evidence worktracks/evidence/2026-10-18-generated-inline-module-type-join.md; component only, no gate closure. October18 user stopped subagents after current handoffs; implementing lead now owns this existing dirty source reservation and asynchronous validation. Prior acceptance unchanged.",
       "paths": [
         "crates/lrr/src/frontend/local_type_modules.rs",
         "crates/lrr/src/frontend/current_module_names.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T08:48:59.774551+00:00",
+      "updated_at": "2026-10-18T16:03:38.349591+00:00",
       "review_after": "2026-10-18T08:48:59.774551+00:00"
     },
     {
       "id": "LOCAL-041",
       "track": "WT04",
       "item": "WT04-04",
-      "owner": "/root/generic_projection_resume",
+      "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Atomic library facade shared serialized RMW intrinsic; unchanged atomic.rs support input imported. V5 real owning2024 selected6 tests all fail before verified kernel behavior (local initializer Type/primitive namespace). No runtime acceptance. See worktracks/evidence/2026-10-18-atomic-library-rmw.md.",
+      "scope": "Atomic library facade shared serialized RMW intrinsic; unchanged atomic.rs support input imported. V5 real owning2024 selected6 tests all fail before verified kernel behavior (local initializer Type/primitive namespace). No runtime acceptance. See worktracks/evidence/2026-10-18-atomic-library-rmw.md. October18 user stopped subagents after current handoffs; implementing lead now owns this existing dirty source reservation and asynchronous validation. Prior acceptance unchanged.",
       "paths": [
         "crates/lrr/facade/core/sync.rs",
         "crates/lrr/src/facade/functions.rs",
@@ -1279,23 +1279,23 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T08:48:59.774551+00:00",
+      "updated_at": "2026-10-18T16:03:38.349592+00:00",
       "review_after": "2026-10-18T08:48:59.774551+00:00"
     },
     {
       "id": "LOCAL-042",
       "track": "WT04",
       "item": "WT04-04",
-      "owner": "/root/interpreter_validation_resume",
+      "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Existing supplemental Type-scope regression source review and stale oracle repair: genuine identical-derived agreement/currentness vs actual conflicting receipt refusal. No production policy change or stock pass.",
+      "scope": "Existing supplemental Type-scope regression source review and stale oracle repair: genuine identical-derived agreement/currentness vs actual conflicting receipt refusal. No production policy change or stock pass. October18 user stopped subagents after current handoffs; implementing lead now owns this existing dirty source reservation and asynchronous validation. Prior acceptance unchanged.",
       "paths": [
         "crates/lrr/src/frontend/current_type_scope_tests.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T08:57:28.443446+00:00",
+      "updated_at": "2026-10-18T16:03:38.349594+00:00",
       "review_after": "2026-10-18T08:57:28.443446+00:00"
     },
     {
@@ -1394,10 +1394,10 @@
       "id": "LOCAL-046",
       "track": "WT04",
       "item": "WT04-01",
-      "owner": "/root/closure_callable_resume",
+      "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V23 ordinary FRU ownership/exactonce all editions passes; actual retained source occurrence/ancestry join successor corrects original=None and digest-sorted topology assumptions using exact assembly root inventory. Separate associated scope source/negative control. Source-only review pending, full macro/E007/interpreter gates held.",
+      "scope": "V23 ordinary FRU ownership/exactonce all editions passes; actual retained source occurrence/ancestry join successor corrects original=None and digest-sorted topology assumptions using exact assembly root inventory. Separate associated scope source/negative control. Source-only review pending, full macro/E007/interpreter gates held. October18 user stopped subagents after current handoffs; implementing lead now owns this existing dirty source reservation and asynchronous validation. Prior acceptance unchanged.",
       "paths": [
         "crates/lrr/src/frontend/nominal_member_goals.rs",
         "crates/lrr/src/frontend/declaration_nominal_types.rs",
@@ -1435,7 +1435,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T12:43:38.345895+00:00",
+      "updated_at": "2026-10-18T16:03:38.349595+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00",
       "transferred_paths": [
         "crates/lrr/src/vm/step.rs",
@@ -1448,10 +1448,10 @@
       "id": "LOCAL-047",
       "track": "WT04",
       "item": "WT04-01",
-      "owner": "/root/generic_projection_resume",
+      "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Actual shared mismatch term and retained-source failure provenance plus ordinary reverse String comparison source impl. V10 diagnostic/literal controls pass; reverse String semantic repair awaits next exact binary. No macro special case or feature/gate closure. Corrective common actual-Fn classifier source-only after V12 constructor-signature fault.",
+      "scope": "Actual shared mismatch term and retained-source failure provenance plus ordinary reverse String comparison source impl. V10 diagnostic/literal controls pass; reverse String semantic repair awaits next exact binary. No macro special case or feature/gate closure. Corrective common actual-Fn classifier source-only after V12 constructor-signature fault. October18 user stopped subagents after current handoffs; implementing lead now owns this existing dirty source reservation and asynchronous validation. Prior acceptance unchanged.",
       "paths": [
         "crates/lrr/src/engine/failure.rs",
         "crates/lrr/src/syntax/parse_retained.rs",
@@ -1469,7 +1469,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T10:28:02.996611+00:00",
+      "updated_at": "2026-10-18T16:03:38.349597+00:00",
       "review_after": "2026-10-18T09:45:35.941918+00:00"
     },
     {

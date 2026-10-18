@@ -1,0 +1,62 @@
+{
+  "candidate": "V35",
+  "status": "Library test compile101: dormant legacy cap test references unresolved; no CLI/runtime",
+  "head": "b933a599414daaacbbd791c0533c9e819533b7ff",
+  "source_sha256": "e02d117030c310104cd00963657f8095aaf049fd9ae660554b36680a99baa6c0",
+  "source_file_count": 3335,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "Rust1.99.0",
+  "build": {
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "test",
+      "--offline",
+      "--locked",
+      "-p",
+      "lrr",
+      "--lib",
+      "--no-run"
+    ],
+    "exit": 101,
+    "seconds": 15.854,
+    "log": "compile.log",
+    "session_id": 29105,
+    "initial_chunk": "3c528d",
+    "terminal_chunk": "e74cb1",
+    "warnings": 11
+  },
+  "source_head_generator_unchanged": true,
+  "diagnostics": [
+    {
+      "code": "E0425",
+      "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+      "line": 251,
+      "message": "cannot find value MAX_ROWS in this scope"
+    },
+    {
+      "code": "E0425",
+      "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+      "line": 253,
+      "message": "cannot find value MAX_BYTES in this scope"
+    }
+  ],
+  "scope": [
+    "Actual modulehook now includes canonicalsource component in Rust module tree; testcompile failure prevents successful library binary acceptance.",
+    "Prior V34 fullbuild succeeded only with canonicalmoduleomitted; no runtime then. Both missingselectors preserved in V34portable.",
+    "Standing prior hook->rearm grant launched V35 before later root pauseforE006cleanup. All writers stopped; worker1 explicitlyconfirmed zero Rust writes and exactbefore/after provesunchanged. No invalidfreeze or mixedbinary acceptance.",
+    "Root now coordinates4leafE006 removal; undefined retired caps must notberestored. Existing actual allocation/index/source checks preserved."
+  ],
+  "cli_build": "UNEXECUTED",
+  "stock_executed": 0,
+  "controls_executed": 0,
+  "passes": 0,
+  "holds": [
+    "No fixture/runtime/feature/gate claim from failed compile.",
+    "All earlier V33/source-only and V34 selectorfailure evidence retained separately."
+  ],
+  "schema": "lrr/focused-validation/v1",
+  "raw_report_sha256": "ff0dba40712e6a492159c74b9fc3e29796666d1aa6853deb7d7f1500492464dc",
+  "raw_artifact_index_sha256": "a0a3507ddd1584bcba359bbfbcfcb3e73753072da1ecd4d075c8fa1756329bfc"
+}

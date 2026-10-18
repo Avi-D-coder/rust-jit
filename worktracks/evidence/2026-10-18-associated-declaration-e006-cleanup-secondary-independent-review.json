@@ -1,0 +1,75 @@
+{
+  "status": "independent_source_review_clear_narrow_e006_cleanup_uncompiled_unexecuted",
+  "owner_receipt": "worktracks/evidence/2026-10-18-associated-declaration-e006-cleanup-source-review.json",
+  "owner_receipt_sha256": "9ff043b2d90446955a554f45a8a75d37dd9dea307ff3b3f5a9141633b75e4b53",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/associated_declarations.rs",
+      "sha256": "1ddd50179ace717af96593554ca8261479c51ac59124406bda3f0522655a75d8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_associated_declarations.rs",
+      "sha256": "a5a0df73782d8425264a4c9db3d1f742ca8268d44f6445b5c5b2122ffe82b903"
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+      "sha256": "d75a3495e30df071af4d0b12f66619ca51156e6297a22c02f6ce23493e632394"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_associated_declaration_tests.rs",
+      "sha256": "98a3a9fc277867aa19e40f7fce8329c5042f673787ba127c6b49e47ae8ef60d5"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "c25f06b7792c2c6cb8fe9a942edb54b3a853490538f3f32bd21615ceaec175ca"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
+      "sha256": "8b66a4995a950e5ac2431b8bb94f3bd6b98eccd49516b826a7e0d70d80c0a8d8"
+    }
+  ],
+  "delta_review": [
+    "Original reserve<T>(count) retains actual Vec::try_reserve_exact and typed allocation failure; removed byte sums/capacity counting/metadata_bytes field/accessor only. Actual trait+impl and total slot count checked_add plus u32 index conversions remain.",
+    "Generated issued receipt SyntaxRequestReceipt::capture remains. Inspecting syntax_receipt::metadata_bytes confirmed removed call only counted struct/export capacity and had no source/identity validation side effect; capture_parts still validates key, actual input/procedural site/input identity/token roots.",
+    "Generated shared output/receipt roots, nonempty chain, actual request/producer/input/record/parent inventory/grammar/epoch/cfg/direct fragment/owner/header/body/name/context/span checks remain. Outline construction/slot actual index maps unchanged; removed context/scan/outline byte preflight only.",
+    "Original publication/source/cfg/parse/path/header/body/context/name/canonical parent checks and LocalImplOwners retained canonical plan are unchanged source authorities. No namespace/currentness or negative Drop proof was added or weakened by the accounting removal.",
+    "Original/generated fingerprint encodings contain actual source identity/semantic records, not deleted metadata byte counts; no semantic encoding change requires a new domain solely for this cleanup.",
+    "Tests remove two metadata-size and undefined MAX_ROWS/MAX_BYTES cap oracles only. Generated original mismatch negative remains, actual usize::MAX allocation failure remains with renamed selector; all source parent/header/body/edition/pointer identity oracles remain.",
+    "Module hook c25f06b7 and local helper8b66a499 match reviewed scope. This makes source component discoverable but does not introduce a production runtime member/Drop consumer."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "No expression/assertion evaluator; only obsolete accounting deleted."
+    },
+    {
+      "mode": 2,
+      "review": "Generated issued-output chain unchanged, no scalar/break executor."
+    },
+    {
+      "mode": 3,
+      "review": "No context/method/numeric name policy introduced; actual source selection unchanged."
+    },
+    {
+      "mode": 4,
+      "review": "Original/generated source ownership and missing-parent typed holds preserved."
+    },
+    {
+      "mode": 5,
+      "review": "No BindingBudget/PatternTree/body preparation added; cold declaration source component stays metadata."
+    },
+    {
+      "mode": 6,
+      "review": "Cold byte/capacity census removed, same canonical collector/preparation; no per-operation parse/plan or new query framework."
+    },
+    {
+      "mode": 7,
+      "review": "No namespace/global invalidation/negative completeness authority change; live currentness remains existing actual input/receipt consumers."
+    },
+    {
+      "mode": 8,
+      "review": "Same Arc/shared AST/plan data; actual checked index/allocation operations retained, no body clone/wholefile search."
+    }
+  ],
+  "validation": "Read-only exact-source review only. No Cargo/tests/code/index by reviewer. V35 failed compile101 remains prior evidence; successor build/list/actual metadata tests pending sole validator. No runtime/fullfixture/feature or performance acceptance claim."
+}

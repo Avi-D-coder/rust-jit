@@ -1,0 +1,27 @@
+{
+  "status": "precode before narrow V35 E006 removal",
+  "actual_failure": "V35 e74cb1/101: MAX_ROWS/MAX_BYTES undefined; hook-only source unchanged; no CLI/runtime",
+  "invariant": "E-R5-006 forbids retained byte accounting and admission caps; preserve actual allocation/index failures and source proofs",
+  "scope": [
+    "crates/lrr/src/frontend/associated_declarations.rs",
+    "crates/lrr/src/frontend/generated_associated_declarations.rs",
+    "crates/lrr/src/frontend/associated_declaration_tests.rs",
+    "crates/lrr/src/frontend/generated_associated_declaration_tests.rs"
+  ],
+  "before_sha256": {
+    "crates/lrr/src/frontend/associated_declarations.rs": "44a25344d96b94ac8a460e0785ee82a54710d33cfc7ba9f5f99f45405e53286b",
+    "crates/lrr/src/frontend/generated_associated_declarations.rs": "98637571b1b16be140ff2d41bc13fc2095b7d32e8d5343fe9e6a9c0820c4509d",
+    "crates/lrr/src/frontend/associated_declaration_tests.rs": "99833ac2a17fce4294899c73efb02074443c6c006c2e7e9b4028680826bc056d",
+    "crates/lrr/src/frontend/generated_associated_declaration_tests.rs": "214a05345dca81cdf50b54b823e60f5dbe416dd235e255dbecb9a2a31667a0af"
+  },
+  "mechanism": "Remove metadata byte fields/accessors/censuses/preflight and cap-only oracles; reserve delegates actual try_reserve_exact. No semantic source encoding change; no source/type/member/execution routes added.",
+  "witness": "Existing unchanged zero-size-type-destructors metadata control and actual source/producer/epoch tests remain; actual usize::MAX allocation failure retained outside originals.",
+  "entry_points": [
+    "PreparedOriginalAssociatedDeclarations::from_scan",
+    "PreparedGeneratedAssociatedDeclarations::prepare",
+    "reserve<T>"
+  ],
+  "authority": "Source/header/body/context/record/grammar/epoch/hygiene checks unchanged; no publication/runtime entry authority added.",
+  "cost": "Delete cold byte/capacity census; allocation and existing canonical sorting/attachment unchanged. No hot path added.",
+  "acceptance": "Mechanical E006 repair only; actual module compile/test discovery and component controls pending; production runtime consumer remains absent."
+}

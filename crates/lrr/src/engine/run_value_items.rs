@@ -458,6 +458,62 @@ impl RunMachine {
             module_root,
         })))
     }
+    /// Only a genuine source-selected parameter may precede module and
+    /// constructor lookup. Reuse its retained qualifier and ordinary item
+    /// initializer route; spelling alone never establishes this precedence.
+    pub(super) fn prepare_parameter_associated_value(
+        &mut self,
+        db: &mut Database,
+        path: &str,
+    ) -> QueryPoll<bool> {
+        if !path.contains("::") {
+            return QueryPoll::Ready(Ok(false));
+        }
+        // A genuine free/unowned signature with no Type binder proves this
+        // cannot be a parameter-relative value. An owner-bearing retained
+        // fragment may lack its actual binder and cannot prove its absence.
+        let body = self.frame.pc().body.clone();
+        let declared = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(body.definition)) {
+            QueryPoll::Ready(Ok(declared)) => declared,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::FunctionSignature(signature) = declared.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("associated parameter signature query variant differs")));
+        };
+        if !declared.cacheable || signature.definition != body.definition
+            || !matches!(db.input(&crate::db::dependency::InputKey::DefinitionBody(body.definition)).as_deref(),
+                Some(crate::db::dependency::InputValue::DefinitionBody(actual)) if actual.key() == body)
+        {
+            return QueryPoll::Ready(Err(call_fault("associated parameter signature does not own the current body")));
+        }
+        if signature.scope.owner.is_none() && signature.header.context.is_empty()
+            && !signature.generics.iter().any(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
+        {
+            return QueryPoll::Ready(Ok(false));
+        }
+        let selected = match self.associated_value_qualifier(db) {
+            QueryPoll::Ready(Ok(selected)) => selected,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::AssociatedItemQualifier(qualifier) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("associated value qualifier query variant differs")));
+        };
+        if !matches!(qualifier.source(), Some(crate::frontend::explicit_type_arguments::ExplicitType::Parameter(_))) {
+            return QueryPoll::Ready(Ok(false));
+        }
+        let identity = match self.associated_value_path_prepared(db, path, &selected) {
+            QueryPoll::Ready(Ok(Some(identity))) => identity,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Err(unsupported(format!(
+                "value path `{path}` has no unique accessible declaration"
+            )))),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let kind = crate::frontend::callables::selected_item_kind(db, self.sources.iter(), identity);
+        self.prepare_selected_item_value(db, path, identity, kind).map(|()| true)
+    }
     pub(super) fn prepare_item_value_path(
         &mut self,
         db: &mut Database,
@@ -465,6 +521,12 @@ impl RunMachine {
     ) -> QueryPoll<()> {
         if self.frame.use_cached_item_value() {
             return QueryPoll::Ready(Ok(()));
+        }
+        match self.prepare_parameter_associated_value(db, path) {
+            QueryPoll::Ready(Ok(true)) => return QueryPoll::Ready(Ok(())),
+            QueryPoll::Ready(Ok(false)) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
         let found = match self.lookup_value_name(db, path, Namespace::Value) {
             QueryPoll::Ready(Ok(found)) => found,
@@ -506,21 +568,12 @@ impl RunMachine {
     /// The associated constant a type-relative written path selects through
     /// the run's shared member index (the same `CallResolver` route a
     /// `Type::function` callee uses).
-    fn associated_value_path(
+    fn associated_value_qualifier(
         &self,
         db: &mut Database,
-        path: &str,
-    ) -> QueryPoll<Option<crate::core::digest::Digest>> {
-        let Some(graph) = &self.graph else {
-            return QueryPoll::Ready(Err(call_fault(
-                "value paths require a checked source catalogue",
-            )));
-        };
-        let sources: Vec<_> = self.sources.iter().collect();
-        let key = QueryKey::AssociatedItemQualifier(PcKey {
-            body: self.frame.pc().body.clone(), node: self.frame.pc().node, phase: 0,
-        });
-        let selected = match db.fetch(&SyntaxProvider, key.clone()) {
+    ) -> QueryPoll<crate::db::memo::Outcome> {
+        let pc = PcKey { body: self.frame.pc().body.clone(), node: self.frame.pc().node, phase: 0 };
+        let selected = match db.fetch(&SyntaxProvider, QueryKey::AssociatedItemQualifier(pc.clone())) {
             QueryPoll::Ready(Ok(value)) => value,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -528,20 +581,57 @@ impl RunMachine {
         let QueryValue::AssociatedItemQualifier(qualifier) = selected.value.as_ref() else {
             return QueryPoll::Ready(Err(call_fault("associated value qualifier query variant differs")));
         };
-        if !selected.cacheable { return QueryPoll::Ready(Err(call_fault("associated value qualifier is not retained"))); }
+        if !selected.cacheable || qualifier.key() != &pc {
+            return QueryPoll::Ready(Err(call_fault("associated value qualifier is not its retained occurrence")));
+        }
+        QueryPoll::Ready(Ok(selected))
+    }
+    fn associated_value_path(
+        &self,
+        db: &mut Database,
+        path: &str,
+    ) -> QueryPoll<Option<crate::core::digest::Digest>> {
+        let selected = match self.associated_value_qualifier(db) {
+            QueryPoll::Ready(Ok(selected)) => selected,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        self.associated_value_path_prepared(db, path, &selected)
+    }
+    fn associated_value_path_prepared(
+        &self,
+        db: &mut Database,
+        path: &str,
+        selected: &crate::db::memo::Outcome,
+    ) -> QueryPoll<Option<crate::core::digest::Digest>> {
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Err(call_fault(
+                "value paths require a checked source catalogue",
+            )));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
+        let QueryValue::AssociatedItemQualifier(qualifier) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("associated value qualifier query variant differs")));
+        };
+        let key = QueryKey::AssociatedItemQualifier(qualifier.key().clone());
         let resolver = match CallResolver::new(graph, &sources) {
             Ok(resolver) => resolver.with_members(self.members.as_deref()),
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         if let Some(source) = qualifier.source() {
-            if let crate::frontend::explicit_type_arguments::ExplicitType::Parameter(crate::traits::term::TyTerm::Param(parameter)) = source {
+            let actual = if let crate::frontend::explicit_type_arguments::ExplicitType::Parameter(crate::traits::term::TyTerm::Param(parameter)) = source {
                 match self.frame.parameter_hint(*parameter) {
                     Ok(Some(_)) => {},
                     Ok(None) => return QueryPoll::Ready(Err(call_fault("associated qualifier source parameter has no paired runtime binding"))),
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 }
-            }
-            let actual = self.frame.bound_view(source.source(), &self.store);
+                let Some(actual) = self.frame.bound_parameter_source(source.source()) else {
+                    return QueryPoll::Ready(Err(call_fault("associated qualifier parameter requires its actual closed source binding")));
+                };
+                actual
+            } else {
+                self.frame.bound_view(source.source(), &self.store)
+            };
             // Source arguments are never dropped to pretend the declaration
             // alone identifies an initializer application. Its ordinary packet
             // and once-per-application storage transport is the next join.
@@ -589,43 +679,10 @@ impl RunMachine {
             QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
         }
     }
-    /// Whether the written path at `pc` is the operand of an explicit shared
-    /// borrow (`&PATH`): its parent's operand recipe forms `Borrow` with
-    /// shared access directly from the path's place.
-    fn path_is_shared_borrow_operand(&self, db: &mut Database, pc: &PcKey) -> QueryPoll<bool> {
-        let body = &self.frame.body;
-        let Some(parent) = body.nodes()[pc.node as usize].parent else {
-            return QueryPoll::Ready(Ok(false));
-        };
-        if body.nodes()[parent.0 as usize].role
-            != crate::syntax::body_index::NodeRole::Expression(
-                crate::syntax::body_index::ExpressionKind::Borrow,
-            )
-        {
-            return QueryPoll::Ready(Ok(false));
-        }
-        let key = match body.pc(parent, Phase::Operand(0)) {
-            Ok(key) => key,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        match db.fetch(&SyntaxProvider, QueryKey::Thunk(key)) {
-            QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
-                QueryValue::Thunk(recipe) => {
-                    QueryPoll::Ready(Ok(recipe.recipe().operations.iter().any(|op| {
-                        matches!(
-                            op,
-                            Op::Borrow {
-                                access: crate::ir::op::BorrowAccess::Shared,
-                                ..
-                            }
-                        )
-                    })))
-                }
-                _ => QueryPoll::Ready(Err(call_fault("borrow operand recipe differs"))),
-            },
-            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
-        }
+    /// A constant root under the same indexed shared-borrow context that
+    /// temporary projection lowering uses, including a field/index base.
+    fn path_is_shared_borrow_operand(&self, pc: &PcKey) -> bool {
+        self.frame.body.shared_borrow_owner(NodeId(pc.node)).is_some()
     }
     /// The value of the Value item `identity` (a module item, or a body-local
     /// item selected by the entered lexical scope) read by this `ValuePath`.
@@ -650,11 +707,7 @@ impl RunMachine {
                 // `&CONST` is rustc's promotable borrow of an rvalue; any other
                 // use of the constant as a place (a `&mut`, a method autoref)
                 // addresses a fresh temporary.
-                let place = match self.path_is_shared_borrow_operand(db, &pc) {
-                    QueryPoll::Ready(Ok(place)) => place,
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                };
+                let place = self.path_is_shared_borrow_operand(&pc);
                 let promote = |value: ItemValue| {
                     if place {
                         ItemValue::Promotable(Box::new(value))

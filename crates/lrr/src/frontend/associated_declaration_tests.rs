@@ -88,12 +88,11 @@ fn unchanged_stock_owners_join_canonical_headers_and_real_producer_slots_all_edi
             }
             assert_eq!(Arc::as_ptr(value.scan()), scan_ptr);
         }
-        assert!(value.metadata_bytes() >= std::mem::size_of_val(&value));
     }
 }
 const DIRECT: &str = "\ntrait LrrDirect {\n type Item;\n const COUNT: u8 = 11;\n fn same() { let _ = 11; }\n fn required();\n #[cfg(any())] fn disabled() { missing(); }\n}\nimpl LrrDirect for Baz {\n type Item = ();\n const COUNT: u8 = 11;\n fn same() { let _ = 11; }\n fn required() {}\n}\nimpl Qux { fn same() { let _ = 11; } }\nfn lrr_cold() { struct Local; impl Local { fn hidden() { missing(); } } }\n";
 #[test]
-fn actual_direct_members_keep_distinct_canonical_owners_and_cold_local_gap() {
+fn actual_direct_members_keep_distinct_canonical_owners_and_cold_local_attachment() {
     for edition in [2015, 2018, 2021, 2024] {
         let text = format!("{STOCK}{DIRECT}");
         assert!(text.starts_with(STOCK));
@@ -101,6 +100,7 @@ fn actual_direct_members_keep_distinct_canonical_owners_and_cold_local_gap() {
         let value = prepared(&view);
         let mut direct = 0;
         let mut producers = 0;
+        let mut local_attachments = 0;
         let mut local_gaps = 0;
         let mut same = Vec::new();
         let rows = value
@@ -115,11 +115,27 @@ fn actual_direct_members_keep_distinct_canonical_owners_and_cold_local_gap() {
                 OriginalAssociatedTarget::Declaration(item) => {
                     direct += 1;
                     let parent = slot.owner.canonical.unwrap();
-                    let owner = if parent.def_key.item_kind == ItemKind::Trait {
-                        parent.def_key.fingerprint()
+                    let owner = slot.owner.member_owner.unwrap();
+                    if parent.scope.owner.is_some() {
+                        local_attachments += 1;
+                        assert_eq!(item.def_key.declared_name, "hidden");
+                        assert!(
+                            view.prepared_inputs()
+                                .get(&InputKey::DefinitionHeader(parent.def_key.fingerprint()))
+                                .is_none()
+                        );
+                    } else if parent.def_key.item_kind == ItemKind::Trait {
+                        assert_eq!(owner, parent.def_key.fingerprint());
                     } else {
-                        parent.header.fingerprint()
-                    };
+                        // The stock source and DIRECT both contain `impl Qux`.
+                        // Equal headers retain distinct canonical occurrences.
+                        assert_eq!(Some(owner), parent.def_key.enclosing_impl);
+                        if owner != parent.header.fingerprint() {
+                            assert!(value.scan().impls().iter()
+                                .filter(|implementation| implementation.header == parent.header.tokens)
+                                .count() > 1);
+                        }
+                    }
                     assert_eq!(item.scope.owner, Some(owner));
                     assert_eq!(item.def_key.enclosing_impl, Some(owner));
                     assert_eq!(item.header.context, parent.header.tokens);
@@ -148,7 +164,10 @@ fn actual_direct_members_keep_distinct_canonical_owners_and_cold_local_gap() {
                 }
             }
         }
-        assert_eq!((direct, producers, local_gaps), (9, 2, 1));
+        assert_eq!(
+            (direct, producers, local_attachments, local_gaps),
+            (10, 2, 1, 0)
+        );
         assert_eq!(same.len(), 3);
         same.sort_unstable();
         assert!(
@@ -192,7 +211,7 @@ fn changed_actual_source_cannot_reuse_join_but_equivalent_immutable_capture_can(
     }
 }
 #[test]
-fn original_component_rejects_generated_slot_scan_and_checked_index_overflow() {
+fn original_component_rejects_generated_slot_scan_and_allocation_failure() {
     use crate::expand::{
         generated_declarations::GeneratedDeclarations,
         source_declarative::{SourceDeclarativeDemand, engine_version},
@@ -234,8 +253,60 @@ fn original_component_rejects_generated_slot_scan_and_checked_index_overflow() {
     .err()
     .unwrap();
     assert_eq!(error.code, "LRR-E-ASSOCIATED-DECLARATION");
-    let mut budget = 0;
-    assert!(reserve::<SlotLocation>(MAX_ROWS + 1, &mut budget).is_err());
-    assert!(reserve::<SlotLocation>(usize::MAX, &mut budget).is_err());
-    assert!(checked_add(MAX_BYTES, 1).is_err());
+    assert!(reserve::<SlotLocation>(usize::MAX).is_err());
+}
+
+#[test]
+fn unchanged_local_drop_impl_joins_canonical_declaration_plan_without_body_entry() {
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let view = source(ORIGINAL, edition);
+        let joined = prepared(&view);
+        assert_eq!(joined.scan().impls().len(), 1);
+        let raw = &joined.scan().impls()[0];
+        let owner = joined.owner(raw.identity).unwrap();
+        let canonical = owner.canonical.unwrap();
+        assert_eq!(canonical.header.profile.edition, edition);
+        assert_eq!(canonical.declaration_span, raw.range);
+        assert_eq!(canonical.header.tokens, raw.header);
+        assert_ne!(canonical.def_key.fingerprint(), raw.identity);
+        assert!(canonical.scope.owner.is_some());
+        assert_eq!(canonical.def_key.enclosing_impl, owner.member_owner);
+        assert!(
+            view.prepared_inputs()
+                .get(&InputKey::DefinitionHeader(canonical.def_key.fingerprint()))
+                .is_none()
+        );
+        let actual = raw
+            .associated
+            .iter()
+            .find(|row| {
+                row.name
+                    .as_ref()
+                    .is_some_and(|name| name.spelling == "drop")
+            })
+            .unwrap();
+        let slot = joined.associated(actual.identity).unwrap();
+        let OriginalAssociatedTarget::Declaration(member) = slot.target else {
+            panic!("actual cold local Drop declaration stayed unattached");
+        };
+        assert_eq!(member.scope.owner, owner.member_owner);
+        assert_eq!(member.def_key.enclosing_impl, owner.member_owner);
+        assert_eq!(member.header.context, canonical.header.tokens);
+        assert_eq!(member.header.tokens, actual.header);
+        assert_eq!(member.body.as_ref().map(|body| body.range), actual.body);
+        assert_eq!(
+            member.body.as_ref().unwrap().def_key,
+            member.def_key.fingerprint()
+        );
+        assert!(
+            view.prepared_inputs()
+                .get(&InputKey::DefinitionBody(member.def_key.fingerprint()))
+                .is_none()
+        );
+        let repeated = joined.owner(raw.identity).unwrap().canonical.unwrap();
+        assert!(std::ptr::eq(canonical, repeated));
+    }
 }

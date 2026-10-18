@@ -720,19 +720,19 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "674d67baa6191f6a90a6aec3309001852813bc96",
+    "baseline_git_head": "b933a599414daaacbbd791c0533c9e819533b7ff",
     "working_tree": "inherited_dirty_plus_current_source_components",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "fae3d9354615e7e4d2c04c85c75737a07743e618cc7a649abcf74fc4aff66810",
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V31 compileFAIL preserved; V32 bothbuildsPASS5/8stock14/16controls. V33 exact3374e7ee bothbuildsPASS5/8stock15/16controls; actualgenericfirstfaultA::X3calls464dispatch911ops afterboundcache fix. Nestedchildticket retry+sharedArcidentityPASS. Structural4vs3FAIL; sameTraitprefix+tupleleaseFAIL. 0newhistoricalstock; Query53unconsumed metadata, nominalonce/coldimpl/genericpacket/interpreter/JITheld.",
+    "validation": "V34zero-selectors/V35caprefs/V36testAPI failures preserved. V37 bothbuildsPASS primary8/10stock+3/4adjacent=11/14distinct onCLI f7e8efb;17/19controls. V38test-onlyoraclefix bothbuildsPASS3/3focusedcontrols, CLIidentical; no stockrerun. Newhistorical2witnesses static-ref-array andatomicDrop; genericpacket/coldnonlocalmethod/structural4vs3holds. Metadata nowcompiled/tested, no runtimeconsumer. Solo lead afterall3agentsfinished; no interpreter/JITclosure.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 25,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "674d67baa6191f6a90a6aec3309001852813bc96",
+    "source_checkpoint_pushed": "b933a599414daaacbbd791c0533c9e819533b7ff",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

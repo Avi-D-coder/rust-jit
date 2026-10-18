@@ -1,0 +1,65 @@
+{
+  "status": "independent_source_review_clear_bounded_component_uncompiled_unexecuted",
+  "owner_receipt": "worktracks/evidence/2026-10-18-shared-projection-root-context-source-review.json",
+  "owner_receipt_sha256": "8865162cee5eb35b6f309f3a044a5f1a47fe13f5d6ccefb16225540300db7d77",
+  "sources": [
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "sha256": "7fad1f503866fdb60fb29e808aef20d9a0822812fb782e512b6a1630e9748bb2"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "f52fb01a01bd81aeb38cb84ee72ab1dac753f2dcf995aa5fdd285b9c2e712245"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "947d5fce6e247f0ff450aa918ca12e9a19cf5f5ac6d8363533f930a3c2fa1c25"
+    }
+  ],
+  "generic_delta_isolation": "Verified in memory: restore ONLY prior indexed path_is_shared_borrow_operand function and its prior prepare_selected_item_value callsite from existing Git index into current run_value_items text; resulting complete source SHA256 exactly4c6d0a6a8bcab352a3622c4f8e0bf6262886d9bdea2c5e2101af948383f58e36. Thus current947d5fce changes only those two projection-context blocks relative to worker generic guard candidate; strict free/unowned/no-Type/currentbody proof, source Parameter precedence and closed symbolic+paired runtime binding flow byte-for-byte preserved. No source/index writes used for this check.",
+  "common_route": [
+    "ParsedFile::index_body records actual FieldExpr/IndexExpr projection_base and actual shared RefExpr nonmut/nonraw shared_borrow flags on same immutable StructuralNode for original/generated AST. Synthetic initializer return flags false.",
+    "BodyIndex::shared_borrow_owner follows exact indexed parent/first-expression-operand edges only; transparent parentheses and field/index bases may carry context, index argument operand1/calls/deref/other syntax stop. nearest valid shared borrow returned.",
+    "ParsedFile::initial_place_thunk FIELD_EXPR/INDEX_EXPR Operand0 uses same indexed helper after existing promotable_constant(base_expression), preserving ordinary PromotedPlace vs ValuePlace and operand continuation. No literal/expression evaluator added.",
+    "RunMachine::prepare_selected_item_value uses same helper for actual constant root, creating existing ItemValue::Promotable; initializer/static storage/frame/VM promotion/cleanup owners unchanged. Previous separate immediate Ref/Borrow recipe fetch removed.",
+    "BodyIndex stable domain v5->v6; both flags explicitly stable-encoded. No new opcode/schema tag or namespace dependency introduced. Existing immutable BodyIndex/query/recipe dependency fingerprint carries metadata change."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "review": "No assertion/expression evaluator, same PromotedPlace/ValuePlace/ItemValue/ordinary initializer operations."
+    },
+    {
+      "mode": 2,
+      "review": "Common original/generated indexed AST flags, no scalar/break macro output route."
+    },
+    {
+      "mode": 3,
+      "review": "No macro identity, member or numeric context policy; generic qualifier flow proven unchanged by exact reverse-delta hash."
+    },
+    {
+      "mode": 4,
+      "review": "No source-origin exclusion/currentness bypass; same actual retained index authority."
+    },
+    {
+      "mode": 5,
+      "review": "No pattern engine/eager unselected arm preparation. Firstoperand edge distinguishes actual projected root from dynamic index selector."
+    },
+    {
+      "mode": 6,
+      "review": "Flags captured once; reached lookup O(projection ancestry) over retained indexed links. Old source AST ancestry walk and extra Borrow recipe query removed, no installed parsing/planning."
+    },
+    {
+      "mode": 7,
+      "review": "No namespace/world scan/census/broad invalidation; existing body metadata dependency handles semantic index change."
+    },
+    {
+      "mode": 8,
+      "review": "No immutable body copy or wholefile production node search; shared index and direct parent/operand references. Test-only source enumeration is not production path."
+    }
+  ],
+  "control_source_review": "Inspected syntax::body_index::tests::rustc_projected_borrow_roots_share_indexed_context_without_promoting_index_operands. Uses unchanged stock static-ref-to-const-array-element original array(i) &ALL_THE_NUMS[i] and tuple_field &(42,).0, all4editions. Both roots must map to actual borrow node; dynamic i index operand must returnNone. Actual command/runtime not run by reviewer.",
+  "cost": "O(1) metadata flags per indexed node; O(projection ancestry) reached preparation; existing promotable_constant subtree walk only where previous literal recipe did it. No new accounting/caps or measured performance claim.",
+  "holds": "Uncompiled/unexecuted component; actual stock runtime/promotion/four-origin/epoch/cleanup matrix acceptance remains sole validator/root. Broader nominal Drop absence, full generic packet and legacy source-publication gaps unchanged. No feature/JIT gate closure.",
+  "workflow": "Read-only source review and evidence file only. No Cargo/tests/source/index/HEAD changes. Stopping after this requested handoff per parent/user steering."
+}

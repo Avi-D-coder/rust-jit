@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+  "old_sha256": "d75a3495e30df071af4d0b12f66619ca51156e6297a22c02f6ce23493e632394",
+  "new_sha256": "66c2cfafc69240423cc7d3b60d89118c8c1d7ad869be7ebf556e157a9f4fb4eb",
+  "old_failure": "V37 control17, false bare-header identity oracle; repeated impl canonical identity is correct",
+  "source_delta": "Test-only canonical DefKey owner assertion plus independent duplicate-header scan evidence",
+  "production_source_unchanged": true,
+  "all8review": "No language pipeline, parser, inference, patterns, generated admission, installed planning, namespace invalidation or immutable body storage changed. Test source scan is a host metadata oracle only. All unchanged original/source/body/cold publication checks retained.",
+  "acceptance": "uncompiled/unexecuted; no feature/runtime gate closure"
+}

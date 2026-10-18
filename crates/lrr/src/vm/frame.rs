@@ -1062,7 +1062,7 @@ impl Frame {
     }
     /// A generic parameter's source is the closed source Type its call bound
     /// it to (the frame's definition environment), e.g. a closure argument.
-    fn bound_parameter_source(
+    pub(crate) fn bound_parameter_source(
         &self,
         declared: &crate::traits::term::TyTerm,
     ) -> Option<crate::traits::term::TyTerm> {

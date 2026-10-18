@@ -24,7 +24,25 @@ use crate::{
 use std::sync::Arc;
 use unicode_normalization::UnicodeNormalization;
 
-const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
+#[path = "declaration_impl_owners.rs"]
+mod local_impl_owners;
+use local_impl_owners::{LocalDeclarationLocation, LocalImplOwners};
+
+#[derive(Clone, Copy)]
+enum CanonicalLocation {
+    Outline(u32),
+    Local(LocalDeclarationLocation),
+}
+fn canonical_item<'a>(
+    source: &'a PreparedSourceView,
+    local: &'a LocalImplOwners,
+    location: CanonicalLocation,
+) -> &'a ItemOutline {
+    match location {
+        CanonicalLocation::Outline(index) => &source.outline().items[index as usize],
+        CanonicalLocation::Local(location) => local.item(location),
+    }
+}
 
 pub(crate) enum AssociatedDeclarationsPreparation<'a> {
     Original(PreparedOriginalAssociatedDeclarations<'a>),
@@ -41,12 +59,12 @@ struct OwnerLocation {
     identity: Digest,
     kind: OwnerKind,
     scan: u32,
-    outline: Option<u32>,
+    canonical: Option<CanonicalLocation>,
     member_owner: Option<Digest>,
 }
 #[derive(Clone, Copy)]
 enum SlotTarget {
-    Declaration(u32),
+    Declaration(CanonicalLocation),
     Producer(u32),
     NeedCanonicalOwner,
 }
@@ -63,11 +81,11 @@ struct SlotLocation {
 pub(crate) struct PreparedOriginalAssociatedDeclarations<'a> {
     source: &'a PreparedSourceView,
     scan: Arc<DeclarationScan>,
+    local: LocalImplOwners,
     owners: Vec<OwnerLocation>,
     slots: Vec<SlotLocation>,
     producer_slots: Vec<(Digest, u32)>,
     fingerprint: Digest,
-    metadata_bytes: usize,
 }
 pub(crate) enum AssociatedOwnerSource<'a> {
     Trait(&'a ScannedTrait),
@@ -100,25 +118,9 @@ fn resource() -> Diagnostic {
 fn key(range: SourceRange) -> (u32, u32) {
     (range.start, range.end)
 }
-fn checked_add(bytes: usize, added: usize) -> Result<usize, Diagnostic> {
-    bytes
-        .checked_add(added)
-        .ok_or_else(resource)
-}
-fn reserve<T>(count: usize, bytes: &mut usize) -> Result<Vec<T>, Diagnostic> {
-    let planned = count
-        .checked_mul(std::mem::size_of::<T>())
-        .ok_or_else(resource)?;
-    *bytes = checked_add(*bytes, planned)?;
+fn reserve<T>(count: usize) -> Result<Vec<T>, Diagnostic> {
     let mut rows = Vec::new();
     rows.try_reserve_exact(count).map_err(|_| resource())?;
-    *bytes = checked_add(
-        *bytes,
-        rows.capacity()
-            .checked_sub(count)
-            .and_then(|n| n.checked_mul(std::mem::size_of::<T>()))
-            .ok_or_else(resource)?,
-    )?;
     Ok(rows)
 }
 fn publication(source: &PreparedSourceView, item: &ItemOutline) -> Result<(), Diagnostic> {
@@ -198,6 +200,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
         {
             return Err(fault("original captured scan/source owner differs"));
         }
+        let local = LocalImplOwners::prepare(source, &scan)?;
         let count = scan
             .traits()
             .len()
@@ -212,9 +215,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
                 n.checked_add(m)
                     .ok_or_else(resource)
             })?;
-        let mut budget = checked_add(std::mem::size_of::<Self>(), scan.retained_bytes())?;
-        budget = checked_add(budget, ARC_HEADER)?;
-        let mut spans = reserve::<((u32, u32), u32)>(outline.items.len(), &mut budget)?;
+        let mut spans = reserve::<((u32, u32), u32)>(outline.items.len())?;
         for (i, item) in outline.items.iter().enumerate() {
             spans.push((
                 key(item.declaration_span),
@@ -222,7 +223,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
             ));
         }
         spans.sort_unstable_by_key(|row| row.0);
-        let mut producers = reserve::<(Digest, u32)>(scan.producers().len(), &mut budget)?;
+        let mut producers = reserve::<(Digest, u32)>(scan.producers().len())?;
         for (i, row) in scan.producers().iter().enumerate() {
             producers.push((row.identity, u32::try_from(i).map_err(|_| resource())?));
         }
@@ -230,7 +231,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
         if producers.windows(2).any(|r| r[0].0 == r[1].0) {
             return Err(fault("associated producer identity is duplicated"));
         }
-        let mut owners = reserve::<OwnerLocation>(count, &mut budget)?;
+        let mut owners = reserve::<OwnerLocation>(count)?;
         for (kind, index, identity, range, header, scope) in
             scan.traits()
                 .iter()
@@ -252,6 +253,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
                 )
         {
             let actual = at_span(&spans, range)?;
+            let mut canonical = actual.map(CanonicalLocation::Outline);
             let mut member_owner = None;
             if let Some(index) = actual {
                 let item = &outline.items[index as usize];
@@ -274,11 +276,17 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
                     })?,
                 });
             }
+            if canonical.is_none() && matches!(kind, OwnerKind::Impl)
+                && let Some(location) = local.owner(range)
+            {
+                member_owner = local.item(location).def_key.enclosing_impl;
+                canonical = Some(CanonicalLocation::Local(location));
+            }
             owners.push(OwnerLocation {
                 identity,
                 kind,
                 scan: u32::try_from(index).map_err(|_| resource())?,
-                outline: actual,
+                canonical,
                 member_owner,
             });
         }
@@ -286,7 +294,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
         if owners.windows(2).any(|r| r[0].identity == r[1].identity) {
             return Err(fault("associated owner source identity is duplicated"));
         }
-        let mut slots = reserve::<SlotLocation>(slot_count, &mut budget)?;
+        let mut slots = reserve::<SlotLocation>(slot_count)?;
         for (ordinal, owner) in owners.iter().enumerate() {
             let associated = match owner.kind {
                 OwnerKind::Trait => &scan.traits()[owner.scan as usize].associated,
@@ -300,8 +308,8 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
                 if row.owner != expected {
                     return Err(fault("associated source entry enclosing owner differs"));
                 }
-                let target = if let Some(canonical) = owner.outline {
-                    let parent = &outline.items[canonical as usize];
+                let target = if let Some(canonical) = owner.canonical {
+                    let parent = canonical_item(source, &local, canonical);
                     let child_owner = owner
                         .member_owner
                         .ok_or_else(|| fault("canonical associated owner child scope absent"))?;
@@ -330,58 +338,73 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
                         }
                         SlotTarget::Producer(index)
                     } else {
-                        let index = at_span(&spans, row.range)?.ok_or_else(|| {
-                            fault("original associated declaration canonical row absent")
-                        })?;
-                        let item = &outline.items[index as usize];
-                        let (kind, namespace) = match row.kind {
-                            AssociatedDeclarationKind::Function => {
-                                (ItemKind::Function, Namespace::Value)
-                            }
-                            AssociatedDeclarationKind::Const => {
-                                (ItemKind::Constant, Namespace::Value)
-                            }
-                            AssociatedDeclarationKind::TypeAlias => {
-                                (ItemKind::TypeAlias, Namespace::Type)
-                            }
-                            AssociatedDeclarationKind::MacroProducer => unreachable!(),
-                        };
-                        let name_matches = match &row.name {
-                            Some(name) => {
-                                name.edition == item.header.profile.edition
-                                    && row.range.contains(name.range)
-                                    && name
-                                        .spelling
-                                        .strip_prefix("r#")
-                                        .unwrap_or(&name.spelling)
-                                        .nfc()
-                                        .eq(item.def_key.declared_name.chars())
-                            }
-                            // An actual unnamed constant is a declaration row,
-                            // not an invented member callable by an empty name.
-                            None => {
-                                row.kind == AssociatedDeclarationKind::Const
-                                    && item.def_key.declared_name.is_empty()
+                        let location = match canonical {
+                            CanonicalLocation::Outline(_) => Some(CanonicalLocation::Outline(
+                                at_span(&spans, row.range)?.ok_or_else(|| {
+                                    fault("original associated declaration canonical row absent")
+                                })?,
+                            )),
+                            CanonicalLocation::Local(owner) => {
+                                local.member(owner, row.range).map(CanonicalLocation::Local)
                             }
                         };
-                        if item.def_key.item_kind != kind
-                            || item.def_key.namespace != namespace
-                            || item.scope.owner != Some(child_owner)
-                            || item.def_key.enclosing_impl != Some(child_owner)
-                            || item.scope.crate_key != parent.scope.crate_key
-                            || item.scope.module_path != parent.scope.module_path
-                            || item.header.context != parent.header.tokens
-                            || item.header.tokens != row.header
-                            || row.producer.is_some()
-                            || item.body.as_ref().map(|b| b.range) != row.body
-                            || !name_matches
-                        {
-                            return Err(fault(
-                                "original associated declaration canonical attachment differs",
-                            ));
+                        if let Some(location) = location {
+                            let item = canonical_item(source, &local, location);
+                            let (kind, namespace) = match row.kind {
+                                AssociatedDeclarationKind::Function => {
+                                    (ItemKind::Function, Namespace::Value)
+                                }
+                                AssociatedDeclarationKind::Const => {
+                                    (ItemKind::Constant, Namespace::Value)
+                                }
+                                AssociatedDeclarationKind::TypeAlias => {
+                                    (ItemKind::TypeAlias, Namespace::Type)
+                                }
+                                AssociatedDeclarationKind::MacroProducer => unreachable!(),
+                            };
+                            let name_matches = match &row.name {
+                                Some(name) => {
+                                    name.edition == item.header.profile.edition
+                                        && row.range.contains(name.range)
+                                        && name
+                                            .spelling
+                                            .strip_prefix("r#")
+                                            .unwrap_or(&name.spelling)
+                                            .nfc()
+                                            .eq(item.def_key.declared_name.chars())
+                                }
+                                // An actual unnamed constant is a declaration row,
+                                // not an invented member callable by an empty name.
+                                None => {
+                                    row.kind == AssociatedDeclarationKind::Const
+                                        && item.def_key.declared_name.is_empty()
+                                }
+                            };
+                            if item.def_key.item_kind != kind
+                                || item.def_key.namespace != namespace
+                                || item.scope.owner != Some(child_owner)
+                                || item.def_key.enclosing_impl != Some(child_owner)
+                                || item.scope.crate_key != parent.scope.crate_key
+                                || item.scope.module_path != parent.scope.module_path
+                                || item.header.context != parent.header.tokens
+                                || item.header.tokens != row.header
+                                || row.producer.is_some()
+                                || item.body.as_ref().map(|b| b.range) != row.body
+                                || !name_matches
+                            {
+                                return Err(fault(
+                                    "original associated declaration canonical attachment differs",
+                                ));
+                            }
+                            if matches!(location, CanonicalLocation::Outline(_)) {
+                                publication(source, item)?;
+                            }
+                            SlotTarget::Declaration(location)
+                        } else {
+                            // An opaque or not-yet-canonical local member is
+                            // pending, never an absent associated declaration.
+                            SlotTarget::NeedCanonicalOwner
                         }
-                        publication(source, item)?;
-                        SlotTarget::Declaration(index)
                     }
                 } else {
                     SlotTarget::NeedCanonicalOwner
@@ -402,7 +425,7 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
             .iter()
             .filter(|row| matches!(row.target, SlotTarget::Producer(_)))
             .count();
-        let mut producer_slots = reserve::<(Digest, u32)>(producer_count, &mut budget)?;
+        let mut producer_slots = reserve::<(Digest, u32)>(producer_count)?;
         for (i, row) in slots.iter().enumerate() {
             if let SlotTarget::Producer(producer) = row.target {
                 producer_slots.push((
@@ -415,35 +438,16 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
         if producer_slots.windows(2).any(|rows| rows[0].0 == rows[1].0) {
             return Err(fault("associated producer slot owner is duplicated"));
         }
-        let metadata_bytes = checked_add(
-            checked_add(std::mem::size_of::<Self>(), ARC_HEADER)?,
-            owners
-                .capacity()
-                .checked_mul(std::mem::size_of::<OwnerLocation>())
-                .and_then(|n| {
-                    slots
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<SlotLocation>())
-                        .and_then(|m| n.checked_add(m))
-                })
-                .and_then(|n| {
-                    producer_slots
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<(Digest, u32)>())
-                        .and_then(|m| n.checked_add(m))
-                })
-                .ok_or_else(resource)?,
-        )?;
         let mut value = Self {
             source,
             scan,
+            local,
             owners,
             slots,
             producer_slots,
             fingerprint: Digest([0; 32]),
-            metadata_bytes,
         };
-        let mut encoded = StableEncoder::new("lrr/v1/original-associated-declaration-source-join");
+        let mut encoded = StableEncoder::new("lrr/v2/original-associated-declaration-source-join");
         encoded.string(selection.path.as_str());
         encoded.record(&selection.outline);
         encoded.digest(value.scan.fingerprint());
@@ -455,9 +459,12 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
             });
             e.u32(row.scan);
             e.option(&row.member_owner, |e, id| e.digest(*id));
-            e.option(&row.outline, |e, i| {
-                let item = &outline.items[*i as usize];
-                e.u32(*i);
+            e.option(&row.canonical, |e, location| {
+                e.u8(match location {
+                    CanonicalLocation::Outline(_) => 0,
+                    CanonicalLocation::Local(_) => 1,
+                });
+                let item = canonical_item(source, &value.local, *location);
                 e.record(&item.def_key);
                 e.record(&item.header);
             });
@@ -467,10 +474,13 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
             e.u32(row.owner);
             e.u32(row.associated);
             match row.target {
-                SlotTarget::Declaration(i) => {
+                SlotTarget::Declaration(location) => {
                     e.u8(0);
-                    e.u32(i);
-                    let item = &outline.items[i as usize];
+                    e.u8(match location {
+                        CanonicalLocation::Outline(_) => 0,
+                        CanonicalLocation::Local(_) => 1,
+                    });
+                    let item = canonical_item(source, &value.local, location);
                     e.record(&item.def_key);
                     e.option(&item.body, |e, b| e.record(b));
                 }
@@ -487,10 +497,6 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
     }
     pub(crate) fn fingerprint(&self) -> Digest {
         self.fingerprint
-    }
-    /// Exclusive locator/handle storage. Retained scan payload is shared separately.
-    pub(crate) fn metadata_bytes(&self) -> usize {
-        self.metadata_bytes
     }
     pub(crate) fn scan(&self) -> &Arc<DeclarationScan> {
         &self.scan
@@ -515,8 +521,8 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
                 }
             },
             canonical: row
-                .outline
-                .map(|i| &self.source.outline().items[i as usize]),
+                .canonical
+                .map(|location| canonical_item(self.source, &self.local, location)),
             member_owner: row.member_owner,
         }
     }
@@ -545,9 +551,9 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
             source,
             owner: self.owner_at(owner),
             target: match row.target {
-                SlotTarget::Declaration(i) => {
-                    OriginalAssociatedTarget::Declaration(&self.source.outline().items[i as usize])
-                }
+                SlotTarget::Declaration(location) => OriginalAssociatedTarget::Declaration(
+                    canonical_item(self.source, &self.local, location),
+                ),
                 SlotTarget::Producer(i) => {
                     OriginalAssociatedTarget::Producer(&self.scan.producers()[i as usize])
                 }

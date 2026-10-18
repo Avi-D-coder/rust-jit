@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "candidate": "V38",
+  "source_sha256": "fab94ad18768dff71d5cd091d65784d8786cab6954b95fb2a83d8cb90f4809a5",
+  "head": "b933a599414daaacbbd791c0533c9e819533b7ff",
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "source_leaves": 3335,
+  "source_unchanged_through_both_builds": true,
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "session_id": 90131,
+      "terminal": "9eaefd",
+      "seconds": 8.95,
+      "sha256": "aedd081a1721247fd1e85f5a4b7cb80821e4adaa770bb0e18af61730c2a1788e"
+    },
+    "cli": {
+      "exit": 0,
+      "terminal": "400451",
+      "seconds": 0.1,
+      "sha256": "f7e8efb1445e7b7486df4821af4492361cc8d7d55a924d7626676f03111715ec"
+    }
+  },
+  "staged_source": {
+    "status": "exact-compiled-index",
+    "source_sha256": "fab94ad18768dff71d5cd091d65784d8786cab6954b95fb2a83d8cb90f4809a5",
+    "files": [
+      {
+        "path": "crates/lrr/src/engine/run_nominal.rs",
+        "sha256": "d3822ffe2078a8f2bf9beda51648d4837ff55061547cfb96804cb72e0f101396"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_value_items.rs",
+        "sha256": "947d5fce6e247f0ff450aa918ca12e9a19cf5f5ac6d8363533f930a3c2fa1c25"
+      },
+      {
+        "path": "crates/lrr/src/frontend/associated_declaration_tests.rs",
+        "sha256": "66c2cfafc69240423cc7d3b60d89118c8c1d7ad869be7ebf556e157a9f4fb4eb"
+      },
+      {
+        "path": "crates/lrr/src/frontend/associated_declarations.rs",
+        "sha256": "1ddd50179ace717af96593554ca8261479c51ac59124406bda3f0522655a75d8"
+      },
+      {
+        "path": "crates/lrr/src/frontend/declaration_impl_owners.rs",
+        "sha256": "8b66a4995a950e5ac2431b8bb94f3bd6b98eccd49516b826a7e0d70d80c0a8d8"
+      },
+      {
+        "path": "crates/lrr/src/frontend/generated_associated_declaration_tests.rs",
+        "sha256": "98a3a9fc277867aa19e40f7fce8329c5042f673787ba127c6b49e47ae8ef60d5"
+      },
+      {
+        "path": "crates/lrr/src/frontend/generated_associated_declarations.rs",
+        "sha256": "a5a0df73782d8425264a4c9db3d1f742ca8268d44f6445b5c5b2122ffe82b903"
+      },
+      {
+        "path": "crates/lrr/src/frontend/local_type_names.rs",
+        "sha256": "d7da5b010d268bd39e66671407d3d0f3b02c6e07534df05e9a41206877ede60d"
+      },
+      {
+        "path": "crates/lrr/src/frontend/mod.rs",
+        "sha256": "c25f06b7792c2c6cb8fe9a942edb54b3a853490538f3f32bd21615ceaec175ca"
+      },
+      {
+        "path": "crates/lrr/src/syntax/body_index.rs",
+        "sha256": "a7d7269023e602fdea49fa1616e54bb3e800d8331c7078c54747386db3b28b8d"
+      },
+      {
+        "path": "crates/lrr/src/syntax/thunks.rs",
+        "sha256": "f52fb01a01bd81aeb38cb84ee72ab1dac753f2dcf995aa5fdd285b9c2e712245"
+      },
+      {
+        "path": "crates/lrr/src/syntax/value_paths.rs",
+        "sha256": "f2cc66c13acc23ea631f1828b7e50cda6770f6fca517e69c0bfc93970a6c1f92"
+      },
+      {
+        "path": "crates/lrr/src/vm/frame.rs",
+        "sha256": "fff72fbaf02e6ca07bea61baeb3fc865133aeace06f6f31d971c58903e494710"
+      }
+    ]
+  },
+  "controls": [
+    {
+      "selector": "frontend::associated_declarations::tests::actual_direct_members_keep_distinct_canonical_owners_and_cold_local_attachment",
+      "exit": 0,
+      "seconds": 0.314,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::associated_declarations::tests::actual_direct_members_keep_distinct_canonical_owners_and_cold_local_attachment",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "aedd081a1721247fd1e85f5a4b7cb80821e4adaa770bb0e18af61730c2a1788e",
+      "source_sha256": "fab94ad18768dff71d5cd091d65784d8786cab6954b95fb2a83d8cb90f4809a5"
+    },
+    {
+      "selector": "frontend::associated_declarations::tests::unchanged_local_drop_impl_joins_canonical_declaration_plan_without_body_entry",
+      "exit": 0,
+      "seconds": 0.304,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::associated_declarations::tests::unchanged_local_drop_impl_joins_canonical_declaration_plan_without_body_entry",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "aedd081a1721247fd1e85f5a4b7cb80821e4adaa770bb0e18af61730c2a1788e",
+      "source_sha256": "fab94ad18768dff71d5cd091d65784d8786cab6954b95fb2a83d8cb90f4809a5"
+    },
+    {
+      "selector": "syntax::body_index::tests::rustc_projected_borrow_roots_share_indexed_context_without_promoting_index_operands",
+      "exit": 0,
+      "seconds": 0.007,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "syntax::body_index::tests::rustc_projected_borrow_roots_share_indexed_context_without_promoting_index_operands",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "aedd081a1721247fd1e85f5a4b7cb80821e4adaa770bb0e18af61730c2a1788e",
+      "source_sha256": "fab94ad18768dff71d5cd091d65784d8786cab6954b95fb2a83d8cb90f4809a5"
+    }
+  ],
+  "control_summary": {
+    "pass": 3,
+    "total": 3,
+    "terminal": "501258",
+    "queue_exit": 0
+  },
+  "source_delta_vs_v37": [
+    "test-only repeated impl owner oracle corrected; no production source changed"
+  ],
+  "production_evidence": "CLI binary exactly equals V37 f7e8efb1445e7b7486df4821af4492361cc8d7d55a924d7626676f03111715ec. V37 stock8/10 +promotionedges3/4 remain the executed evidence for this identical binary. No redundant stock rerun.",
+  "prior_evidence": "worktracks/evidence/2026-10-18-interpreter-v37-validation.json",
+  "holds": [
+    "V37 structural exact-once4vs3 remains unfixed/unrerun",
+    "full generic application packet",
+    "cold nonlocal runtime impl publication",
+    "four-origin projection matrix unexecuted",
+    "full interpreter/JIT gates"
+  ],
+  "all_agents": "completed/stopped per user; implementing lead sole validation owner",
+  "acceptance": "3focused controls only, not refreshed19control aggregate or full milestone."
+}

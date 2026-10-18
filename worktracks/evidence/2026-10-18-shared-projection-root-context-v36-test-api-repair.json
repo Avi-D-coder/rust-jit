@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "scope": "V36 test-only E0599 mechanical repair; no production code changed",
+  "path": "crates/lrr/src/syntax/body_index.rs",
+  "old_sha256": "7fad1f503866fdb60fb29e808aef20d9a0822812fb782e512b6a1630e9748bb2",
+  "new_sha256": "a7d7269023e602fdea49fa1616e54bb3e800d8331c7078c54747386db3b28b8d",
+  "operation": "Use existing ParsedFile::parsed.tree() in unchanged-original structural control; do not add parser API or evaluator.",
+  "source_review": "Reversing this single replacement yields exactly old reviewed BodyIndex source. Prior language review applies to unchanged production code; renewed compilation/control evidence required."
+}
