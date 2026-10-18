@@ -7604,7 +7604,11 @@ impl SourceDiscovery {
             .get(&identity)
             .ok_or_else(|| fault("generated body boundary owner absent"))?;
         if owner != &unit.scope
-            || unit.seal != self.key
+            // Completion domains can differ for the same actual generated
+            // source (Type/Value facets). Match same_unit/require_current;
+            // the returned boundary retains this discovery's full own seal.
+            || unit.seal.unit_graph != self.key.unit_graph
+            || unit.seal.epoch != self.key.epoch
             || unit.items.epoch() != self.epoch
             || unit.cfg.fingerprint() != self.sources[*ordinal].captured_macro_cfg()?.fingerprint()
             || self
@@ -7614,9 +7618,11 @@ impl SourceDiscovery {
         {
             return Err(fault(&format!(
                 "generated body boundary actual output/owner differs \
-                 (owner {}, seal {}, epoch {} [{} vs {}], cfg {}, record {}; output {:?})",
+                 (owner {}, domain {}, graph {}, seal epoch {}, epoch {} [{} vs {}], cfg {}, record {}; output {:?})",
                 owner == &unit.scope,
-                unit.seal == self.key,
+                unit.seal.domain == self.key.domain,
+                unit.seal.unit_graph == self.key.unit_graph,
+                unit.seal.epoch == self.key.epoch,
                 unit.items.epoch() == self.epoch,
                 unit.items.epoch(),
                 self.epoch,

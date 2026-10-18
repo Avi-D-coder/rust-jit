@@ -140,6 +140,43 @@ impl BoundConstructor {
     }
 }
 
+/// Source-selected constructor metadata retained while field projections
+/// still need the actual reached nominal application. This is not a bound
+/// field/layout witness.
+#[derive(Debug, Clone)]
+pub(crate) struct ConstructorTemplate {
+    pub(crate) identity: Digest,
+    pub(crate) schema: Digest,
+    pub(crate) variant: u32,
+    pub(crate) name: Option<String>,
+    pub(crate) shape: FieldShape,
+    pub(crate) arity: usize,
+    demand: NominalBindingDemand,
+}
+pub(crate) enum ConstructorPreparation {
+    Ready(BoundConstructor),
+    Pending(ConstructorTemplate),
+}
+impl ConstructorTemplate {
+    fn diagnostic(&self) -> Diagnostic {
+        Diagnostic::new(
+            "LRR-E-UNSUPPORTED",
+            match &self.demand {
+                NominalBindingDemand::GenericContext => {
+                    "generic nominal constructor requires its generic type context"
+                }
+                NominalBindingDemand::TypeRecipe => {
+                    "constructor field type requires compound source type binding"
+                }
+                NominalBindingDemand::Name(_) => {
+                    "constructor field type requires further source type binding"
+                }
+            }
+            .into(),
+        )
+    }
+}
+
 /// Bind the reached constructor's variant. Field Types are admitted by the
 /// current declaration service; a generic or unresolved field remains a
 /// typed refusal rather than a guessed descriptor.
@@ -149,6 +186,23 @@ pub(crate) fn bind_constructor(
     sources: &[&PreparedSourceView],
     target: &NominalConstructorTarget,
 ) -> QueryPoll<BoundConstructor> {
+    match prepare_constructor(db, graph, sources, target) {
+        QueryPoll::Ready(Ok(ConstructorPreparation::Ready(bound))) => QueryPoll::Ready(Ok(bound)),
+        QueryPoll::Ready(Ok(ConstructorPreparation::Pending(template))) => {
+            QueryPoll::Ready(Err(template.diagnostic()))
+        }
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
+}
+/// The same binder with its typed unresolved field demand retained for a
+/// reached operation that can supply its actual generic context later.
+pub(crate) fn prepare_constructor(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    target: &NominalConstructorTarget,
+) -> QueryPoll<ConstructorPreparation> {
     if !matches!(target.owner.item_kind, ItemKind::Struct | ItemKind::Enum)
         || (target.owner.item_kind == ItemKind::Enum) != target.variant.is_some()
     {
@@ -173,28 +227,36 @@ pub(crate) fn bind_constructor(
     };
     match names.bind_variant_current(db, sources, target.variant.as_deref()) {
         QueryPoll::Ready(Ok(NominalBinding::Ready(variant))) => {
-            QueryPoll::Ready(Ok(BoundConstructor {
+            QueryPoll::Ready(Ok(ConstructorPreparation::Ready(BoundConstructor {
                 variant: Arc::new(variant),
                 shape,
                 guard: None,
-            }))
+            })))
         }
         QueryPoll::Ready(Ok(NominalBinding::Deferred { demand, .. })) => {
-            QueryPoll::Ready(Err(Diagnostic::new(
-                "LRR-E-UNSUPPORTED",
-                match demand {
-                    NominalBindingDemand::GenericContext => {
-                        "generic nominal constructor requires its generic type context"
-                    }
-                    NominalBindingDemand::TypeRecipe => {
-                        "constructor field type requires compound source type binding"
-                    }
-                    NominalBindingDemand::Name(_) => {
-                        "constructor field type requires further source type binding"
-                    }
+            let Some((ordinal, selected)) = schema
+                .variants
+                .iter()
+                .enumerate()
+                .find(|(_, variant)| variant.name.as_deref() == target.variant.as_deref())
+            else {
+                return QueryPoll::Ready(Err(fault("pending constructor selected variant absent")));
+            };
+            let ordinal = match u32::try_from(ordinal) {
+                Ok(ordinal) => ordinal,
+                Err(_) => {
+                    return QueryPoll::Ready(Err(fault("constructor variant ordinal overflow")));
                 }
-                .into(),
-            )))
+            };
+            QueryPoll::Ready(Ok(ConstructorPreparation::Pending(ConstructorTemplate {
+                identity: target.identity,
+                schema: schema.fingerprint(),
+                variant: ordinal,
+                name: target.variant.clone(),
+                shape,
+                arity: selected.fields.len(),
+                demand,
+            })))
         }
         QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),

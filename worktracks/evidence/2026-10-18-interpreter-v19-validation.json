@@ -1,0 +1,79 @@
+{
+  "candidate": "V19",
+  "status": "exactsource libcompilefailed, noCLI/runtime",
+  "source_sha256": "99482a19550ba703be628080bb4557c97a0f2217ce34c2394924cd997fd858d9",
+  "head": "3feaeb81822666664570f54c47892c597e42dede",
+  "source_leaves": 3327,
+  "lib_terminal": "a8fba7/101",
+  "lib": {
+    "exit": 101,
+    "seconds": 16.857
+  },
+  "source_unchanged": true,
+  "diagnostics": [
+    {
+      "code": "E0433",
+      "message": "cannot find `compile_inputs` in `super`",
+      "path": "crates/lrr/src/cli/generic_boundary_tests.rs",
+      "line": 627,
+      "column": 24
+    },
+    {
+      "code": "E0433",
+      "message": "cannot find `type_preparation` in `super`",
+      "path": "crates/lrr/src/cli/generic_boundary_tests.rs",
+      "line": 635,
+      "column": 20
+    },
+    {
+      "code": "E0433",
+      "message": "cannot find `retained_entry` in `super`",
+      "path": "crates/lrr/src/cli/generic_boundary_tests.rs",
+      "line": 668,
+      "column": 24
+    },
+    {
+      "code": "E0425",
+      "message": "cannot find type `ItemKind` in this scope",
+      "path": "crates/lrr/src/engine/run_pattern_names.rs",
+      "line": 289,
+      "column": 27
+    },
+    {
+      "code": "E0616",
+      "message": "field `memos` of struct `db::memo::Database` is private",
+      "path": "crates/lrr/src/cli/generic_boundary_tests.rs",
+      "line": 697,
+      "column": 25
+    },
+    {
+      "code": "E0616",
+      "message": "field `memos` of struct `db::memo::Database` is private",
+      "path": "crates/lrr/src/cli/generic_boundary_tests.rs",
+      "line": 729,
+      "column": 28
+    },
+    {
+      "code": "E0308",
+      "message": "mismatched types",
+      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+      "line": 635,
+      "column": 39
+    }
+  ],
+  "cli_build": "unexecuted",
+  "runtime_roots": "unexecuted",
+  "controls": "unexecuted",
+  "binaries": "V18 retained unchanged; no V19 runtime acceptance",
+  "new_authorized_witnesses": [
+    "tests/ui/consts/match-const-fn-structs.rs",
+    "tests/ui/consts/const-struct.rs"
+  ],
+  "holds": "All source reviews remain source-only tiedtooriginalhashes; mechanicalfixesneednewreviewandfreshmanifest undernewallwriterfreeze.",
+  "raw_report_sha256": "c9b015bf9b5fee9360212dceebdb4c347fc01660b0ed1e5ca0eb21a32718c7d0",
+  "acceptance_limits": [
+    "Library compilation failed with seven mechanical integration/test API errors; CLI build and runtime commands were not run.",
+    "The exact failed source and actual terminal remain preserved. Narrow owner repairs are separate unvalidated successor source.",
+    "No additional upstream runtime pass, architecture completion or interpreter/JIT gate acceptance."
+  ]
+}

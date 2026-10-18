@@ -12,14 +12,35 @@ use crate::{
         provider::SyntaxProvider,
         value::QueryValue,
     },
-    source::manifest::BodyKey,
+    source::manifest::{BodyKey, PcKey},
     traits::term::{ParamKey, TyTerm},
 };
 use ra_ap_syntax::{AstNode, ast};
 use std::collections::BTreeMap;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+pub enum EquationOwner {
+    DeclaredBody(BodyKey),
+    SelectedCall(PcKey),
+}
+impl StableEncode for EquationOwner {
+    const DOMAIN: &'static str = "lrr/v1/associated-equation-owner";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        match self {
+            Self::DeclaredBody(body) => {
+                e.u32(0);
+                e.record(body);
+            }
+            Self::SelectedCall(pc) => {
+                e.u32(1);
+                e.record(pc);
+            }
+        }
+    }
+}
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct AssociatedEquationsKey {
-    pub(crate) body: BodyKey,
+    pub(crate) owner: EquationOwner,
+    pub(crate) definition: Digest,
     pub(crate) bindings: Vec<(ParamKey, TyTerm)>,
     pub(crate) needed: Vec<u32>,
 }
@@ -41,9 +62,10 @@ impl AssociatedEquationsKey {
     }
 }
 impl StableEncode for AssociatedEquationsKey {
-    const DOMAIN: &'static str = "lrr/v1/associated-equality-goal";
+    const DOMAIN: &'static str = "lrr/v2/associated-equality-goal";
     fn encode_fields(&self, e: &mut StableEncoder) {
-        e.record(&self.body);
+        e.record(&self.owner);
+        e.digest(self.definition);
         e.sequence(&self.bindings, |e, (parameter, term)| {
             e.record(parameter);
             e.record(term);
@@ -56,6 +78,7 @@ pub struct PreparedAssociatedEquations {
     key: AssociatedEquationsKey,
     signature: Digest,
     equations: Vec<(TyTerm, TyTerm)>,
+    pending: bool,
 }
 impl PreparedAssociatedEquations {
     pub(crate) fn key(&self) -> &AssociatedEquationsKey {
@@ -81,15 +104,28 @@ impl PreparedAssociatedEquations {
     }
 }
 impl StableEncode for PreparedAssociatedEquations {
-    const DOMAIN: &'static str = "lrr/v1/prepared-associated-equalities";
+    const DOMAIN: &'static str = "lrr/v2/prepared-associated-equalities";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.signature);
+        e.bool(self.pending);
         e.sequence(&self.equations, |e, (left, right)| {
             e.record(left);
             e.record(right);
         });
     }
+}
+fn pending(key: &AssociatedEquationsKey, signature: Digest) -> PreparedAssociatedEquations {
+    PreparedAssociatedEquations {
+        key: key.clone(),
+        signature,
+        equations: Vec::new(),
+        pending: true,
+    }
+}
+pub(crate) struct EquationInference {
+    pub(crate) guard: Option<std::sync::Arc<crate::db::memo::PreparedInputGuard>>,
+    pub(crate) pending: bool,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-CONTEXT", message.into())
@@ -116,7 +152,7 @@ pub(crate) fn prepare(
     key: &AssociatedEquationsKey,
 ) -> QueryPoll<PreparedAssociatedEquations> {
     checked!(key.heap_bytes().ok_or_else(crate::runtime::arena::resource));
-    let definition = key.body.definition;
+    let definition = key.definition;
     if key.bindings.windows(2).any(|pair| pair[0].0 >= pair[1].0)
         || key.needed.windows(2).any(|pair| pair[0] >= pair[1])
         || key.bindings.iter().any(|(parameter, term)| {
@@ -126,31 +162,116 @@ pub(crate) fn prepare(
         return QueryPoll::Ready(Err(fault("bound equation key is not canonical")));
     }
 
-    let selected = ready!(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)));
-    let QueryValue::FunctionSignature(signature) = selected.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("bound equation signature differs")));
+    let selected = ready!(db.fetch(
+        &SyntaxProvider,
+        match &key.owner {
+            EquationOwner::DeclaredBody(_) => QueryKey::FunctionSignature(definition),
+            EquationOwner::SelectedCall(pc) => QueryKey::EnteredCall(pc.clone()),
+        }
+    ));
+    let (signature, source, context, completed) = match (&key.owner, selected.value.as_ref()) {
+        (EquationOwner::DeclaredBody(body), QueryValue::FunctionSignature(signature)) => {
+            let environment = db.input(&InputKey::BodyEnvironment(body.clone()));
+            let Some(InputValue::BodyEnvironment(environment)) = environment.as_deref() else {
+                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+            };
+            ready!(environment.require_current(db));
+            if environment.body() != body || body.definition != definition {
+                return QueryPoll::Ready(Err(fault("bound equation declaration owner differs")));
+            }
+            let context = db.input(&InputKey::DeclarationContext(definition));
+            let source = db.input(&InputKey::DefinitionSource(definition));
+            let (
+                Some(InputValue::DeclarationContext(context)),
+                Some(InputValue::DefinitionSource(source)),
+            ) = (context.as_deref(), source.as_deref())
+            else {
+                return QueryPoll::Ready(Err(fault("bound equation declaration inputs absent")));
+            };
+            (
+                signature.as_ref(),
+                source.clone(),
+                context.clone(),
+                std::sync::Arc::clone(environment.macros().source_environment()),
+            )
+        }
+        (EquationOwner::SelectedCall(pc), QueryValue::EnteredCall(goal)) => {
+            checked!(goal.require_current(db));
+            if goal.key() != pc {
+                return QueryPoll::Ready(Err(fault("bound equation call occurrence differs")));
+            }
+            let Some(signature) = goal.signature() else {
+                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+            };
+            use super::entered_call_goals::EnteredCallSelection;
+            let (source, context, parent) = match goal.selection() {
+                EnteredCallSelection::Module(declaration) => {
+                    if declaration.identity() != definition
+                        || declaration.header() != signature.header.fingerprint()
+                    {
+                        return QueryPoll::Ready(Err(fault(
+                            "bound equation selected module declaration differs",
+                        )));
+                    }
+                    (
+                        declaration.source().clone(),
+                        declaration.context().clone(),
+                        goal.retained_plan(),
+                    )
+                }
+                EnteredCallSelection::Local(proof) => {
+                    let item = proof.item();
+                    if item.def_key.fingerprint() != definition
+                        || item.header != signature.header
+                        || item.scope != signature.scope
+                    {
+                        return QueryPoll::Ready(Err(fault(
+                            "bound equation selected local declaration differs",
+                        )));
+                    }
+                    (
+                        proof.source().clone(),
+                        crate::syntax::outline::DeclarationContext {
+                            scope: item.scope.clone(),
+                            range: item.declaration_span,
+                        },
+                        proof.parent(),
+                    )
+                }
+                _ => return QueryPoll::Ready(Ok(pending(key, selected.fingerprint))),
+            };
+            ready!(parent.require_current(db));
+            let Some(environment) = parent.environment() else {
+                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+            };
+            // The actual selected local declaration remains unpublished until
+            // reached. Its legacy named-Type adapter still needs a genuine
+            // declaration-scope join; never publish substitute global rows.
+            if !matches!(db.input(&InputKey::DefinitionHeader(definition)).as_deref(),
+                Some(InputValue::DefinitionHeader(header)) if header == &signature.header)
+                || !matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),
+                    Some(InputValue::DefinitionSource(actual)) if actual == &source)
+                || !matches!(db.input(&InputKey::DeclarationContext(definition)).as_deref(),
+                    Some(InputValue::DeclarationContext(actual)) if actual == &context)
+            {
+                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+            }
+            (
+                signature,
+                source,
+                context,
+                std::sync::Arc::clone(environment.macros().source_environment()),
+            )
+        }
+        _ => return QueryPoll::Ready(Err(fault("bound equation selected query outcome differs"))),
     };
-    let environment = db.input(&InputKey::BodyEnvironment(key.body.clone()));
-    let Some(InputValue::BodyEnvironment(environment)) = environment.as_deref() else {
-        return QueryPoll::Ready(Err(fault(
-            "bound equation requires its genuine declaration environment",
-        )));
-    };
-    ready!(environment.require_current(db));
-    if environment.body() != &key.body || signature.definition != definition {
-        return QueryPoll::Ready(Err(fault("bound equation declaration owner differs")));
-    }
-    let context = db.input(&InputKey::DeclarationContext(definition));
-    let source = db.input(&InputKey::DefinitionSource(definition));
-    let (Some(InputValue::DeclarationContext(context)), Some(InputValue::DefinitionSource(source))) =
-        (context.as_deref(), source.as_deref())
-    else {
-        return QueryPoll::Ready(Err(fault("bound equation declaration inputs absent")));
-    };
-    if context.scope != signature.scope || source.profile != signature.header.profile {
+    if signature.definition != definition
+        || context.scope != signature.scope
+        || source.profile != signature.header.profile
+    {
         return QueryPoll::Ready(Err(fault("bound equation source scope/profile differs")));
     }
-    let parsed = ready!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(source.clone())));
+    let parsed = ready!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(source)));
     let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
         return QueryPoll::Ready(Err(fault("bound equation parse differs")));
     };
@@ -159,7 +280,6 @@ pub(crate) fn prepare(
     else {
         return QueryPoll::Ready(Err(fault("bound equation actual function absent")));
     };
-    let completed = environment.macros().source_environment();
     let sources: Vec<_> = completed.sources().iter().collect();
     let declaration =
         super::source_types::WrittenTypeDeclaration::function_syntax(signature, &owner);
@@ -172,21 +292,26 @@ pub(crate) fn prepare(
         &key.needed
     ));
     let bindings: BTreeMap<_, _> = key.bindings.iter().cloned().collect();
+    let Some(equations) = equations else {
+        return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+    };
     let mut normalized = Vec::new();
-    if let Some(equations) = equations {
+    let mut unanswered = false;
+    if !equations.is_empty() {
         let members = checked!(completed.member_index());
         for (projection, template) in equations {
             let selected = super::associated_types::substitute(&projection, &bindings);
-            if let Some(actual) = ready!(super::associated_types::normalize(
+            match ready!(super::associated_types::normalize(
                 db,
                 completed.names(),
                 &sources,
                 &members,
                 &selected
             )) {
-                if super::call_contracts::closed_term(&actual) {
-                    normalized.push((template, actual));
+                Some(actual) if super::call_contracts::closed_term(&actual) => {
+                    normalized.push((template, actual))
                 }
+                _ => unanswered = true,
             }
         }
     }
@@ -194,6 +319,7 @@ pub(crate) fn prepare(
         key: key.clone(),
         signature: selected.fingerprint,
         equations: normalized,
+        pending: unanswered,
     }))
 }
 
@@ -202,20 +328,20 @@ pub(crate) fn prepare(
 /// memo closure; runtime consumers retain the returned immutable input guard.
 pub(crate) fn constrain(
     db: &mut Database,
-    body: &BodyKey,
+    owner: &EquationOwner,
     signature: &crate::syntax::signatures::FunctionSignature,
     symbolic: &mut super::signature_subst::SignatureSubstitution,
-) -> QueryPoll<Option<std::sync::Arc<crate::db::memo::PreparedInputGuard>>> {
+) -> QueryPoll<EquationInference> {
     use crate::{db::memo::PreparedInputGuard, syntax::signatures::GenericKind};
     use std::sync::Arc;
-    if body.definition != signature.definition {
+    if let EquationOwner::DeclaredBody(body) = owner
+        && body.definition != signature.definition
+    {
         return QueryPoll::Ready(Err(fault(
             "equation substitution declaration owner differs",
         )));
     }
-    if db.input(&InputKey::BodyEnvironment(body.clone())).is_none() {
-        return QueryPoll::Ready(Ok(None));
-    }
+    let mut pending = false;
     let mut guards = Vec::new();
     loop {
         let needed: Vec<_> = signature
@@ -250,7 +376,8 @@ pub(crate) fn constrain(
             .collect();
         let before = bindings.len();
         let key = QueryKey::AssociatedEquations(Box::new(AssociatedEquationsKey {
-            body: body.clone(),
+            owner: owner.clone(),
+            definition: signature.definition,
             bindings,
             needed,
         }));
@@ -258,6 +385,7 @@ pub(crate) fn constrain(
         let QueryValue::AssociatedEquations(equations) = selected.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("associated equality goal outcome differs")));
         };
+        pending |= equations.pending;
         if equations.equations().is_empty() {
             break;
         }
@@ -283,11 +411,14 @@ pub(crate) fn constrain(
             break;
         }
     }
-    QueryPoll::Ready(Ok(if guards.is_empty() {
-        None
-    } else {
-        Some(Arc::new(checked!(PreparedInputGuard::join(
-            &guards.iter().collect::<Vec<_>>()
-        ))))
+    QueryPoll::Ready(Ok(EquationInference {
+        guard: if guards.is_empty() {
+            None
+        } else {
+            Some(Arc::new(checked!(PreparedInputGuard::join(
+                &guards.iter().collect::<Vec<_>>()
+            ))))
+        },
+        pending,
     }))
 }

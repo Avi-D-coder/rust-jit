@@ -264,12 +264,62 @@ impl<'a> Component<'a> {
         bound.extend(ready!(
             self.explicit_argument_bindings(db, call, definition)
         ));
-        let selected = ready!(self.method_signature(db, definition));
-        if let Some(selected) = selected
-            && let crate::db::value::QueryValue::FunctionSignature(signature) = selected.as_ref()
+        use crate::frontend::associated_equations::EquationOwner;
+        let selected_call = if self
+            .fact(call)
+            .is_ok_and(|fact| fact.kind() == FactKind::Call)
         {
-            let body = db.input(&crate::db::dependency::InputKey::DefinitionBody(definition));
-            if let Some(crate::db::dependency::InputValue::DefinitionBody(body)) = body.as_deref() {
+            let selected = ready!(db.fetch(
+                &crate::db::provider::SyntaxProvider,
+                crate::db::key::QueryKey::EnteredCall(super::entry(self.key, call))
+            ));
+            match selected.value.as_ref() {
+                crate::db::value::QueryValue::EnteredCall(goal)
+                    if goal
+                        .signature()
+                        .is_some_and(|signature| signature.definition == definition) =>
+                {
+                    if let Err(error) = goal.require_current(db) {
+                        return QueryPoll::Ready(Err(error));
+                    }
+                    Some(selected.value)
+                }
+                crate::db::value::QueryValue::EnteredCall(_) => None,
+                _ => {
+                    return QueryPoll::Ready(Err(super::fault(
+                        "source equation call selection differs",
+                    )));
+                }
+            }
+        } else {
+            None
+        };
+        let (selected, owner) = match selected_call {
+            Some(selected) => (
+                Some(selected),
+                Some(EquationOwner::SelectedCall(super::entry(self.key, call))),
+            ),
+            None => {
+                let selected = ready!(self.method_signature(db, definition));
+                let body = db.input(&crate::db::dependency::InputKey::DefinitionBody(definition));
+                let owner = match body.as_deref() {
+                    Some(crate::db::dependency::InputValue::DefinitionBody(body)) => {
+                        Some(EquationOwner::DeclaredBody(body.key()))
+                    }
+                    _ => None,
+                };
+                (selected, owner)
+            }
+        };
+        if let (Some(selected), Some(owner)) = (selected, owner) {
+            let signature = match selected.as_ref() {
+                crate::db::value::QueryValue::FunctionSignature(signature) => {
+                    Some(signature.as_ref())
+                }
+                crate::db::value::QueryValue::EnteredCall(goal) => goal.signature(),
+                _ => None,
+            };
+            if let Some(signature) = signature {
                 let mut encoder =
                     crate::core::digest::StableEncoder::new("lrr/v1/source-equation-substitution");
                 encoder.record(&super::entry(self.key, call));
@@ -293,14 +343,15 @@ impl<'a> Component<'a> {
                         }
                     }
                 }
-                // The outer source-constraint memo captures this exact query's
-                // semantic dependencies; no runtime proof is fabricated here.
-                let _proof = ready!(crate::frontend::associated_equations::constrain(
+                let inference = ready!(crate::frontend::associated_equations::constrain(
                     db,
-                    &body.key(),
+                    &owner,
                     signature,
                     &mut substitution
                 ));
+                if inference.pending {
+                    self.defer(call, super::ConstraintDemand::ResultType);
+                }
                 for parameter in &signature.generics {
                     if let Some(term) = substitution.binding(parameter.ordinal)
                         && crate::frontend::call_contracts::closed_term(term)

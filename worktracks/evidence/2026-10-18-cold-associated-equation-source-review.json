@@ -1,0 +1,131 @@
+{
+  "status": "READY source candidate; build/runtime/control evidence unexecuted",
+  "owner": "/root/generic_projection_resume",
+  "tasks": [
+    "T025",
+    "T062",
+    "M019",
+    "M020",
+    "M023",
+    "M026",
+    "M027"
+  ],
+  "precode": "2026-10-18-cold-associated-equation-source-scope.md",
+  "unchanged_runtime_witnesses": [
+    "tests/ui/associated-types/associated-types-struct-field-numbered.rs",
+    "tests/ui/associated-types/associated-types-struct-field-named.rs"
+  ],
+  "prior_runtime_evidence": "2026-10-18-associated-equality-v18-runtime.json: exact source88b73c9d, both wholemains PASS owning2015. Those bodies enterfoo; cold signature-only contract was not proved.",
+  "source_sha256": {
+    "crates/lrr/src/frontend/associated_equations.rs": "9301240adbaf2e064eae3c3f3c200b4148f1909c3a90c91768249eee0e09f0ae",
+    "crates/lrr/src/frontend/call_contracts.rs": "70d6baa3ad64fd0b34e8ec005b9c3d0e26fab4086a2eea24990eb369b82acab5",
+    "crates/lrr/src/frontend/binding_constraint_projection.rs": "664e06cbe5a79ad70ee5a3da0228efae240aa96bafbe49cadeaf7e262a64be0a",
+    "crates/lrr/src/cli/generic_boundary_tests.rs": "9c507a6c93020b95a2c72628028f50e86e6eebb2e1ca3c31861f54ec1a9d1f3f"
+  },
+  "entry_points": [
+    "EquationOwner::{DeclaredBody,SelectedCall}; explicit selected Fn definition in associated equation key, stable domainv2",
+    "associated_equations::prepare: current Q44 real Local/Module declaration -> actual source/context/profile/direct Fn syntax -> genuine retained parent environment -> same actual_bound_equations",
+    "associated_equations::constrain: same single SignatureSubstitution fixed point and actual query guard; typed EquationInference.pending propagates unavailable scopes/normalization",
+    "Component::instantiated_declared: ordinaryCall selects actual Q44 signature/callerPc; existing method/bound consumers keep genuine declared-body owner fallback",
+    "call_contracts::prepare: runtime owner DeclaredBody; retains returned guard; descriptor admission unchanged"
+  ],
+  "removed_or_replaced": [
+    "Source ordinary-call equation preparation no longer requires selected callee BodyEnvironment or DefinitionBody merely to resolve declared Type facts.",
+    "No replacement or expansion of legacy written-Type parser. No source_types change needed in this bounded stage.",
+    "Runtime/source share same actual equation algorithm, now different genuine source-owner envelopes, not different evaluators."
+  ],
+  "controls": {
+    "runtime": "cli::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold: unchanged upstream declarations + reachedliteral0xffffffff, only never-takenbranch changes0_u32 vsfoo(&node).unwrap; ordinary/arbitrary user macro/wrapper/applicable assert macro forms x4editions. No suffixed expectedvalue supplies missingType.",
+    "source_metadata": "cli::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation: actualCLIcapture/compiler/discovery/retainedmain plan, query actualreachedliteral BindingConstraints, requireU32, selected-call Eqmemo forsourcebranch, nofooBodyEnvironment or BodyStructure/SourceLocalPlan/Thunk/PatternPlan before/after, metadata rows permitted. Bothbranchesx4editions.",
+    "originals": "Imported originals remain unchanged; adaptations are LRR source controls only, not fullfixture pass inflation."
+  },
+  "reviews": [
+    {
+      "mode": 1,
+      "symbols": [
+        "associated_equations::prepare",
+        "Component::instantiated_declared"
+      ],
+      "finding": "Type fact/selection query only. No expression/assertion compiler, body wrapping, evaluator or dynamic expectedvalue coercion."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "EquationOwner::SelectedCall",
+        "EnteredCallGoal::selection/signature/require_current"
+      ],
+      "finding": "Real indexed ordinary Call selection for every origin. No generated literal/break phase or evaluator route."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "actual_bound_equations",
+        "SignatureSubstitution",
+        "associated_equations::constrain"
+      ],
+      "finding": "No identity-selected macro inference/method/name whitelist. Same actualtrait projection equation/unifier; owner envelope selects real source proof, not semantic execution rules."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "SelectedCall module/local proof branch",
+        "ParsedFile::syntax_at"
+      ],
+      "finding": "Actual source/header/context/edition and parent currentness retained. Unpublished local globals remain typedpending; no fake publication/Scope input. Broader generated local header binding still held, no complete source-scope claim."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "associated_equations::prepare",
+        "cold_associated_type_goal_retains_selected_source_without_callee_preparation"
+      ],
+      "finding": "Cold selected Fn signature preparation does not request/publish callee body environment or call callable()/BodyStructure/Thunk. Test uses real caller plan and actual source literal, no skipped execution counted asfixturepass."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "AssociatedEquationsKey",
+        "EquationInference",
+        "Component::instantiated_declared"
+      ],
+      "finding": "Same immutable query now keyed by actual source-owner kind, callerPc/declaredBody, selectedFn identity and canonical bindings/needed ordinals. Phase execution retains currentness guard; source query dependencies transitively include actualQ44. Cold query/guard/term work only, no installed preparation."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "EnteredCallGoal::require_current",
+        "PreparedSourceLocalPlan::require_current",
+        "associated_equations::prepare"
+      ],
+      "finding": "Positive/negative selectedtarget/header/scope inputs and existing relevant Type member query dependencies retained. Missing actualdeclarationHeader/Source/Context are negativeinputs. No fullworld namespace scan added. Qualified trait-name and associated-owner legacy lookup closure debt remains explicit."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "goal.retained_plan",
+        "proof.parent",
+        "completed.sources/member_index",
+        "ParsedFile::syntax_at"
+      ],
+      "finding": "Arc handles borrowed/shared; only small context/source key copies. Direct selectedFn source range, no whole-file node search or immutable BodyIndex clone. Tests inspect actual indexed literal/call metadata, no fabricatedFn declaration."
+    }
+  ],
+  "audit_mapping": {
+    "MA003/MA006": "Relevant source inference/member selection repairs; common mechanism retained.",
+    "other_MA": "No completion inferred for MA001/MA002/MA004/MA005/MA007/MA008; recurring reviews1-8 are separate numbering."
+  },
+  "cost": "Key owner fixedsize. Cold selected-call mode fetches one memoizedQ44 and uses retained parent environment; selected declaration terms/bounds O(B+T), source borrow vector O(S), dependencyguard capture O(D), no fullbody preparation. No measured speedclaim.",
+  "remaining": [
+    "Candidate4leaf build/runtime tests unexecuted.",
+    "Unpublished local sourceType names still require genuine declaration-scope Type service; nofake globals/currentType provenance. Explicit pending retained.",
+    "Cold method/lang-call selectedtarget envelope remains declared-body fallback; future actual selectedmember receipt needed.",
+    "Full source epoch/selected-target change suspension matrix notexecuted; no feature/task/architecture closure.",
+    "Complete tabled trait/GAT equality/novel nominal descriptor reconstruction remain incomplete."
+  ],
+  "source_only_checks": "rustfmt parses/formats owned leaves and git diff --check passed. No Cargo/tests executed by implementation worker.",
+  "mechanical_repair_after_v19_compile": {
+    "failed_candidate_test_sha256": "738555a59217bed097632b99212dcdd9839dfbbf11afa97502f5c8419f06bc45",
+    "scope": "Only generic_boundary_tests.rs: three nested-module paths use crate::cli; private memo-map inspection replaced by existing complete detailed query trace enabled before preparation. Trace completeness and both initial/post-demand four-kind no-body checks preserved; source branch requires actual SelectedCall AssociatedEquations query event. No visibility, production or semantic change.",
+    "acceptance": "V19 failed before CLI/tests; this successor is source-reviewed only, uncompiled/unexecuted."
+  }
+}

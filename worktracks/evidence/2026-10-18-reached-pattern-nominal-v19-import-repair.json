@@ -1,0 +1,9 @@
+{
+  "scope": "Mechanical V19 successor only: restore ItemKind type import used by existing lexical helper Option<ItemKind>; no semantic change",
+  "predecessor_review": "worktracks/evidence/2026-10-18-reached-pattern-nominal-source-review.json",
+  "predecessor_sha256": "02fd6f35ed85991138b8cc5d05e23451d859d5eecdd18ec8df3b3e0b1d6104a9",
+  "v19_terminal": "lib compile failed missing ItemKind plus six disjoint errors; no CLI/runtime launched",
+  "file": "crates/lrr/src/engine/run_pattern_names.rs",
+  "sha256": "9c3f08be2ed1488579fd419993b5be8b6529b3bc99fe245c958b949eeedca71f",
+  "all_eight_review": "All eight prior route conclusions remain unchanged; exact import-only diff compared to prior reviewed bytes; runtime claims remain held."
+}

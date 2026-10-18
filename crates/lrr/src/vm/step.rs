@@ -31,9 +31,13 @@ impl GuestPanic {
 pub enum StepOutcome {
     /// Bounded operation progress; PC and opcode entry charge remain retained.
     Dispatch,
-    /// A reached constant pattern suspends this operation for the ordinary
-    /// initializer frame; no pattern result has been committed.
-    Initializer(crate::core::digest::Digest),
+    /// One reached pattern goal needs preparation. The same operation and
+    /// open transaction resume; no pattern result has been committed.
+    PatternPrepare {
+        owner: crate::ir::pc::NodeId,
+        tree: std::sync::Arc<crate::syntax::pattern_tree::PatternTree>,
+        demand: super::pattern::PatternDemand,
+    },
     Backedge(PcKey),
     Next(PcKey),
     Call {
@@ -1668,9 +1672,13 @@ pub(crate) fn step_with_constant(
             } = op
             {
                 match frame.search_pattern(*owner, tree, *result, *retry, store)? {
-                    super::pattern::matcher::SearchOutcome::Initializer(identity) => {
+                    super::pattern::matcher::SearchOutcome::Prepare(demand) => {
                         frame.suspend_pattern_test(index)?;
-                        return Ok(StepOutcome::Initializer(identity));
+                        return Ok(StepOutcome::PatternPrepare {
+                            owner: *owner,
+                            tree: std::sync::Arc::clone(tree),
+                            demand,
+                        });
                     }
                     super::pattern::matcher::SearchOutcome::Complete(found) => {
                         frame.count_step();
@@ -1922,7 +1930,7 @@ pub(crate) fn step_with_constant(
         };
         increment(&mut frame.counters.exits_completed)?;
         match &outcome {
-            StepOutcome::Dispatch | StepOutcome::Initializer(_) => {
+            StepOutcome::Dispatch | StepOutcome::PatternPrepare { .. } => {
                 return Err(invalid("operation suspension cannot be a recipe exit"));
             }
             StepOutcome::Backedge(pc) => {

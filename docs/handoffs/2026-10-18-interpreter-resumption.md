@@ -366,3 +366,51 @@ whole-suite count; V17 numeric mains were not gratuitously rerun in V18.
 [Exact V18](../../worktracks/evidence/2026-10-18-interpreter-v18-validation.json).
 Source checkpoint `5761075884f60ea25053072be8db916108ffe57f` (exact V17 plus
 scoped evidence/plans) was pushed to the implementation branch.
+
+## V19: failed compilation preserved, narrow repairs pending
+
+Exact source `99482a19550ba703be628080bb4557c97a0f2217ce34c2394924cd997fd858d9`
+(3,327 leaves, HEAD `3feaeb81822666664570f54c47892c597e42dede`) failed the
+library build, terminal `a8fba7/101`, 16.857 seconds. Seven errors are mechanical:
+test helper module paths/private memo inspection, a missing manifest ItemKind
+import, and a test cloning an ExpansionRecord reference instead of its actual Arc
+handle. No CLI build or runtime commands ran. The failed snapshot remains attached
+to its original source; test API/import/record_input repairs are a separate successor.
+[Exact failed V19](../../worktracks/evidence/2026-10-18-interpreter-v19-validation.json).
+
+The exact compiled V18 source/evidence checkpoint `3feaeb81822666664570f54c47892c597e42dede`
+was pushed. Its index matches all 3,326 V18 compiled source leaves, not just the ten
+changed Rust files. No unvalidated successor Rust was included.
+
+## V20: reached nominal pattern specialization and cold declaration facts
+
+Exact source `18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e`
+(3,327 leaves, HEAD `3feaeb81822666664570f54c47892c597e42dede`) passes both frozen
+builds: lib `ebf17b/0` (29.246s), CLI `8c007f/0` (23.596s). All seventeen changed
+Rust leaves, including the new route control, were staged against the manifest
+before writer release; successor source remains unstaged.
+
+All seven primary unchanged originals complete. The named enum newly completes
+19 calls / 303 dispatches / 429 classified operations, including recursive Redirect
+and Root patterns and the final assertion. Previous six primary passes remain.
+Two additional unchanged originals fail: match-const-fn-structs stops at actual
+VM-produced structural constant pattern comparison; const-struct stops in w's
+record update after earlier operations. Neither is counted as a pass.
+
+Six of nine controls pass. Pure cold Eq facts return U32 in both literal/call
+branches across four editions, with actual SelectedCall equation evidence and no
+callee body preparation. Nested heterogeneous nominal patterns pass their owning
+2021 route/exact-once control. The all-origin initializer control crosses the
+earlier seal refusal, then fails missing canonical item-kind recognition for N;
+its exact unlabeled source variant is unknown. Cold runtime user-macro literal
+case fails an actual token-context attachment; the ancestry control fails during
+its existing discovery helper before boundary assertions. Those remain blockers.
+
+Root's next code unifies existing original/generated declaration-kind metadata
+for ordinary values and patterns and improves failure-only source facts; no
+unsupported shape is treated as success. Worker1 extends genuine retained local
+header Type scope, and worker2 implements ordinary record rest transfer through
+the same constructor/copy/cleanup mechanisms. These successors remain unvalidated.
+[Exact V20](../../worktracks/evidence/2026-10-18-interpreter-v20-validation.json).
+Fourteen distinct targeted cases have newly passed at least once in this
+resumption's exact historical binaries; no refreshed full-inventory count follows.

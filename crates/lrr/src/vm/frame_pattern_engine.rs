@@ -101,6 +101,8 @@ impl Frame {
             matched: false,
             staged: Vec::new(),
             exposed: Vec::new(),
+            nominal_tree: None,
+            nominal_bindings: std::collections::BTreeMap::new(),
         });
         Ok(())
     }
@@ -147,7 +149,7 @@ impl Frame {
         self.preflight_write_type(result, TypeId(2), store)
     }
     /// Search once, without publishing a result or changing ownership. The
-    /// VM can suspend this exact operation for an actually reached constant.
+    /// VM can suspend this exact operation for a reached initializer or member.
     pub(crate) fn search_pattern(
         &self,
         owner: NodeId,
@@ -163,6 +165,7 @@ impl Frame {
         Search::run(
             store,
             names.as_deref(),
+            (open.nominal_tree == Some(tree.identity())).then_some(&open.nominal_bindings),
             skip,
             &open.root,
             open.root_source.as_ref(),
@@ -203,9 +206,11 @@ impl Frame {
         open.solution = skip;
         open.matched = matched;
         open.staged = found.unwrap_or_default();
+        open.nominal_tree = None;
+        open.nominal_bindings.clear();
         Ok(())
     }
-    /// Retain exactly this operation when the matcher needs an initializer;
+    /// Retain exactly this operation when the matcher needs preparation;
     /// all earlier recipe operations and the scrutinee remain completed.
     pub(crate) fn suspend_pattern_test(&mut self, index: usize) -> Result<(), Diagnostic> {
         self.rerun_index = Some(
@@ -225,10 +230,101 @@ impl Frame {
             crate::vm::pattern::matcher::SearchOutcome::Complete(found) => {
                 self.complete_pattern_test(owner, tree, result, retry, found, store)
             }
-            crate::vm::pattern::matcher::SearchOutcome::Initializer(_) => Err(transaction(
-                "constant pattern requires the resumable operation dispatcher",
+            crate::vm::pattern::matcher::SearchOutcome::Prepare(_) => Err(transaction(
+                "pattern preparation requires the resumable operation dispatcher",
             )),
         }
+    }
+    /// Only applications actually requested by the current test belong to
+    /// this operation's dependency closure. Historical instantiations and
+    /// unrelated open owners are not scanned or invalidated here.
+    pub(crate) fn require_pattern_nominals_current(
+        &self,
+        owner: NodeId,
+        tree: &crate::syntax::pattern_tree::PatternTree,
+        db: &crate::db::memo::Database,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        if let Some(open) = self.open_patterns.find(owner)
+            && open.nominal_tree == Some(tree.identity())
+        {
+            for ((_, _, goal_source), prepared) in &open.nominal_bindings {
+                if self.bound_view(goal_source, store) != prepared.source {
+                    return Err(transaction("pattern goal's source application changed"));
+                }
+                prepared.guard.require_current(db)?;
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn pattern_constructor_template(
+        &self,
+        tree: &crate::syntax::pattern_tree::PatternTree,
+        slot: u32,
+    ) -> Result<Arc<crate::frontend::nominal_constructors::ConstructorTemplate>, Diagnostic> {
+        let names = self
+            .pattern_name_classes(tree)?
+            .ok_or_else(|| transaction("pattern constructor source targets absent"))?;
+        match names.get(slot as usize) {
+            Some(crate::vm::pattern::matcher::PatternTarget::ConstructorTemplate {
+                template,
+                ..
+            }) => Ok(Arc::clone(template)),
+            _ => Err(transaction(
+                "reached pattern constructor target is not pending",
+            )),
+        }
+    }
+    pub(crate) fn prepare_pattern_nominal(
+        &mut self,
+        owner: NodeId,
+        tree: &crate::syntax::pattern_tree::PatternTree,
+        slot: u32,
+        ty: TypeId,
+        goal_source: &crate::traits::term::TyTerm,
+        source: &crate::traits::term::TyTerm,
+        variant: Arc<crate::frontend::types::BoundNominalVariant>,
+        guard: Arc<crate::db::memo::PreparedInputGuard>,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        Self::require_structural_source_target(source, ty, store)?;
+        if self.bound_view(goal_source, store) != *source {
+            return Err(transaction(
+                "pattern goal/member source application differs",
+            ));
+        }
+        let template = self.pattern_constructor_template(tree, slot)?;
+        if !matches!(store.type_descriptor(ty)?.key.as_ref(),
+            crate::runtime::shape::TypeKey::Nominal {identity, schema, ..}
+                if *identity == template.identity && *schema == template.schema)
+            || variant.identity() != template.identity
+            || variant.schema() != template.schema
+            || variant.variant() != template.variant
+            || variant.fields().len() != template.arity
+        {
+            return Err(transaction(
+                "reached pattern member/source/descriptor join differs",
+            ));
+        }
+        let open = self.open_patterns.current_mut(owner)?;
+        if !open.exposed.is_empty() {
+            return Err(transaction(
+                "pattern nominal preparation while guard view is exposed",
+            ));
+        }
+        if open.nominal_tree != Some(tree.identity()) {
+            open.nominal_bindings.clear();
+            open.nominal_tree = Some(tree.identity());
+        }
+        open.nominal_bindings.insert(
+            (slot, ty, goal_source.clone()),
+            crate::vm::pattern::matcher::PreparedPatternNominal {
+                source: source.clone(),
+                variant,
+                guard,
+            },
+        );
+        Ok(())
     }
     pub(crate) fn preflight_pattern_publication(
         &self,

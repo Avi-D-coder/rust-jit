@@ -1,0 +1,124 @@
+{
+  "scope": "Reached nominal pattern field specialization, bounded source-only candidate after exact V18 failures; no runtime or feature-completion claim",
+  "tasks": [
+    "T032",
+    "T033",
+    "M018",
+    "M025",
+    "M030"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-reached-pattern-nominal-context.md",
+  "files_sha256": {
+    "crates/lrr/src/frontend/nominal_constructors.rs": "4d29c848e59cdf0851e537be598043748fe75a70069c48b995a45be43f6c4f07",
+    "crates/lrr/src/engine/run_pattern_names.rs": "af10ef4bce1f5ea532ca809b1fd444ba2d2096221e16fe692bc720ca51b02712",
+    "crates/lrr/src/vm/pattern_match.rs": "b57284e1b9ac45a04a43b4d5cd2f5dd659b6aa57dfb2efd7786231dcdc5a346e",
+    "crates/lrr/src/vm/frame_pattern_engine.rs": "cf5a453aa6ea51f98829fa2d965fc14b999df986d86c69c96482210538b45d24",
+    "crates/lrr/src/vm/pattern.rs": "617618c21db2f9a0fec0f2d2ba68f8ee7d2ff86b926d36c040d55b6d1ab4fe9b",
+    "crates/lrr/src/vm/step.rs": "b371db63acd5f64825474a487dc88bf5c0c0b6f56257b66758b73a1bdf4e06a0",
+    "crates/lrr/src/engine/run.rs": "bffe0beb91e6acb542b55d7c7760026af5cb261f9a1f47f040e0c9356be96741",
+    "crates/lrr/src/engine/run_capture.rs": "ae943bcc285f0ff93dd9bc80c11fefd798abade885c8d4b592fe13a9ce81d93c",
+    "crates/lrr/src/cli/reached_pattern_nominal_tests.rs": "62fbbf6514a4cb988556f7ad92ba3433c4f6cf413f054f5c318e474d93cceded",
+    "crates/lrr/src/cli/mod.rs": "117602ca3239a5fd5979f7ad1fa3b02571f8048f0d50577222ad0b39be14054a"
+  },
+  "primary_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-enum-field-named.rs",
+    "sha256": "a63942e3b573cb8932cce79381a1574b96f3e6e33768797d2edc0639a4126b82",
+    "edition": 2015,
+    "baseline": "V18 actual fault in Root record pattern, original478..524, 17 source calls/204 dispatches; no successor run"
+  },
+  "control_selector": "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+  "source_review": [
+    {
+      "failure_mode": 1,
+      "symbols": [
+        "nominal_constructors::prepare_constructor",
+        "run_pattern_names::prepare_reached_pattern_nominal",
+        "Search::template_constructor"
+      ],
+      "finding": "One shared typed constructor binder retains pending metadata; existing strict bind_constructor diagnostic adapter retained. No assertion evaluator, synthetic body or macro-specific source branch."
+    },
+    {
+      "failure_mode": 2,
+      "symbols": [
+        "PatternTarget::ConstructorTemplate",
+        "Search::named_constructor",
+        "Search::solve_inner"
+      ],
+      "finding": "Generated and handwritten PatternTree constructor nodes enter the existing non-consuming Search. No literal-only or break-only executor; no new source/index/verifier namespace."
+    },
+    {
+      "failure_mode": 3,
+      "symbols": [
+        "NominalMemberKey",
+        "RunMachine::nominal_member",
+        "Frame::bound_view",
+        "Frame::prepare_pattern_nominal"
+      ],
+      "finding": "Source-selected definition/variant and full actual GenericArgs drive existing field normalization. Per-goal source term closes in owning GenericEnv. No name or context whitelist, numeric/assertion adaptation or descriptor-name invention."
+    },
+    {
+      "failure_mode": 4,
+      "symbols": [
+        "run_pattern_names::pattern_constructor",
+        "select_pattern_name",
+        "PatternDemand::Nominal"
+      ],
+      "finding": "No generated-source refusal added. Same selected source target is retained for all PatternTree origins; missing source arguments stay explicit unsupported. Supplementary route control is unexecuted."
+    },
+    {
+      "failure_mode": 5,
+      "symbols": [
+        "Search::template_constructor",
+        "SearchOutcome::Prepare",
+        "StepOutcome::PatternPrepare",
+        "Frame::suspend_pattern_test",
+        "Frame::complete_pattern_test",
+        "RunMachine::prepare_reached_pattern_nominal"
+      ],
+      "finding": "Single search/operation rerun and existing commit/cleanup. Identity/schema/active variant checked before field demand. Search failure/demand publishes no staged result and consumes no values. Initializer and nominal preparation use one transport. Rerun skips earlier operations/scrutinee. Guard-view admission preserved; false-guard retries share same solution search. Runtime suspension/cleanup evidence still pending."
+    },
+    {
+      "failure_mode": 6,
+      "symbols": [
+        "prepare_constructor",
+        "pattern_field_ordinals",
+        "prepare_pattern_names",
+        "Search::run",
+        "Frame::require_pattern_nominals_current"
+      ],
+      "finding": "Cold source selection/template/field mapping uses existing retained PC/tree name cache. Each actual member application uses existing pure NominalMember query and runtime guarded cache; Search only reads runtime metadata and emits demand. No parsing, plan reconstruction or source query in installed VM. Existing non-consuming search reruns O(reached pattern nodes) per new demand; known existing source-catalogue cold scans are not claimed removed."
+    },
+    {
+      "failure_mode": 7,
+      "symbols": [
+        "NominalMemberKey.arguments",
+        "OpenPattern::nominal_bindings",
+        "Frame::require_pattern_nominals_current",
+        "Frame::prepare_pattern_nominal"
+      ],
+      "finding": "Active binding key retains name slot, runtime TypeId and full exact goal TyTerm; value retains checked GenericEnv-closed application and relevant prepared guard. Currentness compares same bound goal/application on resume. Owner/tree scope is explicit, map clears after completed test. No runtime TypeId-only source key, historical all-instantiation guard scan or world namespace census. Existing callee/pattern selector dependency closure limitations stay held."
+    },
+    {
+      "failure_mode": 8,
+      "symbols": [
+        "StepOutcome::PatternPrepare.tree",
+        "Search::run",
+        "OpenPattern::nominal_tree",
+        "PatternTarget::ConstructorTemplate"
+      ],
+      "finding": "Retained trees, bound variants, templates and guards use Arc handles. No BodyIndex deep clone or whole-file node search introduced; exact retained PatternTree supplies source name slots. Full source goal terms are cloned into bounded active preparation keys as semantic facts, not immutable body copies."
+    }
+  ],
+  "mechanical_checks": [
+    "rustfmt 1.99.0 parsed individually owned leaves with skip_children; shared run.rs only narrow pattern outcome arm changed",
+    "git diff --check terminal exit0",
+    "rg confirms no old StepOutcome/SearchOutcome/SearchFailure Initializer-only transport remains"
+  ],
+  "known_gaps": [
+    "No Cargo or runtime execution by implementation worker; sole validator must capture exact successor builds and unchanged primary plus control terminals",
+    "Broader pattern/macro/edition/NeedInput/invalidation/panic matrix unexecuted for this candidate",
+    "Common structural source target checker currently holds nominal const/region generic applications; full source key retention is not support evidence",
+    "Existing cold source catalogue/name construction and exact selector dependency closure not claimed repaired",
+    "No whole feature/task/architecture gate closure"
+  ]
+}

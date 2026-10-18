@@ -3,7 +3,7 @@
 //! emitted by macros) runs this one non-consuming search over the retained
 //! `PatternTree`. Testing reads guest addresses only; ownership changes happen
 //! later, in `Frame::commit_pattern`, after the whole pattern has matched.
-use super::{BindingModifier, DefaultBindingMode, PatternContext, ReferenceKind};
+use super::{BindingModifier, DefaultBindingMode, PatternContext, PatternDemand, ReferenceKind};
 use crate::{
     core::diagnostic::Diagnostic,
     ir::pc::NodeId,
@@ -19,7 +19,7 @@ use crate::{
     },
     traits::term::TyTerm,
 };
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 fn unsupported(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
@@ -57,6 +57,12 @@ pub(crate) enum PatternTarget {
         shape: crate::frontend::types::FieldShape,
         ordinals: Box<[u32]>,
     },
+    /// Source-selected constructor whose fields need the actually reached
+    /// goal's generic application. No runtime field authority yet.
+    ConstructorTemplate {
+        template: Arc<crate::frontend::nominal_constructors::ConstructorTemplate>,
+        ordinals: Box<[u32]>,
+    },
     /// A constant pattern: the constant's evaluated scalar value.
     Constant(ValueRepr),
     /// Source-selected constant; evaluated only if this search reaches it.
@@ -90,6 +96,8 @@ pub(crate) struct OpenPattern {
     pub(crate) matched: bool,
     pub(crate) staged: Vec<Staged>,
     pub(crate) exposed: Vec<NodeId>,
+    pub(crate) nominal_tree: Option<crate::core::digest::Digest>,
+    pub(crate) nominal_bindings: BTreeMap<(u32, TypeId, TyTerm), PreparedPatternNominal>,
 }
 
 /// One stack per frame, shared by every pattern owner.
@@ -111,11 +119,14 @@ impl OpenPatterns {
         self.active.push(pattern);
     }
     pub(crate) fn current(&self, owner: NodeId) -> Result<&OpenPattern, Diagnostic> {
+        self.find(owner)
+            .ok_or_else(|| transaction("pattern owner has no open transaction"))
+    }
+    pub(crate) fn find(&self, owner: NodeId) -> Option<&OpenPattern> {
         self.active
             .iter()
             .rev()
             .find(|active| active.owner == owner)
-            .ok_or_else(|| transaction("pattern owner has no open transaction"))
     }
     pub(crate) fn current_mut(&mut self, owner: NodeId) -> Result<&mut OpenPattern, Diagnostic> {
         self.active
@@ -194,15 +205,22 @@ impl Number {
     }
 }
 
-/// A search either finishes without consuming the scrutinee or asks the
-/// dispatcher for one actually reached constant's ordinary VM initializer.
+#[derive(Clone)]
+pub(crate) struct PreparedPatternNominal {
+    /// Closed source application used by the guarded member query.
+    pub(crate) source: TyTerm,
+    pub(crate) variant: Arc<crate::frontend::types::BoundNominalVariant>,
+    pub(crate) guard: Arc<crate::db::memo::PreparedInputGuard>,
+}
+/// One non-consuming search completion or suspension. Every pattern owner
+/// and preparation kind retains the same transaction and operation index.
 pub(crate) enum SearchOutcome {
     Complete(Option<Vec<Staged>>),
-    Initializer(crate::core::digest::Digest),
+    Prepare(PatternDemand),
 }
 enum SearchFailure {
     Fault(Diagnostic),
-    Initializer(crate::core::digest::Digest),
+    Prepare(PatternDemand),
 }
 impl From<Diagnostic> for SearchFailure {
     fn from(error: Diagnostic) -> Self {
@@ -216,12 +234,14 @@ pub(crate) struct Search<'s> {
     store: &'s GuestStore,
     names: Option<&'s [PatternTarget]>,
     skip: u64,
+    nominal_bindings: Option<&'s BTreeMap<(u32, TypeId, TyTerm), PreparedPatternNominal>>,
     pub(crate) staged: Vec<Staged>,
 }
 impl<'s> Search<'s> {
     pub(crate) fn run(
         store: &'s GuestStore,
         names: Option<&'s [PatternTarget]>,
+        nominal_bindings: Option<&'s BTreeMap<(u32, TypeId, TyTerm), PreparedPatternNominal>>,
         skip: u64,
         root: &Place,
         root_source: Option<&TyTerm>,
@@ -231,6 +251,7 @@ impl<'s> Search<'s> {
         let mut search = Self {
             store,
             names,
+            nominal_bindings,
             skip,
             staged: Vec::new(),
         };
@@ -243,7 +264,7 @@ impl<'s> Search<'s> {
         match search.solve(&goal, &Next::Done) {
             Ok(true) => Ok(SearchOutcome::Complete(Some(search.staged))),
             Ok(false) => Ok(SearchOutcome::Complete(None)),
-            Err(SearchFailure::Initializer(identity)) => Ok(SearchOutcome::Initializer(identity)),
+            Err(SearchFailure::Prepare(demand)) => Ok(SearchOutcome::Prepare(demand)),
             Err(SearchFailure::Fault(error)) => Err(error),
         }
     }
@@ -484,7 +505,9 @@ impl<'s> Search<'s> {
                 )
             })?;
         match target {
-            PatternTarget::Initializer(identity) => Err(SearchFailure::Initializer(*identity)),
+            PatternTarget::Initializer(identity) => Err(SearchFailure::Prepare(
+                PatternDemand::Initializer(*identity),
+            )),
             _ => Ok(target),
         }
     }
@@ -553,6 +576,138 @@ impl<'s> Search<'s> {
         }
         self.proceed(&Next::Goals(&goals, next))
     }
+    fn template_constructor(
+        &mut self,
+        goal: &Goal<'_>,
+        slot: u32,
+        template: &crate::frontend::nominal_constructors::ConstructorTemplate,
+        fields: &[(u32, &PatternNode)],
+        next: &Next<'_, '_>,
+    ) -> Result<bool, SearchFailure> {
+        let (place, source, _, ty) = self.peel(
+            copy_place(&goal.place),
+            goal.source.clone(),
+            goal.context,
+            false,
+        )?;
+        let ty = ty.ok_or_else(|| mismatch("nominal pattern requires a nominal scrutinee"))?;
+        if !matches!(self.store.type_descriptor(ty)?.key.as_ref(),
+            TypeKey::Nominal {identity, schema, ..}
+                if *identity == template.identity && *schema == template.schema)
+        {
+            return Err(mismatch(
+                "pattern source template differs from the actual nominal descriptor",
+            )
+            .into());
+        }
+        if self.store.place_variant(&place).map_err(place_fault)? != Some(template.variant) {
+            return Ok(false);
+        }
+        let source = source
+            .or_else(|| self.store.descriptor_source_term(ty))
+            .ok_or_else(|| {
+                unsupported("reached nominal pattern requires its source argument facts")
+            })?;
+        if let Some(prepared) = self
+            .nominal_bindings
+            .and_then(|bindings| bindings.get(&(slot, ty, source.clone())))
+        {
+            return self.constructor(goal, &prepared.variant, fields, next);
+        }
+        Err(SearchFailure::Prepare(PatternDemand::Nominal {
+            slot,
+            ty,
+            source,
+        }))
+    }
+    fn named_constructor(
+        &mut self,
+        goal: &Goal<'_>,
+        slot: u32,
+        form: &ConstructorForm,
+        next: &Next<'_, '_>,
+    ) -> Result<bool, SearchFailure> {
+        let target = self.target(slot)?;
+        let (shape, arity, ordinals) = match target {
+            PatternTarget::Refused(error) => return Err(error.clone().into()),
+            PatternTarget::Initializer(identity) => {
+                return Err(SearchFailure::Prepare(PatternDemand::Initializer(
+                    *identity,
+                )));
+            }
+            PatternTarget::Constant(value) if matches!(form, ConstructorForm::Path) => {
+                return self.constant(goal, *value, next);
+            }
+            PatternTarget::Constructor {
+                variant,
+                shape,
+                ordinals,
+            } => (*shape, variant.fields().len(), ordinals.as_ref()),
+            PatternTarget::ConstructorTemplate { template, ordinals } => {
+                (template.shape, template.arity, ordinals.as_ref())
+            }
+            _ => {
+                return Err(
+                    mismatch("pattern path does not name a constructor of this form").into(),
+                );
+            }
+        };
+        let fields = match form {
+            ConstructorForm::Path => {
+                if shape != crate::frontend::types::FieldShape::Unit {
+                    return Err(mismatch("path pattern names a tuple or record constructor").into());
+                }
+                Vec::new()
+            }
+            ConstructorForm::Tuple { items, rest } => {
+                if shape != crate::frontend::types::FieldShape::Tuple {
+                    return Err(mismatch(
+                        "tuple-struct pattern names a unit or record constructor",
+                    )
+                    .into());
+                }
+                let fixed = items.len();
+                let before = match rest {
+                    Some(rest) if fixed <= arity => *rest as usize,
+                    None if fixed == arity => fixed,
+                    _ => {
+                        return Err(mismatch(
+                            "tuple-struct pattern arity differs from its constructor",
+                        )
+                        .into());
+                    }
+                };
+                let mut fields = Vec::with_capacity(fixed);
+                for (ordinal, item) in items.iter().enumerate() {
+                    let field = if ordinal < before {
+                        ordinal
+                    } else {
+                        arity - (fixed - ordinal)
+                    };
+                    fields.push((
+                        u32::try_from(field).map_err(|_| mismatch("field overflow"))?,
+                        item,
+                    ));
+                }
+                fields
+            }
+            ConstructorForm::Record { fields, .. } => {
+                if ordinals.len() != fields.len() {
+                    return Err(transaction("record pattern field resolution differs").into());
+                }
+                ordinals.iter().copied().zip(fields.iter()).collect()
+            }
+        };
+        match target {
+            PatternTarget::Constructor { variant, .. } => {
+                self.constructor(goal, variant, &fields, next)
+            }
+            PatternTarget::ConstructorTemplate { template, .. } => {
+                self.template_constructor(goal, slot, template, &fields, next)
+            }
+            _ => Err(transaction("pattern constructor target changed during search").into()),
+        }
+    }
     fn solve_inner(&mut self, goal: &Goal<'_>, next: &Next<'_, '_>) -> Result<bool, SearchFailure> {
         match goal.node {
             PatternNode::Wildcard => self.proceed(next),
@@ -570,7 +725,9 @@ impl<'s> Search<'s> {
                     match self.target(*slot)? {
                         PatternTarget::Refused(error) => return Err(error.clone().into()),
                         PatternTarget::Initializer(identity) => {
-                            return Err(SearchFailure::Initializer(*identity));
+                            return Err(SearchFailure::Prepare(PatternDemand::Initializer(
+                                *identity,
+                            )));
                         }
                         PatternTarget::Binding => {}
                         PatternTarget::Constant(value) => {
@@ -581,7 +738,13 @@ impl<'s> Search<'s> {
                             shape: crate::frontend::types::FieldShape::Unit,
                             ..
                         } => return self.constructor(goal, variant, &[], next),
-                        PatternTarget::Constructor { .. } => {
+                        PatternTarget::ConstructorTemplate { template, .. }
+                            if template.shape == crate::frontend::types::FieldShape::Unit =>
+                        {
+                            return self.template_constructor(goal, *slot, template, &[], next);
+                        }
+                        PatternTarget::ConstructorTemplate { .. }
+                        | PatternTarget::Constructor { .. } => {
                             return Err(mismatch(&format!(
                                 "pattern identifier `{written}` names a tuple or record constructor"
                             ))
@@ -857,78 +1020,9 @@ impl<'s> Search<'s> {
                     next,
                 )
             }
-            PatternNode::Constructor { slot, form } => match (self.target(*slot)?, form) {
-                (PatternTarget::Refused(error), _) => Err(error.clone().into()),
-                (PatternTarget::Initializer(identity), _) => {
-                    Err(SearchFailure::Initializer(*identity))
-                }
-                (PatternTarget::Constant(value), ConstructorForm::Path) => {
-                    self.constant(goal, *value, next)
-                }
-                (PatternTarget::Constructor { variant, shape, .. }, ConstructorForm::Path) => {
-                    if *shape != crate::frontend::types::FieldShape::Unit {
-                        return Err(
-                            mismatch("path pattern names a tuple or record constructor").into()
-                        );
-                    }
-                    self.constructor(goal, variant, &[], next)
-                }
-                (
-                    PatternTarget::Constructor { variant, shape, .. },
-                    ConstructorForm::Tuple { items, rest },
-                ) => {
-                    if *shape != crate::frontend::types::FieldShape::Tuple {
-                        return Err(mismatch(
-                            "tuple-struct pattern names a unit or record constructor",
-                        )
-                        .into());
-                    }
-                    let arity = variant.fields().len();
-                    let fixed = items.len();
-                    let before = match rest {
-                        Some(rest) if fixed <= arity => *rest as usize,
-                        None if fixed == arity => fixed,
-                        _ => {
-                            return Err(mismatch(
-                                "tuple-struct pattern arity differs from its constructor",
-                            )
-                            .into());
-                        }
-                    };
-                    let mut fields = Vec::with_capacity(fixed);
-                    for (ordinal, item) in items.iter().enumerate() {
-                        let field = if ordinal < before {
-                            ordinal
-                        } else {
-                            arity - (fixed - ordinal)
-                        };
-                        fields.push((
-                            u32::try_from(field).map_err(|_| mismatch("field overflow"))?,
-                            item,
-                        ));
-                    }
-                    self.constructor(goal, variant, &fields, next)
-                }
-                (
-                    PatternTarget::Constructor {
-                        variant, ordinals, ..
-                    },
-                    ConstructorForm::Record { fields, .. },
-                ) => {
-                    if ordinals.len() != fields.len() {
-                        return Err(transaction("record pattern field resolution differs").into());
-                    }
-                    let fields = ordinals
-                        .iter()
-                        .copied()
-                        .zip(fields.iter())
-                        .collect::<Vec<_>>();
-                    self.constructor(goal, variant, &fields, next)
-                }
-                (PatternTarget::Binding, _) | (PatternTarget::Constant(_), _) => {
-                    Err(mismatch("pattern path does not name a constructor of this form").into())
-                }
-            },
+            PatternNode::Constructor { slot, form } => {
+                self.named_constructor(goal, *slot, form, next)
+            }
             PatternNode::Or(alternatives) => {
                 for alternative in alternatives.iter() {
                     let matched = self.solve(

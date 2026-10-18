@@ -7,6 +7,18 @@ use crate::core::{
 #[path = "pattern_match.rs"]
 pub(crate) mod matcher;
 
+/// Preparation requested by one actually reached non-consuming pattern goal.
+/// It carries source/type facts, never a pattern evaluator or guest value.
+#[derive(Debug)]
+pub enum PatternDemand {
+    Initializer(crate::core::digest::Digest),
+    Nominal {
+        slot: u32,
+        ty: crate::runtime::shape::TypeId,
+        source: crate::traits::term::TyTerm,
+    },
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum DefaultBindingMode {
     Move,
@@ -118,4 +130,3 @@ impl PatternContext {
         })
     }
 }
-

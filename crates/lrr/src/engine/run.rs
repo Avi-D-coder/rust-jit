@@ -3774,9 +3774,30 @@ impl RunMachine {
             };
             match outcome {
                 StepOutcome::Dispatch => {}
-                StepOutcome::Initializer(identity) => {
-                    self.demand_initializer(identity, false);
-                }
+                StepOutcome::PatternPrepare {
+                    owner,
+                    tree,
+                    demand,
+                } => match demand {
+                    crate::vm::pattern::PatternDemand::Initializer(identity) => {
+                        self.demand_initializer(identity, false);
+                    }
+                    crate::vm::pattern::PatternDemand::Nominal { slot, ty, source } => {
+                        match self
+                            .prepare_reached_pattern_nominal(db, owner, &tree, slot, ty, &source)
+                        {
+                            QueryPoll::Ready(Ok(())) => {}
+                            QueryPoll::Ready(Err(error)) => {
+                                if self.frame.has_source_constant_activation() {
+                                    return self.fail_source_constant(error);
+                                }
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        }
+                    }
+                },
                 StepOutcome::Call {
                     action,
                     site,

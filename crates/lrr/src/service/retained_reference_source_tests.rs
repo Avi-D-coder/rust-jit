@@ -626,6 +626,21 @@ fn generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editio
                 panic!()
             };
             let boundary = discovery.generated_body_macro_boundary(unit).unwrap();
+            // The same actual output cannot acquire a boundary in another
+            // source world merely because its completion epoch matches.
+            let mut foreign_seal = unit.seal.clone();
+            foreign_seal.unit_graph =
+                crate::core::digest::Digest::of_bytes(b"foreign generated source world");
+            let (foreign, _) = crate::expand::generated_syntax::GeneratedSyntaxInput::prepare(
+                unit.items.record_input(),
+                unit.scope.clone(),
+                unit.cfg.clone(),
+                foreign_seal,
+                unit.producer_origin.clone(),
+                unit.included_source.clone(),
+            )
+            .unwrap();
+            assert!(discovery.generated_body_macro_boundary(&foreign).is_err());
             let body_input = db.input(&InputKey::DefinitionBody(definition)).unwrap();
             let InputValue::DefinitionBody(body) = body_input.as_ref() else {
                 panic!()

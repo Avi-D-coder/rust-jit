@@ -1792,13 +1792,16 @@ fn prepare(
     // an actual associated equality, e.g. K::Value = Option<V>. Consume only
     // those declaration equations; this does not validate unrelated bounds.
     let inferred_equations = if let (Some(store), Some(body)) = (store, callee.body()) {
-        let proof =
-            match super::associated_equations::constrain(db, &body.key(), signature, &mut symbolic)
-            {
-                QueryPoll::Ready(Ok(proof)) => proof,
-                QueryPoll::Ready(Err(error)) => return Err(error),
-                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
-            };
+        let proof = match super::associated_equations::constrain(
+            db,
+            &super::associated_equations::EquationOwner::DeclaredBody(body.key()),
+            signature,
+            &mut symbolic,
+        ) {
+            QueryPoll::Ready(Ok(inference)) => inference.guard,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+        };
         if proof.is_some() {
             for parameter in &signature.generics {
                 if parameter.kind != crate::syntax::signatures::GenericKind::Type {

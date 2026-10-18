@@ -520,3 +520,226 @@ fn main() {
         "65535\n65536\n65534\n65533\n65532\n65530\n65529\n65537\n",
     );
 }
+
+fn cold_associated_source(branch: &str, route: u8) -> String {
+    // Reuse the unchanged upstream declarations; adaptations stay here.
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-struct-field-numbered.rs"
+    );
+    let (declarations, _) = ORIGINAL.split_once("pub fn main()").unwrap();
+    let operation = format!("if true {{ 0xffffffff }} else {{ {branch} }}");
+    let (macros, body) = match route {
+        0 => (
+            String::new(),
+            format!("let value = {operation}; assert!(value > 0);"),
+        ),
+        1 => (
+            format!("macro_rules! emit {{ () => {{ {operation} }}; }}"),
+            "let value = emit!(); assert!(value > 0);".into(),
+        ),
+        2 => (
+            format!(
+                "macro_rules! emit {{ () => {{ {operation} }}; }} macro_rules! wrapper {{ () => {{ emit!() }}; }}"
+            ),
+            "let value = wrapper!(); assert!(value > 0);".into(),
+        ),
+        3 => (String::new(), format!("assert!(({operation}) > 0);")),
+        _ => unreachable!(),
+    };
+    format!(
+        "{declarations}\nfn main() {{ let node: Node<i32> = Node(1, Some(22)); {macros} {body} }}"
+    )
+}
+
+#[test]
+fn cold_associated_result_keeps_unentered_source_calls_cold() {
+    for edition in [2015, 2018, 2021, 2024] {
+        for route in 0..4 {
+            for branch in ["0_u32", "foo(&node).unwrap()"] {
+                let source = cold_associated_source(branch, route);
+                match run("cold-associated-result", &source, edition) {
+                    Ok(StandaloneOutcome::Completed(report)) => {
+                        assert_eq!(report.output.stdout, "")
+                    }
+                    Ok(StandaloneOutcome::Panicked(report)) => panic!(
+                        "edition {edition}, route {route}, branch {branch}: {:?}",
+                        report.panic
+                    ),
+                    Ok(_) => panic!(
+                        "edition {edition}, route {route}, branch {branch}: unexpected outcome"
+                    ),
+                    Err(error) => {
+                        panic!("edition {edition}, route {route}, branch {branch}: {error}")
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn cold_associated_type_goal_retains_selected_source_without_callee_preparation() {
+    use crate::{
+        core::digest::StableEncode,
+        db::{
+            dependency::{InputKey, InputValue},
+            key::QueryKey,
+            memo::Database,
+            poll::QueryPoll,
+            provider::SyntaxProvider,
+            value::QueryValue,
+        },
+        frontend::{
+            associated_equations::EquationOwner, binding_constraints::BindingConstraintState,
+            callables::CallSelection,
+        },
+        ir::{op::PrimitiveType, pc::Phase},
+        source::manifest::Namespace,
+        syntax::body_index::{ExpressionKind, NodeRole},
+    };
+    fn ready<T>(poll: QueryPoll<T>) -> T {
+        match poll {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => panic!("cold source goal: {error:?}"),
+            QueryPoll::NeedInput(input) => panic!("cold source goal input: {input:?}"),
+        }
+    }
+    for edition in [2015, 2018, 2021, 2024] {
+        for branch in ["0_u32", "foo(&node).unwrap()"] {
+            let temp = Temp::new("cold-associated-type-goal");
+            let root = temp.0.join("main.rs");
+            std::fs::write(&root, cold_associated_source(branch, 0)).unwrap();
+            let profile = ProfileIdentity {
+                edition,
+                ..ProfileIdentity::current()
+            };
+            let (prepared, view, sources, mut snapshot) = capture_with(
+                &root,
+                false,
+                edition,
+                &super::ExternCrates::default(),
+                crate::source::embedded_crates::standard_facade_crates(&profile),
+                None,
+            )
+            .unwrap()
+            .0;
+            let (compiler, prepared, view, sources) =
+                crate::cli::compile_inputs::PreparedCompileInputs::prepare(
+                    &root, prepared, view, sources,
+                )
+                .unwrap();
+            let mut db = Database::default();
+            db.trace.detailed = true;
+            prepared.publish(&mut db).unwrap();
+            db.begin_expansion_epoch(1).unwrap();
+            crate::cli::type_preparation::prepare(
+                &compiler,
+                &mut db,
+                &view,
+                &sources,
+                &mut snapshot,
+                None,
+            )
+            .unwrap();
+            let mut discovery =
+                crate::expand::source_discovery::SourceDiscovery::new_deferred_imports(
+                    sources,
+                    view.outline().root_scope.clone(),
+                    Namespace::Value,
+                    view.selection().outline.crate_key,
+                    1,
+                )
+                .unwrap()
+                .with_declarative_compiler(
+                    compiler.environment_identity(),
+                    crate::expand::source_declarative::engine_version(),
+                    compiler.catalog.clone(),
+                )
+                .unwrap();
+            compiler
+                .discover_diagnostic(&mut discovery, &mut db, &mut snapshot)
+                .unwrap();
+            discovery.publish(&mut db).unwrap();
+            let CallSelection::Source(main) = ready(discovery.entry_function(&mut db, "main"))
+            else {
+                panic!("main source selection")
+            };
+            let main =
+                crate::cli::retained_entry::prepare(&mut db, &discovery, &view, "main", main)
+                    .unwrap();
+            let body = main.body().unwrap().key();
+            let plan = ready(db.prepare_source_local_plan(&discovery, &[&view], &body));
+            let source = plan.context().source();
+            let literal = source
+                .index()
+                .nodes()
+                .iter()
+                .find(|node| {
+                    node.role == NodeRole::Expression(ExpressionKind::Literal)
+                        && source
+                            .parsed()
+                            .entered_node_syntax(source.body(), source.index(), node.id)
+                            .unwrap()
+                            .is_some_and(|syntax| syntax.text().to_string() == "0xffffffff")
+                })
+                .expect("actual reached literal");
+            let foo = view
+                .outline()
+                .items
+                .iter()
+                .find(|item| item.def_key.declared_name == "foo")
+                .unwrap();
+            let definition = foo.def_key.fingerprint();
+            let cold_body = foo.body.as_ref().unwrap().key();
+            assert!(
+                db.input(&InputKey::BodyEnvironment(cold_body.clone()))
+                    .is_none()
+            );
+            assert_eq!(
+                db.trace.truncated, 0,
+                "initial cold Type proof trace incomplete"
+            );
+            assert!(!db.trace.events.iter().any(|event| match &event.key {
+                QueryKey::BodyStructure(body) | QueryKey::SourceLocalPlan(body) =>
+                    body.definition == definition,
+                QueryKey::Thunk(pc) | QueryKey::PatternPlan(pc) => pc.body.definition == definition,
+                _ => false,
+            }));
+            // Scope the diagnostic trace to this metadata demand. The complete
+            // trace above also covers preparation before that demand.
+            db.trace.events.clear();
+            db.trace.truncated = 0;
+            db.trace.detailed = true;
+            let selected = ready(db.fetch(
+                &SyntaxProvider,
+                QueryKey::BindingConstraints(source.index().pc(literal.id, Phase::Entry).unwrap()),
+            ));
+            let QueryValue::BindingConstraints(goal) = selected.value.as_ref() else {
+                panic!("binding constraint variant")
+            };
+            assert_eq!(
+                goal.state(),
+                BindingConstraintState::Resolved(PrimitiveType::U32),
+                "edition {edition}, branch {branch}"
+            );
+            assert!(db.input(&InputKey::BodyEnvironment(cold_body)).is_none());
+            assert_eq!(db.trace.truncated, 0, "cold Type proof trace incomplete");
+            assert!(!db.trace.events.iter().any(|event| match &event.key {
+                QueryKey::BodyStructure(body) | QueryKey::SourceLocalPlan(body) =>
+                    body.definition == definition,
+                QueryKey::Thunk(pc) | QueryKey::PatternPlan(pc) => pc.body.definition == definition,
+                _ => false,
+            }));
+            if branch.starts_with("foo") {
+                assert!(db.trace.events.iter().any(|event| matches!(&event.key,
+                    QueryKey::AssociatedEquations(key) if key.definition == definition
+                        && matches!(&key.owner, EquationOwner::SelectedCall(_)))));
+            }
+            // Metadata rows are allowed; they are not executable body owners.
+            assert!(matches!(
+                db.input(&InputKey::DefinitionBody(definition)).as_deref(),
+                Some(InputValue::DefinitionBody(_))
+            ));
+        }
+    }
+}

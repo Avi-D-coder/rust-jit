@@ -5,16 +5,18 @@
 //! path, tuple-struct or record pattern names a constructor (or a constant).
 //! The reached dispatcher answers each written name of a retained tree from
 //! the run's completed namespace graph through the same routes ordinary code
-//! uses: `CallResolver` Value lookups and `select_nominal_constructor` (shared
-//! with value paths and constructor calls) for unit/tuple constructors, the
-//! Type namespace for record constructors. Constants retain their actual
+//! uses: `CallResolver` Value lookups for unit/tuple constructors, the Type
+//! namespace for record constructors and the shared typed constructor binder
+//! for the selected declaration. Constants retain their actual
 //! declaration identity; the matcher demands an ordinary VM initializer only
 //! if it reaches that target. Cold alternatives remain unevaluated.
 use super::*;
 use crate::{
     frontend::{
         names::NameLookup,
-        nominal_constructors::{NominalConstructorTarget, bind_constructor},
+        nominal_constructors::{
+            ConstructorPreparation, NominalConstructorTarget, prepare_constructor,
+        },
         pattern_names::{PatternSelection, pattern_declaration, select_pattern_name},
         types::FieldShape,
     },
@@ -42,17 +44,23 @@ impl RunMachine {
                 .skip(self.frame.resume_operation_index())
                 .find_map(|op| match op {
                     Op::Pattern {
-                        operation: PatternOperation::Test { tree, .. },
-                    } => Some(Arc::clone(tree)),
+                        operation: PatternOperation::Test { owner, tree, .. },
+                    } => Some((*owner, Arc::clone(tree))),
                     _ => None,
                 }),
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        let Some(tree) = tree else {
+        let Some((owner, tree)) = tree else {
             return QueryPoll::Ready(Ok(()));
         };
         if tree.names().is_empty() {
             return QueryPoll::Ready(Ok(()));
+        }
+        if let Err(error) =
+            self.frame
+                .require_pattern_nominals_current(owner, &tree, db, &self.store)
+        {
+            return QueryPoll::Ready(Err(error));
         }
         let pc = self.frame.pc().clone();
         let mut targets = match self.pattern_names.get(&pc) {
@@ -121,6 +129,69 @@ impl RunMachine {
         }
         self.frame.set_pattern_names(pc, targets);
         QueryPoll::Ready(Ok(()))
+    }
+    /// The single matcher supplied this goal after identity/variant testing.
+    /// Resolve only its actual application through the shared pure member
+    /// service; no pattern traversal or guest operand evaluation happens here.
+    pub(super) fn prepare_reached_pattern_nominal(
+        &mut self,
+        db: &mut Database,
+        owner: crate::ir::pc::NodeId,
+        tree: &crate::syntax::pattern_tree::PatternTree,
+        slot: u32,
+        ty: crate::runtime::shape::TypeId,
+        source: &crate::traits::term::TyTerm,
+    ) -> QueryPoll<()> {
+        use crate::frontend::nominal_member_goals::{NominalMemberKey, NominalMemberSelection};
+        let template = match self.frame.pattern_constructor_template(tree, slot) {
+            Ok(template) => template,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let goal_source = source;
+        let source = self.frame.bound_view(goal_source, &self.store);
+        let crate::traits::term::TyTerm::Nominal(definition, arguments) = &source else {
+            return QueryPoll::Ready(Err(unsupported(
+                "reached nominal pattern requires actual source arguments".into(),
+            )));
+        };
+        if *definition != template.identity {
+            return QueryPoll::Ready(Err(call_fault(
+                "pattern goal source/selected definition differs",
+            )));
+        }
+        let key = NominalMemberKey {
+            pc: PcKey {
+                phase: 0,
+                ..self.frame.pc().clone()
+            },
+            definition: *definition,
+            arguments: arguments.clone(),
+            selection: NominalMemberSelection::Variant(template.name.clone()),
+        };
+        let (member, guard) = match self.nominal_member(db, key.clone(), Some(ty)) {
+            QueryPoll::Ready(Ok(member)) => member,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::NominalMember(member) = member.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("pattern nominal member outcome differs")));
+        };
+        let Some(variant) = member.variant().filter(|_| member.key() == &key) else {
+            return QueryPoll::Ready(Err(call_fault(
+                "pattern nominal member key/variant differs",
+            )));
+        };
+        QueryPoll::Ready(self.frame.prepare_pattern_nominal(
+            owner,
+            tree,
+            slot,
+            ty,
+            goal_source,
+            &source,
+            Arc::clone(variant),
+            guard,
+            &self.store,
+        ))
     }
     fn resolve_pattern_name(
         &mut self,
@@ -278,10 +349,22 @@ impl RunMachine {
         identity: crate::core::digest::Digest,
         variant: Option<crate::frontend::names::EnumVariantDefinition>,
     ) -> QueryPoll<PatternTarget> {
-        let bound = if matches!(name.form, NameForm::Record(_)) {
-            // Record structs/variants live only in the Type namespace.
-            let sources: Vec<_> = self.sources.iter().collect();
-            let target = match &variant {
+        let sources: Vec<_> = self.sources.iter().collect();
+        let definition = variant
+            .as_ref()
+            .map_or(identity, |variant| variant.enumeration);
+        let local = match NominalConstructorTarget::local(
+            db,
+            definition,
+            variant.as_ref().map(|variant| variant.name.as_str()),
+        ) {
+            QueryPoll::Ready(Ok(local)) => local,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let target = match local {
+            Some(target) => target,
+            None => match &variant {
                 Some(variant) => match NominalConstructorTarget::variant(&sources, variant) {
                     Ok(target) => target,
                     Err(error) => return QueryPoll::Ready(Err(error)),
@@ -293,33 +376,43 @@ impl RunMachine {
                     Some(item) => NominalConstructorTarget::structure(item),
                     None => {
                         return QueryPoll::Ready(Err(unsupported(
-                            "record pattern type is outside the source catalogue".into(),
+                            "pattern constructor is outside the source catalogue".into(),
                         )));
                     }
                 },
-            };
-            let Some(graph) = &self.graph else {
-                return QueryPoll::Ready(Err(call_fault("record pattern requires names")));
-            };
-            match bind_constructor(db, graph, &sources, &target) {
-                QueryPoll::Ready(Ok(bound)) => bound,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            }
-        } else {
-            match self.select_nominal_constructor(db, &name.spelling) {
-                QueryPoll::Ready(Ok(Some(bound))) => bound,
-                QueryPoll::Ready(Ok(None)) => {
-                    return QueryPoll::Ready(Err(unsupported(format!(
-                        "pattern path `{}` does not select a constructor",
-                        name.spelling
-                    ))));
-                }
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            }
+            },
         };
-        self.pattern_constructor_target(db, name, bound, variant.as_ref().map(|v| v.name.as_str()))
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Err(call_fault("pattern constructor requires names")));
+        };
+        match prepare_constructor(db, graph, &sources, &target) {
+            QueryPoll::Ready(Ok(ConstructorPreparation::Ready(bound))) => self
+                .pattern_constructor_target(
+                    db,
+                    name,
+                    bound,
+                    variant.as_ref().map(|variant| variant.name.as_str()),
+                ),
+            QueryPoll::Ready(Ok(ConstructorPreparation::Pending(template))) => {
+                let ordinals = match self.pattern_field_ordinals(
+                    db,
+                    name,
+                    template.identity,
+                    template.name.as_deref(),
+                    template.shape,
+                ) {
+                    QueryPoll::Ready(Ok(ordinals)) => ordinals,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                QueryPoll::Ready(Ok(PatternTarget::ConstructorTemplate {
+                    template: Arc::new(template),
+                    ordinals,
+                }))
+            }
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
     }
     /// The matcher target of a bound constructor, mapping written record
     /// fields to declaration ordinals through its declaration's schema.
@@ -330,12 +423,34 @@ impl RunMachine {
         bound: crate::frontend::nominal_constructors::BoundConstructor,
         variant_name: Option<&str>,
     ) -> QueryPoll<PatternTarget> {
+        let ordinals = match self.pattern_field_ordinals(
+            db,
+            name,
+            bound.variant().identity(),
+            variant_name,
+            bound.shape(),
+        ) {
+            QueryPoll::Ready(Ok(ordinals)) => ordinals,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Ok(PatternTarget::Constructor {
+            variant: Arc::clone(bound.variant()),
+            shape: bound.shape(),
+            ordinals,
+        }))
+    }
+    fn pattern_field_ordinals(
+        &self,
+        db: &mut Database,
+        name: &PatternName,
+        definition: crate::core::digest::Digest,
+        variant_name: Option<&str>,
+        shape: FieldShape,
+    ) -> QueryPoll<Box<[u32]>> {
         let ordinals: Box<[u32]> = match &name.form {
             NameForm::Record(written) => {
-                let schema = match db.fetch(
-                    &SyntaxProvider,
-                    QueryKey::TypeSchema(bound.variant().identity()),
-                ) {
+                let schema = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(definition)) {
                     QueryPoll::Ready(Ok(schema)) => schema,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -355,7 +470,7 @@ impl RunMachine {
                         .iter()
                         .position(|declared| declared.name.as_deref() == Some(field.as_str()));
                     let position = position.or_else(|| {
-                        (bound.shape() == FieldShape::Tuple)
+                        (shape == FieldShape::Tuple)
                             .then(|| field.parse::<usize>().ok())
                             .flatten()
                             .filter(|index| *index < recipe.fields.len())
@@ -372,10 +487,6 @@ impl RunMachine {
             }
             _ => Box::new([]),
         };
-        QueryPoll::Ready(Ok(PatternTarget::Constructor {
-            variant: Arc::clone(bound.variant()),
-            shape: bound.shape(),
-            ordinals,
-        }))
+        QueryPoll::Ready(Ok(ordinals))
     }
 }

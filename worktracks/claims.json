@@ -1344,11 +1344,14 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root actual generated source boundary/sourceworld correspondence. V18 origincontrol fails seal-only mismatch; creator aligns with existing same_unit and Boundary currentness graph+epoch contract, retains full ownseal and actual source/record checks. Foreignworldnegative and stdmacro context source-only pending. No authority bypass or fullmatrixclosure.",
+      "scope": "Root shared selected declaration-kind metadata for ordinary values/patterns plus actual generated source correspondence and failure-only hygiene diagnostics. V20 crosses fullseal refusal but originNkind/hygiene/ancestrysetup fail. Sixleaf successor independently source-reviewed, uncompiled; no authority bypass or architecture closure.",
       "paths": [
         "crates/lrr/src/frontend/names.rs",
         "crates/lrr/src/expand/source_discovery.rs",
-        "crates/lrr/src/service/retained_reference_source_tests.rs"
+        "crates/lrr/src/service/retained_reference_source_tests.rs",
+        "crates/lrr/src/frontend/pattern_names.rs",
+        "crates/lrr/src/service/retained_body_tests.rs",
+        "crates/lrr/src/syntax/lexical_hygiene.rs"
       ],
       "issue": null,
       "pull_request": null,
@@ -1386,7 +1389,9 @@
         "crates/lrr/src/engine/run_pattern_names.rs",
         "crates/lrr/src/vm/pattern_match.rs",
         "crates/lrr/src/vm/frame_pattern_engine.rs",
-        "crates/lrr/src/vm/step.rs"
+        "crates/lrr/src/vm/step.rs",
+        "crates/lrr/src/vm/pattern.rs",
+        "crates/lrr/src/cli/reached_pattern_nominal_tests.rs"
       ],
       "issue": null,
       "pull_request": null,

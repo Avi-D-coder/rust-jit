@@ -1,0 +1,693 @@
+{
+  "candidate": "V20",
+  "status": "exactcompiledsource; sevenprimaryruntimepasses plusseparatelyfailedstructuralwitnesses andarchitecturecontrols",
+  "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e",
+  "head": "3feaeb81822666664570f54c47892c597e42dede",
+  "compiled_source_leaves": 3327,
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "seconds": 29.246,
+      "terminal": "ebf17b/0",
+      "binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a"
+      }
+    },
+    "cli": {
+      "exit": 0,
+      "seconds": 23.596,
+      "terminal": "8c007f/0",
+      "binary": {
+        "path": "target/debug/lrr",
+        "sha256": "41f21f8c8f423887da28d712ad70270e1545a5936a11f6b07325d115d2b55162"
+      }
+    }
+  },
+  "source_frozen_through_both_builds": true,
+  "binaries_unchanged_after_runtime": true,
+  "runtime_scope": "SealedcompiledV20binaries, sourcewritersreleasedafterbothbuilds. Owning2015 unchangedimportedoriginals+actual17718auxbyteverifiedpinnedcheckout/manifest. No rustcguestexecution/fullinventory/fullfixtureclaim.",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "stock_terminal": "81f22f/0",
+  "stock_roots": 7,
+  "stock_runtime_passes": 7,
+  "stock": [
+    {
+      "path": "tests/ui/associated-types/associated-types-enum-field-named.rs",
+      "sha256": "a63942e3b573cb8932cce79381a1574b96f3e6e33768797d2edc0639a4126b82",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-enum-field-named.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "265ca88ba90c3e4f2b32fd8d5cca8c20d0302f95d9cc9ee955a96dbfde578558"
+      ],
+      "exit": 0,
+      "seconds": 9.503,
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 429,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 19,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 303,
+        "vm_outcomes": 303
+      },
+      "operations_completed": 404,
+      "prior_v18_runtime_pass": false,
+      "saved_v16_outcome": "fault"
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-struct-field-numbered.rs",
+      "sha256": "546cac38874fc4cacbd44096766955220c1e1e571c841bb0b0e9eee7306a8794",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-struct-field-numbered.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "73758bf0b9730803aa2c85e2a955ddcd3d1d700d21cdd7498d7b919d32f0ddc0"
+      ],
+      "exit": 0,
+      "seconds": 4.974,
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 414,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 14,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 268,
+        "vm_outcomes": 268
+      },
+      "operations_completed": 322,
+      "prior_v18_runtime_pass": true,
+      "saved_v16_outcome": "fault"
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-struct-field-named.rs",
+      "sha256": "3a7374d317e6975b76c9aa6f9817f89c09d96157a25536199b5a03e9e2e181df",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-struct-field-named.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "8035b66d05fa42b4849a807087597a088d6ee059e445001422ca07fbb22113a2"
+      ],
+      "exit": 0,
+      "seconds": 5.516,
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 416,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 12,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 270,
+        "vm_outcomes": 270
+      },
+      "operations_completed": 324,
+      "prior_v18_runtime_pass": true,
+      "saved_v16_outcome": "fault"
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-ref-in-struct-literal.rs",
+      "sha256": "bf427a591d40311671cc1cee67eb5426e3bcf7e6d1e2996e83144ca031ce403e",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-ref-in-struct-literal.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "ecbf139039b5ec096c2201594db96e5b1809b70f41b0bc67145f7b249cbe74f0"
+      ],
+      "exit": 0,
+      "seconds": 3.95,
+      "stdout": "stock-3.stdout",
+      "stderr": "stock-3.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 100,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 72,
+        "vm_outcomes": 72
+      },
+      "operations_completed": 78,
+      "prior_v18_runtime_pass": true,
+      "saved_v16_outcome": "fault"
+    },
+    {
+      "path": "tests/ui/consts/issue-17718.rs",
+      "sha256": "12efc2f4f1636ee274e09c1d4afd6486b02f2f8c822aec344f8569319fe84601",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass",
+        "//@ aux-build:issue-17718-aux.rs"
+      ],
+      "aux": [
+        {
+          "path": "tests/ui/consts/auxiliary/issue-17718-aux.rs",
+          "sha256": "0337a60e8e1be0f17a795a78e20e765663144c027fd036db115d425e9ce149db",
+          "edition": 2015
+        }
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "--extern",
+        "issue_17718_aux=/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/auxiliary/issue-17718-aux.rs",
+        "--extern-edition",
+        "issue_17718_aux=2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-17718.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "1bf0ebcfec2e5203f1a6ec12751f1d552ef68533e1ff339fbd99802407ae5541"
+      ],
+      "exit": 0,
+      "seconds": 9.771,
+      "stdout": "stock-4.stdout",
+      "stderr": "stock-4.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 9600,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 50,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 4654,
+        "vm_outcomes": 4654
+      },
+      "operations_completed": 2076,
+      "prior_v18_runtime_pass": true,
+      "saved_v16_outcome": "fault"
+    },
+    {
+      "path": "tests/ui/consts/const-meth-pattern.rs",
+      "sha256": "fd0b81f01ca445e6f6290765a591507e7b0235b3f341e2e92039fe215ad98280",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const-meth-pattern.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "1e292363acd74de0c4d214b6408677368e02db9076aad9bbd879552613192b37"
+      ],
+      "exit": 0,
+      "seconds": 3.837,
+      "stdout": "stock-5.stdout",
+      "stderr": "stock-5.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 28,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 18,
+        "vm_outcomes": 18
+      },
+      "operations_completed": 27,
+      "prior_v18_runtime_pass": true,
+      "saved_v16_outcome": "fault"
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+      "sha256": "9dce5eb0efe1907b2f19703697952721eda352a53365bb9f725486c29614f881",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "6ec321b76f2f69bd4f4dd1bcf44516a406f999ba504d8faaf33d1f0ccf50a3f0"
+      ],
+      "exit": 0,
+      "seconds": 7.079,
+      "stdout": "stock-6.stdout",
+      "stderr": "stock-6.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 962,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 49,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 722,
+        "vm_outcomes": 722
+      },
+      "operations_completed": 886,
+      "prior_v18_runtime_pass": true,
+      "saved_v16_outcome": "fault"
+    }
+  ],
+  "additional_terminal": "8712c8/0",
+  "additional_evidence_directory": "additional-const-witnesses",
+  "additional": [
+    {
+      "path": "tests/ui/consts/match-const-fn-structs.rs",
+      "sha256": "358758e1ba2b8663d6fc61896c0016979dbd0791f7716fb35f4a39369813cfb1",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/match-const-fn-structs.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "93bf28f440eea6025eee229f5d68f80823a5f705d571c8c61f9b9aa4955b3e18"
+      ],
+      "exit": 2,
+      "seconds": 4.558,
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "non-scalar constant pattern requires structural constant integration"
+      },
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 37,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 2,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 27,
+        "vm_outcomes": 26
+      },
+      "operations_completed": null,
+      "prior_v18_runtime_pass": null,
+      "saved_v16_outcome": "fault"
+    },
+    {
+      "path": "tests/ui/consts/const-struct.rs",
+      "sha256": "ea2ef00a878f74349c68eb5db9f3026befe26b02bac48fbc3eadaf24dc58978b",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const-struct.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "446a5fb4051f028eddd0eb1c442ab8b5acdcbe15e62fa22b558c529e5a6cd775"
+      ],
+      "exit": 2,
+      "seconds": 5.113,
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "record update requires bound base-field transfer"
+      },
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 527,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 1,
+        "vm_dispatches": 341,
+        "vm_outcomes": 340
+      },
+      "operations_completed": null,
+      "prior_v18_runtime_pass": null,
+      "saved_v16_outcome": "fault"
+    }
+  ],
+  "additional_runtime_passes": 0,
+  "combined_selected_roots": 9,
+  "combined_runtime_passes": 7,
+  "new_distinct_runtime_passes_vs_v18_and_saved_v16": [
+    "tests/ui/associated-types/associated-types-enum-field-named.rs"
+  ],
+  "controls_terminal": "54ad0e/0",
+  "controls_actual_bodies": 9,
+  "controls_passed": 6,
+  "controls": [
+    {
+      "selector": "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+      "exit": 101,
+      "seconds": 35.536,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+      "exit": 101,
+      "seconds": 0.178,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+      "exit": 0,
+      "seconds": 28.466,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+      "exit": 101,
+      "seconds": 11.245,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+      "exit": 0,
+      "seconds": 4.479,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::reached_pattern_constants_share_vm_storage_and_leave_alternatives_cold",
+      "exit": 0,
+      "seconds": 16.629,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::initializer_tests::reached_pattern_constants_share_vm_storage_and_leave_alternatives_cold",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+      "exit": 0,
+      "seconds": 0.512,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-6.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+      "exit": 0,
+      "seconds": 0.092,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-7.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    },
+    {
+      "selector": "cli::callable_value_tests::callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins",
+      "exit": 0,
+      "seconds": 17.059,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-8.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::callable_value_tests::callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "31c07d3d8e14be847db33c05911921d7b399c4e4d0a12efbc6278359f1beb22a",
+      "source_sha256": "18f193dc916e43f77d5088666145052a511f9ab141f231daecbdf9308793f15e"
+    }
+  ],
+  "full_fixture_passes_claimed": 0,
+  "positive_evidence": [
+    "NewnamedENUMrunpasswholemainnowcomplete19sourcecalls303dispatches429classifiedops/cleanupclosed; actualRedirectrecursion,Rootfieldbindings,finalassertcomplete.",
+    "Prior6mainpasses retained(numbered,named,refliteral,properaux17718,freshconstmeth,viawhere).",
+    "PurecoldEqTypegoalcontrolactualbodyPASS28.466s: ordinary2branchesx4editionsU32, actualSelectedCallEqquery, nofooBodyEnvironment/BodyStructure/SourceLocalPlan/Thunk/PatternPlan beforeafter completequerytrace.",
+    "NewnestednominalcontrolPASS4.479s owning2021: mixedW<u8>/W<u32>nestedsourceapplications, genericactivations, ordinary/user/wrapper/stdmacro nesting, scrutinee count3. Broadereditionmatrixnotexecuted.",
+    "Patterncold/range/ORguardretryexactonce,recordmemo/epoch,sourceDerefretainedPASS."
+  ],
+  "failures": [
+    "Generatedorigincontrol0FAIL2015 after35.536s: patternnameNnamesValueitemnotconstant/constructor. Previoussealguardfaultnotobservednow; nofulloriginpassorwhichunlabeledsourcevariantclaim. Source-reviewfirstcause select_pattern_name usesoriginalsourceoutline onlyforitemkind despiteactualgeneratednameselection.",
+    "Ancestrycontrol1FAIL0.178s duringexistingretained_body_tests helper setup228: actualarithmeticdiscoveryrequiresunhandledphase. Newwronggraphassertionnotreached; cannotclaimpositiveornegativeauthorityacceptance.",
+    "Coldruntimeorigincontrol3FAIL11.245s actualedition2015route1branch0_u32: LRR-E-MACRO-OUTPUT generatednamecrossesorlacksitstokencontextattachment. Plainrouteadvancesbut4originmatrixnotcomplete; failurebeforefoobranch.",
+    "Extra match-const-fn-structs FAILnon-scalarconstantpatternrequiresstructuralconstantintegration,2calls27dispatches37classifiedops. ActualA_1arm293..306,PCfa46fc89307d651e966f5d64cbeb753574db18e2b78ffd49144e375990f8773c,Body15cf010a97293797584a7c3a52798c1bb566f2ee2d647aa8a370c82e8de57652/c918335f943646a893337b846f11f474f6b4266f8b43b28adaa63e07c8fba472rel23..34.",
+    "Extra const-struct FAILrecordupdaterequiresboundbase-fieldtransfer,0calls341dispatches527classifiedops. Actualwinitializer550..566,PCa2b71dcdee7139316501b15b282e52dfd997172e151bf4b69730b1cdb35616f6,Bodydf4298f158c7086de00530aca0d901d59bb15272cfc6ee1041c7a30e99493b2f/8d706120f11b163b69fa03b4e73bd806eda9fd905f26c93301315e5c38780548rel0..16; mainwread671..672. Earlierassertionspartialtraversalnotruntimepass."
+  ],
+  "source_reviews": [
+    "../generated-boundary-world-independent-review-next.json",
+    "../cold-selected-call-equation-independent-review-next.json",
+    "../reached-pattern-nominal-independent-review-next.json",
+    "../v20-mechanical-independent-source-review.json"
+  ],
+  "prior_failed_compile": "../candidate-v19/report.json",
+  "holds": [
+    "No architecture/task/interpreter/JITgateclosure:3actualcontrolsfailed,2requiredruntimefeaturesblocked.",
+    "No refreshedsuitecount. Namedenum1NEWdistinct plusprior13evernew gives14targetedevernew, notcurrentglobalaggregate.",
+    "i128/u128 andearlierunaffectedstockpassesstayonV17/V9etc originalsource/binaryreceipts, notrerunV20.",
+    "Fullsource/currentness/NeedInput/constregionnominal/structuralconstantstorage/cache/fulloriginandeditionmatrix remainheld."
+  ],
+  "raw_report_sha256": "62ac63c71daf3e5cc0ab9fb41a07bede384ba84bff87c2b7906a52efcc5dbd37",
+  "acceptance_limits": [
+    "Seven primary originals pass; two additional unchanged originals fail. This is scoped runtime evidence, not full fixture or refreshed suite acceptance.",
+    "Six of nine controls pass; generated declaration classification, source attachment and authority setup remain incomplete.",
+    "V19 compile failure remains separately preserved. Successor source is uncompiled. Guest JIT is still blocked."
+  ]
+}

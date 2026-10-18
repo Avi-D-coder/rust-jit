@@ -215,6 +215,9 @@ fn generated_constant_patterns_use_the_same_vm_initializer_demand() {
     "#;
     for source in [
         BODY.to_owned(),
+        "const fn value() -> i32 { 7 } const N: i32 = value();
+         fn main() { assert!(matches!(7_i32, N)); let _same = N; }"
+            .to_owned(),
         format!("macro_rules! emit {{ ($($i:item)*) => {{ $($i)* }}; }} emit! {{ {BODY} }}"),
         format!(
             "macro_rules! emit {{ ($($i:item)*) => {{ $($i)* }}; }} macro_rules! wrap {{ ($($i:item)*) => {{ emit! {{ $($i)* }} }}; }} wrap! {{ {BODY} }}"
