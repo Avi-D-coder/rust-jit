@@ -15,13 +15,100 @@ impl RunMachine {
         contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
     ) -> QueryPoll<()> {
         match self.installed.prepared_constructor(db, id) {
-            Ok(Some(source)) => QueryPoll::Ready(
-                self.frame
-                    .prepare_installed_nominal_constructor(source, &mut self.store),
-            ),
+            Ok(Some(source)) => self.prepare_installed_record_template(db, source),
             Ok(None) => self.prepare_constructor(db, contexts),
             Err(error) => QueryPoll::Ready(Err(error)),
         }
+    }
+    /// Specialization supplies only the reached declaration's Type inputs;
+    /// record syntax, mapping and executable operands stay in the retained plan.
+    fn prepare_installed_record_template(
+        &mut self,
+        db: &mut Database,
+        source: crate::frontend::prepared_constructors::PreparedRecordConstructorHandle,
+    ) -> QueryPoll<()> {
+        use crate::frontend::nominal_member_goals::{NominalMemberKey, NominalMemberSelection};
+        use crate::traits::term::{GenericArg, TyTerm};
+        if source.prepared().bound().is_some() {
+            return QueryPoll::Ready(
+                self.frame
+                    .prepare_installed_nominal_constructor(source, &mut self.store),
+            );
+        }
+        let Some((_, variant_name)) = source.prepared().pending_target() else {
+            return QueryPoll::Ready(Err(call_fault("record pending source target absent")));
+        };
+        let definition = source.prepared().mapping().definition();
+        let context = match self.constructor_context(self.frame.pc().node) {
+            Ok(context) => context,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let arguments = match context {
+            Some(TyTerm::Nominal(owner, args)) if owner == definition => args,
+            _ if !source.prepared().arguments().is_empty() => {
+                let mut args = Vec::new();
+                for argument in source.prepared().arguments() {
+                    let Some(argument) = argument else {
+                        return QueryPoll::Ready(Err(unsupported(
+                            "record Type argument hole requires actual field/result inference",
+                        )));
+                    };
+                    args.push(GenericArg::Type(
+                        self.frame.bound_view(argument.source(), &self.store),
+                    ));
+                }
+                args
+            }
+            _ => {
+                return QueryPoll::Ready(Err(unsupported(
+                    "record template requires its reached nominal Type context",
+                )));
+            }
+        };
+        let key = NominalMemberKey {
+            pc: PcKey {
+                phase: 0,
+                ..self.frame.pc().clone()
+            },
+            definition,
+            arguments,
+            selection: NominalMemberSelection::Variant(variant_name.map(str::to_owned)),
+        };
+        if let Some(cached) = self.nominal.records.get(&key) {
+            if cached.same_source(&source) {
+                if let Err(error) = cached.require_current(db) {
+                    return QueryPoll::Ready(Err(error));
+                }
+                return QueryPoll::Ready(
+                    self.frame
+                        .prepare_installed_nominal_constructor(cached.clone(), &mut self.store),
+                );
+            }
+        }
+        let (member, guard) = match self.nominal_member(db, key.clone(), None) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::NominalMember(member) = member.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault(
+                "record template specialization outcome differs",
+            )));
+        };
+        let Some(variant) = member.variant() else {
+            return QueryPoll::Ready(Err(call_fault(
+                "record template specialization variant absent",
+            )));
+        };
+        let source = match source.specialize(variant, guard) {
+            Ok(source) => source,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        self.nominal.records.insert(key, source.clone());
+        QueryPoll::Ready(
+            self.frame
+                .prepare_installed_nominal_constructor(source, &mut self.store),
+        )
     }
     // Unsealed legacy/structural entries retain their existing route until
     // their common immutable preparation is delivered. Prepared record entries
@@ -127,7 +214,11 @@ impl RunMachine {
                     // same ordinary source the original route checks. A body
                     // declared by a published generated unit (macro or derive
                     // item output) is located the same way.
-                    let retained = match db.input(&InputKey::DefinitionSource(caller)).as_deref().cloned() {
+                    let retained = match db
+                        .input(&InputKey::DefinitionSource(caller))
+                        .as_deref()
+                        .cloned()
+                    {
                         Some(InputValue::DefinitionSource(key)) => {
                             db.input(&InputKey::RetainedSyntax(key.content)).is_some()
                                 || db.generated_declaration_unit(&key).is_some()
@@ -172,7 +263,10 @@ impl RunMachine {
                             self.frame.set_source_view(result, Some(array.clone()))?;
                             written = Some(array);
                         }
-                        match written.as_ref().map(|term| self.store.intern_structural_term(term)) {
+                        match written
+                            .as_ref()
+                            .map(|term| self.store.intern_structural_term(term))
+                        {
                             Some(Ok(Some(ty))) => ty,
                             Some(Err(error)) => return Err(error),
                             _ => {
@@ -192,13 +286,14 @@ impl RunMachine {
                 if let Some(written) = self.frame.source_view(result)? {
                     // Regions are not data: the descriptor's `'static`-erased
                     // references meet the source's own regions.
-                    let same_type = |reached: Option<crate::traits::term::TyTerm>,
-                                     written: &crate::traits::term::TyTerm| {
-                        reached.is_some_and(|reached| {
-                            crate::frontend::signature_subst::erase_regions(&reached)
-                                == crate::frontend::signature_subst::erase_regions(written)
-                        })
-                    };
+                    let same_type =
+                        |reached: Option<crate::traits::term::TyTerm>,
+                         written: &crate::traits::term::TyTerm| {
+                            reached.is_some_and(|reached| {
+                                crate::frontend::signature_subst::erase_regions(&reached)
+                                    == crate::frontend::signature_subst::erase_regions(written)
+                            })
+                        };
                     let exact = same_type(self.store.descriptor_source_term(ty), &written);
                     let matches = match written {
                         crate::traits::term::TyTerm::Primitive(primitive) => {

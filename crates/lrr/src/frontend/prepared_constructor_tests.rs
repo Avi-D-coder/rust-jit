@@ -53,7 +53,11 @@ fn stock_records_share_one_binding_between_query_and_repeated_installed_lookup_a
                 assert_eq!(prepared.key(), &key);
                 assert_eq!(prepared.plan_identity(), prepared.plan().fingerprint());
                 assert_eq!(
-                    prepared.bound().mapping().constructor(),
+                    prepared
+                        .bound()
+                        .expect("fully bound source fixture")
+                        .mapping()
+                        .constructor(),
                     prepared.plan_identity()
                 );
                 assert!(

@@ -48,6 +48,12 @@ pub(super) struct NominalRunFacts {
     /// source catalogue publication supplies a retained BodyEnvironment.
     legacy_positional:
         BTreeMap<(PcKey, crate::core::digest::Digest), crate::frontend::types::BoundNominalField>,
+    /// Ready record activations retain the same source plan and immutable
+    /// specialized mapping once per actual generic application.
+    pub(super) records: BTreeMap<
+        crate::frontend::nominal_member_goals::NominalMemberKey,
+        crate::frontend::prepared_constructors::PreparedRecordConstructorHandle,
+    >,
     /// Current pure member specializations; runtime representation is an
     /// additional guard key, never part of the memo request.
     members: BTreeMap<
@@ -215,17 +221,21 @@ impl RunMachine {
     }
     /// An admitted context is source identity; a runtime descriptor may supply
     /// its actual closed arguments after the declaration has been selected.
-    fn constructor_context(
+    pub(super) fn constructor_context(
         &self,
         site: u32,
     ) -> Result<Option<crate::traits::term::TyTerm>, Diagnostic> {
-        let slot = self
+        let node = self
             .frame
             .body
             .nodes()
             .get(site as usize)
-            .and_then(|node| node.value)
-            .ok_or_else(|| call_fault("constructor context result slot absent"))?;
+            .ok_or_else(|| call_fault("constructor context node outside body index"))?;
+        // Constructor classification is also probed for valid synthetic
+        // operator/pattern sites. They need no expression result context.
+        let Some(slot) = node.value else {
+            return Ok(None);
+        };
         if let Some(source) = self.frame.source_view_ref(slot)? {
             return Ok(Some(self.frame.bound_view(source, &self.store)));
         }
@@ -235,7 +245,7 @@ impl RunMachine {
             .and_then(|ty| self.store.descriptor_source_term(ty)))
     }
 
-    fn nominal_member(
+    pub(super) fn nominal_member(
         &mut self,
         db: &mut Database,
         key: crate::frontend::nominal_member_goals::NominalMemberKey,
@@ -284,12 +294,6 @@ impl RunMachine {
                 if definition == target.identity() =>
             {
                 arguments
-                    .into_iter()
-                    .filter_map(|argument| match argument {
-                        crate::traits::term::GenericArg::Type(term) => Some(term),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
             }
             _ => Vec::new(),
         };
@@ -365,13 +369,7 @@ impl RunMachine {
         if *owner != definition {
             return QueryPoll::Ready(Err(call_fault("nominal field source declaration differs")));
         }
-        let arguments = args
-            .iter()
-            .filter_map(|arg| match arg {
-                crate::traits::term::GenericArg::Type(term) => Some(term.clone()),
-                _ => None,
-            })
-            .collect();
+        let arguments = args.clone();
         let runtime = match self.frame.place_type(base, &self.store) {
             Ok(ty) => ty,
             Err(error) => return QueryPoll::Ready(Err(error)),

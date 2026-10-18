@@ -1,0 +1,17 @@
+{
+  "status": "source reviewed bounded callback representation join, validation pending",
+  "path": "crates/lrr/src/frontend/types.rs",
+  "sha256": "8c5a0ea57c01a538d2a86eddf0953b0187a0cb835b510b0bfeea491f879aa601",
+  "witness": "V13 unchanged viawhere G::<Struct> failed at record45calls597dispatch; concrete normalized T::Item discarded by written-only Compound consumers",
+  "symbols": [
+    "SchemaTypeName::into_field_type",
+    "SchemaNames::bind_variant_with",
+    "SchemaNames::bind_field_with"
+  ],
+  "removed": "duplicated Compound written-only branches and separate Name result conversion; one admitted concrete/Written/pending conversion serves all field consumers",
+  "all_eight": "No parser/evaluator, macro-specific behavior, context inference, generated-source refusal, pattern change, source planning, namespace scans, or body copies. Source producer/normalizer and currentness inputs unchanged. Only ordinary callback representation consumed uniformly. Runtime materialization/construction/projection/cleanup remain ordinary VM.",
+  "holds": [
+    "no runtime pass from source review",
+    "all previous architecture matrix/selected-target lookup closure/legacy environment/open generic record/opaque associated-result holds remain"
+  ]
+}

@@ -275,6 +275,19 @@ impl SchemaTypeName {
             written: None,
         })
     }
+    /// One admitted field Type result, independent of the syntax that produced
+    /// it. A compound projection can normalize to a concrete primitive too.
+    fn into_field_type(self) -> Result<NominalFieldType, NominalBindingDemand> {
+        if let Some(concrete) = self.concrete {
+            Ok(NominalFieldType::Concrete(concrete))
+        } else if let Some(written) = self.written {
+            Ok(NominalFieldType::Compound(std::sync::Arc::new(written)))
+        } else {
+            Err(self
+                .name
+                .map_or(NominalBindingDemand::TypeRecipe, NominalBindingDemand::Name))
+        }
+    }
     /// A compound field Type the metadata graph cannot select.
     fn deferred() -> Self {
         Self {
@@ -906,49 +919,25 @@ impl<'a> SchemaNames<'a> {
                     crate::ir::op::PrimitiveType::Unit,
                 ))?
             } else {
-                let compound = match lookup(FieldTypeQuery::Compound(recipe)) {
+                match lookup(FieldTypeQuery::Compound(recipe)) {
                     crate::db::poll::QueryPoll::Ready(result) => result?,
                     crate::db::poll::QueryPoll::NeedInput(input) => {
                         return Ok(crate::db::poll::QueryPoll::NeedInput(input));
                     }
-                };
-                let Some(written) = compound.written else {
-                    return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                        NominalBinding::Deferred {
-                            field,
-                            demand: NominalBindingDemand::TypeRecipe,
-                        },
-                    )));
-                };
-                let field = NominalFieldType::Compound(std::sync::Arc::new(written));
-                field_bytes = field_bytes
-                    .checked_add(field.heap_bytes()?)
-                    .ok_or_else(schema_limit)?;
-                fields.push(field);
-                continue;
-            };
-            let Some(concrete) = resolved.concrete else {
-                if let Some(written) = resolved.written {
-                    let field = NominalFieldType::Compound(std::sync::Arc::new(written));
-                    field_bytes = field_bytes
-                        .checked_add(field.heap_bytes()?)
-                        .ok_or_else(schema_limit)?;
-                    fields.push(field);
-                    continue;
                 }
-                return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                    NominalBinding::Deferred {
-                        field,
-                        demand: NominalBindingDemand::Name(resolved.name.ok_or_else(|| {
-                            schema_fault("deferred field lookup lacks its demand")
-                        })?),
-                    },
-                )));
+            };
+            let field_type = match resolved.into_field_type() {
+                Ok(field_type) => field_type,
+                Err(demand) => {
+                    return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                        NominalBinding::Deferred { field, demand },
+                    )));
+                }
             };
             field_bytes = field_bytes
-                .checked_add(concrete.heap_bytes()?)
+                .checked_add(field_type.heap_bytes()?)
                 .ok_or_else(schema_limit)?;
-            fields.push(NominalFieldType::Concrete(concrete));
+            fields.push(field_type);
         }
         let discriminants = if self.definition.item_kind == crate::source::manifest::ItemKind::Enum
         {
@@ -1171,55 +1160,21 @@ impl<'a> SchemaNames<'a> {
         ) {
             SchemaTypeName::metadata(SignatureName::Primitive(crate::ir::op::PrimitiveType::Unit))?
         } else {
-            let compound = match lookup(FieldTypeQuery::Compound(recipe)) {
+            match lookup(FieldTypeQuery::Compound(recipe)) {
                 crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
                 crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
                 crate::db::poll::QueryPoll::NeedInput(request) => {
                     return Ok(crate::db::poll::QueryPoll::NeedInput(request));
                 }
-            };
-            let Some(written) = compound.written else {
-                return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                    NominalFieldBinding::Deferred {
-                        field,
-                        demand: NominalBindingDemand::TypeRecipe,
-                    },
-                )));
-            };
-            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                NominalFieldBinding::Ready(BoundNominalField {
-                    identity: self.schema.definition,
-                    definition: self.definition.as_ref().clone(),
-                    schema: self.schema.fingerprint(),
-                    variant,
-                    field,
-                    field_type: NominalFieldType::Compound(std::sync::Arc::new(written)),
-                }),
-            )));
+            }
         };
-        let Some(source_type) = resolved.concrete else {
-            if let Some(written) = resolved.written {
+        let field_type = match resolved.into_field_type() {
+            Ok(field_type) => field_type,
+            Err(demand) => {
                 return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                    NominalFieldBinding::Ready(BoundNominalField {
-                        identity: self.schema.definition,
-                        definition: self.definition.as_ref().clone(),
-                        schema: self.schema.fingerprint(),
-                        variant,
-                        field,
-                        field_type: NominalFieldType::Compound(std::sync::Arc::new(written)),
-                    }),
+                    NominalFieldBinding::Deferred { field, demand },
                 )));
             }
-            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
-                NominalFieldBinding::Deferred {
-                    field,
-                    demand: NominalBindingDemand::Name(
-                        resolved.name.ok_or_else(|| {
-                            schema_fault("deferred field lookup lacks its demand")
-                        })?,
-                    ),
-                },
-            )));
         };
         Ok(crate::db::poll::QueryPoll::Ready(Ok(
             NominalFieldBinding::Ready(BoundNominalField {
@@ -1228,10 +1183,11 @@ impl<'a> SchemaNames<'a> {
                 schema: self.schema.fingerprint(),
                 variant,
                 field,
-                field_type: NominalFieldType::Concrete(source_type),
+                field_type,
             }),
         )))
     }
+
     /// Bind the written field order after the caller has selected this exact
     /// source schema. Shape errors precede any selected field type demand.
     /// A deferred type binding retains its field map but cannot start a guard.
@@ -1325,6 +1281,13 @@ impl<'a> SchemaNames<'a> {
                 NominalConstructorBinding::Ready(BoundNominalConstructor { variant, mapping })
             }
             NominalBinding::Deferred { field, demand } => NominalConstructorBinding::Deferred {
+                variant: self
+                    .schema
+                    .variants
+                    .iter()
+                    .position(|variant| variant.name.as_deref() == name)
+                    .and_then(|index| u32::try_from(index).ok())
+                    .ok_or_else(schema_limit)?,
                 mapping,
                 field,
                 demand,
@@ -1360,7 +1323,7 @@ impl BoundRecordFields {
     pub fn definition(&self) -> Digest {
         self.definition
     }
-    fn heap_bytes(&self) -> Option<usize> {
+    pub(crate) fn heap_bytes(&self) -> Option<usize> {
         self.written_to_declaration
             .capacity()
             .checked_mul(std::mem::size_of::<u32>())
@@ -1381,6 +1344,31 @@ pub struct BoundNominalConstructor {
     mapping: BoundRecordFields,
 }
 impl BoundNominalConstructor {
+    /// Rejoin an already checked record map with its exact specialized variant.
+    /// Neither an arbitrary same-shaped variant nor a different schema may join.
+    pub(crate) fn rejoin(
+        mapping: &BoundRecordFields,
+        selected_variant: u32,
+        variant: &BoundNominalVariant,
+    ) -> Result<Self, Diagnostic> {
+        if mapping.definition() != variant.identity()
+            || mapping.schema() != variant.schema()
+            || selected_variant != variant.variant()
+            || mapping.written_to_declaration().len() != variant.fields().len()
+            || mapping
+                .written_to_declaration()
+                .iter()
+                .any(|field| *field as usize >= variant.fields().len())
+        {
+            return Err(schema_fault(
+                "record map/specialized source variant differs",
+            ));
+        }
+        Ok(Self {
+            mapping: mapping.clone(),
+            variant: variant.clone(),
+        })
+    }
     pub fn variant(&self) -> &BoundNominalVariant {
         &self.variant
     }
@@ -1408,6 +1396,7 @@ impl StableEncode for BoundNominalConstructor {
 pub enum NominalConstructorBinding {
     Ready(BoundNominalConstructor),
     Deferred {
+        variant: u32,
         mapping: BoundRecordFields,
         field: Option<u32>,
         demand: NominalBindingDemand,

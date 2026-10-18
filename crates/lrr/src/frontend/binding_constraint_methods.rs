@@ -236,6 +236,9 @@ impl<'a> Component<'a> {
                 | Some(SourceOperator::CompoundShift) => {
                     Some(TyTerm::Primitive(PrimitiveType::Unit))
                 }
+                Some(operation @ (SourceOperator::Arithmetic | SourceOperator::Shift)) => {
+                    ready!(self.builtin_binary_type(db, node, operation))
+                }
                 _ => None,
             },
             FactKind::Integer | FactKind::Float => Some(open()),
@@ -389,6 +392,71 @@ impl<'a> Component<'a> {
             _ => None,
         }))
     }
+    /// The exact result of builtin primitive operators. Nominal operands
+    /// need their selected operator's declared Output, never a guessed
+    /// left-operand Type.
+    fn builtin_binary_type(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        operation: SourceOperator,
+    ) -> QueryPoll<Option<TyTerm>> {
+        fn head(mut term: &TyTerm) -> &TyTerm {
+            while let TyTerm::Ref(_, _, inner) = term {
+                term = inner;
+            }
+            term
+        }
+        let fact = match self.fact(node) {
+            Ok(fact) => fact,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let (Some(left), Some(right)) = (fact.operand(0), fact.operand(1)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let (Some(left_type), Some(right_type)) = (
+            ready!(self.expression_type(db, left)),
+            ready!(self.expression_type(db, right)),
+        ) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let (left_type, right_type) = (head(&left_type), head(&right_type));
+        let result = match (operation, left_type, right_type) {
+            (SourceOperator::Arithmetic, TyTerm::Primitive(left), TyTerm::Primitive(right))
+                if left == right
+                    && (super::family(*left).is_some() || *left == PrimitiveType::Bool) =>
+            {
+                Some(*left)
+            }
+            (SourceOperator::Arithmetic, TyTerm::Primitive(primitive), other)
+            | (SourceOperator::Arithmetic, other, TyTerm::Primitive(primitive))
+                if *other == open() && super::family(*primitive).is_some() =>
+            {
+                let operand = if matches!(left_type, TyTerm::Primitive(_)) {
+                    right
+                } else {
+                    left
+                };
+                ready!(self.literal_origin(db, operand))
+                    .filter(|(_, floating)| Some(*floating) == super::family(*primitive))
+                    .map(|_| *primitive)
+            }
+            (SourceOperator::Shift, TyTerm::Primitive(left), TyTerm::Primitive(right))
+                if super::family(*left) == Some(false) && super::family(*right) == Some(false) =>
+            {
+                Some(*left)
+            }
+            (SourceOperator::Shift, TyTerm::Primitive(primitive), other)
+                if super::family(*primitive) == Some(false) && *other == open() =>
+            {
+                ready!(self.literal_origin(db, right))
+                    .filter(|(_, floating)| !*floating)
+                    .map(|_| *primitive)
+            }
+            _ => None,
+        };
+        QueryPoll::Ready(Ok(result.map(TyTerm::Primitive)))
+    }
     /// `result` with the callee's type parameters that the call writes
     /// explicitly (`f::<u8>(..)`) replaced by those Types.
     pub(super) fn explicit_arguments(
@@ -426,6 +494,7 @@ impl<'a> Component<'a> {
             goal.selection(),
             crate::frontend::entered_call_goals::EnteredCallSelection::Pending(_)
                 | crate::frontend::entered_call_goals::EnteredCallSelection::Binding(_)
+                | crate::frontend::entered_call_goals::EnteredCallSelection::Value(_)
         ) {
             return QueryPoll::Ready(Ok(result));
         }

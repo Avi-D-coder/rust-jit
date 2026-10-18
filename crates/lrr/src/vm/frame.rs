@@ -194,7 +194,7 @@ impl ConstructionMapping {
     fn fields(&self) -> &[u32] {
         match self {
             Self::Legacy(mapping) => mapping,
-            Self::Prepared(source) => source.prepared().bound().mapping().written_to_declaration(),
+            Self::Prepared(source) => source.prepared().mapping().written_to_declaration(),
         }
     }
     fn heap_bytes(&self) -> Option<usize> {
@@ -203,8 +203,9 @@ impl ConstructionMapping {
                 .len()
                 .checked_mul(std::mem::size_of::<u32>())?
                 .checked_add(3 * std::mem::size_of::<usize>()),
-            // Retained outer query allocation is charged by its actual query
-            // pin. The handle itself is inline in the frame's slot storage.
+            // Source metadata belongs to the retained query; any ready Type
+            // specialization is shared with the run's record cache. This
+            // frame owns only the inline handle, not another field-list copy.
             Self::Prepared(_) => Some(0),
         }
     }
@@ -3697,7 +3698,7 @@ impl Frame {
         // descriptors are read under this activation, never from a prior call
         // frame cached at the same source PC.
         if !prepared.arguments().is_empty() {
-            let bound = prepared.bound().variant();
+            let bound = source.ready_bound()?.variant();
             if prepared.arguments().len() != bound.type_parameters() as usize {
                 return Err(Diagnostic::new(
                     "LRR-E-TYPE-CONTEXT",
@@ -3735,7 +3736,7 @@ impl Frame {
         let (guard, hints, partial) = self.prepare_nominal_hints(
             prepared.plan(),
             prepared.plan_identity(),
-            prepared.bound(),
+            source.ready_bound()?,
             store,
         )?;
         self.constructor_start = Some(PreparedConstructor {
@@ -3846,7 +3847,7 @@ impl Frame {
         if let ConstructorBinding::PreparedNominal(source) = &facts.binding {
             self.require_nominal_result_source(
                 guard,
-                source.prepared().bound().variant().identity(),
+                source.ready_bound()?.variant().identity(),
                 true,
             )?;
         }
@@ -3895,7 +3896,7 @@ impl Frame {
             }
             ConstructorBinding::PreparedNominal(source) => {
                 let mapping = ConstructionMapping::Prepared(source.clone());
-                let bound = source.prepared().bound();
+                let bound = source.ready_bound()?;
                 let total = self.preflight_nominal_mapping(guard, bound, 0)?;
                 self.begin_nominal_with_mapping(guard, bound, mapping, total, store)?
             }

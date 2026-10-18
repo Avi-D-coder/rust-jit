@@ -7,9 +7,39 @@
 //! of its own and asks the calling frame for the wrapper's leading type
 //! parameters by position.
 use super::*;
-use crate::{syntax::signatures::GenericKind, traits::term::ParamKey};
+use crate::{
+    syntax::signatures::GenericKind,
+    traits::term::{ParamKey, TyTerm},
+};
+
+pub(crate) struct FrameResultContext<'a> {
+    declared: Option<&'a TyTerm>,
+    bound: Result<Option<TypeId>, Diagnostic>,
+    written: Option<TypeId>,
+}
+impl std::fmt::Debug for FrameResultContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FrameResultContext")
+            .field("declared", &self.declared)
+            .field("bound", &self.bound)
+            .field("written", &self.written)
+            .finish()
+    }
+}
 
 impl Frame {
+    /// Failure-report facts only; this grants no result-context authority
+    /// and performs no query, source preparation or descriptor publication.
+    pub(crate) fn diagnostic_result_context(
+        &self,
+        store: &GuestStore,
+    ) -> Option<FrameResultContext<'_>> {
+        self.context.as_ref().map(|context| FrameResultContext {
+            declared: context.definition().result_symbolic.as_ref(),
+            bound: context.bound_result_descriptor_find(store),
+            written: context.written_result_descriptor(),
+        })
+    }
     /// The runtime descriptors bound to the first `count` type parameters
     /// (lifetimes and const parameters are skipped) of this frame's function,
     /// in declaration order.

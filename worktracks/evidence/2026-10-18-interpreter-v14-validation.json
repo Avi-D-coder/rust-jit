@@ -1,0 +1,20 @@
+{
+  "candidate": "V14",
+  "status": "compile failure; no runtime validation",
+  "head": "85d7d64eafbbbcd8c87ee783b641e0a076bbaa04",
+  "source_sha256": "7f1e836855639f412235b4c896c3a11055853cec7148e61bdf79a9d2f917713e",
+  "compiled_source_leaves": 3325,
+  "source_unchanged_through_compile": true,
+  "lib": {
+    "exit": 101,
+    "seconds": 9.25,
+    "terminal": "8b41b7/101",
+    "diagnostic": "E0616 engine/run_trait_calls.rs489 private Frame.context access in added diagnostic",
+    "log": "compile.log"
+  },
+  "cli": "unexecuted",
+  "controls": [],
+  "stock": [],
+  "previous_binaries": "V13 retained; no V14 runtime acceptance",
+  "raw_report_sha256": "1f0b036920f1125aeb1eedb25530a8b2390e198015365cd887c5a36fddc2161f"
+}

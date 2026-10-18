@@ -7,7 +7,9 @@
 use super::{Component, ConstraintDemand, fault};
 use crate::{
     core::digest::Digest,
-    db::{key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+    db::{
+        key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue,
+    },
     ir::pc::NodeId,
     traits::term::{GenericArg, TyTerm},
 };
@@ -37,8 +39,9 @@ impl Component<'_> {
         let QueryValue::SourceLocalPlan(plan) = plan.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("constraint source plan variant differs")));
         };
-        let name =
-            crate::syntax::constructors::range_inclusive_new_path(plan.context().source().index().profile());
+        let name = crate::syntax::constructors::range_inclusive_new_path(
+            plan.context().source().index().profile(),
+        );
         let members = match environment.member_index() {
             Ok(members) => members,
             Err(error) => return QueryPoll::Ready(Err(error)),
@@ -93,9 +96,8 @@ impl Component<'_> {
         node: NodeId,
     ) -> QueryPoll<Option<TyTerm>> {
         match ready!(self.lang_function(db, node)) {
-            Some(function) => QueryPoll::Ready(Ok(
-                ready!(self.result_term(db, node, function)).map(|term| open_parameters(term, function))
-            )),
+            Some(function) => QueryPoll::Ready(Ok(ready!(self.result_term(db, node, function))
+                .map(|term| open_parameters(term, function)))),
             None => QueryPoll::Ready(Ok(None)),
         }
     }
@@ -114,9 +116,11 @@ fn open_parameters(term: TyTerm, definition: Digest) -> TyTerm {
                 })
                 .collect(),
         ),
-        TyTerm::Ref(region, mutable, inner) => {
-            TyTerm::Ref(region, mutable, Box::new(open_parameters(*inner, definition)))
-        }
+        TyTerm::Ref(region, mutable, inner) => TyTerm::Ref(
+            region,
+            mutable,
+            Box::new(open_parameters(*inner, definition)),
+        ),
         TyTerm::Slice(inner) => TyTerm::Slice(Box::new(open_parameters(*inner, definition))),
         TyTerm::Array(inner, length) => {
             TyTerm::Array(Box::new(open_parameters(*inner, definition)), length)

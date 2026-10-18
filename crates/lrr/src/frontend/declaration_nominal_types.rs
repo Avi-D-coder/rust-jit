@@ -201,10 +201,9 @@ impl SchemaNames<'_> {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let term = crate::frontend::associated_types::substitute(&term, bindings);
         let term = if crate::frontend::associated_types::contains_projection(&term) {
-            match crate::frontend::associated_types::normalize(
-                db, self.graph, sources, members, &term,
+            match crate::frontend::associated_types::normalize_template(
+                db, self.graph, sources, members, &term, bindings,
             ) {
                 QueryPoll::Ready(Ok(Some(term))) => term,
                 QueryPoll::Ready(Ok(None)) => {
@@ -216,6 +215,13 @@ impl SchemaNames<'_> {
         } else {
             term
         };
+        // Preserve the existing concrete primitive field representation;
+        // aliases and normalized projections have the same primitive identity.
+        if let TyTerm::Primitive(primitive) = &term {
+            return QueryPoll::Ready(SchemaTypeName::metadata(
+                super::super::signature_names::SignatureName::Primitive(*primitive),
+            ));
+        }
         let written = match self.written_field_type(db, sources, &term) {
             QueryPoll::Ready(Ok(written)) => written,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),

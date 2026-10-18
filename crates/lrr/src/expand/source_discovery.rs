@@ -10647,6 +10647,20 @@ impl SourceDiscovery {
                             }
                         }
                     }
+                    // Producer completion can release namespace frontiers after
+                    // the last import scheduling snapshot. A blocked import may
+                    // then be waiting on itself, so refresh at this settled
+                    // boundary before declaring the preparation incomplete.
+                    let current = unique_graph(&mut self.graph)?.resolve_imports()?;
+                    let progressed = current
+                        .resolved
+                        .iter()
+                        .any(|id| self.imports.resolved.binary_search(id).is_err());
+                    self.imports = current;
+                    if progressed {
+                        self.work.namespace_changed()?;
+                        continue;
+                    }
                     let diagnostic = self.attach_incomplete_source_origin(diagnostic, &blocked)?;
                     return Ok(SourceDiscoveryStep::Incomplete {
                         diagnostic,

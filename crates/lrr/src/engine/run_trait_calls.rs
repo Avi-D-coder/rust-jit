@@ -486,10 +486,13 @@ impl RunMachine {
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         let (true, Some(expected)) = (result_self, expected) else {
+            let result_context = self.frame.diagnostic_result_context(&self.store);
+            let slot_hint = result_slot.map(|slot| self.frame.hint(slot));
             return QueryPoll::Ready(Err(Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",
                 format!(
-                    "trait path call `{name}` needs its Self type from an argument or the expected result"
+                    "trait path call `{name}` needs its Self type from an argument or the expected result \
+                     (owning context {result_context:?}, result slot {result_slot:?}, hint {slot_hint:?})"
                 ),
             )));
         };

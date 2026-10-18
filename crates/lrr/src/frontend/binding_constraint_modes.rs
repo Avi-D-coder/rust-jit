@@ -51,14 +51,12 @@ fn fill_from(annotation: &TyTerm, initializer: &TyTerm) -> TyTerm {
                     .collect(),
             )
         }
-        (TyTerm::Tuple(left), TyTerm::Tuple(right)) if left.len() == right.len() => {
-            TyTerm::Tuple(
-                left.iter()
-                    .zip(right)
-                    .map(|(left, right)| fill_from(left, right))
-                    .collect(),
-            )
-        }
+        (TyTerm::Tuple(left), TyTerm::Tuple(right)) if left.len() == right.len() => TyTerm::Tuple(
+            left.iter()
+                .zip(right)
+                .map(|(left, right)| fill_from(left, right))
+                .collect(),
+        ),
         (TyTerm::Array(left, length), TyTerm::Array(right, _)) => {
             TyTerm::Array(Box::new(fill_from(left, right)), length.clone())
         }

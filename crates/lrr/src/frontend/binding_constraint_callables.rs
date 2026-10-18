@@ -15,8 +15,8 @@
 //! scope of the declaration that wrote them; nothing here guesses a Type. A
 //! part the service cannot state stays an unanswered goal.
 use super::{
-    Callee, Component, ConstraintDemand, Step, Via, fault, generics::parameter_paths, not_closed,
-    nominal::ConstructorSite,
+    Callee, Component, ConstraintDemand, Step, Via, fault, generics::parameter_paths,
+    nominal::ConstructorSite, not_closed,
 };
 use crate::{
     core::digest::Digest,
@@ -75,11 +75,10 @@ pub(super) fn fn_sugar(tokens: &[TokenRecipe]) -> Option<(Vec<&[TokenRecipe]>, &
         }
     }
     let close = close?;
-    let arguments: Vec<&[TokenRecipe]> =
-        super::generics::split(&tokens[at + 2..close], ",")
-            .into_iter()
-            .filter(|argument| !argument.is_empty())
-            .collect();
+    let arguments: Vec<&[TokenRecipe]> = super::generics::split(&tokens[at + 2..close], ",")
+        .into_iter()
+        .filter(|argument| !argument.is_empty())
+        .collect();
     let rest = &tokens[close + 1..];
     let result = match rest.first() {
         Some(arrow) if arrow.text == "->" => {
@@ -183,11 +182,9 @@ impl<'a> Component<'a> {
         let QueryValue::FunctionSignature(signature) = signature.as_ref() else {
             return QueryPoll::Ready(Err(fault("constraint callable signature differs")));
         };
-        let Some(parameter) = signature
-            .generics
-            .iter()
-            .find(|parameter| parameter.ordinal == key.ordinal && parameter.kind == GenericKind::Type)
-        else {
+        let Some(parameter) = signature.generics.iter().find(|parameter| {
+            parameter.ordinal == key.ordinal && parameter.kind == GenericKind::Type
+        }) else {
             return QueryPoll::Ready(Ok(None));
         };
         let mut candidates: Vec<&[TokenRecipe]> = vec![parameter.bounds.as_slice()];
@@ -245,7 +242,10 @@ impl<'a> Component<'a> {
                 _ => false,
             }
         };
-        let mut matching = signature.parameters.iter().filter(|parameter| written(parameter));
+        let mut matching = signature
+            .parameters
+            .iter()
+            .filter(|parameter| written(parameter));
         let (Some(parameter), None) = (matching.next(), matching.next()) else {
             return QueryPoll::Ready(Ok(None));
         };
@@ -509,8 +509,7 @@ impl<'a> Component<'a> {
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         for (position, argument) in operands.iter().enumerate().skip(offset) {
-            let (Some(argument), Ok(ordinal)) = (argument, u32::try_from(position - offset))
-            else {
+            let (Some(argument), Ok(ordinal)) = (argument, u32::try_from(position - offset)) else {
                 continue;
             };
             let Some(closure) = ready!(self.closure_of(db, *argument, 0)) else {

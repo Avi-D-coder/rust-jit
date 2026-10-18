@@ -71,6 +71,21 @@ pub(super) fn thunk(
     if !prepared.cacheable {
         return QueryPoll::Ready(Err(fault("source call dependencies are not retained")));
     }
+    if let Err(error) = goal.require_current(db) {
+        return QueryPoll::Ready(Err(error));
+    }
+    if goal.is_value_callee() {
+        return QueryPoll::Ready(
+            parsed
+                .initial_thunk_with_value_call_goal(body, index, pc, goal)
+                .map(|recipe| {
+                    Some(Provided {
+                        value: QueryValue::Thunk(Box::new(recipe)),
+                        cacheable: true,
+                    })
+                }),
+        );
+    }
     // Both admitted declaration kinds use the same indexed source-call path.
     // Qualified/value/pending paths retain their explicit safety boundaries.
     if !matches!(
@@ -78,9 +93,6 @@ pub(super) fn thunk(
         EnteredCallSelection::Local(_) | EnteredCallSelection::Module(_)
     ) {
         return QueryPoll::Ready(Ok(None));
-    }
-    if let Err(error) = goal.require_current(db) {
-        return QueryPoll::Ready(Err(error));
     }
     let mut entry = pc.clone();
     entry.phase = 0;

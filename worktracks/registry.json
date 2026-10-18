@@ -727,12 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V12 exact staged sourcea02f3317 bothbuildsPASS,5/7controlsPASS,0/6wholemainPASS. Known sourceDeref/viawhere regressions; held from integration. V11 compile101 retained. Corrective successors unstaged/unvalidated. Four gains belong to historical V9, no refreshed current total.",
+    "validation": "V15 exact source53e16d94 bothbuildsPASS,6/6controlsPASS,3/8affectedwholemainPASS: two NEW vs savedv16 plus viawhereRESTORED. Five others incomplete; successors unstaged/unvalidated. No refreshed current suite total.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 4,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 6,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "046bd18d453f327ea82efeab220f3d7b19273028",
+    "source_checkpoint_pushed": "85d7d64eafbbbcd8c87ee783b641e0a076bbaa04",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

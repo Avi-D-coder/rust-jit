@@ -794,10 +794,7 @@
         "crates/lrr/src/runtime/place.rs",
         "worktracks/04-calls-source-views/common-nominal-field-storage-handoff.md",
         "worktracks/evidence/2026-10-16-nominal-field-storage-source.json",
-        "crates/lrr/src/frontend/constructors.rs",
         "crates/lrr/src/frontend/source_types.rs",
-        "crates/lrr/src/frontend/types.rs",
-        "crates/lrr/src/engine/run_constructors.rs",
         "crates/lrr/src/frontend/module_aliases.rs",
         "crates/lrr/src/frontend/source_macro_routes.rs",
         "worktracks/04-calls-source-views/prepared-local-record-constructor-handoff.md",
@@ -1199,7 +1196,6 @@
         "crates/lrr/src/frontend/binding_constraint_observed.rs",
         "crates/lrr/src/frontend/prepared_binding_plan.rs",
         "crates/lrr/src/db/binding_constraint_thunk.rs",
-        "crates/lrr/src/syntax/thunks.rs",
         "crates/lrr/src/vm/frame_related_numeric.rs"
       ],
       "issue": null,
@@ -1208,7 +1204,8 @@
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
         "crates/lrr/src/ir/op.rs",
-        "crates/lrr/src/frontend/binding_constraints.rs"
+        "crates/lrr/src/frontend/binding_constraints.rs",
+        "crates/lrr/src/syntax/thunks.rs"
       ]
     },
     {
@@ -1307,7 +1304,6 @@
         "crates/lrr/src/vm/numeric.rs",
         "crates/lrr/src/vm/numeric_store.rs",
         "crates/lrr/src/vm/step.rs",
-        "crates/lrr/src/vm/frame.rs",
         "crates/lrr/src/vm/frame_operator_calls.rs",
         "crates/lrr/src/vm/frame_temporary_scopes.rs",
         "crates/lrr/src/vm/frame_string_literals.rs",
@@ -1319,7 +1315,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T08:57:28.443446+00:00",
+      "updated_at": "2026-10-18T10:28:02.996611+00:00",
       "review_after": "2026-10-18T08:57:28.443446+00:00"
     },
     {
@@ -1365,7 +1361,7 @@
       "owner": "/root/closure_callable_resume",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Shared argument-aware constructors/fields source candidate. V12 compilePASS but introduces sourceDeref/viawhere regressions, held. Corrective optional-context/projection-template/fullGenericArg successors unvalidated. No feature closure.",
+      "scope": "Shared argument-aware constructors/fields: V13 sourceDeref and alias controls restored, viawhere still regressed. Reviewed pending record activation and concrete/written callback join await V14. Frame record methods owned here; root DefinitionResult methods reserved by coordination. No feature closure.",
       "paths": [
         "crates/lrr/src/frontend/nominal_member_goals.rs",
         "crates/lrr/src/frontend/declaration_nominal_types.rs",
@@ -1382,11 +1378,16 @@
         "crates/lrr/src/service/expansion.rs",
         "crates/lrr/src/traits/term.rs",
         "crates/lrr/src/ir/op.rs",
-        "crates/lrr/src/frontend/associated_types.rs"
+        "crates/lrr/src/frontend/associated_types.rs",
+        "crates/lrr/src/frontend/prepared_constructors.rs",
+        "crates/lrr/src/frontend/types.rs",
+        "crates/lrr/src/engine/run_constructors.rs",
+        "crates/lrr/src/vm/frame.rs",
+        "crates/lrr/src/frontend/prepared_constructor_tests.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T09:44:05.987318+00:00",
+      "updated_at": "2026-10-18T10:28:02.996611+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00"
     },
     {
@@ -1403,12 +1404,37 @@
         "crates/lrr/src/syntax/parse_retained_tests.rs",
         "crates/lrr/src/traits/unify.rs",
         "crates/lrr/facade/alloc/string.rs",
-        "crates/lrr/src/frontend/binding_constraints.rs"
+        "crates/lrr/src/frontend/binding_constraints.rs",
+        "crates/lrr/src/frontend/binding_constraint_bounds.rs",
+        "crates/lrr/src/frontend/binding_constraint_callables.rs",
+        "crates/lrr/src/frontend/binding_constraint_deref.rs",
+        "crates/lrr/src/frontend/binding_constraint_iteration.rs",
+        "crates/lrr/src/frontend/binding_constraint_lang.rs",
+        "crates/lrr/src/frontend/binding_constraint_modes.rs",
+        "crates/lrr/src/engine/run_trait_calls.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T09:45:35.941918+00:00",
+      "updated_at": "2026-10-18T10:28:02.996611+00:00",
       "review_after": "2026-10-18T09:45:35.941918+00:00"
+    },
+    {
+      "id": "LOCAL-048",
+      "track": "WT04",
+      "item": "WT04-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "Actual const/static item callees use ordinary enteredValue selection+guard and existing value_call_thunk/VM initializer. Properaux17718 crosses prepV13 thenC3callfault; source-only successor. No alternative evaluator or full callable/E007 closure.",
+      "paths": [
+        "crates/lrr/src/frontend/entered_call_goals.rs",
+        "crates/lrr/src/db/entered_call_thunk.rs",
+        "crates/lrr/src/syntax/thunks.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-18T10:28:02.996611+00:00",
+      "review_after": "2026-10-18T10:24:05.894441+00:00"
     }
   ]
 }

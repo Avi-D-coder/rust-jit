@@ -647,7 +647,10 @@ impl<'a> Component<'a> {
         let QueryValue::BoundRecordConstructor(prepared) = prepared.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("constraint record constructor differs")));
         };
-        let variant = prepared.bound().variant().clone();
+        let Some(bound) = prepared.bound() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let variant = bound.variant().clone();
         self.constructed(db, &variant)
     }
     /// A call whose callee path selects a tuple struct or tuple variant.

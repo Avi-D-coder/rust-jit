@@ -15,11 +15,20 @@ use crate::{
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
+enum PreparedRecordBinding {
+    Ready(super::types::BoundNominalConstructor),
+    Pending {
+        mapping: super::types::BoundRecordFields,
+        variant: u32,
+        name: Option<String>,
+    },
+}
+#[derive(Debug, Clone)]
 pub struct PreparedRecordConstructor {
     key: PcKey,
     plan: ConstructorPlan,
     plan_identity: Digest,
-    bound: super::types::BoundNominalConstructor,
+    binding: PreparedRecordBinding,
     /// Actual final-segment Type arguments selected at indexed occurrences.
     /// Runtime parameter descriptors are read only by the owning activation.
     arguments: Box<[Option<super::explicit_type_arguments::ExplicitType>]>,
@@ -34,8 +43,25 @@ impl PreparedRecordConstructor {
     pub(crate) fn plan_identity(&self) -> Digest {
         self.plan_identity
     }
-    pub(crate) fn bound(&self) -> &super::types::BoundNominalConstructor {
-        &self.bound
+    pub(crate) fn bound(&self) -> Option<&super::types::BoundNominalConstructor> {
+        match &self.binding {
+            PreparedRecordBinding::Ready(bound) => Some(bound),
+            _ => None,
+        }
+    }
+    pub(crate) fn mapping(&self) -> &super::types::BoundRecordFields {
+        match &self.binding {
+            PreparedRecordBinding::Ready(bound) => bound.mapping(),
+            PreparedRecordBinding::Pending { mapping, .. } => mapping,
+        }
+    }
+    pub(crate) fn pending_target(&self) -> Option<(u32, Option<&str>)> {
+        match &self.binding {
+            PreparedRecordBinding::Pending { variant, name, .. } => {
+                Some((*variant, name.as_deref()))
+            }
+            _ => None,
+        }
     }
     pub(crate) fn arguments(&self) -> &[Option<super::explicit_type_arguments::ExplicitType>] {
         &self.arguments
@@ -48,11 +74,14 @@ impl PreparedRecordConstructor {
                     .estimated_bytes()?
                     .checked_sub(std::mem::size_of::<ConstructorPlan>())?,
             )?
-            .checked_add(
-                self.bound
+            .checked_add(match &self.binding {
+                PreparedRecordBinding::Ready(bound) => bound
                     .estimated_bytes()?
                     .checked_sub(std::mem::size_of::<super::types::BoundNominalConstructor>())?,
-            )?
+                PreparedRecordBinding::Pending { mapping, name, .. } => mapping
+                    .heap_bytes()?
+                    .checked_add(name.as_ref().map_or(0, String::capacity))?,
+            })?
             .checked_add(
                 self.arguments
                     .len()
@@ -71,31 +100,87 @@ impl PreparedRecordConstructor {
     }
 }
 impl StableEncode for PreparedRecordConstructor {
-    const DOMAIN: &'static str = "lrr/v2/prepared-record-constructor";
+    const DOMAIN: &'static str = "lrr/v3/prepared-record-constructor";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.plan);
         e.digest(self.plan_identity);
-        e.record(&self.bound);
+        match &self.binding {
+            PreparedRecordBinding::Ready(bound) => {
+                e.u32(0);
+                e.record(bound);
+            }
+            PreparedRecordBinding::Pending {
+                mapping,
+                variant,
+                name,
+            } => {
+                e.u32(1);
+                e.record(mapping);
+                e.u32(*variant);
+                e.option(name, |e, name| e.string(name));
+            }
+        }
         e.sequence(&self.arguments, |e, argument| {
             e.option(argument, |e, argument| e.record(argument))
         });
     }
 }
-/// Retains the actual query allocation, whose lifetime/accounting is already
-/// tracked by Database's query pins. No deep copy of a body, plan or binding.
+/// Retains the actual query allocation and, when required, a run-shared ready
+/// specialization. Cloning a handle shares both allocations; it never copies
+/// a body, syntax plan or bound field list.
 #[derive(Debug, Clone)]
-pub(crate) struct PreparedRecordConstructorHandle(Arc<QueryValue>);
+pub(crate) struct PreparedRecordConstructorHandle {
+    value: Arc<QueryValue>,
+    specialized: Option<Arc<super::types::BoundNominalConstructor>>,
+    guard: Option<Arc<crate::db::memo::PreparedInputGuard>>,
+}
 impl PreparedRecordConstructorHandle {
     pub(crate) fn from_query(value: Arc<QueryValue>, key: &PcKey) -> Result<Self, Diagnostic> {
         if !matches!(value.as_ref(), QueryValue::BoundRecordConstructor(value) if value.key() == key)
         {
             return Err(fault("prepared record query key/variant differs"));
         }
-        Ok(Self(value))
+        Ok(Self {
+            value,
+            specialized: None,
+            guard: None,
+        })
+    }
+    pub(crate) fn same_source(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.value, &other.value)
+    }
+    pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
+        if let Some(guard) = &self.guard {
+            guard.require_current(db)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn ready_bound(&self) -> Result<&super::types::BoundNominalConstructor, Diagnostic> {
+        self.specialized
+            .as_deref()
+            .or_else(|| self.prepared().bound())
+            .ok_or_else(|| fault("record template requires its reached Type activation"))
+    }
+    pub(crate) fn specialize(
+        mut self,
+        variant: &super::types::BoundNominalVariant,
+        guard: Arc<crate::db::memo::PreparedInputGuard>,
+    ) -> Result<Self, Diagnostic> {
+        let Some((selected, _)) = self.prepared().pending_target() else {
+            return Err(fault("record specialization lacks pending source template"));
+        };
+        let bound = super::types::BoundNominalConstructor::rejoin(
+            self.prepared().mapping(),
+            selected,
+            variant,
+        )?;
+        self.specialized = Some(Arc::new(bound));
+        self.guard = Some(guard);
+        Ok(self)
     }
     pub(crate) fn prepared(&self) -> &PreparedRecordConstructor {
-        match self.0.as_ref() {
+        match self.value.as_ref() {
             QueryValue::BoundRecordConstructor(value) => value,
             // The checked constructor and private field preserve this invariant.
             _ => unreachable!("typed prepared constructor handle"),
@@ -166,16 +251,44 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
         &source_arguments,
         members.as_deref(),
     ));
-    match bound {
-        RecordConstructorBinding::Ready(bound) => QueryPoll::Ready(Ok(PreparedRecordConstructor {
-            key: key.clone(),
-            plan: plan.as_ref().clone(),
-            plan_identity: plan.fingerprint(),
-            bound: *bound,
-            arguments,
-        })),
-        RecordConstructorBinding::Deferred(demand) => QueryPoll::Ready(Err(demand.diagnostic())),
-    }
+    let binding = match bound {
+        RecordConstructorBinding::Ready(bound) => PreparedRecordBinding::Ready(*bound),
+        RecordConstructorBinding::Deferred(demand) => {
+            let diagnostic = demand.diagnostic();
+            let RecordConstructorDemand::Fields(fields) = *demand else {
+                return QueryPoll::Ready(Err(diagnostic));
+            };
+            let super::types::NominalConstructorBinding::Deferred {
+                mapping, variant, ..
+            } = *fields
+            else {
+                return QueryPoll::Ready(Err(diagnostic));
+            };
+            let schema =
+                ready!(db.fetch(&SyntaxProvider, QueryKey::TypeSchema(mapping.definition())));
+            let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault("pending record schema outcome differs")));
+            };
+            if schema.fingerprint() != mapping.schema() {
+                return QueryPoll::Ready(Err(fault("pending record mapping schema differs")));
+            }
+            let Some(selected) = schema.variants.get(variant as usize) else {
+                return QueryPoll::Ready(Err(fault("pending record selected variant absent")));
+            };
+            PreparedRecordBinding::Pending {
+                mapping,
+                variant,
+                name: selected.name.clone(),
+            }
+        }
+    };
+    QueryPoll::Ready(Ok(PreparedRecordConstructor {
+        key: key.clone(),
+        plan: plan.as_ref().clone(),
+        plan_identity: plan.fingerprint(),
+        binding,
+        arguments,
+    }))
 }
 
 /// Shared explicit Type selection for the actual record path, retaining its

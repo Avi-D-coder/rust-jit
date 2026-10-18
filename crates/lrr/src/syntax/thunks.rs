@@ -22,18 +22,18 @@ use ra_ap_syntax::{
     AstNode, AstToken, SyntaxKind, SyntaxNode,
     ast::{self, HasArgList, HasGenericArgs, HasGenericParams, HasLoopBody, HasName},
 };
-#[path = "format_args_thunk.rs"]
-mod format_args_thunk;
-#[path = "method_call_thunk.rs"]
-pub(crate) mod method_call_thunk;
-#[path = "lang_call_thunk.rs"]
-mod lang_call_thunk;
-#[path = "value_call_thunk.rs"]
-pub(crate) mod value_call_thunk;
 #[path = "closure_thunk.rs"]
 pub(crate) mod closure_thunk;
+#[path = "format_args_thunk.rs"]
+mod format_args_thunk;
+#[path = "lang_call_thunk.rs"]
+mod lang_call_thunk;
+#[path = "let_annotations.rs"]
+pub(crate) mod let_annotations;
 #[path = "local_numeric_constraints.rs"]
 mod local_numeric_constraints;
+#[path = "method_call_thunk.rs"]
+pub(crate) mod method_call_thunk;
 #[path = "pattern_plan.rs"]
 pub mod pattern_plan;
 #[path = "pattern_tree.rs"]
@@ -46,10 +46,10 @@ mod runtime_local_numeric_context;
 pub(crate) mod runtime_macro_numeric_context;
 #[path = "string_literal.rs"]
 pub mod string_literal;
+#[path = "value_call_thunk.rs"]
+pub(crate) mod value_call_thunk;
 #[path = "value_paths.rs"]
 mod value_paths;
-#[path = "let_annotations.rs"]
-pub(crate) mod let_annotations;
 
 #[derive(Default, Clone, Copy)]
 struct EnteredAdmissions<'a> {
@@ -353,21 +353,22 @@ fn compound_local_primitive(
         return Ok(None);
     };
     let owner = pattern.parent();
-    let (annotation, initializer) = if let Some(statement) = owner.clone().and_then(ast::LetStmt::cast) {
-        (statement.ty(), statement.initializer())
-    } else if let Some(condition) = owner.clone().and_then(ast::LetExpr::cast) {
-        (None, condition.expr())
-    } else if let Some(arm) = owner.and_then(ast::MatchArm::cast) {
-        (
-            None,
-            arm.syntax()
-                .ancestors()
-                .find_map(ast::MatchExpr::cast)
-                .and_then(|expression| expression.expr()),
-        )
-    } else {
-        return Ok(None);
-    };
+    let (annotation, initializer) =
+        if let Some(statement) = owner.clone().and_then(ast::LetStmt::cast) {
+            (statement.ty(), statement.initializer())
+        } else if let Some(condition) = owner.clone().and_then(ast::LetExpr::cast) {
+            (None, condition.expr())
+        } else if let Some(arm) = owner.and_then(ast::MatchArm::cast) {
+            (
+                None,
+                arm.syntax()
+                    .ancestors()
+                    .find_map(ast::MatchExpr::cast)
+                    .and_then(|expression| expression.expr()),
+            )
+        } else {
+            return Ok(None);
+        };
     let ty = if let Some(annotation) = annotation {
         let Some(HintRecipe::Primitive(ty)) =
             annotation_hint(parsed, Some(annotation), body.def_key)?
@@ -413,25 +414,36 @@ fn compound_local_definition_context(
 fn promotable_constant(expression: &ast::Expr) -> bool {
     match expression {
         ast::Expr::Literal(_) => true,
-        ast::Expr::ParenExpr(inner) => inner.expr().is_some_and(|inner| promotable_constant(&inner)),
+        ast::Expr::ParenExpr(inner) => inner
+            .expr()
+            .is_some_and(|inner| promotable_constant(&inner)),
         ast::Expr::PrefixExpr(prefix) => {
-            matches!(prefix.op_kind(), Some(ast::UnaryOp::Neg | ast::UnaryOp::Not))
-                && prefix.expr().is_some_and(|inner| promotable_constant(&inner))
+            matches!(
+                prefix.op_kind(),
+                Some(ast::UnaryOp::Neg | ast::UnaryOp::Not)
+            ) && prefix
+                .expr()
+                .is_some_and(|inner| promotable_constant(&inner))
         }
         ast::Expr::TupleExpr(tuple) => tuple.fields().all(|field| promotable_constant(&field)),
         // A record literal of promotable fields (`P { x: 3 }`); the runtime
         // refuses one with drop glue or interior mutability.
         ast::Expr::RecordExpr(record) => record.record_expr_field_list().is_some_and(|list| {
             list.spread().is_none()
-                && list
-                    .fields()
-                    .all(|field| field.expr().is_some_and(|value| promotable_constant(&value)))
+                && list.fields().all(|field| {
+                    field
+                        .expr()
+                        .is_some_and(|value| promotable_constant(&value))
+                })
         }),
         ast::Expr::ArrayExpr(array) => match array.kind() {
             ast::ArrayExprKind::ElementList(mut elements) => {
                 elements.all(|element| promotable_constant(&element))
             }
-            ast::ArrayExprKind::Repeat { initializer, repeat } => {
+            ast::ArrayExprKind::Repeat {
+                initializer,
+                repeat,
+            } => {
                 initializer.is_some_and(|initializer| promotable_constant(&initializer))
                     && matches!(repeat, Some(ast::Expr::Literal(_)))
             }
@@ -1005,7 +1017,10 @@ fn local_binding_at(
         // (E-R5-010), shadowed by any inner binding found before this point.
         if let Some(function) = ast::Fn::cast(ancestor.clone())
             && let Some(block) = function.body()
-            && block.syntax().text_range().contains_range(syntax.text_range())
+            && block
+                .syntax()
+                .text_range()
+                .contains_range(syntax.text_range())
             && let Some(list) = super::fn_parameters::pattern_list(block.syntax())
             && super::fn_parameters::body_range(block.syntax()) == body.range
         {
@@ -1029,9 +1044,11 @@ fn local_binding_at(
         // bound from its call argument at the closure's entry; it shadows
         // every enclosing binding of its name.
         if let Some(closure) = ast::ClosureExpr::cast(ancestor.clone())
-            && closure
-                .body()
-                .is_some_and(|body| body.syntax().text_range().contains_range(syntax.text_range()))
+            && closure.body().is_some_and(|body| {
+                body.syntax()
+                    .text_range()
+                    .contains_range(syntax.text_range())
+            })
             && let Some(parameters) = closure.param_list()
         {
             for parameter in parameters.params() {
@@ -1088,9 +1105,11 @@ fn local_binding_at(
         }
         // A `for` pattern binds in its loop body only.
         if let Some(expression) = ast::ForExpr::cast(ancestor.clone())
-            && expression
-                .loop_body()
-                .is_some_and(|body| body.syntax().text_range().contains_range(syntax.text_range()))
+            && expression.loop_body().is_some_and(|body| {
+                body.syntax()
+                    .text_range()
+                    .contains_range(syntax.text_range())
+            })
             && let Some(pattern) = expression.pat()
             && let Some(candidate) =
                 pattern_binding_at(parsed, index, body, syntax, name, &pattern)?
@@ -1169,9 +1188,7 @@ fn parameter_from(
         if closure_thunk::closure_parameter(parsed, &closure, reference, name)?.is_some() {
             return Ok(None);
         }
-        let arity = closure
-            .param_list()
-            .map_or(0, |list| list.params().count());
+        let arity = closure.param_list().map_or(0, |list| list.params().count());
         return match parameter_from(parsed, closure.syntax(), reference, name)? {
             Some(outer) => Ok(Some(
                 u32::try_from(arity)
@@ -1386,7 +1403,9 @@ pub(super) fn literal_recipe(
             };
             (
                 LiteralKind::ByteString,
-                Some(DecodedLiteral::ByteString(std::sync::Arc::from(value.as_ref()))),
+                Some(DecodedLiteral::ByteString(std::sync::Arc::from(
+                    value.as_ref(),
+                ))),
             )
         }
         _ => {
@@ -1526,9 +1545,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("assertion predicate offset overflow"))?;
         let expression = self
-            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
-                ast::MacroExpr::can_cast(syntax.kind())
-            })?
+            .syntax_at(
+                crate::syntax::spans::SourceRange::checked(start, end)?,
+                |syntax| ast::MacroExpr::can_cast(syntax.kind()),
+            )?
             .and_then(ast::MacroExpr::cast)
             .ok_or_else(|| error("assertion predicate original macro differs"))?;
         let wanted = MacroName::parse(name, self.edition)?;
@@ -1769,9 +1789,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("runtime binding source overflow"))?;
         let expression = self
-            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
-                ast::MacroExpr::can_cast(syntax.kind())
-            })?
+            .syntax_at(
+                crate::syntax::spans::SourceRange::checked(start, end)?,
+                |syntax| ast::MacroExpr::can_cast(syntax.kind()),
+            )?
             .and_then(ast::MacroExpr::cast)
             .ok_or_else(|| error("runtime binding invocation source differs"))?;
         let name = MacroName::parse(name, self.edition)?;
@@ -1835,9 +1856,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("runtime macro continuation end overflow"))?;
         let expression = self
-            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
-                ast::MacroExpr::can_cast(syntax.kind())
-            })?
+            .syntax_at(
+                crate::syntax::spans::SourceRange::checked(start, end)?,
+                |syntax| ast::MacroExpr::can_cast(syntax.kind()),
+            )?
             .and_then(ast::MacroExpr::cast)
             .ok_or_else(|| error("runtime macro continuation source differs"))?;
         return_pc(index, body, expression.syntax())
@@ -1949,7 +1971,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("constructor syntax range overflow"))?;
         let syntax = self
-            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| ast::Expr::can_cast(syntax.kind()))?
+            .syntax_at(
+                crate::syntax::spans::SourceRange::checked(start, end)?,
+                |syntax| ast::Expr::can_cast(syntax.kind()),
+            )?
             .ok_or_else(|| error("constructor syntax boundary absent"))?;
         if syntax
             .children()
@@ -2036,9 +2061,10 @@ impl ParsedFile {
             .checked_add(node.range.end)
             .ok_or_else(|| error("repeat syntax range overflow"))?;
         let syntax = self
-            .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |syntax| {
-                ast::ArrayExpr::can_cast(syntax.kind())
-            })?
+            .syntax_at(
+                crate::syntax::spans::SourceRange::checked(start, end)?,
+                |syntax| ast::ArrayExpr::can_cast(syntax.kind()),
+            )?
             .and_then(ast::ArrayExpr::cast)
             .ok_or_else(|| error("repeat syntax absent"))?;
         let ast::ArrayExprKind::Repeat {
@@ -2244,6 +2270,25 @@ impl ParsedFile {
                 ..Default::default()
             },
         )
+    }
+    /// The actual indexed CallExpr uses the same once-evaluated value-callee
+    /// lowering as local bindings and arbitrary expression callees.
+    pub(crate) fn initial_thunk_with_value_call_goal(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        goal: &crate::frontend::entered_call_goals::EnteredCallGoal,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        goal.require_value_call_site(index, key)?;
+        let call = self
+            .entered_node_syntax(body, index, NodeId(key.node))?
+            .and_then(ast::CallExpr::cast)
+            .ok_or_else(|| error("value call consumer is not its actual call"))?;
+        let callee = call
+            .expr()
+            .ok_or_else(|| error("value call callee absent"))?;
+        self.value_call_thunk(body, index, key, &call, &callee)
     }
     /// Lower a cast whose target the entered Type service selected as a
     /// written trait-object Type (`&x as &dyn T`, `Box::new(x) as Box<dyn
@@ -2779,12 +2824,15 @@ impl ParsedFile {
                         let local = match &base {
                             ast::Expr::PathExpr(path) => {
                                 local_binding(self, index, body, path)?.is_some()
-                                    || MacroName::local(&path.syntax().text().to_string(), self.edition)
-                                        .ok()
-                                        .map(|name| parameter_at(self, path.syntax(), &name))
-                                        .transpose()?
-                                        .flatten()
-                                        .is_some()
+                                    || MacroName::local(
+                                        &path.syntax().text().to_string(),
+                                        self.edition,
+                                    )
+                                    .ok()
+                                    .map(|name| parameter_at(self, path.syntax(), &name))
+                                    .transpose()?
+                                    .flatten()
+                                    .is_some()
                             }
                             _ => false,
                         };
@@ -3153,7 +3201,9 @@ impl ParsedFile {
                             match self.dollar_crate_root(crate::syntax::ast_adapter::range(
                                 name.syntax().text_range(),
                             ))? {
-                                Some((unit, _)) => crate::frontend::callables::dollar_crate_segment(unit),
+                                Some((unit, _)) => {
+                                    crate::frontend::callables::dollar_crate_segment(unit)
+                                }
                                 None => {
                                     return Err(error("`$crate` outside generated syntax"));
                                 }
@@ -3240,9 +3290,9 @@ impl ParsedFile {
                     })
                     .unwrap_or_default();
                 if let Some(goal) = source_goal {
-                    let target = goal
-                        .indexed_source_name(index, key)?
-                        .ok_or_else(|| error("source call goal did not admit this indexed target"))?;
+                    let target = goal.indexed_source_name(index, key)?.ok_or_else(|| {
+                        error("source call goal did not admit this indexed target")
+                    })?;
                     if target.node() != id_for(index, body, path.syntax())?
                         || target.range()
                             != crate::syntax::ast_adapter::range(path.syntax().text_range())
@@ -3527,7 +3577,8 @@ impl ParsedFile {
             }
             (SyntaxKind::BREAK_EXPR, phase) => {
                 let expression = ast::BreakExpr::cast(syntax).expect("checked break");
-                let Some(target) = control_target(self, index, body, node, expression.lifetime(), false)?
+                let Some(target) =
+                    control_target(self, index, body, node, expression.lifetime(), false)?
                 else {
                     return unsupported("break target is absent");
                 };
@@ -3555,7 +3606,10 @@ impl ParsedFile {
                     .checked_add(target_node.range.end)
                     .ok_or_else(|| error("break target range overflow"))?;
                 let target_syntax = self
-                    .syntax_at(crate::syntax::spans::SourceRange::checked(start, end)?, |s| ast::Expr::can_cast(s.kind()))?
+                    .syntax_at(
+                        crate::syntax::spans::SourceRange::checked(start, end)?,
+                        |s| ast::Expr::can_cast(s.kind()),
+                    )?
                     .ok_or_else(|| error("break continuation syntax absent"))?;
                 // `break` out of a `for` leaves one iteration; the loop's
                 // exit then drops its iterator.
@@ -3612,7 +3666,8 @@ impl ParsedFile {
             }
             (SyntaxKind::CONTINUE_EXPR, Phase::Entry) => {
                 let expression = ast::ContinueExpr::cast(syntax).expect("checked continue");
-                let Some(target) = control_target(self, index, body, node, expression.lifetime(), true)?
+                let Some(target) =
+                    control_target(self, index, body, node, expression.lifetime(), true)?
                 else {
                     return unsupported("continue target is absent or not a loop");
                 };
@@ -4015,7 +4070,9 @@ impl ParsedFile {
                             // projection; its Exit forms the place.
                             if !matches!(
                                 &left,
-                                ast::Expr::IndexExpr(_) | ast::Expr::FieldExpr(_) | ast::Expr::PathExpr(_)
+                                ast::Expr::IndexExpr(_)
+                                    | ast::Expr::FieldExpr(_)
+                                    | ast::Expr::PathExpr(_)
                             ) && !matches!(&left, ast::Expr::PrefixExpr(prefix) if prefix.op_token().is_some_and(|token| token.text() == "*"))
                             {
                                 return unsupported(
@@ -4214,9 +4271,7 @@ impl ParsedFile {
                                 RecipeExit::Next(return_pc(index, body, expression.syntax())?),
                             )
                         }
-                        Phase::Operand(n)
-                            if node.operands.get(usize::from(n)) == Some(&right) =>
-                        {
+                        Phase::Operand(n) if node.operands.get(usize::from(n)) == Some(&right) => {
                             draft(
                                 index,
                                 key,
@@ -4254,15 +4309,14 @@ impl ParsedFile {
                     compound_local_primitive(self, index, body, &left, source_constraints)?
                 {
                     let context = if shift { PrimitiveType::I32 } else { left_type };
-                    let Some(right_type) =
-                        compound_rhs_primitive(
-                            self,
-                            index,
-                            body,
-                            right.clone(),
-                            context,
-                            source_constraints,
-                        )?
+                    let Some(right_type) = compound_rhs_primitive(
+                        self,
+                        index,
+                        body,
+                        right.clone(),
+                        context,
+                        source_constraints,
+                    )?
                     else {
                         return Err(Diagnostic::new(
                             "LRR-E-TYPE-CONTEXT",
@@ -4572,9 +4626,7 @@ impl ParsedFile {
                             key,
                             vec![Op::SetHint {
                                 child: source,
-                                hint: HintRecipe::Written(std::sync::Arc::clone(
-                                    &coercion.written,
-                                )),
+                                hint: HintRecipe::Written(std::sync::Arc::clone(&coercion.written)),
                             }],
                             RecipeExit::Next(index.pc(child, Phase::Entry)?),
                         ),
@@ -4670,9 +4722,7 @@ impl ParsedFile {
                     // common source constraints; otherwise its reached parent
                     // hint alone selects the representation.
                     match source_constraints {
-                        Some(proof) => proof
-                            .literal_hint(index, key)?
-                            .unwrap_or(HintRecipe::None),
+                        Some(proof) => proof.literal_hint(index, key)?.unwrap_or(HintRecipe::None),
                         None => HintRecipe::None,
                     },
                     node.value.expect("literal value"),

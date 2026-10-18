@@ -236,6 +236,11 @@ enum Selection {
         plan: Arc<PreparedSourceLocalPlan>,
         identity: Digest,
     },
+    Value {
+        plan: Arc<PreparedSourceLocalPlan>,
+        identity: Digest,
+        syntax_guard: Arc<PreparedInputGuard>,
+    },
     Pending {
         plan: Arc<PreparedSourceLocalPlan>,
         demand: ValueGoalDemand,
@@ -245,6 +250,7 @@ pub(crate) enum EnteredCallSelection<'a> {
     Local(&'a OrdinaryLocalAdmission),
     Module(&'a SelectedValueDeclaration),
     Binding(Digest),
+    Value(Digest),
     Pending(ValueGoalDemand),
 }
 /// Retained genuine selection for installed ordinary calls. The admission Arc
@@ -365,7 +371,7 @@ impl EnteredCallGoal {
                 TargetAdmission::Module(Arc::clone(proof)),
                 proof.metadata_bytes(),
             ),
-            Selection::Binding { .. } | Selection::Pending { .. } => {
+            Selection::Binding { .. } | Selection::Value { .. } | Selection::Pending { .. } => {
                 return Err(fault(
                     "retained call target requires an admitted declaration",
                 ));
@@ -437,7 +443,9 @@ impl EnteredCallGoal {
         match &self.selection {
             Selection::Local(proof) => proof.parent(),
             Selection::Module(proof) => proof.parent(),
-            Selection::Binding { plan, .. } | Selection::Pending { plan, .. } => plan,
+            Selection::Binding { plan, .. }
+            | Selection::Value { plan, .. }
+            | Selection::Pending { plan, .. } => plan,
         }
     }
     pub(crate) fn selection(&self) -> EnteredCallSelection<'_> {
@@ -445,6 +453,7 @@ impl EnteredCallGoal {
             Selection::Local(proof) => EnteredCallSelection::Local(proof),
             Selection::Module(proof) => EnteredCallSelection::Module(proof.declaration()),
             Selection::Binding { identity, .. } => EnteredCallSelection::Binding(*identity),
+            Selection::Value { identity, .. } => EnteredCallSelection::Value(*identity),
             Selection::Pending { demand, .. } => EnteredCallSelection::Pending(*demand),
         }
     }
@@ -454,13 +463,58 @@ impl EnteredCallGoal {
         match &self.selection {
             Selection::Local(proof) => Some(proof.signature()),
             Selection::Module(proof) => Some(proof.signature()),
-            Selection::Binding { .. } | Selection::Pending { .. } => None,
+            Selection::Binding { .. } | Selection::Value { .. } | Selection::Pending { .. } => None,
         }
     }
     pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
         self.guard.require_current(db)?;
         if let Selection::Module(proof) = &self.selection {
             proof.revalidate(db)?;
+        }
+        if let Selection::Value { syntax_guard, .. } = &self.selection {
+            syntax_guard.require_current(db)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn is_value_callee(&self) -> bool {
+        matches!(
+            self.selection,
+            Selection::Binding { .. } | Selection::Value { .. }
+        )
+    }
+    /// The exact owning call proof, without granting source-function authority.
+    pub(crate) fn require_value_call_site(
+        &self,
+        index: &BodyIndex,
+        phase: &PcKey,
+    ) -> Result<(), Diagnostic> {
+        if !self.is_value_callee()
+            || self.key.phase != 0
+            || phase.body != self.key.body
+            || phase.node != self.key.node
+            || index.body() != &self.key.body
+            || index.semantic_identity() != self.structure
+            || self.retained_plan().context().source().identity() != self.source
+            || self
+                .retained_plan()
+                .context()
+                .source()
+                .index()
+                .semantic_identity()
+                != self.structure
+            || index.pc(NodeId(phase.node), Phase::from_code(phase.phase))? != *phase
+        {
+            return Err(fault("value call source/body/site differs"));
+        }
+        let call = index
+            .nodes()
+            .get(phase.node as usize)
+            .ok_or_else(|| fault("value call indexed node absent"))?;
+        if call.id != NodeId(self.key.node)
+            || call.range != self.call_range
+            || call.role != NodeRole::Expression(ExpressionKind::Call)
+        {
+            return Err(fault("value call actual indexed occurrence differs"));
         }
         Ok(())
     }
@@ -530,7 +584,7 @@ impl EnteredCallGoal {
     ) -> Result<Option<&EnteredSourceName>, Diagnostic> {
         if matches!(
             &self.selection,
-            Selection::Binding { .. } | Selection::Pending { .. }
+            Selection::Binding { .. } | Selection::Value { .. } | Selection::Pending { .. }
         ) {
             return Ok(None);
         }
@@ -592,8 +646,11 @@ impl EnteredCallGoal {
             // Admission metadata includes its Arc header and selection guard;
             // self.guard aliases that allocation, never another parent handle.
             Selection::Module(proof) => bytes = add(bytes, proof.metadata_bytes())?,
-            Selection::Binding { .. } | Selection::Pending { .. } => {
+            Selection::Binding { .. } | Selection::Value { .. } | Selection::Pending { .. } => {
                 bytes = add(bytes, add(self.guard.metadata_bytes(), ARC_HEADER)?)?;
+                if let Selection::Value { syntax_guard, .. } = &self.selection {
+                    bytes = add(bytes, add(syntax_guard.metadata_bytes(), ARC_HEADER)?)?;
+                }
             }
         }
         self.bytes = bytes;
@@ -650,7 +707,7 @@ fn encode_demand(demand: ValueGoalDemand, e: &mut StableEncoder) {
     }
 }
 impl StableEncode for EnteredCallGoal {
-    const DOMAIN: &'static str = "lrr/v4/entered-ordinary-source-call-goal";
+    const DOMAIN: &'static str = "lrr/v5/entered-ordinary-source-call-goal";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.structure);
@@ -679,6 +736,15 @@ impl StableEncode for EnteredCallGoal {
             Selection::Binding { identity, .. } => {
                 e.u8(2);
                 e.digest(*identity);
+            }
+            Selection::Value {
+                identity,
+                syntax_guard,
+                ..
+            } => {
+                e.u8(4);
+                e.digest(*identity);
+                e.digest(syntax_guard.fingerprint());
             }
             Selection::Pending { demand, .. } => {
                 e.u8(3);
@@ -867,6 +933,39 @@ fn written_target(
 
 /// Future pure memo provider. No source capture/publication, body entry, child
 /// BodyStructure, executable argument preparation or normal runtime work occurs.
+/// An actual const/static declaration is a value operand, not a source Fn.
+/// Its initializer remains cold until the ordinary callee expression executes.
+fn item_value_syntax_guard(
+    db: &mut Database,
+    declaration: &SelectedValueDeclaration,
+) -> QueryPoll<Option<Arc<PreparedInputGuard>>> {
+    if declaration.variant().is_some() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let key = QueryKey::ParseFile(declaration.source().clone());
+    let parsed = ready!(db.fetch(&SyntaxProvider, key.clone()));
+    let QueryValue::ParseFile(syntax) = parsed.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("value callee declaration parse differs")));
+    };
+    let node = checked!(syntax.syntax_at(declaration.context().range, |node| {
+        ast::Item::can_cast(node.kind())
+    }));
+    let Some(item) = node.and_then(ast::Item::cast) else {
+        return QueryPoll::Ready(Err(fault("value callee actual declaration absent")));
+    };
+    if range(item.syntax().text_range()) != declaration.context().range {
+        return QueryPoll::Ready(Err(fault("value callee actual declaration range differs")));
+    }
+    if !matches!(item, ast::Item::Const(_) | ast::Item::Static(_)) {
+        return QueryPoll::Ready(Ok(None));
+    }
+    QueryPoll::Ready(Ok(Some(Arc::new(ready!(db.prepare_input_guard(
+        &SyntaxProvider,
+        &key,
+        parsed.fingerprint
+    ))))))
+}
+
 pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGoal> {
     if key.phase != 0 {
         return QueryPoll::Ready(Err(fault("entered call requires entry key")));
@@ -895,6 +994,62 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGo
             node.parent == Some(call.id) && node.role == NodeRole::Expression(ExpressionKind::Path)
         })
     });
+    // Const/static callees (including qualified paths) join the existing value
+    // call plan. The selected Value and its real syntax are both retained;
+    // neither this query nor the kind observation evaluates the initializer.
+    if let Some(path) = path {
+        let demand = QueryKey::EnteredValue(PcKey {
+            body: key.body.clone(),
+            node: path.0,
+            phase: 0,
+        });
+        let selected = ready!(db.fetch(&SyntaxProvider, demand.clone()));
+        let QueryValue::EnteredValue(goal) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("item value call selection differs")));
+        };
+        if !selected.cacheable
+            || goal.body() != &key.body
+            || goal.node() != path
+            || !parent.same_environment(goal.retained_plan())
+        {
+            return QueryPoll::Ready(Err(fault("item value call owner differs")));
+        }
+        if goal.pending().is_none()
+            && let Some(declaration) = goal.declaration()
+            && let Some(syntax_guard) = ready!(item_value_syntax_guard(db, declaration))
+        {
+            let identity = declaration.identity();
+            let guard = Arc::new(ready!(db.prepare_input_guard(
+                &SyntaxProvider,
+                &demand,
+                selected.fingerprint
+            )));
+            let target = checked!(written_target(&parent, path));
+            let call_range = call.range;
+            let structure = index.semantic_identity();
+            let source = parent.context().source().identity();
+            return QueryPoll::Ready(
+                EnteredCallGoal {
+                    key: key.clone(),
+                    selection: Selection::Value {
+                        plan: parent,
+                        identity,
+                        syntax_guard,
+                    },
+                    site: None,
+                    target,
+                    call_range,
+                    structure,
+                    source,
+                    value: Some(selected.fingerprint),
+                    guard,
+                    fingerprint: Digest([0; 32]),
+                    bytes: 0,
+                }
+                .finish(),
+            );
+        }
+    }
     let selected = ready!(prepare_entered_local_function(db, key));
     let (value, demand) = if let Some(path) = path {
         let demand = QueryKey::EnteredValue(PcKey {

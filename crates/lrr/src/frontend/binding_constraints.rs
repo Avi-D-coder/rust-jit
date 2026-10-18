@@ -33,6 +33,7 @@ use crate::{
     },
     traits::term::TyTerm,
 };
+use ra_ap_syntax::AstNode;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -1424,9 +1425,36 @@ impl<'a> Component<'a> {
         if selection_pending(selected) || selected.local_binding().is_some() {
             return QueryPoll::Ready(Ok(None));
         }
-        QueryPoll::Ready(Ok(selected
-            .declaration()
-            .map(|declaration| declaration.identity())))
+        match selected.declaration() {
+            Some(declaration) => Self::selected_function(db, declaration),
+            None => QueryPoll::Ready(Ok(None)),
+        }
+    }
+    /// Source function identity from an actual retained declaration, shared
+    /// by direct path calls and locals initialized with function items.
+    fn selected_function(
+        db: &mut Database,
+        declaration: &crate::frontend::source_value_goals::SelectedValueDeclaration,
+    ) -> QueryPoll<Option<Digest>> {
+        let parsed = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::ParseFile(declaration.source().clone())
+        ));
+        let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint callee source outcome differs")));
+        };
+        let item = match parsed.syntax_at(declaration.context().range, |node| {
+            ra_ap_syntax::ast::Item::can_cast(node.kind())
+        }) {
+            Ok(Some(item)) => item,
+            Ok(None) => {
+                return QueryPoll::Ready(Err(fault("constraint callee actual declaration absent")));
+            }
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        QueryPoll::Ready(Ok(
+            ra_ap_syntax::ast::Fn::can_cast(item.kind()).then(|| declaration.identity())
+        ))
     }
     /// A call through a callee value: a literal's demand keeps its reached
     /// (run-time) context; a binding's component has no static Type from it.
@@ -1564,7 +1592,14 @@ impl<'a> Component<'a> {
             self.defer(callee, ConstraintDemand::SelectedDeclaration);
             return QueryPoll::Ready(Ok(None));
         };
-        QueryPoll::Ready(Ok(Some(Callee::Source(declaration.identity()))))
+        // A selected Value declaration can be a constructor whose field
+        // Types are not yet closed. It is not then a function: only the
+        // declaration's actual retained Fn occurrence has a signature.
+        let Some(function) = ready!(Self::selected_function(db, declaration)) else {
+            self.defer(call, ConstraintDemand::SelectedDeclaration);
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(Ok(Some(Callee::Source(function))))
     }
 
     fn argument(&mut self, db: &mut Database, call: NodeId, ordinal: u32) -> QueryPoll<()> {

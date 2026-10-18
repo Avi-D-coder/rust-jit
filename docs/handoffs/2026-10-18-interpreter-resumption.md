@@ -238,3 +238,59 @@ feature, constant-template, full-fixture, architecture, milestone or JIT closure
 raw report SHA `31401a2fcebf99d2355a16fc674c0e678a0434db2b3ffc3c1a3e8ad50f0e02bc`.
 Raw logs remain local. Existing global 1,429 result is still only its older binary's
 historical survey; report it separately from this targeted delta.
+
+## V13 frontier and V14 candidate
+
+V13 exact source `5110ee4d0fd8acf2c4eba42e7eac7bb8ca72c7f187c7af4ab44d6d16ff5a3a53`
+compiles (lib `1e1528/0`, CLI `9f815c/0`) and passes seven selected controls
+(`2b8781/0`). Zero of six unchanged originals complete (`5ddb19/0` is the
+reporting runner terminal, not six guest passes). Source-Deref and alias/reference
+controls are restored; via-where remains regressed. The i128 main reaches 835
+source calls and lacks the ordinary receiver result context for `None`; u128
+reaches 721 and lacks the generic result context for `Sum::sum(self)`. Numbered
+fields now reach foo(&node), where its associated-equality result parameter is
+unbound. Named/reference and via-where records need ordinary pending field
+specialization. Proper issue-17718 and its actual auxiliary cross preparation
+and stop at C3(), a const fn-pointer callee. Exact failures and hashes are in
+[the V13 report](../../worktracks/evidence/2026-10-18-interpreter-v13-validation.json).
+
+V14 freezes the reviewed shared primitive binary inference, concrete/written
+field callback join and pending record activation, ordinary item-value callee
+lowering, and failure-only trait result diagnostics. Source review found no
+blocker; runtime results remain pending. Root owns the item-value route, worker1
+primitive/result constraints, worker2 record binding, and the validation agent
+solely owns Cargo. No guest JIT work or current global pass total is claimed.
+
+Source checkpoint `85d7d64eafbbbcd8c87ee783b641e0a076bbaa04` (exact V12, held
+with regressions) was pushed. V13 twelve Rust leaves were staged separately
+from corrective successor edits, retaining the exact tested snapshot.
+
+## V15 actual runtime progress
+
+V14 failed compilation (private diagnostic field); no CLI or tests ran. V15
+fixes only that diagnostic accessor and compiles exact source
+`53e16d94dc8bd8fb6eab7a87dfb8f92eef091cfbca75c08a3d4e1e4514bfa476`
+(lib `65e968/0`, CLI `32878f/0`). Six/six selected controls pass; main six
+originals produce two whole-main passes and the separate two field originals
+produce one. The new passes are associated-types-ref-from-struct (8 calls /
+108 dispatches) and associated-types-normalize-unifield-struct (2 / 19); via-where
+is restored (49 / 722). All three complete captures and cleanup. This adds two
+distinct targeted gains against saved v16, without refreshing the global suite.
+V9 four gains remain attached to V9; no unrun current control is assumed.
+
+i128 now crosses None inference and reaches 860 source calls before Sum's
+expected result is lost. Actual GenericEnv binds i128/u128, but shared
+Frame::numeric_hint_value forwards only IDs 2..15, dropping 17/18; root fixes
+that ordinary forwarding guard next. issue-17718 crosses C3() and reaches 23
+calls, then its actual C1 match pattern enters the old pure constant route and
+fails source admission. That pattern route must demand the reached initializer
+through the ordinary VM, without executing constants in cold alternatives.
+Worker1 handles actual associated-equality call inference for numbered fields;
+worker2 handles source constraint inference for an unannotated Thing record.
+Root also corrects intrinsic Copy constant storage using the existing descriptor,
+including fn/raw pointers. These successor edits remain unvalidated.
+
+See [V15 evidence](../../worktracks/evidence/2026-10-18-interpreter-v15-validation.json).
+Exact 24 compiled Rust leaves were staged before writer release; no successor
+source is attributed to those results. No interpreter, architecture or JIT gate
+is closed.

@@ -40,6 +40,31 @@ pub(crate) fn normalize(
     members: &MemberIndex,
     term: &TyTerm,
 ) -> QueryPoll<Option<TyTerm>> {
+    normalize_with_bindings(db, graph, sources, members, term, None)
+}
+
+/// Normalize projection leaves under actual declaration arguments while
+/// retaining ordinary parameter leaves for runtime descriptor instantiation.
+/// Substitution belongs to projection selection, not the surrounding template.
+pub(crate) fn normalize_template(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    members: &MemberIndex,
+    term: &TyTerm,
+    bindings: &std::collections::BTreeMap<crate::traits::term::ParamKey, TyTerm>,
+) -> QueryPoll<Option<TyTerm>> {
+    normalize_with_bindings(db, graph, sources, members, term, Some(bindings))
+}
+
+fn normalize_with_bindings(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    members: &MemberIndex,
+    term: &TyTerm,
+    bindings: Option<&std::collections::BTreeMap<crate::traits::term::ParamKey, TyTerm>>,
+) -> QueryPoll<Option<TyTerm>> {
     macro_rules! ready {
         ($value:expr) => {
             match $value {
@@ -52,6 +77,21 @@ pub(crate) fn normalize(
     }
     QueryPoll::Ready(Ok(Some(match term {
         TyTerm::Projection(key) => {
+            // Instantiate this projection subtree exactly once. Recursive
+            // normalization inside it uses the ordinary closed-input service;
+            // surrounding nonprojection parameter leaves remain untouched.
+            let instantiated = bindings.map(|bindings| substitute(term, bindings));
+            let key = match instantiated.as_ref() {
+                Some(TyTerm::Projection(key)) => key.as_ref(),
+                None => key.as_ref(),
+                _ => {
+                    return QueryPoll::Ready(Err(crate::core::diagnostic::Diagnostic::new(
+                        "LRR-E-TYPE-SCHEMA",
+                        "projection substitution changed its term kind".into(),
+                    )));
+                }
+            };
+
             let self_ty = ready!(normalize(
                 db,
                 graph,
@@ -187,19 +227,25 @@ pub(crate) fn normalize(
         TyTerm::Ref(region, mutable, inner) => TyTerm::Ref(
             region.clone(),
             *mutable,
-            Box::new(ready!(normalize(db, graph, sources, members, inner))),
+            Box::new(ready!(normalize_with_bindings(
+                db, graph, sources, members, inner, bindings
+            ))),
         ),
-        TyTerm::Slice(inner) => TyTerm::Slice(Box::new(ready!(normalize(
-            db, graph, sources, members, inner
+        TyTerm::Slice(inner) => TyTerm::Slice(Box::new(ready!(normalize_with_bindings(
+            db, graph, sources, members, inner, bindings
         )))),
         TyTerm::Array(inner, len) => TyTerm::Array(
-            Box::new(ready!(normalize(db, graph, sources, members, inner))),
+            Box::new(ready!(normalize_with_bindings(
+                db, graph, sources, members, inner, bindings
+            ))),
             len.clone(),
         ),
         TyTerm::Tuple(items) => {
             let mut normalized = Vec::with_capacity(items.len());
             for item in items {
-                normalized.push(ready!(normalize(db, graph, sources, members, item)));
+                normalized.push(ready!(normalize_with_bindings(
+                    db, graph, sources, members, item, bindings
+                )));
             }
             TyTerm::Tuple(normalized)
         }
@@ -207,9 +253,9 @@ pub(crate) fn normalize(
             let mut normalized = Vec::with_capacity(args.len());
             for arg in args {
                 normalized.push(match arg {
-                    GenericArg::Type(ty) => {
-                        GenericArg::Type(ready!(normalize(db, graph, sources, members, ty)))
-                    }
+                    GenericArg::Type(ty) => GenericArg::Type(ready!(normalize_with_bindings(
+                        db, graph, sources, members, ty, bindings
+                    ))),
                     other => other.clone(),
                 });
             }

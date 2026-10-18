@@ -12,7 +12,7 @@ use crate::{
         key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue,
     },
     source::manifest::{ItemKind, PcKey},
-    traits::term::TyTerm,
+    traits::term::GenericArg,
 };
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ pub enum NominalMemberSelection {
 pub struct NominalMemberKey {
     pub(crate) pc: PcKey,
     pub(crate) definition: Digest,
-    pub(crate) arguments: Vec<TyTerm>,
+    pub(crate) arguments: Vec<GenericArg>,
     pub(crate) selection: NominalMemberSelection,
 }
 impl NominalMemberKey {
@@ -34,9 +34,11 @@ impl NominalMemberKey {
         let mut bytes = self
             .arguments
             .capacity()
-            .checked_mul(std::mem::size_of::<TyTerm>())?;
-        for term in &self.arguments {
-            bytes = bytes.checked_add(term.heap_bytes()?)?;
+            .checked_mul(std::mem::size_of::<GenericArg>())?;
+        for argument in &self.arguments {
+            if let GenericArg::Type(term) = argument {
+                bytes = bytes.checked_add(term.heap_bytes()?)?;
+            }
         }
         if let NominalMemberSelection::Variant(Some(name)) = &self.selection {
             bytes = bytes.checked_add(name.capacity())?;
@@ -45,7 +47,7 @@ impl NominalMemberKey {
     }
 }
 impl StableEncode for NominalMemberKey {
-    const DOMAIN: &'static str = "lrr/v1/nominal-member-goal";
+    const DOMAIN: &'static str = "lrr/v2/nominal-member-goal";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.pc);
         e.digest(self.definition);
@@ -186,7 +188,16 @@ pub(crate) fn prepare(
         schema
     ));
     let members = checked!(completed.member_index());
-    let arguments: Vec<_> = key.arguments.iter().cloned().map(Some).collect();
+    // The query identity preserves all source arguments. This existing binder
+    // currently consumes Type parameters only; const support remains pending.
+    let arguments: Vec<_> = key
+        .arguments
+        .iter()
+        .filter_map(|argument| match argument {
+            GenericArg::Type(term) => Some(Some(term.clone())),
+            GenericArg::Const(_) | GenericArg::Region(_) => None,
+        })
+        .collect();
     let shape = checked!(schema.variant(match &key.selection {
         NominalMemberSelection::Variant(name) => name.as_deref(),
         _ => None,

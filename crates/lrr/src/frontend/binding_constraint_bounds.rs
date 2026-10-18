@@ -23,9 +23,7 @@ use super::{Component, ConstraintDemand, RECURSION_LIMIT, Step, Via, iteration};
 use crate::{
     core::digest::Digest,
     db::{memo::Database, poll::QueryPoll, value::QueryValue},
-    syntax::{
-        ast_adapter::TokenRecipe, signatures::GenericKind, source_constraints::FactKind,
-    },
+    syntax::{ast_adapter::TokenRecipe, signatures::GenericKind, source_constraints::FactKind},
     traits::term::{ParamKey, TyTerm},
 };
 
@@ -141,11 +139,9 @@ impl<'a> Component<'a> {
         let QueryValue::FunctionSignature(signature) = signature.as_ref() else {
             return QueryPoll::Ready(Ok(None));
         };
-        let Some(parameter) = signature
-            .generics
-            .iter()
-            .find(|parameter| parameter.ordinal == key.ordinal && parameter.kind == GenericKind::Type)
-        else {
+        let Some(parameter) = signature.generics.iter().find(|parameter| {
+            parameter.ordinal == key.ordinal && parameter.kind == GenericKind::Type
+        }) else {
             return QueryPoll::Ready(Ok(None));
         };
         let mut lists: Vec<&[TokenRecipe]> = vec![parameter.bounds.as_slice()];
@@ -264,9 +260,11 @@ impl<'a> Component<'a> {
                 BoundKind::Arguments => self.defer(call, ConstraintDemand::ParameterType),
                 BoundKind::Bindings(bindings) => {
                     for (name, value) in bindings {
-                        ready!(self.relate_binding(
-                            db, call, definition, key, remaining, &name, &value
-                        ));
+                        ready!(
+                            self.relate_binding(
+                                db, call, definition, key, remaining, &name, &value
+                            )
+                        );
                     }
                 }
             }

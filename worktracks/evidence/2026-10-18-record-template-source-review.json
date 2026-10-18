@@ -1,0 +1,56 @@
+{
+  "status": "source-reviewed-uncompiled-unexecuted",
+  "task_ids": [
+    "T032",
+    "T033",
+    "M018",
+    "M025",
+    "M030"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-record-template-activation.md",
+  "predecessor": "worktracks/evidence/2026-10-18-field-callback-representation-join.json",
+  "files": {
+    "crates/lrr/src/frontend/types.rs": "364d2dda1154b4b76da9bcea72b9d0359121b92b0a61a01b28f1b3db05d5588e",
+    "crates/lrr/src/frontend/prepared_constructors.rs": "bfff68576ebd3c163294c456580bf0cd5d174dd91eba1e7b808ebef408bd2d5c",
+    "crates/lrr/src/frontend/binding_constraint_nominal.rs": "e8dc08587b88721ee1eadf78519764ea7a35ec2aa6f938c330e2b12f736dd949",
+    "crates/lrr/src/frontend/prepared_constructor_tests.rs": "6c9b6922a08c7590a53ef2d8291e7f3489b9a274f222731da3b93e18ae1ef6a9",
+    "crates/lrr/src/engine/run_constructors.rs": "edc74ac7bc46288b34b0bbc8c4f4ec4315af93903d1c3e680d6935cc9d3c4f97",
+    "crates/lrr/src/engine/run_nominal.rs": "6515a10ae113da6f8f646381725de4b9d5be847c62f8bed24218c7cee0f1b37f",
+    "crates/lrr/src/vm/frame.rs": "786b7ef981165a2441b7701214b4c353bd9f32598c1872131ac44cc4deb0384f"
+  },
+  "witnesses": [
+    "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-ref-from-struct.rs",
+    "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+    "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-struct-field-numbered.rs"
+  ],
+  "review": {
+    "1": "No evaluator added. prepare retains source mapping and pending target; reached record uses existing NominalMember query and ordinary Frame constructor operations.",
+    "2": "No literal-only or macro-specific route. ConstructorPlan and existing source environment select all record operands.",
+    "3": "No method/numeric/macro-name selection. Actual nominal result source application or explicit indexed Type arguments supply specialization; missing context remains unsupported.",
+    "4": "No source-origin exclusion; generated records use same BoundRecordConstructor and installed entry. Generated/ref/suspension matrix not executed for this successor.",
+    "5": "No pattern or executable cold-arm preparation. Constraint record query returns unknown for pending Type template rather than executing operands. Ordinary constructor guard/commit/cleanup unchanged.",
+    "6": "Source mapping and plan retained in query. One cold shared nominal-member specialization plus checked mapping/field-metadata copy per source allocation and actual GenericArg application; cache hits share Arc handles and check dependency guards. No parsing/planning in installed constructor op.",
+    "7": "New records map keyed by exact PC, definition, full GenericArg application and variant selector; shared member input guard checked on reuse and original query allocation must match. No new full-world namespace scan. Existing preceding callee/name selection dependency-closure hold remains.",
+    "8": "No BodyIndex/AST clone or whole-file search added. Handles share query and specialized allocation. Cold rejoin clones only source field metadata/mapping once per specialization; existing ConstructorPlan clone in pure preparation unchanged."
+  },
+  "joins": [
+    "SchemaNames::bind_record_constructor_with retains actual variant ordinal for Deferred mapping",
+    "prepared_constructors::prepare retains only Fields demand with checked schema/mapping/variant",
+    "PreparedRecordConstructorHandle::specialize calls BoundNominalConstructor::rejoin",
+    "RunMachine::prepare_installed_record_template requests nominal_member with reached application and caches guarded ready handle",
+    "Frame::prepare_installed_nominal_constructor, preflight_prepared_constructor, begin_prepared_constructor consume ready_bound without source preparation",
+    "Component::record_constructor returns typed unknown for pending binding",
+    "PreparedRecordConstructor StableEncode domain v2 -> v3"
+  ],
+  "costs": {
+    "cold": "Existing pure source mapping/field binding retained once per query; shared member query normalizes declaration fields per semantic application; rejoin checks O(field count) and copies bound metadata once into Arc. No executable operand preparation repeated.",
+    "hot": "Per reached record entry obtains current frame source/result context, builds exact Type-argument key, BTreeMap lookup, actual prepared guard checks; subsequent phases use retained handle. No global scan/parse. No measured speed claim."
+  },
+  "holds": [
+    "Not compiled or runtime validated by worker; sole validation owner must run exact successor.",
+    "Actual reached record result context may expose another shared propagation gap; absence remains explicit unsupported.",
+    "Numbered result-template admission remains separate held prerequisite.",
+    "Legacy source publication and preceding callee lookup dependency closure remain held.",
+    "Const/default/opaque/local-projection and broader macro/edition/suspension matrix not established."
+  ]
+}

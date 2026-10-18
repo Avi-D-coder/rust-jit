@@ -521,8 +521,7 @@ impl<'a> Component<'a> {
                             strict: rest.strict,
                         },
                     );
-                    let result =
-                        self.constrain_term(db, node, &term, ConstraintDemand::ResultType);
+                    let result = self.constrain_term(db, node, &term, ConstraintDemand::ResultType);
                     self.via = current;
                     ready!(result);
                     true

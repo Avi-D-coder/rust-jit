@@ -156,8 +156,9 @@ impl<'a> Component<'a> {
         db: &mut Database,
         ty: &TyTerm,
     ) -> QueryPoll<Option<TyTerm>> {
-        QueryPoll::Ready(Ok(ready!(self.through_target(db, ty, &[], "Receiver"))
-            .map(|(target, _)| target)))
+        QueryPoll::Ready(Ok(
+            ready!(self.through_target(db, ty, &[], "Receiver")).map(|(target, _)| target)
+        ))
     }
 
     /// `*x` of the overloaded `Deref` Type `ty` (a projection step
@@ -167,8 +168,9 @@ impl<'a> Component<'a> {
         db: &mut Database,
         ty: &TyTerm,
     ) -> QueryPoll<Option<TyTerm>> {
-        QueryPoll::Ready(Ok(ready!(self.through_deref(db, ty, &[]))
-            .map(|(target, _)| target)))
+        QueryPoll::Ready(Ok(
+            ready!(self.through_deref(db, ty, &[])).map(|(target, _)| target)
+        ))
     }
 
     /// The current member is `node`, the operand of the dereference `parent`
@@ -193,7 +195,10 @@ impl<'a> Component<'a> {
         if steps.first() == Some(&Step::TypeArgument(0))
             && ready!(self.box_contents(db, &ty)).is_some()
         {
-            let via = self.via.unwrap(Step::TypeArgument(0)).expect("checked step");
+            let via = self
+                .via
+                .unwrap(Step::TypeArgument(0))
+                .expect("checked step");
             self.expression_via(Some(parent), via);
             return QueryPoll::Ready(Ok(()));
         }
@@ -292,11 +297,7 @@ impl<'a> Component<'a> {
             ),
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        let Some(argument) = operands
-            .get(ordinal as usize + offset)
-            .copied()
-            .flatten()
-        else {
+        let Some(argument) = operands.get(ordinal as usize + offset).copied().flatten() else {
             return QueryPoll::Ready(Ok(None));
         };
         let Some(TyTerm::Ref(_, _, actual)) = ready!(self.expression_type(db, argument)) else {
@@ -339,15 +340,13 @@ impl<'a> Component<'a> {
                         .collect();
                     actual = *inner;
                 }
-                TyTerm::Nominal(..) => {
-                    match ready!(self.through_deref(db, &actual, &frontier)) {
-                        Some((target, mapped)) => {
-                            frontier = mapped;
-                            actual = target;
-                        }
-                        None => return QueryPoll::Ready(Ok(None)),
+                TyTerm::Nominal(..) => match ready!(self.through_deref(db, &actual, &frontier)) {
+                    Some((target, mapped)) => {
+                        frontier = mapped;
+                        actual = target;
                     }
-                }
+                    None => return QueryPoll::Ready(Ok(None)),
+                },
                 _ => return QueryPoll::Ready(Ok(None)),
             }
             coerced = true;
