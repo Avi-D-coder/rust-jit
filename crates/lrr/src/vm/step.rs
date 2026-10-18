@@ -73,10 +73,7 @@ fn frame_hint(
     if matches!(hint, HintRecipe::DefinitionResult) {
         frame.definition_result_descriptor(store)
     } else if matches!(hint, HintRecipe::DefinitionWrittenResult) {
-        match frame.definition_written_result()? {
-            Some(written) => written.find_in(store, &[]),
-            None => Ok(None),
-        }
+        frame.definition_written_result_descriptor()
     } else if let HintRecipe::DefinitionParameter(ordinal) = hint {
         concrete(&HintRecipe::Primitive(
             frame.definition_parameter_primitive(*ordinal)?,
@@ -185,10 +182,7 @@ fn materialize_hint(
             .map(Some);
     }
     if matches!(hint, HintRecipe::DefinitionWrittenResult) {
-        let Some(written) = frame.definition_written_result()?.cloned() else {
-            return Ok(None);
-        };
-        return written.materialize_in(store, &[]);
+        return frame.definition_written_result_descriptor();
     }
     if let HintRecipe::Reference {
         mutable, target, ..
@@ -274,29 +268,12 @@ fn prepare_literal(
                     ..
                 }) => (*negative, *suffix, Some(*magnitude)),
                 Some(DecodedLiteral::InvalidInteger {
-                    negative,
-                    suffix,
-                    reason,
-                    ..
-                }) => {
-                    if *reason == crate::ir::op::IntegerLexicalError::UnsupportedWidth {
-                        return Err(Diagnostic::new(
-                            "LRR-E-UNSUPPORTED",
-                            "128-bit guest integers are outside the live profile".into(),
-                        ));
-                    }
-                    (*negative, *suffix, None)
-                }
+                    negative, suffix, ..
+                }) => (*negative, *suffix, None),
                 _ => return Err(invalid("integer has no pinned decoded payload")),
             };
             if negative != (kind == LiteralKind::NegativeInteger) {
                 return Err(invalid("integer sign differs from decoded payload"));
-            }
-            if matches!(suffix, Some(PrimitiveType::I128 | PrimitiveType::U128)) {
-                return Err(Diagnostic::new(
-                    "LRR-E-UNSUPPORTED",
-                    "128-bit guest integers are outside the live profile".into(),
-                ));
             }
             let magnitude = magnitude
                 .ok_or_else(|| invalid("invalid integer literal spelling or magnitude"))?;
@@ -306,7 +283,7 @@ fn prepare_literal(
                 .map(|p| p.id());
             let ty = suffix.or(hint);
             if let Some(ty) = ty {
-                GuestStore::preview_integer(negative, magnitude, ty)?;
+                GuestStore::integer_literal_bits(negative, magnitude, ty)?;
             }
             Ok(PreparedLiteral::Integer {
                 negative,
@@ -949,6 +926,7 @@ fn numeric_preflight(
                                 )
                     );
                 if !(1..=7).contains(&raw.kind)
+                    && raw.kind != 17
                     && raw.kind != 11
                     && raw.kind != 12
                     && !primitive_reference
@@ -1160,7 +1138,10 @@ fn numeric_operation(
                 frame.reserve_primitive_operator_result(*destination, store)?;
             }
             frame.prepare_write(*destination, store)?;
-            (*destination, numeric::binary(*operator, left, right)?)
+            (
+                *destination,
+                numeric::binary_in(store, *operator, left, right)?,
+            )
         }
         Op::NumericUnary {
             operator,
@@ -1174,7 +1155,7 @@ fn numeric_operation(
                     frame.operand(*source, frame.hint(*destination)?, store)?
                 };
             frame.prepare_write(*destination, store)?;
-            (*destination, numeric::unary(*operator, source)?)
+            (*destination, numeric::unary_in(store, *operator, source)?)
         }
         Op::PrimitiveCast {
             source,
@@ -1189,7 +1170,7 @@ fn numeric_operation(
             frame.prepare_write(*destination, store)?;
             let target = concrete(&HintRecipe::Primitive(*target))?
                 .ok_or_else(|| invalid("primitive cast target absent"))?;
-            (*destination, numeric::cast(source, target)?)
+            (*destination, numeric::cast_in(store, source, target)?)
         }
         _ => return Ok(false),
     };

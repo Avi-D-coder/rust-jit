@@ -1,0 +1,29 @@
+{
+  "schema": "lrr-source-review/v1",
+  "reviewer": "closure_callable_resume",
+  "scope": "Root wide integer representation and ordinary scalar operations, read-only independent review; no runtime acceptance",
+  "files": {
+    "crates/lrr/src/runtime/cell_wide_integer.rs": "6639655e325820a6d737c296cd78b4b7c943f5c9f514aa5f9af5b33c30444fc2",
+    "crates/lrr/src/runtime/value.rs": "030a3dc32ac48c083e7e1b3deafb4eeee65e8669d7d7e4dffcc7e7cfca3d0548",
+    "crates/lrr/src/runtime/shape.rs": "aef43dda41772f46dc25f99d48eb372eca69e5cf0651224dedce58a35cebe910",
+    "crates/lrr/src/vm/numeric_store.rs": "9c5c33e0f704fcd8e3c75bbf28b224a1136be3d3eaf73bdfaf7d1e047310b79c",
+    "crates/lrr/src/vm/numeric.rs": "1b588950f3713963e746d509f61b2bfc4b46e4c059a7e8ec34d51611f03c7b01",
+    "crates/lrr/src/runtime/arena.rs": "639b36526a6a85367769c7e67f4d507fc0b45c7c0d6f04436b978d324a5193af"
+  },
+  "review": {
+    "integer_boundaries": "integer_literal_bits uses 1u128 << (width-1), permits magnitude 2^127 only for negative i128, and encodes MIN through wrapping_sub; negative zero stable. Unsigned 128 avoids shifting1 by128. Wide operation results reconstruct signed magnitude from full bits.",
+    "arithmetic": "numeric_store::binary_in uses checked signed/unsigned128 add/sub/mul/div/rem, checks zero before division/remainder, reports MIN/-1 overflow via checked_div/checked_rem. unary_in checked_neg rejects signed MIN and bitwise Not preserves all128bits.",
+    "shifts": "Actual RHS bits are unsigned comparison against actual left width. Negative signed counts sign-extend to huge u128 and reject; unsigned huge128 counts reject before u32 truncation. Only mixed-width primitive operator is shift; narrow LHS converts verified count toU32 and preserves original LHS descriptor. Signed wide Shr uses arithmetic i128 shift. Shl truncates high bits as Rust; checked_shl checks count, not value overflow.",
+    "casts": "cast_in validates source/destination family through shared cast_types; narrow signed operands retain i64 sign before widening; destination narrow truncates via actual i8/i16/i32/u8/u16/u32 cast. Wide signed/unsigned conversion uses Rust as semantics; float direct as i128/u128 supplies Rust saturating conversions incl NaN/inf. Integer->float uses direct host width. No raw payload treated as128 bits.",
+    "representation": "ValueRepr stays repr(C)16bytes/alignment8; kind17 stores checked arena handle, not raw integer bits. Scalar-immediate constructors reject width128. TypeIds17/18 are Copy primitive descriptors, str16 remains unsized/nonCopy, dynamic descriptors start19 consistently in lookup/intern/discriminant joins.",
+    "handles_cleanup": "GuestArena::get validates epoch,index,tombstone. wide_integer_bits validates kind/type family, actual integer record and binding compatibility. Fullwidth records are runlong scalar backing; copies share checked bits and never guest object ownership. Typed operation results record bindingSome(TypeId). Newly typed literal previews may use an unbound immutable numeric record exactly as preexisting narrow preview semantics; ordinary literal binding/contract owner must remain intact.",
+    "architecture_all8": "No source parser, assertion evaluator, macro output executor, context-specific member/inference selector, pattern lowerer, generated-source exclusion, namespace scan, body clone or node search introduced in these leaves. Operators are source-independent runtime scalar operations. Primitive admission/static/runtime gaps elsewhere remain separate.",
+    "holds": [
+      "Root literal decoder/step/format/sourceview joins not yet reviewed at these fingerprints.",
+      "Source-only reasoning is not runtime pass or full128 acceptance.",
+      "Other scalar serialization, native ABI, byte layout/transmute and representation switches may still lack kind17; guest JIT remains gated.",
+      "Unsupported operator profile behavior/debug-overflow settings beyond existing narrow engine not claimed changed."
+    ]
+  },
+  "findings": []
+}

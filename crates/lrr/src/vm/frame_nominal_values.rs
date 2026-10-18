@@ -95,6 +95,7 @@ impl Frame {
         &mut self,
         bound: Arc<BoundNominalVariant>,
         stated: Option<&crate::ir::written_type::WrittenType>,
+        explicit: Option<&[Option<TypeId>]>,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         if !bound.fields().is_empty() {
@@ -106,7 +107,7 @@ impl Frame {
             .get(self.pc.node as usize)
             .and_then(|node| node.value)
             .ok_or_else(|| invalid("value path result slot absent"))?;
-        let args = match self.nominal_hint_args(result, &bound, store)? {
+        let context = match self.nominal_hint_args(result, &bound, store)? {
             Some(args) => Some(args),
             // The context the value's own recipe states ahead of this
             // operation (a Type decided from the value's later uses).
@@ -117,6 +118,28 @@ impl Frame {
                 },
                 None => None,
             },
+        };
+        let args = match explicit {
+            Some(explicit) => {
+                let count = bound.type_parameters() as usize;
+                if explicit.len() > count {
+                    return Err(Diagnostic::new(
+                        "LRR-E-GENERIC-BINDING",
+                        "constructor Type argument count differs from the declaration".into(),
+                    ));
+                }
+                let mut fixed: Vec<Option<TypeId>> = match context {
+                    Some(args) => args.into_iter().map(Some).collect(),
+                    None => vec![None; count],
+                };
+                for (slot, actual) in fixed.iter_mut().zip(explicit) {
+                    if let Some(actual) = actual {
+                        *slot = Some(*actual);
+                    }
+                }
+                fixed.into_iter().collect::<Option<Vec<_>>>()
+            }
+            None => context,
         }
         .ok_or_else(|| {
             Diagnostic::new(
@@ -243,9 +266,9 @@ impl Frame {
                     }
                 },
                 NominalFieldType::Parameter(index) => {
-                    let parameter = args
-                        .get_mut(*index as usize)
-                        .ok_or_else(|| invalid("generic field parameter outside its declaration"))?;
+                    let parameter = args.get_mut(*index as usize).ok_or_else(|| {
+                        invalid("generic field parameter outside its declaration")
+                    })?;
                     match parameter {
                         Some(ty) => *ty,
                         None => {
@@ -291,12 +314,15 @@ impl Frame {
             cells.push(cell);
             types.push(expected);
         }
-        let args = args.into_iter().collect::<Option<Vec<_>>>().ok_or_else(|| {
-            Diagnostic::new(
-                "LRR-E-TYPE-CONTEXT",
-                "generic type argument is not determined by any constructor argument".into(),
-            )
-        })?;
+        let args = args
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "generic type argument is not determined by any constructor argument".into(),
+                )
+            })?;
         self.call_types = types;
         self.call_cells = cells;
         self.call_ready = true;

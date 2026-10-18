@@ -398,7 +398,14 @@ impl<'a> Component<'a> {
         definition: Digest,
         result: TyTerm,
     ) -> QueryPoll<TyTerm> {
-        if !self.fact(call).is_ok_and(|fact| fact.flag()) || !mentions_parameter(&result) {
+        // Q44/Q47 currently describe indexed ordinary Call expressions.
+        // Method/lang calls keep this optional goal open until their actual
+        // declared-target proof joins the same query domain.
+        if !self
+            .fact(call)
+            .is_ok_and(|fact| fact.kind() == FactKind::Call && fact.flag())
+            || !mentions_parameter(&result)
+        {
             return QueryPoll::Ready(Ok(result));
         }
         // This is optional inference, not admission of an actual call.

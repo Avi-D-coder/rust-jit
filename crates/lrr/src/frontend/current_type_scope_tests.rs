@@ -169,9 +169,98 @@ fn inline_type_bucket_retains_actual_value_parent_and_exact_namespace_all_editio
                 ..
             }
         ));
-        // An actual second parent is relevant to the same contained scope. It
-        // must invalidate the selected-candidate dependency and report ambiguity.
+        let selected_dependency = db
+            .memo(&request)
+            .unwrap()
+            .dependencies
+            .iter()
+            .find(|dependency| {
+                matches!(
+                    dependency,
+                    DependencyStamp::Input {
+                        key: InputKey::ScopeCertificateSelection(_),
+                        ..
+                    }
+                )
+            })
+            .expect("actual relevant candidate-set dependency")
+            .clone();
+        // Both root discoveries certify this child scope derivatively. Their
+        // independently produced answers agree, so adding the Type parent
+        // refreshes the candidate dependency without changing the name answer.
         publish(&mut db, &source, Namespace::Type, 1);
+        let refreshed = observe(&mut db, &request);
+        assert!(!Arc::ptr_eq(&answer, &refreshed));
+        assert_eq!(refreshed.completion(), ModuleNameCompletion::Complete);
+        assert_eq!(answer.lookup(), refreshed.lookup());
+        assert_eq!(answer.semantic_identity(), refreshed.semantic_identity());
+        let refreshed_dependency = db
+            .memo(&request)
+            .unwrap()
+            .dependencies
+            .iter()
+            .find(|dependency| {
+                matches!(
+                    dependency,
+                    DependencyStamp::Input {
+                        key: InputKey::ScopeCertificateSelection(_),
+                        ..
+                    }
+                )
+            })
+            .expect("refreshed relevant candidate-set dependency");
+        assert_ne!(&selected_dependency, refreshed_dependency);
+        assert!(Arc::ptr_eq(&refreshed, &observe(&mut db, &request)));
+        db.begin_expansion_epoch(2).unwrap();
+        assert_eq!(
+            observe(&mut db, &request).completion(),
+            ModuleNameCompletion::Unsealed
+        );
+    }
+}
+
+#[test]
+fn independently_published_primary_type_certificates_remain_ambiguous_all_editions() {
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, source) = qualified(edition);
+        let request = key(&source, Namespace::Type, "m");
+        publish(&mut db, &source, Namespace::Type, 1);
+        assert!(matches!(
+            observe(&mut db, &request).lookup(),
+            Some(NameLookup::Defined(_))
+        ));
+        // A separate genuine discovery in another compilation-unit graph
+        // produces a second primary certificate for the exact same source
+        // scope. No cloned/retagged certificate is inserted into the database.
+        let mut discovery = SourceDiscovery::new(
+            vec![source.share()],
+            source.outline().root_scope.clone(),
+            Namespace::Type,
+            Digest::of_bytes(b"independent primary Type discovery graph"),
+            1,
+        )
+        .unwrap()
+        .with_declarative_compiler(
+            Digest::of_bytes(b"current module-name actual compile environment"),
+            crate::expand::source_declarative::engine_version(),
+            Arc::new(CompileInputCatalog::standalone(&source.outline().profile).unwrap()),
+        )
+        .unwrap();
+        loop {
+            match discovery.poll().unwrap() {
+                SourceDiscoveryStep::NeedExpansion { request } => discovery
+                    .admit_expansion(Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
+                    .admit_expansion(Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::Sealed(_) => {
+                    discovery.publish(&mut db).unwrap();
+                    break;
+                }
+                _ => panic!("actual source discovery requires another producer"),
+            }
+        }
         assert!(
             matches!(db.fetch(&SyntaxProvider, request.clone()), QueryPoll::Ready(Err(error))
             if error.message.contains("selection is ambiguous"))

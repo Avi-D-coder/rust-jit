@@ -82,7 +82,7 @@ impl Frame {
             // result. Strict written annotations still require a Ref descriptor.
             if !self.slot(reference)?.strict_hint
                 && matches!(key, TypeKey::Primitive(_))
-                && matches!(descriptor, crate::runtime::shape::TypeId(2 | 4..=15))
+                && matches!(descriptor, crate::runtime::shape::TypeId(2 | 4..=15 | 17 | 18))
             {
                 Self::require_borrow_source_target(target_source, descriptor, store)?;
                 return Ok(Some(descriptor));

@@ -439,22 +439,17 @@ fn missing_legacy_integer_metadata_and_wrong_sign_are_structurally_refused() {
     // This is raw legacy metadata refusal, not a claimed persisted checkpoint restore.
 }
 #[test]
-fn original_i128_minimum_lexical_payload_does_not_admit_guest_i128_execution() {
+fn original_i128_minimum_lexical_payload_executes_at_full_width() {
     let spelling = "-0x8000_0000_0000_0000_0000_0000_0000_0000i128";
     let p = prepare(WIDE, 2024, spelling, spelling);
     let mut store = GuestStore::for_epoch(1).unwrap();
     let mut f = frame(&p, &mut store);
-    let handles = store.budget().handles();
-    let error = step(&mut f, &mut store, &p.recipe).unwrap_err();
-    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-    assert_eq!(
-        error.message,
-        "128-bit guest integers are outside the live profile"
-    );
-    assert_eq!(f.counters.started_by_opcode[0], 0);
-    assert_eq!(store.budget().handles(), handles);
-    assert!(f.cell(p.destination).is_err());
+    step(&mut f, &mut store, &p.recipe).unwrap();
+    let value = store.read_scalar(f.cell(p.destination).unwrap()).unwrap();
+    assert_eq!(value.type_id, 17);
+    assert_eq!(store.wide_integer_bits(value).unwrap() as i128, i128::MIN);
 }
+
 #[test]
 fn unchanged_oversized_literal_fault_is_retained_at_exact_reached_source_boundary() {
     let spelling = TOO_LARGE

@@ -1,0 +1,128 @@
+{
+  "at": "2026-10-18T09:04:40.801197+00:00",
+  "claim": "LOCAL-043",
+  "tasks": [
+    "T023",
+    "T025",
+    "T032"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/value.rs",
+      "sha256": "030a3dc32ac48c083e7e1b3deafb4eeee65e8669d7d7e4dffcc7e7cfca3d0548"
+    },
+    {
+      "path": "crates/lrr/src/runtime/shape.rs",
+      "sha256": "aef43dda41772f46dc25f99d48eb372eca69e5cf0651224dedce58a35cebe910"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_wide_integer.rs",
+      "sha256": "6639655e325820a6d737c296cd78b4b7c943f5c9f514aa5f9af5b33c30444fc2"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "sha256": "471f594cb9ee9f58f138bd3bf43fe4528284e01a8f6e3218d86941f1ec3aa7e1"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_layout.rs",
+      "sha256": "7cff736f5c99e13233cccc3cd86df961a36b05f0bca5b7a535cbff05243bf82e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "805ba008d4258f99b4d234a0ab21ed926203cbf958d692aa535ca8dbb14c9aae"
+    },
+    {
+      "path": "crates/lrr/src/vm/numeric.rs",
+      "sha256": "1b588950f3713963e746d509f61b2bfc4b46e4c059a7e8ec34d51611f03c7b01"
+    },
+    {
+      "path": "crates/lrr/src/vm/numeric_store.rs",
+      "sha256": "9c5c33e0f704fcd8e3c75bbf28b224a1136be3d3eaf73bdfaf7d1e047310b79c"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "bda13119ee03cce880974e28a516b139552bbb428f1ad5e3fb6746f85682b9d1"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "a798481c6f4f227dc67de9e3e3f12aec188f0c5119090671187146b25f930eb7"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_operator_calls.rs",
+      "sha256": "84270515fd4f5f08d9ba65b5edadb0a4e0c269e2cba0234467c8bc4a8782b700"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_temporary_scopes.rs",
+      "sha256": "126b43d4452ac12427939c1143e19bfbf3797da126c9a94ff31170a4e6b38db7"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_string_literals.rs",
+      "sha256": "9d1d4c9983496630e83d8ebc9ff488ab340f16a321c3472cda4faad39345a5d5"
+    },
+    {
+      "path": "crates/lrr/src/vm/pattern_match.rs",
+      "sha256": "1bf286014bbc10aa7288cecb68439ddf5a4ad617aace31012f58b61687d85277"
+    },
+    {
+      "path": "crates/lrr/src/vm/integer_literal_decode_tests.rs",
+      "sha256": "ee1f343be2564b405c5ab67962b81c7872c6b820f8f390fd8e2ac16347f36386"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_facade.rs",
+      "sha256": "cf5ebc90b40ac9c29337eb68359efb04c853abb69d0e79889abb6c73e27f5697"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "22ced558204b39950c3c6a527149e714724c6ef7b6abe5ad40533e1935ef1692"
+    }
+  ],
+  "status": "Source reviewed, not compiled or executed yet; unchanged stock runtime witnesses remain required.",
+  "all8": [
+    {
+      "mode": 1,
+      "route": "Ordinary Literal/NumericBinary/NumericUnary/PrimitiveCast -> existing vm::step -> numeric::{binary_in,unary_in,cast_in}; typed width extension, no expression/assert evaluator."
+    },
+    {
+      "mode": 2,
+      "route": "Generated source uses same indexed recipe; no macro-specific emitted scalar executor."
+    },
+    {
+      "mode": 3,
+      "route": "Exact PrimitiveIdentity distinguishes signed17/unsigned18, common signatures/member lookup, no macro/name-selected width. Runtime bits never mint source occurrence; source -> descriptor check retained."
+    },
+    {
+      "mode": 4,
+      "route": "No new original-only/generated refusals; literal parser already decodes i128/u128 and now ordinary materialization supports its backing."
+    },
+    {
+      "mode": 5,
+      "route": "Existing transactional Search Number comparison extended signed/unsigned full domain, no second matcher; literal/range tests remain nonconsuming. No cold body preparation added."
+    },
+    {
+      "mode": 6,
+      "route": "Installed arithmetic reads checked numeric arena backing only. No source parsing/planning. Existing descriptor setup static; record allocation per computed wide result, run-long retention."
+    },
+    {
+      "mode": 7,
+      "route": "No namespace scan/invalidator added; common source Type contracts unchanged except delegating primitive identity map. No sandbox/resource caps."
+    },
+    {
+      "mode": 8,
+      "route": "No BodyIndex clone or source searches added; checked arena epochs for payload values, immutable Copy backing no owning aggregate/drop identity."
+    }
+  ],
+  "details": [
+    "ValueRepr remains16bytes; kind17 checked immutable literal arena record, TypeId17/18 primitive, dynamic descriptors start19 consistently.",
+    "MIN encoding uses wrapping subtraction, signed checked_neg and MIN/-1 div/rem return guest overflow; shift count checked in full128bits before cast; typed host i128/u128 arithmetic only at128 width.",
+    "Primitive casts use native Rust truncation/sign extension/float saturation after common cast_types. Narrow primitive execution remains existing path.",
+    "Literal source suffixes/contexts share exact identity; full128 bit pattern literals follow user no-lint enforcement policy, avoiding rejected rustc overflowing_literals-allowed programs.",
+    "Shared format Value already storesi128/u128, now consumes actual bits; byte image read/write adds16byte cases; static primitive source views include17/18; compound assignment and builtin primitive classification join same numeric service.",
+    "Existing upstream-derived MIN refusal control updated to actual fullwidth value semantics; no new toy language suite."
+  ],
+  "known_gaps": [
+    "Not compiled or executed yet; pure constant evaluator remains prep-only intended but reached legacy fastpath still held by E007 debt.",
+    "Atomic128/native128 signatures not admitted here; no guest scheduling or JIT/reconstruction/native compatibility claim.",
+    "Unexamined scalar consumers (hash, pointer integer conversion, source/native ABI serialization) need actual witnesses; no full128 feature closure.",
+    "Raw self-review and independent5-leaf review have differing scopes; follow exact fingerprints; no measuredperformance or fullmatrix acceptance."
+  ]
+}

@@ -67,10 +67,12 @@ impl ParsedFile {
         let Some(source_path) = path.path() else {
             return Ok(None);
         };
-        Ok(match self.written_path(source_path, path.syntax(), cfg, true, true)? {
-            WrittenValuePath::Spelled(spelled) => Some(spelled),
-            WrittenValuePath::Refused(_) => None,
-        })
+        Ok(
+            match self.written_path(source_path, path.syntax(), cfg, true, true)? {
+                WrittenValuePath::Spelled(spelled) => Some(spelled),
+                WrittenValuePath::Refused(_) => None,
+            },
+        )
     }
     /// The same spelling for a path written in a pattern (path, tuple-struct
     /// or record pattern), so pattern paths resolve through the one route.
@@ -104,12 +106,12 @@ impl ParsedFile {
             // no runtime effect: the variant is selected by identity against
             // the scrutinee's own reached Type. An expression's arguments are
             // explicit type arguments of its value and are never dropped.
-            let call_arguments = callee
+            let explicit_arguments = (callee || lexical_value)
                 && final_segment
                 && matches!(part.kind(), Some(ast::PathSegmentKind::Name(_)));
             final_segment = false;
             if part.generic_arg_list().is_some()
-                && !call_arguments
+                && !explicit_arguments
                 && (lexical_value || !matches!(part.kind(), Some(ast::PathSegmentKind::Name(_))))
             {
                 return Ok(WrittenValuePath::Refused(
@@ -251,8 +253,7 @@ impl ParsedFile {
             }
         }
         parts.reverse();
-        if parts.iter().skip(1).any(|part| part == "Self")
-            || parts[0] == "Self" && parts.len() != 1
+        if parts.iter().skip(1).any(|part| part == "Self") || parts[0] == "Self" && parts.len() != 1
         {
             return Ok(None);
         }
@@ -310,8 +311,7 @@ impl ParsedFile {
             .find_map(|syntax| {
                 let path = ast::PathExpr::cast(syntax)?;
                 let range = path.syntax().text_range();
-                (u32::from(range.start()) == start && u32::from(range.end()) == end)
-                    .then_some(path)
+                (u32::from(range.start()) == start && u32::from(range.end()) == end).then_some(path)
             })
             .ok_or_else(|| error("lexical value dispatch exact path syntax absent"))?;
         let Some(written) = path.path() else {
@@ -323,8 +323,10 @@ impl ParsedFile {
             return Ok(false);
         };
         let wanted = MacroName::parse(name.text(), self.edition)?;
-        Ok(self.lexical_item_may_bind(path.syntax(), &wanted, index.cfg())?
-            || self.enclosing_import_may_bind(path.syntax(), name.text(), index.cfg())?)
+        Ok(
+            self.lexical_item_may_bind(path.syntax(), &wanted, index.cfg())?
+                || self.enclosing_import_may_bind(path.syntax(), name.text(), index.cfg())?,
+        )
     }
     /// The name a block item or block-level `use` could bind in a written
     /// path: its only segment, or the first of exactly two (`Root::member`).
@@ -333,8 +335,10 @@ impl ParsedFile {
     pub(crate) fn lexical_root_name(
         path: &ast::Path,
     ) -> Option<(ast::NameRef, Option<ast::NameRef>)> {
-        let plain = |segment: ast::PathSegment| {
-            if segment.generic_arg_list().is_some() || segment.coloncolon_token().is_some() {
+        let plain = |segment: ast::PathSegment, final_segment: bool| {
+            if (!final_segment && segment.generic_arg_list().is_some())
+                || segment.coloncolon_token().is_some()
+            {
                 return None;
             }
             // A path keyword (`Self`, `self`, `super`, `crate`, `$crate`) is
@@ -345,12 +349,15 @@ impl ParsedFile {
             })
         };
         match path.qualifier() {
-            None => path.segment().and_then(plain).map(|name| (name, None)),
+            None => path
+                .segment()
+                .and_then(|segment| plain(segment, true))
+                .map(|name| (name, None)),
             Some(root) => {
                 if root.qualifier().is_some() {
                     return None;
                 }
-                let root = root.segment().and_then(plain)?;
+                let root = root.segment().and_then(|segment| plain(segment, false))?;
                 // The member segment may carry its own generic arguments
                 // (`mem::size_of::<T>`); they belong to the member, not the root.
                 let member = path.segment().and_then(|segment| segment.name_ref())?;

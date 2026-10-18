@@ -32,7 +32,10 @@ pub(super) struct NominalRunFacts {
     /// block-level import brought into scope (`None`: it is not one).
     lexical_facades: BTreeMap<
         (BodyKey, crate::vm::call::CallIdentity),
-        Option<(crate::facade::functions::LibraryFunction, crate::core::digest::Digest)>,
+        Option<(
+            crate::facade::functions::LibraryFunction,
+            crate::core::digest::Digest,
+        )>,
     >,
     /// Positional members (`t.0`) keyed by PC and the base's nominal identity.
     positional:
@@ -239,6 +242,17 @@ impl RunMachine {
         path: &str,
         stated: Option<&crate::ir::written_type::WrittenType>,
     ) -> QueryPoll<()> {
+        let explicit = match self.owner_arguments(db) {
+            QueryPoll::Ready(Ok(Some(arguments))) => {
+                match arguments.value_descriptors(&self.frame, &mut self.store) {
+                    Ok(arguments) => Some(arguments),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            }
+            QueryPoll::Ready(Ok(None)) => None,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         let pc = self.frame.pc().clone();
         if self.item_values.contains_key(&pc) {
             return self.prepare_item_value_path(db, path);
@@ -254,11 +268,12 @@ impl RunMachine {
             return QueryPoll::Ready(self.frame.prepare_nominal_value(
                 Arc::clone(bound.variant()),
                 stated,
+                explicit.as_deref(),
                 &mut self.store,
             ));
         }
         // Lexical (body-local) scope precedes the module graph.
-        match self.prepare_lexical_value_path(db, path, stated) {
+        match self.prepare_lexical_value_path(db, path, stated, explicit.as_deref()) {
             QueryPoll::Ready(Ok(true)) => return QueryPoll::Ready(Ok(())),
             QueryPoll::Ready(Ok(false)) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -270,6 +285,11 @@ impl RunMachine {
             let bound = match self.select_nominal_constructor(db, path) {
                 QueryPoll::Ready(Ok(Some(bound))) => bound,
                 // Constants, statics and function items are Value items too.
+                QueryPoll::Ready(Ok(None)) if explicit.is_some() => {
+                    return QueryPoll::Ready(Err(unsupported(
+                        "explicit Type arguments on a non-constructor value require their value contract integration",
+                    )));
+                }
                 QueryPoll::Ready(Ok(None)) => return self.prepare_item_value_path(db, path),
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -296,6 +316,7 @@ impl RunMachine {
         QueryPoll::Ready(self.frame.prepare_nominal_value(
             Arc::clone(bound.variant()),
             stated,
+            explicit.as_deref(),
             &mut self.store,
         ))
     }
@@ -305,6 +326,7 @@ impl RunMachine {
         &mut self,
         bound: BoundConstructor,
         stated: Option<&crate::ir::written_type::WrittenType>,
+        explicit: Option<&[Option<crate::runtime::shape::TypeId>]>,
     ) -> QueryPoll<()> {
         match bound.shape() {
             FieldShape::Unit => {}
@@ -326,6 +348,7 @@ impl RunMachine {
         QueryPoll::Ready(self.frame.prepare_nominal_value(
             Arc::clone(bound.variant()),
             stated,
+            explicit,
             &mut self.store,
         ))
     }
@@ -466,7 +489,12 @@ impl RunMachine {
         db: &mut Database,
         site: u32,
         name: &str,
-    ) -> QueryPoll<Option<(crate::facade::functions::LibraryFunction, crate::core::digest::Digest)>> {
+    ) -> QueryPoll<
+        Option<(
+            crate::facade::functions::LibraryFunction,
+            crate::core::digest::Digest,
+        )>,
+    > {
         if name.contains("::") || name.starts_with('.') {
             return QueryPoll::Ready(Ok(None));
         }
@@ -480,12 +508,13 @@ impl RunMachine {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         let mut selected = None;
-        if lexical && let Some(path) = self
-            .frame
-            .body
-            .nodes()
-            .get(site as usize)
-            .and_then(|call| call.operands.first().copied())
+        if lexical
+            && let Some(path) = self
+                .frame
+                .body
+                .nodes()
+                .get(site as usize)
+                .and_then(|call| call.operands.first().copied())
         {
             let goal = PcKey {
                 body: self.frame.pc().body.clone(),
@@ -789,9 +818,11 @@ impl RunMachine {
         };
         let sources: Vec<_> = self.sources.iter().collect();
         let selection = match CallResolver::new(graph, &sources) {
-            Ok(resolver) => resolver
-                .with_members(Some(&members))
-                .associated_of(db, &members, Ok(root), member),
+            Ok(resolver) => {
+                resolver
+                    .with_members(Some(&members))
+                    .associated_of(db, &members, Ok(root), member)
+            }
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         match selection {

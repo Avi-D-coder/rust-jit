@@ -655,6 +655,7 @@ impl GuestStore {
             1 => {}
             2 => Self::put_bytes(image, offset, &[value.payload as u8]),
             3 => Self::put_bytes(image, offset, &(value.payload as u32).to_le_bytes()),
+            17 => Self::put_bytes(image, offset, &self.wide_integer_bits(value)?.to_le_bytes()),
             4 | 5 => {
                 let Ok(Primitive::Signed(width) | Primitive::Unsigned(width)) =
                     primitive(TypeId(value.type_id))
@@ -714,6 +715,14 @@ impl GuestStore {
             }
             bytes
         };
+        if matches!(ty.0, 17 | 18) {
+            let start = usize::try_from(offset).map_err(|_| invalid())?;
+            let end = start.checked_add(16).ok_or_else(invalid)?;
+            let bytes: [u8; 16] = image.get(start..end).ok_or_else(invalid)?
+                .try_into().map_err(|_| invalid())?;
+            let value = self.wide_integer_value(ty, u128::from_le_bytes(bytes))?;
+            return self.ticket(value);
+        }
         if let Ok(scalar) = primitive(ty) {
             let value = match scalar {
                 Primitive::Unit => ValueRepr::unit(),

@@ -29,7 +29,10 @@ pub(super) struct LexicalSelection {
     pub(super) local: bool,
     /// A closed library facade function a block-level import brought into
     /// scope, with its definition identity.
-    pub(super) facade: Option<(crate::facade::functions::LibraryFunction, crate::core::digest::Digest)>,
+    pub(super) facade: Option<(
+        crate::facade::functions::LibraryFunction,
+        crate::core::digest::Digest,
+    )>,
     /// `Root::member`: the written member, `identity`/`kind` naming the root
     /// the entered lexical prefix selected (an enum, whose variant it is).
     pub(super) rooted: Option<String>,
@@ -39,7 +42,9 @@ pub(super) struct LexicalSelection {
     pub(super) module_root: Option<String>,
 }
 
-fn primitive_view(value: &crate::runtime::value::ValueRepr) -> Option<crate::ir::op::PrimitiveType> {
+fn primitive_view(
+    value: &crate::runtime::value::ValueRepr,
+) -> Option<crate::ir::op::PrimitiveType> {
     use crate::ir::op::PrimitiveType as P;
     Some(match value.type_id {
         1 => P::Unit,
@@ -57,6 +62,8 @@ fn primitive_view(value: &crate::runtime::value::ValueRepr) -> Option<crate::ir:
         13 => P::Usize,
         14 => P::F32,
         15 => P::F64,
+        17 => P::I128,
+        18 => P::U128,
         _ => return None,
     })
 }
@@ -72,6 +79,7 @@ impl RunMachine {
         db: &mut Database,
         path: &str,
         stated: Option<&crate::ir::written_type::WrittenType>,
+        explicit: Option<&[Option<crate::runtime::shape::TypeId>]>,
     ) -> QueryPoll<bool> {
         // A single name, or `Root::member` whose root a block item or import
         // may bind; longer or anchored paths are the module route's.
@@ -98,7 +106,9 @@ impl RunMachine {
         // same service module-level constructor paths use.
         match self.lexical_constructor(db, &selected) {
             QueryPoll::Ready(Ok(Some(bound))) => {
-                return self.prepare_lexical_constructor_value(bound, stated).map(|()| true);
+                return self
+                    .prepare_lexical_constructor_value(bound, stated, explicit)
+                    .map(|()| true);
             }
             QueryPoll::Ready(Ok(None)) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -111,11 +121,16 @@ impl RunMachine {
             let rewritten = format!("{root}::{member}");
             match self.select_nominal_constructor(db, &rewritten) {
                 QueryPoll::Ready(Ok(Some(bound))) => {
-                    return self.prepare_lexical_constructor_value(bound, stated).map(|()| true);
+                    return self
+                        .prepare_lexical_constructor_value(bound, stated, explicit)
+                        .map(|()| true);
                 }
                 QueryPoll::Ready(Ok(None)) => {}
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            if explicit.is_some() {
+                return QueryPoll::Ready(Err(unsupported("explicit Type arguments on a non-constructor value require their value contract integration".into())));
             }
             return self.prepare_item_value_path(db, &rewritten).map(|()| true);
         }
@@ -127,6 +142,9 @@ impl RunMachine {
             return QueryPoll::Ready(Err(unsupported(format!(
                 "value path `{path}` is an associated item of a block-scoped or imported type; its member selection awaits integration"
             ))));
+        }
+        if explicit.is_some() {
+            return QueryPoll::Ready(Err(unsupported("explicit Type arguments on a non-constructor value require their value contract integration".into())));
         }
         let LexicalSelection { identity, kind, .. } = selected;
         if kind == Some(ItemKind::Function)
@@ -157,7 +175,9 @@ impl RunMachine {
     ) -> QueryPoll<Option<crate::frontend::nominal_constructors::BoundConstructor>> {
         use crate::frontend::nominal_constructors::{NominalConstructorTarget, bind_constructor};
         let Some(graph) = &self.graph else {
-            return QueryPoll::Ready(Err(call_fault("value paths require a checked source catalogue")));
+            return QueryPoll::Ready(Err(call_fault(
+                "value paths require a checked source catalogue",
+            )));
         };
         let sources: Vec<_> = self.sources.iter().collect();
         // `Enum::Variant`: the root selected an enum declared in this body
@@ -179,7 +199,8 @@ impl RunMachine {
                 return QueryPoll::Ready(Ok(None));
             }
             let target = if selected.local {
-                match NominalConstructorTarget::local(db, selected.identity, Some(member.as_str())) {
+                match NominalConstructorTarget::local(db, selected.identity, Some(member.as_str()))
+                {
                     QueryPoll::Ready(Ok(Some(target))) => target,
                     QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -273,13 +294,16 @@ impl RunMachine {
                         "local function value admission selects another declaration",
                     )));
                 }
-                self.local_function_values.insert(identity, Arc::from(proof));
+                self.local_function_values
+                    .insert(identity, Arc::from(proof));
                 QueryPoll::Ready(Ok(()))
             }
             QueryPoll::Ready(Ok(EnteredLocalCall::Pending(demand))) => {
                 QueryPoll::Ready(Err(Diagnostic::new(
                     "LRR-E-CALL-CONTEXT",
-                    format!("local function value requires exact entered source context ({demand:?})"),
+                    format!(
+                        "local function value requires exact entered source context ({demand:?})"
+                    ),
                 )))
             }
             QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Err(call_fault(
@@ -289,10 +313,7 @@ impl RunMachine {
             QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
         }
     }
-    fn select_lexical_value(
-        &mut self,
-        db: &mut Database,
-    ) -> QueryPoll<Option<LexicalSelection>> {
+    fn select_lexical_value(&mut self, db: &mut Database) -> QueryPoll<Option<LexicalSelection>> {
         use crate::db::dependency::{InputKey, InputValue};
         let pc = self.frame.pc().clone();
         let definition = pc.body.definition;
@@ -385,7 +406,10 @@ impl RunMachine {
                     if context.source().index().body() == owner {
                         break;
                     }
-                    declaring = context.source().local_parent().map(|parent| parent.context());
+                    declaring = context
+                        .source()
+                        .local_parent()
+                        .map(|parent| parent.context());
                 }
                 let Some(declaring) = declaring else {
                     return QueryPoll::Ready(Err(call_fault(
@@ -416,8 +440,12 @@ impl RunMachine {
                 .iter()
                 .find_map(|source| source.outline_item(identity))
                 .map(|item| {
-                    let mut segments: Vec<&str> =
-                        item.def_key.module_path.iter().map(String::as_str).collect();
+                    let mut segments: Vec<&str> = item
+                        .def_key
+                        .module_path
+                        .iter()
+                        .map(String::as_str)
+                        .collect();
                     segments.push(&item.def_key.declared_name);
                     format!(
                         "{}::{}",
@@ -437,7 +465,11 @@ impl RunMachine {
             module_root,
         })))
     }
-    pub(super) fn prepare_item_value_path(&mut self, db: &mut Database, path: &str) -> QueryPoll<()> {
+    pub(super) fn prepare_item_value_path(
+        &mut self,
+        db: &mut Database,
+        path: &str,
+    ) -> QueryPoll<()> {
         let pc = self.frame.pc().clone();
         if let Some(value) = self.item_values.get(&pc) {
             self.frame.prepare_item_value(value.clone());
@@ -551,11 +583,8 @@ impl RunMachine {
         };
         match db.fetch(&SyntaxProvider, QueryKey::Thunk(key)) {
             QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
-                QueryValue::Thunk(recipe) => QueryPoll::Ready(Ok(recipe
-                    .recipe()
-                    .operations
-                    .iter()
-                    .any(|op| {
+                QueryValue::Thunk(recipe) => {
+                    QueryPoll::Ready(Ok(recipe.recipe().operations.iter().any(|op| {
                         matches!(
                             op,
                             Op::Borrow {
@@ -563,7 +592,8 @@ impl RunMachine {
                                 ..
                             }
                         )
-                    }))),
+                    })))
+                }
                 _ => QueryPoll::Ready(Err(call_fault("borrow operand recipe differs"))),
             },
             QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
@@ -681,11 +711,13 @@ impl RunMachine {
                 // Its code address, so the item casts and compares as a fn
                 // pointer.
                 self.store.function_address(definition.identity);
-                match self.store.intern_type(crate::runtime::shape::TypeKey::Callable {
-                    identity: definition.identity,
-                    captures: Box::new([]),
-                    borrowed: Box::new([]),
-                }) {
+                match self
+                    .store
+                    .intern_type(crate::runtime::shape::TypeKey::Callable {
+                        identity: definition.identity,
+                        captures: Box::new([]),
+                        borrowed: Box::new([]),
+                    }) {
                     Ok(ty) => ItemValue::Function { ty },
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 }
@@ -720,13 +752,19 @@ fn constant_layout(
         ConstantWireType::Array { element, length } => {
             let (element_ty, element_view) = constant_layout(store, element)?;
             let len = u32::try_from(*length).map_err(|_| {
-                Diagnostic::new("LRR-E-CONST-INSTANTIATION", "constant array length overflow".into())
+                Diagnostic::new(
+                    "LRR-E-CONST-INSTANTIATION",
+                    "constant array length overflow".into(),
+                )
             })?;
             let ty = store.intern_type(TypeKey::Array {
                 element: element_ty,
                 len,
             })?;
-            Ok((ty, TyTerm::Array(Box::new(element_view), ConstTerm::Value(*length))))
+            Ok((
+                ty,
+                TyTerm::Array(Box::new(element_view), ConstTerm::Value(*length)),
+            ))
         }
     }
 }
@@ -807,7 +845,9 @@ impl RunMachine {
             let ticket = match value.scalar() {
                 Some(scalar) => self.store.ticket(scalar)?,
                 None => {
-                    let plan = self.store.prepare_constant_instantiation(&value, &wire, ty)?;
+                    let plan = self
+                        .store
+                        .prepare_constant_instantiation(&value, &wire, ty)?;
                     self.store
                         .instantiate_constant_value(plan, &mut self.frame.fuel)?
                 }

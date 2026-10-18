@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T08:48:59.774551+00:00",
+  "updated_at": "2026-10-18T09:15:56.673375+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -727,10 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V6 source3d5608832ad2a0610c3d3ff5be25d9657825fe0e058993e1cd1cd8eaacb8736e compiled lib+CLI, three focused bodiesPASS; wholeconstarith128integer blocker after60calls, viawheregenericvaluecontext after27calls. No whole upstream runtime pass added. Exactsource V6 staged; successors remain unvalidated.",
+    "validation": "V7 sourcee7f91cd60edcdc9d80648bbd657dec6ef93ea9bb8772d350ce832d2d4907a449 compiled lib+CLI,6/6focusedPASS,2/6UIcapturePASS,3/3selectedatomicbodyPASS. Four other wholemains fail. Exact report worktracks/evidence/2026-10-18-interpreter-v7-validation.json. Successors remain unvalidated.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 0,
-    "guest_jit": "blocked_by_runtime_acceptance"
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 2,
+    "guest_jit": "blocked_by_runtime_acceptance",
+    "source_checkpoint_pushed": "9d4c588ea279ca3c25ff19d99b4e4cdd5b21b112",
+    "scope": "targeted distinct delta versus savedv16; no refreshed global current count/fullsuite/JITgate"
   }
 }

@@ -1,4 +1,7 @@
-//! Concrete primitive operations. No literal defaulting, guest cleanup or host panic.
+#[path = "numeric_store.rs"]
+mod stored;
+pub(crate) use stored::{binary_in, cast_in, unary_in};
+// Concrete primitive operations. No literal defaulting, guest cleanup or host panic.
 pub use crate::ir::op::{NumericBinary as Binary, NumericUnary as Unary};
 use crate::{
     core::diagnostic::Diagnostic,
@@ -222,10 +225,25 @@ pub(crate) fn unary_type(operator: Unary, value: TypeId) -> Result<()> {
 pub(crate) fn cast_types(source: TypeId, destination: TypeId) -> Result<()> {
     primitive(source).map_err(|_| op_type())?;
     primitive(destination).map_err(|_| op_type())?;
+    let integer = |id: TypeId| {
+        matches!(
+            primitive(id),
+            Ok(Primitive::Signed(_) | Primitive::Unsigned(_))
+        )
+    };
     if source == destination
         || destination.0 == 3 && source.0 == 9
-        || (4..=13).contains(&destination.0) && (2..=15).contains(&source.0)
-        || (14..=15).contains(&destination.0) && (4..=15).contains(&source.0)
+        || integer(destination)
+            && matches!(
+                primitive(source),
+                Ok(Primitive::Bool
+                    | Primitive::Char
+                    | Primitive::Signed(_)
+                    | Primitive::Unsigned(_)
+                    | Primitive::F32
+                    | Primitive::F64)
+            )
+        || matches!(destination.0, 14 | 15) && (integer(source) || matches!(source.0, 14 | 15))
     {
         Ok(())
     } else {

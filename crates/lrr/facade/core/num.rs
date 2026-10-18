@@ -83,19 +83,19 @@ impl crate::fmt::Display for ParseIntError {
 fn lrr_parse_digits(
     s: &str,
     from: usize,
-    radix: u64,
-    limit: u64,
+    radix: u128,
+    limit: u128,
     overflow: IntErrorKind,
-) -> crate::result::Result<u64, ParseIntError> {
+) -> crate::result::Result<u128, ParseIntError> {
     let n: usize = core::intrinsics::lrr_str_len(s);
     if from >= n {
         return crate::result::Result::Err(ParseIntError { kind: IntErrorKind::InvalidDigit });
     }
-    let mut value: u64 = 0;
+    let mut value: u128 = 0;
     let mut pos: usize = from;
     while pos < n {
-        let byte: u64 = core::intrinsics::lrr_str_byte(s, pos) as u64;
-        let digit: u64 = if byte >= 48 && byte <= 57 {
+        let byte: u128 = core::intrinsics::lrr_str_byte(s, pos) as u128;
+        let digit: u128 = if byte >= 48 && byte <= 57 {
             byte - 48
         } else if byte >= 97 && byte <= 122 {
             byte - 87
@@ -107,7 +107,7 @@ fn lrr_parse_digits(
         if digit >= radix {
             return crate::result::Result::Err(ParseIntError { kind: IntErrorKind::InvalidDigit });
         }
-        if value > (limit - digit) / radix {
+        if digit > limit || value > (limit - digit) / radix {
             return crate::result::Result::Err(ParseIntError { kind: overflow });
         }
         value = value * radix + digit;
@@ -122,11 +122,11 @@ fn lrr_check_radix(radix: u32) {
         core::panicking::panic("from_ascii_bytes_radix: radix must lie in the range `[2, 36]`");
     }
 }
-pub(crate) fn lrr_parse_radix_u64(
+pub(crate) fn lrr_parse_radix_u128(
     s: &str,
     radix: u32,
-    max: u64,
-) -> crate::result::Result<u64, ParseIntError> {
+    max: u128,
+) -> crate::result::Result<u128, ParseIntError> {
     lrr_check_radix(radix);
     let n: usize = core::intrinsics::lrr_str_len(s);
     if n == 0 {
@@ -136,14 +136,14 @@ pub(crate) fn lrr_parse_radix_u64(
     if core::intrinsics::lrr_str_byte(s, 0) == 43 {
         from = 1;
     }
-    lrr_parse_digits(s, from, radix as u64, max, IntErrorKind::PosOverflow)
+    lrr_parse_digits(s, from, radix as u128, max, IntErrorKind::PosOverflow)
 }
-pub(crate) fn lrr_parse_radix_i64(
+pub(crate) fn lrr_parse_radix_i128(
     s: &str,
     radix: u32,
-    min: i64,
-    max: i64,
-) -> crate::result::Result<i64, ParseIntError> {
+    min: i128,
+    max: i128,
+) -> crate::result::Result<i128, ParseIntError> {
     lrr_check_radix(radix);
     let n: usize = core::intrinsics::lrr_str_len(s);
     if n == 0 {
@@ -151,13 +151,13 @@ pub(crate) fn lrr_parse_radix_i64(
     }
     let first: u8 = core::intrinsics::lrr_str_byte(s, 0);
     if first == 45 {
-        let limit: u64 = ((0i64 - (min + 1)) as u64) + 1;
-        match lrr_parse_digits(s, 1, radix as u64, limit, IntErrorKind::NegOverflow) {
+        let limit: u128 = ((0i128 - (min + 1)) as u128) + 1;
+        match lrr_parse_digits(s, 1, radix as u128, limit, IntErrorKind::NegOverflow) {
             crate::result::Result::Ok(magnitude) => {
                 if magnitude == limit {
                     crate::result::Result::Ok(min)
                 } else {
-                    crate::result::Result::Ok(0i64 - (magnitude as i64))
+                    crate::result::Result::Ok(0i128 - (magnitude as i128))
                 }
             }
             crate::result::Result::Err(error) => crate::result::Result::Err(error),
@@ -167,10 +167,33 @@ pub(crate) fn lrr_parse_radix_i64(
         if first == 43 {
             from = 1;
         }
-        match lrr_parse_digits(s, from, radix as u64, max as u64, IntErrorKind::PosOverflow) {
-            crate::result::Result::Ok(value) => crate::result::Result::Ok(value as i64),
+        match lrr_parse_digits(s, from, radix as u128, max as u128, IntErrorKind::PosOverflow) {
+            crate::result::Result::Ok(value) => crate::result::Result::Ok(value as i128),
             crate::result::Result::Err(error) => crate::result::Result::Err(error),
         }
+    }
+}
+// Narrow entry points retain their actual bounds while sharing the same
+// digit parser. A cast happens only after that bounded parser succeeds.
+pub(crate) fn lrr_parse_radix_u64(
+    s: &str,
+    radix: u32,
+    max: u64,
+) -> crate::result::Result<u64, ParseIntError> {
+    match lrr_parse_radix_u128(s, radix, max as u128) {
+        crate::result::Result::Ok(value) => crate::result::Result::Ok(value as u64),
+        crate::result::Result::Err(error) => crate::result::Result::Err(error),
+    }
+}
+pub(crate) fn lrr_parse_radix_i64(
+    s: &str,
+    radix: u32,
+    min: i64,
+    max: i64,
+) -> crate::result::Result<i64, ParseIntError> {
+    match lrr_parse_radix_i128(s, radix, min as i128, max as i128) {
+        crate::result::Result::Ok(value) => crate::result::Result::Ok(value as i64),
+        crate::result::Result::Err(error) => crate::result::Result::Err(error),
     }
 }
 pub(crate) fn lrr_parse_u64(s: &str, max: u64) -> crate::result::Result<u64, ParseIntError> {

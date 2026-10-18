@@ -53,12 +53,6 @@ mod constructors;
 #[cfg(test)]
 #[path = "run_discarded_numeric_tests.rs"]
 mod discarded_numeric_tests;
-#[path = "run_facade.rs"]
-mod facade;
-#[path = "run_layout.rs"]
-mod layout_facts;
-#[path = "run_nominal.rs"]
-mod nominal;
 #[path = "run_drop_inventory.rs"]
 mod drop_inventory;
 #[path = "run_drop_witness.rs"]
@@ -66,20 +60,10 @@ mod drop_witness;
 #[cfg(test)]
 #[path = "run_drop_witness_tests.rs"]
 mod drop_witness_tests;
-#[path = "run_methods.rs"]
-mod methods;
-#[path = "run_operator_calls.rs"]
-mod operator_calls;
-#[path = "run_format_calls.rs"]
-mod format_calls;
-#[path = "run_initializers.rs"]
-mod initializers;
 #[path = "run_enum_discriminants.rs"]
 mod enum_discriminants;
-#[path = "run_owner_arguments.rs"]
-mod owner_arguments;
-#[path = "run_trait_calls.rs"]
-mod trait_calls;
+#[path = "run_facade.rs"]
+mod facade;
 #[path = "run_fields.rs"]
 mod fields;
 #[cfg(test)]
@@ -87,23 +71,33 @@ mod fields;
 mod floating_constant_tests;
 #[path = "run_floating_constants.rs"]
 mod floating_constants;
+#[path = "run_format_calls.rs"]
+mod format_calls;
+#[path = "run_initializers.rs"]
+mod initializers;
+#[path = "run_layout.rs"]
+mod layout_facts;
+#[path = "run_methods.rs"]
+mod methods;
 #[path = "run_module_source_preparation.rs"]
 pub(crate) mod module_source_preparation;
 #[cfg(test)]
 #[path = "run_nested_match_context_tests.rs"]
 mod nested_match_context_tests;
+#[path = "run_nominal.rs"]
+mod nominal;
 #[cfg(test)]
 #[path = "run_observed_constructors_tests.rs"]
 mod observed_constructor_tests;
+#[path = "run_operator_calls.rs"]
+mod operator_calls;
+#[path = "run_owner_arguments.rs"]
+mod owner_arguments;
 #[cfg(test)]
 #[path = "run_panic_tests.rs"]
 mod panic_tests;
 #[path = "run_pattern_names.rs"]
 mod pattern_names;
-#[path = "run_value_items.rs"]
-mod value_items;
-#[path = "run_value_calls.rs"]
-mod value_calls;
 #[cfg(test)]
 #[path = "run_pattern_tests.rs"]
 mod pattern_tests;
@@ -135,8 +129,14 @@ pub(crate) mod source_preparation;
 #[cfg(test)]
 #[path = "run_temporaries.rs"]
 mod temporaries;
+#[path = "run_trait_calls.rs"]
+mod trait_calls;
 #[path = "run_panic.rs"]
 mod unwinding;
+#[path = "run_value_calls.rs"]
+mod value_calls;
+#[path = "run_value_items.rs"]
+mod value_items;
 #[cfg(test)]
 #[path = "run_wildcard_tests.rs"]
 mod wildcard_tests;
@@ -415,7 +415,10 @@ pub struct RunMachine {
     /// The selected static cell of each by-value static read PC.
     static_reads: BTreeMap<
         PcKey,
-        (crate::runtime::cell::CellId, Option<crate::traits::term::TyTerm>),
+        (
+            crate::runtime::cell::CellId,
+            Option<crate::traits::term::TyTerm>,
+        ),
     >,
     /// Body-local function items used as values: their entered admission
     /// (the same proof a direct call of the path consumes), by identity.
@@ -467,12 +470,18 @@ pub struct RunMachine {
     /// Evaluated constants copied on each use, with their returned views.
     const_cells: BTreeMap<
         crate::core::digest::Digest,
-        (crate::runtime::cell::CellId, Option<crate::traits::term::TyTerm>),
+        (
+            crate::runtime::cell::CellId,
+            Option<crate::traits::term::TyTerm>,
+        ),
     >,
     /// A constant's value evaluated for the one use at this PC.
     initialized_values: BTreeMap<
         PcKey,
-        (crate::runtime::cell::TicketId, Option<crate::traits::term::TyTerm>),
+        (
+            crate::runtime::cell::TicketId,
+            Option<crate::traits::term::TyTerm>,
+        ),
     >,
     /// Slots allocated under the run's static anchor.
     static_slots: u32,
@@ -729,11 +738,7 @@ impl RunMachine {
     }
     /// The source function a written call path names, through the ordinary
     /// call resolver.
-    fn select_named_callee(
-        &self,
-        db: &mut Database,
-        name: &str,
-    ) -> QueryPoll<Arc<SourceCallable>> {
+    fn select_named_callee(&self, db: &mut Database, name: &str) -> QueryPoll<Arc<SourceCallable>> {
         let Some(graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(
                 "source calls require a checked source catalogue",
@@ -1017,19 +1022,16 @@ impl RunMachine {
                             Err(e) => return QueryPoll::Ready(Err(e)),
                         }
                     }
-                    Ok(SignatureName::Parameter(key)) => {
-                        match self.frame.parameter_hint(key) {
-                            Ok(Some(ty)) => (crate::traits::term::TyTerm::Param(key), ty),
-                            Ok(None) => {
-                                return QueryPoll::Ready(Err(Diagnostic::new(
-                                    "LRR-E-TYPE-CONTEXT",
-                                    "explicit caller parameter has no reached runtime binding"
-                                        .into(),
-                                )));
-                            }
-                            Err(e) => return QueryPoll::Ready(Err(e)),
+                    Ok(SignatureName::Parameter(key)) => match self.frame.parameter_hint(key) {
+                        Ok(Some(ty)) => (crate::traits::term::TyTerm::Param(key), ty),
+                        Ok(None) => {
+                            return QueryPoll::Ready(Err(Diagnostic::new(
+                                "LRR-E-TYPE-CONTEXT",
+                                "explicit caller parameter has no reached runtime binding".into(),
+                            )));
                         }
-                    }
+                        Err(e) => return QueryPoll::Ready(Err(e)),
+                    },
                     Ok(SignatureName::Source(found)) => {
                         match normalizer.normalize(db, found.identity) {
                             QueryPoll::Ready(Ok(
@@ -1473,8 +1475,10 @@ impl RunMachine {
             }
             Some(body)
         } else if callee.body().is_some_and(|handle| {
-            db.input(&crate::db::dependency::InputKey::BodyEnvironment(handle.key()))
-                .is_none()
+            db.input(&crate::db::dependency::InputKey::BodyEnvironment(
+                handle.key(),
+            ))
+            .is_none()
         }) && matches!(self.graph, Some(RunNames::Completed(_)))
         {
             // A module/impl callee selected by ordinary resolution owns the same
@@ -1561,7 +1565,9 @@ impl RunMachine {
                 .runtime_substitution
                 .iter()
                 .filter_map(|(key, ty)| {
-                    self.store.descriptor_source_term(*ty).map(|term| (*key, term))
+                    self.store
+                        .descriptor_source_term(*ty)
+                        .map(|term| (*key, term))
                 })
                 .collect();
             let bound = crate::frontend::associated_types::substitute(result, &bindings);
@@ -1594,7 +1600,9 @@ impl RunMachine {
                     .runtime_substitution
                     .iter()
                     .filter_map(|(key, ty)| {
-                        self.store.descriptor_source_term(*ty).map(|term| (*key, term))
+                        self.store
+                            .descriptor_source_term(*ty)
+                            .map(|term| (*key, term))
                     })
                     .collect();
                 let bound = crate::frontend::associated_types::substitute(&written, &bindings);
@@ -1719,19 +1727,77 @@ impl RunMachine {
                     Ok(context) => context,
                     Err(e) => return QueryPoll::Ready(Err(e)),
                 };
-            // A closed declared result naming a nominal Type (`-> Option<u32>`)
-            // is the body's root result context, as its written Type.
+            // The declared result's written structure is instantiated from
+            // this call's actual generic descriptors. Closing its source term
+            // first can erase a binding's runtime representation (for example
+            // a closure capture tuple nested under a nominal result).
             let context = match contracts.source_result.as_ref().filter(|term| {
                 crate::frontend::call_contracts::closed_term(term)
                     && crate::frontend::written_terms::contains_nominal(term)
             }) {
                 Some(term) => {
-                    match crate::frontend::written_terms::closed_written_type(db, &sources, term) {
-                        QueryPoll::Ready(Ok(written)) => {
-                            context.with_written_result(written.map(Arc::new))
-                        }
+                    let mut written = match crate::frontend::written_terms::closed_written_type(
+                        db, &sources, term,
+                    ) {
+                        QueryPoll::Ready(Ok(written)) => written,
                         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    };
+                    if written.is_none() {
+                        let declared = match crate::frontend::source_return_goals::prepare(
+                            db,
+                            graph,
+                            &sources,
+                            callee.signature().definition,
+                        ) {
+                            QueryPoll::Ready(Ok(declared)) => declared,
+                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                        };
+                        if let crate::frontend::source_return_goals::ReturnTypeGoal::Ready(proof) =
+                            declared
+                        {
+                            if let Err(error) = proof.require(
+                                callee.signature().definition,
+                                QueryValue::FunctionSignature(Box::new(callee.signature().clone()))
+                                    .fingerprint(),
+                            ) {
+                                return QueryPoll::Ready(Err(error));
+                            }
+                            written = match crate::frontend::written_terms::written_template(
+                                db,
+                                &sources,
+                                proof.source(),
+                                callee.signature().definition,
+                            ) {
+                                QueryPoll::Ready(Ok(written)) => written,
+                                QueryPoll::Ready(Err(error)) => {
+                                    return QueryPoll::Ready(Err(error));
+                                }
+                                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                            };
+                        }
+                    }
+                    let descriptor = match written {
+                        Some(written) => {
+                            match written.materialize_with(&mut self.store, &|ordinal| {
+                                contracts
+                                    .runtime_substitution
+                                    .get(&crate::traits::term::ParamKey {
+                                        definition: callee.signature().definition,
+                                        ordinal,
+                                    })
+                                    .copied()
+                            }) {
+                                Ok(descriptor) => descriptor,
+                                Err(error) => return QueryPoll::Ready(Err(error)),
+                            }
+                        }
+                        None => None,
+                    };
+                    match descriptor {
+                        Some(descriptor) => context.with_written_result(term.clone(), descriptor),
+                        None => context,
                     }
                 }
                 None => context,
@@ -1798,9 +1864,11 @@ impl RunMachine {
         };
         // A closure frame has no definition environment of its own.
         if call.closure.is_none() {
-            callee.install_context(call.context.take().ok_or_else(|| {
-                call_fault("accepted definition environment already consumed")
-            })?)?;
+            callee.install_context(
+                call.context.take().ok_or_else(|| {
+                    call_fault("accepted definition environment already consumed")
+                })?,
+            )?;
         }
         callee.install_parameter_sources(call.contracts.source_parameters.clone())?;
         callee.initialize_parameters(args, &contracts, &mut self.store)?;
@@ -1857,7 +1925,9 @@ impl RunMachine {
             .filter(|proof| proof.has_result())
         {
             proof.validate_packet(call.callee.signature(), &call.contracts)?;
-            return call.contracts.check_return_descriptor_in(actual, Some(&self.store));
+            return call
+                .contracts
+                .check_return_descriptor_in(actual, Some(&self.store));
         }
         // An opaque/trait-object result accepts the returned concrete value.
         if call
@@ -1870,15 +1940,10 @@ impl RunMachine {
         }
         // A closed nominal/tuple result: the returned value's exact runtime
         // type must be that declared source type.
-        if let Some(expected) = call
-            .contracts
-            .source_result
-            .as_ref()
-            .filter(|term| {
-                !matches!(term, crate::traits::term::TyTerm::Primitive(_))
-                    && crate::frontend::call_contracts::closed_term(term)
-            })
-        {
+        if let Some(expected) = call.contracts.source_result.as_ref().filter(|term| {
+            !matches!(term, crate::traits::term::TyTerm::Primitive(_))
+                && crate::frontend::call_contracts::closed_term(term)
+        }) {
             let found = match self.frame.return_source.as_ref() {
                 Some(found) => Some(found.clone()),
                 None => self.store.descriptor_source_term(actual),
@@ -1895,7 +1960,9 @@ impl RunMachine {
                             if captures.is_empty()
                     )
                 });
-            if found.as_ref().map(crate::frontend::signature_subst::erase_regions)
+            if found
+                .as_ref()
+                .map(crate::frontend::signature_subst::erase_regions)
                 != Some(crate::frontend::signature_subst::erase_regions(expected))
                 && !found.as_ref().is_some_and(|found| {
                     crate::frontend::signature_subst::erase_regions(expected)
@@ -1914,7 +1981,8 @@ impl RunMachine {
             return Ok(());
         }
         if call.contracts.result_descriptor.is_some() {
-            call.contracts.check_return_descriptor_in(actual, Some(&self.store))?;
+            call.contracts
+                .check_return_descriptor_in(actual, Some(&self.store))?;
             if let (Some(expected @ crate::traits::term::TyTerm::Primitive(_)), Some(found)) = (
                 call.contracts.source_result.as_ref(),
                 self.frame.return_source.as_ref(),
@@ -2771,7 +2839,9 @@ impl RunMachine {
                 QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
             }
             let field = match self.installed.get_current(db, id) {
-                Ok(_) if self.frame.has_place_deref_demand() || self.frame.place_deref_returned() => {
+                Ok(_)
+                    if self.frame.has_place_deref_demand() || self.frame.place_deref_returned() =>
+                {
                     None::<(SlotId, SlotId)>
                 }
                 Ok(recipe) => recipe
@@ -2953,8 +3023,7 @@ impl RunMachine {
                             match self.select_value_call(db, site.0, &arguments) {
                                 QueryPoll::Ready(Ok(false)) => {}
                                 QueryPoll::Ready(Ok(true)) => {
-                                    if let Err(error) =
-                                        self.start_closure_call(site.0, &arguments)
+                                    if let Err(error) = self.start_closure_call(site.0, &arguments)
                                     {
                                         self.terminal = true;
                                         return RunPoll::Fault(error);
@@ -3008,9 +3077,9 @@ impl RunMachine {
                                     "method call has no published receiver place",
                                 ));
                             };
-                            match self.select_method_call(
-                                db, site.0, &name, &explicit, &arguments, place,
-                            ) {
+                            match self
+                                .select_method_call(db, site.0, &name, &explicit, &arguments, place)
+                            {
                                 QueryPoll::Ready(Ok(methods::MethodCall::Selected(call))) => {
                                     self.pending_bytes =
                                         self.pending_bytes.saturating_add(call.bytes);
@@ -3042,10 +3111,9 @@ impl RunMachine {
                             && explicit.is_empty()
                         {
                             match self.trait_path_call(db, site.0, &name, &arguments) {
-                                QueryPoll::Ready(Ok(Some(trait_calls::TraitPathCall::Deferred {
-                                    declaration,
-                                    call,
-                                }))) => {
+                                QueryPoll::Ready(Ok(Some(
+                                    trait_calls::TraitPathCall::Deferred { declaration, call },
+                                ))) => {
                                     self.start_deferred_trait_call(
                                         site.0,
                                         declaration,
@@ -3054,9 +3122,9 @@ impl RunMachine {
                                     );
                                     continue;
                                 }
-                                QueryPoll::Ready(Ok(Some(trait_calls::TraitPathCall::Selected(
-                                    callee,
-                                )))) => match self.prepare_selected_argument_call(
+                                QueryPoll::Ready(Ok(Some(
+                                    trait_calls::TraitPathCall::Selected(callee),
+                                ))) => match self.prepare_selected_argument_call(
                                     db, callee, &explicit, &arguments,
                                 ) {
                                     QueryPoll::Ready(Ok(call)) => {
@@ -3192,12 +3260,16 @@ impl RunMachine {
                         // has no descriptor hint, but its argument is still a
                         // reference coercion site (implicit reborrow).
                         for (ordinal, slot) in arguments.iter().enumerate() {
-                            let expectation = selected.hints.get(ordinal).and_then(|hint| {
-                                match &hint.source {
-                                    crate::traits::term::TyTerm::Ref(_, mutable, _) => Some(*mutable),
-                                    _ => None,
-                                }
-                            });
+                            let expectation =
+                                selected
+                                    .hints
+                                    .get(ordinal)
+                                    .and_then(|hint| match &hint.source {
+                                        crate::traits::term::TyTerm::Ref(_, mutable, _) => {
+                                            Some(*mutable)
+                                        }
+                                        _ => None,
+                                    });
                             self.frame.expect_reference(*slot, expectation);
                         }
                         self.frame.call_start = Some(crate::vm::call::CallStartFacts {
@@ -3215,17 +3287,12 @@ impl RunMachine {
                             .trait_calls
                             .contains_key(&self.frame.call_identity(site.0)) =>
                     {
-                        let self_ordinal = self.frame.trait_calls
-                            [&self.frame.call_identity(site.0)]
-                            .self_ordinal;
+                        let self_ordinal =
+                            self.frame.trait_calls[&self.frame.call_identity(site.0)].self_ordinal;
                         if argument < self_ordinal {
                             continue;
                         }
-                        match self.select_deferred_trait_call(
-                            db,
-                            site.0,
-                            argument as usize + 1,
-                        ) {
+                        match self.select_deferred_trait_call(db, site.0, argument as usize + 1) {
                             QueryPoll::Ready(Ok(())) => {}
                             QueryPoll::Ready(Err(error)) => {
                                 self.terminal = true;
@@ -3340,8 +3407,7 @@ impl RunMachine {
                         }
                         match self.select_constructor_call(db, site.0, &name) {
                             QueryPoll::Ready(Ok(true)) => {
-                                if let Err(error) = self.seal_constructor_call(site.0, &arguments)
-                                {
+                                if let Err(error) = self.seal_constructor_call(site.0, &arguments) {
                                     self.terminal = true;
                                     return RunPoll::Fault(error);
                                 }
@@ -3363,8 +3429,7 @@ impl RunMachine {
                                 .trait_calls
                                 .contains_key(&self.frame.call_identity(site.0))
                             {
-                                match self.select_deferred_trait_call(db, site.0, arguments.len())
-                                {
+                                match self.select_deferred_trait_call(db, site.0, arguments.len()) {
                                     QueryPoll::Ready(Ok(())) => {}
                                     QueryPoll::Ready(Err(error)) => {
                                         self.terminal = true;
@@ -3488,7 +3553,8 @@ impl RunMachine {
                                 // The caller's own generic parameters are
                                 // its runtime instantiation at the boundary:
                                 // a callee contract never sees them rigid.
-                                let view = view.map(|view| self.frame.bound_view(&view, &self.store));
+                                let view =
+                                    view.map(|view| self.frame.bound_view(&view, &self.store));
                                 let argument = reached_argument_type(descriptor, view)?;
                                 Ok((cell, argument))
                             })();
@@ -3539,12 +3605,17 @@ impl RunMachine {
                                     // source constraints from the value's uses).
                                     let hinted = match &call_result_hint {
                                         Some(crate::ir::op::HintRecipe::Primitive(primitive)) => {
-                                            crate::frontend::call_contracts::primitive_runtime_id(*primitive)
-                                                .and_then(primitive_argument_type)
-                                                .map(Some)
+                                            crate::frontend::call_contracts::primitive_runtime_id(
+                                                *primitive,
+                                            )
+                                            .and_then(primitive_argument_type)
+                                            .map(Some)
                                         }
                                         Some(crate::ir::op::HintRecipe::Written(written)) => {
-                                            match (written.source(), written.materialize(&mut self.store)) {
+                                            match (
+                                                written.source(),
+                                                written.materialize(&mut self.store),
+                                            ) {
                                                 (Some(source), Ok(Some(descriptor))) => {
                                                     Ok(Some(ArgumentType { source, descriptor }))
                                                 }

@@ -14,6 +14,8 @@ mod vecs;
 mod interior;
 #[path = "cell_atomics.rs"]
 mod atomics;
+#[path = "cell_wide_integer.rs"]
+mod wide_integer;
 #[path = "cell_promoted.rs"]
 mod promoted;
 #[path = "cell_pointers.rs"]
@@ -375,6 +377,8 @@ impl GuestStore {
             14 => Some(P::F32),
             15 => Some(P::F64),
             16 => return Some(TyTerm::Str),
+            17 => Some(P::I128),
+            18 => Some(P::U128),
             _ => None,
         };
         if let Some(primitive) = primitive {
@@ -1124,13 +1128,13 @@ impl GuestStore {
         };
         let value = record.fields[field as usize].ok_or_else(ownership)?;
         self.object_owner(value, ValueOwner::Construction { guard, field })?;
-        if !(1..=7).contains(&value.kind) {
+        if !(1..=7).contains(&value.kind) && value.kind != 17 {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "constructor field cleanup requires ordinary destructor dispatch".into(),
             ));
         }
-        value.validate_scalar()?;
+        self.validate_value(value)?;
         Ok(true)
     }
     /// Move one reverse-initialization-order value to the ordinary cleanup machine.
@@ -2486,7 +2490,7 @@ impl GuestStore {
         self.validate_value(value)?;
         self.object_owner(value, ValueOwner::Ticket(ticket))?;
         match value.kind {
-            1..=7 | 9 | 11 | 12 => Ok(CleanupInventory::Leaf),
+            1..=7 | 9 | 11 | 12 | 17 => Ok(CleanupInventory::Leaf),
             8 if self.types.is_string(TypeId(value.type_id)) => Ok(CleanupInventory::Leaf),
             8 => match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
                 TypeKey::Tuple(_) | TypeKey::Array { .. } | TypeKey::Callable { .. } => {
@@ -2816,6 +2820,7 @@ impl GuestStore {
     fn validate_value(&self, value: ValueRepr) -> Result<(), Diagnostic> {
         match value.kind {
             1..=7 => value.validate_scalar(),
+            17 => self.wide_integer_bits(value).map(|_| ()),
             8 => {
                 let object = self.objects.get(ObjectId::from_bits(value.payload))?;
                 if object.type_id.0 != value.type_id {
@@ -2980,7 +2985,7 @@ impl GuestStore {
     fn contract(&self, cell: &Cell, value: ValueRepr) -> Result<StorageContract, Diagnostic> {
         let incoming = self.effective_type(value)?;
         if cell.declared == StorageContract::NumericLiteral {
-            if value.kind != 11 && value.kind != 12 && !matches!(incoming, Some(TypeId(4..=15))) {
+            if value.kind != 11 && value.kind != 12 && !matches!(incoming, Some(TypeId(4..=15 | 17 | 18))) {
                 return Err(ownership());
             }
             if let Some(record) = cell.numeric_record
@@ -3162,7 +3167,8 @@ impl GuestStore {
                 ))?;
             return self.literal_value(value, ty);
         }
-        value.validate_scalar()?;
+        if value.kind == 17 { self.wide_integer_bits(value)?; }
+        else { value.validate_scalar()?; }
         Ok(value)
     }
     pub fn read_scalar(&self, id: CellId) -> Result<ValueRepr, Diagnostic> {
@@ -3181,6 +3187,8 @@ impl GuestStore {
             if self.references.get(RefId::from_bits(value.payload))?.access != Access::Shared {
                 return Err(ownership());
             }
+        } else if value.kind == 17 {
+            self.wide_integer_bits(value)?;
         } else {
             value.validate_scalar()?;
         }
@@ -3526,7 +3534,7 @@ impl GuestStore {
         while let Some(cell) = pending.pop() {
             let value = self.admit_move(cell)?;
             match value.kind {
-                1..=7 | 11 | 12 => {}
+                1..=7 | 11 | 12 | 17 => {}
                 9 => {
                     if self.references.get(RefId::from_bits(value.payload))?.access
                         == Access::Mutable
@@ -4009,6 +4017,9 @@ impl GuestStore {
         }
     }
     fn literal_value(&self, value: ValueRepr, ty: TypeId) -> Result<ValueRepr, Diagnostic> {
+        if matches!(ty.0, 17 | 18) {
+            return self.wide_literal_value(value, ty);
+        }
         let record = self.literals.get(LiteralId::from_bits(value.payload))?;
         match record.number {
             LiteralNumber::Integer {

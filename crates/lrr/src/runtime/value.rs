@@ -27,6 +27,8 @@ pub enum ValueKind {
     NativeObject,
     ManagedBox,
     DynView,
+    /// Copy scalar whose full bits live in the run's immutable numeric arena.
+    WideInteger,
 }
 impl ValueKind {
     pub fn code(self) -> u32 {
@@ -48,6 +50,7 @@ impl ValueKind {
             Self::NativeObject => 14,
             Self::ManagedBox => 15,
             Self::DynView => 16,
+            Self::WideInteger => 17,
         }
     }
 }
@@ -122,9 +125,13 @@ impl ValueRepr {
                 .is_some(),
             (4, Primitive::Signed(width)) => {
                 let value = self.payload as i64;
-                width == 64 || (value >= -(1i64 << (width - 1)) && value < (1i64 << (width - 1)))
+                width <= 64
+                    && (width == 64
+                        || (value >= -(1i64 << (width - 1)) && value < (1i64 << (width - 1))))
             }
-            (5, Primitive::Unsigned(width)) => width == 64 || self.payload < (1u64 << width),
+            (5, Primitive::Unsigned(width)) => {
+                width <= 64 && (width == 64 || self.payload < (1u64 << width))
+            }
             (6, Primitive::F32) => self.payload <= u64::from(u32::MAX),
             (7, Primitive::F64) => true,
             _ => false,

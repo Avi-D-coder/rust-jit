@@ -152,15 +152,37 @@ enum Next<'a, 't> {
 #[derive(Clone, Copy, PartialEq)]
 enum Number {
     Integer(i128),
+    Unsigned(u128),
     Float(f64),
     Char(u32),
     Bool(bool),
 }
 impl Number {
+    fn integer_parts(negative: bool, magnitude: u128) -> Result<Self, Diagnostic> {
+        if negative {
+            if magnitude > 1u128 << 127 {
+                return Err(mismatch("negative integer pattern has no signed Rust type"));
+            }
+            Ok(Self::Integer(0u128.wrapping_sub(magnitude) as i128))
+        } else {
+            Ok(Self::Unsigned(magnitude))
+        }
+    }
     /// None is an unordered float comparison (NaN): it satisfies no test.
     fn compare(self, other: Self) -> Result<Option<std::cmp::Ordering>, Diagnostic> {
         Ok(match (self, other) {
             (Self::Integer(a), Self::Integer(b)) => Some(a.cmp(&b)),
+            (Self::Unsigned(a), Self::Unsigned(b)) => Some(a.cmp(&b)),
+            (Self::Integer(a), Self::Unsigned(b)) => Some(if a < 0 {
+                std::cmp::Ordering::Less
+            } else {
+                (a as u128).cmp(&b)
+            }),
+            (Self::Unsigned(a), Self::Integer(b)) => Some(if b < 0 {
+                std::cmp::Ordering::Greater
+            } else {
+                a.cmp(&(b as u128))
+            }),
             (Self::Char(a), Self::Char(b)) => Some(a.cmp(&b)),
             (Self::Bool(a), Self::Bool(b)) => Some(a.cmp(&b)),
             (Self::Float(a), Self::Float(b)) => a.partial_cmp(&b),
@@ -295,7 +317,11 @@ impl<'s> Search<'s> {
                 u32::try_from(value.payload).map_err(|_| mismatch("char payload overflow"))?,
             ),
             4 => Number::Integer(i128::from(value.payload as i64)),
-            5 => Number::Integer(i128::from(value.payload)),
+            5 => Number::Unsigned(u128::from(value.payload)),
+            17 if value.type_id == 17 => {
+                Number::Integer(self.store.wide_integer_bits(value)? as i128)
+            }
+            17 => Number::Unsigned(self.store.wide_integer_bits(value)?),
             6 => Number::Float(f64::from(f32::from_bits(value.payload as u32))),
             7 => Number::Float(f64::from_bits(value.payload)),
             11 => {
@@ -303,9 +329,7 @@ impl<'s> Search<'s> {
                     .store
                     .integer_parts(value)?
                     .ok_or_else(|| mismatch("integer literal parts absent"))?;
-                let magnitude = i128::try_from(magnitude)
-                    .map_err(|_| mismatch("integer literal exceeds the pattern domain"))?;
-                Number::Integer(if negative { -magnitude } else { magnitude })
+                Number::integer_parts(negative, magnitude)?
             }
             12 => {
                 return Err(unsupported(
@@ -340,9 +364,16 @@ impl<'s> Search<'s> {
                         "integer pattern literal against a float scrutinee",
                     ));
                 }
-                let magnitude = i128::try_from(*magnitude)
-                    .map_err(|_| mismatch("integer pattern literal exceeds its domain"))?;
-                Number::Integer(if *negative { -magnitude } else { magnitude })
+                if let Some(ty) = concrete.filter(|ty| matches!(ty.0, 17 | 18)) {
+                    let bits = GuestStore::integer_literal_bits(*negative, *magnitude, ty)?;
+                    if ty.0 == 17 {
+                        Number::Integer(bits as i128)
+                    } else {
+                        Number::Unsigned(bits)
+                    }
+                } else {
+                    Number::integer_parts(*negative, *magnitude)?
+                }
             }
             PatternLiteral::Byte(byte) => {
                 if concrete.is_some_and(|ty| ty != TypeId(9)) {
@@ -399,9 +430,7 @@ impl<'s> Search<'s> {
                         actual.compare(self.literal(literal, value)?)
                     }
                     RangeEndpoint::Constant(slot) => match self.target(*slot)? {
-                        PatternTarget::Constant(bound) => {
-                            actual.compare(self.number(*bound)?)
-                        }
+                        PatternTarget::Constant(bound) => actual.compare(self.number(*bound)?),
                         PatternTarget::Refused(refusal) => Err(refusal.clone()),
                         _ => Err(mismatch("range pattern bound is not a constant")),
                     },
@@ -722,7 +751,8 @@ impl<'s> Search<'s> {
                             "array subslice binding requires its sized subarray value",
                         ));
                     }
-                    let start = u64::try_from(before).map_err(|_| mismatch("slice rest overflow"))?;
+                    let start =
+                        u64::try_from(before).map_err(|_| mismatch("slice rest overflow"))?;
                     let end = u64::try_from(length - (fixed - before))
                         .map_err(|_| mismatch("slice rest overflow"))?;
                     goals.push(Goal {
@@ -738,9 +768,7 @@ impl<'s> Search<'s> {
                             )
                             .map_err(place_fault)?,
                         source: match &source {
-                            Some(TyTerm::Slice(element)) => {
-                                Some(TyTerm::Slice(element.clone()))
-                            }
+                            Some(TyTerm::Slice(element)) => Some(TyTerm::Slice(element.clone())),
                             _ => None,
                         },
                         node: binding,

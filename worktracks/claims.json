@@ -118,7 +118,6 @@
         "crates/lrr/src/ir/op.rs",
         "crates/lrr/src/ir/recipe.rs",
         "crates/lrr/src/ir/validate.rs",
-        "crates/lrr/src/vm/step.rs",
         "crates/lrr/src/engine/failure.rs",
         "xtask/tests/match_no_arm_exit.rs"
       ],
@@ -697,7 +696,6 @@
         "crates/lrr/src/frontend/lexical_callables.rs",
         "crates/lrr/src/service/retained_callable_tests.rs",
         "fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
-        "crates/lrr/src/frontend/call_contracts.rs",
         "crates/lrr/src/frontend/generated_result_namespace.rs",
         "crates/lrr/src/frontend/type_name_namespace.rs",
         "crates/lrr/src/frontend/primitive_type_names.rs",
@@ -714,7 +712,6 @@
         "crates/lrr/src/syntax/node_lookup.rs",
         "crates/lrr/src/syntax/node_lookup_tests.rs",
         "crates/lrr/src/db/value.rs",
-        "crates/lrr/src/vm/frame.rs",
         "crates/lrr/src/engine/run_body_sharing_tests.rs",
         "crates/lrr/src/db/body_structure_accounting_tests.rs",
         "worktracks/evidence/2026-10-15-common-source-preparation.json",
@@ -748,13 +745,11 @@
         "worktracks/evidence/2026-10-15-common-source-boundaries.json",
         "crates/lrr/src/syntax/pattern_tests_tests.rs",
         "crates/lrr/src/service/common_pattern_route_tests.rs",
-        "crates/lrr/src/runtime/cell.rs",
         "crates/lrr/src/vm/context.rs",
         "crates/lrr/src/expand/source_declarative/macro_anchors.rs",
         "crates/lrr/src/ir/op.rs",
         "crates/lrr/src/ir/recipe.rs",
         "crates/lrr/src/ir/validate.rs",
-        "crates/lrr/src/vm/step.rs",
         "crates/lrr/src/vm/frame_scope_cleanup.rs",
         "crates/lrr/src/engine/failure.rs",
         "crates/lrr/src/engine/run_capture.rs",
@@ -1194,9 +1189,6 @@
         "crates/lrr/src/syntax/value_call_thunk.rs",
         "crates/lrr/src/engine/run_value_calls.rs",
         "crates/lrr/src/engine/run_capture.rs",
-        "crates/lrr/src/vm/frame_operator_calls.rs",
-        "crates/lrr/src/vm/frame.rs",
-        "crates/lrr/src/vm/step.rs",
         "crates/lrr/src/cli/callable_value_tests.rs",
         "crates/lrr/src/cli/crate_graph.rs",
         "crates/lrr/src/cli/format_trait_facade_tests.rs",
@@ -1225,7 +1217,6 @@
         "crates/lrr/src/db/local_declaration_inputs.rs",
         "crates/lrr/src/frontend/ordinary_local_callables.rs",
         "crates/lrr/src/frontend/callables.rs",
-        "crates/lrr/src/engine/run_initializers.rs",
         "crates/lrr/src/expand/source_declarative/body_selection.rs",
         "crates/lrr/src/syntax/node_lookup.rs",
         "crates/lrr/src/cli/initializer_tests.rs",
@@ -1267,8 +1258,6 @@
       "paths": [
         "crates/lrr/facade/core/sync.rs",
         "crates/lrr/src/facade/functions.rs",
-        "crates/lrr/src/engine/run_facade.rs",
-        "crates/lrr/src/runtime/cell.rs",
         "crates/lrr/src/runtime/cell_interior.rs",
         "crates/lrr/src/runtime/cell_atomics.rs",
         "fixtures/upstream/rustc-checkout/library/coretests/tests/atomic.rs"
@@ -1277,6 +1266,70 @@
       "pull_request": null,
       "updated_at": "2026-10-18T08:48:59.774551+00:00",
       "review_after": "2026-10-18T08:48:59.774551+00:00"
+    },
+    {
+      "id": "LOCAL-042",
+      "track": "WT04",
+      "item": "WT04-04",
+      "owner": "/root/interpreter_validation_resume",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "Existing supplemental Type-scope regression source review and stale oracle repair: genuine identical-derived agreement/currentness vs actual conflicting receipt refusal. No production policy change or stock pass.",
+      "paths": [
+        "crates/lrr/src/frontend/current_type_scope_tests.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-18T08:57:28.443446+00:00",
+      "review_after": "2026-10-18T08:57:28.443446+00:00"
+    },
+    {
+      "id": "LOCAL-043",
+      "track": "WT04",
+      "item": "WT04-04",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "T023/T025 wide primitive runtime foundation; actual unchanged stockconst/i128 witnesses. Existing 16-byte ValueRepr with checked immutable backing; full VM/library integration held. See worktracks/evidence/2026-10-18-wide-integer-precode.md.",
+      "paths": [
+        "crates/lrr/src/runtime/value.rs",
+        "crates/lrr/src/runtime/shape.rs",
+        "crates/lrr/src/runtime/cell_wide_integer.rs",
+        "crates/lrr/src/runtime/cell.rs",
+        "crates/lrr/src/runtime/cell_layout.rs",
+        "crates/lrr/src/frontend/call_contracts.rs",
+        "crates/lrr/src/vm/numeric.rs",
+        "crates/lrr/src/vm/numeric_store.rs",
+        "crates/lrr/src/vm/step.rs",
+        "crates/lrr/src/vm/frame.rs",
+        "crates/lrr/src/vm/frame_operator_calls.rs",
+        "crates/lrr/src/vm/frame_temporary_scopes.rs",
+        "crates/lrr/src/vm/frame_string_literals.rs",
+        "crates/lrr/src/vm/pattern_match.rs",
+        "crates/lrr/src/vm/integer_literal_decode_tests.rs",
+        "crates/lrr/src/engine/run_facade.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-18T08:57:28.443446+00:00",
+      "review_after": "2026-10-18T08:57:28.443446+00:00"
+    },
+    {
+      "id": "LOCAL-044",
+      "track": "WT04",
+      "item": "WT04-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "E007 remove reached scalar/array pure evaluator fallback; shared DefinitionResult primitive/written source context join. Nonprimitive template/instantiation remains held; source-only nextcandidate.",
+      "paths": [
+        "crates/lrr/src/engine/run_value_items.rs",
+        "crates/lrr/src/engine/run_initializers.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-18T09:15:07.352169+00:00",
+      "review_after": "2026-10-18T09:15:07.352169+00:00"
     }
   ]
 }

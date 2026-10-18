@@ -37,6 +37,8 @@ pub fn primitive(id: TypeId) -> Result<Primitive, Diagnostic> {
         14 => Ok(Primitive::F32),
         15 => Ok(Primitive::F64),
         16 => Ok(Primitive::Str),
+        17 => Ok(Primitive::Signed(128)),
+        18 => Ok(Primitive::Unsigned(128)),
         _ => Err(super::value::invalid()),
     }
 }
@@ -62,12 +64,8 @@ impl PrimitiveIdentity {
             P::Usize => 13,
             P::F32 => 14,
             P::F64 => 15,
-            P::I128 | P::U128 => {
-                return Err(Diagnostic::new(
-                    "LRR-E-UNSUPPORTED",
-                    "128-bit guest integers are outside the live profile".into(),
-                ));
-            }
+            P::I128 => 17,
+            P::U128 => 18,
         };
         Self::new(TypeId(id))
     }
@@ -208,8 +206,8 @@ pub struct TypeRegistry {
     unevaluated_discriminants: usize,
 }
 /// Reserved primitive descriptors have no source or worker-dependent state.
-fn primitive_descriptors() -> &'static [TypeDescriptor; 16] {
-    static DESCRIPTORS: OnceLock<[TypeDescriptor; 16]> = OnceLock::new();
+fn primitive_descriptors() -> &'static [TypeDescriptor; 18] {
+    static DESCRIPTORS: OnceLock<[TypeDescriptor; 18]> = OnceLock::new();
     DESCRIPTORS.get_or_init(|| {
         std::array::from_fn(|index| {
             let id = TypeId(index as u32 + 1);
@@ -248,17 +246,17 @@ impl TypeRegistry {
             .unwrap_or(usize::MAX)
     }
     pub fn contains(&self, id: TypeId) -> bool {
-        (1..=16).contains(&id.0)
+        (1..=18).contains(&id.0)
             || id
                 .0
-                .checked_sub(17)
+                .checked_sub(19)
                 .is_some_and(|index| (index as usize) < self.descriptors.len())
     }
     pub fn descriptor(&self, id: TypeId) -> Result<&TypeDescriptor, Diagnostic> {
-        if (1..=16).contains(&id.0) {
+        if (1..=18).contains(&id.0) {
             return Ok(&primitive_descriptors()[id.0 as usize - 1]);
         }
-        let index = id.0.checked_sub(17).ok_or_else(super::value::invalid)?;
+        let index = id.0.checked_sub(19).ok_or_else(super::value::invalid)?;
         self.descriptors
             .get(index as usize)
             .ok_or_else(super::value::invalid)
@@ -271,7 +269,7 @@ impl TypeRegistry {
         }
     }
     fn copy_status(&self, id: TypeId) -> Result<CopyStatus, Diagnostic> {
-        if id.0 <= 16 {
+        if id.0 <= 18 {
             primitive(id)?;
             return Ok(if id.0 == 16 {
                 CopyStatus::NotCopy
@@ -426,7 +424,7 @@ impl TypeRegistry {
         let id = TypeId(
             u32::try_from(self.descriptors.len())
                 .ok()
-                .and_then(|n| n.checked_add(17))
+                .and_then(|n| n.checked_add(19))
                 .ok_or_else(resource)?,
         );
         self.owned_bytes = self.owned_bytes.checked_add(bytes).ok_or_else(resource)?;
@@ -487,7 +485,7 @@ impl TypeRegistry {
         id: TypeId,
         table: &Arc<[Option<i128>]>,
     ) -> Result<(), Diagnostic> {
-        let index = id.0.checked_sub(17).ok_or_else(super::value::invalid)?;
+        let index = id.0.checked_sub(19).ok_or_else(super::value::invalid)?;
         let descriptor = self
             .descriptors
             .get_mut(index as usize)
@@ -694,10 +692,10 @@ mod tests {
                 len: 0,
             })
             .unwrap();
-        assert_eq!(first, TypeId(17));
+        assert_eq!(first, TypeId(19));
         assert_eq!(types.descriptor(first).unwrap().copy, CopyStatus::Copy);
         let mut fresh = TypeRegistry::default();
-        assert!(!fresh.contains(TypeId(17)));
+        assert!(!fresh.contains(TypeId(19)));
         assert_eq!(
             fresh
                 .intern(TypeKey::Primitive(

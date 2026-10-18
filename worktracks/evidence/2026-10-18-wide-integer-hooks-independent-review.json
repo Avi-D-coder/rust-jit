@@ -1,0 +1,36 @@
+{
+  "schema": "lrr-source-review/v1",
+  "reviewer": "closure_callable_resume",
+  "scope": "V7 integrated wide integer ordinary literal/operator/pattern/format/byte hooks, read-only while builds run",
+  "files": {
+    "crates/lrr/src/runtime/cell_wide_integer.rs": "6639655e325820a6d737c296cd78b4b7c943f5c9f514aa5f9af5b33c30444fc2",
+    "crates/lrr/src/runtime/cell_layout.rs": "7cff736f5c99e13233cccc3cd86df961a36b05f0bca5b7a535cbff05243bf82e",
+    "crates/lrr/src/runtime/cell.rs": "471f594cb9ee9f58f138bd3bf43fe4528284e01a8f6e3218d86941f1ec3aa7e1",
+    "crates/lrr/src/vm/step.rs": "bda13119ee03cce880974e28a516b139552bbb428f1ad5e3fb6746f85682b9d1",
+    "crates/lrr/src/vm/frame.rs": "a798481c6f4f227dc67de9e3e3f12aec188f0c5119090671187146b25f930eb7",
+    "crates/lrr/src/vm/frame_operator_calls.rs": "84270515fd4f5f08d9ba65b5edadb0a4e0c269e2cba0234467c8bc4a8782b700",
+    "crates/lrr/src/vm/frame_temporary_scopes.rs": "126b43d4452ac12427939c1143e19bfbf3797da126c9a94ff31170a4e6b38db7",
+    "crates/lrr/src/vm/frame_string_literals.rs": "9d1d4c9983496630e83d8ebc9ff488ab340f16a321c3472cda4faad39345a5d5",
+    "crates/lrr/src/vm/pattern_match.rs": "1bf286014bbc10aa7288cecb68439ddf5a4ad617aace31012f58b61687d85277",
+    "crates/lrr/src/engine/run_facade.rs": "cf5ebc90b40ac9c29337eb68359efb04c853abb69d0e79889abb6c73e27f5697",
+    "crates/lrr/src/engine/run_value_items.rs": "22ced558204b39950c3c6a527149e714724c6ef7b6abe5ad40533e1935ef1692",
+    "crates/lrr/src/frontend/call_contracts.rs": "805ba008d4258f99b4d234a0ab21ed926203cbf958d692aa535ca8dbb14c9aae"
+  },
+  "review": {
+    "full_width_literal": "Updated integer_literal_bits permits all128bit patterns in i128 (no lint enforcement), folding negative bits with wrapping_sub. This supersedes prior5leaf review statement limiting positive i128 magnitude. User-allowed overflow literal behavior does not alter checked reached arithmetic. Narrow literal overflow behavior remains inherited separate gap.",
+    "literal_pipeline": "prepare_literal still consumes pinned DecodedLiteral and shared suffix/context. Pure integer_literal_bits validates before mutation. commit_literal allocates ordinary literal and materialize_ticket binds exact selected Type before publication. No numeric source authority minted from raw descriptor.",
+    "operator_pipeline": "preflight_numeric admits kind17, applies unchanged borrowed builtin primitive route and shared source operand validation; numeric_step uses binary_in/unary_in/cast_in. Frame compound assignment uses same binary_in, operator trait classification treats17 as primitive; no alternate source evaluator. All runtime operators still use actual current scalar cells and descriptor checks.",
+    "pattern_pipeline": "Existing transactional Search Number gains Signed(i128)/Unsigned(u128), with cross-family mathematical ordering guarding negative signed comparisons. Typed fullwidth pattern literals use actual scrutinee Type through same integer_literal_bits, so bitpatterns normalize like runtime values. Number receives checked wide arena bits; no separate pattern traversal or consuming tests introduced.",
+    "format_pipeline": "format_value retains existing FormatValue::Signed(i128,width)/Unsigned(u128,width) and now obtains actual store.integer_bits, preserving full signed extension and128bit width. display_scalar reads checked wide arena bits; references/array formatting stay common.",
+    "plain_image": "layout_of computes16byte scalar from128width. write_plain_image serializes checked128bits little-endian; read_plain_image checks16byte range with checked addition, rebuilds through wide_integer_value, then ordinary ticket. Existing nominal/provenance exclusions unchanged; no native symbol path.",
+    "lifecycle": "Wide literal materialize_ticket reserves concrete ticket then fixes literal binding; typed operation backing has bindingSome. Value validation checks same-run arena handle. Runlong numeric backing has scalar Copy semantics, normal ticket/cell ownership and ordinary panic cleanup. No sandbox, fuel or memory budget policy introduced.",
+    "all8": "Reviewed new joins call existing ordinary source/IR/VM paths for either source origin. No assertion evaluator, generated literal executor, context-only numeric/member rule, generated-only exclusion, second pattern matcher/cold executable branch inspection, source reparsing/planning, global namespace scan or BodyIndex cloning added. This is source evidence; runtime matrix not inferred."
+  },
+  "findings": [],
+  "holds": [
+    "V7 compile/test terminals not yet received; no pass claim.",
+    "Prior5leaf core review remains attached to original hashes; integrated hooks and changed literal bitpattern policy are reviewed separately here.",
+    "Known wider consumers such as native128/hash/pointer conversions and inherited narrow overflowing literal behavior are not complete128 compatibility.",
+    "No source edits performed by independent reviewer."
+  ]
+}

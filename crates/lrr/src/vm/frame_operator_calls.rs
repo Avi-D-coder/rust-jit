@@ -320,7 +320,7 @@ impl Frame {
         let CellState::Live(value) = store.state(self.cell(slot)?)? else {
             return Err(invalid("operator operand not live"));
         };
-        if (1..=7).contains(&value.kind) || matches!(value.kind, 11 | 12) {
+        if (1..=7).contains(&value.kind) || matches!(value.kind, 11 | 12 | 17) {
             return Ok(false);
         }
         if value.kind == 9

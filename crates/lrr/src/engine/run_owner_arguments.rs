@@ -41,6 +41,25 @@ pub(super) enum OwnerArgument {
     /// Resolved in the declaring signature's context (a generated body).
     Term(TyTerm),
 }
+impl OwnerArguments {
+    /// Exact Type arguments under the current activation. The immutable
+    /// selection is shared; descriptors stay local to this execution.
+    pub(super) fn value_descriptors(
+        &self,
+        frame: &Frame,
+        store: &mut GuestStore,
+    ) -> Result<Vec<Option<crate::runtime::shape::TypeId>>, Diagnostic> {
+        self.arguments
+            .iter()
+            .map(|argument| {
+                argument
+                    .as_ref()
+                    .map(|argument| argument.descriptor(frame, store))
+                    .transpose()
+            })
+            .collect()
+    }
+}
 impl OwnerArgument {
     fn source(&self) -> &TyTerm {
         match self {
@@ -141,10 +160,11 @@ impl RunMachine {
                 }
             };
         }
-        let key = ready!(self
-            .frame
-            .body
-            .pc(NodeId(self.frame.pc().node), Phase::Entry));
+        let key = ready!(
+            self.frame
+                .body
+                .pc(NodeId(self.frame.pc().node), Phase::Entry)
+        );
         if let Some(cached) = self.owner_arguments.get(&key) {
             return QueryPoll::Ready(match cached {
                 None => Ok(None),
@@ -173,15 +193,26 @@ impl RunMachine {
         let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
             return QueryPoll::Ready(Err(call_fault("reached call parse kind differs")));
         };
-        let list = ready!(parsed.entered_node_syntax(&handle, &self.frame.body, NodeId(key.node)))
-            .and_then(ast::CallExpr::cast)
-            .and_then(|call| match call.expr() {
-                Some(ast::Expr::PathExpr(path)) => path.path(),
-                _ => None,
-            })
-            .and_then(|path| path.qualifier())
-            .and_then(|owner| owner.segment())
-            .and_then(|segment| segment.generic_arg_list());
+        let syntax =
+            ready!(parsed.entered_node_syntax(&handle, &self.frame.body, NodeId(key.node)));
+        let value_path = syntax
+            .as_ref()
+            .and_then(|node| ast::PathExpr::cast(node.clone()));
+        // A constructor value states arguments on its final segment, just as
+        // an associated call states them on its owner segment. Both consume
+        // the same indexed Type-argument service below.
+        let list = match value_path.as_ref() {
+            Some(path) => path.path().and_then(|path| path.segment()),
+            None => syntax
+                .and_then(ast::CallExpr::cast)
+                .and_then(|call| match call.expr() {
+                    Some(ast::Expr::PathExpr(path)) => path.path(),
+                    _ => None,
+                })
+                .and_then(|path| path.qualifier())
+                .and_then(|owner| owner.segment()),
+        }
+        .and_then(|segment| segment.generic_arg_list());
         let Some(list) = list else {
             self.owner_arguments.insert(key, None);
             return QueryPoll::Ready(Ok(None));
@@ -208,8 +239,14 @@ impl RunMachine {
             .is_some()
         {
             poll!(self.entered_owner_arguments(db, &key, &types))
-        } else {
+        } else if value_path.is_none() {
+            // Existing legacy call-owner route is held migration debt; a
+            // constructor value must retain its actual indexed environment.
             poll!(self.signature_owner_arguments(db, parsed, &key, &types))
+        } else {
+            return QueryPoll::Ready(Err(call_fault(
+                "explicit value Type arguments require their admitted indexed body environment",
+            )));
         };
         let found = Arc::new(found);
         self.owner_arguments.insert(key, Some(Arc::clone(&found)));
@@ -232,11 +269,9 @@ impl RunMachine {
                 }
             };
         }
-        let plan = {
-            let value = match db.fetch(
-                &SyntaxProvider,
-                QueryKey::SourceLocalPlan(key.body.clone()),
-            ) {
+        let plan_key = QueryKey::SourceLocalPlan(key.body.clone());
+        let (plan, source_guard) = {
+            let value = match db.fetch(&SyntaxProvider, plan_key.clone()) {
                 QueryPoll::Ready(Ok(value)) => value,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -244,23 +279,36 @@ impl RunMachine {
             let QueryValue::SourceLocalPlan(plan) = value.value.as_ref() else {
                 return QueryPoll::Ready(Err(call_fault("owner Type plan variant differs")));
             };
-            Arc::clone(plan)
+            if !value.cacheable {
+                return QueryPoll::Ready(Err(call_fault("owner Type source plan is not retained")));
+            }
+            let guard = match db.prepare_input_guard(&SyntaxProvider, &plan_key, value.fingerprint)
+            {
+                QueryPoll::Ready(Ok(guard)) => guard,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            (Arc::clone(plan), Arc::new(guard))
         };
         let owner = plan.context().source();
         let index = owner.index();
         let mut arguments = Vec::new();
-        let mut guards = Vec::new();
+        let mut guards = vec![source_guard];
         for ty in types {
             let range = crate::syntax::ast_adapter::range(ty.syntax().text_range());
             let relative = ready!(crate::syntax::spans::SourceRange::checked(
-                ready!(range
-                    .start
-                    .checked_sub(owner.body().range.start)
-                    .ok_or_else(|| call_fault("owner Type argument escapes its body"))),
-                ready!(range
-                    .end
-                    .checked_sub(owner.body().range.start)
-                    .ok_or_else(|| call_fault("owner Type argument escapes its body"))),
+                ready!(
+                    range
+                        .start
+                        .checked_sub(owner.body().range.start)
+                        .ok_or_else(|| call_fault("owner Type argument escapes its body"))
+                ),
+                ready!(
+                    range
+                        .end
+                        .checked_sub(owner.body().range.start)
+                        .ok_or_else(|| call_fault("owner Type argument escapes its body"))
+                ),
             ));
             let Some(node) = index
                 .nodes_at_range(relative)

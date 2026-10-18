@@ -8,11 +8,17 @@ use crate::{
     },
     db::{
         dependency::{InputKey, InputValue},
+        key::{BucketKey, CurrentModuleNameKey, QueryKey},
         memo::Database,
         poll::QueryPoll,
+        provider::SyntaxProvider,
         seals::SealDomain,
+        value::QueryValue,
     },
-    source::{changes::PreparedSourceView, manifest::Namespace},
+    source::{
+        changes::PreparedSourceView,
+        manifest::{ItemKind, Namespace},
+    },
     syntax::outline::{HeaderRecipe, ScopeKey},
 };
 use std::collections::BTreeMap;
@@ -157,9 +163,11 @@ pub(crate) fn lookup_name(
             "primitive name requires its current owning Type namespace",
         )
     };
-    let Some((InputValue::DefinitionSource(parse), _)) =
-        db.published_input(&InputKey::DefinitionSource(declaration.definition))
+    let Some(selected_source) = db.input(&InputKey::DefinitionSource(declaration.definition))
     else {
+        return Err(missing());
+    };
+    let InputValue::DefinitionSource(parse) = selected_source.as_ref() else {
         return Err(missing());
     };
     let parse = parse.clone();
@@ -208,8 +216,7 @@ pub(crate) fn lookup_name(
     {
         let mut owners = sources.iter().filter(|view| {
             view.outline()
-                .items
-                .iter()
+                .declaration_rows()
                 .any(|item| item.def_key.fingerprint() == declaration.definition)
         });
         let owner = *owners.next().ok_or_else(missing)?;
@@ -223,8 +230,7 @@ pub(crate) fn lookup_name(
         };
         let original = owner
             .outline()
-            .items
-            .iter()
+            .declaration_rows()
             .find(|item| item.def_key.fingerprint() == declaration.definition)
             .ok_or_else(missing)?;
         if proof.parse() != &parse
@@ -242,48 +248,25 @@ pub(crate) fn lookup_name(
         None
     };
     let owning_parse = retained_owner.map_or(&parse, |source| &source.outline.parse);
-    let mut source = None;
-    let mut captured_count = 0usize;
-    for key in stamps.keys() {
-        let InputKey::CapturedSource(location) = key else {
-            continue;
-        };
-        captured_count = captured_count
-            .checked_add(1)
-            .ok_or_else(|| {
-                fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "primitive result source universe count",
-                )
-            })?;
-        let Some((InputValue::CapturedSource(selection), _)) = db.published_input(key) else {
-            return Err(missing());
-        };
-        if selection.location_identity() != *location {
-            return Err(missing());
-        }
-        if selection.outline.parse == *owning_parse
+    // Select the actual owner lease, not the complete published source world.
+    // Retained bridges above have already proved their declaration identity.
+    let mut owners = sources.iter().filter(|view| {
+        let selection = view.selection();
+        selection.outline.parse == *owning_parse
             && selection.outline.crate_key == declaration.scope.crate_key
             && declaration
                 .scope
                 .module_path
                 .starts_with(&selection.outline.module_path)
-        {
-            if source.is_some() {
-                return Err(missing());
-            }
-            source = Some(selection);
-        }
+    });
+    let owner = *owners.next().ok_or_else(missing)?;
+    if owners.next().is_some() {
+        return Err(missing());
     }
-    let Some(source) = source else {
-        return Err(missing());
-    };
-    let Some(owner) = sources.iter().find(|view| view.selection() == source) else {
-        return Err(missing());
-    };
+    let source = owner.selection();
     owner.require_original_hygiene()?;
     if associated_source.is_none()
-        && !owner.outline().items.iter().any(|item| {
+        && !owner.outline().declaration_rows().any(|item| {
             item.def_key.fingerprint() == declaration.definition
                 && item.scope == *declaration.scope
                 && item.header.fingerprint() == declaration.header.fingerprint()
@@ -294,6 +277,23 @@ pub(crate) fn lookup_name(
     }
     let name =
         crate::expand::scopes::MacroName::parse(written_name, declaration.header.profile.edition)?;
+    if let Some(lookup) = certified_module_lookup(db, owner, declaration.scope, name.as_str())? {
+        return Ok(lookup);
+    }
+    // Legacy unsealed/local-rib evidence below still needs its complete source
+    // universe. Certified module answers above never construct that census.
+    let mut captured_count = 0usize;
+    for key in stamps.keys() {
+        let InputKey::CapturedSource(location) = key else {
+            continue;
+        };
+        captured_count = captured_count.checked_add(1).ok_or_else(missing)?;
+        if !matches!(db.published_input(key), Some((InputValue::CapturedSource(selection), _))
+            if selection.location_identity() == *location)
+        {
+            return Err(missing());
+        }
+    }
     // Prefer actual current Type discovery. Select no arbitrary world when
     // more than one current immutable scope certificate is published.
     let epoch = match db.published_input(&InputKey::ExpansionEpoch) {
@@ -326,7 +326,16 @@ pub(crate) fn lookup_name(
         let Some(scope) = input.scope.as_ref() else {
             return Err(missing());
         };
-        if input.seal.key() != *key || input.seal.unresolved_frontiers() != 0 || scope.scope != *declaration.scope || scope.namespace != Namespace::Type || scope.edition != declaration.header.profile.edition || source.outline.parse.profile != declaration.header.profile || !input.sources.contains(source) || input.sources.len() != captured_count || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph), _)) if graph.fingerprint() == input.source_dependencies) {
+        if input.seal.key() != *key
+            || input.seal.unresolved_frontiers() != 0
+            || scope.scope != *declaration.scope
+            || scope.namespace != Namespace::Type
+            || scope.edition != declaration.header.profile.edition
+            || source.outline.parse.profile != declaration.header.profile
+            || !input.sources.contains(source)
+            || input.sources.len() != captured_count
+            || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph), _)) if graph.fingerprint() == input.source_dependencies)
+        {
             return Err(missing());
         }
         let mut locations = std::collections::BTreeSet::new();
@@ -437,14 +446,12 @@ pub(crate) fn lookup_name(
                 )
             })?;
         for (key, expected) in view.prepared_inputs() {
-            rows = rows
-                .checked_add(1)
-                .ok_or_else(|| {
-                    fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "primitive result original namespace input count",
-                    )
-                })?;
+            rows = rows.checked_add(1).ok_or_else(|| {
+                fault(
+                    "LRR-E-METADATA-LIMIT",
+                    "primitive result original namespace input count",
+                )
+            })?;
             if db
                 .published_input(key)
                 .is_none_or(|(_, current)| current != expected.fingerprint())
@@ -472,6 +479,80 @@ pub(crate) fn lookup_name(
         return Err(missing());
     }
     Ok(lookup)
+}
+
+/// A declaration's impl/trait is not a module namespace. Its actual source row
+/// establishes the enclosing module; a function-local rib is never stripped.
+/// The same retained module-name query supplies positive and negative answers.
+fn certified_module_lookup(
+    db: &mut Database,
+    source: &PreparedSourceView,
+    scope: &ScopeKey,
+    name: &str,
+) -> Result<Option<NameLookup>, Diagnostic> {
+    let mut module_scope = scope.clone();
+    if let Some(owner) = scope.owner {
+        let associated_owner = source.outline().declaration_rows().find(|item| {
+            item.scope.crate_key == scope.crate_key
+                && item.scope.module_path == scope.module_path
+                && match item.def_key.item_kind {
+                    ItemKind::Impl => item.def_key.enclosing_impl == Some(owner),
+                    ItemKind::Trait => item.def_key.fingerprint() == owner,
+                    _ => false,
+                }
+        });
+        let Some(associated_owner) = associated_owner else {
+            return Ok(None);
+        };
+        // The owner's real enclosing scope can itself be a local rib. Do not
+        // flatten local impl/trait declarations to the file's module.
+        module_scope = associated_owner.scope.clone();
+        if module_scope.owner.is_some() {
+            return Ok(None);
+        }
+    }
+    if db
+        .current_scope_certificate(source.selection(), &module_scope, Namespace::Type)?
+        .is_none()
+    {
+        return Ok(None);
+    }
+    let key = CurrentModuleNameKey {
+        source: source.selection().outline.clone(),
+        path: source.selection().path.as_str().to_owned(),
+        bucket: BucketKey {
+            scope: module_scope,
+            namespace: Namespace::Type,
+            name: name.to_owned(),
+        },
+    };
+    let outcome = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::CurrentModuleName(Box::new(key.clone())),
+    ) {
+        QueryPoll::Ready(Ok(outcome)) => outcome,
+        QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "owning module Type namespace requires preparation",
+            ));
+        }
+    };
+    match outcome.value.as_ref() {
+        QueryValue::CurrentModuleName(observation) if observation.matches_request(&key) => {
+            observation.lookup().cloned().map(Some).ok_or_else(|| {
+                fault(
+                    "LRR-E-CALL-CONTEXT",
+                    "owning module Type namespace is not complete",
+                )
+            })
+        }
+        _ => Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "owning module Type namespace observation differs",
+        )),
+    }
 }
 
 /// A stored negative/incomplete row is not proof of absence. Completed scope

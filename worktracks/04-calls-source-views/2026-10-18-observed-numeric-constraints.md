@@ -147,3 +147,11 @@ source-defined Deref target's arguments. Such a candidate now supplies no fact;
 source-directed Deref stays with the common member service. Direct completed call
 results, builtin references/Box and tuple/array evidence are unchanged. Updated
 frame_related_numeric.rs SHA-256: `1199f5b575a744fe0a7b3eb891e228bd8406b8140e2b9698a5d88d6e8943dc7d`.
+
+## V6 actual terminal evidence
+
+Sole validation worker compiled unchanged source set `3d5608832ad2a0610c3d3ff5be25d9657825fe0e058993e1cd1cd8eaacb8736e`: library no-run exit0 in30.45s, CLI build exit0 in22.12s, no source changes during either build. Test binary SHA256 `4e6624bc0d6fa36155380c1b8d9e694362076fdac38ff1b3cff146754e6ac74a`.
+
+`cli::callable_value_tests::callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins` PASS, exit0,18.06s. Existing unsuffixed ordinary/user/wrapper forms plus Rc closure program run, check stdout ordering, and inspect CalleeDeref opcode execution. This is an LRR route/exact-once control, not a new stock/full-fixture pass.
+
+Related regression terminals: `array_iteration_nested_in_a_standard_macro` PASS18.599s; definition-numeric recipe schema and explicit context tags controls PASS. Canonical local receipt is `artifacts/validation-resume-2026-10-18/candidate-v6/report.json`; actual callable terminal `control-0.log`. All six selected controls passed; whole owning stock const-int and viawhere roots still faulted at separate i128 and explicit generic ValuePath prerequisites. No new distinct upstream runtime pass claimed in V6. Later result-template/explicit constructor source changes require successor validation and do not rewrite this evidence.

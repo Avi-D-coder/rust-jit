@@ -38,10 +38,13 @@ impl Frame {
         }
         // A `&'static str` literal satisfies a `&'r str` expectation for any
         // region: regions are not runtime data.
-        if self.literal_source_context(destination)?.is_some_and(|expected| {
-            crate::frontend::signature_subst::erase_regions(expected)
-                != crate::frontend::signature_subst::erase_regions(proof.source())
-        }) {
+        if self
+            .literal_source_context(destination)?
+            .is_some_and(|expected| {
+                crate::frontend::signature_subst::erase_regions(expected)
+                    != crate::frontend::signature_subst::erase_regions(proof.source())
+            })
+        {
             return Err(Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",
                 "string literal conflicts with declared source constraint".into(),
@@ -189,10 +192,10 @@ pub(crate) fn format_value(
                     .ok_or_else(unsupported)?,
             ),
             Primitive::Signed(bits) => {
-                FormatValue::Signed(i128::from(value.payload as i64), u32::from(bits))
+                FormatValue::Signed(store.integer_bits(value)? as i128, u32::from(bits))
             }
             Primitive::Unsigned(bits) => {
-                FormatValue::Unsigned(u128::from(value.payload), u32::from(bits))
+                FormatValue::Unsigned(store.integer_bits(value)?, u32::from(bits))
             }
             Primitive::F32 => FormatValue::F32(f32::from_bits(value.payload as u32)),
             Primitive::F64 => FormatValue::F64(f64::from_bits(value.payload)),

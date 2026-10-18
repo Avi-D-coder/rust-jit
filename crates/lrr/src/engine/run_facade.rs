@@ -881,6 +881,8 @@ pub(super) fn display_scalar(store: &GuestStore, value: ValueRepr) -> Result<Str
             .to_string(),
         4 => (value.payload as i64).to_string(),
         5 => value.payload.to_string(),
+        17 if value.type_id == 17 => (store.wide_integer_bits(value)? as i128).to_string(),
+        17 => store.wide_integer_bits(value)?.to_string(),
         6 => f32::from_bits(value.payload as u32).to_string(),
         7 => f64::from_bits(value.payload).to_string(),
         _ => {

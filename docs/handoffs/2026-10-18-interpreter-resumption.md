@@ -136,3 +136,42 @@ Rust tokens changed. Ongoing semantic successors stay in the working tree. The
 small shareable report is [V6 evidence](../../worktracks/evidence/2026-10-18-interpreter-v6-validation.json);
 raw build/test logs stay local. All six focused/regression bodies passed; neither
 whole selected upstream UI fixture passed.
+
+## V7 — first verified upstream gains in this resumption
+
+V6 WIP checkpoint `9d4c588ea279ca3c25ff19d99b4e4cdd5b21b112` was pushed to
+`origin/codex/lrr-implementation`. Its source-only checker, plan check and staged
+whitespace check passed. No PR code was fetched/applied.
+
+V7 source `e7f91cd60edcdc9d80648bbd657dec6ef93ea9bb8772d350ce832d2d4907a449`
+(3,321 Rust/Cargo/vendor leaves; generator separately hashed) built without source
+changes: lib terminal `46c359/0`, CLI `7706c2/0`. Test binary SHA
+`7b4566c5342548b9da9bca9f4443a5d0e55ac1a68fb04ec11b44af0b34a9f280`;
+CLI `1ca2bb6d0739555f1c6181054926785cc4512f9cf20dc221e73b002c5609299b`.
+
+All six selected controls pass, including the corrected genuine derived-scope
+dependency agreement and duplicate-primary refusal. Two unchanged upstream whole
+mains now have complete runtime captures and were failures in saved v16:
+
+- `numbers-arithmetic/i128-min-literal-parses.rs`: seven operations/five dispatches.
+- `autoref-autoderef/autoderef-vec-box-fn-36786.rs`: eleven source calls, 82 dispatches,
+  116 classified operations, 43 cleanup elements.
+
+These are **two targeted new distinct runtime-contract passes versus historical
+v16**, not a refreshed global count or full-suite acceptance. Three selected
+unchanged owning-2024 atomic library bodies pass: bool NAND and the two invalid
+load/store ordering panics. Each selects one of 42 catalogued bodies; the other
+41 are filtered, not passes. Their expected-panic path requires an actual guest
+panic containing the upstream expected string; faults/missing inputs do not pass.
+
+Four other upstream whole-main captures still fail: i128/u128 programs need the
+actual `test` crate preparation (`test::black_box`); const arithmetic reaches 63
+calls then the existing syntax primitive-hint map lacks u128; via-where reaches
+45 calls then generic record constructor binding is incomplete. Current source
+repairs for those gaps are separate unvalidated successors. No 128-bit full
+feature, constant-template, full-fixture, architecture, milestone or JIT closure.
+
+[V7 shareable evidence](../../worktracks/evidence/2026-10-18-interpreter-v7-validation.json),
+raw report SHA `31401a2fcebf99d2355a16fc674c0e678a0434db2b3ffc3c1a3e8ad50f0e02bc`.
+Raw logs remain local. Existing global 1,429 result is still only its older binary's
+historical survey; report it separately from this targeted delta.

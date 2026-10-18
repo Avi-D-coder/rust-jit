@@ -99,15 +99,12 @@ impl NormalizedDeferredReturn {
         }
         let descriptor = primitive_runtime_id(source)?;
         let mut dependencies = Vec::new();
-        let rows = trace
-            .len()
-            .checked_add(9)
-            .ok_or_else(|| {
-                fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "normalized return dependency row budget exceeded",
-                )
-            })?;
+        let rows = trace.len().checked_add(9).ok_or_else(|| {
+            fault(
+                "LRR-E-METADATA-LIMIT",
+                "normalized return dependency row budget exceeded",
+            )
+        })?;
         dependencies
             .try_reserve_exact(rows)
             .map_err(|_| crate::runtime::arena::resource())?;
@@ -678,30 +675,7 @@ fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
 pub(crate) fn primitive_runtime_id(p: PrimitiveType) -> Result<TypeId, Diagnostic> {
-    use PrimitiveType::*;
-    Ok(TypeId(match p {
-        Unit => 1,
-        Bool => 2,
-        Char => 3,
-        I8 => 4,
-        I16 => 5,
-        I32 => 6,
-        I64 => 7,
-        Isize => 8,
-        U8 => 9,
-        U16 => 10,
-        U32 => 11,
-        U64 => 12,
-        Usize => 13,
-        F32 => 14,
-        F64 => 15,
-        I128 | U128 => {
-            return Err(fault(
-                "LRR-E-UNSUPPORTED",
-                "128-bit guest integers are outside the live profile",
-            ));
-        }
-    }))
+    crate::runtime::shape::PrimitiveIdentity::from_recipe(p).map(|identity| identity.id())
 }
 impl PreparedCallContracts {
     /// Validate the reached return source identity and bind an unbound result parameter.
@@ -979,12 +953,8 @@ fn argument_hints(
             && (super::written_terms::contains_nominal(&source)
                 || contains_parameter(&source, signature.definition))
         {
-            match super::written_terms::written_template(
-                db,
-                sources,
-                &source,
-                signature.definition,
-            ) {
+            match super::written_terms::written_template(db, sources, &source, signature.definition)
+            {
                 QueryPoll::Ready(Ok(written)) => written.map(Arc::new),
                 QueryPoll::Ready(Err(error)) => return Err(error),
                 QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
@@ -1067,7 +1037,9 @@ fn bind_const_lengths(
         (TyTerm::Array(element, length), TyTerm::Array(actual_element, actual_length)) => {
             if let (ConstTerm::Param(key), ConstTerm::Value(value)) = (length, actual_length)
                 && key.definition == definition
-                && lengths.insert(*key, *value).is_some_and(|prior| prior != *value)
+                && lengths
+                    .insert(*key, *value)
+                    .is_some_and(|prior| prior != *value)
             {
                 return Err(fault(
                     "LRR-E-GENERIC-BINDING",
@@ -1132,7 +1104,9 @@ pub(crate) fn bind_runtime_parameters(
             runtime.insert(*key, descriptor);
         }
         TyTerm::Ref(_, _, target) => {
-            if let TypeKey::Ref { target: actual, .. } = store.type_descriptor(descriptor)?.key.as_ref() {
+            if let TypeKey::Ref { target: actual, .. } =
+                store.type_descriptor(descriptor)?.key.as_ref()
+            {
                 bind_runtime_parameters(target, *actual, store, definition, runtime)?;
             }
         }
@@ -1144,12 +1118,17 @@ pub(crate) fn bind_runtime_parameters(
             }
         }
         TyTerm::Array(element, _) => {
-            if let TypeKey::Array { element: actual, .. } = store.type_descriptor(descriptor)?.key.as_ref() {
+            if let TypeKey::Array {
+                element: actual, ..
+            } = store.type_descriptor(descriptor)?.key.as_ref()
+            {
                 bind_runtime_parameters(element, *actual, store, definition, runtime)?;
             }
         }
         TyTerm::Slice(element) => {
-            if let TypeKey::Slice { element: actual } = store.type_descriptor(descriptor)?.key.as_ref() {
+            if let TypeKey::Slice { element: actual } =
+                store.type_descriptor(descriptor)?.key.as_ref()
+            {
                 bind_runtime_parameters(element, *actual, store, definition, runtime)?;
             }
         }
@@ -1167,7 +1146,9 @@ pub(crate) fn bind_runtime_parameters(
                 // `*const T` / `*mut T` (E-R5-008): the reserved-identity
                 // nominal binds its pointee like a type argument.
                 TypeKey::RawPtr { target: actual, .. } => {
-                    if let Some((_, pointee)) = crate::traits::pointer_terms::as_raw_pointer(template) {
+                    if let Some((_, pointee)) =
+                        crate::traits::pointer_terms::as_raw_pointer(template)
+                    {
                         bind_runtime_parameters(pointee, *actual, store, definition, runtime)?;
                     }
                 }
@@ -1186,9 +1167,9 @@ pub(crate) fn contains_object(term: &TyTerm) -> bool {
             contains_object(target)
         }
         TyTerm::Tuple(fields) => fields.iter().any(contains_object),
-        TyTerm::Nominal(_, args) => args.iter().any(|arg| {
-            matches!(arg, crate::traits::term::GenericArg::Type(ty) if contains_object(ty))
-        }),
+        TyTerm::Nominal(_, args) => args.iter().any(
+            |arg| matches!(arg, crate::traits::term::GenericArg::Type(ty) if contains_object(ty)),
+        ),
         _ => false,
     }
 }
@@ -1205,13 +1186,16 @@ fn object_compatible(template: &TyTerm, actual: &TyTerm) -> bool {
             d == e
                 && t.len() == a.len()
                 && t.iter().zip(a).all(|(t, a)| match (t, a) {
-                    (crate::traits::term::GenericArg::Type(t), crate::traits::term::GenericArg::Type(a)) => {
-                        object_compatible(t, a)
-                    }
+                    (
+                        crate::traits::term::GenericArg::Type(t),
+                        crate::traits::term::GenericArg::Type(a),
+                    ) => object_compatible(t, a),
                     (t, a) => t == a,
                 })
         }
-        (t, a) => super::signature_subst::erase_regions(t) == super::signature_subst::erase_regions(a),
+        (t, a) => {
+            super::signature_subst::erase_regions(t) == super::signature_subst::erase_regions(a)
+        }
     }
 }
 fn contains_parameter(term: &TyTerm, definition: Digest) -> bool {
@@ -1458,10 +1442,19 @@ fn prepare(
         normalized_deferred_return = Some(Box::new(proof));
     } else if instantiated.result_symbolic.is_none()
         && (signature.result.len() > 1
-            || signature.result.first().is_some_and(|token| token.text == "Self"))
+            || signature
+                .result
+                .first()
+                .is_some_and(|token| token.text == "Self"))
     {
         // A written composite result (tuple/array of resolved names).
-        match super::source_types::resolve_written_type(db, graph, sources, signature, &signature.result) {
+        match super::source_types::resolve_written_type(
+            db,
+            graph,
+            sources,
+            signature,
+            &signature.result,
+        ) {
             // Closed now, or closed once its generic parameters bind.
             QueryPoll::Ready(Ok(Some(term)))
                 if closed_term(&term)
@@ -1587,7 +1580,10 @@ fn prepare(
                 let expected = primitive_runtime_id(*p)?;
                 if expected != actual.descriptor {
                     if std::env::var_os("LRR_DBG_ARG").is_some() {
-                        eprintln!("DBG arg mismatch template={:?} expected={:?} actual={:?} src={:?} def={:?}", template, expected, actual.descriptor, actual.source, definition);
+                        eprintln!(
+                            "DBG arg mismatch template={:?} expected={:?} actual={:?} src={:?} def={:?}",
+                            template, expected, actual.descriptor, actual.source, definition
+                        );
                     }
                     return Err(fault(
                         "LRR-E-CALL-ARG-TYPE",
@@ -1926,13 +1922,10 @@ fn bind(
             "reached generic runtime descriptors disagree",
         ));
     }
-    if source
-        .get(&key)
-        .is_some_and(|prior| {
-            super::signature_subst::erase_regions(prior)
-                != super::signature_subst::erase_regions(&actual.source)
-        })
-    {
+    if source.get(&key).is_some_and(|prior| {
+        super::signature_subst::erase_regions(prior)
+            != super::signature_subst::erase_regions(&actual.source)
+    }) {
         return Err(fault(
             "LRR-E-GENERIC-BINDING",
             "reached generic source identities disagree",
@@ -1998,7 +1991,8 @@ fn pointer_coercion_view(
 ) -> Option<(TyTerm, TypeId)> {
     use crate::{runtime::shape::TypeKey, traits::pointer_terms};
     let (to_mutable, _) = pointer_terms::as_raw_pointer(template)?;
-    let (referent, from_mutable) = match store.type_descriptor(actual.descriptor).ok()?.key.as_ref() {
+    let (referent, from_mutable) = match store.type_descriptor(actual.descriptor).ok()?.key.as_ref()
+    {
         TypeKey::Ref { target, .. } => (*target, None),
         TypeKey::RawPtr { target, mutable } => (*target, Some(*mutable)),
         _ => return None,
@@ -2077,16 +2071,16 @@ pub(crate) fn closed_term(term: &TyTerm) -> bool {
     match term {
         TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Never | TyTerm::Dyn(_) => true,
         TyTerm::Ref(region, _, target) => {
-            !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && closed_term(target)
+            !matches!(region, crate::traits::term::RegionTerm::Placeholder(_))
+                && closed_term(target)
         }
         TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
             crate::traits::term::GenericArg::Type(ty) => closed_term(ty),
             _ => false,
         }),
         TyTerm::Tuple(fields) => fields.iter().all(closed_term),
-        TyTerm::Array(element, crate::traits::term::ConstTerm::Value(_)) | TyTerm::Slice(element) => {
-            closed_term(element)
-        }
+        TyTerm::Array(element, crate::traits::term::ConstTerm::Value(_))
+        | TyTerm::Slice(element) => closed_term(element),
         // A fn pointer with closed parameter and result types (E-R5-008).
         TyTerm::Function(function) => {
             function.variables.is_empty()

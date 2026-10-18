@@ -1,0 +1,422 @@
+{
+  "candidate": "v7",
+  "head": "9d4c588ea279ca3c25ff19d99b4e4cdd5b21b112",
+  "source_sha256": "e7f91cd60edcdc9d80648bbd657dec6ef93ea9bb8772d350ce832d2d4907a449",
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "terminal": "46c359",
+      "seconds": 29.21,
+      "binary_sha256": "7b4566c5342548b9da9bca9f4443a5d0e55ac1a68fb04ec11b44af0b34a9f280"
+    },
+    "cli": {
+      "exit": 0,
+      "terminal": "7706c2",
+      "seconds": 21.48,
+      "binary_sha256": "1ca2bb6d0739555f1c6181054926785cc4512f9cf20dc221e73b002c5609299b"
+    }
+  },
+  "compiled_sources_unchanged_through_both_builds": true,
+  "runtime_source_scope": "Exact V7 compiled binary only; owners released after compile, later working tree edits excluded. Imported originals unchanged.",
+  "controls": [
+    {
+      "selector": "vm::frame::integer_literal_decode_tests::original_i128_minimum_lexical_payload_executes_at_full_width",
+      "exit": 0,
+      "seconds": 0.015,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v7/control-0.log"
+    },
+    {
+      "selector": "cli::callable_value_tests::rustc_autoderef_vec_box_fn_original_executes_unchanged",
+      "exit": 0,
+      "seconds": 4.187,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v7/control-1.log"
+    },
+    {
+      "selector": "cli::callable_value_tests::callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origins",
+      "exit": 0,
+      "seconds": 17.318,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v7/control-2.log"
+    },
+    {
+      "selector": "frontend::current_module_names::tests::type_scope_tests::inline_type_bucket_retains_actual_value_parent_and_exact_namespace_all_editions",
+      "exit": 0,
+      "seconds": 0.359,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v7/control-3.log"
+    },
+    {
+      "selector": "frontend::current_module_names::tests::type_scope_tests::independently_published_primary_type_certificates_remain_ambiguous_all_editions",
+      "exit": 0,
+      "seconds": 0.357,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v7/control-4.log"
+    },
+    {
+      "selector": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals",
+      "exit": 0,
+      "seconds": 0.397,
+      "bodies": 1,
+      "log": "artifacts/validation-resume-2026-10-18/candidate-v7/control-5.log"
+    }
+  ],
+  "stock": [
+    {
+      "path": "tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+      "sha256": "d6298ddfc5b48c1c75d513b9e09add7b60ca69e447843c1af9f2810cf67eb8c6",
+      "edition": 2015,
+      "exit": 0,
+      "seconds": 4.491,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "e468513a5c119dd91f7f3afe286da3d9a027ea0e89dd8aff7eea6b4cec640acc"
+      ],
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "terminal": "completed",
+      "diagnostic": null,
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 7,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 5,
+        "vm_outcomes": 5
+      }
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i128.rs",
+      "sha256": "6d53dcadc07da4c66441f2d40bd4e6c9e375aa30076b6872f7489935d1096fb6",
+      "edition": 2015,
+      "exit": 2,
+      "seconds": 0.744,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/i128.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "cb5493eb21f1d49d213e99ee75e2dffcb237c6de30735499906e5f78d8247be4"
+      ],
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "terminal": "fault",
+      "diagnostic": "extern crate dependency is not captured",
+      "capture_complete": false,
+      "facts": null
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u128.rs",
+      "sha256": "fb753fd396f254766c3d2b3f247a1064cef73f73638775b0caecd017024a8e9d",
+      "edition": 2015,
+      "exit": 2,
+      "seconds": 0.747,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/u128.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "c430ef9981d711e8bb6c105f667e41a1a71d01481e3f9f10d60a890b44c826ef"
+      ],
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "terminal": "fault",
+      "diagnostic": "extern crate dependency is not captured",
+      "capture_complete": false,
+      "facts": null
+    },
+    {
+      "path": "tests/ui/consts/const-int-arithmetic.rs",
+      "sha256": "cf844bc9af69330fe438c5c430970af61b48f36fcdd5b70bda7d9db700d2dfc9",
+      "edition": 2015,
+      "exit": 2,
+      "seconds": 18.959,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/consts/const-int-arithmetic.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "0fb18f53cd933907e549851ffef1066c35683e422c026ba0a09a38be767547d3"
+      ],
+      "stdout": "stock-3.stdout",
+      "stderr": "stock-3.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "terminal": "fault",
+      "diagnostic": "root hint differs from certified written return syntax",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 17312,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 63,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 8264,
+        "vm_outcomes": 8263
+      }
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+      "sha256": "9dce5eb0efe1907b2f19703697952721eda352a53365bb9f725486c29614f881",
+      "edition": 2015,
+      "exit": 2,
+      "seconds": 6.64,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-project-from-type-param-via-bound-in-where.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "101ae04849addd80775a1abe63b57377c522403420001c20ae2e3404997ad1af"
+      ],
+      "stdout": "stock-4.stdout",
+      "stderr": "stock-4.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "terminal": "fault",
+      "diagnostic": "constructor requires further source member/type binding",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 782,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 45,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 597,
+        "vm_outcomes": 597
+      }
+    },
+    {
+      "path": "tests/ui/autoref-autoderef/autoderef-vec-box-fn-36786.rs",
+      "sha256": "ddaa934c7ed95a0f20304e81aa832c81bef2c7a98f18e4d2b7f84798823c9972",
+      "edition": 2015,
+      "exit": 0,
+      "seconds": 3.998,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "fixtures/upstream/rustc-checkout/tests/ui/autoref-autoderef/autoderef-vec-box-fn-36786.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "2f70f05865ebc25ab172c9db1d6cf1beca8cbc5968082528094c67600eea9f01"
+      ],
+      "stdout": "stock-5.stdout",
+      "stderr": "stock-5.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "terminal": "completed",
+      "diagnostic": null,
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 116,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 11,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 82,
+        "vm_outcomes": 82
+      }
+    }
+  ],
+  "distinct_runtime_gains_vs_historical_v16": [
+    {
+      "path": "tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+      "sha256": "d6298ddfc5b48c1c75d513b9e09add7b60ca69e447843c1af9f2810cf67eb8c6",
+      "edition": 2015,
+      "prior_outcome": "fault",
+      "prior_diagnostic": "128-bit guest integers are outside the live profile",
+      "now": "runtime_contract_pass",
+      "evidence": "stock-0.stdout"
+    },
+    {
+      "path": "tests/ui/autoref-autoderef/autoderef-vec-box-fn-36786.rs",
+      "sha256": "ddaa934c7ed95a0f20304e81aa832c81bef2c7a98f18e4d2b7f84798823c9972",
+      "edition": 2015,
+      "prior_outcome": "fault",
+      "prior_diagnostic": "generic unit variant requires its type context",
+      "now": "runtime_contract_pass",
+      "evidence": "stock-5.stdout"
+    }
+  ],
+  "comparison_inventory_sha256": "3535f0644b8ea743c3a0e8a35420344e1c843fda7ea69bb14ab1cd07936afe91",
+  "historical_binary_sha256": "732aec123f8f5de8cf465c9c5ccd757970908ae62bba3dfd68f61a260b27650b",
+  "scope": "Targeted V7 evidence only:6/6 focused bodies,2/6 complete unchanged upstream wholemain runtime captures,3/3 unchanged selected coretests atomic bodies. Two other UI cases failed before observation on test-crate dependency, const arithmetic and associated-type wholemain remain runtime failures. No global inventory refresh/full-fixture/full library/JIT gate claim.",
+  "atomic_status": "complete",
+  "atomic_selected_bodies": [
+    {
+      "source": "fixtures/upstream/rustc-checkout/library/coretests/tests/atomic.rs",
+      "sha256": "f75866407e255ff72179d851218e41c9948eb8e8f87af3a66f4b140a1a731cfe",
+      "selector": "bool_nand",
+      "edition": 2024,
+      "exit": 0,
+      "seconds": 43.185,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2024",
+        "test",
+        "fixtures/upstream/rustc-checkout/library/coretests/tests/atomic.rs",
+        "bool_nand",
+        "--exact"
+      ],
+      "stdout": "atomic2024-0.stdout",
+      "stderr": "atomic2024-0.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "scope": "selected unchanged core library test body, not full file/UI fixture",
+      "json": {
+        "live_edition": 2024,
+        "semantics_profile": "lrr-2024-v2",
+        "schema": "lrr/v2/development-tests",
+        "scope": "sealed-test-catalog-component",
+        "selected": 1,
+        "filtered_out": 41,
+        "listed": [],
+        "results": [
+          {
+            "name": "bool_nand",
+            "status": "passed",
+            "diagnostic": null
+          }
+        ]
+      }
+    },
+    {
+      "source": "fixtures/upstream/rustc-checkout/library/coretests/tests/atomic.rs",
+      "sha256": "f75866407e255ff72179d851218e41c9948eb8e8f87af3a66f4b140a1a731cfe",
+      "selector": "store_illegal_rt_store_acquire_ordering",
+      "edition": 2024,
+      "exit": 0,
+      "seconds": 42.496,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2024",
+        "test",
+        "fixtures/upstream/rustc-checkout/library/coretests/tests/atomic.rs",
+        "store_illegal_rt_store_acquire_ordering",
+        "--exact"
+      ],
+      "stdout": "atomic2024-1.stdout",
+      "stderr": "atomic2024-1.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "scope": "selected unchanged core library test body, not full file/UI fixture",
+      "json": {
+        "live_edition": 2024,
+        "semantics_profile": "lrr-2024-v2",
+        "schema": "lrr/v2/development-tests",
+        "scope": "sealed-test-catalog-component",
+        "selected": 1,
+        "filtered_out": 41,
+        "listed": [],
+        "results": [
+          {
+            "name": "store_illegal_rt_store_acquire_ordering",
+            "status": "passed",
+            "diagnostic": null
+          }
+        ]
+      }
+    },
+    {
+      "source": "fixtures/upstream/rustc-checkout/library/coretests/tests/atomic.rs",
+      "sha256": "f75866407e255ff72179d851218e41c9948eb8e8f87af3a66f4b140a1a731cfe",
+      "selector": "store_illegal_rt_load_release_ordering",
+      "edition": 2024,
+      "exit": 0,
+      "seconds": 41.718,
+      "argv": [
+        "target/debug/lrr",
+        "--edition",
+        "2024",
+        "test",
+        "fixtures/upstream/rustc-checkout/library/coretests/tests/atomic.rs",
+        "store_illegal_rt_load_release_ordering",
+        "--exact"
+      ],
+      "stdout": "atomic2024-2.stdout",
+      "stderr": "atomic2024-2.stderr",
+      "LRR_EMBEDDED_FACADE": "1",
+      "scope": "selected unchanged core library test body, not full file/UI fixture",
+      "json": {
+        "live_edition": 2024,
+        "semantics_profile": "lrr-2024-v2",
+        "schema": "lrr/v2/development-tests",
+        "scope": "sealed-test-catalog-component",
+        "selected": 1,
+        "filtered_out": 41,
+        "listed": [],
+        "results": [
+          {
+            "name": "store_illegal_rt_load_release_ordering",
+            "status": "passed",
+            "diagnostic": null
+          }
+        ]
+      }
+    }
+  ],
+  "atomic_actual_bodies": 3,
+  "atomic_passed_bodies": 3,
+  "binary_hashes_after_execution": {
+    "target/debug/lrr": "1ca2bb6d0739555f1c6181054926785cc4512f9cf20dc221e73b002c5609299b",
+    "target/debug/deps/lrr-5ae916bc286087fa": "7b4566c5342548b9da9bca9f4443a5d0e55ac1a68fb04ec11b44af0b34a9f280"
+  },
+  "original_provenance": "original-provenance.json",
+  "atomic_panic_harness_source_review": "test_catalog decodes actual should_panic string, test_harness accepts only RunPoll::Panicked with matching description; faults/NeedInput/completed are failures for these cases. Source-only harness review, actual selected statuses in raw logs.",
+  "actual_final_terminals": {
+    "controls": "35e8d2/0",
+    "stock_first_five": "381f1c/0",
+    "vec_capture": "0a37d8/0",
+    "atomic3": "e0bb19/0"
+  },
+  "raw_report_sha256": "31401a2fcebf99d2355a16fc674c0e678a0434db2b3ffc3c1a3e8ad50f0e02bc",
+  "checkpoint": "Exact staged V7 source and generator; successor root hints/test-crate/record/initializer edits remain unvalidated and unstaged."
+}

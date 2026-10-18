@@ -28,9 +28,10 @@ pub struct GenericEnv {
     /// A closed structural (tuple/array) declared result.
     structural_result: Option<TyTerm>,
     structural_references: bool,
-    /// A closed declared result naming a nominal Type (`-> Option<u32>`),
-    /// as the written Type its declarations select.
-    written_result: Option<std::sync::Arc<crate::ir::written_type::WrittenType>>,
+    /// The admitted closed source result and its exact run-local descriptor.
+    /// Cold call preparation instantiates the declared written template with
+    /// actual runtime generic bindings (including anonymous callable Types).
+    written_result: Option<(TyTerm, TypeId)>,
 }
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CALL-CONTEXT", message.into())
@@ -343,17 +344,19 @@ impl GenericEnv {
             written_result: None,
         })
     }
-    /// Attach the written Type the caller selected for this definition's
-    /// closed nominal result.
-    pub(crate) fn with_written_result(
-        mut self,
-        written: Option<std::sync::Arc<crate::ir::written_type::WrittenType>>,
-    ) -> Self {
-        self.written_result = written;
+    /// Attach the descriptor of the source-selected declared result after its
+    /// written template is instantiated from this call's runtime bindings.
+    pub(crate) fn with_written_result(mut self, source: TyTerm, descriptor: TypeId) -> Self {
+        self.written_result = Some((source, descriptor));
         self
     }
-    pub(crate) fn written_result(&self) -> Option<&crate::ir::written_type::WrittenType> {
-        self.written_result.as_deref()
+    pub(crate) fn written_result_descriptor(&self) -> Option<TypeId> {
+        self.written_result
+            .as_ref()
+            .map(|(_, descriptor)| *descriptor)
+    }
+    pub(crate) fn written_result_source(&self) -> Option<&TyTerm> {
+        self.written_result.as_ref().map(|(source, _)| source)
     }
     pub fn definition(&self) -> &FunctionSignature {
         &self.definition
