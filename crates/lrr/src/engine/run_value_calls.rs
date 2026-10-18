@@ -388,6 +388,7 @@ impl RunMachine {
             .unwrap_or_default();
         let contracts = crate::frontend::call_contracts::PreparedCallContracts {
             closed_references: None,
+            inferred_equations: None,
             definition: owner.identity(),
             source_parameters,
             parameter_descriptors: types.clone(),

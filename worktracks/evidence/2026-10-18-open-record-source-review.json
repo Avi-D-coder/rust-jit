@@ -1,0 +1,55 @@
+{
+  "status": "source-reviewed-uncompiled-unexecuted",
+  "task_ids": [
+    "T032",
+    "T033",
+    "M018",
+    "M025"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-open-record-source-constraints.md",
+  "source_baseline": "V15 53e16d94dc8bd8fb6eab7a87dfb8f92eef091cfbca75c08a3d4e1e4514bfa476",
+  "files": {
+    "crates/lrr/src/frontend/prepared_constructors.rs": "d16b4ff2856f4bc688b96ccf7404420a03ffe886b89f67350c65bddc1dd5e380",
+    "crates/lrr/src/frontend/declaration_nominal_types.rs": "0d5e3cb6a21a21ba938e328fb36b6a5748e1c65443edc656bfdb7132bc0a1c81",
+    "crates/lrr/src/frontend/binding_constraint_nominal.rs": "2c754f912da24d4227f33e9088c86c956f099ea42737f32776c039bbd11d1afc",
+    "crates/lrr/src/frontend/binding_constraint_open.rs": "b8e4db3ee4f0840f0e18c108c5471d51c3dcb35b77443c9fc18f35119828eb43",
+    "crates/lrr/src/frontend/binding_constraint_generics.rs": "e75b9097e0e21d74a8f66fb35a9d574f220bdabf62f9f93a6ebee27fc6f08501",
+    "crates/lrr/src/frontend/binding_constraints.rs": "5650ee03d0030cfdd9f3e3eeb3cab2c25eb3d372e4e31438594e7fa37fbf1828",
+    "crates/lrr/src/db/binding_constraint_thunk.rs": "d3222dc0ad07a61616f06fa436fe0ff513859a0c309d5ebe2e0f7f85ed663b0b",
+    "crates/lrr/src/engine/run_constructors.rs": "aeac144c9d994f98d73f0b83f5ea1a1642dbe38ceb6a96736c9eb1ae05280c2a"
+  },
+  "shared_dependency": {
+    "file": "crates/lrr/src/frontend/source_types.rs",
+    "owner": "generic_projection_resume",
+    "symbols": [
+      "actual_declaration_bounds",
+      "projection_trait",
+      "WrittenTypeDeclaration::nominal"
+    ],
+    "note": "Other worker owns source; independent/current fingerprint review of shared helper must join combined candidate."
+  },
+  "review": {
+    "1": "No evaluator added. Pending source terms and source constraint result hint feed existing guarded NominalMember and Frame record operations.",
+    "2": "Record syntax is ordinary ConstructorPlan/SourceConstraints/BodyIndex, no generated/macro or literal-only executor.",
+    "3": "No macro/method/fixture name policy. Nominal numeric parameter uses same existing Component::trait_bound/MemberIndex::primitive_candidates; family established by existing numeric initializer facts or current numeric demand, never arbitrary open Type. Explicit actual record args retain existing authority.",
+    "4": "No source-origin exclusion. Real declaration AST/source and header currentness reused for all admitted origins. Broad macro/edition matrix unexecuted.",
+    "5": "No pattern machinery or executable cold branches added. Only declaration field Type terms/bounds read; field operands are source relations and execute through existing VM guards/cleanup.",
+    "6": "Pending field terms retained in pure query with domainv4. Record open goal and ordinary thunk attach retained result Written hint. Dispatcher reads that actual recipe fact; no hint execution/replanning/evaluator. Some cold declaration Type walks repeat the prefix attempted by original binder before pending; no executable operand reparse/phase-plan reconstruction added; full source-type preparation sharing remains held.",
+    "7": "Existing query input guards retain schema/declaration/Type namespace dependencies. New record run key remains full GenericArgs+source allocation+member guard. Reuses existing relevant primitive candidate machinery, no new global namespace-map scan. Broader MemberIndex publication/callee-lookup invalidation matrix remains held.",
+    "8": "Actual ParseFile Arc and direct syntax_at used for owner/field Type occurrences. No immutable body/index clones or whole-file node search. Pending field terms/field-name/ParamKey metadata are copied only for immutable source query/component shapes; no bodies or operand plans deep copied."
+  },
+  "known_gaps": [
+    "No compile/runtime terminal for successor; V15 evidence stays attached to predecessor.",
+    "Plain trait bounds only for new nominal numeric obligation adapter; trait arguments/associated equalities/HRTB remain pending rather than a second solver.",
+    "Structured pending source fields with noncontiguous Type parameter ordinals retain actual Deferred terms until common ordinal adapter exists; direct Params retain exact keys/type positions. Existing ready routes unchanged.",
+    "Deferred associated projection fields are retained but not guessed; shared normalizer specializes once actual nominal application is inferred.",
+    "Cold source-Type prefix walk sharing, qualified-bound lookup dependencies and complete publication/edition/macro/suspension matrix not established."
+  ],
+  "validation_requests": [
+    "unchanged associated-types-ref-in-struct-literal.rs actual V15 first fault baseline",
+    "prior unchanged associated-types-ref-from-struct.rs and normalize-unifield-struct.rs new V15 passes",
+    "prior unchanged via-bound-in-where.rs restoration",
+    "selected existing record memo/epoch/callable exact-once controls",
+    "existing stock numeric generic-bound inference controls, no new miniature language suite"
+  ]
+}

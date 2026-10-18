@@ -31,29 +31,121 @@ macro_rules! checked {
     };
 }
 impl SchemaNames<'_> {
-    pub(super) fn actual_field_type(
+    /// Plain trait obligations on one actual nominal Type parameter. More
+    /// elaborate argument/equality obligations remain unanswered here; their
+    /// resolution is not replaced by a primitive-name policy.
+    pub(crate) fn source_parameter_bounds(
         &self,
         db: &mut Database,
         sources: &[&PreparedSourceView],
-        field: &FieldRecipe,
-    ) -> QueryPoll<Option<TyTerm>> {
+        ordinal: u32,
+    ) -> QueryPoll<Option<Vec<crate::core::digest::Digest>>> {
+        use ra_ap_syntax::ast::HasGenericArgs;
+        let Some(parameter) =
+            self.schema.generics.iter().find(|parameter| {
+                parameter.ordinal == ordinal && parameter.kind == GenericKind::Type
+            })
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let (_, owner) = ready!(self.actual_nominal_owner(db));
+        let declaration =
+            super::super::source_types::WrittenTypeDeclaration::nominal(self.schema, &owner);
+        let key = crate::traits::term::ParamKey {
+            definition: self.schema.definition,
+            ordinal,
+        };
+        let mut traits = Vec::new();
+        for (subject, written_subject, bound) in
+            super::super::source_types::actual_declaration_bounds(&declaration, &owner)
+        {
+            let selected = match subject {
+                Some(TyTerm::Param(subject)) => subject == key,
+                Some(_) => false,
+                None => {
+                    let Some(ast::Type::PathType(subject)) = written_subject else {
+                        continue;
+                    };
+                    let Some(path) = subject.path() else {
+                        continue;
+                    };
+                    path.qualifier().is_none()
+                        && path.segment().is_some_and(|segment| {
+                            segment.generic_arg_list().is_none()
+                                && segment
+                                    .name_ref()
+                                    .is_some_and(|name| name.text() == parameter.name)
+                        })
+                }
+            };
+            if !selected || bound.question_mark_token().is_some() || bound.lifetime().is_some() {
+                continue;
+            }
+            let Some(ast::Type::PathType(bound_type)) = bound.ty() else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            let Some(path) = bound_type.path() else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            // Associated bindings and trait arguments need their shared
+            // equality/argument obligations, not a plain marker candidate.
+            if path
+                .segment()
+                .and_then(|segment| segment.generic_arg_list())
+                .is_some()
+            {
+                return QueryPoll::Ready(Ok(None));
+            }
+            let Some((identity, arguments)) = ready!(super::super::source_types::projection_trait(
+                db,
+                self.graph,
+                sources,
+                &declaration,
+                &path
+            )) else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            if !arguments.is_empty() {
+                return QueryPoll::Ready(Ok(None));
+            }
+            traits.push(identity);
+        }
+        QueryPoll::Ready(Ok(Some(traits)))
+    }
+
+    /// Actual declaration terms retained for source constraints even while a
+    /// projection still needs the constructed value's generic application.
+    /// These terms are not runtime field/materialization authority.
+    pub(crate) fn source_variant_fields(
+        &self,
+        db: &mut Database,
+        sources: &[&PreparedSourceView],
+        selected: u32,
+    ) -> QueryPoll<Vec<Option<TyTerm>>> {
+        let Some(variant) = self.schema.variants.get(selected as usize) else {
+            return QueryPoll::Ready(Err(schema_fault("source field variant absent")));
+        };
+        let mut terms = Vec::new();
+        for field in &variant.fields {
+            terms.push(ready!(self.actual_field_type(db, sources, field)));
+        }
+        QueryPoll::Ready(Ok(terms))
+    }
+
+    fn actual_nominal_owner(
+        &self,
+        db: &mut Database,
+    ) -> QueryPoll<(
+        std::sync::Arc<crate::syntax::parse::ParsedFile>,
+        ra_ap_syntax::SyntaxNode,
+    )> {
         let current = ready!(db.fetch(
             &SyntaxProvider,
             QueryKey::TypeSchema(self.schema.definition)
         ));
         if !matches!(current.value.as_ref(), QueryValue::TypeSchema(actual) if actual.as_ref() == self.schema)
-            || self
-                .schema
-                .variants
-                .iter()
-                .flat_map(|variant| &variant.fields)
-                .filter(|actual| *actual == field)
-                .count()
-                != 1
         {
-            return QueryPoll::Ready(Err(schema_fault(
-                "field Type differs from its actual nominal schema",
-            )));
+            return QueryPoll::Ready(Err(schema_fault("nominal declaration schema differs")));
         }
         let header = db.input(&InputKey::DefinitionHeader(self.schema.definition));
         let context = db.input(&InputKey::DeclarationContext(self.schema.definition));
@@ -71,7 +163,6 @@ impl SchemaNames<'_> {
         if header != &self.schema.header
             || context.scope != self.schema.scope
             || parse.profile != self.schema.header.profile
-            || !context.range.contains(field.type_range)
         {
             return QueryPoll::Ready(Err(schema_fault(
                 "field Type actual declaration header/scope differs",
@@ -93,6 +184,34 @@ impl SchemaNames<'_> {
                 "field Type actual nominal declaration absent",
             )));
         };
+        QueryPoll::Ready(Ok((std::sync::Arc::clone(parsed), owner)))
+    }
+
+    pub(super) fn actual_field_type(
+        &self,
+        db: &mut Database,
+        sources: &[&PreparedSourceView],
+        field: &FieldRecipe,
+    ) -> QueryPoll<Option<TyTerm>> {
+        if self
+            .schema
+            .variants
+            .iter()
+            .flat_map(|variant| &variant.fields)
+            .filter(|actual| *actual == field)
+            .count()
+            != 1
+        {
+            return QueryPoll::Ready(Err(schema_fault(
+                "field Type differs from its actual nominal schema",
+            )));
+        }
+        let (parsed, owner) = ready!(self.actual_nominal_owner(db));
+        if !range(owner.text_range()).contains(field.type_range) {
+            return QueryPoll::Ready(Err(schema_fault(
+                "field Type is outside its actual declaration",
+            )));
+        }
         // The retained TypeSchema already validated this exact parse/header/
         // context and captured its generics. Reuse that current proof instead
         // of retokenizing the complete header for each selected field.

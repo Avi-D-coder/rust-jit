@@ -294,3 +294,40 @@ See [V15 evidence](../../worktracks/evidence/2026-10-18-interpreter-v15-validati
 Exact 24 compiled Rust leaves were staged before writer release; no successor
 source is attributed to those results. No interpreter, architecture or JIT gate
 is closed.
+
+## V17: full numeric mains and ordinary VM constant patterns
+
+Exact source `7a2253f1994777663f2236bdabddee99b6c656738a6c7145ae98691200df6fe0`
+compiles (lib `50986d/0`, CLI `67f527/0`) with both-build freeze. Thirty-two
+exact compiled Rust leaves were staged before writer release. V16's six mechanical
+compile errors remain recorded; no V16 CLI/tests ran. V17's unchanged originals
+produce 7/9 runtime-contract passes: four new versus saved v16/V15 (i128 892 calls,
+u128 753, proper issue-17718 + auxiliary 50, fresh const-meth-pattern 1) and three
+retained (ref-from-struct, via-where, normalize-unifield). Complete captures and
+closed cleanup are recorded. The two failing mains are numbered fields (U32/I32
+constraint mismatch after equation entry succeeds) and an unannotated record.
+
+Selected controls pass 7/9. The failed all-origin and cold/range/retry controls
+are acceptance gaps, not ignored failures. Actual potential constants in or
+alternatives were rejected as unresolved syntactic bindings before namespace
+classification; root successor retains an optional canonical candidate until the
+actual Value selection establishes constant versus local. Generated body boundary
+failure needs exact owner/seal/epoch/cfg/record facts; root adds failure-only
+diagnostics without loosening checks. Worker1 shares equation inference with
+ordinary source result constraints; worker2 joins the existing prepared Record
+recipe to the common open-expression fact/hint adapter. All successors are
+unstaged relative to V17 and unexecuted pending V18.
+
+The obsolete runtime constant_item_value/constant_item_data helpers are removed.
+One non-consuming pattern search now reports a typed demand only when it reaches
+a missing constant, ordinary VM initializer frames satisfy it, and the same
+operation resumes before transactional publication. Pure preparation queries and
+historical SourceConstant operation models remain separate held debt. NonCopy
+run-once templates, generic initializer cache keys, structural constant equality,
+full origin/suspension matrix and interpreter/JIT gates remain open.
+
+[Exact V17 report](../../worktracks/evidence/2026-10-18-interpreter-v17-validation.json).
+No refreshed suite total or full-fixture acceptance follows from these nine cases.
+Ten distinct targeted cases have newly passed at least once versus saved v16
+across this resumption's historical binaries; that is not ten confirmed passes
+on every successor or a full inventory delta.

@@ -11,6 +11,37 @@ use std::collections::BTreeMap;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-GENERIC-BINDING", message.into())
 }
+/// Inspect symbolic Type parameter identity, never identifier spelling.
+pub(crate) fn references_parameters(term: &TyTerm, needed: &[ParamKey]) -> bool {
+    let mut terms = vec![term];
+    while let Some(term) = terms.pop() {
+        fn arguments(args: &[GenericArg]) -> impl Iterator<Item = &TyTerm> {
+            args.iter().filter_map(|argument| match argument {
+                GenericArg::Type(term) => Some(term),
+                _ => None,
+            })
+        }
+        match term {
+            TyTerm::Param(key) if needed.contains(key) => return true,
+            TyTerm::Ref(_, _, inner) | TyTerm::Slice(inner) | TyTerm::Array(inner, _) => {
+                terms.push(inner)
+            }
+            TyTerm::Tuple(fields) => terms.extend(fields),
+            TyTerm::Nominal(_, args) | TyTerm::Opaque(_, args) => terms.extend(arguments(args)),
+            TyTerm::Projection(key) => {
+                terms.push(&key.trait_ref.self_ty);
+                terms.extend(arguments(&key.trait_ref.args));
+                terms.extend(arguments(&key.item_args));
+            }
+            TyTerm::Function(function) => {
+                terms.extend(&function.value.parameters);
+                terms.push(&function.value.result);
+            }
+            _ => {}
+        }
+    }
+    false
+}
 pub struct SignatureSubstitution {
     definition: Digest,
     variables: BTreeMap<ParamKey, InferVarKey>,
@@ -82,6 +113,15 @@ impl SignatureSubstitution {
             })
             .ok_or_else(|| fault("no declared type parameter at this ordinal"))?;
         self.unifier.unify(&TyTerm::Infer(*variable), actual)
+    }
+    /// Relate a genuine declared equation in the same call transaction.
+    pub(crate) fn constrain_equation(
+        &mut self,
+        template: &TyTerm,
+        actual: &TyTerm,
+    ) -> Result<(), Diagnostic> {
+        let instantiated = instantiate(template, &self.variables, 0)?;
+        self.unifier.unify(&instantiated, actual)
     }
     pub fn constrain_argument(&mut self, index: usize, actual: &TyTerm) -> Result<(), Diagnostic> {
         let template = self.source_parameter(index).ok_or_else(|| {

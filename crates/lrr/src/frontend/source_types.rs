@@ -372,6 +372,15 @@ impl<'a> WrittenTypeDeclaration<'a> {
             syntax: None,
         }
     }
+    pub(super) fn function_syntax(
+        signature: &'a FunctionSignature,
+        syntax: &'a ra_ap_syntax::SyntaxNode,
+    ) -> Self {
+        Self {
+            syntax: Some(syntax),
+            ..Self::function(signature)
+        }
+    }
     pub(super) fn nominal(
         schema: &'a super::types::NominalSchema,
         syntax: &'a ra_ap_syntax::SyntaxNode,
@@ -934,79 +943,6 @@ pub(super) fn resolve_actual_type(
             selected.unwrap_or((crate::core::digest::Digest([0; 32]), Vec::new()));
         QueryPoll::Ready(Ok(Some(projection(self_ty, trait_key, args))))
     }
-    /// A trait path and its written Type arguments, shared by qualified
-    /// projections and bounds supplying a shorthand projection.
-    fn projection_trait(
-        db: &mut Database,
-        graph: &NameNamespaces,
-        sources: &[&PreparedSourceView],
-        signature: &WrittenTypeDeclaration<'_>,
-        path: &ra_ap_syntax::ast::Path,
-    ) -> QueryPoll<
-        Option<(
-            crate::core::digest::Digest,
-            Vec<crate::traits::term::GenericArg>,
-        )>,
-    > {
-        use ra_ap_syntax::ast;
-        let trait_key = match projection_trait_key(graph, signature, path) {
-            Ok(Some(key)) => key,
-            Ok(None) => return QueryPoll::Ready(Ok(None)),
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let mut arguments = Vec::new();
-        if let Some(list) = path
-            .segment()
-            .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
-        {
-            for argument in list.generic_args() {
-                match argument {
-                    ast::GenericArg::LifetimeArg(_) | ast::GenericArg::AssocTypeArg(_) => {}
-                    ast::GenericArg::TypeArg(argument) => {
-                        let Some(ty) = argument.ty() else {
-                            return QueryPoll::Ready(Ok(None));
-                        };
-                        match walk(db, graph, sources, signature, &ty) {
-                            QueryPoll::Ready(Ok(Some(term))) => {
-                                arguments.push(crate::traits::term::GenericArg::Type(term))
-                            }
-                            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                        }
-                    }
-                    _ => return QueryPoll::Ready(Ok(None)),
-                }
-            }
-        }
-        QueryPoll::Ready(Ok(Some((trait_key, arguments))))
-    }
-    fn projection_trait_key(
-        graph: &NameNamespaces,
-        signature: &WrittenTypeDeclaration<'_>,
-        path: &ra_ap_syntax::ast::Path,
-    ) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
-        let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
-            return Ok(None);
-        };
-        let scope = crate::syntax::outline::ScopeKey {
-            owner: None,
-            ..(*signature.scope).clone()
-        };
-        match graph.lookup_source_path(
-            Namespace::Type,
-            &segments,
-            absolute,
-            &scope,
-            signature.header.profile.edition,
-        ) {
-            Ok(crate::frontend::names::NameLookup::Defined(definition)) => {
-                Ok(Some(definition.identity))
-            }
-            Ok(_) => Ok(Some(crate::core::digest::Digest([0; 32]))),
-            Err(error) => Err(error),
-        }
-    }
     /// Select the actual bound declaring `item`, preserving its arguments.
     /// The existing trait-owned Type bucket supplies declaration evidence;
     /// unrelated bounds such as `Copy` cannot accidentally select a trait.
@@ -1192,6 +1128,313 @@ pub(super) fn resolve_actual_type(
 
     walk(db, graph, sources, signature, ty)
 }
+pub(super) fn projection_trait(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    signature: &WrittenTypeDeclaration<'_>,
+    path: &ra_ap_syntax::ast::Path,
+) -> QueryPoll<
+    Option<(
+        crate::core::digest::Digest,
+        Vec<crate::traits::term::GenericArg>,
+    )>,
+> {
+    use ra_ap_syntax::ast;
+    // A single declaration-context trait name uses the same source Type
+    // namespace query as an ordinary Type leaf, retaining its bucket deps.
+    let trait_key = if path.qualifier().is_none()
+        && let Some(name) = path.segment().and_then(|segment| segment.name_ref())
+    {
+        match signature.resolve_name(db, graph, sources, name.text()) {
+            QueryPoll::Ready(Ok(SignatureName::Source(selected))) => selected.identity,
+            QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+    } else {
+        match projection_trait_key(graph, signature, path) {
+            Ok(Some(key)) => key,
+            Ok(None) => return QueryPoll::Ready(Ok(None)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        }
+    };
+    let mut arguments = Vec::new();
+    if let Some(list) = path
+        .segment()
+        .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
+    {
+        for argument in list.generic_args() {
+            match argument {
+                ast::GenericArg::LifetimeArg(_) | ast::GenericArg::AssocTypeArg(_) => {}
+                ast::GenericArg::TypeArg(argument) => {
+                    let Some(ty) = argument.ty() else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    match resolve_actual_type(db, graph, sources, signature, &ty) {
+                        QueryPoll::Ready(Ok(Some(term))) => {
+                            arguments.push(crate::traits::term::GenericArg::Type(term))
+                        }
+                        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                }
+                _ => return QueryPoll::Ready(Ok(None)),
+            }
+        }
+    }
+    QueryPoll::Ready(Ok(Some((trait_key, arguments))))
+}
+fn projection_trait_key(
+    graph: &NameNamespaces,
+    signature: &WrittenTypeDeclaration<'_>,
+    path: &ra_ap_syntax::ast::Path,
+) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
+    let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
+        return Ok(None);
+    };
+    let scope = crate::syntax::outline::ScopeKey {
+        owner: None,
+        ..(*signature.scope).clone()
+    };
+    match graph.lookup_source_path(
+        Namespace::Type,
+        &segments,
+        absolute,
+        &scope,
+        signature.header.profile.edition,
+    ) {
+        Ok(crate::frontend::names::NameLookup::Defined(definition)) => {
+            Ok(Some(definition.identity))
+        }
+        Ok(_) => Ok(Some(crate::core::digest::Digest([0; 32]))),
+        Err(error) => Err(error),
+    }
+}
+
+/// Actual bound occurrences from this declaration and its enclosing item owners.
+/// No Type arguments, bodies or unrelated bounds are resolved by enumeration.
+pub(super) fn actual_declaration_bounds(
+    declaration: &WrittenTypeDeclaration<'_>,
+    owner: &ra_ap_syntax::SyntaxNode,
+) -> Vec<(
+    Option<TyTerm>,
+    Option<ra_ap_syntax::ast::Type>,
+    ra_ap_syntax::ast::TypeBound,
+)> {
+    use crate::traits::term::ParamKey;
+    use ra_ap_syntax::{
+        AstNode,
+        ast::{self, HasName, HasTypeBounds},
+    };
+    let mut bounds = Vec::new();
+    // Signatures inherit only their immediate impl/trait owner's generics.
+    // A nested item does not acquire an enclosing function's generic binder.
+    let associated_owner = owner
+        .parent()
+        .and_then(|items| items.parent())
+        .filter(|node| {
+            matches!(
+                node.kind(),
+                ra_ap_syntax::SyntaxKind::IMPL | ra_ap_syntax::SyntaxKind::TRAIT
+            )
+        });
+    for scope in std::iter::once(owner.clone()).chain(associated_owner) {
+        if let Some(list) = scope.children().find_map(ast::GenericParamList::cast) {
+            for parameter in list.generic_params().filter_map(|p| match p {
+                ast::GenericParam::TypeParam(p) => Some(p),
+                _ => None,
+            }) {
+                let Some(name) = parameter.name() else {
+                    continue;
+                };
+                let Some(selected) = declaration
+                    .generics
+                    .iter()
+                    .rev()
+                    .find(|p| p.name == name.text())
+                else {
+                    continue;
+                };
+                for bound in parameter
+                    .type_bound_list()
+                    .into_iter()
+                    .flat_map(|list| list.bounds())
+                {
+                    bounds.push((
+                        Some(TyTerm::Param(ParamKey {
+                            definition: declaration.definition,
+                            ordinal: selected.ordinal,
+                        })),
+                        None,
+                        bound,
+                    ));
+                }
+            }
+        }
+        if let Some(clause) = scope.children().find_map(ast::WhereClause::cast) {
+            for predicate in clause.predicates() {
+                for bound in predicate
+                    .type_bound_list()
+                    .into_iter()
+                    .flat_map(|list| list.bounds())
+                {
+                    bounds.push((None, predicate.ty(), bound));
+                }
+            }
+        }
+    }
+    bounds
+}
+
+/// Source equations from actual declaration bounds. Only RHS occurrences naming
+/// a requested unbound parameter are demanded; unrelated bounds stay cold.
+pub(super) fn actual_bound_equations(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>,
+    owner: &ra_ap_syntax::SyntaxNode,
+    needed: &[u32],
+) -> QueryPoll<Option<Vec<(TyTerm, TyTerm)>>> {
+    use crate::traits::term::{ProjectionKey, TraitRef};
+    use ra_ap_syntax::{
+        AstNode,
+        ast::{self, HasGenericArgs},
+    };
+    macro_rules! some {
+        ($v:expr) => {
+            match $v {
+                QueryPoll::Ready(Ok(Some(v))) => v,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+                QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+            }
+        };
+    }
+    let names: Vec<_> = declaration
+        .generics
+        .iter()
+        .filter(|parameter| needed.contains(&parameter.ordinal))
+        .map(|parameter| parameter.name.as_str())
+        .collect();
+    let bounds = actual_declaration_bounds(declaration, owner);
+    let mut equations = Vec::new();
+    for (subject, written_subject, bound) in bounds {
+        if bound.question_mark_token().is_some() || bound.lifetime().is_some() {
+            continue;
+        }
+        let Some(ast::Type::PathType(ty)) = bound.ty() else {
+            continue;
+        };
+        let Some(path) = ty.path() else {
+            continue;
+        };
+        let Some(list) = path
+            .segment()
+            .and_then(|segment| segment.generic_arg_list())
+        else {
+            continue;
+        };
+        let relevant: Vec<_> = list
+            .generic_args()
+            .filter_map(|argument| match argument {
+                ast::GenericArg::AssocTypeArg(argument) => Some(argument),
+                _ => None,
+            })
+            .filter(|argument| {
+                argument.ty().is_some_and(|ty| {
+                    ty.syntax()
+                        .descendants()
+                        .filter_map(ast::NameRef::cast)
+                        .any(|name| names.iter().any(|needed| name.text() == *needed))
+                })
+            })
+            .collect();
+        let needed_keys: Vec<_> = needed
+            .iter()
+            .map(|ordinal| crate::traits::term::ParamKey {
+                definition: declaration.definition,
+                ordinal: *ordinal,
+            })
+            .collect();
+        let mut demanded = Vec::new();
+        for argument in relevant {
+            let Some(rhs) = argument.ty() else {
+                continue;
+            };
+            let rhs = some!(resolve_actual_type(db, graph, sources, declaration, &rhs));
+            if super::signature_subst::references_parameters(&rhs, &needed_keys) {
+                demanded.push((argument, rhs));
+            }
+        }
+        if demanded.is_empty() {
+            continue;
+        }
+        let subject = match subject {
+            Some(subject) => subject,
+            None => {
+                let Some(ty) = written_subject else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                some!(resolve_actual_type(db, graph, sources, declaration, &ty))
+            }
+        };
+        let (trait_key, args) = some!(projection_trait(db, graph, sources, declaration, &path));
+        if trait_key == crate::core::digest::Digest([0; 32]) {
+            return QueryPoll::Ready(Ok(None));
+        }
+        for (argument, rhs) in demanded {
+            let Some(name) = argument.name_ref() else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            let context = db.input(&InputKey::DeclarationContext(trait_key));
+            let Some(InputValue::DeclarationContext(context)) = context.as_deref() else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            let scope = crate::syntax::outline::ScopeKey {
+                owner: Some(trait_key),
+                ..context.scope.clone()
+            };
+            let bucket = match db.fetch(
+                &SyntaxProvider,
+                QueryKey::ScopeBucket(crate::db::key::BucketKey {
+                    scope,
+                    namespace: Namespace::Type,
+                    name: name.text().to_string(),
+                }),
+            ) {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let QueryValue::ScopeBucket(bucket) = bucket.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault("bound associated item bucket differs")));
+            };
+            if !bucket.blockers.is_empty() || bucket.candidates.len() != 1 {
+                return QueryPoll::Ready(Ok(None));
+            }
+            if argument.generic_arg_list().is_some() {
+                return QueryPoll::Ready(Ok(None));
+            }
+            equations.push((
+                TyTerm::Projection(Box::new(ProjectionKey {
+                    trait_ref: TraitRef {
+                        trait_key,
+                        self_ty: subject.clone(),
+                        args: args.clone(),
+                    },
+                    item: super::member_index::associated_name_key(name.text()),
+                    item_args: Vec::new(),
+                })),
+                rhs,
+            ));
+        }
+    }
+    QueryPoll::Ready(Ok(Some(equations)))
+}
+
 /// The written self type of impl `owner`.
 pub(crate) fn impl_self_type(
     sources: &[&PreparedSourceView],

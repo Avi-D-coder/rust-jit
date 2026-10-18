@@ -147,6 +147,7 @@ pub use crate::frontend::constants::query_identity::ConstQueryIdentity as Consta
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
     PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
+    AssociatedEquations(Box<crate::frontend::associated_equations::AssociatedEquationsKey>),
     NominalMember(Box<crate::frontend::nominal_member_goals::NominalMemberKey>),
     PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
     EnteredCall(crate::source::manifest::PcKey),
@@ -185,6 +186,8 @@ pub enum QueryKey {
 impl QueryKey {
     pub fn heap_bytes(&self) -> usize {
         match self {
+            Self::AssociatedEquations(key) => std::mem::size_of_val(key.as_ref())
+                .saturating_add(key.heap_bytes().unwrap_or(usize::MAX)),
             Self::NominalMember(key) => std::mem::size_of_val(key.as_ref())
                 .saturating_add(key.heap_bytes().unwrap_or(usize::MAX)),
             Self::PreparedBodySyntax(key) => {
@@ -237,6 +240,7 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::AssociatedEquations(_) => "AssociatedEquations",
             Self::NominalMember(_) => "NominalMember",
             Self::PreparedBodySyntax(_) => "PreparedBodySyntax",
             Self::PreparedExplicitTypeArguments(_) => "PreparedExplicitTypeArguments",
@@ -279,6 +283,10 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::AssociatedEquations(key) => {
+                e.u32(50);
+                e.record(key.as_ref());
+            }
             Self::NominalMember(key) => {
                 e.u32(49);
                 e.record(key.as_ref());

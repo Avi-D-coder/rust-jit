@@ -3082,7 +3082,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
         FactKind::Float => (true, Start::Literal(NodeId(key.node))),
         // A call or fieldless constructor whose type arguments no argument
         // fixes: later code decides them.
-        FactKind::Path | FactKind::Call | FactKind::MethodCall => {
+        FactKind::Path | FactKind::Call | FactKind::MethodCall | FactKind::Record => {
             return open::prepare_expression(db, key, plan, result);
         }
         _ => return QueryPoll::Ready(Ok(result)),

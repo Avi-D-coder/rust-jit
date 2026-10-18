@@ -21,6 +21,7 @@ enum PreparedRecordBinding {
         mapping: super::types::BoundRecordFields,
         variant: u32,
         name: Option<String>,
+        fields: Box<[Option<crate::traits::term::TyTerm>]>,
     },
 }
 #[derive(Debug, Clone)]
@@ -63,6 +64,12 @@ impl PreparedRecordConstructor {
             _ => None,
         }
     }
+    pub(crate) fn pending_fields(&self) -> Option<&[Option<crate::traits::term::TyTerm>]> {
+        match &self.binding {
+            PreparedRecordBinding::Pending { fields, .. } => Some(fields),
+            _ => None,
+        }
+    }
     pub(crate) fn arguments(&self) -> &[Option<super::explicit_type_arguments::ExplicitType>] {
         &self.arguments
     }
@@ -78,9 +85,23 @@ impl PreparedRecordConstructor {
                 PreparedRecordBinding::Ready(bound) => bound
                     .estimated_bytes()?
                     .checked_sub(std::mem::size_of::<super::types::BoundNominalConstructor>())?,
-                PreparedRecordBinding::Pending { mapping, name, .. } => mapping
-                    .heap_bytes()?
-                    .checked_add(name.as_ref().map_or(0, String::capacity))?,
+                PreparedRecordBinding::Pending {
+                    mapping,
+                    name,
+                    fields,
+                    ..
+                } => {
+                    let mut bytes = mapping
+                        .heap_bytes()?
+                        .checked_add(name.as_ref().map_or(0, String::capacity))?
+                        .checked_add(fields.len().checked_mul(std::mem::size_of::<
+                            Option<crate::traits::term::TyTerm>,
+                        >())?)?;
+                    for field in fields.iter().flatten() {
+                        bytes = bytes.checked_add(field.heap_bytes()?)?;
+                    }
+                    bytes
+                }
             })?
             .checked_add(
                 self.arguments
@@ -100,7 +121,7 @@ impl PreparedRecordConstructor {
     }
 }
 impl StableEncode for PreparedRecordConstructor {
-    const DOMAIN: &'static str = "lrr/v3/prepared-record-constructor";
+    const DOMAIN: &'static str = "lrr/v4/prepared-record-constructor";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.plan);
@@ -114,11 +135,15 @@ impl StableEncode for PreparedRecordConstructor {
                 mapping,
                 variant,
                 name,
+                fields,
             } => {
                 e.u32(1);
                 e.record(mapping);
                 e.u32(*variant);
                 e.option(name, |e, name| e.string(name));
+                e.sequence(fields, |e, field| {
+                    e.option(field, |e, field| e.record(field))
+                });
             }
         }
         e.sequence(&self.arguments, |e, argument| {
@@ -275,10 +300,18 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
             let Some(selected) = schema.variants.get(variant as usize) else {
                 return QueryPoll::Ready(Err(fault("pending record selected variant absent")));
             };
+            let names = ready!(super::types::SchemaNames::from_current_database(
+                db,
+                completed.names(),
+                &sources,
+                schema,
+            ));
+            let fields = ready!(names.source_variant_fields(db, &sources, variant));
             PreparedRecordBinding::Pending {
                 mapping,
                 variant,
                 name: selected.name.clone(),
+                fields: fields.into_boxed_slice(),
             }
         }
     };

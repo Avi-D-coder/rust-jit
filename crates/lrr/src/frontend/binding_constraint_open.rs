@@ -160,6 +160,35 @@ impl<'a> Component<'a> {
                         }
                     })))
             }
+            // A record's field relations and declaration obligations can
+            // decide its application even with no explicit/result context.
+            // This is the same component solver, not executable field prep.
+            FactKind::Record => {
+                let prepared = ready!(db.fetch(
+                    &crate::db::provider::SyntaxProvider,
+                    crate::db::key::QueryKey::BoundRecordConstructor(super::entry(self.key, node))
+                ));
+                let QueryValue::BoundRecordConstructor(prepared) = prepared.value.as_ref() else {
+                    return QueryPoll::Ready(Err(fault("open record source query differs")));
+                };
+                // Explicit arguments already own this application's context;
+                // an open goal must not replace them with literal fallback.
+                if !prepared.arguments().is_empty() {
+                    return QueryPoll::Ready(Ok(None));
+                }
+                let constructed =
+                    ready!(self.constructor(db, super::nominal::ConstructorSite::Expression(node)));
+                QueryPoll::Ready(Ok(constructed
+                    .filter(|constructed| constructed.type_parameter_count() > 0)
+                    .map(|constructed| {
+                        let (term, keys) = constructed.open_type();
+                        OpenShape {
+                            term,
+                            keys,
+                            callee: None,
+                        }
+                    })))
+            }
             FactKind::Call => {
                 // Explicit generic arguments (`f::<u8>()`, `Vec::<u8>::new()`)
                 // are the call's own explicit Type goal.

@@ -630,7 +630,10 @@ impl RunMachine {
                         value
                     }
                 };
-                if let Some((ticket, view)) = self.initialized_values.remove(&pc) {
+                if let Some((ticket, view)) = self
+                    .initialized_values
+                    .remove(&(pc.clone(), definition.identity))
+                {
                     self.frame
                         .prepare_item_value(promote(ItemValue::Ticket { ticket, view }));
                     return QueryPoll::Ready(Ok(()));

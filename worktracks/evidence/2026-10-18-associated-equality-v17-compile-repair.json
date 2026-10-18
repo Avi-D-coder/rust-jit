@@ -1,0 +1,17 @@
+{
+  "status": "READY stationary after root-authorized V16 compile-only repair; no V17 build/runtime evidence yet",
+  "previous_evidence": "2026-10-18-associated-equality-call-inference-review.json",
+  "failed_candidate": "V16 sole validator reported compiler failures before CLI/runtime; old source/evidence preserved",
+  "changes": {
+    "source_types.rs": "Two new NameRef::text already-&str values passed directly instead of unstable &str::as_str; no resolution change.",
+    "cli/preentry_loader.rs": "AssociatedEquations shares NominalMember forbidden executable/expansion query classification for metadata-only preentry receipt; no permission widening.",
+    "service/expansion.rs": "AssociatedEquations shares NominalMember query.heap_bytes accounting arm."
+  },
+  "source_sha256": {
+    "crates/lrr/src/frontend/source_types.rs": "9a60e010fc4bb526a5079de9da84bae6ef6f8fafe824407a4a325d0243ff2c78",
+    "crates/lrr/src/cli/preentry_loader.rs": "5d7006eb6802061f76c1e24f90d6caf402c2d9e12e2c5fe57f0534725460bebd",
+    "crates/lrr/src/service/expansion.rs": "de0b8a3735edd277476983d9280088e57f09c7503247dcd24fa44375171e656f"
+  },
+  "all_eight_review": "Prior all-eight source conclusions remain scoped to prior source. These exact successor deltas add no evaluator/parser/method/numeric selection/generated refusal/pattern/branch preparation/runtime planning/global namespace scan/body copy: direct API argument correction and exhaustive query classification/size joins only. Full matrix remains unexecuted; no feature closure.",
+  "validation": "git diff --check on exactly these three leaves exited0; no Cargo/tests run by worker."
+}

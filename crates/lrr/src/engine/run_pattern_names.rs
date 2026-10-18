@@ -7,8 +7,9 @@
 //! the run's completed namespace graph through the same routes ordinary code
 //! uses: `CallResolver` Value lookups and `select_nominal_constructor` (shared
 //! with value paths and constructor calls) for unit/tuple constructors, the
-//! Type namespace for record constructors, and the pure constant evaluator for
-//! constants. The VM matcher then consumes only the resulting targets.
+//! Type namespace for record constructors. Constants retain their actual
+//! declaration identity; the matcher demands an ordinary VM initializer only
+//! if it reaches that target. Cold alternatives remain unevaluated.
 use super::*;
 use crate::{
     frontend::{
@@ -54,7 +55,7 @@ impl RunMachine {
             return QueryPoll::Ready(Ok(()));
         }
         let pc = self.frame.pc().clone();
-        let targets = match self.pattern_names.get(&pc) {
+        let mut targets = match self.pattern_names.get(&pc) {
             Some((identity, targets)) if *identity == tree.identity() => Arc::clone(targets),
             _ => {
                 let mut targets = Vec::with_capacity(tree.names().len());
@@ -73,6 +74,51 @@ impl RunMachine {
                 targets
             }
         };
+        // Only hydrate values already produced by the ordinary initializer
+        // continuation. Looking at unresolved names never executes a cold
+        // initializer; Search is the sole owner of that demand.
+        let mut ready = Vec::new();
+        for (slot, target) in targets.iter().enumerate() {
+            let PatternTarget::Initializer(identity) = target else {
+                continue;
+            };
+            let value = if let Some((cell, _)) = self.const_cells.get(identity) {
+                match self.store.admit_move(*cell) {
+                    Ok(value) => Some(value),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            } else if let Some((ticket, _)) = self.initialized_values.get(&(pc.clone(), *identity))
+            {
+                match self.store.peek_ticket(*ticket) {
+                    Ok(value) => Some(value),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            } else {
+                None
+            };
+            if let Some(value) = value {
+                // Scalar patterns already use the shared numeric comparator.
+                // Keep an unsupported structural value's ticket owned by the
+                // run instead of treating a raw aggregate handle as a scalar.
+                let target = if matches!(value.kind, 1..=7 | 11 | 12 | 17) {
+                    PatternTarget::Constant(value)
+                } else {
+                    PatternTarget::Refused(unsupported(
+                        "non-scalar constant pattern requires structural constant integration"
+                            .into(),
+                    ))
+                };
+                ready.push((slot, target));
+            }
+        }
+        if !ready.is_empty() {
+            let writable = Arc::make_mut(&mut targets);
+            for (slot, target) in ready {
+                writable[slot] = target;
+            }
+            self.pattern_names
+                .insert(pc.clone(), (tree.identity(), Arc::clone(&targets)));
+        }
         self.frame.set_pattern_names(pc, targets);
         QueryPoll::Ready(Ok(()))
     }
@@ -183,7 +229,7 @@ impl RunMachine {
         }
     }
     /// The matcher target of a shared pattern-name selection: a constant's
-    /// value from the pure constant evaluator, a constructor bound as
+    /// actual initializer identity, or a constructor bound as
     /// constructor expressions bind it.
     fn pattern_selection_target(
         &mut self,
@@ -193,9 +239,9 @@ impl RunMachine {
     ) -> QueryPoll<PatternTarget> {
         match selection {
             PatternSelection::Binding => QueryPoll::Ready(Ok(PatternTarget::Binding)),
-            PatternSelection::Constant(identity) => self
-                .constant_item_value(db, identity)
-                .map(PatternTarget::Constant),
+            PatternSelection::Constant(identity) => {
+                QueryPoll::Ready(Ok(PatternTarget::Initializer(identity)))
+            }
             PatternSelection::Constructor { identity, variant } => {
                 self.pattern_constructor(db, name, identity, variant)
             }
@@ -240,7 +286,10 @@ impl RunMachine {
                     Ok(target) => target,
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 },
-                None => match sources.iter().find_map(|source| source.outline_item(identity)) {
+                None => match sources
+                    .iter()
+                    .find_map(|source| source.outline_item(identity))
+                {
                     Some(item) => NominalConstructorTarget::structure(item),
                     None => {
                         return QueryPoll::Ready(Err(unsupported(

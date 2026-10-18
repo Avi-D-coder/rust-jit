@@ -157,6 +157,7 @@ impl RunCapture {
         match outcome {
             StepOutcome::Call { .. } => add(&mut self.facts.source_call_boundaries, 1)?,
             StepOutcome::Dispatch
+            | StepOutcome::Initializer(_)
             | StepOutcome::Backedge(_)
             | StepOutcome::Next(_)
             | StepOutcome::Return(_)

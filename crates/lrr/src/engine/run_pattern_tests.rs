@@ -179,16 +179,9 @@ fn plain_identifier_naming_a_constant_is_not_a_fresh_binding() {
             let k = match 4_i32 { LIMIT => 1_i32, _ => 2_i32 };
             if k != 2_i32 { let z = 0_i32; let _ = 1_i32 / z; }
         }";
-    let (mut db, mut run) = borrows::tests::start_stock_body(SOURCE, "main");
-    // The constant pattern takes the pure constant route (whose seal
-    // prerequisites this unsealed world may still lack); it never binds a
-    // fresh local named LIMIT that would match every value.
-    let outcome = run.poll(&mut db);
-    assert!(!matches!(outcome, RunPoll::Panicked(_)));
-    if let RunPoll::Fault(error) = &outcome {
-        assert!(!error.message.contains("LIMIT"), "{error:?}");
-        assert_ne!(error.code, "LRR-E-PATTERN-BINDING");
-    }
+    // The source-selected constant runs through the ordinary initializer;
+    // a runtime refusal is not evidence that its pattern worked.
+    complete(SOURCE);
     // A function name in the Value namespace is shadowed by a new binding.
     complete(
         "fn a() {} fn main() { match 3_i32 { a => { if a != 3_i32 { let z = 0_i32; let _ = 1_i32 / z; } } } }",

@@ -146,34 +146,53 @@ impl Frame {
         }
         self.preflight_write_type(result, TypeId(2), store)
     }
-    pub(crate) fn test_pattern(
-        &mut self,
+    /// Search once, without publishing a result or changing ownership. The
+    /// VM can suspend this exact operation for an actually reached constant.
+    pub(crate) fn search_pattern(
+        &self,
         owner: NodeId,
         tree: &Arc<crate::syntax::pattern_tree::PatternTree>,
         result: SlotId,
         retry: bool,
-        store: &mut GuestStore,
-    ) -> Result<(), Diagnostic> {
+        store: &GuestStore,
+    ) -> Result<crate::vm::pattern::matcher::SearchOutcome, Diagnostic> {
         self.preflight_pattern_test(owner, tree, result, retry, store)?;
         let names = self.pattern_name_classes(tree)?;
-        let edition = self.body.profile().edition;
         let open = self.open_patterns.current(owner)?;
-        let skip = if retry {
-            open.solution
-                .checked_add(1)
-                .ok_or_else(|| transaction("pattern solution counter overflow"))?
-        } else {
-            0
-        };
-        let found = Search::run(
+        let skip = self.pattern_solution(owner, retry)?;
+        Search::run(
             store,
             names.as_deref(),
             skip,
             &open.root,
             open.root_source.as_ref(),
             tree,
-            edition,
-        )?;
+            self.body.profile().edition,
+        )
+    }
+    fn pattern_solution(&self, owner: NodeId, retry: bool) -> Result<u64, Diagnostic> {
+        let open = self.open_patterns.current(owner)?;
+        if retry {
+            open.solution
+                .checked_add(1)
+                .ok_or_else(|| transaction("pattern solution counter overflow"))
+        } else {
+            Ok(0)
+        }
+    }
+    /// Commit only the completed non-consuming search, using the same
+    /// transaction for every pattern owner and source origin.
+    pub(crate) fn complete_pattern_test(
+        &mut self,
+        owner: NodeId,
+        tree: &Arc<crate::syntax::pattern_tree::PatternTree>,
+        result: SlotId,
+        retry: bool,
+        found: Option<Vec<Staged>>,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        self.preflight_pattern_test(owner, tree, result, retry, store)?;
+        let skip = self.pattern_solution(owner, retry)?;
         let matched = found.is_some();
         store.reserve_owning_read_result(self.slot(result)?.cell.is_none(), false)?;
         self.prepare_write(result, store)?;
@@ -185,6 +204,31 @@ impl Frame {
         open.matched = matched;
         open.staged = found.unwrap_or_default();
         Ok(())
+    }
+    /// Retain exactly this operation when the matcher needs an initializer;
+    /// all earlier recipe operations and the scrutinee remain completed.
+    pub(crate) fn suspend_pattern_test(&mut self, index: usize) -> Result<(), Diagnostic> {
+        self.rerun_index = Some(
+            u32::try_from(index).map_err(|_| transaction("pattern operation index overflow"))?,
+        );
+        Ok(())
+    }
+    pub(crate) fn test_pattern(
+        &mut self,
+        owner: NodeId,
+        tree: &Arc<crate::syntax::pattern_tree::PatternTree>,
+        result: SlotId,
+        retry: bool,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        match self.search_pattern(owner, tree, result, retry, store)? {
+            crate::vm::pattern::matcher::SearchOutcome::Complete(found) => {
+                self.complete_pattern_test(owner, tree, result, retry, found, store)
+            }
+            crate::vm::pattern::matcher::SearchOutcome::Initializer(_) => Err(transaction(
+                "constant pattern requires the resumable operation dispatcher",
+            )),
+        }
     }
     pub(crate) fn preflight_pattern_publication(
         &self,

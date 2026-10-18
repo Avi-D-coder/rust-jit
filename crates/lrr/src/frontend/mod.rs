@@ -42,6 +42,7 @@ pub mod names;
 pub mod thunks;
 
 pub mod signature_subst;
+pub(crate) mod associated_equations;
 
 pub mod signature_names;
 

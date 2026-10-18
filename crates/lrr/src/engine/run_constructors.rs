@@ -15,7 +15,36 @@ impl RunMachine {
         contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
     ) -> QueryPoll<()> {
         match self.installed.prepared_constructor(db, id) {
-            Ok(Some(source)) => self.prepare_installed_record_template(db, source),
+            Ok(Some(source)) => {
+                // The recipe may state its own inferred result before its
+                // constructor operation. Read that retained source fact just
+                // as value-path preparation does; do not execute the hint.
+                let stated = match self.installed.get_current(db, id) {
+                    Ok(recipe) => {
+                        let result = self
+                            .frame
+                            .body
+                            .nodes()
+                            .get(self.frame.pc().node as usize)
+                            .and_then(|node| node.value);
+                        recipe
+                            .recipe()
+                            .operations
+                            .iter()
+                            .skip(self.frame.resume_operation_index())
+                            .take_while(|op| !matches!(op, Op::ConstructStart { .. }))
+                            .find_map(|op| match op {
+                                Op::SetHint {
+                                    child,
+                                    hint: crate::ir::op::HintRecipe::Written(written),
+                                } if Some(*child) == result => Some(Arc::clone(written)),
+                                _ => None,
+                            })
+                    }
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                self.prepare_installed_record_template(db, source, stated.as_deref())
+            }
             Ok(None) => self.prepare_constructor(db, contexts),
             Err(error) => QueryPoll::Ready(Err(error)),
         }
@@ -26,6 +55,7 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         source: crate::frontend::prepared_constructors::PreparedRecordConstructorHandle,
+        stated: Option<&crate::ir::written_type::WrittenType>,
     ) -> QueryPoll<()> {
         use crate::frontend::nominal_member_goals::{NominalMemberKey, NominalMemberSelection};
         use crate::traits::term::{GenericArg, TyTerm};
@@ -40,7 +70,7 @@ impl RunMachine {
         };
         let definition = source.prepared().mapping().definition();
         let context = match self.constructor_context(self.frame.pc().node) {
-            Ok(context) => context,
+            Ok(context) => context.or_else(|| stated.and_then(|written| written.source())),
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         let arguments = match context {

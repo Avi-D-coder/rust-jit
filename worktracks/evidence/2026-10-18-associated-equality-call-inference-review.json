@@ -1,0 +1,123 @@
+{
+  "status": "source candidate; no compile or interpreter acceptance yet",
+  "owner": "/root/generic_projection_resume",
+  "tasks": [
+    "M019",
+    "M020",
+    "M021",
+    "M022",
+    "M023",
+    "M026"
+  ],
+  "witness": "fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-struct-field-numbered.rs",
+  "source_sha256": {
+    "crates/lrr/src/frontend/associated_equations.rs": "28cdfdf9799c922200df33b9083c612c8123b176ae5a830c6d4bf0e65c9358f8",
+    "crates/lrr/src/frontend/source_types.rs": "8f02a5bf31d52397506fce27c7b589ad1f3ae667259b4c233614c79e5e2f70c3",
+    "crates/lrr/src/frontend/signature_subst.rs": "4acbbb5d5b1e56c26b39efbd13c026101967bffefce39624c579bf6299bb17f2",
+    "crates/lrr/src/frontend/call_contracts.rs": "da6fbfab2f17e2bb31de9b16d24e1bc62ee363b698dcb2a2e14435fb941eb197",
+    "crates/lrr/src/frontend/mod.rs": "a5075ef911c9bc209fb2f85240ff2ea32be3cdf3e015760bfad9519a49d3dd50",
+    "crates/lrr/src/db/key.rs": "0a5f5708f5fb8afffb643169e5313a09b7f8b25b95d8634c67a575884e9d752a",
+    "crates/lrr/src/db/value.rs": "45f182911dc1b48f6097bef68e28ec5893431f2994eef8e4a2f829380e1794ea",
+    "crates/lrr/src/db/provider.rs": "97a9cd730dbb0c78960143e53e8cbf6f706c0110ae99a7b259fe394c9e785d62",
+    "crates/lrr/src/engine/run.rs": "d931fc46695b9f721441ed22e609f5596e479268e0a40680f74623a93413f622",
+    "crates/lrr/src/engine/run_value_calls.rs": "dcc1e4868d17d23645f67f38354d45c7b1655eb58e583caae90d72a71bb939a3",
+    "crates/lrr/src/vm/frame.rs": "b8ef2deb75d25e14a8a0bf460fe16222832e13bcc080dd5285063128b4a2b31a"
+  },
+  "reviews": [
+    {
+      "mode": 1,
+      "symbols": [
+        "associated_equations::prepare",
+        "call_contracts::prepare",
+        "SignatureSubstitution::constrain_equation"
+      ],
+      "finding": "No executable expression compiler/evaluator added. Real declaration Type equations feed existing transaction; GenericEnv checks remain."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "source_types::actual_declaration_bounds",
+        "WrittenTypeDeclaration::function_syntax"
+      ],
+      "finding": "Actual retained Fn syntax/selected profile used for all origins; no literal/break/generated expression executor."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "source_types::actual_bound_equations",
+        "signature_subst::references_parameters",
+        "associated_types::normalize"
+      ],
+      "finding": "No macro/member/fixture names select inference. Raw NameRef spelling is only conservative prefilter; resolved RHS must contain exact demanded ParamKey before LHS trait/member demand. Same unifier binds source templates."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "associated_equations::prepare",
+        "QueryKey::ParseFile",
+        "BodyEnvironmentInput"
+      ],
+      "finding": "Genuine existing coordinator-published callee environment, exact Fn declaration source/context/profile. No generated exclusion added; generated edition/hygiene matrix unexecuted."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "actual_declaration_bounds",
+        "actual_bound_equations"
+      ],
+      "finding": "Only declaration generic/where children plus direct associated impl/trait owner enumerated. Only still-unbound Type RHS equations consumed; no executable body/branch preparation or static unrelated bound validation."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "QueryKey::AssociatedEquations",
+        "PreparedInputGuard",
+        "call_contracts::prepare"
+      ],
+      "finding": "Immutable query keyed by exact body and source substitutions/demanded ordinals; retains transitive captured input closure. Guard retained whenever equations constrain source transaction, even no descriptor progress. No installed parsing/planning. Reached call cold path walks selected signature bounds on cache miss; fixed point advances newly closed runtime bindings."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "projection_trait",
+        "actual_bound_equations",
+        "run::prepare_selected_source_call",
+        "run::check_source_return"
+      ],
+      "finding": "Single trait name uses ordinary declaration Type namespace query; associated member uses relevant actual trait Type bucket; no new world census. Existing qualified trait graph lookup dependency completeness held. Entry/return use retained input guard, with cached per-revision currentness, no query recomputation."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "associated_equations::prepare",
+        "ParsedFile::syntax_at",
+        "BodyEnvironmentInput::macros"
+      ],
+      "finding": "Borrows retained parsed/source environment/member index Arcs; direct source declaration range, no whole-file node search/body deep clone. Cold source view borrow vector O(S); selected signature bounds/term work O(B+T); key BTreeMap and guard closure allocations checked."
+    }
+  ],
+  "remaining": [
+    "No runtime pass until sole validator captures terminal on frozen source.",
+    "Full edition/origin/publication refresh matrix unexecuted.",
+    "Legacy written-Type token parser and qualified trait graph lookup remain named architecture debt, unextended as parser routes.",
+    "GAT equality item arguments unresolved.",
+    "Only already registered structural descriptors reconstructable through GuestStore::find_structural_term; novel nominal/anonymous descriptor reconstruction not closed by this slice.",
+    "Nested inference variable binding normalization uses existing SignatureSubstitution binding behavior; complete trait-goal engine remains outstanding.",
+    "Ordinary environments absent in legacy public call adapter do not gain fabricated source context.",
+    "Shared run.rs/frame.rs whole-file hashes include disjoint root changes; successor source review must track changed conclusions."
+  ],
+  "acceptance": {
+    "runtime": "unexecuted successor",
+    "compiler": "unexecuted successor",
+    "feature": "not complete",
+    "architecture_matrix": "unexecuted successor"
+  },
+  "audit_mapping": {
+    "MA003": "Relevant numeric/type inference drift prerequisite: equations use actual declared bound/source terms, never assertion identity. This slice does not certify deletion of old audited assertion routes.",
+    "MA006": "Relevant member-selection drift prerequisite: actual trait Type bucket + retained MemberIndex/common normalizer; no context method whitelist.",
+    "MA001/MA004/MA005/MA007/MA008": "No executor/lowering/index/verifier modification here. Their repair acceptance cannot be inferred from this source Type query.",
+    "MA002": "Pattern machinery untouched; remains separate acceptance.",
+    "numbering": "Recurring failure modes 1-8 in reviews are distinct from audit IDs MA001-MA008."
+  },
+  "key_serialization_review": "Canonical strictly ordered unique Vec<(ParamKey,TyTerm)> wire key, not a JSON object with struct map keys. Pure provider validates sorted unique bindings/needed and same-owner closed input terms; BTreeMap reconstruction only cold for existing substitution. Source-only repair, no roundtrip test run by this worker."
+}

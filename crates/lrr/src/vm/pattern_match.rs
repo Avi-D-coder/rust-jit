@@ -46,6 +46,7 @@ pub(crate) fn copy_place(place: &Place) -> Place {
 /// The ordinary namespace resolution of one pattern name slot, prepared by
 /// the dispatcher once per PC through the same Value/Type routes ordinary
 /// paths, callees and record constructors use.
+#[derive(Clone)]
 pub(crate) enum PatternTarget {
     /// A fresh binding (plain identifiers only).
     Binding,
@@ -58,6 +59,8 @@ pub(crate) enum PatternTarget {
     },
     /// A constant pattern: the constant's evaluated scalar value.
     Constant(ValueRepr),
+    /// Source-selected constant; evaluated only if this search reaches it.
+    Initializer(crate::core::digest::Digest),
     /// This name's resolution was refused; the refusal faults only if the
     /// matcher actually reaches the name (cold alternatives stay cold).
     Refused(Diagnostic),
@@ -191,6 +194,22 @@ impl Number {
     }
 }
 
+/// A search either finishes without consuming the scrutinee or asks the
+/// dispatcher for one actually reached constant's ordinary VM initializer.
+pub(crate) enum SearchOutcome {
+    Complete(Option<Vec<Staged>>),
+    Initializer(crate::core::digest::Digest),
+}
+enum SearchFailure {
+    Fault(Diagnostic),
+    Initializer(crate::core::digest::Digest),
+}
+impl From<Diagnostic> for SearchFailure {
+    fn from(error: Diagnostic) -> Self {
+        Self::Fault(error)
+    }
+}
+
 /// The non-consuming search. `skip` counts earlier complete solutions to pass
 /// over, so a retry after a false guard continues in written order.
 pub(crate) struct Search<'s> {
@@ -208,7 +227,7 @@ impl<'s> Search<'s> {
         root_source: Option<&TyTerm>,
         tree: &PatternTree,
         edition: u16,
-    ) -> Result<Option<Vec<Staged>>, Diagnostic> {
+    ) -> Result<SearchOutcome, Diagnostic> {
         let mut search = Self {
             store,
             names,
@@ -221,13 +240,14 @@ impl<'s> Search<'s> {
             node: tree.root(),
             context: PatternContext::new(edition)?,
         };
-        Ok(if search.solve(&goal, &Next::Done)? {
-            Some(search.staged)
-        } else {
-            None
-        })
+        match search.solve(&goal, &Next::Done) {
+            Ok(true) => Ok(SearchOutcome::Complete(Some(search.staged))),
+            Ok(false) => Ok(SearchOutcome::Complete(None)),
+            Err(SearchFailure::Initializer(identity)) => Ok(SearchOutcome::Initializer(identity)),
+            Err(SearchFailure::Fault(error)) => Err(error),
+        }
     }
-    fn proceed(&mut self, next: &Next<'_, '_>) -> Result<bool, Diagnostic> {
+    fn proceed(&mut self, next: &Next<'_, '_>) -> Result<bool, SearchFailure> {
         match next {
             Next::Done => {
                 if self.skip == 0 {
@@ -243,7 +263,7 @@ impl<'s> Search<'s> {
             },
         }
     }
-    fn solve(&mut self, goal: &Goal<'_>, next: &Next<'_, '_>) -> Result<bool, Diagnostic> {
+    fn solve(&mut self, goal: &Goal<'_>, next: &Next<'_, '_>) -> Result<bool, SearchFailure> {
         let mark = self.staged.len();
         let matched = self.solve_inner(goal, next)?;
         if !matched {
@@ -420,19 +440,21 @@ impl<'s> Search<'s> {
         end: Option<&Result<RangeEndpoint, String>>,
         inclusive: bool,
         value: ValueRepr,
-    ) -> Result<bool, Diagnostic> {
+    ) -> Result<bool, SearchFailure> {
         use std::cmp::Ordering;
         let actual = self.number(value)?;
         let compare =
-            |endpoint: &Result<RangeEndpoint, String>| -> Result<Option<Ordering>, Diagnostic> {
+            |endpoint: &Result<RangeEndpoint, String>| -> Result<Option<Ordering>, SearchFailure> {
                 match endpoint.as_ref().map_err(|message| unsupported(message))? {
-                    RangeEndpoint::Literal(literal) => {
-                        actual.compare(self.literal(literal, value)?)
-                    }
+                    RangeEndpoint::Literal(literal) => actual
+                        .compare(self.literal(literal, value)?)
+                        .map_err(Into::into),
                     RangeEndpoint::Constant(slot) => match self.target(*slot)? {
-                        PatternTarget::Constant(bound) => actual.compare(self.number(*bound)?),
-                        PatternTarget::Refused(refusal) => Err(refusal.clone()),
-                        _ => Err(mismatch("range pattern bound is not a constant")),
+                        PatternTarget::Constant(bound) => {
+                            actual.compare(self.number(*bound)?).map_err(Into::into)
+                        }
+                        PatternTarget::Refused(refusal) => Err(refusal.clone().into()),
+                        _ => Err(mismatch("range pattern bound is not a constant").into()),
                     },
                 }
             };
@@ -451,15 +473,20 @@ impl<'s> Search<'s> {
         }
         Ok(true)
     }
-    fn target(&self, slot: u32) -> Result<&'s PatternTarget, Diagnostic> {
-        self.names
+    fn target(&self, slot: u32) -> Result<&'s PatternTarget, SearchFailure> {
+        let target = self
+            .names
             .and_then(|names| names.get(slot as usize))
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-PATTERN-BINDING",
                     "pattern name requires its ordinary namespace resolution".into(),
                 )
-            })
+            })?;
+        match target {
+            PatternTarget::Initializer(identity) => Err(SearchFailure::Initializer(*identity)),
+            _ => Ok(target),
+        }
     }
     /// A constant pattern compares the scrutinee scalar with the constant's
     /// evaluated value (structural equality of a primitive constant).
@@ -468,7 +495,7 @@ impl<'s> Search<'s> {
         goal: &Goal<'_>,
         expected: ValueRepr,
         next: &Next<'_, '_>,
-    ) -> Result<bool, Diagnostic> {
+    ) -> Result<bool, SearchFailure> {
         let (place, _, _, _) = self.peel(copy_place(&goal.place), None, goal.context, false)?;
         let actual = self.number(self.value(&place)?)?;
         let expected = self.number(expected)?;
@@ -487,7 +514,7 @@ impl<'s> Search<'s> {
         variant: &crate::frontend::types::BoundNominalVariant,
         fields: &[(u32, &PatternNode)],
         next: &Next<'_, '_>,
-    ) -> Result<bool, Diagnostic> {
+    ) -> Result<bool, SearchFailure> {
         let (place, _, context, ty) = self.peel(
             copy_place(&goal.place),
             goal.source.clone(),
@@ -498,9 +525,7 @@ impl<'s> Search<'s> {
         if !matches!(self.store.type_descriptor(ty)?.key.as_ref(),
             TypeKey::Nominal { identity, .. } if *identity == variant.identity())
         {
-            return Err(mismatch(
-                "nominal pattern names another type than its scrutinee",
-            ));
+            return Err(mismatch("nominal pattern names another type than its scrutinee").into());
         }
         if self.store.place_variant(&place).map_err(place_fault)? != Some(variant.variant()) {
             return Ok(false);
@@ -528,10 +553,10 @@ impl<'s> Search<'s> {
         }
         self.proceed(&Next::Goals(&goals, next))
     }
-    fn solve_inner(&mut self, goal: &Goal<'_>, next: &Next<'_, '_>) -> Result<bool, Diagnostic> {
+    fn solve_inner(&mut self, goal: &Goal<'_>, next: &Next<'_, '_>) -> Result<bool, SearchFailure> {
         match goal.node {
             PatternNode::Wildcard => self.proceed(next),
-            PatternNode::Unsupported(message) => Err(unsupported(message)),
+            PatternNode::Unsupported(message) => Err(unsupported(message).into()),
             PatternNode::Binding {
                 binding,
                 by_reference,
@@ -543,7 +568,10 @@ impl<'s> Search<'s> {
             } => {
                 if let Some((slot, written)) = name {
                     match self.target(*slot)? {
-                        PatternTarget::Refused(error) => return Err(error.clone()),
+                        PatternTarget::Refused(error) => return Err(error.clone().into()),
+                        PatternTarget::Initializer(identity) => {
+                            return Err(SearchFailure::Initializer(*identity));
+                        }
                         PatternTarget::Binding => {}
                         PatternTarget::Constant(value) => {
                             return self.constant(goal, *value, next);
@@ -556,7 +584,8 @@ impl<'s> Search<'s> {
                         PatternTarget::Constructor { .. } => {
                             return Err(mismatch(&format!(
                                 "pattern identifier `{written}` names a tuple or record constructor"
-                            )));
+                            ))
+                            .into());
                         }
                     }
                 }
@@ -597,7 +626,7 @@ impl<'s> Search<'s> {
                 let crate::runtime::cell::str_storage::ReferenceView::Str(actual) =
                     self.store.reference_view(value)?
                 else {
-                    return Err(mismatch("string literal pattern requires a &str scrutinee"));
+                    return Err(mismatch("string literal pattern requires a &str scrutinee").into());
                 };
                 if actual == expected {
                     self.proceed(next)
@@ -644,7 +673,7 @@ impl<'s> Search<'s> {
                     {
                         0
                     }
-                    _ => return Err(mismatch("tuple pattern requires a tuple scrutinee")),
+                    _ => return Err(mismatch("tuple pattern requires a tuple scrutinee").into()),
                 };
                 let fixed = items.len();
                 let (before, after) = match rest {
@@ -652,13 +681,16 @@ impl<'s> Search<'s> {
                         if fixed > arity {
                             return Err(mismatch(
                                 "tuple pattern has more fields than its scrutinee",
-                            ));
+                            )
+                            .into());
                         }
                         (*rest as usize, fixed - *rest as usize)
                     }
                     None => {
                         if fixed != arity {
-                            return Err(mismatch("tuple pattern arity differs from its scrutinee"));
+                            return Err(
+                                mismatch("tuple pattern arity differs from its scrutinee").into()
+                            );
                         }
                         (fixed, 0)
                     }
@@ -708,14 +740,18 @@ impl<'s> Search<'s> {
                         self.store.slice_place_len(&place).map_err(place_fault)? as usize,
                         true,
                     ),
-                    _ => return Err(mismatch("array pattern requires an array scrutinee")),
+                    _ => return Err(mismatch("array pattern requires an array scrutinee").into()),
                 };
                 let fixed = items.len();
                 let before = match rest {
                     Some(rest) if fixed <= length => *rest as usize,
                     None if fixed == length => fixed,
                     _ if unsized_slice => return Ok(false),
-                    _ => return Err(mismatch("array pattern length differs from its scrutinee")),
+                    _ => {
+                        return Err(
+                            mismatch("array pattern length differs from its scrutinee").into()
+                        );
+                    }
                 };
                 let mut goals = Vec::with_capacity(fixed + 1);
                 for (ordinal, item) in items.iter().enumerate() {
@@ -749,7 +785,8 @@ impl<'s> Search<'s> {
                     if !unsized_slice {
                         return Err(unsupported(
                             "array subslice binding requires its sized subarray value",
-                        ));
+                        )
+                        .into());
                     }
                     let start =
                         u64::try_from(before).map_err(|_| mismatch("slice rest overflow"))?;
@@ -784,19 +821,20 @@ impl<'s> Search<'s> {
             } => {
                 let context = goal.context.with_edition(*edition)?.explicit_reference()?;
                 if self.unresolved_literal(&goal.place)?.is_some() {
-                    return Err(mismatch("reference pattern requires a reference scrutinee"));
+                    return Err(mismatch("reference pattern requires a reference scrutinee").into());
                 }
                 let ty = self.place_type(&goal.place)?;
                 let TypeKey::Ref {
                     mutable: actual, ..
                 } = self.store.type_descriptor(ty)?.key.as_ref()
                 else {
-                    return Err(mismatch("reference pattern requires a reference scrutinee"));
+                    return Err(mismatch("reference pattern requires a reference scrutinee").into());
                 };
                 if actual != mutable {
                     return Err(mismatch(
                         "reference pattern mutability differs from its scrutinee",
-                    ));
+                    )
+                    .into());
                 }
                 let place = self
                     .store
@@ -817,13 +855,18 @@ impl<'s> Search<'s> {
                 )
             }
             PatternNode::Constructor { slot, form } => match (self.target(*slot)?, form) {
-                (PatternTarget::Refused(error), _) => Err(error.clone()),
+                (PatternTarget::Refused(error), _) => Err(error.clone().into()),
+                (PatternTarget::Initializer(identity), _) => {
+                    Err(SearchFailure::Initializer(*identity))
+                }
                 (PatternTarget::Constant(value), ConstructorForm::Path) => {
                     self.constant(goal, *value, next)
                 }
                 (PatternTarget::Constructor { variant, shape, .. }, ConstructorForm::Path) => {
                     if *shape != crate::frontend::types::FieldShape::Unit {
-                        return Err(mismatch("path pattern names a tuple or record constructor"));
+                        return Err(
+                            mismatch("path pattern names a tuple or record constructor").into()
+                        );
                     }
                     self.constructor(goal, variant, &[], next)
                 }
@@ -834,7 +877,8 @@ impl<'s> Search<'s> {
                     if *shape != crate::frontend::types::FieldShape::Tuple {
                         return Err(mismatch(
                             "tuple-struct pattern names a unit or record constructor",
-                        ));
+                        )
+                        .into());
                     }
                     let arity = variant.fields().len();
                     let fixed = items.len();
@@ -844,7 +888,8 @@ impl<'s> Search<'s> {
                         _ => {
                             return Err(mismatch(
                                 "tuple-struct pattern arity differs from its constructor",
-                            ));
+                            )
+                            .into());
                         }
                     };
                     let mut fields = Vec::with_capacity(fixed);
@@ -868,7 +913,7 @@ impl<'s> Search<'s> {
                     ConstructorForm::Record { fields, .. },
                 ) => {
                     if ordinals.len() != fields.len() {
-                        return Err(transaction("record pattern field resolution differs"));
+                        return Err(transaction("record pattern field resolution differs").into());
                     }
                     let fields = ordinals
                         .iter()
@@ -877,9 +922,9 @@ impl<'s> Search<'s> {
                         .collect::<Vec<_>>();
                     self.constructor(goal, variant, &fields, next)
                 }
-                (PatternTarget::Binding, _) | (PatternTarget::Constant(_), _) => Err(mismatch(
-                    "pattern path does not name a constructor of this form",
-                )),
+                (PatternTarget::Binding, _) | (PatternTarget::Constant(_), _) => {
+                    Err(mismatch("pattern path does not name a constructor of this form").into())
+                }
             },
             PatternNode::Or(alternatives) => {
                 for alternative in alternatives.iter() {

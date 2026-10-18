@@ -1,10 +1,11 @@
 //! Value-namespace items read as values through the ordinary `ValuePath` op.
 //!
 //! The dispatcher resolves the written path once per PC through the run's
-//! namespace graph and the pure constant evaluator (the same route constant
-//! patterns use) and installs the evaluated value here before dispatch. The
-//! VM never resolves a name, evaluates an initializer or demands a schema; a
-//! `ValuePath` whose PC selected a constructor keeps the nominal route.
+//! namespace graph. Reached const/static initializers enter ordinary VM
+//! frames; their resulting run-long cell or per-use ticket is installed here
+//! before this operation resumes. `ValuePath` consumes that prepared value
+//! without resolving names or preparing source; constructor paths retain their
+//! ordinary nominal route. Pure evaluation is for preparation-time values.
 use super::{Frame, invalid};
 use crate::{
     core::diagnostic::Diagnostic,
@@ -33,7 +34,7 @@ pub(crate) enum ItemValue {
         view: Option<TyTerm>,
     },
     /// A constant whose initializer ran through the interpreter and whose
-    /// value is copied intrinsically (a scalar or shared reference): its one
+    /// value is copied intrinsically (including function/raw pointers): its one
     /// run-long cell, copied at each read (E-R5-007).
     ConstCell {
         cell: crate::runtime::cell::CellId,
@@ -186,7 +187,9 @@ impl Frame {
                 Ok(())
             }
             ItemValue::Function { ty } => {
-                let pointer = self.function_pointer_expectation(destination, store)?.is_some();
+                let pointer = self
+                    .function_pointer_expectation(destination, store)?
+                    .is_some();
                 let cell = self.prepare_write(destination, store)?;
                 if !pointer {
                     store.validate_constructor_destination(cell, ty)?;
@@ -197,9 +200,11 @@ impl Frame {
                     // The function item meets its fn-pointer expectation by
                     // the shared pointer coercion.
                     let value = store.peek_ticket(ticket)?;
-                    let expected = self
-                        .write_unsizing(destination, value, store)?
-                        .ok_or_else(|| invalid("function item does not coerce to its fn pointer"))?;
+                    let expected =
+                        self.write_unsizing(destination, value, store)?
+                            .ok_or_else(|| {
+                                invalid("function item does not coerce to its fn pointer")
+                            })?;
                     store.coerce_unsized_ticket(ticket, expected)?;
                 }
                 store.initialize(cell, ticket)
@@ -231,7 +236,10 @@ impl Frame {
                         view,
                     } => {
                         let plan = store.prepare_constant_instantiation(&value, &wire, ty)?;
-                        (store.instantiate_constant_value(plan, &mut self.fuel)?, view)
+                        (
+                            store.instantiate_constant_value(plan, &mut self.fuel)?,
+                            view,
+                        )
                     }
                     other => {
                         self.item_values.value = Some((self.pc.clone(), other));

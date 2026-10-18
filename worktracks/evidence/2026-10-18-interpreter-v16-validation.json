@@ -1,0 +1,56 @@
+{
+  "candidate": "V16",
+  "status": "compile failure; no CLI build or runtime validation",
+  "head": "653d52e0a51f10881b7f78fbd07193ae13fb8063",
+  "source_sha256": "6d457bcb5f120d6b722424fac144dd17a5a8f486ba7cbd4107f03376c8bc788f",
+  "compiled_source_leaves": 3326,
+  "source_unchanged_through_compile": true,
+  "head_unchanged": true,
+  "lib": {
+    "exit": 101,
+    "seconds": 16.822,
+    "terminal": "d5f422/101",
+    "log": "compile.log"
+  },
+  "errors": [
+    {
+      "code": "E0433",
+      "path": "crates/lrr/src/cli/initializer_tests.rs",
+      "lines": [
+        197,
+        225
+      ],
+      "message": "super::StandaloneOutcome wrong module for initializer_tests nested crate_graph"
+    },
+    {
+      "code": "E0658",
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "lines": [
+        1149,
+        1428
+      ],
+      "message": "unstable str_as_str on name.text().as_str(), text already str reference"
+    },
+    {
+      "code": "E0004",
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "lines": [
+        332
+      ],
+      "message": "missing new AssociatedEquations QueryKey arm"
+    },
+    {
+      "code": "E0004",
+      "path": "crates/lrr/src/service/expansion.rs",
+      "lines": [
+        155
+      ],
+      "message": "missing new AssociatedEquations QueryKey arm"
+    }
+  ],
+  "cli": "unexecuted",
+  "controls": [],
+  "stock": [],
+  "previous_binary": "Exact V15 retained; no V16 acceptance",
+  "raw_report_sha256": "a1c59b297f3b1979fa65c201fd3c4ecda0ec249eb02a635909a1d0c8180d1216"
+}

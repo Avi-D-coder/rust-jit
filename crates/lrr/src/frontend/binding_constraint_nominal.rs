@@ -48,6 +48,9 @@ pub(super) enum FieldType {
     Parameter(u32),
     /// A written structure around the declaration's type parameters.
     Written(Arc<WrittenType>),
+    /// An actual declaration occurrence whose projection/application is not
+    /// yet a materializable field Type. Preserve it without inventing a leaf.
+    Deferred(Option<TyTerm>),
 }
 /// A declared field's written structure under the nominal Type's own type
 /// arguments (`None` while a leaf is left to inference or an argument is
@@ -209,6 +212,7 @@ impl FieldType {
                 out
             }
             Self::Concrete(_) => Vec::new(),
+            Self::Deferred(_) => Vec::new(),
         }
     }
     /// This field's Type projected by `steps`, as far as its written
@@ -218,6 +222,7 @@ impl FieldType {
             Self::Concrete(term) => return FieldProjection::Concrete(term.clone(), steps.to_vec()),
             Self::Parameter(index) => return FieldProjection::Parameter(*index, steps.to_vec()),
             Self::Written(written) => written.as_ref(),
+            Self::Deferred(_) => return FieldProjection::Unknown,
         };
         let mut rest = steps;
         loop {
@@ -291,6 +296,7 @@ impl FieldType {
                 .nth(*index as usize)
                 .cloned(),
             Self::Written(written) => instantiate(written, args),
+            Self::Deferred(_) => None,
         }
     }
 }
@@ -304,8 +310,9 @@ pub(super) struct Constructed {
     /// Declaration-order field names (`None` for positional fields).
     names: Vec<Option<String>>,
     fields: Vec<FieldType>,
-    /// The declaration's own type parameter count.
-    type_parameters: usize,
+    /// Actual declaration keys in Type-argument order. Region/const ordinal
+    /// positions are not fabricated into Type parameter identities.
+    type_parameters: Vec<crate::traits::term::ParamKey>,
 }
 impl Constructed {
     pub(super) fn arity(&self) -> usize {
@@ -333,22 +340,32 @@ impl Constructed {
                 FieldType::Written(inner) => written(inner),
                 FieldType::Concrete(term) => super::term_depth(term),
                 FieldType::Parameter(_) => 1,
+                FieldType::Deferred(Some(term)) => super::term_depth(term),
+                FieldType::Deferred(None) => 1,
             })
             .max()
             .unwrap_or(0)
     }
     /// The declaration's own type parameter count.
     pub(super) fn type_parameter_count(&self) -> usize {
-        self.type_parameters
+        self.type_parameters.len()
     }
     /// Whether some declared field of this constructor names type parameter
     /// `ordinal`.
     pub(super) fn names_parameter(&self, ordinal: u32) -> bool {
+        let Some(position) = self
+            .type_parameters
+            .iter()
+            .position(|key| key.ordinal == ordinal)
+            .and_then(|position| u32::try_from(position).ok())
+        else {
+            return false;
+        };
         self.fields.iter().any(|field| {
             field
                 .parameters()
                 .iter()
-                .any(|(index, _)| *index == ordinal)
+                .any(|(index, _)| *index == position)
         })
     }
     /// The type-parameter positions inside declaration field `field`.
@@ -369,13 +386,7 @@ impl Constructed {
     /// distinct variable of this declaration (position order), for a
     /// constructor whose arguments do not decide them.
     pub(super) fn open_type(&self) -> (TyTerm, Vec<crate::traits::term::ParamKey>) {
-        let keys: Vec<_> = (0..self.type_parameters)
-            .filter_map(|ordinal| u32::try_from(ordinal).ok())
-            .map(|ordinal| crate::traits::term::ParamKey {
-                definition: self.definition,
-                ordinal,
-            })
-            .collect();
+        let keys = self.type_parameters.clone();
         (
             TyTerm::Nominal(
                 self.definition,
@@ -463,7 +474,11 @@ impl<'a> Component<'a> {
                 .generics
                 .iter()
                 .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
-                .count(),
+                .map(|parameter| crate::traits::term::ParamKey {
+                    definition: schema.definition,
+                    ordinal: parameter.ordinal,
+                })
+                .collect(),
         }))))
     }
     /// A selected Value/Type definition that constructs: a struct or an
@@ -648,10 +663,102 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Err(fault("constraint record constructor differs")));
         };
         let Some(bound) = prepared.bound() else {
-            return QueryPoll::Ready(Ok(None));
+            return self.pending_record_shape(db, prepared);
         };
         let variant = bound.variant().clone();
         self.constructed(db, &variant)
+    }
+    /// Source constraint shape only: a pending runtime binding still has its
+    /// exact schema, selected variant and actual field Type occurrences.
+    fn pending_record_shape(
+        &mut self,
+        db: &mut Database,
+        prepared: &crate::frontend::prepared_constructors::PreparedRecordConstructor,
+    ) -> QueryPoll<Option<Arc<Constructed>>> {
+        let Some((selected, _)) = prepared.pending_target() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(terms) = prepared.pending_fields() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let schema = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::TypeSchema(prepared.mapping().definition())
+        ));
+        let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("pending constraint schema differs")));
+        };
+        let Some(variant) = schema.variants.get(selected as usize) else {
+            return QueryPoll::Ready(Err(fault("pending constraint variant absent")));
+        };
+        if crate::core::digest::StableEncode::fingerprint(schema.as_ref())
+            != prepared.mapping().schema()
+            || variant.fields.len() != terms.len()
+        {
+            return QueryPoll::Ready(Err(fault(
+                "pending constraint field/schema identity differs",
+            )));
+        }
+        let Some(environment) = ready!(self.environment_parts(db)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let sources: Vec<_> = environment.sources().iter().collect();
+        let parameters: Vec<_> = schema
+            .generics
+            .iter()
+            .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
+            .collect();
+        let mut fields = Vec::new();
+        for term in terms {
+            let field = match term {
+                Some(TyTerm::Param(key)) if key.definition == schema.definition => match parameters
+                    .iter()
+                    .position(|parameter| parameter.ordinal == key.ordinal)
+                    .and_then(|index| u32::try_from(index).ok())
+                {
+                    Some(index) => FieldType::Parameter(index),
+                    None => FieldType::Deferred(term.clone()),
+                },
+                Some(term)
+                    if !crate::frontend::associated_types::contains_projection(term)
+                        && (crate::frontend::call_contracts::closed_term(term)
+                            || parameters.iter().enumerate().all(|(index, parameter)| {
+                                u32::try_from(index).ok() == Some(parameter.ordinal)
+                            })) =>
+                {
+                    match ready!(crate::frontend::written_terms::written_template(
+                        db,
+                        &sources,
+                        term,
+                        schema.definition
+                    )) {
+                        Some(written) => FieldType::Written(Arc::new(written)),
+                        None => FieldType::Deferred(Some(term.clone())),
+                    }
+                }
+                _ => FieldType::Deferred(term.clone()),
+            };
+            fields.push(field);
+        }
+        QueryPoll::Ready(Ok(Some(Arc::new(Constructed {
+            definition: schema.definition,
+            enumeration: variant.name.is_some(),
+            variant: selected,
+            shape: variant.shape,
+            names: variant
+                .fields
+                .iter()
+                .map(|field| field.name.clone())
+                .collect(),
+            fields,
+            type_parameters: parameters
+                .iter()
+                .map(|parameter| crate::traits::term::ParamKey {
+                    definition: schema.definition,
+                    ordinal: parameter.ordinal,
+                })
+                .collect(),
+        }))))
     }
     /// A call whose callee path selects a tuple struct or tuple variant.
     fn call_constructor(
@@ -854,7 +961,7 @@ impl<'a> Component<'a> {
     fn dependent_arguments(&mut self, node: NodeId, constructed: &Constructed) -> Vec<GenericArg> {
         let definition =
             Digest::of_bytes(&[b"lrr/open-dependent".as_slice(), &node.0.to_le_bytes()].concat());
-        (0..constructed.type_parameters)
+        (0..constructed.type_parameters.len())
             .filter_map(|ordinal| u32::try_from(ordinal).ok())
             .map(|ordinal| {
                 let key = crate::traits::term::ParamKey {
@@ -900,6 +1007,38 @@ impl<'a> Component<'a> {
             // that type parameter holds it.
             Step::TypeArgument(parameter) => {
                 let rest = via.unwrap(first).expect("checked first step");
+                // Apply numeric obligations only when this variable is
+                // known to be numeric. A general open Type must not choose
+                // a primitive merely because a trait also has a primitive
+                // impl; the ordinary literal/source relations establish its
+                // family first.
+                if rest.steps.is_empty() {
+                    let mut family = (!self.open).then_some(self.floating);
+                    if self.open {
+                        for (field, operand) in operands {
+                            if matches!(constructed.fields.get(*field as usize),
+                                Some(FieldType::Parameter(found)) if *found == parameter)
+                            {
+                                match super::numeric_initializer(self.plan, *operand) {
+                                    Ok(Some(found)) => {
+                                        if family.is_some_and(|old| old != found) {
+                                            self.defer(node, ConstraintDemand::NumericFamily);
+                                            return QueryPoll::Ready(Ok(()));
+                                        }
+                                        family = Some(found);
+                                    }
+                                    Ok(None) => {}
+                                    Err(error) => return QueryPoll::Ready(Err(error)),
+                                }
+                            }
+                        }
+                    }
+                    if let (Some(family), Some(key)) =
+                        (family, constructed.type_parameters.get(parameter as usize))
+                    {
+                        ready!(self.nominal_numeric_parameter(db, node, *key, family));
+                    }
+                }
                 for (operand_field, operand) in operands {
                     let Some(field_type) = constructed.fields.get(*operand_field as usize) else {
                         continue;

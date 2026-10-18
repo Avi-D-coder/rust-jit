@@ -11,6 +11,7 @@ use super::*;
 use crate::{core::digest::Digest, runtime::cell::TicketId};
 
 /// The initializer a `ValuePath` preparation demands before its PC runs.
+#[derive(Clone)]
 pub(crate) struct InitializerDemand {
     pub(crate) identity: Digest,
     pub(crate) is_static: bool,
@@ -35,7 +36,7 @@ impl RunMachine {
                 }
             };
         }
-        let Some(demand) = self.initializer_demand.take() else {
+        let Some(demand) = self.initializer_demand.clone() else {
             return QueryPoll::Ready(Err(call_fault("no initializer is demanded")));
         };
         if demand.pc != *self.frame.pc()
@@ -90,6 +91,9 @@ impl RunMachine {
             // including primitive widths, nominal arguments and references.
             self.frame.enter_initializer_root()?;
             crate::vm::step::initializer_root_hint(&mut self.frame, &mut self.store)?;
+            // Preparation may suspend for source input before entry. Retain
+            // the exact demand until the ordinary initializer frame exists.
+            self.initializer_demand = None;
             Ok(())
         })())
     }
@@ -132,13 +136,19 @@ impl RunMachine {
                 "initializer result requires its reached concrete type".into(),
             )
         })?;
-        // A scalar or shared reference is copied intrinsically: one run-long
-        // value serves every use, as rustc's evaluated constant does.
+        // The shared descriptor's intrinsic Copy fact applies equally to
+        // scalar values, shared references and raw/function pointers. Keep
+        // one run-long value for their ordinary copy operation; aggregate
+        // constant templates still require their separate instantiation route.
+        let descriptor = self.store.type_descriptor(ty)?;
         let copied = !is_static
+            && descriptor.copy == crate::runtime::shape::CopyStatus::Copy
             && matches!(
-                self.store.type_descriptor(ty)?.key.as_ref(),
-                crate::runtime::shape::TypeKey::Primitive(_)
-                    | crate::runtime::shape::TypeKey::Ref { mutable: false, .. }
+                descriptor.shape,
+                crate::runtime::shape::ShapeCategory::Scalar
+                    | crate::runtime::shape::ShapeCategory::Reference
+                    | crate::runtime::shape::ShapeCategory::Function
+                    | crate::runtime::shape::ShapeCategory::Pointer
             );
         if is_static || copied {
             let cell = self.run_long_cell(ty, writable)?;
@@ -153,7 +163,7 @@ impl RunMachine {
             }
         } else {
             self.initialized_values
-                .insert(self.frame.pc().clone(), (ticket, source));
+                .insert((self.frame.pc().clone(), identity), (ticket, source));
         }
         Ok(())
     }

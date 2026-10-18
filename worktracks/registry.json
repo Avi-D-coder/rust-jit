@@ -727,12 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V15 exact source53e16d94 bothbuildsPASS,6/6controlsPASS,3/8affectedwholemainPASS: two NEW vs savedv16 plus viawhereRESTORED. Five others incomplete; successors unstaged/unvalidated. No refreshed current suite total.",
+    "validation": "V17 exactsource7a2253f1 bothbuildsPASS,7/9controlsPASS,7/9affectedoriginalwholemainPASS (4new vs V15/savedv16,3retained). Two new route controls fail; architecture held. V16 compile101 preserved. V18 successors unstaged/unexecuted; no refreshed suite total.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 6,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 10,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "85d7d64eafbbbcd8c87ee783b641e0a076bbaa04",
+    "source_checkpoint_pushed": "653d52e0a51f10881b7f78fbd07193ae13fb8063",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

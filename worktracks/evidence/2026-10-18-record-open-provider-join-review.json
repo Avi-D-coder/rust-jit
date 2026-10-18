@@ -1,0 +1,39 @@
+{
+  "status": "source-reviewed-uncompiled-unexecuted",
+  "task_ids": [
+    "T032",
+    "T033",
+    "M018",
+    "M025"
+  ],
+  "predecessor": "worktracks/evidence/2026-10-18-open-record-source-review.json",
+  "actual_witness": {
+    "artifact": "artifacts/validation-resume-2026-10-18/candidate-v17/stock-results.json",
+    "row": 6,
+    "path": "tests/ui/associated-types/associated-types-ref-in-struct-literal.rs",
+    "sha256": "bf427a591d40311671cc1cee67eb5426e3bcf7e6d1e2996e83144ca031ce403e",
+    "source_sha256": "7a2253f1994777663f2236bdabddee99b6c656738a6c7145ae98691200df6fe0",
+    "binary_sha256": "155a5a67dd3264d7409a14f994f076e73be5390cdcb1ded599889da6710027da",
+    "exit": 2,
+    "fault": "record template requires its reached nominal Type context, 0calls/2dispatches; source adapter unreachable in constructor provider arm"
+  },
+  "files": {
+    "crates/lrr/src/db/provider.rs": "822456adb0e604b94f3dfe8b7a8a0bfcd78aca88718d1267ac15fe16a15b5373",
+    "crates/lrr/src/db/binding_constraint_thunk.rs": "316043a9b038d1e777d15d46e04786dee0537cb9ec34361e618e54bcab845aa7"
+  },
+  "review": {
+    "1": "No evaluator. PreparedOpenExpression only retains source hint/inferred args/inputguard and decorates existing VerifiedRecipe.",
+    "2": "Actual source ConstructorPlan lowering owns record phases for every origin; no alternate macro execution route.",
+    "3": "No new inference policy: adapter consumes unchanged existing source constraint proof; macro/fixture/method names irrelevant.",
+    "4": "No source-origin restriction. Genuine BodyEnvironment check shared with old adapter keeps legacy unsealed source behavior unchanged.",
+    "5": "No patterns/cold executable arm preparation; constructor operands still ordinary lazy reached child phases and VM guard/cleanup.",
+    "6": "Provider lowers constructor once, then applies common source goal adapter. Ordinary call adapter uses same prepare/apply fact transport. No initial_thunk re-lowering of constructor and no perphase source-goal construction; Record entry only, retained PreparedBindingPlan/memo. Removed unreachable RECORD_EXPR consumer from old generic branch.",
+    "7": "Original constructor query/inputguard preserved; common adapter attaches actual PreparedBindingPlan guard with source/currentness dependencies. No new namespace scan/census.",
+    "8": "PreparedOpenExpression copies only hint/args/guard Arc handles; existing verified recipe reused. No immutable body/index clone or file search added."
+  },
+  "holds": [
+    "Actual pure Record goal outcome/runtime successor not yet observed; explicit missing/unknown proof still leaves ordinary refusal.",
+    "Prior plain-bound/ordinal adapter/full macro/edition/suspension/invalidation holds remain unchanged.",
+    "Other worker owns associated-call equation query and source helper; provider AssociatedEquations arm left byte-identical."
+  ]
+}

@@ -479,7 +479,7 @@ pub struct RunMachine {
     >,
     /// A constant's value evaluated for the one use at this PC.
     initialized_values: BTreeMap<
-        PcKey,
+        (PcKey, crate::core::digest::Digest),
         (
             crate::runtime::cell::TicketId,
             Option<crate::traits::term::TyTerm>,
@@ -1556,6 +1556,11 @@ impl RunMachine {
             QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
             QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
         };
+        match contracts.require_inference_current(db) {
+            QueryPoll::Ready(Ok(())) => {},
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
         // A generic result mentioning an associated type of its bound
         // parameters (`-> Result<F, F::Err>`) is normalized with them.
         if let Some(result) = contracts.source_result.as_ref()
@@ -1719,6 +1724,8 @@ impl RunMachine {
                         .checked_mul(std::mem::size_of::<crate::traits::term::TyTerm>())
                         .and_then(|size| n.checked_add(size))
                 })
+                .and_then(|n| n.checked_add(contracts.inferred_equations.as_ref()
+                    .map_or(0, |guard| guard.metadata_bytes())))
                 .and_then(|n| n.checked_add(context_bytes))
                 .and_then(|n| n.checked_add(4096));
             let Some(retained_bytes) = bytes else {
@@ -1914,6 +1921,11 @@ impl RunMachine {
         actual: crate::runtime::shape::TypeId,
     ) -> Result<(), Diagnostic> {
         call.callee.revalidate(db)?;
+        match call.contracts.require_inference_current(db) {
+            QueryPoll::Ready(Ok(())) => {},
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(_) => return Err(call_fault("inferred call dependencies require source preparation")),
+        }
         // A closure's result is its body's reached value; no declared
         // result constrains it here.
         if call.closure.is_some() {
@@ -3762,6 +3774,9 @@ impl RunMachine {
             };
             match outcome {
                 StepOutcome::Dispatch => {}
+                StepOutcome::Initializer(identity) => {
+                    self.demand_initializer(identity, false);
+                }
                 StepOutcome::Call {
                     action,
                     site,
@@ -3806,6 +3821,11 @@ impl RunMachine {
                             call_fault("Call exit has no selected source context")
                         })?;
                         call.callee.revalidate(db)?;
+                        match call.contracts.require_inference_current(db) {
+                            QueryPoll::Ready(Ok(())) => {},
+                            QueryPoll::Ready(Err(error)) => return Err(error),
+                            QueryPoll::NeedInput(_) => return Err(call_fault("inferred call dependencies require source preparation")),
+                        }
                         let entry = match &call.closure {
                             Some(closure) => closure.entry.clone(),
                             None => call.body.pc(NodeId(0), Phase::Entry)?,

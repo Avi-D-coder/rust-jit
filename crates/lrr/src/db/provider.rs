@@ -789,6 +789,13 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::AssociatedEquations(key) => {
+                return match crate::frontend::associated_equations::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::AssociatedEquations(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::PreparedReturnPlan(definition) => {
                 return match crate::frontend::source_return_goals::prepare_plan(db, *definition) {
                     QueryPoll::Ready(Ok(value)) => {

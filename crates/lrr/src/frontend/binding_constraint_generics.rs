@@ -295,6 +295,56 @@ fn bound_paths(tokens: &[TokenRecipe]) -> Option<Vec<String>> {
 }
 
 impl<'a> Component<'a> {
+    /// A numeric variable occupying a nominal's own Type parameter has the
+    /// declaration's obligations, just as a function parameter does. The
+    /// source nominal service supplies actual AST bounds, never a fake Fn.
+    pub(super) fn nominal_numeric_parameter(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+        key: ParamKey,
+        floating: bool,
+    ) -> QueryPoll<()> {
+        let Some(environment) = ready!(self.environment(db)) else {
+            self.defer(node, ConstraintDemand::ParameterType);
+            return QueryPoll::Ready(Ok(()));
+        };
+        let sources: Vec<_> = environment.sources().iter().collect();
+        let schema = ready!(db.fetch(&SyntaxProvider, QueryKey::TypeSchema(key.definition)));
+        let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("nominal generic obligation schema differs")));
+        };
+        let names = ready!(crate::frontend::types::SchemaNames::from_current_database(
+            db,
+            environment.names(),
+            &sources,
+            schema
+        ));
+        let Some(bounds) = ready!(names.source_parameter_bounds(db, &sources, key.ordinal)) else {
+            self.defer(node, ConstraintDemand::ParameterType);
+            return QueryPoll::Ready(Ok(()));
+        };
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut answer = BoundAnswer::Unconstraining;
+        for bound in bounds {
+            let old = std::mem::replace(&mut self.floating, floating);
+            let selected = self.trait_bound(db, &members, &sources, bound, 0);
+            self.floating = old;
+            answer = answer.and(ready!(selected));
+        }
+        match answer {
+            BoundAnswer::Selected(primitive) => QueryPoll::Ready(self.constrain(node, primitive)),
+            BoundAnswer::Unconstraining => QueryPoll::Ready(Ok(())),
+            BoundAnswer::Unknown => {
+                self.defer(node, ConstraintDemand::ParameterType);
+                QueryPoll::Ready(Ok(()))
+            }
+        }
+    }
+
     /// A declared Type term projected by `steps`, stopping at a type
     /// parameter (nominal field steps go through the shared schema binder).
     pub(super) fn project_parametric(

@@ -78,6 +78,7 @@ pub(super) fn thunk(
                 ra_ap_syntax::SyntaxKind::PATH_EXPR
                     | ra_ap_syntax::SyntaxKind::CALL_EXPR
                     | ra_ap_syntax::SyntaxKind::METHOD_CALL_EXPR
+                    | ra_ap_syntax::SyntaxKind::RECORD_EXPR
             ) {
                 // A call or fieldless constructor whose type arguments later
                 // code decides: its own result Type, stated at its Entry, and

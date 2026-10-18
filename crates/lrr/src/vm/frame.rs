@@ -4460,7 +4460,7 @@ impl Frame {
         // also carries a nominal or composite context
         // (`-> Option<u32> { None }`, `-> (W<u8>, i32) { (W { x: 1 }, 2) }`).
         let parent_type = match self.hint(parent)? {
-            Some(ty) if (2..=15).contains(&ty.0) => Some(ty),
+            Some(ty) if matches!(ty.0, 2..=15 | 17 | 18) => Some(ty),
             Some(ty)
                 if operator.is_none()
                     && left.is_none()
@@ -6503,6 +6503,7 @@ mod tests {
         // existing original-source ownership helper; no callable is fabricated.
         let contracts = crate::frontend::call_contracts::PreparedCallContracts {
             closed_references: None,
+            inferred_equations: None,
             definition: signature.definition,
             source_parameters: frame.parameter_sources.clone(),
             parameter_descriptors: vec![ty],

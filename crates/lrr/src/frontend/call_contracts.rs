@@ -39,6 +39,7 @@ pub struct ArgumentType {
 }
 pub struct PreparedCallContracts {
     pub closed_references: Option<Box<ClosedReferenceContracts>>,
+    pub(crate) inferred_equations: Option<Arc<PreparedInputGuard>>,
     pub definition: Digest,
     pub source_parameters: Vec<TyTerm>,
     pub parameter_descriptors: Vec<TypeId>,
@@ -678,6 +679,13 @@ pub(crate) fn primitive_runtime_id(p: PrimitiveType) -> Result<TypeId, Diagnosti
     crate::runtime::shape::PrimitiveIdentity::from_recipe(p).map(|identity| identity.id())
 }
 impl PreparedCallContracts {
+    pub(crate) fn require_inference_current(&self, db: &mut Database) -> QueryPoll<()> {
+        match &self.inferred_equations {
+            Some(proof) => QueryPoll::Ready(proof.require_current(db)),
+            None => QueryPoll::Ready(Ok(())),
+        }
+    }
+
     /// Validate the reached return source identity and bind an unbound result parameter.
     pub fn bind_return_parameter(&mut self, actual: &ArgumentType) -> Result<(), Diagnostic> {
         self.bind_return_parameter_in(actual, None)
@@ -1780,6 +1788,112 @@ fn prepare(
     if let (Some(TyTerm::Primitive(_)), Some(hint)) = (&instantiated.result_symbolic, result_hint) {
         symbolic.constrain_result(&hint.source)?;
     }
+    // Reached argument Types may determine a still-unbound parameter through
+    // an actual associated equality, e.g. K::Value = Option<V>. Consume only
+    // those declaration equations; this does not validate unrelated bounds.
+    let mut inferred_guards = Vec::new();
+    if let (Some(store), Some(body)) = (store, callee.body())
+        && db.input(&InputKey::BodyEnvironment(body.key())).is_some()
+    {
+        loop {
+            let needed: Vec<_> = signature
+                .generics
+                .iter()
+                .filter(|parameter| {
+                    parameter.kind == crate::syntax::signatures::GenericKind::Type
+                        && symbolic
+                            .binding(parameter.ordinal)
+                            .is_none_or(|term| !closed_term(term))
+                })
+                .map(|parameter| parameter.ordinal)
+                .collect();
+            if needed.is_empty() {
+                break;
+            }
+            let bindings = signature
+                .generics
+                .iter()
+                .filter_map(|parameter| {
+                    let term = symbolic.binding(parameter.ordinal)?;
+                    closed_term(term).then(|| {
+                        (
+                            ParamKey {
+                                definition,
+                                ordinal: parameter.ordinal,
+                            },
+                            term.clone(),
+                        )
+                    })
+                })
+                .collect();
+            let key = QueryKey::AssociatedEquations(Box::new(
+                super::associated_equations::AssociatedEquationsKey {
+                    body: body.key(),
+                    bindings,
+                    needed,
+                },
+            ));
+            let selected = match db.fetch(&SyntaxProvider, key.clone()) {
+                QueryPoll::Ready(Ok(selected)) => selected,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+            };
+            let QueryValue::AssociatedEquations(equations) = selected.value.as_ref() else {
+                return Err(fault(
+                    "LRR-E-CALL-CONTEXT",
+                    "associated equality goal outcome differs",
+                ));
+            };
+            if equations.equations().is_empty() {
+                break;
+            }
+            for (template, actual) in equations.equations() {
+                symbolic.constrain_equation(template, actual)?;
+            }
+            let mut progress = false;
+            for parameter in &signature.generics {
+                if parameter.kind != crate::syntax::signatures::GenericKind::Type {
+                    continue;
+                }
+                let key = ParamKey {
+                    definition,
+                    ordinal: parameter.ordinal,
+                };
+                if runtime.contains_key(&key) {
+                    continue;
+                }
+                let Some(bound) = symbolic
+                    .binding(parameter.ordinal)
+                    .filter(|term| closed_term(term))
+                else {
+                    continue;
+                };
+                let Some(descriptor) = store.find_structural_term(bound) else {
+                    continue;
+                };
+                source_bindings.insert(key, bound.clone());
+                runtime.insert(key, descriptor);
+                structural_generic = true;
+                progress = true;
+            }
+            let guard = match db.prepare_input_guard(&SyntaxProvider, &key, selected.fingerprint) {
+                QueryPoll::Ready(Ok(guard)) => guard,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+            };
+            inferred_guards.push(guard);
+            if !progress {
+                break;
+            }
+        }
+    }
+    let inferred_equations = if inferred_guards.is_empty() {
+        None
+    } else {
+        Some(Arc::new(PreparedInputGuard::join(
+            &inferred_guards.iter().collect::<Vec<_>>(),
+        )?))
+    };
     // Structurally bound parameters: publish their source identities beside
     // their descriptors, and give the callee closed parameter views.
     let templates = if structural_generic {
@@ -1885,6 +1999,7 @@ fn prepare(
     Ok(QueryPoll::Ready(Ok(ContractPreparation::Ready(
         PreparedCallContracts {
             closed_references,
+            inferred_equations,
             definition,
             source_parameters: templates,
             parameter_descriptors: descriptors,

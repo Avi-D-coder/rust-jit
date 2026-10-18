@@ -1,0 +1,83 @@
+{
+  "status": "READY source candidate; V17 runtime failure preserved; successor build/runtime unexecuted",
+  "owner": "/root/generic_projection_resume",
+  "tasks": [
+    "T025",
+    "T062",
+    "M019",
+    "M020",
+    "M021",
+    "M023",
+    "M026"
+  ],
+  "witness": "tests/ui/associated-types/associated-types-struct-field-numbered.rs unchanged owning2015",
+  "observed_before": "V17 runtime Primitive(U32)!=Primitive(I32),7calls85dispatches117ops; generated comparison origin only, source assertion invocation not identified",
+  "source_sha256": {
+    "crates/lrr/src/frontend/associated_equations.rs": "0d85388fcd3fd07f0354e7074252cba39381a08cdbed9cebb54ad0b984862657",
+    "crates/lrr/src/frontend/call_contracts.rs": "bb857db1a9afc972e9f02b5d713d8c63cac0be53659be716f1d0c88b0e94d39a",
+    "crates/lrr/src/frontend/binding_constraint_methods.rs": "2c1189e0eb72ba80236a4998439faebfbbecb22d934878f9a8476aa141bd851d",
+    "crates/lrr/src/frontend/binding_constraint_projection.rs": "59ed21f58662750fcdc744772259b0a6ecd7b9e9f580ebbe27d609f22254c756",
+    "crates/lrr/src/frontend/binding_constraints.rs": "c63279b1c3b578f14881640e071ad7f175bc7769dd55185cc306a17af4dd92dc"
+  },
+  "entry_points": [
+    "associated_equations::constrain (one shared fixed point and query guard capture)",
+    "call_contracts::prepare (run-local descriptor admission only after shared inference)",
+    "Component::instantiated_declared (actual operand/explicit source bindings -> same SignatureSubstitution/equation query)",
+    "Component::constrain_declared (generic results/parameters as well as direct projections)",
+    "Component::explicit_argument_bindings (one Q44/Q47 source selector)"
+  ],
+  "removed_routes": [
+    "Removed old inline call_contracts equation iteration, replaced with shared associated_equations::constrain.",
+    "Removed unused Component::explicit_arguments wrapper and duplicated explicit-Type map preparation; ordinary source parameter/result consumers share explicit_argument_bindings."
+  ],
+  "reviews": [
+    {
+      "mode": 1,
+      "finding": "No new Rust expression evaluator or assertion compiler: only actual declaration Type equations into existing transaction."
+    },
+    {
+      "mode": 2,
+      "finding": "No generated literal/break route; normal source constraints/pattern projections/VM remain common."
+    },
+    {
+      "mode": 3,
+      "finding": "No macro/fixture/expected-output/numeric-Type-list dispatch. Closed selected declaration equations supply source generic result. Still-open operand inference retains original declared parameter relation in core, preventing loss of argument/bound obligations by replacing formal T with an unrelated open Infer."
+    },
+    {
+      "mode": 4,
+      "finding": "Shared actual source Fn/where/header/environment query works for original/retained sources; origin/edition matrix unexecuted."
+    },
+    {
+      "mode": 5,
+      "finding": "Only declared parameter/result Type goal preparation; no called body or cold branch execution. Absent genuine callee environment is recorded as negative input dependency and remains unanswered."
+    },
+    {
+      "mode": 6,
+      "finding": "One equation query+one fixed-point implementation shared by both consumers. Source outer memo captures fetched semantic query dependencies; runtime keeps actual guard. Cold query misses traverse selected bounds/terms. Query guard joining still cold per consumer; no performance claim."
+    },
+    {
+      "mode": 7,
+      "finding": "No full-world index/namespace comparison added; existing captured query input closure preserves relevant source/member dependencies. Existing qualified trait lookup and associated-owner name adapter debt remains held."
+    },
+    {
+      "mode": 8,
+      "finding": "No immutable BodyIndex copy or full-file node lookup. Source consumer reads retained FunctionSignature/DefinitionBody input and actual source query borrows current retained environment/AST/member index."
+    }
+  ],
+  "audit_mapping": {
+    "MA003/MA006": "Shared source inference/member mechanism, no macro-selected numeric constraints or context whitelist.",
+    "other_MA_findings": "No completion inferred for MA001/MA002/MA004/MA005/MA007/MA008; distinct from recurring modes1-8."
+  },
+  "acceptance": {
+    "runtime": "unexecuted successor; request unchanged numbered wholemain then named-field complement if numbered passes",
+    "controls": "Existing direct-projection/decided generic result controls appropriate; same ordinary/user/wrapper/stdmacro semantics matrix still unexecuted.",
+    "build": "unexecuted successor; rustfmt source parse and own diff --check only",
+    "closure": "Feature/task/architecture not complete"
+  },
+  "remaining": [
+    "Already registered structural runtime descriptors only; nominal/anonymous reconstruction held.",
+    "Complete tabled trait engine/GAT equality arguments remain incomplete.",
+    "Source equation goal does not publish/reconstruct absent declaration environment or prepare executable bodies just for a Type query.",
+    "Core binding_constraints.rs also contains disjoint root pattern work; this review covers only constrain_declared change."
+  ]
+}

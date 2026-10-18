@@ -31,6 +31,9 @@ impl GuestPanic {
 pub enum StepOutcome {
     /// Bounded operation progress; PC and opcode entry charge remain retained.
     Dispatch,
+    /// A reached constant pattern suspends this operation for the ordinary
+    /// initializer frame; no pattern result has been committed.
+    Initializer(crate::core::digest::Digest),
     Backedge(PcKey),
     Next(PcKey),
     Call {
@@ -1654,6 +1657,31 @@ pub(crate) fn step_with_constant(
                 continue;
             }
             let tag = usize::from(op.opcode_tag());
+            if let Op::Pattern {
+                operation:
+                    crate::ir::op::PatternOperation::Test {
+                        owner,
+                        tree,
+                        result,
+                        retry,
+                    },
+            } = op
+            {
+                match frame.search_pattern(*owner, tree, *result, *retry, store)? {
+                    super::pattern::matcher::SearchOutcome::Initializer(identity) => {
+                        frame.suspend_pattern_test(index)?;
+                        return Ok(StepOutcome::Initializer(identity));
+                    }
+                    super::pattern::matcher::SearchOutcome::Complete(found) => {
+                        frame.count_step();
+                        increment(&mut frame.counters.operations_started)?;
+                        increment(&mut frame.counters.started_by_opcode[tag])?;
+                        frame.complete_pattern_test(*owner, tree, *result, *retry, found, store)?;
+                        increment(&mut frame.counters.operations_completed)?;
+                        continue;
+                    }
+                }
+            }
             let prepared = literal_preflight(frame, store, op)?;
             let assertion = assertion_preflight(frame, store, op)?;
             // A reference read into a destination expecting a reference to
@@ -1894,7 +1922,9 @@ pub(crate) fn step_with_constant(
         };
         increment(&mut frame.counters.exits_completed)?;
         match &outcome {
-            StepOutcome::Dispatch => return Err(invalid("Dispatch cannot be a recipe exit")),
+            StepOutcome::Dispatch | StepOutcome::Initializer(_) => {
+                return Err(invalid("operation suspension cannot be a recipe exit"));
+            }
             StepOutcome::Backedge(pc) => {
                 increment(&mut frame.counters.backedges_completed)?;
                 frame.pc = pc.clone();

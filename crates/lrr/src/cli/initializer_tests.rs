@@ -166,3 +166,68 @@ fn local_initializers_share_the_vm_across_source_origins() {
         prints(label, &source, "16 16\n");
     }
 }
+
+#[test]
+fn reached_pattern_constants_share_vm_storage_and_leave_alternatives_cold() {
+    // LRR exact-once/route control outside upstream originals. The two pure
+    // initializer calls are the only source calls: a cold alternative must
+    // not initialize COLD, and retry must not rerun LO or HI.
+    const SOURCE: &str = r#"
+        const fn bound(n: i32) -> i32 { n }
+        const LO: i32 = bound(1);
+        const HI: i32 = bound(2);
+        const COLD: i32 = bound(9);
+        fn main() {
+            match 2_i32 { LO..=HI => {}, _ => { let z = 0_i32; let _ = 1 / z; } }
+            let mut seen = 0_i32;
+            match (1_i32, 2_i32) {
+                (LO, x) | (x, HI) if { seen += 1; false } => {},
+                _ => {},
+            }
+            if seen != 2_i32 { let z = 0_i32; let _ = 1 / z; }
+            let k = match 1_i32 { 1 | COLD => 3_i32, _ => 0_i32 };
+            if k != 3_i32 { let z = 0_i32; let _ = 1 / z; }
+            if let LO = 1_i32 {} else { let z = 0_i32; let _ = 1 / z; }
+            let HI = 2_i32 else { return; };
+            let _same = LO;
+        }
+    "#;
+    for edition in [2015, 2018, 2021, 2024] {
+        match super::format_trait_facade_tests::run("pattern-init-once", SOURCE, edition) {
+            Ok(crate::cli::StandaloneOutcome::Completed(report)) => {
+                assert_eq!(report.opcode_counters.started_by_opcode[19], 2, "{edition}");
+            }
+            Err(error) => panic!("{edition}: {error}"),
+            Ok(other) => panic!("{edition}: {}", serde_json::to_string(&other).unwrap()),
+        }
+    }
+}
+
+#[test]
+fn generated_constant_patterns_use_the_same_vm_initializer_demand() {
+    const BODY: &str = r#"
+        const fn value() -> i32 { 7 }
+        const N: i32 = value();
+        fn main() {
+            match 7_i32 { N => {}, _ => { let z = 0_i32; let _ = 1 / z; } }
+            let _same = N;
+        }
+    "#;
+    for source in [
+        BODY.to_owned(),
+        format!("macro_rules! emit {{ ($($i:item)*) => {{ $($i)* }}; }} emit! {{ {BODY} }}"),
+        format!(
+            "macro_rules! emit {{ ($($i:item)*) => {{ $($i)* }}; }} macro_rules! wrap {{ ($($i:item)*) => {{ emit! {{ $($i)* }} }}; }} wrap! {{ {BODY} }}"
+        ),
+    ] {
+        for edition in [2015, 2018, 2021, 2024] {
+            match super::format_trait_facade_tests::run("pattern-init-origin", &source, edition) {
+                Ok(crate::cli::StandaloneOutcome::Completed(report)) => {
+                    assert_eq!(report.opcode_counters.started_by_opcode[19], 1, "{edition}");
+                }
+                Err(error) => panic!("{edition}: {error}"),
+                Ok(other) => panic!("{edition}: {}", serde_json::to_string(&other).unwrap()),
+            }
+        }
+    }
+}

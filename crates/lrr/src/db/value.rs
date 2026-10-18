@@ -118,6 +118,7 @@ pub enum QueryValue {
     DeclaredParameterGoal(Box<crate::frontend::source_parameter_goals::ParameterGoalObservation>),
     SourceConstraints(Box<crate::syntax::source_constraints::SourceConstraintPlan>),
     QualifiedBodyType(Box<crate::frontend::qualified_type_names::QualifiedTypeObservation>),
+    AssociatedEquations(Box<crate::frontend::associated_equations::PreparedAssociatedEquations>),
     NominalMember(Box<crate::frontend::nominal_member_goals::PreparedNominalMember>),
     BoundRecordConstructor(Box<crate::frontend::prepared_constructors::PreparedRecordConstructor>),
     SourceLocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
@@ -213,6 +214,10 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::AssociatedEquations(value), QueryKey::AssociatedEquations(key)) = (self, key)
+        {
+            return value.key() == key.as_ref();
+        }
         if let (Self::NominalMember(value), QueryKey::NominalMember(key)) = (self, key) {
             return value.key() == key.as_ref();
         }
@@ -399,6 +404,10 @@ impl QueryValue {
                 e.u32(36);
                 e.digest(value.fingerprint());
             }
+            Self::AssociatedEquations(value) => {
+                e.u32(50);
+                e.record(value.as_ref());
+            }
             Self::NominalMember(value) => {
                 e.u32(49);
                 e.record(value.as_ref());
@@ -569,6 +578,7 @@ impl QueryValue {
             Self::TypeAlias(v) => v.estimated_bytes(),
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
+            Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::BoundRecordConstructor(v) => v.metadata_bytes().unwrap_or(usize::MAX),
             Self::QualifiedBodyType(value) => value.estimated_bytes(),
