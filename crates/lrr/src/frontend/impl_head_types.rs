@@ -41,10 +41,40 @@ pub enum ImplHeadTypeResult {
     Pending(ImplHeadPending),
 }
 #[derive(Debug)]
+pub(super) struct ImplDeclarationContext {
+    header: Arc<InputValue>,
+    context: Arc<InputValue>,
+}
+impl ImplDeclarationContext {
+    pub(super) fn owner(
+        &self,
+        definition: crate::core::digest::Digest,
+    ) -> super::type_name_namespace::SourceTypeOwner<'_> {
+        let InputValue::DefinitionHeader(header) = self.header.as_ref() else {
+            unreachable!("verified declaration header")
+        };
+        let InputValue::DeclarationContext(context) = self.context.as_ref() else {
+            unreachable!("verified declaration context")
+        };
+        super::type_name_namespace::SourceTypeOwner {
+            definition,
+            header,
+            scope: &context.scope,
+        }
+    }
+    pub(super) fn range(&self) -> crate::syntax::spans::SourceRange {
+        let InputValue::DeclarationContext(context) = self.context.as_ref() else {
+            unreachable!("verified declaration context")
+        };
+        context.range
+    }
+}
+#[derive(Debug)]
 pub struct PreparedImplHeadTypes {
     key: ImplHeaderSyntaxKey,
     syntax: Arc<QueryValue>,
     result: ImplHeadTypeResult,
+    declaration: Option<ImplDeclarationContext>,
 }
 impl PreparedImplHeadTypes {
     pub fn key(&self) -> &ImplHeaderSyntaxKey {
@@ -58,6 +88,9 @@ impl PreparedImplHeadTypes {
             unreachable!("private source header owner")
         };
         syntax
+    }
+    pub(super) fn declaration(&self) -> Option<&ImplDeclarationContext> {
+        self.declaration.as_ref()
     }
     pub(crate) fn prepare(db: &mut Database, key: &ImplHeaderSyntaxKey) -> QueryPoll<Self> {
         macro_rules! ready {
@@ -83,6 +116,7 @@ impl PreparedImplHeadTypes {
                     key: key.clone(),
                     syntax: syntax_owner.clone(),
                     result: ImplHeadTypeResult::Pending(ImplHeadPending::$why),
+                    declaration: None,
                 }))
             };
         }
@@ -104,16 +138,22 @@ impl PreparedImplHeadTypes {
             pending!(SourceEnvironment)
         };
         let source = db.input(&InputKey::DefinitionSource(definition));
-        let header = db.input(&InputKey::DefinitionHeader(definition));
-        let context = db.input(&InputKey::DeclarationContext(definition));
-        let (Some(source), Some(header), Some(context)) = (source, header, context) else {
+        let header_input = db.input(&InputKey::DefinitionHeader(definition));
+        let context_input = db.input(&InputKey::DeclarationContext(definition));
+        let (Some(source), Some(header_input), Some(context_input)) =
+            (source, header_input, context_input)
+        else {
             pending!(DeclarationMetadata)
         };
         let (
             InputValue::DefinitionSource(source),
             InputValue::DefinitionHeader(header),
             InputValue::DeclarationContext(context),
-        ) = (source.as_ref(), header.as_ref(), context.as_ref())
+        ) = (
+            source.as_ref(),
+            header_input.as_ref(),
+            context_input.as_ref(),
+        )
         else {
             return QueryPoll::Ready(Err(fault("impl Type declaration input variants differ")));
         };
@@ -141,33 +181,16 @@ impl PreparedImplHeadTypes {
             pending!(SelfType)
         };
         let trait_syntax = implementation.trait_();
-        // The ordinary runtime Type walk currently erases these regions. Do
-        // not promote erased terms to symbolic trait-head evidence.
-        if std::iter::once(&self_syntax)
-            .chain(trait_syntax.iter())
-            .any(|ty| {
-                ty.syntax().descendants().any(|node| {
-                    ast::RefType::can_cast(node.kind()) || ast::Lifetime::can_cast(node.kind())
-                })
-            })
-        {
-            pending!(SymbolicRegions);
-        }
-        if std::iter::once(&self_syntax)
-            .chain(trait_syntax.iter())
-            .any(|ty| {
-                ty.syntax().descendants().any(|node| {
-                    ast::DynTraitType::can_cast(node.kind())
-                        || ast::ImplTraitType::can_cast(node.kind())
-                        || ast::FnPtrType::cast(node).is_some_and(|function| {
-                            function.abi().is_some() || function.unsafe_token().is_some()
-                        })
-                })
-            })
-        {
-            // Runtime dyn views/ABI erasure are not complete symbolic identities.
-            // Preserve actual source demand until their shared representation joins.
-            pending!(SymbolicTypeIdentity);
+        for ty in std::iter::once(&self_syntax).chain(trait_syntax.iter()) {
+            match super::source_types::symbolic_type_pending(ty) {
+                Some(super::source_types::SymbolicTypePending::Regions) => {
+                    pending!(SymbolicRegions)
+                }
+                Some(super::source_types::SymbolicTypePending::Identity) => {
+                    pending!(SymbolicTypeIdentity)
+                }
+                None => {}
+            }
         }
         let sources: Vec<_> = environment.sources().iter().collect();
         let owner = super::type_name_namespace::SourceTypeOwner {
@@ -231,6 +254,10 @@ impl PreparedImplHeadTypes {
         QueryPoll::Ready(Ok(Self {
             key: key.clone(),
             syntax: syntax_owner.clone(),
+            declaration: Some(ImplDeclarationContext {
+                header: header_input.clone(),
+                context: context_input.clone(),
+            }),
             result: ImplHeadTypeResult::Resolved {
                 self_type,
                 trait_ref,

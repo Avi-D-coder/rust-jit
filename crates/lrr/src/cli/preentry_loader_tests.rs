@@ -392,6 +392,46 @@ fn unchanged_conditional_impl_heads_use_common_types_across_origins_and_editions
                     );
                     kinds[2] += 1;
                 }
+                let predicate_key = QueryKey::ImplPredicates(Box::new(ImplHeaderSyntaxKey {
+                    inventory: seal.clone(),
+                    implementation: raw.identity,
+                }));
+                let predicates = ready(db.fetch(&SyntaxProvider, predicate_key.clone()));
+                let repeated = ready(db.fetch(&SyntaxProvider, predicate_key));
+                assert!(std::sync::Arc::ptr_eq(&predicates.value, &repeated.value));
+                let QueryValue::ImplPredicates(predicates) = predicates.value.as_ref() else {
+                    panic!()
+                };
+                use crate::{
+                    frontend::impl_predicates::ImplPredicateResult,
+                    traits::predicate::{PredicateResult, SourcePredicateRecipe},
+                };
+                let ImplPredicateResult::Requirements(requirements) = predicates.result() else {
+                    panic!("{:?}", predicates.result())
+                };
+                if prepared.syntax().generics().is_empty() {
+                    assert!(requirements.is_empty());
+                } else {
+                    assert_eq!(requirements.len(), 2);
+                    let parameter = ParamKey {
+                        definition: canonical,
+                        ordinal: 0,
+                    };
+                    assert_eq!(
+                        requirements[0],
+                        SourcePredicateRecipe::ImplicitSizedDefault(parameter)
+                    );
+                    let SourcePredicateRecipe::Explicit {
+                        result: PredicateResult::Implemented(actual),
+                        ..
+                    } = &requirements[1]
+                    else {
+                        panic!()
+                    };
+                    assert_eq!(actual.trait_key, copy);
+                    assert_eq!(actual.self_ty, TyTerm::Param(parameter));
+                    assert!(actual.args.is_empty());
+                }
             }
             assert_eq!(kinds, [1, 1, 1]);
             assert!(db.trace.events[start..].iter().all(|event| !matches!(
@@ -412,7 +452,17 @@ fn unchanged_conditional_impl_heads_use_common_types_across_origins_and_editions
                 db.fetch(
                     &SyntaxProvider,
                     QueryKey::ImplHeadTypes(Box::new(ImplHeaderSyntaxKey {
-                        inventory: seal,
+                        inventory: seal.clone(),
+                        implementation: raw.identity,
+                    }))
+                ),
+                QueryPoll::Ready(Err(_))
+            ));
+            assert!(matches!(
+                db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::ImplPredicates(Box::new(ImplHeaderSyntaxKey {
+                        inventory: seal.clone(),
                         implementation: raw.identity,
                     }))
                 ),
@@ -481,6 +531,57 @@ fn unchanged_impl_heads_keep_region_and_cold_metadata_demands_explicit() {
                     panic!()
                 };
                 predicates += prepared.syntax().predicates().len();
+                let plan = ready(db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::ImplPredicates(Box::new(ImplHeaderSyntaxKey {
+                        inventory: seal.clone(),
+                        implementation: raw.identity,
+                    })),
+                ));
+                let QueryValue::ImplPredicates(plan) = plan.value.as_ref() else {
+                    panic!()
+                };
+                use crate::{
+                    frontend::impl_predicates::ImplPredicateResult,
+                    traits::predicate::{PredicatePending, PredicateResult, SourcePredicateRecipe},
+                };
+                match (prepared.result(), plan.result()) {
+                    (
+                        ImplHeadTypeResult::Pending(expected),
+                        ImplPredicateResult::HeadPending(actual),
+                    ) => assert_eq!(expected, actual),
+                    (
+                        ImplHeadTypeResult::Resolved { .. },
+                        ImplPredicateResult::Requirements(requirements),
+                    ) => {
+                        assert!(requirements.iter().any(|row| matches!(
+                            row,
+                            SourcePredicateRecipe::ImplicitSizedDefault(_)
+                        )));
+                        assert!(requirements.iter().any(|row| matches!(
+                            row,
+                            SourcePredicateRecipe::Explicit {
+                                result: PredicateResult::Implemented(_),
+                                ..
+                            }
+                        )));
+                        if prepared.syntax().predicates().len() == 2 {
+                            assert_eq!(requirements.len(), 3);
+                            assert!(requirements.iter().any(|row| matches!(
+                                row,
+                                SourcePredicateRecipe::Explicit {
+                                    result: PredicateResult::Pending(
+                                        PredicatePending::AssociatedIdentity
+                                    ),
+                                    ..
+                                }
+                            )));
+                        } else {
+                            assert_eq!(requirements.len(), 2);
+                        }
+                    }
+                    other => panic!("predicate preparation differs: {other:?}"),
+                }
                 match prepared.result() {
                     ImplHeadTypeResult::Resolved { .. } => observed[0] += 1,
                     ImplHeadTypeResult::Pending(ImplHeadPending::SymbolicRegions) => {

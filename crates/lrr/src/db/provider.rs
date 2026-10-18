@@ -344,6 +344,13 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),
                 };
             }
+            QueryKey::ImplPredicates(key) => {
+                return match crate::frontend::impl_predicates::PreparedImplPredicates::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplPredicates(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::ImplHeadTypes(key) => {
                 return match crate::frontend::impl_head_types::PreparedImplHeadTypes::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplHeadTypes(Box::new(value))),

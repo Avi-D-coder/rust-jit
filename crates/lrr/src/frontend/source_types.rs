@@ -430,6 +430,20 @@ impl<'a> WrittenTypeDeclaration<'a> {
         )
     }
 }
+/// Symbolic consumers must not promote runtime-erased representations into
+/// exact trait identities. This is a preparation demand, never runtime refusal.
+pub(super) enum SymbolicTypePending { Regions, Identity }
+pub(super) fn symbolic_type_pending(ty: &ra_ap_syntax::ast::Type) -> Option<SymbolicTypePending> {
+    use ra_ap_syntax::{AstNode, ast};
+    if ty.syntax().descendants().any(|node| ast::RefType::can_cast(node.kind()) || ast::Lifetime::can_cast(node.kind())) {
+        return Some(SymbolicTypePending::Regions);
+    }
+    ty.syntax().descendants().any(|node| ast::DynTraitType::can_cast(node.kind())
+        || ast::ImplTraitType::can_cast(node.kind()) || ast::FnPtrType::cast(node).is_some_and(|function|
+            function.abi().is_some() || function.unsafe_token().is_some()))
+        .then_some(SymbolicTypePending::Identity)
+}
+
 /// Resolve an actual retained Type occurrence through the same walk as legacy
 /// written signature Types. The caller proves its declaration/span/currentness.
 pub(super) fn resolve_actual_type(
@@ -984,45 +998,20 @@ pub(super) fn resolve_actual_type(
         };
         let mut paths = Vec::new();
         if let Some(owner) = signature.syntax {
-            use ra_ap_syntax::{AstNode, ast::HasName};
-            let mut append = |list: Option<ast::TypeBoundList>| {
-                for bound in list.into_iter().flat_map(|list| list.bounds()) {
-                    if bound.question_mark_token().is_some() || bound.lifetime().is_some() {
-                        continue;
-                    }
-                    if let Some(ast::Type::PathType(ty)) = bound.ty()
-                        && let Some(path) = ty.path()
-                    {
-                        paths.push(path);
-                    }
-                }
-            };
-            if let Some(list) = owner.children().find_map(ast::GenericParamList::cast) {
-                for actual in list
-                    .generic_params()
-                    .filter_map(|parameter| match parameter {
-                        ast::GenericParam::TypeParam(parameter) => Some(parameter),
-                        _ => None,
-                    })
-                    .filter(|actual| {
-                        actual
-                            .name()
-                            .is_some_and(|name| name.text() == parameter.name)
-                    })
-                {
-                    append(actual.type_bound_list());
-                }
-            }
-            if let Some(clause) = owner.children().find_map(ast::WhereClause::cast) {
-                for predicate in clause.predicates() {
-                    if matches!(predicate.ty(), Some(ast::Type::PathType(ty))
+            let key = crate::traits::term::ParamKey { definition: signature.definition, ordinal: parameter.ordinal };
+            for (subject, written, bound) in actual_declaration_bounds(signature, owner) {
+                let selected = match subject {
+                    Some(TyTerm::Param(selected)) => selected == key,
+                    Some(_) => false,
+                    None => matches!(written, Some(ast::Type::PathType(ty))
                         if ty.path().is_some_and(|path| path.qualifier().is_none()
                             && path.segment().and_then(|segment| segment.name_ref())
-                                .is_some_and(|name| name.text() == parameter.name)))
-                    {
-                        append(predicate.type_bound_list());
-                    }
-                }
+                                .is_some_and(|name| name.text() == parameter.name))),
+                };
+                if selected && bound.question_mark_token().is_none() && bound.lifetime().is_none()
+                    && let Some(ast::Type::PathType(ty)) = bound.ty()
+                    && let Some(path) = ty.path()
+                { paths.push(path); }
             }
         } else {
             let mut lists = vec![parameter.bounds.as_slice()];
@@ -1223,7 +1212,7 @@ fn projection_trait_key(
         Ok(crate::frontend::names::NameLookup::Defined(definition)) => {
             Ok(Some(definition.identity))
         }
-        Ok(_) => Ok(Some(crate::core::digest::Digest([0; 32]))),
+        Ok(_) => Ok(None),
         Err(error) => Err(error),
     }
 }
@@ -1338,90 +1327,93 @@ fn actual_bound_owner_complete(
         )
 }
 
-/// Actual bound occurrences from this declaration and its enclosing item owners.
-/// No Type arguments, bodies or unrelated bounds are resolved by enumeration.
-pub(super) fn actual_declaration_bounds(
-    declaration: &WrittenTypeDeclaration<'_>,
-    owner: &ra_ap_syntax::SyntaxNode,
-) -> Vec<(
-    Option<TyTerm>,
-    Option<ra_ap_syntax::ast::Type>,
-    ra_ap_syntax::ast::TypeBound,
-)> {
-    use crate::traits::term::ParamKey;
-    use ra_ap_syntax::{
-        AstNode,
-        ast::{self, HasName, HasTypeBounds},
-    };
-    let mut bounds = Vec::new();
-    // Signatures inherit only their immediate impl/trait owner's generics.
-    // A nested item does not acquire an enclosing function's generic binder.
-    let associated_owner = actual_associated_owner(owner);
-    for scope in std::iter::once(owner.clone()).chain(associated_owner) {
+pub(super) enum ActualBoundSubject {
+    Type(TyTerm),
+    TypeSyntax(ra_ap_syntax::ast::Type),
+    Region(crate::traits::term::RegionTerm),
+    RegionSyntax(ra_ap_syntax::ast::Lifetime),
+    Missing,
+}
+pub(super) struct ActualDeclarationBound {
+    pub subject: ActualBoundSubject,
+    pub bound: ra_ap_syntax::ast::TypeBound,
+    pub where_binder: Option<ra_ap_syntax::ast::ForBinder>,
+}
+pub(super) struct ActualDeclarationBounds {
+    pub bounds: Vec<ActualDeclarationBound>,
+    pub implicit_sized: Vec<crate::traits::term::ParamKey>,
+}
+/// One ordinary declaration-bound collector. All subjects/binders are kept;
+/// old Type-only consumers below project this same retained syntax data.
+pub(super) fn actual_declaration_bound_syntax(
+    declaration: &WrittenTypeDeclaration<'_>, owner: &ra_ap_syntax::SyntaxNode,
+) -> ActualDeclarationBounds {
+    use crate::{traits::term::{ParamKey, RegionTerm}, syntax::signatures::GenericKind};
+    use ra_ap_syntax::{AstNode, ast::{self, HasName, HasTypeBounds}};
+    let mut result = ActualDeclarationBounds { bounds: Vec::new(), implicit_sized: Vec::new() };
+    for scope in std::iter::once(owner.clone()).chain(actual_associated_owner(owner)) {
         if let Some(trait_owner) = ast::Trait::cast(scope.clone()) {
-            let subject = declaration
-                .generics
-                .iter()
-                .rev()
-                .find(|parameter| parameter.name == "Self")
-                .map(|parameter| {
-                    TyTerm::Param(ParamKey {
-                        definition: declaration.definition,
-                        ordinal: parameter.ordinal,
-                    })
+            let subject = declaration.generics.iter().rev().find(|parameter| parameter.name == "Self")
+                .map(|parameter| TyTerm::Param(ParamKey { definition: declaration.definition, ordinal: parameter.ordinal }));
+            for bound in trait_owner.type_bound_list().into_iter().flat_map(|list| list.bounds()) {
+                result.bounds.push(ActualDeclarationBound {
+                    subject: subject.clone().map_or(ActualBoundSubject::Missing, ActualBoundSubject::Type),
+                    bound, where_binder: None,
                 });
-            for bound in trait_owner
-                .type_bound_list()
-                .into_iter()
-                .flat_map(|list| list.bounds())
-            {
-                bounds.push((subject.clone(), None, bound));
             }
         }
         if let Some(list) = scope.children().find_map(ast::GenericParamList::cast) {
-            for parameter in list.generic_params().filter_map(|p| match p {
-                ast::GenericParam::TypeParam(p) => Some(p),
-                _ => None,
-            }) {
-                let Some(name) = parameter.name() else {
-                    continue;
+            for parameter in list.generic_params() {
+                let (kind, name, bounds) = match parameter {
+                    ast::GenericParam::TypeParam(parameter) => (GenericKind::Type,
+                        parameter.name().and_then(|name| crate::syntax::ast_adapter::semantic_name(name.text())),
+                        parameter.type_bound_list()),
+                    ast::GenericParam::LifetimeParam(parameter) => (GenericKind::Lifetime,
+                        parameter.lifetime().and_then(|name| crate::syntax::signatures::canonical_lifetime(&name.syntax().text().to_string())),
+                        parameter.type_bound_list()),
+                    ast::GenericParam::ConstParam(_) => continue,
                 };
-                let Some(name) = crate::syntax::ast_adapter::semantic_name(name.text()) else {
-                    continue;
-                };
-                let Some(selected) = declaration.generics.iter().rev().find(|p| p.name == name)
-                else {
-                    continue;
-                };
-                for bound in parameter
-                    .type_bound_list()
-                    .into_iter()
-                    .flat_map(|list| list.bounds())
-                {
-                    bounds.push((
-                        Some(TyTerm::Param(ParamKey {
-                            definition: declaration.definition,
-                            ordinal: selected.ordinal,
-                        })),
-                        None,
-                        bound,
-                    ));
+                let Some(selected) = name.and_then(|name| declaration.generics.iter().rev().find(|p| p.name == name && p.kind == kind)) else { continue; };
+                let key = ParamKey { definition: declaration.definition, ordinal: selected.ordinal };
+                let bounds: Vec<_> = bounds.into_iter().flat_map(|list| list.bounds()).collect();
+                if kind == GenericKind::Type {
+                    // Actual relaxed bounds remain in `bounds`, including
+                    // where clauses. The language-item pass decides whether
+                    // they remove this default; collection makes no spelling guess.
+                    result.implicit_sized.push(key);
+                }
+                for bound in bounds {
+                    result.bounds.push(ActualDeclarationBound {
+                        subject: if kind == GenericKind::Type { ActualBoundSubject::Type(TyTerm::Param(key)) }
+                            else { ActualBoundSubject::Region(RegionTerm::Param(key)) },
+                        bound, where_binder: None,
+                    });
                 }
             }
         }
         if let Some(clause) = scope.children().find_map(ast::WhereClause::cast) {
             for predicate in clause.predicates() {
-                for bound in predicate
-                    .type_bound_list()
-                    .into_iter()
-                    .flat_map(|list| list.bounds())
-                {
-                    bounds.push((None, predicate.ty(), bound));
+                for bound in predicate.type_bound_list().into_iter().flat_map(|list| list.bounds()) {
+                    let subject = if let Some(ty) = predicate.ty() { ActualBoundSubject::TypeSyntax(ty) }
+                        else if let Some(region) = predicate.lifetime() { ActualBoundSubject::RegionSyntax(region) }
+                        else { ActualBoundSubject::Missing };
+                    result.bounds.push(ActualDeclarationBound { subject, bound, where_binder: predicate.for_binder() });
                 }
             }
         }
     }
-    bounds
+    result
+}
+/// Existing Type-only view, derived from the one source collector above.
+pub(super) fn actual_declaration_bounds(
+    declaration: &WrittenTypeDeclaration<'_>, owner: &ra_ap_syntax::SyntaxNode,
+) -> Vec<(Option<TyTerm>, Option<ra_ap_syntax::ast::Type>, ra_ap_syntax::ast::TypeBound)> {
+    actual_declaration_bound_syntax(declaration, owner).bounds.into_iter().filter_map(|row| match row.subject {
+        ActualBoundSubject::Type(term) => Some((Some(term), None, row.bound)),
+        ActualBoundSubject::TypeSyntax(ty) => Some((None, Some(ty), row.bound)),
+        ActualBoundSubject::Missing => Some((None, None, row.bound)),
+        ActualBoundSubject::Region(_) | ActualBoundSubject::RegionSyntax(_) => None,
+    }).collect()
 }
 
 /// Candidate syntax from the same actual declaration-bound collector used by

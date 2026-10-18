@@ -174,6 +174,7 @@ pub enum QueryKey {
     PreparedScopeImplHeaders(super::seals::SealKey),
     ImplHeaderSyntax(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
     ImplHeadTypes(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
+    ImplPredicates(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
     BodyStructure(crate::source::manifest::BodyKey),
     Thunk(crate::source::manifest::PcKey),
     CurrentExpansionInput(Box<crate::expand::identity::ExpansionKey>),
@@ -209,7 +210,7 @@ impl QueryKey {
                     + key.bucket.name.capacity()
             }
             Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) => 0,
             Self::ExpansionInput(k) | Self::CurrentExpansionInput(k) => {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k)
             }
@@ -257,6 +258,7 @@ impl QueryKey {
             Self::PreparedScopeImplHeaders(_) => "PreparedScopeImplHeaders",
             Self::ImplHeaderSyntax(_) => "ImplHeaderSyntax",
             Self::ImplHeadTypes(_) => "ImplHeadTypes",
+            Self::ImplPredicates(_) => "ImplPredicates",
             Self::AssociatedItemQualifier(_) => "AssociatedItemQualifier",
             Self::AssociatedEquations(_) => "AssociatedEquations",
             Self::NominalMember(_) => "NominalMember",
@@ -307,6 +309,7 @@ impl StableEncode for QueryKey {
             Self::PreparedScopeImplHeaders(key) => { e.u32(56); e.record(key); }
             Self::ImplHeaderSyntax(key) => { e.u32(57); e.record(key.as_ref()); }
             Self::ImplHeadTypes(key) => { e.u32(58); e.record(key.as_ref()); }
+            Self::ImplPredicates(key) => { e.u32(59); e.record(key.as_ref()); }
             Self::AssociatedItemQualifier(key) => { e.u32(51); e.record(key); }
             Self::AssociatedEquations(key) => {
                 e.u32(50);
