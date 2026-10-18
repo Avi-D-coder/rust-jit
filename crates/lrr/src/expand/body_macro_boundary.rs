@@ -82,6 +82,7 @@ pub(crate) struct GeneratedBodyBoundary {
     selected: Option<RetainedMacroScope>,
     declarations:
         Arc<BTreeMap<Digest, crate::frontend::generated_macros::CapturedDeclarationScope>>,
+    expansion_definitions: BTreeMap<Digest, crate::expand::scopes::MacroDefinition>,
     parents: RetainedBoundaryParents,
     seal: SealKey,
     seal_value: Digest,
@@ -104,6 +105,7 @@ impl GeneratedBodyBoundary {
             BTreeMap<Digest, crate::frontend::generated_macros::CapturedDeclarationScope>,
         >,
         parents: RetainedBoundaryParents,
+        expansion_definitions: BTreeMap<Digest, crate::expand::scopes::MacroDefinition>,
         seal: SealKey,
         seal_value: Digest,
     ) -> Result<Arc<Self>, Diagnostic> {
@@ -113,6 +115,27 @@ impl GeneratedBodyBoundary {
             || (selected.is_none() && !declarations.is_empty())
         {
             return Err(fault("generated macro boundary owner/epoch differs"));
+        }
+        let records: BTreeMap<_, _> = std::iter::once(&output)
+            .chain(parents.items.iter())
+            .map(|items| (items.record().key().fingerprint(), items.record()))
+            .collect();
+        for (key, definition) in &expansion_definitions {
+            let record = records
+                .get(key)
+                .ok_or_else(|| fault("expansion definition escapes owning record closure"))?;
+            definition.validate()?;
+            if record.key().definition_edition != definition.definition_edition
+                || matches!(record.key().macro_identity,
+                    crate::expand::identity::MacroIdentity::Declaration { definition: actual }
+                    | crate::expand::identity::MacroIdentity::Builtin { definition: actual }
+                    | crate::expand::identity::MacroIdentity::BuiltinDerive { definition: actual }
+                    if actual != definition.identity)
+            {
+                return Err(fault(
+                    "owning expansion definition differs from output record",
+                ));
+            }
         }
         let mut bytes = std::mem::size_of::<Self>()
             .checked_add(scope.heap_bytes())
@@ -157,7 +180,7 @@ impl GeneratedBodyBoundary {
                 )
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
-        let mut e = StableEncoder::new("lrr/v2/generated-owning-macro-boundary");
+        let mut e = StableEncoder::new("lrr/v3/generated-owning-macro-boundary");
         e.record(&output.record().descriptor());
         e.record(&scope);
         e.record(&seal);
@@ -184,11 +207,22 @@ impl GeneratedBodyBoundary {
             e.record(&declaration.context);
             e.record(&declaration.lexical);
         }
+        e.u64(
+            u64::try_from(expansion_definitions.len())
+                .map_err(|_| crate::runtime::arena::resource())?,
+        );
+        for (record, definition) in &expansion_definitions {
+            e.digest(*record);
+            e.digest(definition.identity);
+            e.digest(definition.defining_unit);
+            e.u16(definition.definition_edition);
+        }
         Ok(Arc::new(Self {
             output,
             scope,
             selected,
             declarations,
+            expansion_definitions,
             parents,
             seal,
             seal_value,
@@ -216,6 +250,11 @@ impl GeneratedBodyBoundary {
     }
     pub(crate) fn source_roots(&self) -> &[PreparedSourceView] {
         &self.parents.sources
+    }
+    pub(crate) fn expansion_definitions(
+        &self,
+    ) -> &BTreeMap<Digest, crate::expand::scopes::MacroDefinition> {
+        &self.expansion_definitions
     }
     pub(crate) fn generated_roots(&self) -> &[Arc<GeneratedItems>] {
         &self.parents.items

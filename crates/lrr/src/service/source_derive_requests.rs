@@ -120,15 +120,46 @@ impl SourceDeriveSelection {
         selected.metadata_bytes()?;
         Ok(selected)
     }
+    /// Definition from the actual producer selection, bound to this output.
+    /// Context marks cannot supply this immutable source proof.
+    pub(crate) fn definition_for_expansion(
+        &self,
+        record: &crate::expand::record::ExpansionRecord,
+    ) -> Result<MacroDefinition, Diagnostic> {
+        let key = record.key();
+        key.validate()?;
+        if key.invocation != self.input.identity()
+            || key.definition_edition != self.definition.definition_edition
+            || key.grammar != crate::expand::identity::GrammarSlot::Items
+        {
+            return Err(fault("derive output selection identity differs"));
+        }
+        let matches = match &self.executor {
+            DeriveExecutor::Builtin { .. } => matches!(key.macro_identity,
+                MacroIdentity::BuiltinDerive { definition } if definition == self.definition.identity),
+            DeriveExecutor::Procedural(catalog) => {
+                let selected = catalog
+                    .select(&self.definition, ProceduralKind::Derive)?
+                    .ok_or_else(|| fault("derive output selected export absent"))?;
+                &key.macro_identity == selected.identity()
+                    && key.consumer_compile_env == catalog.environment()
+                    && key.procedural_epoch == Some(catalog.epoch())
+            }
+        };
+        if !matches {
+            return Err(fault("derive output producer differs from selection"));
+        }
+        Ok(self.definition.clone())
+    }
     pub(crate) fn is_builtin(&self) -> bool {
         matches!(self.executor, DeriveExecutor::Builtin { .. })
     }
     fn catalog(&self) -> Result<&Arc<PreparedProcCatalog>, Diagnostic> {
         match &self.executor {
             DeriveExecutor::Procedural(catalog) => Ok(catalog),
-            DeriveExecutor::Builtin { .. } => Err(fault(
-                "builtin derive selection has no procedural export",
-            )),
+            DeriveExecutor::Builtin { .. } => {
+                Err(fault("builtin derive selection has no procedural export"))
+            }
         }
     }
     /// The in-process expansion request of a builtin derive occurrence: the

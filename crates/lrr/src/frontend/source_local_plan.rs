@@ -819,12 +819,20 @@ fn expansion_definitions(
 ) -> Result<(Vec<(Key, MacroDefinition)>, Vec<Key>), Diagnostic> {
     let mut known = BTreeMap::new();
     let mut missing = BTreeSet::new();
+    if let Some(boundary) = context.generated_boundary() {
+        for (key, definition) in boundary.expansion_definitions() {
+            known.insert(Key(key.0), definition.clone());
+        }
+    }
     for input in context.source().retained_inputs() {
         match input.as_ref() {
             InputValue::RetainedSyntax(unit) => {
                 for (key, definition) in unit.prepared().expansion_definitions() {
-                    if known.insert(Key(key.0), definition.clone()).is_some() {
-                        return Err(error("duplicate retained expansion definition"));
+                    if known
+                        .insert(Key(key.0), definition.clone())
+                        .is_some_and(|old| old != *definition)
+                    {
+                        return Err(error("conflicting retained expansion definition"));
                     }
                 }
             }
@@ -832,13 +840,17 @@ fn expansion_definitions(
                 let mut join =
                     |record: &crate::expand::record::ExpansionRecord| -> Result<(), Diagnostic> {
                         let key = Key(record.key().fingerprint().0);
-                        let selected = match record.key().macro_identity {
-                            MacroIdentity::Declaration { definition }
-                            | MacroIdentity::Builtin { definition } => {
-                                entered.retained_definition(definition)?
+                        let selected = if let Some(definition) = known.get(&key) {
+                            Some(definition.clone())
+                        } else {
+                            match record.key().macro_identity {
+                                MacroIdentity::Declaration { definition }
+                                | MacroIdentity::Builtin { definition }
+                                | MacroIdentity::BuiltinDerive { definition } => {
+                                    entered.retained_definition(definition)?
+                                }
+                                MacroIdentity::Procedural { .. } => None,
                             }
-                            MacroIdentity::Procedural { .. }
-                            | MacroIdentity::BuiltinDerive { .. } => None,
                         };
                         if let Some(definition) = selected {
                             if definition.definition_edition != record.key().definition_edition {
@@ -869,6 +881,7 @@ fn expansion_definitions(
             _ => {}
         }
     }
+    missing.retain(|key| !known.contains_key(key));
     known
         .len()
         .checked_add(missing.len())

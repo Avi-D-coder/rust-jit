@@ -7952,12 +7952,28 @@ impl SourceDiscovery {
                 ));
             }
         }
+        // Keep actual selected producer metadata separately from lexical
+        // scopes: a derive's definition can live in a compiler catalog.
+        let mut expansion_definitions = BTreeMap::new();
+        for items in std::iter::once(&unit.items).chain(parents.items.iter()) {
+            let record = items.record();
+            let key = record.key().fingerprint();
+            // Completed fragments have already transferred their actual
+            // selection to this invocation-keyed table before the seal forms.
+            if let Some(selection) = self.completed_source_derives.get(&record.key().invocation) {
+                let definition = selection.definition_for_expansion(record)?;
+                if expansion_definitions.insert(key, definition.clone()).is_some_and(|old| old != definition) {
+                    return Err(fault("selected expansion definition metadata conflicts"));
+                }
+            }
+        }
         super::body_macro_boundary::GeneratedBodyBoundary::prepare(
             std::sync::Arc::clone(&unit.items),
             owner.clone(),
             selected,
             declarations,
             parents,
+            expansion_definitions,
             self.key.clone(),
             seal_value,
         )

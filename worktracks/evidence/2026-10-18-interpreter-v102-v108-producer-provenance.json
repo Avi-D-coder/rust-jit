@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-18T22:32:42.892806+00:00",
+  "owner": "solo root; no subagents",
+  "candidate": "V108",
+  "head": "53c81bc0247785c2c65a328a6c8f1ecfdba49ced",
+  "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70",
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "source_frozen_through_terminals": true,
+  "scope": "V108 solo held M007/M018 producer-definition integration: actual completed derive selections validate their output identity/edition and supply immutable per-record definition metadata to GeneratedBodyBoundary, whose v3 fingerprint and existing source/currentness proof retain it for the common lexical resolver. No receiver/derive runtime evaluator. Both builds pass;6/8focused controls pass, including handwritten/user-macro/builtin-derived Clone+PartialEq equivalence in2015/2021 (failed V101/V104), copy-derive originals, symbolic source control all4editions and3boundary authority controls. Selected unchanged stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals now resolve self but fail generated local __self_discr classification. Diagnostic trace proves DefinitionModule pending at declaration and BindingClassification pending at later read. Zero new distinct upstream runtime gains; no refreshed suite total or M007/M018/interpreter/JIT gate closure. Common definition-site Type/Value module receipt/query integration is the next prerequisite.",
+  "changed_rust_sources": {
+    "crates/lrr/src/cli/vec_string_tests.rs": "6deebd4e03047790dfc9a675047d5090b5e1fd3e89fe11bbd716d92d9c467a1b",
+    "crates/lrr/src/expand/body_macro_boundary.rs": "2e6466fdd0dafbc275d3006589a0129bd2ced619e5a5c81824eae2e119e906f4",
+    "crates/lrr/src/expand/source_discovery.rs": "10b2bed144a3050050f1469caed540c98274b73d8704b09c4edf77ab83a1482f",
+    "crates/lrr/src/frontend/source_local_plan.rs": "48bd469332d510253271dfb2ba6fa15f0a7f68c40c3db477eb059dc91f616321",
+    "crates/lrr/src/service/source_derive_requests.rs": "956561bd462c33a469fa18ca72da79bd76670b17887e1a7568fe270cee228ee1"
+  },
+  "lib_build": {
+    "session": 78954,
+    "terminal": "7dc25f",
+    "exit": 0,
+    "seconds": 8.34,
+    "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63"
+  },
+  "cli_build": {
+    "session": 34782,
+    "terminal": "31fdc8",
+    "exit": 0,
+    "seconds": 5.99,
+    "binary_sha256": "237d2a8834fe9bda78a955654f72e301167bc7ea23d84acaaf7295df6bf03ce7"
+  },
+  "queues": {
+    "controls": {
+      "session": 39933,
+      "terminal": "09515c",
+      "runner_exit": 0,
+      "passed": 6,
+      "total": 8
+    },
+    "stock": {
+      "session": 1486,
+      "terminal": "3947f0",
+      "runner_exit": 0,
+      "passed": 1,
+      "total": 3
+    }
+  },
+  "controls": [
+    {
+      "selector": "cli::crate_graph::vec_string_tests::upstream_slice_pattern_receivers_complete",
+      "exit": 101,
+      "seconds": 7.049,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::vec_string_tests::upstream_slice_pattern_receivers_complete",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::rustc_unchanged_copy_derive_fixtures_complete_without_the_facade",
+      "exit": 0,
+      "seconds": 0.715,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::builtin_derive_tests::rustc_unchanged_copy_derive_fixtures_complete_without_the_facade",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    },
+    {
+      "selector": "vm::frame::symbolic_place_source_tests::ordinary_generic_parameter_alias_borrow_and_deref_keep_rigid_source_all_editions",
+      "exit": 0,
+      "seconds": 0.385,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "vm::frame::symbolic_place_source_tests::ordinary_generic_parameter_alias_borrow_and_deref_keep_rigid_source_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    },
+    {
+      "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+      "exit": 0,
+      "seconds": 0.363,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    },
+    {
+      "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+      "exit": 0,
+      "seconds": 0.121,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    },
+    {
+      "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::wrong_typed_prerequisite_cannot_hide_pending_boundary_behind_a_worklist_seal",
+      "exit": 0,
+      "seconds": 0.097,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "expand::source_discovery::original_inert_tests::item_boundary_tests::wrong_typed_prerequisite_cannot_hide_pending_boundary_behind_a_worklist_seal",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::derived_impls_run_like_handwritten_and_user_macro_impls",
+      "exit": 0,
+      "seconds": 13.845,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-6.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::builtin_derive_tests::derived_impls_run_like_handwritten_and_user_macro_impls",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::derived_clone_partial_eq_and_default_cover_struct_enum_and_generic_shapes",
+      "exit": 101,
+      "seconds": 12.526,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-7.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::builtin_derive_tests::derived_clone_partial_eq_and_default_cover_struct_enum_and_generic_shapes",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "0e1f0d43f5f38e473906ffbee31fb13a1c80e313cf785df93d8688ec1f05bb63",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70"
+    }
+  ],
+  "stock": [
+    {
+      "path": "tests/ui/or-patterns/slice-patterns.rs",
+      "sha256": "054e6ee60670edf6f27892d8968783e5c68aecac8a5110f6b56914e74c7347d7",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "237d2a8834fe9bda78a955654f72e301167bc7ea23d84acaaf7295df6bf03ce7",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70",
+      "exit": 2,
+      "seconds": 8.147,
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/or-patterns/slice-patterns.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "109659f327be6f519c5f84d7c3308f0ce6369a899defb76204065e45013d0e40"
+      ],
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-NAME-MISSING",
+        "message": "reached direct function identity is absent before argument evaluation (value path `__self_discr`)"
+      },
+      "facts": {
+        "classified_operation_candidates": 268,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 17,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 184,
+        "vm_outcomes": 184
+      },
+      "capture_complete": false
+    },
+    {
+      "path": "tests/ui/pattern/bindings-after-at/slice-patterns.rs",
+      "sha256": "51fc3dd5a98f7cd50a528b04417bf95033b7179b824e7dfdb12d0f2b4d28398b",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "237d2a8834fe9bda78a955654f72e301167bc7ea23d84acaaf7295df6bf03ce7",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70",
+      "exit": 2,
+      "seconds": 7.734,
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/pattern/bindings-after-at/slice-patterns.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "c761096e1344763f202a82d3fc13ddcad58efe83692b63f149b24c10ce1a0518"
+      ],
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-NAME-MISSING",
+        "message": "reached direct function identity is absent before argument evaluation (value path `__self_discr`)"
+      },
+      "facts": {
+        "classified_operation_candidates": 1298,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 33,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 841,
+        "vm_outcomes": 841
+      },
+      "capture_complete": false
+    },
+    {
+      "path": "tests/ui/regions/regions-infer-borrow-scope-view.rs",
+      "sha256": "1ebe0df25f8c4cc4046832445feae03b090f7abd5eaa511c791dcc683caa91e7",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "237d2a8834fe9bda78a955654f72e301167bc7ea23d84acaaf7295df6bf03ce7",
+      "source_sha256": "359af7bea280c8204484309b999708f4b781d19243844438bbf7d14f13d01b70",
+      "exit": 0,
+      "seconds": 4.22,
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-borrow-scope-view.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "362bea0d74e5ec1169a38dd302c62da3ef3ceeb73490fa3744ad0c9310e2cf2b"
+      ],
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null
+      },
+      "facts": {
+        "classified_operation_candidates": 221,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 12,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 148,
+        "vm_outcomes": 148
+      },
+      "capture_complete": true
+    }
+  ],
+  "prior_attempts": [
+    {
+      "candidate": "V102",
+      "source_sha256": "cedc06434da261a1dfa8871f8bc82c33444468856c175500bf86f97f0d1fdf47",
+      "lib_terminal": "934b50",
+      "lib_exit": 0,
+      "diagnostic_control_terminal": "bfe7ec",
+      "control_exit": 101,
+      "finding": "actual Receiver self fact exists; lexical selection blocked by missing expansion definition",
+      "observer_removed": true
+    },
+    {
+      "candidate": "V103",
+      "source_sha256": "8a5e98c0fbb74461f05736ee2343c283a8bfd68013f689b94f221d4dcd0c4965",
+      "lib_terminal": "ff6257",
+      "cli_terminal": "139731",
+      "controls_terminal": "0a5fa0",
+      "stock_terminal": "55e6c4",
+      "controls": "2/3",
+      "stock": "1/3",
+      "finding": "retained scope lookup lacks actual compiler derive definition"
+    },
+    {
+      "candidate": "V104",
+      "source_sha256": "43ea0e2d4351fbd3029d501e8786240ee9d4938a8b71d15ddd179a4a0df8e3bf",
+      "lib_terminal": "6d04e8",
+      "cli_terminal": "b7a5b4",
+      "controls_terminal": "a3ccb9",
+      "stock_terminal": "f766c1",
+      "controls": "5/8",
+      "stock": "1/3",
+      "finding": "producer selection transferred out of in-flight fragments before boundary publication"
+    },
+    {
+      "candidate": "V105",
+      "source_sha256": "798534b0ce3b9acb8318e756eb00df63123b22a1114f8e698e20111827306497",
+      "lib_terminal": "3ab8de",
+      "cli_terminal": "c1c999",
+      "controls_terminal": "cfe872",
+      "stock_terminal": "c346d1",
+      "controls": "6/8",
+      "stock": "1/3",
+      "finding": "completed selection receipt unblocks receiver and impl equivalence; generated local declaration still needs definition module"
+    },
+    {
+      "candidate": "V106",
+      "source_sha256": "64d8257d01a04137c831de3cdee16c362e05201711988a5ce74df5fa43f8a012",
+      "lib_terminal": "8f816c",
+      "diagnostic_control_terminal": "138dcc",
+      "control_exit": 101,
+      "observer_removed": true,
+      "finding": "actual pending goal of __self_discr declaration is DefinitionModule; later read is BindingClassification"
+    },
+    {
+      "candidate": "V107",
+      "source_sha256": "798534b0ce3b9acb8318e756eb00df63123b22a1114f8e698e20111827306497",
+      "lib_terminal": "5da6cb",
+      "lib_exit": 0,
+      "runtime_rerun": false,
+      "finding": "diagnostic observer removed, exact V105 Rust source restored; production CLI unchanged"
+    }
+  ],
+  "diagnostic_trace_source": "V106 test-only observer, removed; receipt shows source selections, not an opcode trace",
+  "diagnostic_trace": [
+    "VALUE_GOAL EnteredValueGoal { key: PcKey { body: BodyKey { definition: Digest(3c932a794951928ffb14bda4c8099e4e25b1b82fedf4a057e49b90416a733417), exact_body_bytes: Digest(93fabb08544cdc46f832906aa42350432e83592c70eaabbba9e1a5548fe0ef49) }, node: 10, phase: 0 }, local: Some(Digest(d7fcc556f871032415aba74d5ba4a7d57af111c3472478abdd85898550b51159)), demand: None, .. } SYNTAX Some(\"self\")",
+    "VALUE_GOAL EnteredValueGoal { key: PcKey { body: BodyKey { definition: Digest(3c932a794951928ffb14bda4c8099e4e25b1b82fedf4a057e49b90416a733417), exact_body_bytes: Digest(93fabb08544cdc46f832906aa42350432e83592c70eaabbba9e1a5548fe0ef49) }, node: 3, phase: 0 }, local: None, demand: Some(DefinitionModule(Key([8, 25, 82, 139, 168, 19, 157, 120, 106, 163, 73, 173, 205, 180, 194, 181, 52, 233, 45, 74, 70, 24, 143, 208, 40, 42, 220, 14, 4, 163, 232, 179]))), .. } SYNTAX Some(\"__self_discr\")",
+    "VALUE_GOAL EnteredValueGoal { key: PcKey { body: BodyKey { definition: Digest(3c932a794951928ffb14bda4c8099e4e25b1b82fedf4a057e49b90416a733417), exact_body_bytes: Digest(93fabb08544cdc46f832906aa42350432e83592c70eaabbba9e1a5548fe0ef49) }, node: 68, phase: 0 }, local: None, demand: Some(BindingClassification(Digest(485e7672273a3453d11452163e1a78ecb57b9082eb940bf3c0831cbd7793c6c9))), .. } SYNTAX Some(\"__self_discr\")",
+    "VALUE_GOAL EnteredValueGoal { key: PcKey { body: BodyKey { definition: Digest(3c932a794951928ffb14bda4c8099e4e25b1b82fedf4a057e49b90416a733417), exact_body_bytes: Digest(93fabb08544cdc46f832906aa42350432e83592c70eaabbba9e1a5548fe0ef49) }, node: 35, phase: 0 }, local: None, demand: Some(DefinitionModule(Key([8, 25, 82, 139, 168, 19, 157, 120, 106, 163, 73, 173, 205, 180, 194, 181, 52, 233, 45, 74, 70, 24, 143, 208, 40, 42, 220, 14, 4, 163, 232, 179]))), .. } SYNTAX Some(\"__arg1_discr\")",
+    "VALUE_GOAL EnteredValueGoal { key: PcKey { body: BodyKey { definition: Digest(3c932a794951928ffb14bda4c8099e4e25b1b82fedf4a057e49b90416a733417), exact_body_bytes: Digest(93fabb08544cdc46f832906aa42350432e83592c70eaabbba9e1a5548fe0ef49) }, node: 72, phase: 0 }, local: None, demand: Some(BindingClassification(Digest(d3105993c57f1a414b0fa04c8eef3fa3007e8eb964e737d2312ac6f02f79ea40))), .. } SYNTAX Some(\"__arg1_discr\")"
+  ],
+  "remaining_unexecuted": [
+    "new definition-map corruption/mismatched-producer negative controls",
+    "procedural derive receipt execution",
+    "full origin/all4edition matrix for repaired producer metadata",
+    "definition-site Value module integration",
+    "broad suspension/invalidation/cleanup milestone"
+  ],
+  "new_distinct_upstream_runtime_gains": 0,
+  "full_fixture_acceptance_claimed": false,
+  "guest_jit_allowed": false,
+  "architecture_review": "worktracks/04-calls-source-views/2026-10-18-receiver-name-origin.md"
+}

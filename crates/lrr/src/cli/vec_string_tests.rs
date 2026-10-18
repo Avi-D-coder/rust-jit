@@ -2274,3 +2274,15 @@ Some(1)
 "###,
     );
 }
+
+/// Keep the unchanged slice-pattern witnesses independently runnable while
+/// their shared generated receiver/parameter source join is repaired.
+#[test]
+fn upstream_slice_pattern_receivers_complete() {
+    for path in [
+        "tests/ui/or-patterns/slice-patterns.rs",
+        "tests/ui/pattern/bindings-after-at/slice-patterns.rs",
+    ] {
+        upstream_completes(path);
+    }
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-18T22:09:44.658866+00:00",
+  "updated_at": "2026-10-18T22:32:42.892806+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -235,11 +235,12 @@
           "title": "Expression source views",
           "status": "in_progress",
           "candidate": "worktracks/04-calls-source-views/2026-10-18-receiver-name-origin.md",
-          "acceptance_scope": "V101 solo held source-name admission component: names::owned_name shares existing MacroName::local receiver validation instead of rejecting self as r#self. Both builds pass;2/4derive/source controls pass, two derive controls fail constructor source/member binding (baseline attribution unverified). Stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals advance past invalid-name admission then fail self Value-path resolution after17/33source calls. Zero additional distinct upstream gains. Full receiver source/parameter join, constructor binding, M018/architecture/interpreter/JIT gates remain open.",
+          "acceptance_scope": "V108 solo held M007/M018 producer-definition integration: actual completed derive selections validate their output identity/edition and supply immutable per-record definition metadata to GeneratedBodyBoundary, whose v3 fingerprint and existing source/currentness proof retain it for the common lexical resolver. No receiver/derive runtime evaluator. Both builds pass;6/8focused controls pass, including handwritten/user-macro/builtin-derived Clone+PartialEq equivalence in2015/2021 (failed V101/V104), copy-derive originals, symbolic source control all4editions and3boundary authority controls. Selected unchanged stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals now resolve self but fail generated local __self_discr classification. Diagnostic trace proves DefinitionModule pending at declaration and BindingClassification pending at later read. Zero new distinct upstream runtime gains; no refreshed suite total or M007/M018/interpreter/JIT gate closure. Common definition-site Type/Value module receipt/query integration is the next prerequisite.",
           "evidence": [
             "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
             "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
-            "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json"
+            "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json",
+            "worktracks/evidence/2026-10-18-interpreter-v102-v108-producer-provenance.json"
           ]
         },
         {
@@ -753,7 +754,7 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V101 solo held source-name admission component: names::owned_name shares existing MacroName::local receiver validation instead of rejecting self as r#self. Both builds pass;2/4derive/source controls pass, two derive controls fail constructor source/member binding (baseline attribution unverified). Stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals advance past invalid-name admission then fail self Value-path resolution after17/33source calls. Zero additional distinct upstream gains. Full receiver source/parameter join, constructor binding, M018/architecture/interpreter/JIT gates remain open.",
+    "validation": "V108 solo held M007/M018 producer-definition integration: actual completed derive selections validate their output identity/edition and supply immutable per-record definition metadata to GeneratedBodyBoundary, whose v3 fingerprint and existing source/currentness proof retain it for the common lexical resolver. No receiver/derive runtime evaluator. Both builds pass;6/8focused controls pass, including handwritten/user-macro/builtin-derived Clone+PartialEq equivalence in2015/2021 (failed V101/V104), copy-derive originals, symbolic source control all4editions and3boundary authority controls. Selected unchanged stock sample1/3passes: prior generic slice-view gain remains; both slice-pattern originals now resolve self but fail generated local __self_discr classification. Diagnostic trace proves DefinitionModule pending at declaration and BindingClassification pending at later read. Zero new distinct upstream runtime gains; no refreshed suite total or M007/M018/interpreter/JIT gate closure. Common definition-site Type/Value module receipt/query integration is the next prerequisite.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 27,
@@ -766,7 +767,8 @@
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
-      "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json"
+      "worktracks/evidence/2026-10-18-interpreter-v101-receiver-name-origin.json",
+      "worktracks/evidence/2026-10-18-interpreter-v102-v108-producer-provenance.json"
     ]
   }
 }
