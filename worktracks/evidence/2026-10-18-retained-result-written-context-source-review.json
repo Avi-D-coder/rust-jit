@@ -1,0 +1,29 @@
+{
+  "status": "root source-only review; compile/runtime and independent final review pending",
+  "baseline": "V26/dfcb89188427a17e67e82f63adac9774840ade7bae881cc3ee4d60032339b9cc",
+  "files": {
+    "crates/lrr/src/vm/context.rs": "ee136837c73cce09406f529e8455ef20f388434cf1a90b46d5957c5913842644",
+    "crates/lrr/src/engine/run.rs": "5e6bc4b68f1f60f1ed3dd436402f08c80c57e5c98bb6deb0b32043f47d1555a8",
+    "crates/lrr/src/vm/frame_partial_hints.rs": "8fb58a7997a8623ffae3979ddfefd4f1593e4e90bab29575ee91f5584bac604d",
+    "crates/lrr/src/vm/step.rs": "a0ac709d9ec27f8a1551cd4d0f9463cf57109721a79c5f79cf03646b1edec8ee"
+  },
+  "shared_route": "RunMachine::prepare_selected_source_call retains actual source return WrittenType in GenericEnv; ordinary Op::SetHint DefinitionResult/DefinitionWrittenResult and initializer_root_hint use Frame::definition_result_partial_hint -> existing BorrowTarget partial hints -> ordinary structural constructor",
+  "source_boundary": "Existing closed_written_type/source_return_goals proof/written_template and SourceCallable revalidation unchanged. Same body definition guard and actual runtime ParamKey ordinals. Never recover nominal authority from raw TypeId or spelling.",
+  "all8": {
+    "1": "No evaluator or assertion runtime branch added.",
+    "2": "Generated/original code shares existing Op::SetHint and frame construction.",
+    "3": "No member/numeric/macroidentity selection.",
+    "4": "No generated-source restriction added.",
+    "5": "No pattern engine or cold executable-arm preparation change.",
+    "6": "Source metadata prepared on existing cold call route and retained once; VM does no source planning. Fixed argument vector construction traverses actual entered definition generic parameters.",
+    "7": "No namespace census; existing signature/currentness boundary retained.",
+    "8": "Arc WrittenType retained; no BodyIndex clone/file search."
+  },
+  "cost": "Additional immutable written template Arc allocation once per prepared call environment, checked retained size propagated to PreparedSourceCall; entered hint clones Arc and creates actual generic ordinal vector. Existing partial arguments may copy that vector as before. No measured speed claim.",
+  "holds": [
+    "No compile/runtime acceptance yet",
+    "Ordinary and generated reference slice results, zero-array and generic runtime matrix require terminals",
+    "Full generic initializer identity/runonce aggregate templates/cleanup still incomplete",
+    "Unsupported pointer/object written forms unchanged; no gate closure"
+  ]
+}

@@ -3490,11 +3490,20 @@ impl SourceDiscovery {
                     .collect::<BTreeSet<_>>()
             })
             .unwrap_or_default();
+        // Impl completion has its own actual declaration-inventory job. It
+        // must not orphan the same output's known macro catalog, and it is
+        // never discharged as a macro definition/call frontier below.
+        let owned_impl_completion = match (impl_frontier, declaration_identity) {
+            (Some(frontier), Some(declaration_job)) => Some((frontier, declaration_job)),
+            (Some(_), None) => return Err(fault("impl frontier declaration job owner absent")),
+            (None, _) => None,
+        };
         let can_publish_macros = plan.blocked().all(|id| {
             imports.contains(id)
                 || macro_ids.contains(id)
                 || call_frontiers.contains(id)
                 || module_ids.contains(id)
+                || owned_impl_completion.is_some_and(|(frontier, _)| frontier == *id)
         });
         let deferred =
             can_publish_macros && catalog.as_ref().is_some_and(|c| !c.ready_for_outward());
@@ -3656,7 +3665,7 @@ impl SourceDiscovery {
                 unique_graph(&mut self.graph)?
                     .release_generated_frontier(&call.scope, call.frontier);
             }
-            if opaque.is_empty() && !deferred {
+            if can_publish_macros && !deferred {
                 let provider = &mut self
                     .declarative
                     .as_mut()
@@ -3729,9 +3738,9 @@ impl SourceDiscovery {
                 return Err(fault("item declaration job conflict"));
             }
             self.item_root_declarations.insert(identity, job);
-            if let Some(frontier) = impl_frontier {
+            if let Some((frontier, declaration_job)) = owned_impl_completion {
                 self.item_impl_jobs
-                    .insert(frontier, (job, bound_impl_headers, impl_scope));
+                    .insert(frontier, (declaration_job, bound_impl_headers, impl_scope));
             }
             self.nested_bytes = nested_bytes;
         }

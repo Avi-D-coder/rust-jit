@@ -495,3 +495,24 @@ Primary007bbc/0 is4/5 upstream runtime contracts: new match-const-fn-structs, cy
 Controlsde639a/0 actual5/9 bodiesPASS. Existing scalar cold/retry, initializer origins, corrected localpure, all-editionFRU and retainedgenerated sourceentry pass. New structural control completes2015origin0 source equality/inequality/owner assertions but opcode19 is4 expected3; the exact-once assertion fails and remaining origins/editions do not run. There is no retained per-call trace (helper uses capture disabled, deletes its temporary), so attributing fourthcall to initializer replay is unproven; per-use aggregate cache key remains independently source-confirmed E007 debt. Keep expected3 unchanged. Global/local generated coldcall controls cross prior occurrence proof then panic value>0 for2015route1 coldfoo branch; literal-only branch advanced. Associated ancestry control now stalls its earlier new impl+localmacro case on producer setup selfcycle before alias and negative checks; no Someassociated/alias authority acceptance.
 
 Raw reportSHA79944183e2bc21c008809f1c787bd26adc71136207a8e3611b4dbc9f2b979343,48file indexe08f08ab524f15b07a136cd81370d724222cfaa6a5be8b79669a92d7f0f8bb7b. Shareable worktracks/evidence/2026-10-18-interpreter-v25-validation.json. No diagnostic/tooling/full-fixture/architecture/interpreter/JIT gate closes. New source-only successors: worker1 actual Const/Static owner binders oneleaf reviewed; worker2 generated puregoal diagnostic/control extension; root common source-selected structural context repair under investigation, no production patch yet. Remaining actual generic initializer/template prerequisites in worktracks/04-calls-source-views/2026-10-18-constant-applications-and-templates.md.
+
+## V26 focused prerequisite checkpoint
+
+Exact source `dfcb89188427a17e67e82f63adac9774840ade7bae881cc3ee4d60032339b9cc`
+compiled both lib (`6842bf/0`) and CLI (`6a7f94/0`) unchanged.
+**2/3 stock runtime contracts and 4/7 controls pass; zero new stock pass.**
+The actual source structural context fix crosses the singleton nominal array,
+then custom-eq-branch-pass fails the EMPTY `&[]` initializer. The common source
+return-goal controls still report Pending for the generated caller binding;
+associated ancestry crosses impl setup and fails trait setup. The all-edition
+owner-binder metadata control passes; that is not associated-const main execution
+or full GenericArg transport. Three V25 controls without a source fix were
+not rerun: the unexplained fourth call and two runtime cold-call numeric cases.
+Their failures remain held, not skips converted to passes.
+
+Four compiled Rust leaves are checkpointed separately from successor work.
+Root's retained actual WrittenType result-hint transport, local macro event
+identity bridge, and actual trait producer lifecycle repair are source-only
+successors. Preserve their exact review/validation boundaries. No aggregate
+template/runonce/full generic cache, source authority, architecture, runtime
+acceptance or JIT gate is closed. [Portable V26 receipt](../../worktracks/evidence/2026-10-18-interpreter-v26-validation.json).

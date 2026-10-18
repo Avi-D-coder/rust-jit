@@ -41,7 +41,11 @@ impl Frame {
         written: Arc<WrittenType>,
         construction: Option<SlotId>,
     ) -> Result<(), Diagnostic> {
-        self.set_partial_hint_with(slot, written, construction.map(PartialArguments::Construction))
+        self.set_partial_hint_with(
+            slot,
+            written,
+            construction.map(PartialArguments::Construction),
+        )
     }
     pub(crate) fn set_partial_hint_with(
         &mut self,
@@ -170,6 +174,48 @@ impl Frame {
         let Some(hint) = self.partial_hints.0.remove(&result) else {
             return self.prepare_observed_structural_constructor(plan);
         };
+        let args = self.partial_arguments(&hint, store)?;
+        // A retained nominal member has source authority that the primitive
+        // structural interner intentionally cannot recreate. Use that same
+        // WrittenType witness before choosing an observed constructor.
+        let exact = match (plan.kind(), hint.written.as_ref()) {
+            (C::Array(fields), WrittenType::Slice(element)) => {
+                let length = u32::try_from(fields.len())
+                    .map_err(|_| invalid("array source cardinality does not fit its descriptor"))?;
+                Arc::new(WrittenType::Array(element.clone(), length))
+            }
+            _ => Arc::clone(&hint.written),
+        };
+        if let Some(ty) = Self::partial_exact(&exact, &args, store)? {
+            if let Some(source) = self.source_view(result)? {
+                let source = self.bound_view(&source, store);
+                let source = match (&source, plan.kind()) {
+                    (crate::traits::term::TyTerm::Slice(element), C::Array(fields)) => {
+                        crate::traits::term::TyTerm::Array(
+                            element.clone(),
+                            crate::traits::term::ConstTerm::Value(
+                                u64::try_from(fields.len())
+                                    .map_err(|_| invalid("array cardinality overflow"))?,
+                            ),
+                        )
+                    }
+                    _ => source,
+                };
+                if store.descriptor_source_term(ty).is_none_or(|actual| {
+                    crate::frontend::signature_subst::erase_regions(&actual)
+                        != crate::frontend::signature_subst::erase_regions(&source)
+                }) {
+                    return Err(Diagnostic::new(
+                        "LRR-E-GENERIC-BINDING",
+                        "exact structural hint differs from its retained source result context"
+                            .into(),
+                    ));
+                }
+                self.set_source_view(result, Some(source))?;
+            }
+            self.declared_hint(result, Some(ty))?;
+            return self.prepare_structural_constructor(plan, ty, store);
+        }
         let members: Vec<(SlotId, &WrittenType)> = match (plan.kind(), hint.written.as_ref()) {
             (C::Tuple(fields), WrittenType::Tuple(written)) if fields.len() == written.len() => {
                 fields
@@ -193,7 +239,6 @@ impl Frame {
                 .collect(),
             _ => Vec::new(),
         };
-        let args = self.partial_arguments(&hint, store)?;
         let mut hints = Vec::new();
         let mut nested = Vec::new();
         for (slot, member) in members {

@@ -1,0 +1,124 @@
+{
+  "scope": "WT04-03 T032/T033/M017/M018/M023, E007 initializer owner-binder source metadata prerequisite only",
+  "head": "5fe70d59298508da56ae4062cdcd427138ed4bd5",
+  "files": {
+    "crates/lrr/src/syntax/signatures.rs": "0112cb3510ff714dbb92e8fd424e064ea298373f947bdd5eee5eae0ddddbfcde"
+  },
+  "architecture_record": "worktracks/evidence/2026-10-18-initializer-owner-binder.md",
+  "entrypoints": [
+    "ParsedFile::declaration_generics",
+    "associated_owner_generics",
+    "associated_owner",
+    "ParsedFile::spell_generic_bounds",
+    "ParsedFile::declaration_predicates",
+    "ParsedFile::initializer_signature",
+    "ParsedFile::initializer_parameters",
+    "ParsedFile::function_signature",
+    "owner_generics Fn compatibility wrapper"
+  ],
+  "current_consumers_inspected": [
+    "db/provider.rs QueryKey::FunctionSignature uses Signature, DefinitionSource, ParseFile, DeclarationContext without demanding DefinitionBody",
+    "frontend/source_body_context.rs parsed.initializer_parameters for ordinary/generated checked initializer source",
+    "syntax/thunks.rs::owner_generics and frontend/local_type_names.rs::owner_generics retained wrapper callers"
+  ],
+  "source_identity": "Actual selected declaration node and immediate Impl/Trait ancestor; own then owner ordinal order, all original GenericKind values and bound/default/const_type tokens retained under the selected item signature-local ParamKey convention. Trait implicit Self remains last; impl Self stays its actual source owner/self-type, no new free Self generic.",
+  "changed_routes": [
+    "Existing Fn generics and predicate preparation now delegate to shared actual-declaration helpers",
+    "Initializer signature/entered metadata now consume same helpers, replacing item-own-only capture",
+    "Existing internal Fn owner_generics API remains a delegate for two unchanged metadata callers"
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "initializer_signature",
+        "function_signature",
+        "initializer_parameters"
+      ],
+      "result": "No evaluator, synthetic function/block or executable expression path. Initializers retain their real source declaration."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "declaration_generics",
+        "associated_owner_generics"
+      ],
+      "result": "No generated scalar/break route. Same admitted ParsedFile node path for original/generated declarations with a real retained immediate owner."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "spell_generic_bounds",
+        "declaration_predicates"
+      ],
+      "result": "Generic declaration facts only; same actual owner/source tokens and dollar-crate spelling as ordinary Fn. No method/numeric/macro names choose semantics."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "associated_owner",
+        "initializer_signature"
+      ],
+      "result": "No source-origin filter introduced. Generated fragments lacking a real retained parent AST still have the inherited owner-publication prerequisite; no fabricated parent from spelling/scope alone. Generated binder route matrix not run."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "db::SyntaxProvider FunctionSignature arm",
+        "initializer_parameters"
+      ],
+      "result": "Source signature query remains body-independent. Actual reached initializer metadata validates existing body/header/context; no new body preparation, pattern engine, branch evaluation or static checker."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "declaration_generics",
+        "declaration_predicates",
+        "FunctionSignature memo"
+      ],
+      "result": "Cold linear own/immediate-owner header capture once through existing signature query; no additional parser or installed operation planning."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "associated_owner",
+        "associated_owner_generics"
+      ],
+      "result": "Immediate actual AST ancestry only; no namespace census, dependency guard relaxation or unrelated world invalidation introduced. Existing ParseFile/DefinitionSource/Signature/DeclarationContext dependencies cover owner syntax."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "associated_owner",
+        "declaration_generics",
+        "declaration_predicates"
+      ],
+      "result": "Direct declaration children/parent, no whole-file production search or immutable body clone. Owned small metadata lists follow existing signature storage; test-only outline iteration is not a production path."
+    }
+  ],
+  "witnesses": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs",
+      "sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+      "runtime": "run-pass unchanged original, not executed for this candidate"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-self-type.rs",
+      "sha256": "deb651fa78587d61071e45cfdca36a36f4d80a657187219818cf2742c2d9f43f",
+      "runtime": "run-pass unchanged original, not executed for this candidate"
+    }
+  ],
+  "validation_plan": [
+    "syntax::signatures::tests::rustc_associated_initializer_binders_retain_real_owner_parameters",
+    "syntax::signatures::tests::rustc_initializer_parameters_require_actual_source_declaration",
+    "syntax::signatures::tests::rustc_duplicate_const_parameter_retains_identity_and_tokens"
+  ],
+  "validation": "No Cargo/tests/guest execution by implementation worker. Added component control includes unchanged official sources; owning2015 runtime directives unchanged, four-edition parser metadata comparisons are LRR supplemental evidence when executed. No successor compile/pass yet.",
+  "held": [
+    "FullGenericArg selected-item application and call/GenericEnv packet transport, const/region arguments, impl/trait witness matching and default Self",
+    "Once per actual item+instantiation initializer cache, inflight/failure state and aggregate template reuse remain root-owned",
+    "Generated standalone associated-item fragments require actual parent AST/source scope join, never a guessed owner; no all-route acceptance",
+    "Lifetime/const kind transport follows existing shared capture but no new runtime or full mixed-kind route acceptance",
+    "No release/performance/feature/JIT gate closes from metadata component"
+  ]
+}

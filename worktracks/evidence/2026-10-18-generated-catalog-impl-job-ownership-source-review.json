@@ -1,0 +1,98 @@
+{
+  "scope": "Actual V25 generated-associated-impl source setup ownership prerequisite; SourceDiscovery::admit_expansion_inner only",
+  "head": "5fe70d59298508da56ae4062cdcd427138ed4bd5",
+  "files": {
+    "crates/lrr/src/expand/source_discovery.rs": "0d3b86631d409ae22ba5e6e335252cad65e0e9863aeefb49d53a5478fe373af0"
+  },
+  "precode": "worktracks/evidence/2026-10-18-generated-catalog-impl-job-ownership.md",
+  "old_failure": "artifacts/validation-resume-2026-10-18/candidate-v25/control-5.log; first new implcase owning2015 CATALOG-INCOMPLETE selfblock26c9... before alias/scope assertions; exact hash\u2192producer mapping not claimed",
+  "proof_join": [
+    "Actual declaration_output derives from same admitted GeneratedItems record and real source",
+    "GeneratedDeclarations::item_impl_headers checks same record/cfg/epoch/text/origin/active impl projection and returns required header pairs",
+    "impl_frontier exists only when actual required impl_headers are nonempty; declaration_identity is exact declaration_output fingerprint job",
+    "owned_impl_completion retains exactly(frontier,declaration_job); same pair is classified and installed into item_impl_jobs with required header identities/scope",
+    "All imports/macros/calls/modules/unknown blocked entries otherwise use existing classification; no wildcard frontier forgiveness"
+  ],
+  "changed_sites": [
+    "Known macro route classification accepts the exact separately owned impl-completion pair",
+    "Ready macro catalog is retained through complete_generated_bindings even while separately owned impl job remains opaque/pending",
+    "item_impl_jobs registers the same owned pair with required headers/scope"
+  ],
+  "preserved_pending": [
+    "Impl frontier remains in opaque and ScanNestedDeclarations jobs/producers",
+    "discharged remains only actual macro_ids union call_frontiers; never includes impl frontier",
+    "Existing ScanNestedDeclarations item_impl_jobs arm still waits nested_completed[declaration_job], checks every required header_identity against actual fragment inventory, then releases only that impl frontier",
+    "Namespace seal/current source/epoch/record/header projection checks unchanged; arbitrary unknown frontiers remain unresolved"
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "admit_expansion_inner"
+      ],
+      "result": "Coordinator source job bookkeeping only; no evaluator/syntheticbody/runtime expression code."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "GeneratedHeaderPlan::prepare",
+        "SourceDeclarative::complete_generated_bindings"
+      ],
+      "result": "Uses actual admitted catalog and existing ordinary source publication; no scalar/break-only macro runtime route."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "owned_impl_completion",
+        "can_publish_macros"
+      ],
+      "result": "Classification by real required job/record identities, no fixture/macro/method/numeric names."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "GeneratedDeclarations::item_impl_headers",
+        "item_impl_jobs"
+      ],
+      "result": "Repairs generated producer ownership, retains actual source/cfg/epoch/header proof; no generated-source exclusion or bypass."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "ScanNestedDeclarations item_impl_jobs completion arm",
+        "discharged"
+      ],
+      "result": "No pattern changes/eager executable checks. Real declaration inventory remains required for impl completion; no unused method body execution."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "admit_expansion_inner"
+      ],
+      "result": "No parser/query/plan reconstruction added. Existing one-time output plan reused with local copied Digest tuple; installed execution unchanged."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "can_publish_macros",
+        "opaque",
+        "discharged",
+        "complete_generated_bindings"
+      ],
+      "result": "Relevant existing blocked frontier pass only. Known impl remains namespace blocker and owned scheduled job, no unrelated namespace scan/invalidation relaxation."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "owned_impl_completion",
+        "item_impl_jobs"
+      ],
+      "result": "Two Digest copy metadata; no immutable body/index clone or whole-file lookup added."
+    }
+  ],
+  "acceptance": "Source reviewed only; no Cargo/tests/guest runs by worker. Existing ancestry control + generated impl-frontier regressions must execute on successor frozen build. Newtrait/alias branches and broader route matrix remain unexecuted; no macro/impl feature/fullfixture/JIT or performance closure.",
+  "review_plan": [
+    "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+    "frontend::generated_headers::tests (relevant existing generated_impl_frontier_tests selectors chosen by validator)"
+  ]
+}

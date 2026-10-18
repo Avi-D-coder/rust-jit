@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-18",
+  "claim": "LOCAL-038",
+  "scope": "Existing cold-associated source-goal control extended to ordinary/emitted four actual bodies; source-only diagnostic, no production repair",
+  "head": "5fe70d59298508da56ae4062cdcd427138ed4bd5",
+  "path": "crates/lrr/src/cli/generic_boundary_tests.rs",
+  "sha256": "82b20712fa2aa6cacf5d3b888c70eb3fc432d5197081b8021f783437f3600026",
+  "precode": "worktracks/04-calls-source-views/2026-10-18-cold-generated-result-relations.md",
+  "selectors": [
+    "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+    "cli::crate_graph::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation"
+  ],
+  "changes": [
+    "Existing route0 original and route1 emitted source with both suffixed-literal and cold FnCall/unwrap branch, all four editions.",
+    "Retain exact expected U32 source goal, actual original/local Fn metadata identity, pure input revision and no cold BodyEnvironment/BodyStructure/SourceLocalPlan/Thunk/PatternPlan assertions.",
+    "Failure-only captures existing SourceConstraints subtree actual If node/ranges/facts/uses, EnteredValue selections for actual path nodes and selected Fn declaration/associated equation query facts. No executable callee body or synthetic source generated.",
+    "All success assertions remain; no pending/unsupported outcome accepted as pass. No production change before actual successor query fault."
+  ],
+  "eight_failure_modes": {
+    "1": "Test observes same existing source queries; no expression evaluator or assertion operand compiler.",
+    "2": "Existing actual retained macro expansion preparation and ordinary source facts; no payload decoder.",
+    "3": "Expected U32 follows existing unchanged foo source signature and associated equality, never macro identity. Production untouched.",
+    "4": "Tests expose original/emitted divergence from actual structural nodes, no rejection bypass.",
+    "5": "Cold body absence and no executable-body query assertions preserved.",
+    "6": "No production planning/phase path changed; failure-only test queries existing memo facts.",
+    "7": "No production namespace/world scan added; diagnostic source traversal is test-only actual containing If.",
+    "8": "No BodyIndex clone; diagnostic direct retained node access and existing Arc source plan retained."
+  },
+  "validation": "git diff --check terminal0; compile/runtime NOT RUN by implementer",
+  "held": "Actual V25 runtime panic source facts still unobserved for emitted pure goal until validator runs successor; no production hypothesis accepted yet."
+}

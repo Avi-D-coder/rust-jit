@@ -97,20 +97,14 @@ impl ParsedFile {
     /// `owner_generics` order.
     fn spell_generic_bounds(
         &self,
-        function: &ast::Fn,
+        declaration: &SyntaxNode,
         generics: &mut [DefinitionParameter],
     ) -> Result<(), Diagnostic> {
-        let owner = function
-            .syntax()
-            .parent()
-            .and_then(|items| items.parent())
-            .and_then(|owner| {
-                ast::Impl::cast(owner.clone())
-                    .and_then(|i| i.generic_param_list())
-                    .or_else(|| ast::Trait::cast(owner).and_then(|t| t.generic_param_list()))
-            });
-        let written = function
-            .generic_param_list()
+        let owner = associated_owner(declaration)
+            .and_then(|owner| owner.children().find_map(ast::GenericParamList::cast));
+        let written = declaration
+            .children()
+            .find_map(ast::GenericParamList::cast)
             .into_iter()
             .chain(owner)
             .flat_map(|list| list.generic_params());
@@ -126,9 +120,43 @@ impl ParsedFile {
         }
         Ok(())
     }
-    /// Capture only the selected initializer declaration's own generic syntax.
-    /// A constant/static is not a function and has no function parameter/result
-    /// signature. Associated owner context is retained by its source scope.
+    /// The selected declaration's own and immediate associated owner's
+    /// generic syntax, using the same source binder as ordinary functions.
+    fn declaration_generics(
+        &self,
+        declaration: &SyntaxNode,
+    ) -> Result<Vec<DefinitionParameter>, Diagnostic> {
+        let own = capture_generics(declaration.children().find_map(ast::GenericParamList::cast))?;
+        let mut generics = associated_owner_generics(declaration, own)?;
+        self.spell_generic_bounds(declaration, &mut generics)?;
+        Ok(generics)
+    }
+    /// Own and immediate impl/trait where clauses belong to the same
+    /// declared Type scope. This prepares signature facts, never a body.
+    fn declaration_predicates(
+        &self,
+        declaration: &SyntaxNode,
+    ) -> Result<Vec<TokenRecipe>, Diagnostic> {
+        let own = declaration.children().find_map(ast::WhereClause::cast);
+        let mut predicates = self.type_tokens(own.map(|clause| clause.syntax().clone()))?;
+        let inherited = associated_owner(declaration)
+            .and_then(|owner| owner.children().find_map(ast::WhereClause::cast));
+        let inherited = self.type_tokens(inherited.map(|clause| clause.syntax().clone()))?;
+        if predicates.is_empty() {
+            predicates = inherited;
+        } else if !inherited.is_empty() {
+            if !predicates.last().is_some_and(|token| token.text == ",") {
+                predicates.push(TokenRecipe {
+                    kind: ra_ap_syntax::SyntaxKind::COMMA as u16,
+                    text: ",".into(),
+                });
+            }
+            predicates.extend(inherited.into_iter().skip(1));
+        }
+        Ok(predicates)
+    }
+    /// Capture the selected initializer's real associated Type binder.
+    /// It remains an initializer declaration, never a synthetic function.
     pub(crate) fn initializer_parameters(
         &self,
         header: &HeaderRecipe,
@@ -160,7 +188,7 @@ impl ParsedFile {
         {
             return Err(fault("initializer declaration/header/source mismatch"));
         }
-        capture_generics(item.children().find_map(ast::GenericParamList::cast))
+        self.declaration_generics(&item)
     }
     /// A `const`/`static` item's initializer as a call signature: no
     /// parameters, its declared type the result (E-R5-007). `None` when the
@@ -191,7 +219,7 @@ impl ParsedFile {
         let Some(ty) = ty else {
             return Err(fault("constant declaration lacks its declared type"));
         };
-        let generics = capture_generics(item.children().find_map(ast::GenericParamList::cast))?;
+        let generics = self.declaration_generics(&item)?;
         Ok(Some(FunctionSignature {
             definition,
             scope: context.scope.clone(),
@@ -200,7 +228,7 @@ impl ParsedFile {
             result: self.type_tokens(Some(ty.syntax().clone()))?,
             generics,
             parameters: Vec::new(),
-            predicates: Vec::new(),
+            predicates: self.declaration_predicates(&item)?,
         }))
     }
     /// The zero-parameter signature of an enum variant's discriminant
@@ -298,9 +326,7 @@ impl ParsedFile {
                 "signature declaration is not in its immutable source",
             ));
         }
-        let mut generics =
-            owner_generics(&function, capture_generics(function.generic_param_list())?)?;
-        self.spell_generic_bounds(&function, &mut generics)?;
+        let generics = self.declaration_generics(function.syntax())?;
         let list = function
             .param_list()
             .ok_or_else(|| fault("function lacks its parameter list"))?;
@@ -366,26 +392,7 @@ impl ParsedFile {
         // The associated item's Type scope includes predicates of its
         // actual impl/trait owner. Keep them with the same captured source
         // signature, not a separate body/member lookup at call time.
-        let mut predicates =
-            self.type_tokens(function.where_clause().map(|n| n.syntax().clone()))?;
-        let owner = function.syntax().parent().and_then(|items| items.parent());
-        let inherited_where = owner.and_then(|owner| {
-            ast::Impl::cast(owner.clone())
-                .and_then(|owner| owner.where_clause())
-                .or_else(|| ast::Trait::cast(owner).and_then(|owner| owner.where_clause()))
-        });
-        let inherited = self.type_tokens(inherited_where.map(|clause| clause.syntax().clone()))?;
-        if predicates.is_empty() {
-            predicates = inherited;
-        } else if !inherited.is_empty() {
-            if !predicates.last().is_some_and(|token| token.text == ",") {
-                predicates.push(TokenRecipe {
-                    kind: ra_ap_syntax::SyntaxKind::COMMA as u16,
-                    text: ",".into(),
-                });
-            }
-            predicates.extend(inherited.into_iter().skip(1));
-        }
+        let predicates = self.declaration_predicates(function.syntax())?;
         let signature = FunctionSignature {
             definition,
             scope: context.scope.clone(),
@@ -671,10 +678,23 @@ fn generic_tokens(
 /// their ordinals, so explicit arguments still address them.
 pub(crate) fn owner_generics(
     function: &ast::Fn,
+    generics: Vec<DefinitionParameter>,
+) -> Result<Vec<DefinitionParameter>, Diagnostic> {
+    associated_owner_generics(function.syntax(), generics)
+}
+/// Only the immediate associated container contributes a binder. A local
+/// item inside a function does not capture the function's generic parameters.
+fn associated_owner(declaration: &SyntaxNode) -> Option<SyntaxNode> {
+    declaration
+        .parent()
+        .and_then(|items| items.parent())
+        .filter(|owner| ast::Impl::can_cast(owner.kind()) || ast::Trait::can_cast(owner.kind()))
+}
+fn associated_owner_generics(
+    declaration: &SyntaxNode,
     mut generics: Vec<DefinitionParameter>,
 ) -> Result<Vec<DefinitionParameter>, Diagnostic> {
-    use ra_ap_syntax::ast::HasGenericParams;
-    let Some(owner) = function.syntax().parent().and_then(|items| items.parent()) else {
+    let Some(owner) = associated_owner(declaration) else {
         return Ok(generics);
     };
     let (inherited, implicit_self) = if let Some(implementation) = ast::Impl::cast(owner.clone()) {
@@ -843,6 +863,113 @@ mod tests {
         );
         // Only checked declaration metadata: no function signature, constant
         // evaluator, import settlement, macro expansion or guest main execution.
+    }
+
+    #[test]
+    fn rustc_associated_initializer_binders_retain_real_owner_parameters() {
+        const GENERIC: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs"
+        );
+        const SELF: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-self-type.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            for original in [GENERIC, SELF] {
+                let mut profile = ProfileIdentity::current();
+                profile.edition = edition;
+                let parsed = ParsedFile::parse(
+                    &SourceBlob::new(original.as_bytes().to_vec()).unwrap(),
+                    profile,
+                )
+                .unwrap();
+                let outline = parsed
+                    .outline(Digest([155; 32]), vec![], &CfgSet::guest_default())
+                    .unwrap();
+                let mut constants = 0;
+                let mut inherited = 0;
+                let mut trait_self = 0;
+                for item in &outline.items {
+                    if item.def_key.item_kind != crate::source::manifest::ItemKind::Constant {
+                        continue;
+                    }
+                    constants += 1;
+                    let context = DeclarationContext {
+                        scope: item.scope.clone(),
+                        range: item.declaration_span,
+                    };
+                    let identity = item.def_key.fingerprint();
+                    let signature = parsed
+                        .function_signature(identity, &item.header, &context, item.body.as_ref())
+                        .unwrap();
+                    assert!(signature.parameters.is_empty());
+                    assert_eq!(signature.scope, item.scope);
+                    let declaration = parsed
+                        .syntax_at(item.declaration_span, |node| {
+                            ast::Const::can_cast(node.kind())
+                        })
+                        .unwrap()
+                        .unwrap();
+                    let owner = associated_owner(&declaration).unwrap();
+                    if ast::Trait::can_cast(owner.kind()) {
+                        trait_self += 1;
+                        assert_eq!(signature.generics.len(), 1);
+                        assert_eq!(signature.generics[0].name, "Self");
+                        assert_eq!(signature.generics[0].kind, GenericKind::Type);
+                        assert_eq!(signature.generics[0].ordinal, 0);
+                        if original == SELF {
+                            assert_eq!(
+                                signature.result_symbolic,
+                                Some(crate::traits::term::TyTerm::Param(
+                                    crate::traits::term::ParamKey {
+                                        definition: identity,
+                                        ordinal: 0,
+                                    }
+                                ))
+                            );
+                        }
+                    } else if owner
+                        .children()
+                        .any(|node| ast::GenericParamList::can_cast(node.kind()))
+                    {
+                        inherited += 1;
+                        assert_eq!(signature.generics.len(), 1);
+                        let parameter = &signature.generics[0];
+                        assert_eq!(
+                            (parameter.ordinal, parameter.kind, parameter.name.as_str()),
+                            (0, GenericKind::Type, "T")
+                        );
+                        assert_eq!(
+                            parameter
+                                .bounds
+                                .iter()
+                                .map(|token| token.text.as_str())
+                                .collect::<Vec<_>>(),
+                            ["Foo"]
+                        );
+                    } else {
+                        assert!(signature.generics.is_empty());
+                    }
+                    if let Some(body) = &item.body {
+                        assert_eq!(
+                            parsed
+                                .initializer_parameters(&item.header, &context, body)
+                                .unwrap(),
+                            signature.generics
+                        );
+                    }
+                }
+                assert_eq!(
+                    (constants, inherited, trait_self),
+                    if original == GENERIC {
+                        (5, 1, 2)
+                    } else {
+                        (2, 0, 1)
+                    }
+                );
+                // Declaration metadata only: no body index/lowering, selected
+                // guest main, evaluator, instantiated packet or cache evidence.
+            }
+        }
     }
 
     #[test]

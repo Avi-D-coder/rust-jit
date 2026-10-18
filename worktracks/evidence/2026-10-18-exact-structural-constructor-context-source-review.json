@@ -1,0 +1,16 @@
+{
+  "status": "source-only root review, independent pending; no compile/runtime acceptance",
+  "file": "crates/lrr/src/vm/frame_partial_hints.rs",
+  "sha256": "fea2b12b1cf309e7143ec6a38de975137d1d124289e3f2a45e7cb6b0f0fc3d65",
+  "baseline": "V25/4d7efa67",
+  "ordinary_route": "actual WrittenType source hint and construction arguments -> partial_exact -> same prepare_structural_constructor / allocation guard / field hints / finish and cleanup",
+  "replacement": "Closed actual source hints no longer sent into observed route; observed existing no-source guard preserved for truly open values",
+  "source_guard": "Bound current source compared exactly to actual descriptor source with existing region erasure, only actual plan slice-to-array cardinality normalization; original source owner/currentness and Type witnesses unchanged",
+  "all8": "No evaluators/macro or method name/numeric cases/original-only exclusion/pattern fork; no parse or globalworld scan; retained Arc written context, no BodyIndex clones",
+  "cost": "Traversal of existing retained WrittenType to materialize physical descriptor at reached constructor; no new source queries or executable cold operands",
+  "holds": [
+    "Compile and runtime pending",
+    "Full source/macro/epoch/cleanup matrix unexecuted",
+    "E007 nonCopy templates/full generic keys and unknown fourth call not fixed"
+  ]
+}

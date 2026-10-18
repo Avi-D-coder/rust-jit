@@ -1,0 +1,126 @@
+{
+  "status": "source_review_only_runtime_unexecuted",
+  "claim": "LOCAL-038",
+  "task_ids": [
+    "T032",
+    "M018",
+    "M025",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "precode": "worktracks/04-calls-source-views/2026-10-18-cold-generated-result-relations.md",
+  "changed": [
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "6cced3df25b6262905499c25c15b23e31b8603140c3151ef5cffdb4965a360e9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "0278940c33c5331fcf329548c55f6669b4f1326311cb22625856a448ea06bc62"
+    }
+  ],
+  "inspected": [
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "63c32859d0dafa22f180a51feb9798f97b2890c457cc3739e86bb7f94a8c0c64"
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_scopes.rs",
+      "sha256": "c92944d7bb57958d0faf9d2aeed266a29e8ef697c70f4d9dce499c912b185464"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "f9e41e2a69a4eda4082d70347dd3d95722422219d3fbe82e8d872c5b36d04769"
+    },
+    {
+      "path": "crates/lrr/src/syntax/entered_macros.rs",
+      "sha256": "1b3c2ce2fffbe8f4ebc21ce501bd66fbd0b72337959b0a0b77b8195e2caf0a5e"
+    },
+    {
+      "path": "crates/lrr/src/syntax/body_items.rs",
+      "sha256": "62ea18fbb0a30a2dfff4e3e6fedc902db622b1aab293ae1c4b980ace13a7f2ae"
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan.rs",
+      "sha256": "f964799a4e3678b22a028462273379f1707f968a3e3f1d56515cb06bf1a3ea49"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_anchors.rs",
+      "sha256": "3318220cc9e7f9aa4418ce629c32d02ece536efef9283251190c846d8a7ef28f"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "f05f65b7aff34df3f4235bbf10374363ebb894484a091be20842866c06cc042a"
+    },
+    {
+      "path": "crates/lrr/src/cli/generic_boundary_tests.rs",
+      "sha256": "82b20712fa2aa6cacf5d3b888c70eb3fc432d5197081b8021f783437f3600026"
+    }
+  ],
+  "actual_failure": {
+    "source": "sealed V26",
+    "logs": [
+      "artifacts/validation-resume-2026-10-18/candidate-v26/control-0.log",
+      "artifacts/validation-resume-2026-10-18/candidate-v26/control-1.log"
+    ],
+    "facts": "Global/local emitted coldcall ResultType Pending. Actual foo Fn selected, actual emitted node local absent/Prelude. AssociatedEquations bindings=[] needed=[0,1]. Body macro event DefKey differs from real scan producer identity retained in expansion records."
+  },
+  "shared_join": {
+    "prepare": "AdmittedBodyContext::prepare_with_boundary -> prepare_body_macro_definitions once alongside entered facts; actual BodyItem header/profile/scope/DefKey/range, parsed name/context/token edition, exact retained MacroDefinitionAnchor range and authority",
+    "registration": "PublishedMacroIndex::build_entered_with_context uses actual definition + precise name range; same MacroDeclarations::register/TextualScopes::define",
+    "lookup": "EnteredMacroIndex::retained_definition canonicalizes actual event through retained occurrence table; unchanged source_locals Row::Event -> LocalScopes::define_macro and existing lookup_with_scope mixed-site peeling",
+    "removed_route": "Retained body events no longer mint a second MacroDefinition identity for the same declaration. No runtime alias map or changed LocalScopes algorithm. Legacy/direct GeneratedSyntax use prior admitted event identity."
+  },
+  "dependencies": {
+    "authority": "Existing AdmittedBodyContext.require_current, exact retained parser/source/header/body/context/cfg/edition/epoch and retained lease. Exact anchor contains capture identity checked by assembly admission. No original-root/context fallback added.",
+    "cold_cost": "D definitions x I entered item header comparisons, D direct macro shapes; D log A retained anchor lookups + D log D sort, fixed-size D-row immutable table. No callee executable prep.",
+    "later_cost": "Binary event lookup O(log D) when source registration/LocalScopes preparation consumes metadata, existing registry membership lookups unchanged; installed VM dispatch unaffected. No repeated parse/whole-plan reconstruction.",
+    "storage": "Box D fixed-size rows containing digests/MacroDefinition/range, counted once with checked sizeof arithmetic; existing Arc context shared. No new wire/key schema."
+  },
+  "all_eight": [
+    {
+      "mode": 1,
+      "review": "No expression/assertion evaluator; only retained declaration occurrence metadata. Existing binding constraints and ordinary literal lowering remain sole path."
+    },
+    {
+      "mode": 2,
+      "review": "No literal/break macro-output route; genuine expanded BodyIndex and actual ParsedFile/name positions preserved."
+    },
+    {
+      "mode": 3,
+      "review": "No numeric/method inference change. Correct caller-local selection supplies ordinary Node<i32> substitution to common selected Fn/AssociatedEquations query."
+    },
+    {
+      "mode": 4,
+      "review": "Retained ordinary/generated declarations join exact actual MacroDefinitionAnchor; GeneratedSyntax and legacy existing identities preserved. Missing actual retained proof stays explicit; no generated-source exclusion based on feature/name."
+    },
+    {
+      "mode": 5,
+      "review": "No pattern/cold executable work; only entered macro declaration headers and source name metadata. Never-taken foo body remains undemanded in existing pure query controls."
+    },
+    {
+      "mode": 6,
+      "review": "Actual macro shape validation moved from source registration into single PreparedBodyContext preparation; consumers select immutable rows. No installed source planning."
+    },
+    {
+      "mode": 7,
+      "review": "No world namespace map or dispatch scan; source event/header search bounded to actual body cold facts, exact anchor binary lookup. Existing relevant name buckets and currentness remain."
+    },
+    {
+      "mode": 8,
+      "review": "No BodyIndex/ParsedFile deep clone or whole-file node scan. Retained ParsedFile shared; direct indexed macro shape API and fixed-size MacroDefinition clone only."
+    }
+  ],
+  "acceptance_pending": [
+    "Independent source review of exact hashes",
+    "Combined macOS Rust1.99 lib+CLI compilation by sole validation agent",
+    "Both expanded pure source-goal controls all4editions with existing no-cold-query/input-currentness assertions",
+    "Both existing runtime cold global/local controls ordinary/user/wrapper/stdmacro routes; no runtime count/feature/JIT claims before actual terminals",
+    "Existing selected unchanged upstream/regression controls parent chooses"
+  ],
+  "known_holds": [
+    "Legacy/direct GeneratedSyntax maintain their existing admitted declaration identity; no broad identity-authority replacement claimed.",
+    "Previously catalog-empty boundary proof gap and generated associated setup gap remain separate parent-held debt.",
+    "Current body header matching is cold O(D*I); no measured performance/scaling claim."
+  ]
+}

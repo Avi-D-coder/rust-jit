@@ -652,209 +652,301 @@ fn check_cold_associated_type_goal(local: bool) {
         }
     }
     for edition in [2015, 2018, 2021, 2024] {
-        for branch in ["0_u32", "foo(&node).unwrap()"] {
-            let temp = Temp::new("cold-associated-type-goal");
-            let root = temp.0.join("main.rs");
-            std::fs::write(
-                &root,
-                if local {
-                    cold_local_associated_source(branch, 0)
-                } else {
-                    cold_associated_source(branch, 0)
-                },
-            )
-            .unwrap();
-            let profile = ProfileIdentity {
-                edition,
-                ..ProfileIdentity::current()
-            };
-            let (prepared, view, sources, mut snapshot) = capture_with(
-                &root,
-                false,
-                edition,
-                &super::ExternCrates::default(),
-                crate::source::embedded_crates::standard_facade_crates(&profile),
-                None,
-            )
-            .unwrap()
-            .0;
-            let (compiler, prepared, view, sources) =
-                crate::cli::compile_inputs::PreparedCompileInputs::prepare(
-                    &root, prepared, view, sources,
+        for route in [0, 1] {
+            for branch in ["0_u32", "foo(&node).unwrap()"] {
+                let temp = Temp::new("cold-associated-type-goal");
+                let root = temp.0.join("main.rs");
+                std::fs::write(
+                    &root,
+                    if local {
+                        cold_local_associated_source(branch, route)
+                    } else {
+                        cold_associated_source(branch, route)
+                    },
                 )
                 .unwrap();
-            let mut db = Database::default();
-            db.trace.detailed = true;
-            prepared.publish(&mut db).unwrap();
-            db.begin_expansion_epoch(1).unwrap();
-            crate::cli::type_preparation::prepare(
-                &compiler,
-                &mut db,
-                &view,
-                &sources,
-                &mut snapshot,
-                None,
-            )
-            .unwrap();
-            let mut discovery =
-                crate::expand::source_discovery::SourceDiscovery::new_deferred_imports(
-                    sources,
-                    view.outline().root_scope.clone(),
-                    Namespace::Value,
-                    view.selection().outline.crate_key,
-                    1,
+                let profile = ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                };
+                let (prepared, view, sources, mut snapshot) = capture_with(
+                    &root,
+                    false,
+                    edition,
+                    &super::ExternCrates::default(),
+                    crate::source::embedded_crates::standard_facade_crates(&profile),
+                    None,
                 )
                 .unwrap()
-                .with_declarative_compiler(
-                    compiler.environment_identity(),
-                    crate::expand::source_declarative::engine_version(),
-                    compiler.catalog.clone(),
+                .0;
+                let (compiler, prepared, view, sources) =
+                    crate::cli::compile_inputs::PreparedCompileInputs::prepare(
+                        &root, prepared, view, sources,
+                    )
+                    .unwrap();
+                let mut db = Database::default();
+                db.trace.detailed = true;
+                prepared.publish(&mut db).unwrap();
+                db.begin_expansion_epoch(1).unwrap();
+                crate::cli::type_preparation::prepare(
+                    &compiler,
+                    &mut db,
+                    &view,
+                    &sources,
+                    &mut snapshot,
+                    None,
                 )
                 .unwrap();
-            compiler
-                .discover_diagnostic(&mut discovery, &mut db, &mut snapshot)
-                .unwrap();
-            discovery.publish(&mut db).unwrap();
-            let CallSelection::Source(main) = ready(discovery.entry_function(&mut db, "main"))
-            else {
-                panic!("main source selection")
-            };
-            let main =
-                crate::cli::retained_entry::prepare(&mut db, &discovery, &view, "main", main)
+                let mut discovery =
+                    crate::expand::source_discovery::SourceDiscovery::new_deferred_imports(
+                        sources,
+                        view.outline().root_scope.clone(),
+                        Namespace::Value,
+                        view.selection().outline.crate_key,
+                        1,
+                    )
+                    .unwrap()
+                    .with_declarative_compiler(
+                        compiler.environment_identity(),
+                        crate::expand::source_declarative::engine_version(),
+                        compiler.catalog.clone(),
+                    )
                     .unwrap();
-            let body = main.body().unwrap().key();
-            let plan = ready(db.prepare_source_local_plan(&discovery, &[&view], &body));
-            let source = plan.context().source();
-            let literal = source
-                .index()
-                .nodes()
-                .iter()
-                .find(|node| {
-                    node.role == NodeRole::Expression(ExpressionKind::Literal)
-                        && source
-                            .parsed()
-                            .entered_node_syntax(source.body(), source.index(), node.id)
-                            .unwrap()
-                            .is_some_and(|syntax| syntax.text().to_string() == "0xffffffff")
-                })
-                .expect("actual reached literal");
-            let foo = if local {
-                &plan
-                    .context()
-                    .facts()
-                    .declarations()
-                    .find(|row| row.item.def_key.declared_name == "foo")
-                    .unwrap()
-                    .item
-            } else {
-                view.outline()
-                    .items
+                compiler
+                    .discover_diagnostic(&mut discovery, &mut db, &mut snapshot)
+                    .unwrap();
+                discovery.publish(&mut db).unwrap();
+                let CallSelection::Source(main) = ready(discovery.entry_function(&mut db, "main"))
+                else {
+                    panic!("main source selection")
+                };
+                let main =
+                    crate::cli::retained_entry::prepare(&mut db, &discovery, &view, "main", main)
+                        .unwrap();
+                let body = main.body().unwrap().key();
+                let plan = ready(db.prepare_source_local_plan(&discovery, &[&view], &body));
+                let source = plan.context().source();
+                let literal = source
+                    .index()
+                    .nodes()
                     .iter()
-                    .find(|item| item.def_key.declared_name == "foo")
-                    .unwrap()
-            };
-            let definition = foo.def_key.fingerprint();
-            let cold_body = foo.body.as_ref().unwrap().key();
-            let local_metadata = |db: &mut Database| {
-                assert!(
-                    matches!(db.input(&InputKey::DefinitionHeader(definition)).as_deref(),
+                    .find(|node| {
+                        node.role == NodeRole::Expression(ExpressionKind::Literal)
+                            && source
+                                .parsed()
+                                .entered_node_syntax(source.body(), source.index(), node.id)
+                                .unwrap()
+                                .is_some_and(|syntax| syntax.text().to_string() == "0xffffffff")
+                    })
+                    .expect("actual reached literal");
+                let foo = if local {
+                    &plan
+                        .context()
+                        .facts()
+                        .declarations()
+                        .find(|row| row.item.def_key.declared_name == "foo")
+                        .unwrap()
+                        .item
+                } else {
+                    view.outline()
+                        .items
+                        .iter()
+                        .find(|item| item.def_key.declared_name == "foo")
+                        .unwrap()
+                };
+                let definition = foo.def_key.fingerprint();
+                let cold_body = foo.body.as_ref().unwrap().key();
+                let local_metadata = |db: &mut Database| {
+                    assert!(
+                        matches!(db.input(&InputKey::DefinitionHeader(definition)).as_deref(),
                     Some(InputValue::DefinitionHeader(header)) if header == &foo.header)
-                );
-                assert!(
-                    matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),
+                    );
+                    assert!(
+                        matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),
                     Some(InputValue::DefinitionSource(parse)) if *parse == source.parsed().key())
-                );
-                assert!(
-                    matches!(db.input(&InputKey::DeclarationContext(definition)).as_deref(),
+                    );
+                    assert!(
+                        matches!(db.input(&InputKey::DeclarationContext(definition)).as_deref(),
                     Some(InputValue::DeclarationContext(context))
                         if context.scope == foo.scope && context.range == foo.declaration_span)
-                );
-                assert!(
-                    matches!(db.input(&InputKey::LocalDeclarationOwner(definition)).as_deref(),
+                    );
+                    assert!(
+                        matches!(db.input(&InputKey::LocalDeclarationOwner(definition)).as_deref(),
                     Some(InputValue::LocalDeclarationOwner(owner)) if owner == &body)
-                );
+                    );
+                    assert!(
+                        db.input(&InputKey::DefinitionBody(definition)).is_none(),
+                        "local free Fn body locator was prepared before call"
+                    );
+                    [
+                        InputKey::DefinitionHeader(definition),
+                        InputKey::DefinitionSource(definition),
+                        InputKey::DeclarationContext(definition),
+                        InputKey::LocalDeclarationOwner(definition),
+                    ]
+                    .into_iter()
+                    .map(|key| {
+                        let (_, stamp) = db
+                            .published_input(&key)
+                            .expect("actual local metadata input");
+                        (key, stamp)
+                    })
+                    .collect::<Vec<_>>()
+                };
+                let metadata = local.then(|| local_metadata(&mut db));
+                let input_revision = db.revision();
                 assert!(
-                    db.input(&InputKey::DefinitionBody(definition)).is_none(),
-                    "local free Fn body locator was prepared before call"
+                    db.input(&InputKey::BodyEnvironment(cold_body.clone()))
+                        .is_none()
                 );
-                [
-                    InputKey::DefinitionHeader(definition),
-                    InputKey::DefinitionSource(definition),
-                    InputKey::DeclarationContext(definition),
-                    InputKey::LocalDeclarationOwner(definition),
-                ]
-                .into_iter()
-                .map(|key| {
-                    let (_, stamp) = db
-                        .published_input(&key)
-                        .expect("actual local metadata input");
-                    (key, stamp)
-                })
-                .collect::<Vec<_>>()
-            };
-            let metadata = local.then(|| local_metadata(&mut db));
-            let input_revision = db.revision();
-            assert!(
-                db.input(&InputKey::BodyEnvironment(cold_body.clone()))
-                    .is_none()
-            );
-            assert_eq!(
-                db.trace.truncated, 0,
-                "initial cold Type proof trace incomplete"
-            );
-            assert!(!db.trace.events.iter().any(|event| match &event.key {
-                QueryKey::BodyStructure(body) | QueryKey::SourceLocalPlan(body) =>
-                    body.definition == definition,
-                QueryKey::Thunk(pc) | QueryKey::PatternPlan(pc) => pc.body.definition == definition,
-                _ => false,
-            }));
-            // Scope the diagnostic trace to this metadata demand. The complete
-            // trace above also covers preparation before that demand.
-            db.trace.events.clear();
-            db.trace.truncated = 0;
-            db.trace.detailed = true;
-            let selected = ready(db.fetch(
-                &SyntaxProvider,
-                QueryKey::BindingConstraints(source.index().pc(literal.id, Phase::Entry).unwrap()),
-            ));
-            let QueryValue::BindingConstraints(goal) = selected.value.as_ref() else {
-                panic!("binding constraint variant")
-            };
-            assert_eq!(
-                goal.state(),
-                BindingConstraintState::Resolved(PrimitiveType::U32),
-                "edition {edition}, branch {branch}"
-            );
-            assert!(db.input(&InputKey::BodyEnvironment(cold_body)).is_none());
-            assert_eq!(db.trace.truncated, 0, "cold Type proof trace incomplete");
-            assert!(!db.trace.events.iter().any(|event| match &event.key {
-                QueryKey::BodyStructure(body) | QueryKey::SourceLocalPlan(body) =>
-                    body.definition == definition,
-                QueryKey::Thunk(pc) | QueryKey::PatternPlan(pc) => pc.body.definition == definition,
-                _ => false,
-            }));
-            if branch.starts_with("foo") {
-                assert!(db.trace.events.iter().any(|event| matches!(&event.key,
+                assert_eq!(
+                    db.trace.truncated, 0,
+                    "initial cold Type proof trace incomplete"
+                );
+                assert!(!db.trace.events.iter().any(|event| match &event.key {
+                    QueryKey::BodyStructure(body) | QueryKey::SourceLocalPlan(body) =>
+                        body.definition == definition,
+                    QueryKey::Thunk(pc) | QueryKey::PatternPlan(pc) =>
+                        pc.body.definition == definition,
+                    _ => false,
+                }));
+                // Scope the diagnostic trace to this metadata demand. The complete
+                // trace above also covers preparation before that demand.
+                db.trace.events.clear();
+                db.trace.truncated = 0;
+                db.trace.detailed = true;
+                let selected = ready(db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::BindingConstraints(
+                        source.index().pc(literal.id, Phase::Entry).unwrap(),
+                    ),
+                ));
+                let QueryValue::BindingConstraints(goal) = selected.value.as_ref() else {
+                    panic!("binding constraint variant")
+                };
+                if goal.state() != BindingConstraintState::Resolved(PrimitiveType::U32) {
+                    // Failure-only source observations: the same actual retained
+                    // If subtree, selected Value occurrences and immutable facts.
+                    // Nothing lowers or executes the cold function's body.
+                    let facts =
+                        ready(db.fetch(&SyntaxProvider, QueryKey::SourceConstraints(body.clone())));
+                    let QueryValue::SourceConstraints(facts) = facts.value.as_ref() else {
+                        panic!()
+                    };
+                    let operation = source
+                        .index()
+                        .nodes()
+                        .iter()
+                        .filter(|node| {
+                            node.role == NodeRole::Expression(ExpressionKind::If)
+                                && node.range.contains(literal.range)
+                        })
+                        .min_by_key(|node| node.range.len())
+                        .map(|node| node.range)
+                        .expect("actual containing If");
+                    eprintln!(
+                        "cold source goal local={local}, edition={edition}, route={route}, branch={branch}, actual={:?}, body={body:?}, parsed={:?}, operation={operation:?}",
+                        goal.state(),
+                        source.parsed().key()
+                    );
+                    for node in source
+                        .index()
+                        .nodes()
+                        .iter()
+                        .filter(|node| operation.contains(node.range))
+                    {
+                        let syntax = source
+                            .parsed()
+                            .entered_node_syntax(source.body(), source.index(), node.id)
+                            .unwrap();
+                        eprintln!(
+                            "actual node {:?} {:?} range={:?}, syntax={:?}, fact={:?}, uses={:?}",
+                            node.id,
+                            node.role,
+                            node.range,
+                            syntax.as_ref().map(|node| node.text().to_string()),
+                            facts.fact(node.id),
+                            facts.uses(node.id)
+                        );
+                        if node.role == NodeRole::Expression(ExpressionKind::Path) {
+                            match db.fetch(
+                                &SyntaxProvider,
+                                QueryKey::EnteredValue(
+                                    source.index().pc(node.id, Phase::Entry).unwrap(),
+                                ),
+                            ) {
+                                QueryPoll::Ready(Ok(selected)) => {
+                                    if let QueryValue::EnteredValue(selected) =
+                                        selected.value.as_ref()
+                                    {
+                                        eprintln!(
+                                            "actual Value {:?}, selected={:?}",
+                                            selected,
+                                            selected.declaration().map(|declaration| (
+                                                declaration.identity(),
+                                                declaration.source(),
+                                                declaration.context(),
+                                                declaration.owner()
+                                            ))
+                                        );
+                                    }
+                                }
+                                other => eprintln!("actual Value unavailable: {other:?}"),
+                            }
+                        }
+                    }
+                    eprintln!(
+                        "actual selected Fn metadata: {:?}; equation queries: {:?}",
+                        db.input(&InputKey::DeclarationContext(definition)),
+                        db.trace
+                            .events
+                            .iter()
+                            .filter_map(|event| match &event.key {
+                                QueryKey::AssociatedEquations(key)
+                                    if key.definition == definition =>
+                                    Some(key),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>()
+                    );
+                }
+                assert_eq!(
+                    goal.state(),
+                    BindingConstraintState::Resolved(PrimitiveType::U32),
+                    "local={local}, edition {edition}, route {route}, branch {branch}"
+                );
+                assert!(db.input(&InputKey::BodyEnvironment(cold_body)).is_none());
+                assert_eq!(db.trace.truncated, 0, "cold Type proof trace incomplete");
+                assert!(!db.trace.events.iter().any(|event| match &event.key {
+                    QueryKey::BodyStructure(body) | QueryKey::SourceLocalPlan(body) =>
+                        body.definition == definition,
+                    QueryKey::Thunk(pc) | QueryKey::PatternPlan(pc) =>
+                        pc.body.definition == definition,
+                    _ => false,
+                }));
+                if branch.starts_with("foo") {
+                    assert!(db.trace.events.iter().any(|event| matches!(&event.key,
                     QueryKey::AssociatedEquations(key) if key.definition == definition
                         && matches!(&key.owner, EquationOwner::SelectedCall(_)))));
-            }
-            if let Some(metadata) = metadata {
-                assert_eq!(
-                    db.revision(),
-                    input_revision,
-                    "pure local Type goal published inputs"
-                );
-                assert_eq!(
-                    local_metadata(&mut db),
-                    metadata,
-                    "local metadata changed during the pure Type goal"
-                );
-            } else {
-                // Existing module metadata rows are not executable owners.
-                assert!(matches!(
-                    db.input(&InputKey::DefinitionBody(definition)).as_deref(),
-                    Some(InputValue::DefinitionBody(_))
-                ));
+                }
+                if let Some(metadata) = metadata {
+                    assert_eq!(
+                        db.revision(),
+                        input_revision,
+                        "pure local Type goal published inputs"
+                    );
+                    assert_eq!(
+                        local_metadata(&mut db),
+                        metadata,
+                        "local metadata changed during the pure Type goal"
+                    );
+                } else {
+                    // Existing module metadata rows are not executable owners.
+                    assert!(matches!(
+                        db.input(&InputKey::DefinitionBody(definition)).as_deref(),
+                        Some(InputValue::DefinitionBody(_))
+                    ));
+                }
             }
         }
     }
