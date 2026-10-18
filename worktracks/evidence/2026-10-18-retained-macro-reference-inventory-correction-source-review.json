@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-18",
+  "claim": "LOCAL-038",
+  "scope": "Corrected actual retained macro name occurrence + initial inventory transport; source only",
+  "head": "5fe70d59298508da56ae4062cdcd427138ed4bd5",
+  "tasks": [
+    "T063",
+    "M005",
+    "M018"
+  ],
+  "predecessor_review": {
+    "path": "worktracks/evidence/2026-10-18-retained-macro-reference-occurrences-source-review.json",
+    "sha256": "857fffb710340896ecb3d76f408947b67f8a38aba3422944f63fb5f986dcce8d",
+    "status": "HELD before build: generated-body original=None dependency and sorted-output topology assumption"
+  },
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "eba5d04ac068daaa6f633ce0680c3d5f18098b23312303c204f4c54fe110ab7b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "3b06360701dc4e5c8a27ef3e9afd3d4e74cf289bc5c9169a19afaa7fd9932c61"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_import_occurrences.rs",
+      "sha256": "8319c979a866fefc8ffe7c5aded20f067e0490e1025eca1997e3e47a4cdb4709"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "f05f65b7aff34df3f4235bbf10374363ebb894484a091be20842866c06cc042a"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_seed.rs",
+      "sha256": "731ed03b16e0b4d20f8195f0c70715b60c52fc5f97d23e6109ab300cdcae1c61"
+    }
+  ],
+  "correction": [
+    "SourceSyntaxAssembly::from_source records actual passed scan fingerprint; existing SourceAssemblySeed scan Arc verifies and transports it on fork; PreparedSourceSyntax getter returns exact initial inventory. sizeof-based accounting includes added Digests.",
+    "Prepared source stable domains v2 selectedgenerated/v7 selectedbody/v6 source and seed domainv2 include actual initial inventory; no existing wire tag renumbering.",
+    "PreparedBodyContext::prepare_macro_ancestry no longer reads AdmittedBodyContext.original or reconstructs cached canonical root scan. The real immutable assembly initial inventory seeds child-edge traversal.",
+    "Outputs are key-sorted, so cold BTreeMap inventory-child graph is traversed from genuine retained root. Each inventory visited once; disconnected/multiple-owner/cyclic identities refuse, no missing-parent root default.",
+    "SourceOccurrence::Original remains relative to actual initial source tree; generated Fn insertion intervals are Generated regardless of selected body original owner. Actual assembly factories inspected; no alternate initial generated root assumed.",
+    "Definition/import/invocation actual name range joins and one shared EnteredMacroIndex ancestry Arc from predecessor remain unchanged."
+  ],
+  "eight_failure_modes": [
+    {
+      "id": 1,
+      "symbols": [
+        "PreparedBodyContext::reference_origin",
+        "MacroDeclarations::resolve_with_outers"
+      ],
+      "status": "source_reviewed",
+      "finding": "Only macro ancestry proof, no expression/assertion evaluator."
+    },
+    {
+      "id": 2,
+      "symbols": [
+        "SourceSyntaxAssembly::from_source",
+        "PreparedSourceSyntax::occurrence"
+      ],
+      "status": "source_reviewed",
+      "finding": "No literal/payload decoding or macro-only language dispatch; ordinary retained syntax remains unchanged."
+    },
+    {
+      "id": 3,
+      "symbols": [
+        "EnteredMacroIndex::resolve_at_with"
+      ],
+      "status": "source_reviewed",
+      "finding": "No method/numeric/inference context rules; exact existing name/hygiene/edition selector."
+    },
+    {
+      "id": 4,
+      "symbols": [
+        "PreparedBodyContext::reference_origin",
+        "prepare_macro_ancestry"
+      ],
+      "status": "source_reviewed_runtime_pending",
+      "finding": "Replace blanket outputs rejection by exact structural names and actual root/record topology. Retained generated bodies require no fabricated original owner."
+    },
+    {
+      "id": 5,
+      "symbols": [
+        "PreparedSourceSyntax::initial_inventory"
+      ],
+      "status": "source_reviewed",
+      "finding": "Metadata-only source inventory identity, no executable cold body preparation or pattern engine."
+    },
+    {
+      "id": 6,
+      "symbols": [
+        "SourceAssemblySeed::fork",
+        "PublishedMacroIndex::build_entered_with_context",
+        "prepare_macro_ancestry"
+      ],
+      "status": "source_reviewed",
+      "finding": "Retain actual root once; no canonical scan requery, parser or phase planner. One cold ancestry construction per retained source-local plan."
+    },
+    {
+      "id": 7,
+      "symbols": [
+        "RetainedSyntaxInput::require_current",
+        "PreparedBodyContext::require_current",
+        "prepare_macro_ancestry"
+      ],
+      "status": "source_reviewed",
+      "finding": "Existing selected source/header/scope/cfg/epoch/discovery input closure retained. Graph contains only selected retained unit outputs, no world namespace scan."
+    },
+    {
+      "id": 8,
+      "symbols": [
+        "EnteredMacroIndex::ancestry_root_handle",
+        "SourceLocalPlanRoots::ancestry",
+        "SourceAssemblySeed::scan"
+      ],
+      "status": "source_reviewed",
+      "finding": "Existing real scan Arc owned by seed; new scalar inventory digest transport. No BodyIndex deep copy or whole-file search. Shared ancestry retained/accounted by existing root walker."
+    }
+  ],
+  "costs": "Cold child graph O(O log O), ancestry merges O((A+O) log(A+O)), reference output check O(O) in cold lookup only. Ephemeral graph uses checked/fallible Vec reservations; no caps/budgets. No new VM work or measured speed claim.",
+  "acceptance": "Existing coldglobal/local runtime controls, generated retained Fn entry control and associated scope control await sole-validator actual terminals; no pass inferred. Existing upstream numbered fixture unchanged.",
+  "remaining_holds": [
+    "All prior unrelated macro matrix/epoch/selector completeness holds remain.",
+    "Completed-empty declaration boundary wrong-owner proof is independently held; associated catalogue-backed control extension separate.",
+    "No compile, runtime, feature, JIT or release acceptance from this source receipt."
+  ]
+}

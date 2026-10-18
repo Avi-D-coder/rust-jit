@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-18",
+  "owner": "closure_callable_resume",
+  "scope": "Parent-requested existing generated declaration boundary control extension; source-only test change, no production/runtime claim",
+  "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+  "sha256": "ff1ce65ab014278406d046d89ec5765662a1f9a9c70924924943a81a9b936773",
+  "selector": "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+  "changes": [
+    "Two actual generated output cases before first currently failing alias case: struct Holder + impl Holder::answer and trait Holder::answer default body.",
+    "All four editions use existing real GeneratedSyntax publication, DefinitionBody/DeclarationContext, BodyStructure and owning-body capture/signature proof, boundary attach and ordinary macro lookup route.",
+    "Explicit expected associated owner presence; wrong owner Some(foreign) refused for all, ownerNone refused for associated cases.",
+    "Earlier-only macro scope, retained actual output identity, foreign discovery world and changed epoch negatives remain."
+  ],
+  "eight_failure_modes": {
+    "1": "No runtime evaluator/production expression route changed.",
+    "2": "Existing real generated source admission and ordinary entered macro selector, no payload decoder.",
+    "3": "No production method/numeric policy.",
+    "4": "Actual associated lexical scopes tested; no ownerNone positive or generated-source bypass.",
+    "5": "No new pattern machinery or body execution.",
+    "6": "Reuses existing one prepared output/header/body/index per test; no new source replanning route.",
+    "7": "Test-only existing inventory chooses real publication; no production world scan introduced.",
+    "8": "Existing shared actual handles retained; no BodyIndex clone or whole-file node search added."
+  },
+  "checks": [
+    "git diff --check terminal0; source-only whitespace check"
+  ],
+  "runtime": "UNEXECUTED; existing selector known V23 import failure remains separate; no pass inferred"
+}

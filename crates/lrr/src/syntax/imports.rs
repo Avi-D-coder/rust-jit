@@ -415,3 +415,124 @@ pub(crate) fn retained_bytes(row: &SourceImport) -> Result<usize, Diagnostic> {
     }
     Ok(bytes)
 }
+
+/// Actual unqualified target identifier of a captured one-name use leaf.
+/// Renames and display text never provide the target's hygiene occurrence.
+pub(crate) fn single_name_target(
+    parsed: &super::parse::ParsedFile,
+    source: &SourceImport,
+) -> Result<Option<ast::NameRef>, Diagnostic> {
+    let mut target = source.path.as_slice();
+    if target.len() > 1 && target.last() == Some(&ImportSegment::SelfModule) {
+        target = &target[..target.len() - 1];
+    }
+    let [ImportSegment::Name(expected)] = target else {
+        return Ok(None);
+    };
+    if source.absolute {
+        return Ok(None);
+    }
+    let node = parsed
+        .syntax_at(source.range, |node| ast::UseTree::can_cast(node.kind()))?
+        .ok_or_else(|| error("import target actual use leaf absent"))?;
+    let mut selected = None;
+    for node in node.ancestors() {
+        if ast::Use::can_cast(node.kind()) {
+            break;
+        }
+        let Some(tree) = ast::UseTree::cast(node) else {
+            continue;
+        };
+        let Some(mut path) = tree.path() else {
+            continue;
+        };
+        loop {
+            let segment = path
+                .segment()
+                .ok_or_else(|| error("import target segment absent"))?;
+            if let Some(ast::PathSegmentKind::Name(name)) = segment.kind() {
+                let edition = parsed.token_edition(range(name.syntax().text_range()))?;
+                if selected.is_some()
+                    || crate::expand::scopes::MacroName::parse(name.text(), edition)?
+                        != crate::expand::scopes::MacroName::parse(expected, edition)?
+                {
+                    return Err(error(
+                        "single import target occurrence differs or is ambiguous",
+                    ));
+                }
+                selected = Some(name);
+            }
+            match path.qualifier() {
+                Some(parent) => path = parent,
+                None => break,
+            }
+        }
+    }
+    selected
+        .map(Some)
+        .ok_or_else(|| error("single import target occurrence absent"))
+}
+
+/// Binding and target name occurrences of one actual use leaf, including grouped prefixes.
+/// This borrows the admitted tree and never parses a token forest again.
+pub(crate) fn name_ranges(
+    parsed: &super::parse::ParsedFile,
+    source: &SourceImport,
+) -> Result<Vec<SourceRange>, Diagnostic> {
+    let node = parsed
+        .syntax_at(source.range, |node| ast::UseTree::can_cast(node.kind()))?
+        .ok_or_else(|| error("import name actual use leaf absent"))?;
+    let leaf =
+        ast::UseTree::cast(node.clone()).ok_or_else(|| error("import name use leaf differs"))?;
+    let mut ranges = Vec::new();
+    let mut push = |span| -> Result<(), Diagnostic> {
+        ranges
+            .try_reserve(1)
+            .map_err(|_| error("import name range allocation"))?;
+        ranges.push(span);
+        Ok(())
+    };
+    if let Some(name) = leaf.rename().and_then(|rename| rename.name()) {
+        push(range(name.syntax().text_range()))?;
+    }
+    for node in node.ancestors() {
+        if ast::Use::can_cast(node.kind()) {
+            break;
+        }
+        let Some(tree) = ast::UseTree::cast(node) else {
+            continue;
+        };
+        let Some(mut path) = tree.path() else {
+            continue;
+        };
+        loop {
+            let segment = path
+                .segment()
+                .ok_or_else(|| error("import name segment absent"))?;
+            let span = match segment.kind() {
+                Some(ast::PathSegmentKind::Name(name)) => range(name.syntax().text_range()),
+                Some(
+                    ast::PathSegmentKind::CrateKw
+                    | ast::PathSegmentKind::SelfKw
+                    | ast::PathSegmentKind::SuperKw,
+                ) => range(
+                    segment
+                        .syntax()
+                        .first_token()
+                        .ok_or_else(|| error("import keyword occurrence absent"))?
+                        .text_range(),
+                ),
+                _ => return Err(error("import name segment has no actual occurrence")),
+            };
+            push(span)?;
+            match path.qualifier() {
+                Some(parent) => path = parent,
+                None => break,
+            }
+        }
+    }
+    if ranges.is_empty() {
+        return Err(error("import actual name occurrences absent"));
+    }
+    Ok(ranges)
+}

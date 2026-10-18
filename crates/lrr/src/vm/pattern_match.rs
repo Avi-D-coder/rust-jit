@@ -63,8 +63,8 @@ pub(crate) enum PatternTarget {
         template: Arc<crate::frontend::nominal_constructors::ConstructorTemplate>,
         ordinals: Box<[u32]>,
     },
-    /// A constant pattern: the constant's evaluated scalar value.
-    Constant(ValueRepr),
+    /// An evaluated constant's actual run-owned storage, never a copied owner.
+    Constant(crate::runtime::cell::pattern_constants::ConstantRoot),
     /// Source-selected constant; evaluated only if this search reaches it.
     Initializer(crate::core::digest::Digest),
     /// This name's resolution was refused; the refusal faults only if the
@@ -471,9 +471,9 @@ impl<'s> Search<'s> {
                         .compare(self.literal(literal, value)?)
                         .map_err(Into::into),
                     RangeEndpoint::Constant(slot) => match self.target(*slot)? {
-                        PatternTarget::Constant(bound) => {
-                            actual.compare(self.number(*bound)?).map_err(Into::into)
-                        }
+                        PatternTarget::Constant(bound) => actual
+                            .compare(self.number(self.store.pattern_constant_value(*bound)?)?)
+                            .map_err(Into::into),
                         PatternTarget::Refused(refusal) => Err(refusal.clone().into()),
                         _ => Err(mismatch("range pattern bound is not a constant").into()),
                     },
@@ -511,22 +511,40 @@ impl<'s> Search<'s> {
             _ => Ok(target),
         }
     }
-    /// A constant pattern compares the scrutinee scalar with the constant's
-    /// evaluated value (structural equality of a primitive constant).
+    /// Compare an evaluated value without consuming either owner. References
+    /// peel only until the actual constant type, retaining reference constants.
     fn constant(
         &mut self,
         goal: &Goal<'_>,
-        expected: ValueRepr,
+        expected: crate::runtime::cell::pattern_constants::ConstantRoot,
         next: &Next<'_, '_>,
     ) -> Result<bool, SearchFailure> {
-        let (place, _, _, _) = self.peel(copy_place(&goal.place), None, goal.context, false)?;
-        let actual = self.number(self.value(&place)?)?;
-        let expected = self.number(expected)?;
-        if actual.compare(expected)? == Some(std::cmp::Ordering::Equal) {
-            self.proceed(next)
-        } else {
-            Ok(false)
+        let expected_value = self.store.pattern_constant_value(expected)?;
+        let mut place = copy_place(&goal.place);
+        while self.unresolved_literal(&place)?.is_none() {
+            let ty = self.place_type(&place)?;
+            if ty.0 == expected_value.type_id
+                || !matches!(
+                    self.store.type_descriptor(ty)?.key.as_ref(),
+                    TypeKey::Ref { .. }
+                )
+            {
+                break;
+            }
+            place = self.store.dereference_place(&place).map_err(place_fault)?;
         }
+        let scalar_equal = |actual, expected| {
+            Ok(self.number(actual)?.compare(self.number(expected)?)?
+                == Some(std::cmp::Ordering::Equal))
+        };
+        let equal = if matches!(expected_value.kind, 2..=7 | 11 | 12 | 17) {
+            scalar_equal(self.value(&place)?, expected_value)?
+        } else {
+            self.store
+                .compare_pattern_constant(&place, expected, scalar_equal)
+                .map_err(place_fault)?
+        };
+        if equal { self.proceed(next) } else { Ok(false) }
     }
     /// A nominal pattern: peel references, check the descriptor's nominal
     /// identity, compare the active variant without reading or moving the

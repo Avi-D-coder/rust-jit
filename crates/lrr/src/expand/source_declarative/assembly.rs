@@ -94,6 +94,7 @@ struct CallBinding {
 
 pub struct SourceSyntaxAssembly {
     source: PreparedSourceView,
+    initial_inventory: Digest,
     epoch: u64,
     tree: SyntaxAttachment,
     occurrences: SourceOccurrences,
@@ -108,6 +109,7 @@ pub struct SourceSyntaxAssembly {
 /// not namespace completeness, a current source lease, or VM entry authority.
 pub struct PreparedSourceSyntax {
     source: PreparedSourceView,
+    initial_inventory: Digest,
     epoch: u64,
     syntax: Arc<SyntaxSnapshot>,
     occurrences: SourceOccurrences,
@@ -169,6 +171,12 @@ impl PreparedSourceSyntax {
     }
     pub fn source(&self) -> &SourceSelection {
         self.source.selection()
+    }
+    /// Identity of the actual initial scan passed to this assembly. Same-source
+    /// annotation plans may have distinct inventories; do not reconstruct this
+    /// by requesting a canonical scan of the captured source.
+    pub(crate) fn initial_inventory(&self) -> Digest {
+        self.initial_inventory
     }
     pub fn epoch(&self) -> u64 {
         self.epoch
@@ -352,6 +360,7 @@ impl SourceSyntaxAssembly {
         let retained_bytes = charge(retained_bytes, occurrences.metadata_bytes()?)?;
         Ok(Self {
             source: source.share(),
+            initial_inventory: scan.fingerprint(),
             epoch,
             tree,
             occurrences,
@@ -612,11 +621,11 @@ impl SourceSyntaxAssembly {
         self.outputs
             .sort_by_key(|output| output.record().key().fingerprint());
         let mut identity = StableEncoder::new(if selected_generated.is_some() {
-            "lrr/v1/prepared-source-syntax/selected-generated-body-structural-occurrences"
+            "lrr/v2/prepared-source-syntax/selected-generated-body-structural-occurrences"
         } else if selected_body.is_some() {
-            "lrr/v6/prepared-source-syntax/selected-body-structural-occurrences"
+            "lrr/v7/prepared-source-syntax/selected-body-structural-occurrences"
         } else {
-            "lrr/v5/prepared-source-syntax/structural-occurrences"
+            "lrr/v6/prepared-source-syntax/structural-occurrences"
         });
         if let Some(definition) = selected_body {
             identity.digest(definition);
@@ -626,6 +635,7 @@ impl SourceSyntaxAssembly {
         }
         identity.string(self.source.selection().path.as_str());
         identity.record(&self.source.selection().outline);
+        identity.digest(self.initial_inventory);
         identity.u64(self.epoch);
         identity.digest(Digest(syntax.identity().0));
         self.occurrences.encode(&mut identity);
@@ -656,6 +666,7 @@ impl SourceSyntaxAssembly {
         }
         Ok(PreparedSourceSyntax {
             source: self.source,
+            initial_inventory: self.initial_inventory,
             epoch: self.epoch,
             syntax,
             occurrences: self.occurrences,

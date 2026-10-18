@@ -234,3 +234,49 @@ fn generated_constant_patterns_use_the_same_vm_initializer_demand() {
         }
     }
 }
+
+#[test]
+fn structural_constant_patterns_keep_owners_and_guard_retry_across_origins() {
+    // LRR route/ownership control outside the unchanged upstream originals.
+    // One scrutinee call and two actually reached initializer calls. Retrying
+    // the same transaction must not replay A; COLD must remain unentered.
+    const DECLARATIONS: &str = r#"
+        #[derive(PartialEq, Eq)]
+        struct P { n: i32, data: (u32, bool) }
+        const fn make(n: i32) -> P { P { n, data: (2_u32, true) } }
+        const A: P = make(1);
+        const B: P = make(2);
+        const COLD: P = make(9);
+        macro_rules! emit { ($e:expr) => { $e }; }
+        macro_rules! wrap { ($e:expr) => { emit!($e) }; }
+    "#;
+    const MATCH: &str = "match &a { A | B if { attempts += 1; false } => true, _ => false }";
+    for (origin, expression) in [
+        MATCH.to_owned(),
+        format!("emit!({MATCH})"),
+        format!("wrap!({MATCH})"),
+        "{ assert!(!matches!(&a, A | B if { attempts += 1; false })); false }".to_owned(),
+    ].into_iter().enumerate() {
+        let source = format!(r#"{DECLARATIONS}
+            fn main() {{
+                let a = make(1);
+                let mut attempts = 0_i32;
+                let matched = {expression};
+                if matched || attempts != 1_i32 || a.n != 1_i32
+                    || a.data.0 != 2_u32 || !a.data.1 {{
+                    let z = 0_i32; let _ = 1 / z;
+                }}
+                if false {{ let _ = COLD; }}
+            }}
+        "#);
+        for edition in [2015, 2018, 2021, 2024] {
+            match super::format_trait_facade_tests::run("structural-pattern-origin", &source, edition) {
+                Ok(crate::cli::StandaloneOutcome::Completed(report)) => {
+                    assert_eq!(report.opcode_counters.started_by_opcode[19], 3, "{edition}, origin={origin}");
+                }
+                Err(error) => panic!("{edition}, origin={origin}: {error}"),
+                Ok(other) => panic!("{edition}, origin={origin}: {}", serde_json::to_string(&other).unwrap()),
+            }
+        }
+    }
+}

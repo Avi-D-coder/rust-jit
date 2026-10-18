@@ -1,0 +1,29 @@
+{
+  "status": "Independent source review CLEAR, runtime/compile pending",
+  "witness": "unchanged structs-enums/functional-struct-upd.rs V23 actual declaration module absence",
+  "files": {
+    "crates/lrr/src/frontend/generated_macros.rs": "c09f38b8d409c84bf23e8e49e9b6627768535866be94fa346da79c08ae72fa55",
+    "crates/lrr/src/expand/body_macro_boundary.rs": "013b896da7922978bf75a99eb7b49560436e6986f922709da92768f654e37f56",
+    "crates/lrr/src/expand/source_discovery.rs": "067f285b777084a8b1a4ba2c04c9a7957b9f89d32e15f069c6dca2d3a318a8f7",
+    "crates/lrr/src/db/body_environment_retention.rs": "f92f8744853b8a27dedb71a22caee460300793e10a584b50b4377edcc64f276e"
+  },
+  "common_route": "Existing GeneratedMacroCatalog captured outline OpenScope -> existing TextualScopes nodes -> actual canonical GeneratedHeader+DeclarationContext+lexical proof map -> GeneratedBodyBoundary::declaration_outer -> existing admitted body context -> ordinary frontend/VM",
+  "removed_route": "selected catalogue boundary indexing module-only namespace map by associated DeclarationContext; selected branch no linear header search or owner erasure",
+  "all_eight": {
+    "1_2_4": "Actual retained source metadata and ordinary pipeline; no macro-specific evaluator/literal subset/original-only rejection",
+    "3": "No Debug/method/assertion/fixture name branching or numeric inference change",
+    "5": "No pattern evaluator/branch preparation change",
+    "6": "Cold existing outline maps once; installed dispatch/source parsing/planning unchanged",
+    "7": "Exact canonical definition+full context, real OpenScope parent/cutoff retained; source graph/epoch/cfg/record/seal checks preserved, module namespace facts untouched",
+    "8": "Shared Arc declaration table/TextualScopes; no BodyIndex clone or whole-file node searches"
+  },
+  "encoding": "boundary fingerprint domain v2 includes full canonical declaration/context/lexical map; checked metadata accounting and shared Arc dedup in existing retention",
+  "cost": "O((scopes+headers+items) log(scopes+headers+items)) cold BTreeMap construction, O(log declarations) selected boundary lookup; runtime dispatch unchanged; no measured scaling claim",
+  "holds": [
+    "Independent review and compile/runtime pending",
+    "Existing module-only edge cutoff remains unchanged; associated edge uses existing PublishedMacroIndex event.at+1 semantics",
+    "SelectedNone completed-empty branch retains historical canonical header/range check; independent wrong-owner/context proof remains a separate held gap, no full authority architecture closure",
+    "New genuine associated impl/trait control cases are worker2 service leaf, independently reviewed with finalhash",
+    "Full proc-macro/derive/expansion invalidation matrix and interpreter/JIT gates remain incomplete"
+  ]
+}

@@ -41,6 +41,7 @@ impl SourceAssemblySeed {
             SourceSyntaxAssembly::from_source(forest.source(), &*forest.get()?, scan, epoch)?;
         let SourceSyntaxAssembly {
             source,
+            initial_inventory,
             epoch,
             tree,
             calls,
@@ -51,7 +52,10 @@ impl SourceAssemblySeed {
             expansion_definitions,
             retained_bytes,
         } = initial;
-        if !outputs.is_empty() || !expansion_definitions.is_empty() {
+        if initial_inventory != scan.fingerprint()
+            || !outputs.is_empty()
+            || !expansion_definitions.is_empty()
+        {
             return Err(fault("source assembly seed is not initial"));
         }
         let tree = tree.into_seed().map_err(adapter)?;
@@ -65,9 +69,10 @@ impl SourceAssemblySeed {
         let peak = charge(bytes, anchors::metadata(&originals)?)?;
         let peak = charge_calls(peak, calls.capacity())?;
         charge(peak, macro_anchors::metadata(&macro_definitions)?)?;
-        let mut identity = StableEncoder::new("lrr/v1/initial-source-assembly-seed");
+        let mut identity = StableEncoder::new("lrr/v2/initial-source-assembly-seed");
         identity.string(source.selection().path.as_str());
         identity.record(&source.selection().outline);
+        identity.digest(initial_inventory);
         identity.u64(epoch);
         identity.digest(Digest(tree.identity().0));
         identity.u32(tree.text_len());
@@ -129,6 +134,7 @@ impl SourceAssemblySeed {
         charge(bytes, macro_anchors::metadata(&macro_definitions)?)?;
         Ok(SourceSyntaxAssembly {
             source: self.source.share(),
+            initial_inventory: self.scan.fingerprint(),
             epoch: self.epoch,
             tree: self.tree.fork().map_err(adapter)?,
             occurrences: SourceOccurrences::new(
@@ -176,7 +182,11 @@ pub(crate) struct LazySourceAssemblySeed {
     seed: std::sync::OnceLock<Arc<SourceAssemblySeed>>,
 }
 impl LazySourceAssemblySeed {
-    pub(crate) fn new(provider: &SourceDeclarative, scan: &Arc<DeclarationScan>, epoch: u64) -> Self {
+    pub(crate) fn new(
+        provider: &SourceDeclarative,
+        scan: &Arc<DeclarationScan>,
+        epoch: u64,
+    ) -> Self {
         Self {
             forest: provider.owned_forest_handle(),
             scan: Arc::clone(scan),
@@ -186,7 +196,9 @@ impl LazySourceAssemblySeed {
     }
     pub(crate) fn ready(seed: Arc<SourceAssemblySeed>) -> Result<Self, Diagnostic> {
         let lazy = Self {
-            forest: crate::expand::source_declarative::OwnedForestHandle::detached(seed.source.share()),
+            forest: crate::expand::source_declarative::OwnedForestHandle::detached(
+                seed.source.share(),
+            ),
             scan: Arc::clone(&seed.scan),
             epoch: seed.epoch,
             seed: std::sync::OnceLock::new(),

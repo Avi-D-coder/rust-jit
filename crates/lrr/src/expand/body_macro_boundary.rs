@@ -1,6 +1,6 @@
 //! Discovery-issued owning macro boundaries. Scope roots are retained from the
 //! actual selector; no diagnostic origin or independently reconstructed resolver.
-use super::{generated_items::GeneratedItems, scopes::ScopeKey};
+use super::generated_items::GeneratedItems;
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -80,7 +80,8 @@ pub(crate) struct GeneratedBodyBoundary {
     output: Arc<GeneratedItems>,
     scope: SourceScope,
     selected: Option<RetainedMacroScope>,
-    modules: Arc<BTreeMap<SourceScope, ScopeKey>>,
+    declarations:
+        Arc<BTreeMap<Digest, crate::frontend::generated_macros::CapturedDeclarationScope>>,
     parents: RetainedBoundaryParents,
     seal: SealKey,
     seal_value: Digest,
@@ -99,7 +100,9 @@ impl GeneratedBodyBoundary {
         output: Arc<GeneratedItems>,
         scope: SourceScope,
         selected: Option<RetainedMacroScope>,
-        modules: Arc<BTreeMap<SourceScope, ScopeKey>>,
+        declarations: Arc<
+            BTreeMap<Digest, crate::frontend::generated_macros::CapturedDeclarationScope>,
+        >,
         parents: RetainedBoundaryParents,
         seal: SealKey,
         seal_value: Digest,
@@ -107,7 +110,7 @@ impl GeneratedBodyBoundary {
         parents.require_bound()?;
         if output.epoch() != seal.epoch
             || parents.sources.is_empty()
-            || (selected.is_none() && !modules.is_empty())
+            || (selected.is_none() && !declarations.is_empty())
         {
             return Err(fault("generated macro boundary owner/epoch differs"));
         }
@@ -154,7 +157,7 @@ impl GeneratedBodyBoundary {
                 )
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
-        let mut e = StableEncoder::new("lrr/v1/generated-owning-macro-boundary");
+        let mut e = StableEncoder::new("lrr/v2/generated-owning-macro-boundary");
         e.record(&output.record().descriptor());
         e.record(&scope);
         e.record(&seal);
@@ -175,16 +178,17 @@ impl GeneratedBodyBoundary {
         for item in &parents.items {
             e.record(&item.record().descriptor());
         }
-        e.u64(u64::try_from(modules.len()).map_err(|_| crate::runtime::arena::resource())?);
-        for (module, lexical) in modules.iter() {
-            e.record(module);
-            e.record(lexical);
+        e.u64(u64::try_from(declarations.len()).map_err(|_| crate::runtime::arena::resource())?);
+        for (definition, declaration) in declarations.iter() {
+            e.digest(*definition);
+            e.record(&declaration.context);
+            e.record(&declaration.lexical);
         }
         Ok(Arc::new(Self {
             output,
             scope,
             selected,
-            modules,
+            declarations,
             parents,
             seal,
             seal_value,
@@ -216,8 +220,10 @@ impl GeneratedBodyBoundary {
     pub(crate) fn generated_roots(&self) -> &[Arc<GeneratedItems>] {
         &self.parents.items
     }
-    pub(crate) fn module_roots(&self) -> &Arc<BTreeMap<SourceScope, ScopeKey>> {
-        &self.modules
+    pub(crate) fn declaration_scope_roots(
+        &self,
+    ) -> &Arc<BTreeMap<Digest, crate::frontend::generated_macros::CapturedDeclarationScope>> {
+        &self.declarations
     }
     pub(crate) fn exclusive_metadata_bytes(&self) -> usize {
         self.exclusive_bytes
@@ -242,12 +248,16 @@ impl GeneratedBodyBoundary {
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
         bytes = bytes
-            .checked_add(std::mem::size_of_val(self.modules.as_ref()))
+            .checked_add(std::mem::size_of_val(self.declarations.as_ref()))
             .ok_or_else(crate::runtime::arena::resource)?;
-        for module in self.modules.keys() {
+        for declaration in self.declarations.values() {
             bytes = bytes
-                .checked_add(128)
-                .and_then(|n| n.checked_add(module.heap_bytes()))
+                .checked_add(
+                    128 + std::mem::size_of::<
+                        crate::frontend::generated_macros::CapturedDeclarationScope,
+                    >(),
+                )
+                .and_then(|n| n.checked_add(declaration.context.scope.heap_bytes()))
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
         Ok(bytes)
@@ -334,27 +344,35 @@ impl GeneratedBodyBoundary {
                 .scope
                 .module_path
                 .starts_with(&self.scope.module_path)
-            || !self.output.items().iter().any(|item| {
-                item.key.fingerprint() == definition
-                    && item.start == context.range.start
-                    && item.end == context.range.end
-            })
         {
             return Err(fault("generated owning macro boundary declaration differs"));
         }
         match &self.selected {
             Some(root) => {
-                let scope = *self
-                    .modules
-                    .get(&context.scope)
-                    .ok_or_else(|| fault("generated declaration macro module absent"))?;
-                root.at(scope, u64::from(context.range.start)).map(Some)
+                let declaration = self
+                    .declarations
+                    .get(&definition)
+                    .ok_or_else(|| fault("generated declaration macro scope absent"))?;
+                if &declaration.context != context {
+                    return Err(fault("generated declaration macro context differs"));
+                }
+                root.at(declaration.lexical, u64::from(context.range.start))
+                    .map(Some)
             }
             // The completed header proof covers every module macro/import/
             // producer in this actual output. Inline modules without any such
             // declarations add no macro candidates; body-local facts remain a
             // separate demand and are never assumed empty here.
-            None => Ok(None),
+            None => {
+                if !self.output.items().iter().any(|item| {
+                    item.key.fingerprint() == definition
+                        && item.start == context.range.start
+                        && item.end == context.range.end
+                }) {
+                    return Err(fault("generated owning macro boundary declaration differs"));
+                }
+                Ok(None)
+            }
         }
     }
 }

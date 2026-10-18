@@ -90,33 +90,21 @@ impl RunMachine {
             let PatternTarget::Initializer(identity) = target else {
                 continue;
             };
-            let value = if let Some((cell, _)) = self.const_cells.get(identity) {
-                match self.store.admit_move(*cell) {
-                    Ok(value) => Some(value),
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                }
+            let root = if let Some((cell, _)) = self.const_cells.get(identity) {
+                Some(crate::runtime::cell::pattern_constants::ConstantRoot::Cell(
+                    *cell,
+                ))
             } else if let Some((ticket, _)) = self.initialized_values.get(&(pc.clone(), *identity))
             {
-                match self.store.peek_ticket(*ticket) {
-                    Ok(value) => Some(value),
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                }
+                Some(crate::runtime::cell::pattern_constants::ConstantRoot::Ticket(*ticket))
             } else {
                 None
             };
-            if let Some(value) = value {
-                // Scalar patterns already use the shared numeric comparator.
-                // Keep an unsupported structural value's ticket owned by the
-                // run instead of treating a raw aggregate handle as a scalar.
-                let target = if matches!(value.kind, 1..=7 | 11 | 12 | 17) {
-                    PatternTarget::Constant(value)
-                } else {
-                    PatternTarget::Refused(unsupported(
-                        "non-scalar constant pattern requires structural constant integration"
-                            .into(),
-                    ))
-                };
-                ready.push((slot, target));
+            if let Some(root) = root {
+                if let Err(error) = self.store.pattern_constant_value(root) {
+                    return QueryPoll::Ready(Err(error));
+                }
+                ready.push((slot, PatternTarget::Constant(root)));
             }
         }
         if !ready.is_empty() {

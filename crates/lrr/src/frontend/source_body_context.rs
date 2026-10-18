@@ -304,7 +304,9 @@ impl AdmittedBodyContext {
         original: crate::syntax::token_wire::Key,
     ) -> Result<Option<crate::syntax::token_wire::Key>, Diagnostic> {
         if self.context().range.contains(range) {
-            return self.identifier_context_or_original(range, original).map(Some);
+            return self
+                .identifier_context_or_original(range, original)
+                .map(Some);
         }
         let plain = match self.source_receipt.as_deref() {
             None => true,
@@ -981,13 +983,17 @@ impl PreparedBodyContext {
     pub(crate) fn module_source(&self) -> Option<&PreparedSourceView> {
         self.source.module_source()
     }
-    /// Actual expansion order comes from the admitted syntax record, never a
-    /// syntax-context mark or a token's diagnostic source origin.
+    /// Actual expansion order belongs to this structural name occurrence,
+    /// independently of copied diagnostic spans and syntax-context marks.
     pub(crate) fn reference_origin(
         &self,
+        range: crate::syntax::spans::SourceRange,
     ) -> Result<Option<crate::syntax::token_wire::Key>, Diagnostic> {
-        if let Some(parent) = self.source.local_parent() {
-            return parent.context().reference_origin();
+        use crate::expand::source_declarative::assembly::SourceOccurrence;
+        if range.is_empty() || !self.source.context().range.contains(range) {
+            return Err(fault(
+                "macro reference escapes its actual owning declaration",
+            ));
         }
         match self.source.source_receipt.as_deref() {
             Some(InputValue::GeneratedSyntax(unit)) if self.source.generated_boundary.is_some() => {
@@ -998,14 +1004,136 @@ impl PreparedBodyContext {
             Some(InputValue::GeneratedSyntax(_)) => Err(fault(
                 "generated reference requires its actual macro boundary",
             )),
-            Some(InputValue::RetainedSyntax(unit)) if !unit.prepared().outputs().is_empty() => {
-                Err(fault(
-                    "retained macro reference requires its structural expansion occurrence proof",
-                ))
+            Some(InputValue::RetainedSyntax(unit)) => {
+                if unit.key() != &self.source.parsed().key() {
+                    return Err(fault("retained macro reference parser differs"));
+                }
+                match unit.prepared().occurrence(range)? {
+                    SourceOccurrence::Original { .. } => Ok(None),
+                    SourceOccurrence::Generated {
+                        record,
+                        descriptor,
+                        parent_inventory,
+                        invocation,
+                        ..
+                    } => {
+                        if !unit.prepared().outputs().iter().any(|output| {
+                            output.record().key().fingerprint() == record
+                                && output.record().descriptor().fingerprint() == descriptor
+                                && output.parent_inventory() == parent_inventory
+                                && output.parent_invocation() == invocation
+                                && output.epoch() == unit.prepared().epoch()
+                        }) {
+                            return Err(fault("retained macro occurrence output differs"));
+                        }
+                        Ok(Some(crate::syntax::token_wire::Key(record.0)))
+                    }
+                    SourceOccurrence::Mixed | SourceOccurrence::Pending => Err(fault(
+                        "retained macro reference requires one actual structural occurrence",
+                    )),
+                }
             }
-            Some(InputValue::RetainedSyntax(_)) | None => Ok(None),
+            None => Ok(None),
             _ => Err(fault("owning macro source receipt differs")),
         }
+    }
+    /// Lookup positions remain scope cursors. Join the actual invocation name
+    /// (which need not start at that cursor for qualified calls), or an actual
+    /// identifier token for an ordinary source-name demand.
+    pub(crate) fn reference_origin_at(
+        &self,
+        at: u64,
+        name: &str,
+    ) -> Result<Option<crate::syntax::token_wire::Key>, Diagnostic> {
+        if self.source.source_receipt.is_none() {
+            return Ok(None);
+        }
+        let parsed = self.source.parsed();
+        let at = u32::try_from(at).map_err(|_| fault("macro reference position differs"))?;
+        let token = parsed
+            .parsed
+            .syntax_node()
+            .token_at_offset(at.into())
+            .right_biased()
+            .ok_or_else(|| fault("macro reference identifier absent"))?;
+        let range = crate::syntax::ast_adapter::range(token.text_range());
+        let edition = parsed.token_edition(range)?;
+        if range.start != at
+            || crate::expand::scopes::MacroName::parse(token.text(), edition)?
+                != crate::expand::scopes::MacroName::parse(name, edition)?
+        {
+            return Err(fault(
+                "macro reference requires its actual identifier occurrence",
+            ));
+        }
+        self.reference_origin(range)
+    }
+    /// Cold source preparation only. Preserve the published module ancestry and
+    /// add the actual retained attachment topology, whose parents are inventory
+    /// identities, never diagnostic token contexts.
+    pub(crate) fn prepare_macro_ancestry(
+        &self,
+        published: &Arc<super::macro_origins::ExpansionAncestry>,
+    ) -> Result<Arc<super::macro_origins::ExpansionAncestry>, Diagnostic> {
+        let mut ancestry = Arc::clone(published);
+        if let Some(boundary) = self.macro_ancestry() {
+            if !Arc::ptr_eq(boundary, &ancestry) {
+                Arc::make_mut(&mut ancestry).extend(boundary)?;
+            }
+        }
+        let Some(InputValue::RetainedSyntax(unit)) = self.source.source_receipt.as_deref() else {
+            return Ok(ancestry);
+        };
+        if unit.prepared().outputs().is_empty() {
+            return Ok(ancestry);
+        }
+        if unit.key() != &self.source.parsed().key() {
+            return Err(fault("retained macro ancestry owning source differs"));
+        }
+        // finish_scope stores outputs in canonical record-key order, not
+        // expansion order. Walk the real inventory-parent edges from the
+        // retained initial root; a missing parent must never become a root.
+        let mut children = std::collections::BTreeMap::<_, Vec<_>>::new();
+        for output in unit.prepared().outputs() {
+            if output.epoch() != unit.prepared().epoch() {
+                return Err(fault("retained macro ancestry output epoch differs"));
+            }
+            let siblings = children.entry(output.parent_inventory()).or_default();
+            siblings
+                .try_reserve(1)
+                .map_err(|_| crate::runtime::arena::resource())?;
+            siblings.push(output);
+        }
+        let root_inventory = unit.prepared().initial_inventory();
+        let mut seen = std::collections::BTreeSet::from([root_inventory]);
+        let mut work = Vec::new();
+        work.try_reserve_exact(
+            unit.prepared()
+                .outputs()
+                .len()
+                .checked_add(1)
+                .ok_or_else(crate::runtime::arena::resource)?,
+        )
+        .map_err(|_| crate::runtime::arena::resource())?;
+        work.push((root_inventory, None));
+        while let Some((inventory, parent)) = work.pop() {
+            let Some(outputs) = children.remove(&inventory) else {
+                continue;
+            };
+            for output in outputs {
+                let origin = crate::syntax::token_wire::Key(output.record().key().fingerprint().0);
+                Arc::make_mut(&mut ancestry).register(origin, parent)?;
+                let child = output.scan().fingerprint();
+                if !seen.insert(child) {
+                    return Err(fault("retained macro ancestry inventory owner differs"));
+                }
+                work.push((child, Some(origin)));
+            }
+        }
+        if !children.is_empty() {
+            return Err(fault("retained macro ancestry parent inventory absent"));
+        }
+        Ok(ancestry)
     }
     pub(crate) fn body_type_occurrences(&self) -> &type_occurrences::PreparedBodyTypeOccurrences {
         &self.body_types

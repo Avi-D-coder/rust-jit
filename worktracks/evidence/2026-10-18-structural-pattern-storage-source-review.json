@@ -1,5 +1,5 @@
 {
-  "status": "source-only root review; independent review pending; no compile/runtime claim",
+  "status": "Source-only root and independent review CLEAR against exact five leaves; compilation/runtime pending",
   "baseline": "V23/01d505d4",
   "files": {
     "crates/lrr/src/runtime/cell_pattern_constants.rs": "d0b90b510fd6e8b46eefd3f5b30ed2df4956ee50c73ca76ed431fe5ccfa53729",
@@ -31,5 +31,9 @@
     "E007 nonCopy aggregate per-use reinitialization and generic cache key still held",
     "Mixed reference lease representations/raw pointers/native/dyn values remain explicit gaps",
     "Supplemental origin/guard/nonconsuming control must actually pass; no full architecture gate claim"
-  ]
+  ],
+  "independent_review": {
+    "local_receipt": "artifacts/validation-resume-2026-10-18/structural-constant-storage-independent-review-next.json",
+    "sha256": "4a54f2f98b23c8bb3fe139d34decc0833a0d0b3e8a7bb6ad93936ec92341bf41"
+  }
 }

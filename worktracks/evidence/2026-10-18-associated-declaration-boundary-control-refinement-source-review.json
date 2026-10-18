@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-18",
+  "owner": "closure_callable_resume",
+  "scope": "Parent-requested existing generated declaration boundary control extension; source-only test change, no production/runtime claim",
+  "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+  "sha256": "524201950b8aa4244be8b4e57558146c65fe87175c806a8383ccde1ab93c1e37",
+  "selector": "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+  "changes": [
+    "Two actual generated output cases before first currently failing alias case: struct Holder + impl Holder::answer and trait Holder::answer default body.",
+    "All four editions use existing real GeneratedSyntax publication, DefinitionBody/DeclarationContext, BodyStructure and owning-body capture/signature proof, boundary attach and ordinary macro lookup route.",
+    "Explicit expected associated owner presence; wrong owner Some(foreign) refused for all, ownerNone refused for associated cases.",
+    "Earlier-only macro scope, retained actual output identity, foreign discovery world and changed epoch negatives remain."
+  ],
+  "eight_failure_modes": {
+    "1": "No runtime evaluator/production expression route changed.",
+    "2": "Existing real generated source admission and ordinary entered macro selector, no payload decoder.",
+    "3": "No production method/numeric policy.",
+    "4": "Actual associated lexical scopes tested; no ownerNone positive or generated-source bypass.",
+    "5": "No new pattern machinery or body execution.",
+    "6": "Reuses existing one prepared output/header/body/index per test; no new source replanning route.",
+    "7": "Test-only existing inventory chooses real publication; no production world scan introduced.",
+    "8": "Existing shared actual handles retained; no BodyIndex clone or whole-file node search added."
+  },
+  "checks": [
+    "git diff --check terminal0; source-only whitespace check"
+  ],
+  "runtime": "UNEXECUTED, root-authorized bounded refinement; no positive ownerNone substitution",
+  "predecessor_sha256": "d0eecf137d802461d074626b16548447e50b066324b89a4643dfffd42faee247",
+  "refinement": [
+    "Both associated cases emit real module-local macro_rules local and expect local=true, forcing selected_rootSome; assert actual Some.",
+    "Wrong-owner negatives apply only actual catalogue-backed selected_rootSome; both associated cases always covered. Completed-empty boundary owner-proof gap held explicitly."
+  ]
+}

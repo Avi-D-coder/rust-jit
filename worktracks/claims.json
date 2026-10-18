@@ -1127,16 +1127,18 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "T024/T063/M014 reached generated module body environment join. Existing actual insertion boundary retained with completed generated units and attached through shared body preparation; no source copying, new evaluator, sandbox or resource accounting. See worktracks/evidence/2026-10-18-generated-body-environment-precode.json. Unchanged consts/const-int-arithmetic.rs is primary runtime frontier; no acceptance yet.",
+      "scope": "Actual retained generated body source authority; root distinct canonical declaration/fullcontext/lexical edge map for associated scopes, existing module namespaces unchanged. Source-only successor; selectedNone completed-empty negative context proof separate hold.",
       "paths": [
         "crates/lrr/src/engine/run_module_source_preparation.rs",
         "crates/lrr/src/expand/source_discovery/completed_source_environment.rs",
         "crates/lrr/src/cli/retained_generated_body_tests.rs",
-        "crates/lrr/src/expand/body_macro_boundary.rs"
+        "crates/lrr/src/expand/body_macro_boundary.rs",
+        "crates/lrr/src/frontend/generated_macros.rs",
+        "crates/lrr/src/db/body_environment_retention.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T08:11:34.033776+00:00",
+      "updated_at": "2026-10-18T12:41:22.312429+00:00",
       "review_after": "2026-10-18T08:11:34.033776+00:00",
       "transferred_paths": [
         "crates/lrr/src/expand/source_discovery.rs"
@@ -1149,7 +1151,7 @@
       "owner": "/root/generic_projection_resume",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V20 common SelectedCall Eq retained. V22 cold local lifecycle control assumed absent headers incorrectly; unused unpublished-header machinery removed in successor. Actual macro-definition identifier Name range fixes confirmed hygiene attachment. Independent source review clear; successor runtime unexecuted. Qualified/member scope migration held.",
+      "scope": "Actual declaration import-alias producer prerequisite via retained full leaf-identity import plan and existing hygienic textual target callback; source/generated scope/context classes retained, alias/self/cycle comparisons use full SourceImport fingerprint. Source-only review correction after grouped-leaf collision; cross-output alias export/argument producer held.",
       "paths": [
         "crates/lrr/src/frontend/source_types.rs",
         "crates/lrr/src/syntax/signatures.rs",
@@ -1166,12 +1168,16 @@
         "crates/lrr/src/frontend/mod.rs",
         "crates/lrr/src/frontend/declaration_field_types.rs",
         "crates/lrr/src/frontend/source_local_plan.rs",
-        "crates/lrr/src/frontend/source_macros.rs",
-        "crates/lrr/src/syntax/macro_definition_capture.rs"
+        "crates/lrr/src/syntax/macro_definition_capture.rs",
+        "crates/lrr/src/expand/source_declarative.rs",
+        "crates/lrr/src/frontend/declaration_imports.rs",
+        "crates/lrr/src/frontend/impl_index.rs",
+        "crates/lrr/src/syntax/declaration_scan.rs",
+        "crates/lrr/src/syntax/imports.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T12:24:16.642631+00:00",
+      "updated_at": "2026-10-18T12:43:38.345895+00:00",
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
         "crates/lrr/src/frontend/associated_types.rs"
@@ -1354,11 +1360,9 @@
       "paths": [
         "crates/lrr/src/frontend/names.rs",
         "crates/lrr/src/expand/source_discovery.rs",
-        "crates/lrr/src/service/retained_reference_source_tests.rs",
         "crates/lrr/src/frontend/pattern_names.rs",
         "crates/lrr/src/service/retained_body_tests.rs",
-        "crates/lrr/src/syntax/lexical_hygiene.rs",
-        "crates/lrr/src/expand/source_declarative.rs"
+        "crates/lrr/src/syntax/lexical_hygiene.rs"
       ],
       "issue": null,
       "pull_request": null,
@@ -1372,7 +1376,7 @@
       "owner": "/root/closure_callable_resume",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V22 ordinary record rest transfer: four unchanged upstream record/move/Drop runtime contracts newly pass; all-edition LRR route fails shared executed-rvalue operand proof. One-leaf generic indexed-operand verifier successor reviewed, unexecuted. E007 aggregate initializer run-once and full architecture matrix remain held.",
+      "scope": "V23 ordinary FRU ownership/exactonce all editions passes; actual retained source occurrence/ancestry join successor corrects original=None and digest-sorted topology assumptions using exact assembly root inventory. Separate associated scope source/negative control. Source-only review pending, full macro/E007/interpreter gates held.",
       "paths": [
         "crates/lrr/src/frontend/nominal_member_goals.rs",
         "crates/lrr/src/frontend/declaration_nominal_types.rs",
@@ -1404,11 +1408,17 @@
         "crates/lrr/src/vm/frame_aggregate_copy.rs",
         "crates/lrr/src/vm/frame_record_update.rs",
         "crates/lrr/src/cli/mod.rs",
-        "crates/lrr/src/cli/reached_record_update_tests.rs"
+        "crates/lrr/src/cli/reached_record_update_tests.rs",
+        "crates/lrr/src/service/retained_reference_source_tests.rs",
+        "crates/lrr/src/expand/source_declarative/assembly.rs",
+        "crates/lrr/src/expand/source_declarative/assembly_seed.rs",
+        "crates/lrr/src/frontend/source_macros.rs",
+        "crates/lrr/src/frontend/source_body_context.rs",
+        "crates/lrr/src/frontend/body_import_occurrences.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T12:27:53.460827+00:00",
+      "updated_at": "2026-10-18T12:43:38.345895+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00"
     },
     {

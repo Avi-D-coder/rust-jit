@@ -7,18 +7,20 @@ use super::{
     },
 };
 use crate::{
-    core::{diagnostic::Diagnostic, digest::Digest},
+    core::{diagnostic::Diagnostic, digest::{Digest, StableEncode}},
     expand::scopes::{MacroName, ScopeKey as LexicalScope},
     syntax::{
         declaration_scan::{
-            DeclarationLexicalScope, DeclarationProducer, DeclarationScan, DeclarationScopeKind,
-            ScannedImport,
+            DeclarationLexicalScope, DeclarationScan, DeclarationScopeKind, ScannedImport,
         },
         imports::{ImportKind, ImportSegment},
         outline::ScopeKey,
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
@@ -59,18 +61,19 @@ impl DeclarationCandidates {
         Ok(found)
     }
 }
-pub struct DeclarationImportIndex<'a> {
-    scan: &'a DeclarationScan,
-    scopes: BTreeMap<LexicalScope, &'a DeclarationLexicalScope>,
-    producers: BTreeMap<Digest, &'a DeclarationProducer>,
+#[derive(Clone)]
+pub(crate) struct DeclarationImportPlan {
+    scan: Digest,
+    scopes: BTreeMap<LexicalScope, DeclarationLexicalScope>,
+    producers: BTreeMap<Digest, usize>,
     named: BTreeMap<(LexicalScope, MacroName), Vec<usize>>,
     globs: BTreeMap<LexicalScope, Vec<usize>>,
     bytes: usize,
 }
-impl<'a> DeclarationImportIndex<'a> {
-    pub fn new(scan: &'a DeclarationScan) -> Result<Self, Diagnostic> {
+impl DeclarationImportPlan {
+    pub(crate) fn new(scan: &DeclarationScan) -> Result<Self, Diagnostic> {
         let mut out = Self {
-            scan,
+            scan: scan.fingerprint(),
             scopes: BTreeMap::new(),
             producers: BTreeMap::new(),
             named: BTreeMap::new(),
@@ -79,7 +82,7 @@ impl<'a> DeclarationImportIndex<'a> {
         };
         for scope in scan.lexical_scopes() {
             charge(&mut out.bytes, 128)?;
-            if out.scopes.insert(scope.identity, scope).is_some() {
+            if out.scopes.insert(scope.identity, scope.clone()).is_some() {
                 return Err(fault("duplicate declaration lexical scope"));
             }
         }
@@ -88,10 +91,10 @@ impl<'a> DeclarationImportIndex<'a> {
                 return Err(fault("declaration import parent scope absent"));
             }
         }
-        for row in scan.producers() {
+        for (ordinal, row) in scan.producers().iter().enumerate() {
             charge(&mut out.bytes, 128)?;
             if !out.scopes.contains_key(&row.lexical_scope)
-                || out.producers.insert(row.identity, row).is_some()
+                || out.producers.insert(row.identity, ordinal).is_some()
             {
                 return Err(fault("declaration import producer scope/identity conflict"));
             }
@@ -140,6 +143,33 @@ impl<'a> DeclarationImportIndex<'a> {
     pub fn metadata_bytes(&self) -> usize {
         self.bytes
     }
+}
+pub struct DeclarationImportIndex<'a> {
+    scan: &'a DeclarationScan,
+    plan: Cow<'a, DeclarationImportPlan>,
+}
+impl<'a> DeclarationImportIndex<'a> {
+    pub fn new(scan: &'a DeclarationScan) -> Result<Self, Diagnostic> {
+        Ok(Self {
+            scan,
+            plan: Cow::Owned(DeclarationImportPlan::new(scan)?),
+        })
+    }
+    pub(crate) fn prepared(
+        scan: &'a DeclarationScan,
+        plan: &'a DeclarationImportPlan,
+    ) -> Result<Self, Diagnostic> {
+        if plan.scan != scan.fingerprint() {
+            return Err(fault("declaration import plan source differs"));
+        }
+        Ok(Self {
+            scan,
+            plan: Cow::Borrowed(plan),
+        })
+    }
+    pub fn metadata_bytes(&self) -> usize {
+        self.plan.metadata_bytes()
+    }
     pub fn lookup(
         &self,
         producer: Digest,
@@ -158,9 +188,29 @@ impl<'a> DeclarationImportIndex<'a> {
         names: &MacroNamespaces,
         validate: impl Fn(&ScannedImport) -> Result<bool, Diagnostic>,
     ) -> Result<PathLookup, Diagnostic> {
+        self.lookup_with_textual(producer, segments, absolute, names, validate, |_, _| {
+            Ok(super::macro_scopes::HygienicLookup::Selection(
+                super::macro_origins::MacroSelection::Absent,
+            ))
+        })
+    }
+    pub(crate) fn lookup_with_textual(
+        &self,
+        producer: Digest,
+        segments: &[ImportSegment],
+        absolute: bool,
+        names: &MacroNamespaces,
+        validate: impl Fn(&ScannedImport) -> Result<bool, Diagnostic>,
+        mut textual: impl FnMut(
+            &ScannedImport,
+            &str,
+        ) -> Result<super::macro_scopes::HygienicLookup, Diagnostic>,
+    ) -> Result<PathLookup, Diagnostic> {
         let row = self
+            .plan
             .producers
             .get(&producer)
+            .and_then(|ordinal| self.scan.producers().get(*ordinal))
             .ok_or_else(|| fault("declaration import caller producer absent"))?;
         if segments.is_empty() {
             return Err(fault("declaration import caller path limit"));
@@ -194,6 +244,7 @@ impl<'a> DeclarationImportIndex<'a> {
         parts.extend_from_slice(segments);
         let mut reference = caller.clone();
         let mut imported = None;
+        let mut imported_leaf = None;
         let mut reference_owner = row.scope.owner;
         let mut seen = BTreeSet::new();
         // An import selected twice along one alias chain is a cycle (rustc
@@ -220,7 +271,7 @@ impl<'a> DeclarationImportIndex<'a> {
                 .try_reserve_exact(parts.len())
                 .map_err(|_| fault("declaration import cycle state allocation"))?;
             state_parts.extend_from_slice(&parts);
-            if !seen.insert((current, state_parts, imported)) {
+            if !seen.insert((current, state_parts, imported_leaf)) {
                 return Ok(PathLookup::NeedInput(imported.unwrap_or(producer)));
             }
             let Some(ImportSegment::Name(first)) = parts.first() else {
@@ -254,6 +305,7 @@ impl<'a> DeclarationImportIndex<'a> {
                 )?;
                 if parts.len() > 1 {
                     let kind = self
+                        .plan
                         .scopes
                         .get(&at)
                         .ok_or_else(|| fault("declaration import lexical parent missing"))?
@@ -297,14 +349,14 @@ impl<'a> DeclarationImportIndex<'a> {
                         }
                     }
                 }
-                if let Some(indices) = self.named.get(&(at, name.clone())) {
+                if let Some(indices) = self.plan.named.get(&(at, name.clone())) {
                     let mut matching = None;
                     for index in indices {
                         charge(&mut bytes, 128)?;
                         let candidate = &self.scan.imports()[*index];
                         // A use target does not resolve through the binding it introduces.
                         // A self leaf introduces only a module/type binding, not a macro.
-                        if imported == Some(candidate.source.identity)
+                        if imported_leaf == Some(candidate.source.fingerprint())
                             || (parts.len() == 1
                                 && candidate.source.path.last() == Some(&ImportSegment::SelfModule))
                         {
@@ -335,7 +387,7 @@ impl<'a> DeclarationImportIndex<'a> {
                         break;
                     }
                 }
-                if let Some(indices) = self.globs.get(&at) {
+                if let Some(indices) = self.plan.globs.get(&at) {
                     let mut first_prefix = None;
                     'globs: for index in indices {
                         charge(&mut bytes, 128)?;
@@ -463,6 +515,7 @@ impl<'a> DeclarationImportIndex<'a> {
                     break;
                 }
                 scope = self
+                    .plan
                     .scopes
                     .get(&at)
                     .ok_or_else(|| fault("declaration import lexical parent missing"))?
@@ -483,7 +536,7 @@ impl<'a> DeclarationImportIndex<'a> {
             let Some(selected) = selected else {
                 return self.finish(&parts, false, (&reference, &caller), imported, names, weak);
             };
-            if !chain.insert(selected.source.identity) {
+            if !chain.insert(selected.source.fingerprint()) {
                 return Ok(PathLookup::NeedInput(imported.unwrap_or(producer)));
             }
             if !validate(selected)? {
@@ -495,6 +548,24 @@ impl<'a> DeclarationImportIndex<'a> {
             let mut target = selected.source.path.as_slice();
             if target.len() > 1 && target.last() == Some(&ImportSegment::SelfModule) {
                 target = &target[..target.len() - 1];
+            }
+            if !selected.source.absolute
+                && parts.len() == 1
+                && let [ImportSegment::Name(name)] = target
+            {
+                use super::{macro_origins::MacroSelection, macro_scopes::HygienicLookup};
+                match textual(selected, name)? {
+                    HygienicLookup::NeedInput(input) => {
+                        return weak.finish(PathLookup::NeedInput(input));
+                    }
+                    HygienicLookup::Selection(MacroSelection::Defined(definition)) => {
+                        return weak.finish(PathLookup::Defined(definition));
+                    }
+                    HygienicLookup::Selection(MacroSelection::Ambiguous(definitions)) => {
+                        return weak.finish(PathLookup::Ambiguous(definitions));
+                    }
+                    HygienicLookup::Selection(MacroSelection::Absent) => {}
+                }
             }
             let len = target
                 .len()
@@ -524,6 +595,7 @@ impl<'a> DeclarationImportIndex<'a> {
             reference.owner = None;
             current = selected.lexical_scope;
             imported = Some(selected.source.identity);
+            imported_leaf = Some(selected.source.fingerprint());
             reference_owner = selected.source.scope.owner;
             if selected.source.absolute || !matches!(parts.first(), Some(ImportSegment::Name(_))) {
                 return self.finish(
@@ -555,6 +627,7 @@ impl<'a> DeclarationImportIndex<'a> {
         let mut parts = glob.source.path.as_slice();
         let mut owned;
         let mut imported = glob.source.identity;
+        let mut imported_leaf = glob.source.fingerprint();
         let mut seen = BTreeSet::new();
         // See `lookup`: a repeated selected import is an alias cycle.
         let mut chain = BTreeSet::new();
@@ -578,7 +651,7 @@ impl<'a> DeclarationImportIndex<'a> {
                 .try_reserve_exact(parts.len())
                 .map_err(|_| fault("declaration glob alias state allocation"))?;
             state_parts.extend_from_slice(parts);
-            if !seen.insert((current, state_parts, imported)) {
+            if !seen.insert((current, state_parts, imported_leaf)) {
                 return Ok(DeclarationModuleLookup::NeedInput(imported));
             }
             let mut selected = None;
@@ -603,11 +676,11 @@ impl<'a> DeclarationImportIndex<'a> {
                             .checked_add(128)
                             .ok_or_else(|| fault("declaration glob alias scope work overflow"))?,
                     )?;
-                    if let Some(indices) = self.named.get(&(at, name.clone())) {
+                    if let Some(indices) = self.plan.named.get(&(at, name.clone())) {
                         for index in indices {
                             charge(bytes, 128)?;
                             let candidate = &self.scan.imports()[*index];
-                            if candidate.source.identity == imported
+                            if candidate.source.fingerprint() == imported_leaf
                                 || candidate.source.scope.module_path != reference.module_path
                             {
                                 continue;
@@ -624,6 +697,7 @@ impl<'a> DeclarationImportIndex<'a> {
                         }
                     }
                     scope = self
+                        .plan
                         .scopes
                         .get(&at)
                         .ok_or_else(|| fault("declaration import lexical parent missing"))?
@@ -647,7 +721,7 @@ impl<'a> DeclarationImportIndex<'a> {
                 };
                 return Ok(DeclarationModuleLookup::Module(module));
             };
-            if !chain.insert(selected.source.identity) {
+            if !chain.insert(selected.source.fingerprint()) {
                 return Ok(DeclarationModuleLookup::NeedInput(imported));
             }
             if !validate(selected)? {
@@ -690,6 +764,7 @@ impl<'a> DeclarationImportIndex<'a> {
             reference.owner = None;
             current = selected.lexical_scope;
             imported = selected.source.identity;
+            imported_leaf = selected.source.fingerprint();
         }
         Ok(DeclarationModuleLookup::NeedInput(imported))
     }
@@ -825,6 +900,7 @@ impl<'a> DeclarationImportIndex<'a> {
     ) -> Result<bool, Diagnostic> {
         if parts.len() != 1
             || self
+                .plan
                 .scopes
                 .get(&glob.lexical_scope)
                 .ok_or_else(|| fault("declaration import lexical parent missing"))?

@@ -1,0 +1,11 @@
+{
+  "scope": "Parent-authorized single-leaf V24 E0624 repair; no language semantics change",
+  "failure": "V24 lib 9d4ac9/101, source2784f755 unchanged; no CLI/runtime evidence",
+  "precode": "SourceDeclarative::generated_declaration_demand uses GeneratedDeclarationMacroIndex::producer for the same checked immutable producer metadata already used inside the index. Make this existing accessor pub(crate); retain private fields, checked identity-to-ordinal and actual retained scan lookup, Result errors, and existing source attachments. No external public API, namespace selection, source authority or additional lookup route.",
+  "file": "crates/lrr/src/frontend/impl_index.rs",
+  "before_sha256": "d3d48437d7de0fdfab5c297c59b28baaca4b0e205e21c815b4eb03088ac5aa01",
+  "source_review_all8": "Only fn visibility changes. Modes1-5: no expression/macro/pattern/type/runtime semantics. Mode6: same prepared indexed metadata access, no parse/planning. Mode7: no namespace/currentness/authority change. Mode8: same direct BTreeMap-to-slice access and borrowed declaration, no clone/search. Actual independent/runtimes remain pending successor build.",
+  "after_sha256": "2ecd6eb657a860bc6c59bad7ebc2d49781a3c0e9786a0cac451414dce6f504f8",
+  "delta": "Exactly one token visibility annotation; accessor body unchanged.",
+  "validation": "No Cargo/tests run by implementation worker; V24 failed receipt retained, V25 not yet built."
+}

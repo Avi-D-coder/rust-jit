@@ -24,6 +24,8 @@ mod pointers;
 pub(crate) mod layouts;
 #[path = "cell_constant_instantiation.rs"]
 pub mod constant_instantiation;
+#[path = "cell_pattern_constants.rs"]
+pub(crate) mod pattern_constants;
 #[path = "cell_construction_cleanup.rs"]
 mod construction_cleanup;
 #[path = "cell_closures.rs"]

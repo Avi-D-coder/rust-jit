@@ -218,28 +218,11 @@ impl StableEncode for ImplHeaderIndex {
     }
 }
 
-#[derive(Clone, Default)]
-struct LocalImportFrontiers {
-    glob: Option<crate::core::digest::Digest>,
-    named:
-        std::collections::BTreeMap<crate::expand::scopes::MacroName, crate::core::digest::Digest>,
-    /// The glob imports themselves: whether one binds a macro name depends
-    /// on what its target module exports.
-    globs: Vec<LocalGlobImport>,
-}
-/// One block-level glob import (`use path::*;`), as written.
-#[derive(Clone)]
-pub(crate) struct LocalGlobImport {
-    pub(crate) identity: crate::core::digest::Digest,
-    pub(crate) path: Vec<crate::syntax::imports::ImportSegment>,
-    pub(crate) absolute: bool,
-    pub(crate) scope: crate::syntax::outline::ScopeKey,
-}
-
 /// Unsealed lexical candidates for cold declaration discovery. This is not a
 /// runtime body-entry grant or an impl catalog completion certificate.
 #[derive(Clone)]
 pub struct DeclarationMacroIndex {
+    imports: Arc<super::declaration_imports::DeclarationImportPlan>,
     scan: Arc<DeclarationScan>,
     scopes: crate::expand::scopes::TextualScopes,
     declarations: super::macro_scopes::MacroDeclarations,
@@ -248,8 +231,6 @@ pub struct DeclarationMacroIndex {
     context: crate::syntax::token_wire::Key,
     producer_rows: std::collections::BTreeMap<crate::core::digest::Digest, usize>,
     definition_rows: std::collections::BTreeMap<crate::core::digest::Digest, usize>,
-    local_import_frontiers:
-        std::collections::BTreeMap<crate::expand::scopes::ScopeKey, LocalImportFrontiers>,
     retained_bytes: usize,
     published_bodies: std::collections::BTreeMap<
         crate::core::digest::Digest,
@@ -323,73 +304,23 @@ impl DeclarationMacroIndex {
                 producer.identity,
             )?;
         }
-        let mut local_import_frontiers =
-            std::collections::BTreeMap::<_, LocalImportFrontiers>::new();
-        let mut import_frontier_bytes = 0usize;
-        for row in scan
-            .imports()
-            .iter()
-            .filter(|row| row.source.scope.owner.is_some())
-        {
-            use crate::syntax::imports::{ImportKind, ImportSegment};
-            let name = match &row.source.kind {
-                ImportKind::Anonymous => continue,
-                ImportKind::Glob => None,
-                ImportKind::Named { alias } => {
-                    let Some(name) = alias.as_deref().or_else(|| match row.source.path.last() {
-                        Some(ImportSegment::Name(name)) => Some(name.as_str()),
-                        _ => None,
-                    }) else {
-                        continue;
-                    };
-                    Some(super::names::owned_name(
-                        name,
-                        scan.parse().profile.edition,
-                    )?)
-                }
-            };
-            import_frontier_bytes = import_frontier_bytes
-                .checked_add(
-                    name.as_ref()
-                        .map_or(0, |name| name.as_str().len())
-                        .checked_mul(4)
-                        .and_then(|n| n.checked_add(384))
-                        .ok_or_else(fault)?,
-                )
-                .ok_or_else(fault)?;
-            let frontier = local_import_frontiers.entry(row.lexical_scope).or_default();
-            if let Some(name) = name {
-                frontier
-                    .named
-                    .entry(name)
-                    .and_modify(|id| *id = (*id).min(row.source.identity))
-                    .or_insert(row.source.identity);
-            } else {
-                frontier.glob = Some(
-                    frontier
-                        .glob
-                        .map_or(row.source.identity, |id| id.min(row.source.identity)),
-                );
-                frontier.globs.push(LocalGlobImport {
-                    identity: row.source.identity,
-                    path: row.source.path.clone(),
-                    absolute: row.source.absolute,
-                    scope: row.source.scope.clone(),
-                });
-            }
-        }
+        let imports = Arc::new(super::declaration_imports::DeclarationImportPlan::new(
+            &scan,
+        )?);
         let declaration_bytes = declarations.metadata_bytes()?;
         let hygiene_bytes = facts.metadata_bytes()?;
+        let scope_bytes = scopes.metadata_bytes()?;
         let retained_bytes = scan
             .retained_bytes()
-            .checked_add(scopes.metadata_bytes()?)
+            .checked_add(imports.metadata_bytes())
+            .and_then(|n| n.checked_add(scope_bytes))
             .and_then(|n| n.checked_add(declaration_bytes))
             .and_then(|n| n.checked_add(hygiene_bytes))
             .and_then(|n| n.checked_add(producer_rows.len().checked_mul(192)?))
             .and_then(|n| n.checked_add(definition_rows.len().checked_mul(128)?))
-            .and_then(|n| n.checked_add(import_frontier_bytes))
             .ok_or_else(fault)?;
         Ok(Self {
+            imports,
             pending: producer_rows.keys().copied().collect(),
             published_bodies: Default::default(),
             ancestry,
@@ -400,7 +331,6 @@ impl DeclarationMacroIndex {
             context: root.context,
             producer_rows,
             definition_rows,
-            local_import_frontiers,
             retained_bytes,
         })
     }
@@ -440,6 +370,10 @@ impl DeclarationMacroIndex {
     }
     pub fn is_complete(&self) -> bool {
         self.pending.is_empty()
+    }
+    pub(crate) fn contains_definition(&self, definition: crate::core::digest::Digest) -> bool {
+        self.definition_rows.contains_key(&definition)
+            || self.published_bodies.contains_key(&definition)
     }
     pub(crate) fn body_owner(
         &self,
@@ -593,52 +527,35 @@ impl DeclarationMacroIndex {
             .get(*self.definition_rows.get(&identity).ok_or_else(fault)?)
             .ok_or_else(fault)
     }
-    /// Pending lexical imports are indexed independently of module/prelude routes.
-    pub(crate) fn local_import_frontier(
+    pub(crate) fn lookup_imports(
         &self,
         invocation: crate::core::digest::Digest,
-        head: &str,
-    ) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
-        let head = super::names::owned_name(head, self.scan.parse().profile.edition)?;
-        let mut scope = Some(self.producer(invocation)?.lexical_scope);
-        let mut depth = 0usize;
-        while let Some(current) = scope {
-            depth = depth
-                .checked_add(1)                .ok_or_else(fault)?;
-            if let Some(frontier) = self.local_import_frontiers.get(&current)
-                && let Some(input) = frontier.named.get(&head).copied().or(frontier.glob)
-            {
-                return Ok(Some(input));
-            }
-            scope = self.scopes.parent(current)?.map(|(parent, _)| parent);
-        }
-        Ok(None)
-    }
-    /// `local_import_frontier` where a glob import blocks the name only when
-    /// `glob_binds` says its target can supply it (a named import blocks its
-    /// own name exactly as before).
-    pub(crate) fn local_import_frontier_with(
-        &self,
-        invocation: crate::core::digest::Digest,
-        head: &str,
-        glob_binds: &mut dyn FnMut(&LocalGlobImport) -> Result<bool, Diagnostic>,
-    ) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
-        let head = super::names::owned_name(head, self.scan.parse().profile.edition)?;
-        let mut scope = Some(self.producer(invocation)?.lexical_scope);
-        while let Some(current) = scope {
-            if let Some(frontier) = self.local_import_frontiers.get(&current) {
-                if let Some(input) = frontier.named.get(&head).copied() {
-                    return Ok(Some(input));
-                }
-                for glob in &frontier.globs {
-                    if glob_binds(glob)? {
-                        return Ok(Some(glob.identity));
-                    }
-                }
-            }
-            scope = self.scopes.parent(current)?.map(|(parent, _)| parent);
-        }
-        Ok(None)
+        segments: &[crate::syntax::imports::ImportSegment],
+        absolute: bool,
+        names: &super::macro_names::MacroNamespaces,
+    ) -> Result<super::macro_names::PathLookup, Diagnostic> {
+        super::declaration_imports::DeclarationImportIndex::prepared(&self.scan, &self.imports)?
+            .lookup_with_textual(
+                invocation,
+                segments,
+                absolute,
+                names,
+                |_| Ok(true),
+                |row, name| {
+                    declaration_import_reference(
+                        &self.scan,
+                        row,
+                        name,
+                        Some(self.context),
+                        None,
+                        &self.scopes,
+                        &self.declarations,
+                        &[],
+                        &self.facts,
+                        &self.ancestry,
+                    )
+                },
+            )
     }
     pub fn lookup(
         &self,
@@ -1137,6 +1054,16 @@ pub(crate) enum DeclarationBodyOwner<'a> {
 /// A candidate is not an outward publication or a completed impl catalog.
 #[derive(Clone)]
 pub struct GeneratedDeclarationMacroIndex {
+    imports: Arc<super::declaration_imports::DeclarationImportPlan>,
+    import_contexts: Arc<
+        std::collections::BTreeMap<
+            crate::core::digest::Digest,
+            Option<(
+                crate::syntax::token_wire::NameContextKey,
+                crate::syntax::token_wire::Key,
+            )>,
+        >,
+    >,
     output: Arc<crate::expand::generated_declarations::GeneratedDeclarations>,
     parent: DeclarationMacroParent,
     depth: usize,
@@ -1279,12 +1206,20 @@ impl GeneratedDeclarationMacroIndex {
         let outward_bytes = outward.iter().try_fold(0usize, |n, row| {
             n.checked_add(row.metadata_bytes()?).ok_or_else(fault)
         })?;
+        let imports = Arc::new(super::declaration_imports::DeclarationImportPlan::new(
+            output.scan(),
+        )?);
+        let import_contexts = Arc::new(declaration_import_contexts(&output, &facts)?);
+        let import_context_bytes = import_contexts.len().checked_mul(192).ok_or_else(fault)?;
         let declaration_bytes = declarations.metadata_bytes()?;
         let fact_bytes = facts.metadata_bytes()?;
         let ancestry_bytes = ancestry.metadata_bytes()?;
+        let scope_bytes = scopes.metadata_bytes()?;
         let local_bytes = output
             .metadata_bytes()?
-            .checked_add(scopes.metadata_bytes()?)
+            .checked_add(imports.metadata_bytes())
+            .and_then(|n| n.checked_add(import_context_bytes))
+            .and_then(|n| n.checked_add(scope_bytes))
             .and_then(|n| n.checked_add(declaration_bytes))
             .and_then(|n| n.checked_add(fact_bytes))
             .and_then(|n| n.checked_add(ancestry_bytes))
@@ -1307,6 +1242,8 @@ impl GeneratedDeclarationMacroIndex {
             .map(|p| (p.range.start, p.identity))
             .collect();
         Ok(Self {
+            imports,
+            import_contexts,
             derive_prefix: None,
             pending_order,
             pending: producers.keys().copied().collect(),
@@ -1485,7 +1422,7 @@ impl GeneratedDeclarationMacroIndex {
     pub fn output(&self) -> &Arc<crate::expand::generated_declarations::GeneratedDeclarations> {
         &self.output
     }
-    fn producer(
+    pub(crate) fn producer(
         &self,
         identity: crate::core::digest::Digest,
     ) -> Result<&DeclarationProducer, Diagnostic> {
@@ -1654,18 +1591,7 @@ impl GeneratedDeclarationMacroIndex {
         self.pending_order.remove(&(position, identity));
         Ok(())
     }
-    pub fn lookup(
-        &self,
-        invocation: crate::core::digest::Digest,
-    ) -> Result<super::macro_scopes::HygienicLookup, Diagnostic> {
-        use crate::syntax::declaration_scan::DeclarationProducerKind;
-        let producer = self.producer(invocation)?;
-        if producer.kind != DeclarationProducerKind::Macro || producer.path.len() != 1 {
-            return Ok(super::macro_scopes::HygienicLookup::NeedInput(invocation));
-        }
-        let capture = self.output.macro_call(invocation)?;
-        let (name, context) =
-            crate::expand::source_hygiene::declaration_macro_name(&capture.path, capture.edition)?;
+    fn outer_scopes(&self) -> Result<Vec<super::macro_scopes::OuterMacroScope<'_>>, Diagnostic> {
         let mut outers = Vec::new();
         outers.try_reserve_exact(self.depth).map_err(|_| fault())?;
         let mut child = self;
@@ -1680,6 +1606,91 @@ impl GeneratedDeclarationMacroIndex {
                 DeclarationMacroParent::Generated(index) => child = index,
             }
         }
+        Ok(outers)
+    }
+    pub(crate) fn lookup_imports(
+        &self,
+        invocation: crate::core::digest::Digest,
+        segments: &[crate::syntax::imports::ImportSegment],
+        absolute: bool,
+        names: &super::macro_names::MacroNamespaces,
+    ) -> Result<super::macro_names::PathLookup, Diagnostic> {
+        let capture = self.output.macro_call(invocation)?;
+        let mut expected = None;
+        for span in capture.path.spans() {
+            let context = crate::syntax::token_wire::Key(span.context.0);
+            let class = (self.facts.name_item(context)?, self.facts.item(context)?);
+            if expected.is_some_and(|prior| prior != class) {
+                return Ok(super::macro_names::PathLookup::NeedInput(invocation));
+            }
+            expected = Some(class);
+        }
+        let Some(expected) = expected else {
+            return Ok(super::macro_names::PathLookup::NeedInput(invocation));
+        };
+        let caller = self.producer(invocation)?;
+        let consumer_context =
+            self.facts.context(expected.1)?.defining_unit.0 == caller.scope.crate_key.0;
+        let outers = self.outer_scopes()?;
+        super::declaration_imports::DeclarationImportIndex::prepared(
+            self.output.scan(),
+            &self.imports,
+        )?
+        .lookup_with_textual(
+            invocation,
+            segments,
+            absolute,
+            names,
+            |row| {
+                Ok(self
+                    .import_contexts
+                    .get(&row.source.fingerprint())
+                    .is_some_and(|class| *class == Some(expected))
+                    && (consumer_context || row.target.is_some()))
+            },
+            |row, name| {
+                let found = declaration_import_reference(
+                    self.output.scan(),
+                    row,
+                    name,
+                    None,
+                    Some(self.origin),
+                    &self.scopes,
+                    &self.declarations,
+                    &outers,
+                    &self.facts,
+                    &self.ancestry,
+                )?;
+                if !consumer_context
+                    && matches!(
+                        found,
+                        super::macro_scopes::HygienicLookup::Selection(
+                            super::macro_origins::MacroSelection::Absent
+                        )
+                    )
+                {
+                    Ok(super::macro_scopes::HygienicLookup::NeedInput(
+                        row.source.identity,
+                    ))
+                } else {
+                    Ok(found)
+                }
+            },
+        )
+    }
+    pub fn lookup(
+        &self,
+        invocation: crate::core::digest::Digest,
+    ) -> Result<super::macro_scopes::HygienicLookup, Diagnostic> {
+        use crate::syntax::declaration_scan::DeclarationProducerKind;
+        let producer = self.producer(invocation)?;
+        if producer.kind != DeclarationProducerKind::Macro || producer.path.len() != 1 {
+            return Ok(super::macro_scopes::HygienicLookup::NeedInput(invocation));
+        }
+        let capture = self.output.macro_call(invocation)?;
+        let (name, context) =
+            crate::expand::source_hygiene::declaration_macro_name(&capture.path, capture.edition)?;
+        let outers = self.outer_scopes()?;
         self.declarations.resolve_with_outers(
             &self.scopes,
             super::macro_scopes::MacroReference {
@@ -1694,6 +1705,94 @@ impl GeneratedDeclarationMacroIndex {
             &self.ancestry,
         )
     }
+}
+
+/// Import target lookup uses the captured identifier occurrence, not the alias or call token.
+fn declaration_import_reference(
+    scan: &DeclarationScan,
+    row: &crate::syntax::declaration_scan::ScannedImport,
+    spelling: &str,
+    original_context: Option<crate::syntax::token_wire::Key>,
+    origin: Option<crate::syntax::token_wire::Key>,
+    scopes: &crate::expand::scopes::TextualScopes,
+    declarations: &super::macro_scopes::MacroDeclarations,
+    outers: &[super::macro_scopes::OuterMacroScope<'_>],
+    facts: &super::hygiene::HygieneFacts,
+    ancestry: &super::macro_origins::ExpansionAncestry,
+) -> Result<super::macro_scopes::HygienicLookup, Diagnostic> {
+    use crate::syntax::declaration_scan::DeclarationNameContext;
+    let pending = || super::macro_scopes::HygienicLookup::NeedInput(row.source.identity);
+    let Some(target) = &row.target else {
+        return Ok(pending());
+    };
+    let name = crate::expand::scopes::MacroName::parse(&target.spelling, target.edition)?;
+    if name != crate::expand::scopes::MacroName::parse(spelling, target.edition)? {
+        return Err(fault());
+    }
+    let context = match target.context {
+        DeclarationNameContext::Captured(context) => context,
+        DeclarationNameContext::Original if scan.generated_origin().is_none() => {
+            let Some(context) = original_context else {
+                return Ok(pending());
+            };
+            context
+        }
+        _ => return Ok(pending()),
+    };
+    declarations.resolve_with_outers(
+        scopes,
+        super::macro_scopes::MacroReference {
+            scope: row.lexical_scope,
+            before: u64::from(row.source.range.start),
+            name: &name,
+            context,
+            origin,
+        },
+        outers,
+        facts,
+        ancestry,
+    )
+}
+/// Cold, immutable pinned comparison receipts from the admitted tree's actual use leaves.
+/// Reused on retries; no import syntax extraction is performed by lookup.
+fn declaration_import_contexts(
+    output: &crate::expand::generated_declarations::GeneratedDeclarations,
+    facts: &super::hygiene::HygieneFacts,
+) -> Result<
+    std::collections::BTreeMap<
+        crate::core::digest::Digest,
+        Option<(
+            crate::syntax::token_wire::NameContextKey,
+            crate::syntax::token_wire::Key,
+        )>,
+    >,
+    Diagnostic,
+> {
+    let mut result = std::collections::BTreeMap::new();
+    let parsed = output.admitted_parsed();
+    for row in output.scan().imports() {
+        let ranges = crate::syntax::imports::name_ranges(parsed, &row.source)?;
+        let mut class = None;
+        let mut uniform = true;
+        for range in ranges {
+            let Some(context) = parsed.identifier_context(range)? else {
+                uniform = false;
+                continue;
+            };
+            let current = (facts.name_item(context)?, facts.item(context)?);
+            if class.is_some_and(|old| old != current) {
+                uniform = false;
+            }
+            class = Some(current);
+        }
+        if result
+            .insert(row.source.fingerprint(), class.filter(|_| uniform))
+            .is_some()
+        {
+            return Err(fault());
+        }
+    }
+    Ok(result)
 }
 
 #[derive(Clone)]

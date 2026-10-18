@@ -1,0 +1,903 @@
+{
+  "candidate": "V25",
+  "status": "Exact compiled source and bounded runtime validation; initializer, numeric source-context and declaration-producer gaps remain",
+  "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8",
+  "head": "5fe70d59298508da56ae4062cdcd427138ed4bd5",
+  "compiled_source_leaves": 3330,
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "seconds": 30.115,
+      "terminal": "21e67f/0",
+      "warnings": 83,
+      "binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4"
+      }
+    },
+    "cli": {
+      "exit": 0,
+      "seconds": 24.601,
+      "terminal": "8801b9/0",
+      "warnings": 171,
+      "binary": {
+        "path": "target/debug/lrr",
+        "sha256": "97c7a9c7095ccc3cacece5179e3517f2219d3881274e1099557a48e6fb6f9ced"
+      }
+    }
+  },
+  "source_frozen_through_both_builds": true,
+  "binaries_unchanged_after_runtime": true,
+  "runtime_scope": "Sealed V25 binaries after both builds and exact20 Rust leaves staged/verified; writers released for successors. Five primary and three separately authorized supplemental owning2015 imported originals preserve actual directives/aux and bytes/hash. No rustc guest execution, full-inventory or full-fixture claim.",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "stock_terminal": "007bbc/0",
+  "stock_roots": 5,
+  "stock_runtime_passes": 4,
+  "stock": [
+    {
+      "path": "tests/ui/consts/match-const-fn-structs.rs",
+      "sha256": "358758e1ba2b8663d6fc61896c0016979dbd0791f7716fb35f4a39369813cfb1",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/match-const-fn-structs.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "8757fed59f1b722c1aab462c0d5da1980b7aac995f7ccfa6288d7476cdb167a0"
+      ],
+      "exit": 0,
+      "seconds": 5.522,
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 69,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 3,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 48,
+        "vm_outcomes": 48
+      },
+      "guest_stdout": null,
+      "operations_completed": 67
+    },
+    {
+      "path": "tests/ui/consts/const_in_pattern/cyclic-const-dag-pass.rs",
+      "sha256": "31ee02b5cd60be7801100d9b856e8a65939e6c6ca054275598c3994f6d228d1f",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const_in_pattern/cyclic-const-dag-pass.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "cd4f74ccc8248394bdd85564d92eee39c03edcf5b72c96be634d2193ec57d20c"
+      ],
+      "exit": 0,
+      "seconds": 4.292,
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 51,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 2,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 40,
+        "vm_outcomes": 40
+      },
+      "guest_stdout": null,
+      "operations_completed": 49
+    },
+    {
+      "path": "tests/ui/consts/const_in_pattern/custom-eq-branch-pass.rs",
+      "sha256": "83a1e69b197e30fe7802b040e5c39a9fac07f46f8cf91f9fc7d3aad79fa1908e",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const_in_pattern/custom-eq-branch-pass.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "1f51108a0c30f16900dcc2de2dda6ee1b5540aedf66c224fbfc41af58a8a4b80"
+      ],
+      "exit": 2,
+      "seconds": 4.733,
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "runtime_contract_pass": false,
+      "terminal": {
+        "status": "fault",
+        "code": "LRR-E-GENERIC-BINDING",
+        "message": "observed structural constructor cannot replace its source result context",
+        "phase": "executor"
+      },
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 48,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 35,
+        "vm_outcomes": 35
+      },
+      "guest_stdout": null,
+      "operations_completed": null,
+      "diagnostic": {
+        "code": "LRR-E-GENERIC-BINDING",
+        "generated_origin": null,
+        "guest_stack": {
+          "frames": [
+            {
+              "body": {
+                "body_key": {
+                  "definition": "922fe4acc69c502cfdbf7934dcd61f7222c785efb4708d60bbdb4889e5862d99",
+                  "exact_body_bytes": "04a5bc52bd2f2e1fda661b171d06112fac57c0828e9a4c46657a371e831784b6"
+                },
+                "relative_end": 100,
+                "relative_start": 90
+              },
+              "locations": [
+                {
+                  "range": {
+                    "end": 687,
+                    "start": 686
+                  },
+                  "source": {
+                    "content": [
+                      125,
+                      88,
+                      243,
+                      25,
+                      193,
+                      19,
+                      22,
+                      195,
+                      247,
+                      24,
+                      10,
+                      31,
+                      13,
+                      193,
+                      100,
+                      49,
+                      175,
+                      32,
+                      149,
+                      35,
+                      222,
+                      91,
+                      237,
+                      227,
+                      13,
+                      206,
+                      234,
+                      103,
+                      11,
+                      188,
+                      254,
+                      223
+                    ],
+                    "path": "custom-eq-branch-pass.rs",
+                    "unit": [
+                      119,
+                      166,
+                      186,
+                      210,
+                      215,
+                      178,
+                      100,
+                      231,
+                      39,
+                      227,
+                      58,
+                      192,
+                      57,
+                      10,
+                      110,
+                      24,
+                      85,
+                      18,
+                      251,
+                      98,
+                      42,
+                      247,
+                      3,
+                      88,
+                      135,
+                      218,
+                      19,
+                      220,
+                      114,
+                      192,
+                      49,
+                      130
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "end": 695,
+                    "start": 687
+                  },
+                  "source": {
+                    "content": [
+                      125,
+                      88,
+                      243,
+                      25,
+                      193,
+                      19,
+                      22,
+                      195,
+                      247,
+                      24,
+                      10,
+                      31,
+                      13,
+                      193,
+                      100,
+                      49,
+                      175,
+                      32,
+                      149,
+                      35,
+                      222,
+                      91,
+                      237,
+                      227,
+                      13,
+                      206,
+                      234,
+                      103,
+                      11,
+                      188,
+                      254,
+                      223
+                    ],
+                    "path": "custom-eq-branch-pass.rs",
+                    "unit": [
+                      119,
+                      166,
+                      186,
+                      210,
+                      215,
+                      178,
+                      100,
+                      231,
+                      39,
+                      227,
+                      58,
+                      192,
+                      57,
+                      10,
+                      110,
+                      24,
+                      85,
+                      18,
+                      251,
+                      98,
+                      42,
+                      247,
+                      3,
+                      88,
+                      135,
+                      218,
+                      19,
+                      220,
+                      114,
+                      192,
+                      49,
+                      130
+                    ]
+                  }
+                },
+                {
+                  "range": {
+                    "end": 696,
+                    "start": 695
+                  },
+                  "source": {
+                    "content": [
+                      125,
+                      88,
+                      243,
+                      25,
+                      193,
+                      19,
+                      22,
+                      195,
+                      247,
+                      24,
+                      10,
+                      31,
+                      13,
+                      193,
+                      100,
+                      49,
+                      175,
+                      32,
+                      149,
+                      35,
+                      222,
+                      91,
+                      237,
+                      227,
+                      13,
+                      206,
+                      234,
+                      103,
+                      11,
+                      188,
+                      254,
+                      223
+                    ],
+                    "path": "custom-eq-branch-pass.rs",
+                    "unit": [
+                      119,
+                      166,
+                      186,
+                      210,
+                      215,
+                      178,
+                      100,
+                      231,
+                      39,
+                      227,
+                      58,
+                      192,
+                      57,
+                      10,
+                      110,
+                      24,
+                      85,
+                      18,
+                      251,
+                      98,
+                      42,
+                      247,
+                      3,
+                      88,
+                      135,
+                      218,
+                      19,
+                      220,
+                      114,
+                      192,
+                      49,
+                      130
+                    ]
+                  }
+                }
+              ],
+              "pc": "83d9b690b3038f445541bdd5002b4c19436471c16efe2ea238c4be49e6425ebd"
+            }
+          ],
+          "omitted_frames": 0
+        },
+        "macro_origin": null,
+        "message": "observed structural constructor cannot replace its source result context",
+        "origin_attachment_failure": null,
+        "rendered_generated_origin": null,
+        "rendered_guest_stack": null,
+        "rendered_macro_origin": null
+      }
+    },
+    {
+      "path": "tests/ui/structs-enums/functional-struct-upd.rs",
+      "sha256": "99523cf3db37c83096666946c5cc33bc9e155c6a25d71bc9f4fed35c9a276d50",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/functional-struct-upd.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "9a280c8f4aef7f626819c55a1af32dbb1d48e4ca13b56599cbf4ced5f2bbd463"
+      ],
+      "exit": 0,
+      "seconds": 5.07,
+      "stdout": "stock-3.stdout",
+      "stderr": "stock-3.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 999,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 40,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 692,
+        "vm_outcomes": 692
+      },
+      "guest_stdout": "Foo { x: 4, y: 2 }\n",
+      "operations_completed": 840
+    },
+    {
+      "path": "tests/ui/fn/expr-fn.rs",
+      "sha256": "f30f6f76c325d841b26a981253c014ac7f2c11c65463f4ac86503536b7cbe422",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/fn/expr-fn.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "ab8f4606f78b6ff3ba6b7c8ef927398769ef94c2e1255792bf75e0bca71a5aab"
+      ],
+      "exit": 0,
+      "seconds": 5.95,
+      "stdout": "stock-4.stdout",
+      "stderr": "stock-4.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 772,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 25,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 544,
+        "vm_outcomes": 544
+      },
+      "guest_stdout": null,
+      "operations_completed": 747
+    }
+  ],
+  "additional_stock_terminal": "867112/0",
+  "additional_stock_roots": 3,
+  "additional_stock_runtime_passes": 3,
+  "additional_stock": [
+    {
+      "path": "tests/ui/structs/struct-partial-move-1.rs",
+      "sha256": "7c1c88e14a67ad5ed88b683823c0eacf4a3de95135e8aada05d92f4c89d3292c",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs/struct-partial-move-1.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "f893412c7d3196a0a6768b11804569859715407b64e3d3ee0661b669bc6f0f71"
+      ],
+      "exit": 0,
+      "seconds": 6.583,
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 315,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 7,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 211,
+        "vm_outcomes": 211
+      },
+      "guest_stdout": null,
+      "operations_completed": 281
+    },
+    {
+      "path": "tests/ui/structs/struct-partial-move-2.rs",
+      "sha256": "91ea1d0fce7f424d58cdcd216af8d4ee7d43b4ac1c3222310290d4b8988491f1",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs/struct-partial-move-2.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "61975e5f6181f638b40a20f3f1852e19517642d800d6ce9a518ec4936b05c319"
+      ],
+      "exit": 0,
+      "seconds": 7.054,
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 592,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 13,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 401,
+        "vm_outcomes": 401
+      },
+      "guest_stdout": null,
+      "operations_completed": 525
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-3.rs",
+      "sha256": "0ae45bb5de592e3bfec9d502e1bae76651192130d0c51f41bee82bc6bed9d7f8",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "aux": [],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs/struct-order-of-eval-3.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "6d33f359ad87c924931df3543f6e7e2bfe9c0fd728d4d7c31ff2a6ae3e1e6acd"
+      ],
+      "exit": 0,
+      "seconds": 5.675,
+      "stdout": "stock-2.stdout",
+      "stderr": "stock-2.stderr",
+      "runtime_contract_pass": true,
+      "terminal": {
+        "status": "completed",
+        "code": null,
+        "message": null,
+        "phase": null
+      },
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 701,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 25,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 513,
+        "vm_outcomes": 513
+      },
+      "guest_stdout": null,
+      "operations_completed": 603
+    }
+  ],
+  "combined_stock_roots": 8,
+  "combined_stock_runtime_passes": 7,
+  "new_stock_runtime_passes": 6,
+  "new_stock_paths": [
+    "tests/ui/consts/match-const-fn-structs.rs",
+    "tests/ui/consts/const_in_pattern/cyclic-const-dag-pass.rs",
+    "tests/ui/structs-enums/functional-struct-upd.rs",
+    "tests/ui/structs/struct-partial-move-1.rs",
+    "tests/ui/structs/struct-partial-move-2.rs",
+    "tests/ui/structs/struct-order-of-eval-3.rs"
+  ],
+  "controls_terminal": "de639a/0",
+  "controls_bodies": 9,
+  "controls_passes": 5,
+  "controls": [
+    {
+      "selector": "cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins",
+      "exit": 101,
+      "seconds": 4.928,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-0.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8",
+      "failure_excerpt": "thread 'cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins' (15467117) panicked at crates/lrr/src/cli/initializer_tests.rs:275:21:\nassertion `left == right` failed: 2015, origin=0\n  left: 4\n right: 3\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::reached_pattern_constants_share_vm_storage_and_leave_alternatives_cold",
+      "exit": 0,
+      "seconds": 17.015,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-1.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::initializer_tests::reached_pattern_constants_share_vm_storage_and_leave_alternatives_cold",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8"
+    },
+    {
+      "selector": "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+      "exit": 0,
+      "seconds": 63.601,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-2.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::initializer_tests::generated_constant_patterns_use_the_same_vm_initializer_demand",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+      "exit": 101,
+      "seconds": 15.468,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-3.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8",
+      "failure_excerpt": "thread 'cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold' (15468339) panicked at crates/lrr/src/cli/generic_boundary_tests.rs:602:64:\nedition 2015, route 1, branch foo(&node).unwrap(): GuestPanic { kind: Explicit, message: Some(\"assertion failed: value > 0\"), pc: PcKey { body: BodyKey { definition: Digest(2cb904fa80da6cda0373a6482b08363b818d1109aabc88d3f29c9be304e0c59b), exact_body_bytes: Digest(0a9e1aa026c3d5564da2410c3c35591d665b08299bee1c03f881a698c6610a57) }, node: 66, phase: 4 }, origin: Origin { span: BodySpan { body_key: BodyKey { definition: Digest(2cb904fa80da6cda0373a6482b08363b818d1109aabc88d3f29c9be304e0c59b), exact_body_bytes: Digest(0a9e1aa026c3d5564da2410c3c35591d665b08299bee1c03f881a698c6610a57) }, relative_start: 171, relative_end: 226 }, expansion_ancestry: [] } }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold",
+      "exit": 101,
+      "seconds": 15.282,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-4.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8",
+      "failure_excerpt": "thread 'cli::crate_graph::generic_boundary_tests::cold_local_associated_result_keeps_unentered_source_calls_cold' (15468532) panicked at crates/lrr/src/cli/generic_boundary_tests.rs:576:64:\nedition 2015, route 1, branch foo(&node).unwrap(): GuestPanic { kind: Explicit, message: Some(\"assertion failed: value > 0\"), pc: PcKey { body: BodyKey { definition: Digest(a924c595875ec8efd6921a5453e44b83df28ff45ad1520c5c76a65d452182d53), exact_body_bytes: Digest(9f888a9d89bebecf363f2c4382424f3d08f60cb025168fdce3baff72de054696) }, node: 67, phase: 4 }, origin: Origin { span: BodySpan { body_key: BodyKey { definition: Digest(a924c595875ec8efd6921a5453e44b83df28ff45ad1520c5c76a65d452182d53), exact_body_bytes: Digest(9f888a9d89bebecf363f2c4382424f3d08f60cb025168fdce3baff72de054696) }, relative_start: 256, relative_end: 311 }, expansion_ancestry: [] } }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:"
+    },
+    {
+      "selector": "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+      "exit": 101,
+      "seconds": 0.172,
+      "bodies": 1,
+      "pass": false,
+      "log": "control-5.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8",
+      "failure_excerpt": "thread 'service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions' (15468760) panicked at crates/lrr/src/service/retained_body_tests.rs:231:18:\nsource discovery incomplete: edition=2015, selected=Some(\"lrr_probe\"), source=\"mod import_module{}macro_rules! earlier{()=>{}}macro_rules! emit{()=>{macro_rules! local{()=>{}}struct Holder;impl Holder{fn answer(){earlier!();}}}}emit!();macro_rules! later{()=>{}}fn lrr_probe(){}\", diagnostic=Diagnostic { code: \"LRR-E-CATALOG-INCOMPLETE\", message: \"fixed point retains unresolved import or macro producers\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, failure_context: None }, blocked=[(Digest(26c9e0c7b5a6b924320f9ef1c7fed6569e84aeff9da39633c2026705566dba2c), [Digest(26c9e0c7b5a6b924320f9ef1c7fed6569e84aeff9da39633c2026705566dba2c)])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:"
+    },
+    {
+      "selector": "cli::crate_graph::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation",
+      "exit": 0,
+      "seconds": 28.153,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-6.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::crate_graph::generic_boundary_tests::cold_local_associated_type_goal_retains_selected_source_without_callee_preparation",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8"
+    },
+    {
+      "selector": "cli::reached_record_update_tests::record_updates_share_place_transfers_and_resumable_copy_all_editions",
+      "exit": 0,
+      "seconds": 19.323,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-7.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "cli::reached_record_update_tests::record_updates_share_place_transfers_and_resumable_copy_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8"
+    },
+    {
+      "selector": "service::retained_reference_source_tests::retained_reference_calls_share_ordinary_source_entry_all_editions",
+      "exit": 0,
+      "seconds": 0.482,
+      "bodies": 1,
+      "pass": true,
+      "log": "control-8.log",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+        "service::retained_reference_source_tests::retained_reference_calls_share_ordinary_source_entry_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "binary_sha256": "05f9bb8126712d744d6c6e6bb81b67b8c747470482947e8aab21b504b4c893c4",
+      "source_sha256": "4d7efa672dcc84f9ce330990ed8ae254c3320e285e628412cefcd6ff65e5b0e8"
+    }
+  ],
+  "acceptance_limits": [
+    "No complete interpreter milestone, architecture feature, full-fixture/full-suite or guest-JIT prerequisite gate closure. Seven runtime-contract passes are a bounded eight-root exact-binary result; six previously saved failures newly complete, expr-fn is retained.",
+    "match-const-fn-structs and cyclic-const-dag-pass complete their runtime bodies, but their positive matching branches have no independent observable assertions. These do not alone prove expected selected-arm identity, general graph-cycle behavior or all structural equality semantics.",
+    "functional-struct-upd completes and prints expected Foo { x: 4, y: 2 } newline. Three supplemental FRU partial-move/evaluation-order originals complete; their saved v16 failures cannot justify a fresh repair when current V25 passes.",
+    "custom-eq-branch-pass still fails LRR-E-GENERIC-BINDING: observed structural constructor cannot replace its source result context, at singleton [CustomEq] slice construction, capture incomplete. No full test pass.",
+    "New structural ownership/guard-retry program completes its first 2015 ordinary-source run, then fails source-call counter4 versus expected3. Expected3 retained. Per-call targets/PC are unavailable: helper disables retained trace and removes temporary capture before host assertion. E007 aggregate initializer replay is a suspected existing cause, not demonstrated attribution. Other origins/editions in that control remain unexecuted.",
+    "Cold global/local macro runtime controls advance past previous structural occurrence-proof failures then panic at value > 0 for 2015 route1 branch foo(&node).unwrap(); actual selected cold-branch source constraints remain incorrect. Passing local pure U32/Eq control does not make those runtime matrices pass.",
+    "Ancestry control fails genuine source discovery fixed-point setup at first newly added associated impl 2015 case: self-blocked producer26c9e0c7b5a6b924320f9ef1c7fed6569e84aeff9da39633c2026705566dba2c. SelectedSome/wrong-owner/wrong-graph and later alias assertions were not reached; alias authority matrix remains unverified.",
+    "Existing scalar constant cold/retry/origin controls, retained-generated function entry, local pure goal and FRU all-edition route control pass, but do not close aggregate run-once/template/application identity requirements (E007), complete hygiene matrix, or held SelectedNone empty-boundary owner proof.",
+    "All other historical passes remain attached to their original binaries; no refreshed global passing-total claim. No new Cargo/runtimes launched after terminal queues for this report."
+  ],
+  "review_receipts": [
+    "../structural-constant-storage-independent-review-next.json",
+    "../generated-associated-lexical-boundary-independent-review-next.json",
+    "../declaration-macro-import-alias-independent-review-corrected.json",
+    "../retained-macro-occurrence-independent-review-corrected.json",
+    "../associated-declaration-boundary-control-independent-review-next.json",
+    "../v25-mechanical-independent-source-review.json"
+  ],
+  "prior_failed_candidate": {
+    "candidate": "V24",
+    "lib_terminal": "9d4ac9/101",
+    "error": "E0624 private GeneratedDeclarationMacroIndex::producer",
+    "cli_built": false,
+    "runtime_bodies": 0,
+    "report_sha256": "5318ced933bcaa8624d35a9401a9130cc10716073d5138b730a2edf9b4ad9642",
+    "repair": "V25 sole Rust delta makes existing checked producer accessor pub(crate); exact one-line reverse matches V24 source hash."
+  },
+  "raw_report_sha256": "79944183e2bc21c008809f1c787bd26adc71136207a8e3611b4dbc9f2b979343"
+}

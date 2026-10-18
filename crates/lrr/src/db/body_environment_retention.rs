@@ -175,11 +175,13 @@ impl Roots {
                 for root in boundary.generated_roots() {
                     self.items(root)?;
                 }
-                let modules = boundary.module_roots();
-                let bytes = modules.keys().try_fold(Self::map(modules)?, |n, key| {
-                    account_add(n, key.heap_bytes())
-                })?;
-                self.add(modules, bytes)?;
+                let declarations = boundary.declaration_scope_roots();
+                let bytes = declarations
+                    .values()
+                    .try_fold(Self::map(declarations)?, |n, declaration| {
+                        account_add(n, declaration.context.scope.heap_bytes())
+                    })?;
+                self.add(declarations, bytes)?;
             }
         }
         Ok(())

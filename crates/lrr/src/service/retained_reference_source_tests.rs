@@ -552,37 +552,55 @@ fn generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editio
         },
     };
     for edition in [2015, 2018, 2021, 2024] {
-        for (declaration, local) in [
+        for (declaration, local, associated) in [
             (
                 "macro_rules! emit{()=>{fn answer(){earlier!();}}}emit!();",
+                false,
                 false,
             ),
             (
                 "macro_rules! emit{()=>{fn answer(){earlier!();}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
                 false,
+                false,
             ),
             (
                 "macro_rules! emit{()=>{mod nested{pub fn answer(){earlier!();}}}}emit!();",
+                false,
                 false,
             ),
             (
                 "macro_rules! emit{()=>{macro_rules! local{()=>{}}fn answer(){earlier!();}}}emit!();",
                 true,
+                false,
             ),
             (
                 "macro_rules! emit{()=>{mod nested{macro_rules! local{()=>{}}pub fn answer(){earlier!();}}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+                true,
+                false,
+            ),
+            (
+                "macro_rules! emit{()=>{macro_rules! local{()=>{}}struct Holder;impl Holder{fn answer(){earlier!();}}}}emit!();",
+                true,
+                true,
+            ),
+            (
+                "macro_rules! emit{()=>{macro_rules! local{()=>{}}trait Holder{fn answer(){earlier!();}}}}emit!();",
+                true,
                 true,
             ),
             (
                 "macro_rules! emit{()=>{fn answer(){use earlier as selected;selected!();}}}emit!();",
                 false,
+                false,
             ),
             (
                 "macro_rules! emit{()=>{fn answer(){use earlier as selected;selected!();}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
                 false,
+                false,
             ),
             (
                 "macro_rules! emit{()=>{fn answer(){use import_module::{self as module_alias};earlier!();}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+                false,
                 false,
             ),
         ] {
@@ -625,7 +643,11 @@ fn generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editio
             let InputValue::DeclarationContext(context) = context.as_ref() else {
                 panic!()
             };
+            assert_eq!(context.scope.owner.is_some(), associated);
             let boundary = discovery.generated_body_macro_boundary(unit).unwrap();
+            if associated {
+                assert!(boundary.selected_root().is_some());
+            }
             // The same actual output cannot acquire a boundary in another
             // source world merely because its completion epoch matches.
             let mut foreign_seal = unit.seal.clone();
@@ -771,6 +793,26 @@ fn generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editio
                     .declaration_outer(crate::core::digest::Digest([233; 32]), context)
                     .is_err()
             );
+            // Catalogue-backed boundaries retain the actual associated
+            // declaration's lexical owner; a module-scope substitution fails.
+            // Completed-empty boundaries have a separately held proof gap.
+            if boundary.selected_root().is_some() {
+                let mut wrong_owner = context.clone();
+                wrong_owner.scope.owner = Some(crate::core::digest::Digest([234; 32]));
+                assert!(
+                    boundary
+                        .declaration_outer(definition, &wrong_owner)
+                        .is_err()
+                );
+                if associated {
+                    wrong_owner.scope.owner = None;
+                    assert!(
+                        boundary
+                            .declaration_outer(definition, &wrong_owner)
+                            .is_err()
+                    );
+                }
+            }
             let mut wrong = context.clone();
             wrong.range.end -= 1;
             assert!(boundary.declaration_outer(definition, &wrong).is_err());

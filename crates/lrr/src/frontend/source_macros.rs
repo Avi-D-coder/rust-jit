@@ -1500,6 +1500,7 @@ pub struct EnteredMacroIndex<'a> {
     scopes: Arc<TextualScopes>,
     pub(super) keys: Arc<BTreeMap<u32, ScopeKey>>,
     declarations: Arc<MacroDeclarations>,
+    ancestry: Arc<ExpansionAncestry>,
     producers: Arc<BTreeMap<Digest, ProducerKind>>,
     retired_no_item: Arc<BTreeSet<Digest>>,
     module_outer: Option<(ScopeKey, u64)>,
@@ -1567,6 +1568,10 @@ impl PublishedMacroIndex {
             .and_then(|context| context.macro_hygiene())
             .unwrap_or(&self.index.facts);
         hygiene.context(self.index.context)?;
+        let ancestry = match &body_context {
+            Some(context) => context.prepare_macro_ancestry(&self.index.ancestry)?,
+            None => Arc::clone(&self.index.ancestry),
+        };
         let mut e = crate::core::digest::StableEncoder::new("lrr/v2/entered-macro-root");
         e.digest(body.definition);
         let root = ScopeKey::root(e.finish());
@@ -1598,7 +1603,7 @@ impl PublishedMacroIndex {
                     name,
                     ..
                 } => {
-                    let (definition_context, definition_edition) =
+                    let (definition_context, definition_edition, definition_origin) =
                         if let Some(context) = &body_context {
                             let parsed = context.source().parsed();
                             let shape = parsed.macro_definition_shape_at(event.range)?;
@@ -1609,11 +1614,16 @@ impl PublishedMacroIndex {
                             let raw = context
                                 .source()
                                 .identifier_context_or_original(name_range, self.index.context)?;
-                            (raw, parsed.token_edition(name_range)?)
+                            (
+                                raw,
+                                parsed.token_edition(name_range)?,
+                                context.reference_origin(name_range)?,
+                            )
                         } else {
                             (
                                 self.index.context,
                                 self.source().outline.parse.profile.edition,
+                                None,
                             )
                         };
                     let definition = MacroDefinition {
@@ -1624,15 +1634,9 @@ impl PublishedMacroIndex {
                     declarations.register(
                         definition.clone(),
                         definition_context,
-                        match &body_context {
-                            Some(context) => context.reference_origin()?,
-                            None => None,
-                        },
+                        definition_origin,
                         hygiene,
-                        body_context
-                            .as_ref()
-                            .and_then(|context| context.macro_ancestry())
-                            .map_or(self.index.ancestry.as_ref(), |ancestry| ancestry.as_ref()),
+                        &ancestry,
                     )?;
                     scopes.define(
                         key,
@@ -1657,6 +1661,7 @@ impl PublishedMacroIndex {
             scopes: Arc::new(scopes),
             keys: Arc::new(keys),
             declarations: Arc::new(declarations),
+            ancestry,
             producers: Arc::new(producers),
             retired_no_item: Arc::new(BTreeSet::new()),
             module_outer,
@@ -1989,13 +1994,14 @@ impl EnteredMacroIndex<'_> {
             return Err(error("entered invocation member is missing"));
         };
         let textual = match &self.body_context {
-            Some(_) => self.lookup_with_context(
+            Some(_) => self.lookup_with_context_occurrence(
                 expected,
                 body,
                 u64::from(range.start),
                 name,
                 self.identifier_context(call.name_range())?,
                 self.identifier_edition(call.name_range())?,
+                Some(call.name_range()),
             )?,
             None => lookup(None, u64::from(range.start), name)?,
         };
@@ -2056,6 +2062,18 @@ impl EnteredMacroIndex<'_> {
         context: Key,
         edition: u16,
     ) -> Result<HygienicLookup, Diagnostic> {
+        self.lookup_with_context_occurrence(expected, body, at, name, context, edition, None)
+    }
+    fn lookup_with_context_occurrence(
+        &self,
+        expected: &crate::source::changes::SourceSelection,
+        body: &crate::source::manifest::BodyKey,
+        at: u64,
+        name: &str,
+        context: Key,
+        edition: u16,
+        occurrence: Option<crate::syntax::spans::SourceRange>,
+    ) -> Result<HygienicLookup, Diagnostic> {
         if expected.canonical()? != *self.parent.source() || *body != self.body {
             return Err(error("body lookup source/body revision mismatch"));
         }
@@ -2076,7 +2094,7 @@ impl EnteredMacroIndex<'_> {
             .rev()
             .find(|scope| u64::from(scope.range.start) <= at && at < u64::from(scope.range.end))
             .ok_or_else(|| error("body lookup position is outside entered scopes"))?;
-        self.resolve_at_with(scope.ordinal, at, name, context, edition, &[])
+        self.resolve_at_with(scope.ordinal, at, name, context, edition, occurrence, &[])
     }
     // Called only after public selection checks, with a retained invocation or import scope.
     fn resolve_import(
@@ -2091,7 +2109,7 @@ impl EnteredMacroIndex<'_> {
                 (
                     occurrence.context(context.source(), self.parent.index.context)?,
                     occurrence.edition(),
-                    context.reference_origin()?,
+                    context.reference_origin(occurrence.range())?,
                 )
             }
             None => (
@@ -2167,12 +2185,7 @@ impl EnteredMacroIndex<'_> {
         )
     }
     fn ancestry_root(&self) -> Arc<ExpansionAncestry> {
-        Arc::clone(
-            self.body_context
-                .as_ref()
-                .and_then(|context| context.macro_ancestry())
-                .unwrap_or(&self.parent.index.ancestry),
-        )
+        Arc::clone(&self.ancestry)
     }
     pub(crate) fn source_macro_root(&self) -> &Arc<SourceMacroIndex> {
         &self.parent.index
@@ -2241,10 +2254,7 @@ impl EnteredMacroIndex<'_> {
             .unwrap_or(&self.parent.index.facts)
     }
     pub(crate) fn ancestry_root_handle(&self) -> &Arc<ExpansionAncestry> {
-        self.body_context
-            .as_ref()
-            .and_then(|context| context.macro_ancestry())
-            .unwrap_or(&self.parent.index.ancestry)
+        &self.ancestry
     }
     pub(crate) fn exclusive_metadata_bytes(&self) -> Result<usize, Diagnostic> {
         std::mem::size_of::<Self>()
@@ -2301,6 +2311,7 @@ impl EnteredMacroIndex<'_> {
             && Arc::ptr_eq(&self.scopes, &other.scopes)
             && Arc::ptr_eq(&self.keys, &other.keys)
             && Arc::ptr_eq(&self.declarations, &other.declarations)
+            && Arc::ptr_eq(&self.ancestry, &other.ancestry)
             && Arc::ptr_eq(&self.producers, &other.producers)
             && Arc::ptr_eq(&self.retired_no_item, &other.retired_no_item)
             && self.module_outer == other.module_outer
@@ -2338,6 +2349,7 @@ impl EnteredMacroIndex<'_> {
             scopes: self.scopes,
             keys: self.keys,
             declarations: self.declarations,
+            ancestry: self.ancestry,
             producers: self.producers,
             retired_no_item: self.retired_no_item,
             module_outer: self.module_outer,
@@ -2352,12 +2364,7 @@ impl EnteredMacroIndex<'_> {
             .map_or(self.parent.index.facts.as_ref(), |facts| facts.as_ref())
     }
     fn resolution_ancestry(&self) -> &ExpansionAncestry {
-        self.body_context
-            .as_ref()
-            .and_then(|context| context.macro_ancestry())
-            .map_or(self.parent.index.ancestry.as_ref(), |ancestry| {
-                ancestry.as_ref()
-            })
+        &self.ancestry
     }
     fn append_module_outers<'a>(
         &'a self,
@@ -2407,6 +2414,7 @@ impl EnteredMacroIndex<'_> {
         name: &str,
         context: Key,
         edition: u16,
+        occurrence: Option<crate::syntax::spans::SourceRange>,
         extra: &[super::macro_scopes::OuterMacroScope<'_>],
     ) -> Result<HygienicLookup, Diagnostic> {
         let scope = self
@@ -2427,7 +2435,10 @@ impl EnteredMacroIndex<'_> {
             .collect::<Vec<_>>();
         self.append_module_outers(&mut outers, extra)?;
         let origin = match &self.body_context {
-            Some(context) => context.reference_origin()?,
+            Some(context) => match occurrence {
+                Some(range) => context.reference_origin(range)?,
+                None => context.reference_origin_at(at, name.as_str())?,
+            },
             None => None,
         };
         self.declarations.resolve_with_outers(
@@ -2748,6 +2759,7 @@ impl LinkedEnteredMacroIndex<'_> {
             name,
             self.entered.parent.index.context,
             self.module.source().outline.parse.profile.edition,
+            None,
             &self.module.outers,
         )
     }

@@ -165,6 +165,7 @@ pub struct GeneratedMacroCatalog {
     call_sites: BTreeMap<Digest, (u32, GeneratedCallIndex)>,
     call_scopes: BTreeMap<Digest, SourceScope>,
     module_scopes: Arc<BTreeMap<SourceScope, ScopeKey>>,
+    declaration_scopes: Arc<BTreeMap<Digest, CapturedDeclarationScope>>,
     module_sources: BTreeMap<Digest, ModuleParent>,
     completed_module_sources: BTreeMap<Digest, ModuleParent>,
     source_body_owners: BTreeMap<Digest, Arc<crate::expand::source_declarative::SourceDeclarative>>,
@@ -206,6 +207,12 @@ pub struct GeneratedMacroCatalog {
     facts: Arc<HygieneFacts>,
     ancestry: Arc<ExpansionAncestry>,
     edition: u16,
+}
+/// The actual canonical generated declaration and its retained lexical edge.
+/// This table does not introduce an impl or trait into module namespaces.
+pub(crate) struct CapturedDeclarationScope {
+    pub(crate) context: crate::syntax::outline::DeclarationContext,
+    pub(crate) lexical: ScopeKey,
 }
 pub(crate) struct GeneratedCompilerInput<'a> {
     pub resolver: GeneratedEagerResolver<'a>,
@@ -387,8 +394,10 @@ impl GeneratedMacroCatalog {
     pub(crate) fn retained_items(&self) -> &Arc<GeneratedItems> {
         &self.items
     }
-    pub(crate) fn retained_module_scopes(&self) -> &Arc<BTreeMap<SourceScope, ScopeKey>> {
-        &self.module_scopes
+    pub(crate) fn retained_declaration_scopes(
+        &self,
+    ) -> &Arc<BTreeMap<Digest, CapturedDeclarationScope>> {
+        &self.declaration_scopes
     }
     pub(crate) fn retain_body_outer(
         &self,
@@ -819,22 +828,36 @@ impl GeneratedMacroCatalog {
         let mut scopes = TextualScopes::default();
         scopes.add_root(scope)?;
         let mut module_scopes = BTreeMap::from([(owner.clone(), scope)]);
+        let mut declaration_lexical_scopes = BTreeMap::from([(owner.clone(), scope)]);
         let mut scope_bytes = owner.heap_bytes();
         for event in &outline.textual_events {
             if let crate::syntax::outline::TextualEventKind::OpenScope { child, ordinal } =
                 &event.kind
-                && contained_scope(child, &owner)
+                && child.crate_key == owner.crate_key
+                && child.module_path.starts_with(&owner.module_path)
             {
                 scope_bytes = scope_bytes
                     .checked_add(child.heap_bytes())
                     .and_then(|n| n.checked_add(160))
                     .ok_or_else(|| fault("generated module scope metadata limit"))?;
-                let parent = *module_scopes
+                let parent = *declaration_lexical_scopes
                     .get(&event.scope)
                     .ok_or_else(|| fault("generated module lexical parent absent"))?;
-                let key = scopes.add_child(parent, event.at, *ordinal)?;
-                if module_scopes.insert(child.clone(), key).is_some() {
+                // Associated declarations inherit the actual opening frontier,
+                // like PublishedMacroIndex. Existing module cutoffs stay put.
+                let before = if child.owner.is_some() {
+                    event.at
+                        .checked_add(1)
+                        .ok_or_else(|| fault("generated scope position overflow"))?
+                } else {
+                    event.at
+                };
+                let key = scopes.add_child(parent, before, *ordinal)?;
+                if declaration_lexical_scopes.insert(child.clone(), key).is_some() {
                     return Err(fault("generated module scope duplicated"));
+                }
+                if contained_scope(child, &owner) {
+                    module_scopes.insert(child.clone(), key);
                 }
             }
         }
@@ -912,6 +935,27 @@ impl GeneratedMacroCatalog {
             .iter()
             .map(|h| ((h.start, h.end), h))
             .collect::<BTreeMap<_, _>>();
+        let mut declaration_scopes = BTreeMap::new();
+        for item in &outline.items {
+            let Some(header) = headers.get(&(item.declaration_span.start, item.declaration_span.end)) else {
+                continue;
+            };
+            let lexical = *declaration_lexical_scopes
+                .get(&item.scope)
+                .ok_or_else(|| fault("generated declaration lexical parent absent"))?;
+            if declaration_scopes.insert(
+                header.key.fingerprint(),
+                CapturedDeclarationScope {
+                    context: crate::syntax::outline::DeclarationContext {
+                        scope: item.scope.clone(),
+                        range: item.declaration_span,
+                    },
+                    lexical,
+                },
+            ).is_some() {
+                return Err(fault("generated canonical declaration scope duplicated"));
+            }
+        }
         let spans = items
             .tokens()
             .spans()
@@ -1150,6 +1194,7 @@ impl GeneratedMacroCatalog {
             call_sites,
             call_scopes,
             module_scopes: Arc::new(module_scopes),
+            declaration_scopes: Arc::new(declaration_scopes),
             module_sources,
             completed_module_sources: BTreeMap::new(),
             source_body_owners: BTreeMap::new(),
@@ -1247,6 +1292,11 @@ impl GeneratedMacroCatalog {
                 .heap_bytes()
                 .checked_add(160)
                 .ok_or_else(|| fault("generated lexical scope metadata overflow"))?)?;
+        }
+        for declaration in self.declaration_scopes.values() {
+            add(declaration.context.scope.heap_bytes()
+                .checked_add(160 + std::mem::size_of::<CapturedDeclarationScope>())
+                .ok_or_else(|| fault("generated declaration scope metadata overflow"))?)?;
         }
         for entry in &self.outward {
             add(entry.scope.heap_bytes())?;

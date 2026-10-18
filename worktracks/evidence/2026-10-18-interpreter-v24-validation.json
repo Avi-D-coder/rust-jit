@@ -1,0 +1,39 @@
+{
+  "candidate": "V24",
+  "status": "FAILED exact-source lib compilation; no CLI or runtime execution",
+  "source_sha256": "2784f7554f0ecd1a0bd2dcc27b2938767af9988c0fbc0fc1d6213238abaa94b5",
+  "head": "5fe70d59298508da56ae4062cdcd427138ed4bd5",
+  "compiled_source_leaves": 3330,
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "build": {
+    "exit": 101,
+    "seconds": 16.421,
+    "terminal": "9d4ac9/101",
+    "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run",
+    "warnings": 11
+  },
+  "source_frozen_through_lib": true,
+  "changed_sources": [],
+  "errors": [
+    {
+      "code": "E0624",
+      "message": "method producer is private",
+      "consumer": "crates/lrr/src/expand/source_declarative.rs:3211 index.producer(invocation)?",
+      "producer": "crates/lrr/src/frontend/impl_index.rs:1425 GeneratedDeclarationMacroIndex::producer",
+      "owner": "generic_projection_resume declaration macro alias source slice"
+    }
+  ],
+  "cli_build": "UNEXECUTED",
+  "runtime_roots_executed": 0,
+  "test_bodies_executed": 0,
+  "binaries": "V23 retained unchanged; no V24 runtime acceptance",
+  "planned_queue": "5unchangedupstreamroots and9controls UNEXECUTED",
+  "compile_log_sha256": "0f5b8a68090d8f76577ba34ff303dce0f253f71f5efe4391a6a76ceda32d9664",
+  "acceptance_limits": [
+    "This is a compiler failure, no supportedfeature/runtime/fullfixture/interpreter/JIT gate acceptance.",
+    "All current source reviews remain attached to their exact uncompiledsource fingerprints; narrow repair requires fresh source/candidate manifest/build.",
+    "No auto source repair, CLIbuild or Cargo rerun by validation agent."
+  ],
+  "raw_report_sha256": "5318ced933bcaa8624d35a9401a9130cc10716073d5138b730a2edf9b4ad9642"
+}

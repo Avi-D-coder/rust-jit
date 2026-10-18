@@ -34,6 +34,9 @@ pub(crate) struct MacroImportOccurrence {
     edition: u16,
 }
 impl MacroImportOccurrence {
+    pub(crate) fn range(&self) -> SourceRange {
+        self.range
+    }
     pub(crate) fn context(
         &self,
         source: &AdmittedBodyContext,

@@ -135,6 +135,7 @@ pub struct ScannedModule {
 #[derive(Clone, Debug)]
 pub struct ScannedImport {
     pub source: super::imports::SourceImport,
+    pub target: Option<DeclarationNameOccurrence>,
     pub lexical_scope: MacroScope,
     /// Annotation decisions belong to the coordinator, never the capture pass.
     pub attribute_inputs: Vec<Digest>,
@@ -234,8 +235,7 @@ fn position(e: &mut StableEncoder, r: SourceRange) {
     e.u32(r.end);
 }
 impl StableEncode for DeclarationScan {
-    const DOMAIN: &'static str =
-        "lrr/v3/declaration-skeleton-with-trait-and-associated-source-facts";
+    const DOMAIN: &'static str = "lrr/v4/declaration-skeleton-with-import-target-source-facts";
     // A scan is immutable once `scan_declarations_in_scope` returns it; the
     // fingerprint is never requested while the scan is being built.
     fn fingerprint(&self) -> Digest {
@@ -297,6 +297,7 @@ impl StableEncode for DeclarationScan {
         });
         e.sequence(&self.imports, |e, row| {
             e.record(&row.source);
+            e.option(&row.target, trait_headers::encode_name);
             e.record(&row.lexical_scope);
             e.sequence(&row.attribute_inputs, |e, input| e.digest(*input));
         });
@@ -852,8 +853,32 @@ impl ParsedFile {
                         .try_reserve_exact(import_annotations.len())
                         .map_err(|_| limit())?;
                     attribute_inputs.extend_from_slice(&import_annotations);
+                    let target = super::imports::single_name_target(self, &source)?
+                        .map(|name| -> Result<DeclarationNameOccurrence, Diagnostic> {
+                            let span = range(name.syntax().text_range());
+                            let spelling = name.text().to_string();
+                            budget.charge(spelling.capacity())?;
+                            let context = if self.generated_origin.is_some()
+                                && self.hygiene_facts().is_none()
+                            {
+                                DeclarationNameContext::UnattachedGenerated
+                            } else {
+                                match self.identifier_context(span)? {
+                                    Some(context) => DeclarationNameContext::Captured(context),
+                                    None => DeclarationNameContext::Original,
+                                }
+                            };
+                            Ok(DeclarationNameOccurrence {
+                                spelling,
+                                range: span,
+                                edition: self.token_edition(span)?,
+                                context,
+                            })
+                        })
+                        .transpose()?;
                     scan.imports.push(ScannedImport {
                         source,
+                        target,
                         lexical_scope,
                         attribute_inputs,
                     });
@@ -1292,7 +1317,7 @@ mod scope_kind_tests {
         assert_eq!(digests.len(), kinds.len());
         assert_eq!(
             DeclarationScan::DOMAIN,
-            "lrr/v3/declaration-skeleton-with-trait-and-associated-source-facts"
+            "lrr/v4/declaration-skeleton-with-import-target-source-facts"
         );
         let parsed = generated("#[m] fn cold(){}", GrammarSlot::Items);
         let scans = kinds.map(|kind| capture(&parsed, Some(kind)));

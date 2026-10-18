@@ -750,12 +750,12 @@ pub(crate) fn tokens_for_source_range(
 /// Resolve a generated call path. A leading `$crate` names the defining crate
 /// of that token (definition-site hygiene); other paths resolve from the
 /// call's scope exactly like original source.
-fn generated_path_definition(
+fn generated_path_lookup(
     index: &crate::frontend::impl_index::GeneratedDeclarationMacroIndex,
     invocation: Digest,
     scope: &crate::syntax::outline::ScopeKey,
     namespaces: &crate::frontend::macro_names::MacroNamespaces,
-) -> Result<Option<crate::expand::scopes::MacroDefinition>, Diagnostic> {
+) -> Result<crate::frontend::macro_names::PathLookup, Diagnostic> {
     use crate::frontend::macro_names::{MacroPath, PathLookup};
     let syntax = index.output().macro_syntax(invocation)?;
     let mut scope = scope.clone();
@@ -768,7 +768,7 @@ fn generated_path_definition(
         let mut tail = Vec::new();
         for segment in &syntax.segments()[1..] {
             let crate::syntax::imports::ImportSegment::Name(name) = segment else {
-                return Ok(None);
+                return Ok(PathLookup::Absent);
             };
             tail.push(crate::expand::scopes::MacroName::parse(
                 name,
@@ -777,17 +777,9 @@ fn generated_path_definition(
         }
         namespaces.lookup_from(&MacroPath::new(unit, tail)?, &scope)?
     } else {
-        namespaces.lookup_invocation_segments(
-            syntax.segments(),
-            syntax.absolute(),
-            &scope,
-            syntax.key().profile.edition,
-        )?
+        index.lookup_imports(invocation, syntax.segments(), syntax.absolute(), namespaces)?
     };
-    Ok(match lookup {
-        PathLookup::Defined(definition) => Some(definition),
-        _ => None,
-    })
+    Ok(lookup)
 }
 fn original_definition_body(
     source: &PreparedSourceView,
@@ -2451,35 +2443,26 @@ impl SourceDeclarative {
         let selection = index.lookup(invocation)?;
         let definition = match selection {
             HygienicLookup::Selection(MacroSelection::Defined(definition)) => definition,
-            HygienicLookup::Selection(MacroSelection::Absent) => {
+            selection
+                if matches!(selection, HygienicLookup::Selection(MacroSelection::Absent))
+                    || matches!(selection, HygienicLookup::NeedInput(input) if input == invocation && producer.path.len() > 1) =>
+            {
                 let syntax = self.source.macro_call_at(producer.range)?;
-                let mut scope = producer.scope.clone();
-                scope.owner = None;
-                let PathLookup::Defined(definition) = namespaces.lookup_invocation_segments(
+                match index.lookup_imports(
+                    invocation,
                     syntax.segments(),
                     syntax.absolute(),
-                    &scope,
-                    syntax.key().profile.edition,
-                )?
-                else {
-                    return Ok(None);
-                };
-                definition
-            }
-            HygienicLookup::NeedInput(input) if input == invocation && producer.path.len() > 1 => {
-                let syntax = self.source.macro_call_at(producer.range)?;
-                let mut scope = producer.scope.clone();
-                scope.owner = None;
-                let PathLookup::Defined(definition) = namespaces.lookup_invocation_segments(
-                    syntax.segments(),
-                    syntax.absolute(),
-                    &scope,
-                    syntax.key().profile.edition,
-                )?
-                else {
-                    return Ok(None);
-                };
-                definition
+                    namespaces,
+                )? {
+                    PathLookup::Defined(definition) => definition,
+                    PathLookup::Ambiguous(_) => {
+                        return Err(fault(
+                            "LRR-E-MACRO-AMBIGUOUS",
+                            "cold procedural source macro ambiguous",
+                        ));
+                    }
+                    _ => return Ok(None),
+                }
             }
             HygienicLookup::Selection(MacroSelection::Ambiguous(_)) => {
                 return Err(fault(
@@ -2531,6 +2514,22 @@ impl SourceDeclarative {
         compile_env: Digest,
         engine: Digest,
     ) -> Result<SourceDeclarativeDemand, Diagnostic> {
+        self.declaration_demand_selected(
+            index,
+            invocation,
+            compile_env,
+            engine,
+            index.lookup(invocation)?,
+        )
+    }
+    fn declaration_demand_selected(
+        &self,
+        index: &crate::frontend::impl_index::DeclarationMacroIndex,
+        invocation: Digest,
+        compile_env: Digest,
+        engine: Digest,
+        lookup: HygienicLookup,
+    ) -> Result<SourceDeclarativeDemand, Diagnostic> {
         use crate::frontend::macro_origins::MacroSelection;
         let scan = index.scan();
         let selection = self.source.selection();
@@ -2544,7 +2543,7 @@ impl SourceDeclarative {
                 "cold declaration source attachment differs",
             ));
         }
-        let definition = match index.lookup(invocation)? {
+        let definition = match lookup {
             HygienicLookup::NeedInput(input) => {
                 return Ok(SourceDeclarativeDemand::NeedInput(input));
             }
@@ -2711,39 +2710,31 @@ impl SourceDeclarative {
             _ => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
         };
         let syntax = self.source.macro_call_at(producer.range)?;
-        // Captured module/prelude routes cannot settle an unentered body's
-        // relevant lexical import; unrelated/sibling imports do not block it.
-        if !syntax.absolute()
-            && let Some(crate::syntax::imports::ImportSegment::Name(head)) =
-                syntax.segments().first()
-            && let Some(input) = index.local_import_frontier_with(invocation, head, &mut |glob| {
-                // A block-level glob blocks the call only if its target
-                // module can supply a macro of this name.
-                let mut segments = glob.path.clone();
-                segments.push(crate::syntax::imports::ImportSegment::Name(head.clone()));
-                let mut module_scope = glob.scope.clone();
-                module_scope.owner = None;
-                Ok(!matches!(
-                    namespaces.lookup_invocation_segments(
-                        &segments,
-                        glob.absolute,
-                        &module_scope,
-                        selection.outline.parse.profile.edition,
-                    )?,
-                    PathLookup::Absent | PathLookup::Inaccessible(_)
-                ))
-            })?
-        {
-            return Ok(SourceDeclarativeDemand::NeedInput(input));
-        }
-        let mut scope = producer.scope.clone();
-        scope.owner = None;
-        let definition = match self.index.lookup_declaration_invocation_using(
-            &syntax,
-            namespaces,
-            &scope,
-            |module, before, name| self.lookup_with_parents(module, before, name, owners),
-        )? {
+        let imported =
+            index.lookup_imports(invocation, syntax.segments(), syntax.absolute(), namespaces)?;
+        let imported = match imported {
+            PathLookup::Defined(definition) if index.contains_definition(definition.identity) => {
+                return self.declaration_demand_selected(
+                    index,
+                    invocation,
+                    compile_env,
+                    engine,
+                    HygienicLookup::Selection(MacroSelection::Defined(definition)),
+                );
+            }
+            PathLookup::Absent => {
+                let mut scope = producer.scope.clone();
+                scope.owner = None;
+                self.index.lookup_declaration_invocation_using(
+                    &syntax,
+                    namespaces,
+                    &scope,
+                    |module, before, name| self.lookup_with_parents(module, before, name, owners),
+                )?
+            }
+            found => found,
+        };
+        let definition = match imported {
             PathLookup::Defined(definition) => definition,
             PathLookup::NeedInput(input) => return Ok(SourceDeclarativeDemand::NeedInput(input)),
             PathLookup::Absent => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
@@ -3144,21 +3135,20 @@ impl SourceDeclarative {
         let selected = index.lookup(invocation)?;
         let definition = match selected {
             HygienicLookup::Selection(MacroSelection::Defined(definition)) => definition,
-            HygienicLookup::Selection(MacroSelection::Absent) => {
-                let Some(definition) =
-                    generated_path_definition(index, invocation, &producer.scope, namespaces)?
-                else {
-                    return Ok(None);
-                };
-                definition
-            }
-            HygienicLookup::NeedInput(input) if input == invocation && producer.path.len() > 1 => {
-                let Some(definition) =
-                    generated_path_definition(index, invocation, &producer.scope, namespaces)?
-                else {
-                    return Ok(None);
-                };
-                definition
+            selection
+                if matches!(selection, HygienicLookup::Selection(MacroSelection::Absent))
+                    || matches!(selection, HygienicLookup::NeedInput(input) if input == invocation && producer.path.len() > 1) =>
+            {
+                match generated_path_lookup(index, invocation, &producer.scope, namespaces)? {
+                    crate::frontend::macro_names::PathLookup::Defined(definition) => definition,
+                    crate::frontend::macro_names::PathLookup::Ambiguous(_) => {
+                        return Err(fault(
+                            "LRR-E-MACRO-AMBIGUOUS",
+                            "generated source macro ambiguous",
+                        ));
+                    }
+                    _ => return Ok(None),
+                }
             }
             _ => return Ok(None),
         };
@@ -3217,46 +3207,43 @@ impl SourceDeclarative {
                 "generated declaration source prefix differs",
             ));
         }
-        // Path-based calls (`$crate::m!`, `std::m!`) resolve through the
-        // ordinary macro namespace when no textual definition is in scope.
-        let by_path = |producer_scope: &crate::syntax::outline::ScopeKey| -> Result<Option<crate::expand::scopes::MacroDefinition>, Diagnostic> {
+        use crate::frontend::macro_names::PathLookup;
+        let producer = index.producer(invocation)?;
+        let path_lookup = || -> Result<PathLookup, Diagnostic> {
             match namespaces {
                 Some(namespaces) => {
-                    generated_path_definition(index, invocation, producer_scope, namespaces)
+                    generated_path_lookup(index, invocation, &producer.scope, namespaces)
                 }
-                None => Ok(None),
+                None => Ok(PathLookup::NeedInput(invocation)),
             }
         };
-        let producer_scope = index
-            .output()
-            .scan()
-            .producers()
-            .iter()
-            .find(|p| p.identity == invocation)
-            .map(|p| p.scope.clone());
-        let definition = match index.lookup(invocation)? {
-            HygienicLookup::NeedInput(input) if input == invocation => {
-                match producer_scope.as_ref().map(by_path).transpose()?.flatten() {
-                    Some(definition) => definition,
-                    None => return Ok(SourceDeclarativeDemand::NeedInput(input)),
-                }
+        let selected = match index.lookup(invocation)? {
+            HygienicLookup::NeedInput(input) if input == invocation => path_lookup()?,
+            HygienicLookup::NeedInput(input) => PathLookup::NeedInput(input),
+            HygienicLookup::Selection(MacroSelection::Absent) => path_lookup()?,
+            HygienicLookup::Selection(MacroSelection::Ambiguous(definitions)) => {
+                PathLookup::Ambiguous(definitions)
             }
-            HygienicLookup::NeedInput(input) => {
-                return Ok(SourceDeclarativeDemand::NeedInput(input));
+            HygienicLookup::Selection(MacroSelection::Defined(definition)) => {
+                PathLookup::Defined(definition)
             }
-            HygienicLookup::Selection(MacroSelection::Absent) => {
-                match producer_scope.as_ref().map(by_path).transpose()?.flatten() {
-                    Some(definition) => definition,
-                    None => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
-                }
-            }
-            HygienicLookup::Selection(MacroSelection::Ambiguous(_)) => {
+        };
+        let definition = match selected {
+            PathLookup::Defined(definition) => definition,
+            PathLookup::NeedInput(input) => return Ok(SourceDeclarativeDemand::NeedInput(input)),
+            PathLookup::Absent => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
+            PathLookup::Ambiguous(_) => {
                 return Err(fault(
                     "LRR-E-MACRO-AMBIGUOUS",
                     "generated declaration macro is ambiguous",
                 ));
             }
-            HygienicLookup::Selection(MacroSelection::Defined(definition)) => definition,
+            PathLookup::Inaccessible(_) => {
+                return Err(fault(
+                    "LRR-E-MACRO-INACCESSIBLE",
+                    "generated declaration macro is inaccessible",
+                ));
+            }
         };
         let output = index.output();
         let call = output.macro_call(invocation)?;

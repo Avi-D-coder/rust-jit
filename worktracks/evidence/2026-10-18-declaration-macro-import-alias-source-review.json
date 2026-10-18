@@ -1,0 +1,129 @@
+{
+  "scope": "Declaration macro import-alias producer prerequisite; source component only, no successor build/runtime evidence",
+  "source_baseline": "5fe70d59298508da56ae4062cdcd427138ed4bd5",
+  "files": {
+    "crates/lrr/src/syntax/imports.rs": "87fcf0dd892327a2277467fa2f454982f459240ebdab4137254d74c23833452a",
+    "crates/lrr/src/syntax/declaration_scan.rs": "f964799a4e3678b22a028462273379f1707f968a3e3f1d56515cb06bf1a3ea49",
+    "crates/lrr/src/frontend/declaration_imports.rs": "7d23614bfd97d4e67805e870325a772f98f8fff9e848d6f6f213af7cb330c150",
+    "crates/lrr/src/frontend/impl_index.rs": "d3d48437d7de0fdfab5c297c59b28baaca4b0e205e21c815b4eb03088ac5aa01",
+    "crates/lrr/src/expand/source_declarative.rs": "73516d7794971b6b7bb92119f96ab1e8596be6b33082198586da4716bb0a5276"
+  },
+  "witnesses": [
+    {
+      "kind": "actual failing LRR source-ancestry route control",
+      "selector": "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+      "failed_capture": "artifacts/validation-resume-2026-10-18/candidate-v22/control-2.log",
+      "acceptance": "unexecuted successor; generated use earlier as selected producer closure required, all four editions"
+    },
+    {
+      "kind": "unchanged pinned upstream complementary preparation witness",
+      "path": "rustc/rust/tests/ui/macros/nested-use-as.rs",
+      "sha256": "52664082ddb35c4163bcd5f2a26663e24b6b22371a4c775ca0743ca5f9f1a879",
+      "acceptance": "not imported/executed in successor; check-pass edition2018 and empty main, no runtime-contract claim"
+    }
+  ],
+  "review": [
+    {
+      "mode": 1,
+      "inspected": [
+        "SourceDeclarative::declaration_demand_selected",
+        "SourceDeclarative::generated_declaration_demand"
+      ],
+      "conclusion": "Same existing expansion demand/body request; no assertion/expression evaluator or fake body."
+    },
+    {
+      "mode": 2,
+      "inspected": [
+        "GeneratedDeclarationMacroIndex::lookup_imports",
+        "generated_path_lookup"
+      ],
+      "conclusion": "Only macro definition selection changed; admitted output still uses ordinary source assembly/lowering/runtime, no literal/break executor."
+    },
+    {
+      "mode": 3,
+      "inspected": [
+        "DeclarationImportIndex::lookup_with_textual",
+        "declaration_import_reference"
+      ],
+      "conclusion": "Generic actual Use aliases; target MacroName+edition/context from AST and shared MacroDeclarations resolution; no fixture/method/numeric name rules."
+    },
+    {
+      "mode": 4,
+      "inspected": [
+        "imports::single_name_target",
+        "imports::name_ranges",
+        "DeclarationScan::scan_declarations",
+        "declaration_import_contexts"
+      ],
+      "conclusion": "Original/generated use same alias algorithm. Generated comparison facts retained from actual admitted parser tokens, missing/mixed or foreign module-route facts remain NeedInput; no original-only new refusal for textual macro targets."
+    },
+    {
+      "mode": 5,
+      "inspected": [
+        "SourceDeclarative::declaration_demand_selected",
+        "DeclarationImportIndex::lookup_with_textual"
+      ],
+      "conclusion": "No pattern engine or executable body preparation added; only declaration producer closure required for source sealing."
+    },
+    {
+      "mode": 6,
+      "inspected": [
+        "DeclarationImportPlan::new",
+        "DeclarationImportIndex::prepared",
+        "DeclarationMacroIndex::new",
+        "GeneratedDeclarationMacroIndex::new",
+        "declaration_import_contexts"
+      ],
+      "conclusion": "Import tables and generated binding/path classes prepared once per immutable index, shared Arc snapshots; retry borrows tables. No additional parser, adapter full-output reparsing, or installed runtime source preparation. Cold name_ranges uses direct syntax_at+actual use ancestors."
+    },
+    {
+      "mode": 7,
+      "inspected": [
+        "DeclarationImportIndex::lookup_with_textual",
+        "DeclarationImportIndex::glob_module",
+        "DeclarationCandidates::finish"
+      ],
+      "conclusion": "Existing lexical ancestry/alias-cycle/relevant module namespace algorithm retained, relevant pending/ambiguity preserved; no new full-world namespace census or unrelated installed guards. Internal alias/self/cycle comparisons distinguish full import leaves; actual owning producer IDs remain pending requests."
+    },
+    {
+      "mode": 8,
+      "inspected": [
+        "DeclarationImportPlan",
+        "DeclarationMacroIndex",
+        "GeneratedDeclarationMacroIndex::outer_scopes",
+        "imports::name_ranges"
+      ],
+      "conclusion": "Arc import plan/context receipts; small lexical scope rows copied once at cold construction, no immutable body clone/new whole-file search. Existing scope/declaration snapshot clones outside this slice remain inherited debt, not a measured scaling claim."
+    }
+  ],
+  "removed_routes": [
+    "LocalImportFrontiers",
+    "LocalGlobImport",
+    "DeclarationMacroIndex::local_import_frontier",
+    "DeclarationMacroIndex::local_import_frontier_with",
+    "SourceDeclarative declaration local-import unconditional refusal",
+    "generated_path_definition Option laundering in declaration demand"
+  ],
+  "held_routes_and_gaps": [
+    "ArgumentDeclarationMacroIndex import alias integration remains outside this bounded original/generated route; its direct textual route unchanged.",
+    "Legacy attribute/procedural service consumers constructing DeclarationImportIndex::new remain cold one-shot callers; no claim of all producer types migrated.",
+    "Generated mixed item comparison contexts/foreign module paths remain explicit pending under inherited consumer namespace contract; actual hygienic textual target lookup retains foreign-origin ancestry.",
+    "Cross-generated-output import reexports not published as new alias declarations by this patch; actual unchanged upstream nested-use-as remains unexecuted prerequisite.",
+    "No architecture gate/full fixture/release/performance closure inferred from this source review."
+  ],
+  "cost": "Cold O(scopes+producers+imports) checked index storage plus actual use-name ancestry capture. Producer retry O(relevant lexical/alias chain/module lookups), real pinned context guards; no hot installed execution change.",
+  "validation": "No Cargo/tests/guest runs by implementation agent. Sole validator to build stationary candidate and run existing ancestry plus original/generated/wrapper/standard macro controls. Exact old failures preserved.",
+  "supersedes": "v1-held receipt preserved: independent review found grouped leaves share the Use-item identity; source components were unexecuted.",
+  "leaf_identity_repair": {
+    "invariant": "SourceImport StableEncode fingerprint includes owning Use item plus actual leaf_ordinal/range/path/scope; NeedInput still carries actual owning producer identity.",
+    "changed": [
+      "impl_index::declaration_import_contexts insert and GeneratedDeclarationMacroIndex::lookup_imports receipt lookup use SourceImport fingerprint",
+      "declaration_imports::lookup_with_textual seen-state/imported_leaf/self-binding skip and selected cycle key use full leaf fingerprint",
+      "declaration_imports::glob_module seen-state/imported_leaf/self-binding skip and selected cycle key use full leaf fingerprint"
+    ],
+    "unchanged": [
+      "attribute input IDs, selected.source.identity for pending producer requests, imported pending fallback identity, actual macro definition identities, one existing alias algorithm"
+    ],
+    "counterexample": "generated use foo::{a,b}; retains both comparison receipts; grouped alias chain use {a as b,b as c}; c! must not skip the sibling b leaf or call it a repeated selected import. Source reviewed only, execution pending."
+  }
+}

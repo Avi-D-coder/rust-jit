@@ -7639,7 +7639,7 @@ impl SourceDiscovery {
             .as_ref()
             .ok_or_else(|| fault("generated body boundary source providers absent"))?
             .2;
-        let (selected, modules, parents) =
+        let (selected, declarations, parents) =
             if let Some(empty) = self.completed_empty_boundaries.get(&identity) {
                 if empty.source_ordinal != *ordinal
                     || empty.call.scope != *owner
@@ -7704,7 +7704,7 @@ impl SourceDiscovery {
                 parents.scopes = generated;
                 (
                     Some(scope.catalog.retain_body_outer(owner, u64::MAX)?),
-                    std::sync::Arc::clone(scope.catalog.retained_module_scopes()),
+                    std::sync::Arc::clone(scope.catalog.retained_declaration_scopes()),
                     parents,
                 )
             };
@@ -7727,7 +7727,7 @@ impl SourceDiscovery {
             std::sync::Arc::clone(&unit.items),
             owner.clone(),
             selected,
-            modules,
+            declarations,
             parents,
             self.key.clone(),
             seal_value,
