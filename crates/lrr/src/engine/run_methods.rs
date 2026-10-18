@@ -266,6 +266,8 @@ impl RunMachine {
                     self_reference: false,
                     arguments: arguments.to_vec(),
                     alternatives: alternatives.functions,
+                    compare_from: 1,
+                    result_self: None,
                 },
             }));
         }

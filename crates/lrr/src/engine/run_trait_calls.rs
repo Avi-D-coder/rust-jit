@@ -259,6 +259,49 @@ impl RunMachine {
             };
             return match poll!(resolver.written_trait(db, caller, tr)) {
                 Some(trait_key) => self.trait_function_call(db, trait_key, function, name, arguments),
+                // `Type::f(args)` whose type has several impls of one trait
+                // that differ by the trait's arguments (`u64::from(x)`):
+                // the evaluated arguments select the impl.
+                None if !arguments.is_empty() => {
+                    match poll!(resolver.associated_alternatives(db, caller, name)) {
+                        Some((trait_key, declaration, functions, self_term)) => {
+                            let returns_self = match db
+                                .fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration))
+                            {
+                                QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                                    QueryValue::FunctionSignature(signature) => {
+                                        self_parameter(&signature.result) == Some(false)
+                                    }
+                                    _ => false,
+                                },
+                                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                            };
+                            QueryPoll::Ready(Ok(Some(TraitPathCall::Deferred {
+                                declaration,
+                                call: DeferredTraitCall {
+                                    trait_key,
+                                    name: function.to_owned(),
+                                    // Selected once the last argument is evaluated.
+                                    self_ordinal: match u32::try_from(arguments.len() - 1) {
+                                        Ok(ordinal) => ordinal,
+                                        Err(_) => {
+                                            return QueryPoll::Ready(Err(call_fault(
+                                                "argument ordinal overflow",
+                                            )));
+                                        }
+                                    },
+                                    self_reference: false,
+                                    arguments: arguments.to_vec(),
+                                    alternatives: functions,
+                                    compare_from: 0,
+                                    result_self: self_term.filter(|_| returns_self),
+                                },
+                            })))
+                        }
+                        None => QueryPoll::Ready(Ok(None)),
+                    }
+                }
                 None => QueryPoll::Ready(Ok(None)),
             };
         };
@@ -310,7 +353,7 @@ impl RunMachine {
             // Impls of one trait that differ by its arguments (`Join<&str>`,
             // `Join<&[T]>`): the call starts against the trait's declaration
             // and the evaluated arguments select the impl.
-            _ if arguments.len() > 1
+            _ if !arguments.is_empty()
                 && members.same_trait_of(&candidates).is_some_and(|trait_key| {
                     members.trait_declaration(trait_key, function).is_some()
                 }) =>
@@ -319,6 +362,32 @@ impl RunMachine {
                 let declaration = members
                     .trait_declaration(trait_key, function)
                     .expect("checked");
+                // A declaration with a `Self`/`&Self` parameter takes the
+                // impl from it, so only the later arguments select among the
+                // trait's argument variants; one without (`fn from(value: T)
+                // -> Self`) compares every argument and constrains the
+                // impl's result to the reached Self.
+                let (has_self_parameter, returns_self) = match db
+                    .fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration))
+                {
+                    QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                        QueryValue::FunctionSignature(signature) => (
+                            signature
+                                .parameters
+                                .iter()
+                                .any(|parameter| self_parameter(&parameter.ty).is_some()),
+                            self_parameter(&signature.result) == Some(false),
+                        ),
+                        _ => (true, false),
+                    },
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let result_self = if returns_self && !has_self_parameter {
+                    self.store.descriptor_source_term(binding)
+                } else {
+                    None
+                };
                 return QueryPoll::Ready(Ok(Some(TraitPathCall::Deferred {
                     declaration,
                     call: DeferredTraitCall {
@@ -336,6 +405,8 @@ impl RunMachine {
                         self_reference: false,
                         arguments: arguments.to_vec(),
                         alternatives: candidates,
+                        compare_from: usize::from(has_self_parameter),
+                        result_self,
                     },
                 })));
             }
@@ -402,6 +473,8 @@ impl RunMachine {
                     self_reference: reference,
                     arguments: slots,
                     alternatives: Vec::new(),
+                    compare_from: 1,
+                    result_self: None,
                 },
             })));
         }
@@ -578,7 +651,7 @@ impl RunMachine {
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     }
                 }
-                let function = match self.select_by_arguments(db, &functions, 1, &views) {
+                let function = match self.select_by_arguments(db, &functions, 1, &views, None) {
                     QueryPoll::Ready(Ok(Some(function))) => function,
                     QueryPoll::Ready(Ok(None)) => {
                         return QueryPoll::Ready(Err(Diagnostic::new(
@@ -631,7 +704,13 @@ impl RunMachine {
                 Some(function) => *function,
                 None => {
                     let function =
-                        match self.select_by_arguments(db, &deferred.alternatives, 1, &views) {
+                        match self.select_by_arguments(
+                            db,
+                            &deferred.alternatives,
+                            deferred.compare_from,
+                            &views,
+                            deferred.result_self.as_ref(),
+                        ) {
                             QueryPoll::Ready(Ok(Some(function))) => function,
                             QueryPoll::Ready(Ok(None)) => {
                                 return QueryPoll::Ready(Err(Diagnostic::new(
@@ -717,6 +796,7 @@ impl RunMachine {
         candidates: &[crate::core::digest::Digest],
         first: usize,
         arguments: &[SelectionArgument],
+        result_self: Option<&crate::traits::term::TyTerm>,
     ) -> QueryPoll<Option<crate::core::digest::Digest>> {
         use crate::{ir::op::PrimitiveType as P, traits::term::TyTerm};
         // Each accepting impl, and whether every unresolved literal it
@@ -797,6 +877,13 @@ impl RunMachine {
             .and_then(|mut substitution| {
                 for (ordinal, view) in &compared {
                     substitution.constrain_argument_erased(*ordinal, view)?;
+                }
+                // A `-> Self` function of a type-relative call: the impl's
+                // result is the written Self.
+                if let Some(self_term) = result_self
+                    && substitution.source_result().is_some()
+                {
+                    substitution.constrain_result(self_term)?;
                 }
                 Ok(())
             })

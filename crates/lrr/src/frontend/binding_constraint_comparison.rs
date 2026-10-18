@@ -158,20 +158,54 @@ impl<'a> Component<'a> {
     /// declared Types that name it and `Element` to the arrays and slices it
     /// compares with (and to its own element projection), so the position
     /// of a `Vec<T>` operand is rewritten to the `Element` step.
-    fn mirrored_via(&mut self, db: &mut Database, operand: NodeId) -> QueryPoll<Via> {
+    fn mirrored_via(
+        &mut self,
+        db: &mut Database,
+        operand: NodeId,
+        other: Option<NodeId>,
+    ) -> QueryPoll<Via> {
         let mut via = self.via.clone();
+        // The sequence impls compare through any references (`&[T] ==
+        // [U; N]`): a leading dereference the other operand's Type has no
+        // reference for does not apply to it.
+        if let Some(other) = other
+            && let Some(mut other_term) = ready!(self.expression_type(db, other))
+        {
+            let mut kept = Vec::with_capacity(via.steps.len());
+            let mut leading = true;
+            for step in &via.steps {
+                if leading && *step == Step::Deref {
+                    if let TyTerm::Ref(_, _, inner) = other_term {
+                        other_term = *inner;
+                        kept.push(*step);
+                    }
+                    continue;
+                }
+                leading = false;
+                kept.push(*step);
+            }
+            via.steps = kept;
+        }
         let Some(mut term) = ready!(self.expression_type(db, operand)) else {
             return QueryPoll::Ready(Ok(via));
         };
         let source = self.via.steps.clone();
-        for (index, step) in source.iter().enumerate() {
+        let mut position = 0usize;
+        for step in &source {
             let mut head = &term;
             while let TyTerm::Ref(_, _, inner) = head {
                 head = inner;
             }
-            if *step == Step::TypeArgument(0) && ready!(self.vec_elements(db, head)).is_some() {
-                via.steps[index] = Step::Element;
+            // The mirrored list dropped some leading dereferences: find this
+            // step's place in it.
+            let in_mirror = via.steps.len() - (source.len() - position).min(via.steps.len());
+            if *step == Step::TypeArgument(0)
+                && ready!(self.vec_elements(db, head)).is_some()
+                && let Some(slot) = via.steps.get_mut(in_mirror)
+            {
+                *slot = Step::Element;
             }
+            position += 1;
             term = match ready!(self.project_term(db, &term, std::slice::from_ref(step))) {
                 Some(next) => next,
                 None => break,
@@ -195,7 +229,7 @@ impl<'a> Component<'a> {
         let mut verified = false;
         let mut refused = false;
         // The other operand holds the member at the mirrored projection.
-        let mirrored = ready!(self.mirrored_via(db, node));
+        let mirrored = ready!(self.mirrored_via(db, node, other));
         let own = self.via.steps.clone();
         for (operand, steps) in [(Some(node), own), (other, mirrored.steps.clone())] {
             let Some(operand) = operand else {

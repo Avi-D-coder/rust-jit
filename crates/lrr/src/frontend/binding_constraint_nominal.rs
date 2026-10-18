@@ -255,6 +255,11 @@ impl FieldType {
                         None => return FieldProjection::Unknown,
                     }
                 }
+                // Indexing a one-argument container field (`Vec<T>`): its
+                // element is that type argument.
+                (Step::Element, WrittenType::Generic { args, .. }) if args.len() == 1 => {
+                    &args[0]
+                }
                 _ => return FieldProjection::Unknown,
             };
             if !matches!(step, Step::AutoDeref) {
@@ -351,16 +356,6 @@ impl Constructed {
             .get(field as usize)
             .map(FieldType::parameters)
             .unwrap_or_default()
-    }
-    /// The constructed value's nominal Type: each type argument is left to
-    /// inference.
-    pub(super) fn nominal_type(&self) -> TyTerm {
-        TyTerm::Nominal(
-            self.definition,
-            (0..self.type_parameters)
-                .map(|_| GenericArg::Type(super::methods::open()))
-                .collect(),
-        )
     }
     /// The constructed value's nominal Type with these type arguments.
     pub(super) fn nominal_type_with(&self, arguments: Vec<TyTerm>) -> TyTerm {

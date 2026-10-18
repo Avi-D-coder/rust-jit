@@ -1038,10 +1038,12 @@ fn suffix_type(suffix: &str) -> Option<PrimitiveType> {
     })
 }
 /// Binding positions within one retained tree. Steps follow tuple fields
-/// before any `..` and reference patterns; an or-pattern alternative or an
-/// `@` subpattern matches the same Type. Bindings under constructor, slice
-/// or post-rest tuple positions are not recorded (their Type needs the
-/// declaration or the arity).
+/// (a position after `..` is counted from the end), reference patterns,
+/// array and slice elements, and constructor fields (resolved to the
+/// declaration by the ordinary namespace resolution of the slot); an
+/// or-pattern alternative or an `@` subpattern matches the same Type. The
+/// references a non-reference pattern dereferences (default binding modes)
+/// are not written: the matched value's Type states them.
 fn record_occurrences(
     node: &PatternNode,
     root: NodeId,

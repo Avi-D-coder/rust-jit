@@ -922,6 +922,11 @@ impl MemberIndex {
             direct
         }
     }
+    /// The blanket impls' functions applicable to `ty` (`impl<T> From<T> for
+    /// T`), alongside whatever direct impls it has.
+    pub fn blanket_candidates(&self, ty: Result<Digest, BuiltinSelf>, name: &str) -> Vec<Digest> {
+        self.blanket_functions(ty, name)
+    }
     /// `trait_candidates` where the self type is a reference: the impls for
     /// `&U` are indexed together, so the referent `pointee` selects among
     /// them (an impl naming it, else one generic in it).

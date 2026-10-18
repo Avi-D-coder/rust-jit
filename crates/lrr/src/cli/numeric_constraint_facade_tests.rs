@@ -609,3 +609,203 @@ fn main() {
         "5000000005 5000000007 5000000008 5000000010\n",
     );
 }
+
+/// A program in its handwritten form, emitted by a user macro, and emitted
+/// through a wrapper macro that forwards its tokens to a second macro. The
+/// same operation must take the same route in all three.
+fn forms(prelude: &str, body: &str) -> [String; 3] {
+    [
+        format!("{prelude}\nfn main() {{ {body} }}\n"),
+        format!("{prelude}\nmacro_rules! emit {{ () => {{ {body} }}; }}\nfn main() {{ emit!(); }}\n"),
+        format!(
+            "{prelude}\nmacro_rules! inner {{ ($($t:tt)*) => {{ $($t)* }}; }}\n\
+             macro_rules! wrap {{ ($($t:tt)*) => {{ inner!($($t)*) }}; }}\n\
+             fn main() {{ wrap!({body}); }}\n"
+        ),
+    ]
+}
+
+/// `prints` for each form of a program (all four editions each). The expected
+/// output of every program is real rustc's.
+fn prints_in_all_forms(label: &str, cases: &[(&str, &str, &str, &str)]) {
+    for (name, prelude, body, expected) in cases {
+        for (index, source) in forms(prelude, body).iter().enumerate() {
+            prints(&format!("{label}-{name}-{index}"), source, expected);
+        }
+    }
+}
+
+/// A by-value or borrowed array iterated by `for` takes the element Type its uses state, else rustc's fallback: the array's `IntoIterator::Item` is normalized through the impls over its const-generic length.
+#[test]
+fn array_iteration_closes_its_literals() {
+    prints_in_all_forms(
+        "array_iteration_clos",
+        &[
+            (
+                "witness-array-for",
+                r##""##,
+                r##"let mut total = 0; for x in [5, 1, 3] { total += x; } println!("{}", total);"##,
+                "9\n",
+            ),
+            (
+                "array-for-typed-sum",
+                r##""##,
+                r##"let mut total = 0u64; for x in [3_000_000_000, 1] { total += x; } println!("{}", total);"##,
+                "3000000001\n",
+            ),
+            (
+                "array-ref-for",
+                r##""##,
+                r##"let a = [4_000_000_000, 5]; let mut t = 0u64; for x in &a { t += *x; } println!("{}", t);"##,
+                "4000000005\n",
+            ),
+            (
+                "array-mut-for",
+                r##""##,
+                r##"let mut a = [0; 4]; for x in &mut a { *x += 22; } let mut t = 0u64; for x in &a { t += *x; } println!("{} {}", a[0], t);"##,
+                "22 88\n",
+            ),
+        ],
+    );
+}
+
+/// A numeric variable under the built-in operator bounds (`T: Add<Output = T>`) is left to its other relations and the fallback; a `Vec`, an array and a slice compare element to element through the references between them.
+#[test]
+fn operator_bounds_and_sequence_comparisons_close_literals() {
+    prints_in_all_forms(
+        "operator_bounds_and_",
+        &[
+            (
+                "operator-bounds",
+                r##"fn first<T: std::ops::Add<Output = T> + Copy>(a: T, _b: T) -> T { a }"##,
+                r##"println!("{} {}", first(1, 2), first(3_000_000_000u64, 1));"##,
+                "1 3000000000\n",
+            ),
+            (
+                "vec-array-compare",
+                r##""##,
+                r##"let w = vec![5_000_000_000u64, 2]; assert_eq!(w, [5_000_000_000, 2]); assert_eq!(vec![1, 2, 3], [1, 2, 3]); println!("{}", w == vec![5_000_000_000, 2]);"##,
+                "true\n",
+            ),
+        ],
+    );
+}
+
+/// A parameter typed by `Fn*(..) -> R` sugar (a generic bound, `impl Fn`) is called with the written Types, and a closure written for it holds them in its parameters and body; a closure in a block is a closure.
+#[test]
+fn callable_bounds_relate_closures_and_calls() {
+    prints_in_all_forms(
+        "callable_bounds_rela",
+        &[
+            (
+                "fn-bound-call",
+                r##"fn call<F: Fn(u64) -> u64>(f: F) -> u64 { f(3_000_000_000) }"##,
+                r##"println!("{}", call(|x| x + 1));"##,
+                "3000000001\n",
+            ),
+            (
+                "fn-bound-reference",
+                r##"fn with<T, F: FnOnce(&u32) -> T>(f: F) -> T { f(&22) }"##,
+                r##"println!("{}", with(|x| *x * 2));"##,
+                "44\n",
+            ),
+            (
+                "impl-fn-param",
+                r##"fn hrtb(f: impl Fn(&u32) -> u32) -> u32 { f(&22) + f(&44) }"##,
+                r##"println!("{}", hrtb(|x| x * 2));"##,
+                "132\n",
+            ),
+            (
+                "closure-param-from-bound",
+                r##"fn each<T, F>(v: Vec<T>, mut f: F) where F: FnMut(&T) { for x in &v { f(x); } }"##,
+                r##"let v = vec![1, 2, 3]; let mut odds = 0; each(v, |i| { if *i % 2 == 1 { odds += 1; } }); println!("{}", odds);"##,
+                "2\n",
+            ),
+            (
+                "closure-result-from-bound",
+                r##"fn apply<T, F>(s: String, mut f: F) -> T where F: FnMut(String) -> T { f(s) }"##,
+                r##"let result = apply("test".to_string(), |s| s.len()); assert_eq!(result, 4); println!("{}", result);"##,
+                "4\n",
+            ),
+            (
+                "block-closure",
+                r##""##,
+                r##"let f = {|i| i}; println!("{} {}", f(5), f(3_000_000_000u64));"##,
+                "5 3000000000\n",
+            ),
+        ],
+    );
+}
+
+/// `*rc` and the deref coercion of `&Box<T>` take the `Deref::Target`; indexing and slicing a vector reads its element type.
+#[test]
+fn dereference_relates_literals_through_smart_pointers_and_indexing() {
+    prints_in_all_forms(
+        "dereference_relates_",
+        &[
+            (
+                "box-coercion",
+                r##"fn get(x: &u64) -> u64 { *x }"##,
+                r##"let b = Box::new(3_000_000_000); println!("{}", get(&b));"##,
+                "3000000000\n",
+            ),
+            (
+                "rc-deref",
+                r##""##,
+                r##"let x = std::rc::Rc::new(3_000_000_000u64); let r = std::rc::Rc::new(7); let z: u8 = *r; println!("{} {}", *x + 1, z);"##,
+                "3000000001 7\n",
+            ),
+            (
+                "vec-index",
+                r##""##,
+                r##"let v = vec![1, 2, 3]; let i = 1; let big: u64 = v[i] + 4_000_000_000; let w = vec![7, 8, 9]; let s = &w[1..]; let t: u64 = s[0] + 4_000_000_000; println!("{} {}", big, t);"##,
+                "4000000002 4000000008\n",
+            ),
+        ],
+    );
+}
+
+/// A tuple receiver selects its impl; a parameter's associated-type binding (`Iterator<Item = u64>`) relates the variable inside the instantiated parameter, and a plain bound on it states nothing.
+#[test]
+fn receivers_and_parameter_bounds_relate_literals() {
+    prints_in_all_forms(
+        "receivers_and_parame",
+        &[
+            (
+                "tuple-receiver",
+                r##"trait Car { fn car(&self) -> u64; } impl Car for (u64, u8) { fn car(&self) -> u64 { self.0 } }"##,
+                r##"let p = (3_000_000_000, 7); println!("{}", p.car());"##,
+                "3000000000\n",
+            ),
+            (
+                "binding-bound",
+                r##"fn pairwise<T: Iterator<Item = u64>>(t: T) -> u64 { let mut s = 0; for x in t { s += x; } s }"##,
+                r##"let v = vec![3_000_000_000, 1]; println!("{}", pairwise(v.into_iter()));"##,
+                "3000000001\n",
+            ),
+            (
+                "binding-bound-ref",
+                r##"fn total<'a, I>(it: I) -> u64 where I: Iterator<Item = &'a u64> { let mut s = 0; for x in it { s += *x; } s }"##,
+                r##"println!("{}", total([3_000_000_000, 5].iter()));"##,
+                "3000000005\n",
+            ),
+            (
+                "plain-bound-inside",
+                r##"trait Mark {} impl Mark for &i32 {} fn need<T: Mark>(_: T) {}"##,
+                r##"let x = 22; need(&x); println!("{}", x);"##,
+                "22\n",
+            ),
+        ],
+    );
+}
+
+/// The same loop nested in a standard macro's argument (an expression block
+/// inside `println!`) takes the route the statement form takes.
+#[test]
+fn array_iteration_nested_in_a_standard_macro() {
+    prints(
+        "array-for-println",
+        "fn main() { println!(\"{}\", { let mut total = 0; for x in [5, 1, 3] { total += x; } total }); }\n",
+        "9\n",
+    );
+}

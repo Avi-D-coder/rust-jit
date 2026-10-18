@@ -266,6 +266,7 @@ impl<'a> Component<'a> {
                     Some(super::Callee::Source(definition)) => {
                         match ready!(self.result_term(db, node, definition)) {
                             Some(result) => {
+                                let result = ready!(self.explicit_arguments(db, node, definition, result));
                                 let result =
                                     ready!(self.instantiate_result(db, node, definition, result));
                                 Some(ready!(self.decided(db, node, result)))
@@ -388,6 +389,49 @@ impl<'a> Component<'a> {
             }
             _ => None,
         }))
+    }
+    /// `result` with the callee's type parameters that the call writes
+    /// explicitly (`f::<u8>(..)`) replaced by those Types.
+    fn explicit_arguments(
+        &mut self,
+        db: &mut Database,
+        call: NodeId,
+        definition: Digest,
+        result: TyTerm,
+    ) -> QueryPoll<TyTerm> {
+        if !self.fact(call).is_ok_and(|fact| fact.flag()) || !mentions_parameter(&result) {
+            return QueryPoll::Ready(Ok(result));
+        }
+        let explicit = match db.fetch(
+            &SyntaxProvider,
+            QueryKey::PreparedExplicitTypeArguments(entry(self.key, call)),
+        ) {
+            QueryPoll::Ready(Ok(explicit)) => explicit,
+            QueryPoll::Ready(Err(error)) if super::not_closed(&error) => {
+                return QueryPoll::Ready(Ok(result));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::PreparedExplicitTypeArguments(explicit) = explicit.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint explicit Type query differs")));
+        };
+        let bound: BTreeMap<crate::traits::term::ParamKey, TyTerm> = explicit
+            .rows()
+            .iter()
+            .map(|row| {
+                (
+                    crate::traits::term::ParamKey {
+                        definition,
+                        ordinal: row.ordinal(),
+                    },
+                    row.source().source().clone(),
+                )
+            })
+            .collect();
+        QueryPoll::Ready(Ok(crate::frontend::associated_types::substitute(
+            &result, &bound,
+        )))
     }
     /// A selected function's declared result with its own type parameters
     /// replaced by what the arguments' static Types state: a parameter named

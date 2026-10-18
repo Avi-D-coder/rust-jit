@@ -395,7 +395,7 @@ impl RunMachine {
                 Err(error) => return QueryPoll::Ready(Err(error)),
             },
         };
-        self.select_by_arguments(db, candidates, 1, &[SelectionArgument::Unknown, right])
+        self.select_by_arguments(db, candidates, 1, &[SelectionArgument::Unknown, right], None)
     }
     /// The returned value is admitted as any source call's result, at the
     /// suspended operation's destination.

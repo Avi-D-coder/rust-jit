@@ -445,6 +445,96 @@ impl<'a> CallResolver<'a> {
         };
         self.associated_of(db, members, self_type, name)
     }
+    /// `Type::function` where the written type has no inherent `function`
+    /// and several impls of one trait provide it, differing only by the
+    /// trait's arguments (`u64::from` through `From<u8>`, `From<u32>`, ..):
+    /// the trait, its declaration of `function`, and the impls' functions.
+    /// The evaluated call arguments select among them. `None` for any other
+    /// path (modules, traits, inherent functions, a single candidate).
+    pub(crate) fn associated_alternatives(
+        &self,
+        db: &mut Database,
+        caller: Digest,
+        spelled: &str,
+    ) -> QueryPoll<Option<(Digest, Digest, Vec<Digest>, Option<crate::traits::term::TyTerm>)>> {
+        use crate::syntax::imports::ImportSegment;
+        let Some(members) = self.members else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if spelled.starts_with("::") || spelled.contains('<') {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let (scope, edition) = match self.caller_context(db, caller) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let mut segments = Vec::new();
+        for part in spelled.split("::") {
+            segments.push(match part {
+                "crate" => ImportSegment::Crate,
+                "self" => ImportSegment::SelfModule,
+                "super" => ImportSegment::Super,
+                _ => ImportSegment::Name(part.into()),
+            });
+        }
+        let Some((ImportSegment::Name(name), prefix)) = segments.split_last() else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if prefix.is_empty() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let self_type =
+            match self.resolve_written_type(members, caller, &scope, edition, prefix, false, true) {
+                Ok(Some(self_type)) => self_type,
+                Ok(None) => return QueryPoll::Ready(Ok(None)),
+                Err(_) => return QueryPoll::Ready(Ok(None)),
+            };
+        if let Ok(nominal) = self_type
+            && members.is_trait(nominal)
+        {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let inherent = match self_type {
+            Ok(nominal) => members.inherent(nominal, name),
+            Err(builtin) => members.builtin_inherent(builtin, name),
+        };
+        if !inherent.is_empty() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        // A primitive Self is a closed term; other Self types stay open.
+        let self_term = match self_type {
+            Err(super::member_index::BuiltinSelf::Primitive(primitive)) => {
+                Some(crate::traits::term::TyTerm::Primitive(primitive))
+            }
+            _ => None,
+        };
+        let mut functions = Vec::new();
+        let direct = members.trait_candidates(self_type, name);
+        // The direct impls, plus the applicable blanket impls when the written
+        // Self is a closed term to hold their result to: the arguments may
+        // fit only the blanket one (`u64::from(9u64)`).
+        let blanket = if self_term.is_some() {
+            members.blanket_candidates(self_type, name)
+        } else {
+            Vec::new()
+        };
+        for function in direct.iter().copied().chain(blanket) {
+            if !functions.contains(&function) {
+                functions.push(function);
+            }
+        }
+        if functions.len() < 2 {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let Some(trait_key) = members.same_trait_of(&functions) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let Some(declaration) = members.trait_declaration(trait_key, name) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(Ok(Some((trait_key, declaration, functions, self_term))))
+    }
     /// The associated function `name` of a resolved self type or trait.
     fn associated_of(
         &self,
@@ -477,6 +567,16 @@ impl<'a> CallResolver<'a> {
             [] => match traits.as_slice() {
                 [function] => *function,
                 [] => return QueryPoll::Ready(Ok(None)),
+                // Impls of one trait that differ only by the trait's
+                // arguments (`From<u8>`, `From<u32>` for `u64`): the call's
+                // evaluated arguments select the impl at run time.
+                candidates
+                    if members.same_trait_of(candidates).is_some_and(|trait_key| {
+                        members.trait_declaration(trait_key, name).is_some()
+                    }) =>
+                {
+                    return QueryPoll::Ready(Ok(Some(CallSelection::TypeRelative)));
+                }
                 _ => {
                     return QueryPoll::Ready(Err(Diagnostic::new(
                         "LRR-E-NAME-AMBIGUOUS",

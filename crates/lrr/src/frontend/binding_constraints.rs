@@ -564,41 +564,10 @@ impl<'a> Component<'a> {
             peeled: false,
         }
     }
-    #[track_caller]
     fn mark_unrecorded(&mut self) {
-        // TEMPTRACE
-        if std::env::var_os("LRR_NUM_TRACE").is_some() {
-            let at = std::panic::Location::caller();
-            eprintln!("NUMTRACE unrecorded {}:{} via={:?}", at.file().rsplit('/').next().unwrap_or(""), at.line(), self.via.steps);
-        }
         self.unrecorded = true;
     }
-    #[track_caller]
     fn defer(&mut self, node: NodeId, demand: ConstraintDemand) {
-        // TEMPTRACE
-        if std::env::var_os("LRR_NUM_TRACE").is_some() {
-            let at = std::panic::Location::caller();
-            let kind = self.plan.fact(node).map(|f| f.kind());
-            let member = self
-                .plan
-                .fact(node)
-                .and_then(|f| f.member())
-                .and_then(|row| self.plan.member(row))
-                .unwrap_or("");
-            let name = self.plan.name_of(node).map(|(n, _)| n).unwrap_or("");
-            eprintln!(
-                "NUMTRACE defer {}:{} node={} kind={:?}/{}{} demand={:?} via={:?} strict={}",
-                at.file().rsplit('/').next().unwrap_or(""),
-                at.line(),
-                node.0,
-                kind,
-                member,
-                name,
-                demand,
-                self.via.steps,
-                self.via.strict
-            );
-        }
         if let Some(log) = &mut self.deferred {
             log.push(demand);
         }
@@ -2805,10 +2774,6 @@ fn pattern_binding(db: &mut Database, key: &PcKey, pattern: NodeId) -> QueryPoll
     let (Some(binding), Some(target)) = (goal.local_binding(), goal.binding_target()) else {
         // The pattern's module classification is not published yet: its
         // retained occurrence row still states the binding's identity.
-        // TEMPTRACE
-        if std::env::var_os("LRR_NUM_TRACE").is_some() {
-            eprintln!("NUMTRACE pattern_binding none node={} pending={:?} local={:?} target={}", pattern.0, goal.pending(), goal.local_binding().is_some(), goal.binding_target().is_some());
-        }
         return patterns::unclassified_binding(db, key, pattern, goal);
     };
     if binding != target.identity() {
@@ -2984,10 +2949,6 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
         }
         _ => return QueryPoll::Ready(Ok(result)),
     };
-    // TEMPTRACE
-    if std::env::var_os("LRR_NUM_TRACE").is_some() {
-        eprintln!("NUMTRACE start node={} kind={:?}", key.node, fact.kind());
-    }
     let mut component = Component::new(key, plan, floating);
     component.literal_start = matches!(start, Start::Literal(_));
     match start {
@@ -3013,10 +2974,6 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
             PrimitiveType::I32
         }),
     };
-    // TEMPTRACE
-    if std::env::var_os("LRR_NUM_TRACE").is_some() {
-        eprintln!("NUMTRACE end node={} state={:?}", key.node, result.state);
-    }
     if matches!(result.state, BindingConstraintState::Resolved(_)) {
         result.members = component.members();
     }

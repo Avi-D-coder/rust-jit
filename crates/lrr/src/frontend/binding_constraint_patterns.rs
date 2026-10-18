@@ -46,10 +46,6 @@ pub(super) fn unclassified_binding(
         return QueryPoll::Ready(Ok(None));
     };
     let row = &rows[position];
-    // TEMPTRACE
-    if std::env::var_os("LRR_NUM_TRACE").is_some() {
-        eprintln!("NUMTRACE fallback row node={} resolved={} local={:?} uncertainty={:?} canonical={:?}", pattern.0, row.conflicts().is_resolved(), row.local_source(), row.uncertainty(), row.canonical_candidate());
-    }
     if !row.conflicts().is_resolved() {
         return QueryPoll::Ready(Ok(None));
     }
