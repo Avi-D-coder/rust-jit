@@ -1,0 +1,86 @@
+{
+  "status": "V18 unchanged upstream runtime-contract PASS; broader feature/architecture held",
+  "source_sha256": "88b73c9d329eb4b4fc3c4cc9729f224c0f5eebda133ee5b70fd903487ea65797",
+  "binary_sha256": "23bc52d6649937a96395fb62153751851cd2f66eb20a658900ea37973d5a6d58",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "fixture": "tests/ui/associated-types/associated-types-struct-field-numbered.rs",
+  "fixture_sha256": "546cac38874fc4cacbd44096766955220c1e1e571c841bb0b0e9eee7306a8794",
+  "owning_edition": 2015,
+  "argv": [
+    "/Users/avi/Code/rust-jit/target/debug/lrr",
+    "--edition",
+    "2015",
+    "run",
+    "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-struct-field-numbered.rs",
+    "--runtime-capture",
+    "--capture-context",
+    "4676f5188a16b22a5d14be3c25d135bbeac3514a2a926069ded14542b7596125"
+  ],
+  "exit": 0,
+  "capture_complete": true,
+  "runtime_facts": {
+    "classified_operation_candidates": 414,
+    "cleanup_observed": true,
+    "closed_no_external_effects": true,
+    "effect_recipe_dispatch_attempts": 0,
+    "observed_fault": false,
+    "observed_suspension": false,
+    "source_call_boundaries": 14,
+    "terminal": {
+      "kind": "completed",
+      "unit": true
+    },
+    "typed_fault_exit_candidates": 0,
+    "unsupported_operation_candidates": 0,
+    "vm_dispatches": 268,
+    "vm_outcomes": 268
+  },
+  "raw_capture": "artifacts/validation-resume-2026-10-18/candidate-v18/stock-0.stdout",
+  "raw_capture_sha256": "cbb7f404d7fbc656ffe007aac43183321d972c5236a3794c1a65b81e86dcbadf",
+  "acceptance_scope": "Whole unchanged main completed, both inverse i32/u32 associated Value=Option<V> substitutions and original assertions reached. No native compiler evidence counted.",
+  "remaining": [
+    "Other owning editions for this fixture unexecuted.",
+    "Cold signature-only source Eq inference still requires declaration-scope receipt beyond already published callee BodyEnvironment; not implemented.",
+    "Full ordinary/user-macro/wrapper/stdmacro, suspension/publication refresh matrix incomplete.",
+    "Full suite/trait engine/GAT/anonymous runtime descriptor support not complete."
+  ],
+  "reviews": "Exact prior source review is associated-equality-source-consumer-review.json; failed V16 and partial V17 receipts retained.",
+  "named_field_complement": {
+    "fixture": "tests/ui/associated-types/associated-types-struct-field-named.rs",
+    "fixture_sha256": "3a7374d317e6975b76c9aa6f9817f89c09d96157a25536199b5a03e9e2e181df",
+    "edition": 2015,
+    "source_sha256": "88b73c9d329eb4b4fc3c4cc9729f224c0f5eebda133ee5b70fd903487ea65797",
+    "binary_sha256": "23bc52d6649937a96395fb62153751851cd2f66eb20a658900ea37973d5a6d58",
+    "argv": [
+      "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "--edition",
+      "2015",
+      "run",
+      "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-struct-field-named.rs",
+      "--runtime-capture",
+      "--capture-context",
+      "2bf378a3092834b636659523139dc146ce50de7b948a67fb7fff1dc58a12353b"
+    ],
+    "exit": 0,
+    "capture_complete": true,
+    "facts": {
+      "classified_operation_candidates": 416,
+      "cleanup_observed": true,
+      "closed_no_external_effects": true,
+      "effect_recipe_dispatch_attempts": 0,
+      "observed_fault": false,
+      "observed_suspension": false,
+      "source_call_boundaries": 12,
+      "terminal": {
+        "kind": "completed",
+        "unit": true
+      },
+      "typed_fault_exit_candidates": 0,
+      "unsupported_operation_candidates": 0,
+      "vm_dispatches": 270,
+      "vm_outcomes": 270
+    },
+    "raw_capture": "artifacts/validation-resume-2026-10-18/candidate-v18/additional-associated-fields/stock-0.stdout",
+    "raw_capture_sha256": "e4173cd2766a057ad8125522e2f2c94854a770ebc4742c34591d682e1b72d5cd"
+  }
+}

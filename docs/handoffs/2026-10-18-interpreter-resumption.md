@@ -331,3 +331,38 @@ No refreshed suite total or full-fixture acceptance follows from these nine case
 Ten distinct targeted cases have newly passed at least once versus saved v16
 across this resumption's historical binaries; that is not ten confirmed passes
 on every successor or a full inventory delta.
+
+## V18: source constraints and pattern namespace classification
+
+Exact source `88b73c9d329eb4b4fc3c4cc9729f224c0f5eebda133ee5b70fd903487ea65797`
+compiles (lib `225eb8/0`, CLI `6e89d0/0`) with both-build freeze. Ten exact
+compiled Rust leaves were staged before release. Primary six unchanged originals
+all complete; additional named struct completes, named enum fails at Root pattern
+compound field binding (17 calls / 204 dispatches). Newly passing numbered fields
+complete both opposite substitutions (14 calls / 268 dispatches), the record
+literal completes (0 / 72), and named fields completes (12 / 270).
+
+Eight/nine controls pass. The actual cold alternative/range/false-guard retry
+control completes all four editions. PatternTree now retains an optional canonical
+binding for a plain name until actual namespace classification; constants never
+need a local binding identity, real fresh bindings retain canonical/hygiene checks.
+The source walker queries the actual occurrence and publishes only Some canonical
+binding. Tree domains advance, without a second matcher. Generated origin control
+continues failing: owner/cfg/record/epoch match; complete seal keys differ. Root
+followup aligns cold boundary creation with existing GeneratedSyntaxInput::same_unit
+and boundary currentness graph+epoch source correspondence, retaining its own full
+completion seal validation. Foreign-world denial and standard macro context are
+added as source-only controls, unexecuted until next candidate.
+
+Worker1 next implements genuine selected-callee declaration scope for cold Type
+equations without preparing its body. Worker2 next transports a reached nominal
+field demand from the same non-consuming matcher to the shared member query for
+generic enum patterns. Root owns generated boundary publication. These successors
+are source-only; no integrated architecture/feature/milestone/JIT closure.
+
+Thirteen distinct targeted cases have newly passed at least once across this
+resumption's exact binaries against historical saved v16. This is not a current
+whole-suite count; V17 numeric mains were not gratuitously rerun in V18.
+[Exact V18](../../worktracks/evidence/2026-10-18-interpreter-v18-validation.json).
+Source checkpoint `5761075884f60ea25053072be8db916108ffe57f` (exact V17 plus
+scoped evidence/plans) was pushed to the implementation branch.

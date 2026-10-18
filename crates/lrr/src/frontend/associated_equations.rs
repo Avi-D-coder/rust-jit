@@ -196,3 +196,98 @@ pub(crate) fn prepare(
         equations: normalized,
     }))
 }
+
+/// One declaration-equation inference route for source Type goals and reached
+/// call contracts. Source consumers record the fetched query in their outer
+/// memo closure; runtime consumers retain the returned immutable input guard.
+pub(crate) fn constrain(
+    db: &mut Database,
+    body: &BodyKey,
+    signature: &crate::syntax::signatures::FunctionSignature,
+    symbolic: &mut super::signature_subst::SignatureSubstitution,
+) -> QueryPoll<Option<std::sync::Arc<crate::db::memo::PreparedInputGuard>>> {
+    use crate::{db::memo::PreparedInputGuard, syntax::signatures::GenericKind};
+    use std::sync::Arc;
+    if body.definition != signature.definition {
+        return QueryPoll::Ready(Err(fault(
+            "equation substitution declaration owner differs",
+        )));
+    }
+    if db.input(&InputKey::BodyEnvironment(body.clone())).is_none() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let mut guards = Vec::new();
+    loop {
+        let needed: Vec<_> = signature
+            .generics
+            .iter()
+            .filter(|parameter| {
+                parameter.kind == GenericKind::Type
+                    && symbolic
+                        .binding(parameter.ordinal)
+                        .is_none_or(|term| !super::call_contracts::closed_term(term))
+            })
+            .map(|parameter| parameter.ordinal)
+            .collect();
+        if needed.is_empty() {
+            break;
+        }
+        let bindings: Vec<_> = signature
+            .generics
+            .iter()
+            .filter_map(|parameter| {
+                let term = symbolic.binding(parameter.ordinal)?;
+                super::call_contracts::closed_term(term).then(|| {
+                    (
+                        ParamKey {
+                            definition: signature.definition,
+                            ordinal: parameter.ordinal,
+                        },
+                        term.clone(),
+                    )
+                })
+            })
+            .collect();
+        let before = bindings.len();
+        let key = QueryKey::AssociatedEquations(Box::new(AssociatedEquationsKey {
+            body: body.clone(),
+            bindings,
+            needed,
+        }));
+        let selected = ready!(db.fetch(&SyntaxProvider, key.clone()));
+        let QueryValue::AssociatedEquations(equations) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("associated equality goal outcome differs")));
+        };
+        if equations.equations().is_empty() {
+            break;
+        }
+        for (template, actual) in equations.equations() {
+            checked!(symbolic.constrain_equation(template, actual));
+        }
+        // Guard every consumed fact, even if no runtime descriptor exists.
+        guards.push(ready!(db.prepare_input_guard(
+            &SyntaxProvider,
+            &key,
+            selected.fingerprint
+        )));
+        let after = signature
+            .generics
+            .iter()
+            .filter(|parameter| {
+                symbolic
+                    .binding(parameter.ordinal)
+                    .is_some_and(super::call_contracts::closed_term)
+            })
+            .count();
+        if after <= before {
+            break;
+        }
+    }
+    QueryPoll::Ready(Ok(if guards.is_empty() {
+        None
+    } else {
+        Some(Arc::new(checked!(PreparedInputGuard::join(
+            &guards.iter().collect::<Vec<_>>()
+        ))))
+    }))
+}

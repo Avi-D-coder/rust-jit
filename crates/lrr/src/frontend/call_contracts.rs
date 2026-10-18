@@ -1791,66 +1791,15 @@ fn prepare(
     // Reached argument Types may determine a still-unbound parameter through
     // an actual associated equality, e.g. K::Value = Option<V>. Consume only
     // those declaration equations; this does not validate unrelated bounds.
-    let mut inferred_guards = Vec::new();
-    if let (Some(store), Some(body)) = (store, callee.body())
-        && db.input(&InputKey::BodyEnvironment(body.key())).is_some()
-    {
-        loop {
-            let needed: Vec<_> = signature
-                .generics
-                .iter()
-                .filter(|parameter| {
-                    parameter.kind == crate::syntax::signatures::GenericKind::Type
-                        && symbolic
-                            .binding(parameter.ordinal)
-                            .is_none_or(|term| !closed_term(term))
-                })
-                .map(|parameter| parameter.ordinal)
-                .collect();
-            if needed.is_empty() {
-                break;
-            }
-            let bindings = signature
-                .generics
-                .iter()
-                .filter_map(|parameter| {
-                    let term = symbolic.binding(parameter.ordinal)?;
-                    closed_term(term).then(|| {
-                        (
-                            ParamKey {
-                                definition,
-                                ordinal: parameter.ordinal,
-                            },
-                            term.clone(),
-                        )
-                    })
-                })
-                .collect();
-            let key = QueryKey::AssociatedEquations(Box::new(
-                super::associated_equations::AssociatedEquationsKey {
-                    body: body.key(),
-                    bindings,
-                    needed,
-                },
-            ));
-            let selected = match db.fetch(&SyntaxProvider, key.clone()) {
-                QueryPoll::Ready(Ok(selected)) => selected,
+    let inferred_equations = if let (Some(store), Some(body)) = (store, callee.body()) {
+        let proof =
+            match super::associated_equations::constrain(db, &body.key(), signature, &mut symbolic)
+            {
+                QueryPoll::Ready(Ok(proof)) => proof,
                 QueryPoll::Ready(Err(error)) => return Err(error),
                 QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
             };
-            let QueryValue::AssociatedEquations(equations) = selected.value.as_ref() else {
-                return Err(fault(
-                    "LRR-E-CALL-CONTEXT",
-                    "associated equality goal outcome differs",
-                ));
-            };
-            if equations.equations().is_empty() {
-                break;
-            }
-            for (template, actual) in equations.equations() {
-                symbolic.constrain_equation(template, actual)?;
-            }
-            let mut progress = false;
+        if proof.is_some() {
             for parameter in &signature.generics {
                 if parameter.kind != crate::syntax::signatures::GenericKind::Type {
                     continue;
@@ -1874,25 +1823,11 @@ fn prepare(
                 source_bindings.insert(key, bound.clone());
                 runtime.insert(key, descriptor);
                 structural_generic = true;
-                progress = true;
-            }
-            let guard = match db.prepare_input_guard(&SyntaxProvider, &key, selected.fingerprint) {
-                QueryPoll::Ready(Ok(guard)) => guard,
-                QueryPoll::Ready(Err(error)) => return Err(error),
-                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
-            };
-            inferred_guards.push(guard);
-            if !progress {
-                break;
             }
         }
-    }
-    let inferred_equations = if inferred_guards.is_empty() {
-        None
+        proof
     } else {
-        Some(Arc::new(PreparedInputGuard::join(
-            &inferred_guards.iter().collect::<Vec<_>>(),
-        )?))
+        None
     };
     // Structurally bound parameters: publish their source identities beside
     // their descriptors, and give the callee closed parameter views.

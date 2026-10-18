@@ -727,12 +727,12 @@
     "imported_cases": 2807,
     "imported_files": 3477,
     "claims_are_not_acceptance": true,
-    "validation": "V17 exactsource7a2253f1 bothbuildsPASS,7/9controlsPASS,7/9affectedoriginalwholemainPASS (4new vs V15/savedv16,3retained). Two new route controls fail; architecture held. V16 compile101 preserved. V18 successors unstaged/unexecuted; no refreshed suite total.",
+    "validation": "V18 exactsource88b73c9d bothbuildsPASS,8/9controlsPASS,main6/6+additional1/2originalwholemainPASS. Three new distinct targeted passes; generatedboundaryseal and enumfield binding held. Successors unvalidated, no refreshed suite total.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 10,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 13,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": "653d52e0a51f10881b7f78fbd07193ae13fb8063",
+    "source_checkpoint_pushed": "5761075884f60ea25053072be8db916108ffe57f",
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired."
   }
 }

@@ -589,6 +589,9 @@ impl<'s> Search<'s> {
                         }
                     }
                 }
+                let binding = binding.ok_or_else(|| unsupported(
+                    "actual pattern binding requires resolved alternative, mode and hygiene facts",
+                ))?;
                 let context = goal.context.with_edition(*edition)?;
                 let modifier = match (*by_reference, *mutable) {
                     (false, false) => BindingModifier::Plain,
@@ -598,7 +601,7 @@ impl<'s> Search<'s> {
                 };
                 let mode = context.binding_mode(modifier)?;
                 self.staged.push(Staged {
-                    binding: *binding,
+                    binding,
                     place: copy_place(&goal.place),
                     source: goal.source.clone(),
                     mode,

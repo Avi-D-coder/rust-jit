@@ -494,7 +494,8 @@ struct RouteInstallProvider {
     selection: crate::source::changes::SourceSelection,
     compiler: Option<std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>>,
     procedural: Option<std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>>,
-    role: Option<std::sync::Arc<crate::db::memo::macro_export_inputs::MacroExportSourceObservation>>,
+    role:
+        Option<std::sync::Arc<crate::db::memo::macro_export_inputs::MacroExportSourceObservation>>,
 }
 impl RouteInstallProvider {
     fn of(provider: &super::source_declarative::SourceDeclarative) -> Self {
@@ -522,7 +523,10 @@ impl RouteInstallProvider {
 impl RouteInstallMemo {
     /// Installation reads only each nested index's (immutable) scan.
     fn source_rows(
-        sources: &BTreeMap<usize, std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>>,
+        sources: &BTreeMap<
+            usize,
+            std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>,
+        >,
     ) -> Vec<(usize, Digest)> {
         sources
             .iter()
@@ -541,7 +545,10 @@ impl RouteInstallMemo {
         &self,
         providers: &[super::source_declarative::SourceDeclarative],
         routes: &[std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>],
-        sources: &BTreeMap<usize, std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>>,
+        sources: &BTreeMap<
+            usize,
+            std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>,
+        >,
         inert: &BTreeMap<Digest, super::nested_inert::NestedInertProof>,
     ) -> Option<std::sync::Arc<crate::frontend::macro_names::MacroNamespaces>> {
         let namespaces = self.namespaces.as_ref()?;
@@ -582,9 +589,8 @@ pub struct SourceDiscovery {
     route_install: RouteInstallMemo,
     /// Contained scope receipts of the last publication per namespace, keyed
     /// by everything they are computed from (republication reuses them).
-    receipt_memo: std::sync::Mutex<
-        BTreeMap<u32, (Digest, Vec<type_scope_receipts::TypeScopeReceipt>)>,
-    >,
+    receipt_memo:
+        std::sync::Mutex<BTreeMap<u32, (Digest, Vec<type_scope_receipts::TypeScopeReceipt>)>>,
     producers: BTreeSet<Digest>,
     seal: Option<Seal>,
     body_boundary_seal_fingerprint: Option<Digest>,
@@ -821,7 +827,8 @@ impl SourceDiscovery {
     }
     fn build_deferred_graph(&mut self) -> Result<(), Diagnostic> {
         if self.graph_deferred {
-            self.graph = std::sync::Arc::new(Self::initial_graph(&self.sources, &self.dependencies)?);
+            self.graph =
+                std::sync::Arc::new(Self::initial_graph(&self.sources, &self.dependencies)?);
             self.graph_deferred = false;
         }
         Ok(())
@@ -839,7 +846,15 @@ impl SourceDiscovery {
         let domain = SealDomain::TestCatalog {
             id: scope.crate_key,
         };
-        Self::new_domain(sources, scope, Namespace::Value, unit_graph, epoch, domain, true)
+        Self::new_domain(
+            sources,
+            scope,
+            Namespace::Value,
+            unit_graph,
+            epoch,
+            domain,
+            true,
+        )
     }
     /// The construction graph: captured outlines, pending attribute
     /// declarations hidden, and the selected dependency edges.
@@ -891,7 +906,12 @@ impl SourceDiscovery {
             }) {
                 return Err(fault("source dependency provider not selected"));
             }
-            rows.push((consumer, alias.to_string(), provider, root.outline().profile.edition));
+            rows.push((
+                consumer,
+                alias.to_string(),
+                provider,
+                root.outline().profile.edition,
+            ));
         }
         Ok(rows)
     }
@@ -1463,7 +1483,9 @@ impl SourceDiscovery {
         &self,
         compile_env: Digest,
         engine: Digest,
-        compiler: Option<&std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>>,
+        compiler: Option<
+            &std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>,
+        >,
         procedural: bool,
         compiler_attributes: bool,
     ) -> Result<Option<Digest>, Diagnostic> {
@@ -1476,7 +1498,10 @@ impl SourceDiscovery {
             || !self.macro_export_modules.is_empty()
             || !self.module_routes.is_empty()
             || !self.nested_inert_proofs.is_empty()
-            || self.sources.iter().any(|source| !source.same_publication(first))
+            || self
+                .sources
+                .iter()
+                .any(|source| !source.same_publication(first))
         {
             return Ok(None);
         }
@@ -1499,10 +1524,13 @@ impl SourceDiscovery {
             }
             None => e.u8(0),
         }
-        e.sequence(&RouteInstallMemo::source_rows(&self.nested_sources), |e, (ordinal, scan)| {
-            e.u64(*ordinal as u64);
-            e.digest(*scan);
-        });
+        e.sequence(
+            &RouteInstallMemo::source_rows(&self.nested_sources),
+            |e, (ordinal, scan)| {
+                e.u64(*ordinal as u64);
+                e.digest(*scan);
+            },
+        );
         Ok(Some(e.finish()))
     }
     fn prepare_declarative(
@@ -2327,8 +2355,9 @@ impl SourceDiscovery {
             .checked_add(256)
             .ok_or_else(|| fault("procedural selection metadata limit"))?;
         if self
-                .procedural_selections
-                .contains_key(&ticket.job().identity) {
+            .procedural_selections
+            .contains_key(&ticket.job().identity)
+        {
             return Err(fault("procedural selection count/conflict"));
         }
         let prepared = std::sync::Arc::new(
@@ -2425,8 +2454,9 @@ impl SourceDiscovery {
             .checked_add(selection.metadata_bytes()?)
             .ok_or_else(|| fault("source attribute selection metadata limit"))?;
         if self
-                .attribute_selections
-                .contains_key(&selection.producer()) {
+            .attribute_selections
+            .contains_key(&selection.producer())
+        {
             return Err(fault("source attribute selection count/conflict"));
         }
         let prepared = std::sync::Arc::new(
@@ -2769,7 +2799,9 @@ impl SourceDiscovery {
         let ordinal = *ordinal;
         let call = call.clone();
         let id = record.key().fingerprint();
-        if self.fragments.contains_key(&id) || self.source_derives_inflight.contains_key(&call.item_input) {
+        if self.fragments.contains_key(&id)
+            || self.source_derives_inflight.contains_key(&call.item_input)
+        {
             return Err(fault("source derive append inventory conflict or limit"));
         }
         let items = super::generated_items::GeneratedItems::admit(
@@ -2798,7 +2830,10 @@ impl SourceDiscovery {
             self.epoch,
         )?;
         let impl_headers = declaration.item_impl_headers(&items, cfg, &plan)?;
-        if self.nested_jobs.contains_key(&declaration_job) || self.item_declaration_inputs.contains_key(&declaration_job) || self.item_root_declarations.contains_key(&id) {
+        if self.nested_jobs.contains_key(&declaration_job)
+            || self.item_declaration_inputs.contains_key(&declaration_job)
+            || self.item_root_declarations.contains_key(&id)
+        {
             return Err(fault(
                 "source derive declaration inventory conflict or limit",
             ));
@@ -2982,10 +3017,13 @@ impl SourceDiscovery {
     ) -> Result<(), Diagnostic> {
         if self
             .source_derive_completions
-            .contains_key(&call.item_input) || self.source_derives_inflight.contains_key(&call.item_input) || self
+            .contains_key(&call.item_input)
+            || self.source_derives_inflight.contains_key(&call.item_input)
+            || self
                 .frontier_producers
                 .get(&(call.scope.clone(), call.frontier))
-                .is_none_or(|frontier| !frontier.contains(&call.item_input)) {
+                .is_none_or(|frontier| !frontier.contains(&call.item_input))
+        {
             return Err(fault(
                 "source derive completion frontier or retention differs",
             ));
@@ -3213,12 +3251,13 @@ impl SourceDiscovery {
             .get(&ticket.job().identity)
             .ok_or_else(|| fault("pending source call absent"))?;
         let call = call.clone();
-        let retained_bytes = retained_bytes
-            .checked_add(call.scope.heap_bytes())
-            .ok_or(Diagnostic::new(
-                "LRR-E-DISCOVERY-LIMIT",
-                "generated owner allocation limit".into(),
-            ))?;
+        let retained_bytes =
+            retained_bytes
+                .checked_add(call.scope.heap_bytes())
+                .ok_or(Diagnostic::new(
+                    "LRR-E-DISCOVERY-LIMIT",
+                    "generated owner allocation limit".into(),
+                ))?;
         let bytes = self
             .generated_bytes
             .checked_add(record.descriptor().wire_bytes)
@@ -3396,7 +3435,9 @@ impl SourceDiscovery {
             catalog.inherit_original_helpers(helpers.clone())?;
         }
         let mut empty_boundary = if !requires_macro_catalog {
-            if self.completed_empty_boundaries.contains_key(&identity) || self.pending_item_boundaries.contains_key(&identity) {
+            if self.completed_empty_boundaries.contains_key(&identity)
+                || self.pending_item_boundaries.contains_key(&identity)
+            {
                 return Err(fault("completed empty macro boundary count/conflict"));
             }
             Some(super::body_macro_boundary::CompletedEmptyBoundary {
@@ -3922,7 +3963,9 @@ impl SourceDiscovery {
             .collect::<BTreeSet<_>>();
         let impl_frontier = plan.impl_frontier();
         let child_impl = if let Some(frontier) = impl_frontier {
-            if self.child_impl_frontiers.contains_key(&frontier) || self.item_impl_jobs.contains_key(&frontier) {
+            if self.child_impl_frontiers.contains_key(&frontier)
+                || self.item_impl_jobs.contains_key(&frontier)
+            {
                 return Err(fault("generated child impl frontier conflict or limit"));
             }
             let ancestor_job = self
@@ -4371,10 +4414,8 @@ impl SourceDiscovery {
             };
             let identity = catalog.owning_profile_identity()?;
             if !globals_by_identity.contains_key(&identity) {
-                globals_by_identity.insert(
-                    identity,
-                    catalog.compiler_globals()?.into_iter().collect(),
-                );
+                globals_by_identity
+                    .insert(identity, catalog.compiler_globals()?.into_iter().collect());
             }
             let globals = &globals_by_identity[&identity];
             for scope in provider
@@ -4498,8 +4539,7 @@ impl SourceDiscovery {
                     .ok_or_else(|| fault("runtime macro source count overflow"))?;
             }
         }
-        let count = Some(count)
-            .ok_or_else(|| fault("runtime macro source count limit"))?;
+        let count = Some(count).ok_or_else(|| fault("runtime macro source count limit"))?;
         let mut result = Vec::new();
         result
             .try_reserve_exact(count)
@@ -4582,8 +4622,7 @@ impl SourceDiscovery {
         inert: &BTreeMap<Digest, super::nested_inert::NestedInertProof>,
         memo: &mut RouteInstallMemo,
     ) -> Result<std::sync::Arc<crate::frontend::macro_names::MacroNamespaces>, Diagnostic> {
-        let _span =
-            crate::core::timing::Span::enter(|| "discovery install_macro_routes".into());
+        let _span = crate::core::timing::Span::enter(|| "discovery install_macro_routes".into());
         let routes = Self::completed_macro_routes(providers, modules)?;
         if let Some(namespaces) = memo.hit(providers, &routes, sources, inert) {
             return Ok(namespaces);
@@ -4622,7 +4661,9 @@ impl SourceDiscovery {
         for routes in routes {
             let index = routes.import_route_index();
             for import in &routes.source_imports {
-                if let Some(definition) = routes.import_definition_in(import, &namespaces, &index)? {
+                if let Some(definition) =
+                    routes.import_definition_in(import, &namespaces, &index)?
+                {
                     facets.push((import, definition));
                 }
             }
@@ -4776,26 +4817,37 @@ impl SourceDiscovery {
             e.digest(provider.module_source().selection().location_identity());
             e.digest(provider.module_source().selection().outline.fingerprint());
             e.u8(u8::from(provider.macro_export_source_role().is_some()));
-            e.option(&provider.procedural, |e, catalog| e.digest(catalog.fingerprint()));
+            e.option(&provider.procedural, |e, catalog| {
+                e.digest(catalog.fingerprint())
+            });
             e.option(&provider.compiler, |e, catalog| {
                 e.digest(catalog.owning_profile_identity().unwrap_or_default());
                 e.u64(std::sync::Arc::as_ptr(catalog) as usize as u64);
             });
         });
-        e.u8(u8::from(providers.first().is_some_and(|p| p.compiler.is_some())));
+        e.u8(u8::from(
+            providers.first().is_some_and(|p| p.compiler.is_some()),
+        ));
         e.sequence(routes, |e, route| {
             e.u32(u32::from(route.edition));
-            e.sequence(&route.modules.iter().collect::<Vec<_>>(), |e, (unit, names)| {
-                e.digest(*unit);
-                e.sequence(names, |e, n| e.string(n.as_str()));
-            });
-            e.sequence(&route.dependencies.iter().collect::<Vec<_>>(), |e, (alias, unit)| {
-                e.string(alias.as_str());
-                e.digest(**unit);
-            });
-            e.sequence(&route.implicit_disabled.iter().collect::<Vec<_>>(), |e, scope| {
-                e.record(*scope)
-            });
+            e.sequence(
+                &route.modules.iter().collect::<Vec<_>>(),
+                |e, (unit, names)| {
+                    e.digest(*unit);
+                    e.sequence(names, |e, n| e.string(n.as_str()));
+                },
+            );
+            e.sequence(
+                &route.dependencies.iter().collect::<Vec<_>>(),
+                |e, (alias, unit)| {
+                    e.string(alias.as_str());
+                    e.digest(**unit);
+                },
+            );
+            e.sequence(
+                &route.implicit_disabled.iter().collect::<Vec<_>>(),
+                |e, scope| e.record(*scope),
+            );
             e.sequence(&route.extern_aliases, |e, row| e.digest(row.fingerprint()));
             e.sequence(route.definitions(), |e, row| {
                 e.digest(row.path.unit);
@@ -5920,7 +5972,14 @@ impl SourceDiscovery {
             .as_ref()
             .ok_or_else(|| fault("module inherited owners absent"))?
             .2;
-        Self::projection_inherited_in(&self.fragments, providers, &self.staged_modules, self.exports.as_deref(), syntax, 0)
+        Self::projection_inherited_in(
+            &self.fragments,
+            providers,
+            &self.staged_modules,
+            self.exports.as_deref(),
+            syntax,
+            0,
+        )
     }
     fn projection_inherited_in<'a>(
         fragments: &'a BTreeMap<Digest, GeneratedFragment>,
@@ -7358,9 +7417,7 @@ impl SourceDiscovery {
                 return Err(error);
             }
             let growth = catalogue.metadata_bytes()?.saturating_sub(parent_bytes);
-            let Some(bytes) = bytes
-                .checked_add(growth)
-            else {
+            let Some(bytes) = bytes.checked_add(growth) else {
                 let error = fault("module macro catalogue growth exceeds retained metadata limit");
                 self.failed = Some(error.clone());
                 return Err(error);
@@ -7555,7 +7612,21 @@ impl SourceDiscovery {
                 .get(&identity)
                 .is_none_or(|record| !record.same_record(unit.items.record()))
         {
-            return Err(fault("generated body boundary actual output/owner differs"));
+            return Err(fault(&format!(
+                "generated body boundary actual output/owner differs \
+                 (owner {}, seal {}, epoch {} [{} vs {}], cfg {}, record {}; output {:?})",
+                owner == &unit.scope,
+                unit.seal == self.key,
+                unit.items.epoch() == self.epoch,
+                unit.items.epoch(),
+                self.epoch,
+                unit.cfg.fingerprint()
+                    == self.sources[*ordinal].captured_macro_cfg()?.fingerprint(),
+                self.records
+                    .get(&identity)
+                    .is_some_and(|record| record.same_record(unit.items.record())),
+                identity,
+            )));
         }
         let providers = &self
             .declarative
@@ -8306,9 +8377,10 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("generated diagnostic pending request absent"))?
             .1;
         let origin = pending.diagnostic_origin();
-        if origin.as_ref().is_some_and(|origin| {
-            origin.invocation_identity != request.key().invocation
-        }) {
+        if origin
+            .as_ref()
+            .is_some_and(|origin| origin.invocation_identity != request.key().invocation)
+        {
             return Err(fault("generated diagnostic origin differs"));
         }
         Ok(origin.map(|origin| origin.as_ref().clone()))
@@ -8373,7 +8445,10 @@ impl SourceDiscovery {
     /// Re-publish this immutable sealed discovery, e.g. to renew module leases
     /// at run entry. A procedural discovery must already have been published
     /// under its macro-run certificate; direct first publication still refuses.
-    pub(crate) fn republish(&mut self, db: &mut crate::db::memo::Database) -> Result<(), Diagnostic> {
+    pub(crate) fn republish(
+        &mut self,
+        db: &mut crate::db::memo::Database,
+    ) -> Result<(), Diagnostic> {
         if !self.certified_publication {
             return self.publish(db);
         }
@@ -8633,11 +8708,14 @@ impl SourceDiscovery {
         if let Some(environment) = &self.completed_source_environment {
             let mut boundaries = BTreeMap::new();
             for unit in &generated_units {
-                if unit.definitions.values().any(|item| matches!(item.item_kind,
-                    crate::source::manifest::ItemKind::Function
-                    | crate::source::manifest::ItemKind::Constant
-                    | crate::source::manifest::ItemKind::Static))
-                {
+                if unit.definitions.values().any(|item| {
+                    matches!(
+                        item.item_kind,
+                        crate::source::manifest::ItemKind::Function
+                            | crate::source::manifest::ItemKind::Constant
+                            | crate::source::manifest::ItemKind::Static
+                    )
+                }) {
                     // A cold body's unavailable insertion context is retained as a
                     // typed outcome. It is reported only when that body is
                     // reached, just as unsupported executable syntax is.
@@ -9452,10 +9530,8 @@ impl SourceDiscovery {
                             return Err(error);
                         }
                         if !self.cold_test_bindings.contains_key(&identity) {
-                            self.nested_bytes = self
-                                .nested_bytes
-                                .checked_add(256)
-                                .ok_or_else(|| {
+                            self.nested_bytes =
+                                self.nested_bytes.checked_add(256).ok_or_else(|| {
                                     fault("cold compiler test binding metadata limit")
                                 })?;
                         }

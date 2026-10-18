@@ -1123,9 +1123,20 @@ impl<'a> Component<'a> {
         // associated-type projection of them (`<T as Get>::Value`) is the
         // Type the selected impl states.
         let instantiated;
-        let term = if super::associated_types::contains_projection(term) {
+        let term = if super::associated_types::contains_projection(term)
+            || (is_call && methods::mentions_parameter(term))
+        {
             instantiated = ready!(self.instantiated_declared(db, node, definition, term));
-            &instantiated
+            // An unsolved operand variable is not a source Type answer.
+            // Retain the declared parameter relation so its other argument,
+            // result and bound occurrences can still determine that variable.
+            if !super::associated_types::contains_projection(term)
+                && super::call_contracts::contains_transaction_term(&instantiated)
+            {
+                term
+            } else {
+                &instantiated
+            }
         } else {
             term
         };
@@ -2561,21 +2572,25 @@ impl<'a> Component<'a> {
                 ..
             } => {
                 let by_reference = &(*by_reference || (self.peeled && !*mutable));
-                // Or-alternatives share the canonical binding's identity.
-                match ready!(self.pattern_binding(db, *binding)) {
-                    Some(identity) if *by_reference => {
+                // A plain name with unresolved syntactic binding facts may
+                // select a constant. Ask at its actual occurrence without
+                // inventing a canonical local for that name.
+                let selected = *occurrence;
+                match (ready!(self.pattern_binding(db, selected)), *binding) {
+                    (Some(_), None) => self.defer(*occurrence, ConstraintDemand::Binding),
+                    (Some(identity), Some(binding)) if *by_reference => {
                         let via = self.via.wrap(Step::Deref);
                         let current = std::mem::replace(&mut self.via, via);
-                        self.binding(identity, *binding);
+                        self.binding(identity, binding);
                         self.via = current;
                     }
-                    Some(identity) => self.binding(identity, *binding),
+                    (Some(identity), Some(binding)) => self.binding(identity, binding),
                     // An identifier naming a constant or a unit constructor
                     // matches by value: a constant states its declared Type.
-                    None => {
+                    (None, _) => {
                         let observed = ready!(db.fetch(
                             &SyntaxProvider,
-                            QueryKey::EnteredValue(entry(self.key, *binding))
+                            QueryKey::EnteredValue(entry(self.key, selected))
                         ));
                         let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
                             return QueryPoll::Ready(Err(fault(

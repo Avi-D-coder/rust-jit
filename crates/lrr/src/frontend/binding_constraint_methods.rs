@@ -64,7 +64,7 @@ fn borrowed(inner: TyTerm) -> TyTerm {
     TyTerm::Ref(RegionTerm::Static, false, Box::new(inner))
 }
 /// Whether a declared Type term mentions a generic parameter.
-fn mentions_parameter(term: &TyTerm) -> bool {
+pub(super) fn mentions_parameter(term: &TyTerm) -> bool {
     use crate::traits::term::GenericArg;
     match term {
         TyTerm::Param(_) | TyTerm::Projection(_) | TyTerm::Opaque(..) => true,
@@ -265,8 +265,6 @@ impl<'a> Component<'a> {
                         match ready!(self.result_term(db, node, definition)) {
                             Some(result) => {
                                 let result =
-                                    ready!(self.explicit_arguments(db, node, definition, result));
-                                let result =
                                     ready!(self.instantiate_result(db, node, definition, result));
                                 Some(ready!(self.decided(db, node, result)))
                             }
@@ -457,24 +455,22 @@ impl<'a> Component<'a> {
         };
         QueryPoll::Ready(Ok(result.map(TyTerm::Primitive)))
     }
-    /// `result` with the callee's type parameters that the call writes
-    /// explicitly (`f::<u8>(..)`) replaced by those Types.
-    pub(super) fn explicit_arguments(
+    /// Actual indexed explicit Type bindings, shared by declared source
+    /// parameter and result specialization. No separate operand reparse.
+    pub(super) fn explicit_argument_bindings(
         &mut self,
         db: &mut Database,
         call: NodeId,
         definition: Digest,
-        result: TyTerm,
-    ) -> QueryPoll<TyTerm> {
+    ) -> QueryPoll<BTreeMap<crate::traits::term::ParamKey, TyTerm>> {
         // Q44/Q47 currently describe indexed ordinary Call expressions.
         // Method/lang calls keep this optional goal open until their actual
         // declared-target proof joins the same query domain.
         if !self
             .fact(call)
             .is_ok_and(|fact| fact.kind() == FactKind::Call && fact.flag())
-            || !mentions_parameter(&result)
         {
-            return QueryPoll::Ready(Ok(result));
+            return QueryPoll::Ready(Ok(BTreeMap::new()));
         }
         // This is optional inference, not admission of an actual call.
         // Type-relative/binding callees can be selected at reached dispatch
@@ -496,7 +492,7 @@ impl<'a> Component<'a> {
                 | crate::frontend::entered_call_goals::EnteredCallSelection::Binding(_)
                 | crate::frontend::entered_call_goals::EnteredCallSelection::Value(_)
         ) {
-            return QueryPoll::Ready(Ok(result));
+            return QueryPoll::Ready(Ok(BTreeMap::new()));
         }
         let explicit = match db.fetch(
             &SyntaxProvider,
@@ -504,7 +500,7 @@ impl<'a> Component<'a> {
         ) {
             QueryPoll::Ready(Ok(explicit)) => explicit,
             QueryPoll::Ready(Err(error)) if super::not_closed(&error) => {
-                return QueryPoll::Ready(Ok(result));
+                return QueryPoll::Ready(Ok(BTreeMap::new()));
             }
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -528,9 +524,7 @@ impl<'a> Component<'a> {
                 )
             })
             .collect();
-        QueryPoll::Ready(Ok(crate::frontend::associated_types::substitute(
-            &result, &bound,
-        )))
+        QueryPoll::Ready(Ok(bound))
     }
     /// A selected function's declared result with its own type parameters
     /// replaced by what the arguments' static Types state: a parameter named

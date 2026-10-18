@@ -10,9 +10,9 @@
 //! parameter of the executing function, an inference variable) stays an
 //! unanswered goal; nothing here guesses a Type.
 //!
-//! Everything is demand-driven: terms without a projection never reach this
-//! module's work, and the member index is the environment's own retained
-//! handle.
+//! Everything is demand-driven: declared generic Types and projections use
+//! the same argument/equality substitution. The member index is the
+//! environment's own retained handle.
 use super::{Component, FactKind, QueryPoll, not_closed};
 use crate::{
     core::digest::Digest,
@@ -259,18 +259,66 @@ impl<'a> Component<'a> {
         definition: Digest,
         term: &TyTerm,
     ) -> QueryPoll<TyTerm> {
-        let bound =
+        let mut bound =
             ready!(self.bound_callee_parameters(db, call, definition, contains_projection(term)));
-        // Written arguments fix parameters even when no value parameter
-        // states them (a parameter can itself be `U::Error`). Reuse the
-        // same explicit-Type query as declared results, before normalizing
-        // parameter or result projections.
-        let term = ready!(self.explicit_arguments(db, call, definition, term.clone()));
-        let term = if bound.is_empty() {
-            term
-        } else {
-            substitute(&term, &bound)
-        };
+        bound.extend(ready!(
+            self.explicit_argument_bindings(db, call, definition)
+        ));
+        let selected = ready!(self.method_signature(db, definition));
+        if let Some(selected) = selected
+            && let crate::db::value::QueryValue::FunctionSignature(signature) = selected.as_ref()
+        {
+            let body = db.input(&crate::db::dependency::InputKey::DefinitionBody(definition));
+            if let Some(crate::db::dependency::InputValue::DefinitionBody(body)) = body.as_deref() {
+                let mut encoder =
+                    crate::core::digest::StableEncoder::new("lrr/v1/source-equation-substitution");
+                encoder.record(&super::entry(self.key, call));
+                encoder.digest(definition);
+                let mut substitution =
+                    match super::super::signature_subst::SignatureSubstitution::new(
+                        signature,
+                        encoder.finish(),
+                    ) {
+                        Ok(substitution) => substitution,
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    };
+                for (parameter, term) in &bound {
+                    if parameter.definition == definition
+                        && crate::frontend::call_contracts::closed_term(term)
+                    {
+                        if let Err(error) =
+                            substitution.bind_type_parameter(parameter.ordinal, term)
+                        {
+                            return QueryPoll::Ready(Err(error));
+                        }
+                    }
+                }
+                // The outer source-constraint memo captures this exact query's
+                // semantic dependencies; no runtime proof is fabricated here.
+                let _proof = ready!(crate::frontend::associated_equations::constrain(
+                    db,
+                    &body.key(),
+                    signature,
+                    &mut substitution
+                ));
+                for parameter in &signature.generics {
+                    if let Some(term) = substitution.binding(parameter.ordinal)
+                        && crate::frontend::call_contracts::closed_term(term)
+                    {
+                        bound.insert(
+                            ParamKey {
+                                definition,
+                                ordinal: parameter.ordinal,
+                            },
+                            term.clone(),
+                        );
+                    }
+                }
+            }
+        }
+        // The same operand, explicit and equality bindings instantiate
+        // declared parameter and result Types before projection normalization.
+        let term = substitute(term, &bound);
         self.normalize_projections(db, &term)
     }
 }

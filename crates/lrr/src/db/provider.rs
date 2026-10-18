@@ -1117,7 +1117,38 @@ impl Provider for SyntaxProvider {
                         );
                     };
                     match parsed.constructor_thunk(handle, index, pc, plan) {
-                        Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
+                        Ok(recipe) => {
+                            if pc.phase
+                                == crate::ir::pc::Phase::Entry.code().expect("entry encoding")
+                                && matches!(
+                                    plan.kind(),
+                                    crate::syntax::constructors::ConstructorKind::Record {
+                                        rest: None,
+                                        ..
+                                    }
+                                )
+                                && !matches!(
+                                    recipe.recipe().exit,
+                                    crate::ir::recipe::RecipeExit::Fault(_)
+                                )
+                            {
+                                match super::binding_constraint_thunk::prepare_open_expression(
+                                    db, index, pc, true,
+                                ) {
+                                    QueryPoll::Ready(Ok(Some(goal))) => {
+                                        return QueryPoll::Ready(goal.apply(index, recipe));
+                                    }
+                                    QueryPoll::Ready(Ok(None)) => {}
+                                    QueryPoll::Ready(Err(error)) => {
+                                        return QueryPoll::Ready(Err(error));
+                                    }
+                                    QueryPoll::NeedInput(input) => {
+                                        return QueryPoll::NeedInput(input);
+                                    }
+                                }
+                            }
+                            QueryValue::Thunk(Box::new(recipe))
+                        }
                         Err(error) => QueryValue::Error(error),
                     }
                 } else {

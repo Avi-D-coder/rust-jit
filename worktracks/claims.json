@@ -737,7 +737,6 @@
         "crates/lrr/src/frontend/closed_reference_calls.rs",
         "crates/lrr/src/syntax/closed_reference_signatures.rs",
         "crates/lrr/src/syntax/signatures.rs",
-        "crates/lrr/src/service/retained_reference_source_tests.rs",
         "crates/lrr/src/frontend/generated_reference_source_tests.rs",
         "worktracks/evidence/2026-10-15-common-source-boundaries.json",
         "crates/lrr/src/syntax/pattern_tests_tests.rs",
@@ -1150,7 +1149,7 @@
       "owner": "/root/generic_projection_resume",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Shared bound projection/source constraints; V15 numeric receiver type fixed. Associated equality call goal actual bound AST\u2192normalizer\u2192SignatureSubstitution closes missing V without GenericEnv relaxation; source-reviewed successor awaits combined build. Shared run.rs only inferenceproof guard; Frame only testliteralNone. No feature gate closure.",
+      "scope": "V18 numbered/namedfield wholemains newlypass through same shared Eq/source consumer. Next genuine selectedcall declaration-scope Eq goal without preparing/executing callee body; pure actual Q44/selectedtarget parentenv and cold-call control required. No fake globals/fullstaticchecker; widertrait/closure/genericgate remainsopen.",
       "paths": [
         "crates/lrr/src/frontend/source_types.rs",
         "crates/lrr/src/syntax/signatures.rs",
@@ -1168,7 +1167,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T10:49:38.372473+00:00",
+      "updated_at": "2026-10-18T11:24:35.099548+00:00",
       "review_after": "2026-10-18T08:24:19.411826+00:00",
       "transferred_paths": [
         "crates/lrr/src/frontend/associated_types.rs"
@@ -1323,15 +1322,11 @@
       "scope": "E007 ordinary VM initializers/value storage; V15 C3call nowworks but constantpattern hitsobsoletepure route. Reviewed successor replaces patternpurehelpers with shared typedSearch initializer demand; scalarCopy fn/rawptr cache widened via existingdescriptor. NonCopytemplates/genericcache/structuralconstantpatterns held. Root run.rs only per-use key and pattern outcome; Frame only wide numeric forwarding (coordinated separately).",
       "paths": [
         "crates/lrr/src/engine/run_initializers.rs",
-        "crates/lrr/src/engine/run_pattern_names.rs",
         "crates/lrr/src/engine/run_pattern_tests.rs",
         "crates/lrr/src/engine/run_source_constants.rs",
         "crates/lrr/src/engine/run_value_items.rs",
         "crates/lrr/src/engine/run_capture.rs",
         "crates/lrr/src/vm/frame_item_values.rs",
-        "crates/lrr/src/vm/frame_pattern_engine.rs",
-        "crates/lrr/src/vm/pattern_match.rs",
-        "crates/lrr/src/vm/step.rs",
         "crates/lrr/src/cli/initializer_tests.rs"
       ],
       "issue": null,
@@ -1349,14 +1344,15 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "T008/M025 ordinary incomplete import namespace diagnostics only; actual issue17718 properaux preexecution failure. No semantic or stock acceptance.",
+      "scope": "Root actual generated source boundary/sourceworld correspondence. V18 origincontrol fails seal-only mismatch; creator aligns with existing same_unit and Boundary currentness graph+epoch contract, retains full ownseal and actual source/record checks. Foreignworldnegative and stdmacro context source-only pending. No authority bypass or fullmatrixclosure.",
       "paths": [
         "crates/lrr/src/frontend/names.rs",
-        "crates/lrr/src/expand/source_discovery.rs"
+        "crates/lrr/src/expand/source_discovery.rs",
+        "crates/lrr/src/service/retained_reference_source_tests.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T09:44:05.987318+00:00",
+      "updated_at": "2026-10-18T11:24:35.099548+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00"
     },
     {
@@ -1366,7 +1362,7 @@
       "owner": "/root/closure_callable_resume",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V15 unchanged ref-from-struct+normalize-unifield wholemain passes and viawhere restored. Next open-record source constraints actual nominal field/bound templates plus common numeric obligation produce ordinary Written result hint; source-only candidate awaiting combined build. Frame record methods reserved, root numericguard independent. No fullfeature closure.",
+      "scope": "V18 recordliteral newlypasses after shared providerjoin; ref/viawhere/normalize retained. Next actual namedenum Root pattern fails genericfieldbinding. Extend same nonconsuming matcher with typed reached nominal/member demand, exact goal Type/fullargs+source query guard and operation resume; no global scrutineeargs/eager alternatives or second matcher. Root constant paths reserved unchanged; narrow run.rs patternoutcome interface coordinated.",
       "paths": [
         "crates/lrr/src/frontend/nominal_member_goals.rs",
         "crates/lrr/src/frontend/declaration_nominal_types.rs",
@@ -1386,11 +1382,15 @@
         "crates/lrr/src/frontend/prepared_constructor_tests.rs",
         "crates/lrr/src/frontend/binding_constraint_generics.rs",
         "crates/lrr/src/frontend/binding_constraint_open.rs",
-        "crates/lrr/src/db/binding_constraint_thunk.rs"
+        "crates/lrr/src/db/binding_constraint_thunk.rs",
+        "crates/lrr/src/engine/run_pattern_names.rs",
+        "crates/lrr/src/vm/pattern_match.rs",
+        "crates/lrr/src/vm/frame_pattern_engine.rs",
+        "crates/lrr/src/vm/step.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-18T10:49:38.372473+00:00",
+      "updated_at": "2026-10-18T11:24:35.099548+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00"
     },
     {

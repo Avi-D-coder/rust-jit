@@ -78,7 +78,6 @@ pub(super) fn thunk(
                 ra_ap_syntax::SyntaxKind::PATH_EXPR
                     | ra_ap_syntax::SyntaxKind::CALL_EXPR
                     | ra_ap_syntax::SyntaxKind::METHOD_CALL_EXPR
-                    | ra_ap_syntax::SyntaxKind::RECORD_EXPR
             ) {
                 // A call or fieldless constructor whose type arguments later
                 // code decides: its own result Type, stated at its Entry, and
@@ -199,14 +198,50 @@ fn literal(
 /// source constraints decided from its later uses. The ordinary recipe is
 /// kept; only the reached result Type is stated first, as a parent's
 /// `SetHint` would. Anything unresolved keeps the ordinary route untouched.
-fn open_expression(
+pub(super) struct PreparedOpenExpression {
+    hint: Option<crate::ir::op::HintRecipe>,
+    arguments: Option<std::sync::Arc<crate::ir::recipe::InferredArguments>>,
+    guard: std::sync::Arc<crate::db::memo::PreparedInputGuard>,
+}
+impl PreparedOpenExpression {
+    /// Decorate the owning lowering's already verified recipe. No syntax is
+    /// reparsed or lowered here, including constructor phases.
+    pub(super) fn apply(
+        self,
+        index: &BodyIndex,
+        recipe: crate::ir::recipe::VerifiedRecipe,
+    ) -> Result<Provided, Diagnostic> {
+        let recipe = match self.hint {
+            Some(hint) => recipe.with_entry_hint(index, hint)?,
+            None => recipe,
+        };
+        let recipe = match self.arguments {
+            Some(arguments) => recipe.with_inferred_arguments(arguments),
+            None => recipe,
+        };
+        Ok(Provided {
+            value: QueryValue::Thunk(Box::new(recipe.with_shared_prepared_inputs(self.guard)?)),
+            cacheable: true,
+        })
+    }
+}
+/// The shared immutable result/argument fact adapter. Callers retain their
+/// ordinary lowering route and use this only to state its source goal.
+pub(super) fn prepare_open_expression(
     db: &mut Database,
-    parsed: &ParsedFile,
-    body: &BodyHandle,
     index: &BodyIndex,
     pc: &PcKey,
     entry: bool,
-) -> QueryPoll<Option<Provided>> {
+) -> QueryPoll<Option<PreparedOpenExpression>> {
+    // Constructor lowering also calls this adapter directly. Preserve the
+    // common source-service admission boundary for legacy unsealed entries.
+    if !matches!(
+        db.input(&InputKey::BodyEnvironment(pc.body.clone()))
+            .as_deref(),
+        Some(InputValue::BodyEnvironment(_))
+    ) {
+        return QueryPoll::Ready(Ok(None));
+    }
     let key = PcKey {
         body: pc.body.clone(),
         node: pc.node,
@@ -240,6 +275,23 @@ fn open_expression(
     {
         return QueryPoll::Ready(Ok(None));
     }
+    QueryPoll::Ready(Ok(Some(PreparedOpenExpression {
+        hint,
+        arguments: proof.inferred_arguments().cloned(),
+        guard: std::sync::Arc::clone(guard),
+    })))
+}
+fn open_expression(
+    db: &mut Database,
+    parsed: &ParsedFile,
+    body: &BodyHandle,
+    index: &BodyIndex,
+    pc: &PcKey,
+    entry: bool,
+) -> QueryPoll<Option<Provided>> {
+    let Some(goal) = ready!(prepare_open_expression(db, index, pc, entry)) else {
+        return QueryPoll::Ready(Ok(None));
+    };
     let recipe = match parsed.initial_thunk(body, index, pc) {
         Ok(recipe) => recipe,
         Err(error) => return QueryPoll::Ready(Err(error)),
@@ -250,27 +302,7 @@ fn open_expression(
     ) {
         return QueryPoll::Ready(Ok(None));
     }
-    let recipe = match hint {
-        Some(hint) => match recipe.with_entry_hint(index, hint) {
-            Ok(recipe) => recipe,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        },
-        None => recipe,
-    };
-    let recipe = match proof.inferred_arguments() {
-        Some(arguments) => recipe.with_inferred_arguments(std::sync::Arc::clone(arguments)),
-        None => recipe,
-    };
-    QueryPoll::Ready(
-        recipe
-            .with_shared_prepared_inputs(std::sync::Arc::clone(guard))
-            .map(|recipe| {
-                Some(Provided {
-                    value: QueryValue::Thunk(Box::new(recipe)),
-                    cacheable: true,
-                })
-            }),
-    )
+    QueryPoll::Ready(goal.apply(index, recipe).map(Some))
 }
 /// A `let` statement's own binding goal.
 fn statement(

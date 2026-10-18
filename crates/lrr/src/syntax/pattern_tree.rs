@@ -160,12 +160,13 @@ pub(crate) enum ConstructorForm {
 pub(crate) enum PatternNode {
     Wildcard,
     /// `x`, `mut x`, `ref x`, `ref mut x` and `x @ sub`. `binding` is the
-    /// canonical lexical binding shared by every or-alternative occurrence;
-    /// readers resolve to it. `name` is present only for a plain identifier,
+    /// canonical lexical binding shared by every or-alternative occurrence,
+    /// if its binding facts are resolved. A plain name may instead select a
+    /// constant/constructor without creating a local. `name` is present only for a plain identifier,
     /// which ordinary Value-namespace resolution must classify before use.
     Binding {
         occurrence: NodeId,
-        binding: NodeId,
+        binding: Option<NodeId>,
         by_reference: bool,
         mutable: bool,
         edition: u16,
@@ -221,7 +222,7 @@ impl PatternNode {
             } => {
                 e.u8(1);
                 e.u32(occurrence.0);
-                e.u32(binding.0);
+                e.option(binding, |e, binding| e.u32(binding.0));
                 e.bool(*by_reference);
                 e.bool(*mutable);
                 e.u16(*edition);
@@ -597,12 +598,7 @@ impl Builder<'_> {
                 "pattern binding group is not indexed".into(),
             ));
         };
-        let Some(binding) = group.canonical_candidate() else {
-            return Ok(PatternNode::Unsupported(
-                "pattern binding candidates have unresolved alternative, mode or hygiene facts"
-                    .into(),
-            ));
-        };
+        let binding = group.canonical_candidate();
         let subpattern = match ident.pat() {
             Some(sub) if ident.at_token().is_some() => Some(Box::new(self.build(&sub, depth + 1)?)),
             Some(_) => {
@@ -616,6 +612,12 @@ impl Builder<'_> {
         let mutable = ident.mut_token().is_some();
         let text = name.text().to_string();
         let plain = !shorthand && !by_reference && !mutable && subpattern.is_none();
+        if binding.is_none() && !plain {
+            return Ok(PatternNode::Unsupported(
+                "pattern binding candidates have unresolved alternative, mode or hygiene facts"
+                    .into(),
+            ));
+        }
         let name = if plain {
             let slot = self.slot(&text, NameForm::Identifier)?;
             if self.local_items.may_name(text.trim_start_matches("r#")) {
@@ -761,13 +763,15 @@ impl Builder<'_> {
             ast::Pat::RestPat(_) => {
                 PatternNode::Unsupported("rest pattern outside a tuple or slice".into())
             }
-            ast::Pat::PathPat(path) => match self.path_slot(pattern, path.path(), NameForm::Path)? {
-                Ok(slot) => PatternNode::Constructor {
-                    slot,
-                    form: ConstructorForm::Path,
-                },
-                Err(message) => PatternNode::Unsupported(message),
-            },
+            ast::Pat::PathPat(path) => {
+                match self.path_slot(pattern, path.path(), NameForm::Path)? {
+                    Ok(slot) => PatternNode::Constructor {
+                        slot,
+                        form: ConstructorForm::Path,
+                    },
+                    Err(message) => PatternNode::Unsupported(message),
+                }
+            }
             ast::Pat::TupleStructPat(tuple) => {
                 let mut items = Vec::new();
                 let mut rest = None;
@@ -953,7 +957,7 @@ impl PatternTree {
         };
         let id = builder.indexed(pattern)?;
         let root = builder.build(pattern, 0)?;
-        let mut encoder = StableEncoder::new("lrr/v5/pattern-tree");
+        let mut encoder = StableEncoder::new("lrr/v6/pattern-tree");
         encoder.record(index.body());
         encoder.u32(id.0);
         root.encode(&mut encoder);
@@ -1001,7 +1005,7 @@ impl PatternTree {
                 rest: None,
             },
         };
-        let mut encoder = StableEncoder::new("lrr/v1/for-pattern-tree");
+        let mut encoder = StableEncoder::new("lrr/v2/for-pattern-tree");
         encoder.record(index.body());
         encoder.u32(id.0);
         root.encode(&mut encoder);
@@ -1032,7 +1036,7 @@ impl PartialEq for PatternTree {
 }
 impl Eq for PatternTree {}
 impl StableEncode for PatternTree {
-    const DOMAIN: &'static str = "lrr/v5/pattern-tree-identity";
+    const DOMAIN: &'static str = "lrr/v6/pattern-tree-identity";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.identity);
     }
