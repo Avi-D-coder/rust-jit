@@ -35,6 +35,42 @@ pub(crate) struct PartialHint {
 pub(crate) struct PartialHints(BTreeMap<SlotId, PartialHint>);
 
 impl Frame {
+    /// Definition-result hints keep the admitted written coercion structure,
+    /// even when the reference result itself has a concrete descriptor.
+    pub(crate) fn definition_result_partial_hint(&mut self, slot: SlotId) -> Result<(), Diagnostic> {
+        let Some(context) = self.context.as_ref() else {
+            return Ok(());
+        };
+        if context.definition().definition != self.body.body().definition {
+            return Err(invalid("declared result template belongs to another body"));
+        }
+        let Some(written) = context
+            .written_result_template()
+            .filter(|written| !written.coercion_free())
+            .map(Arc::clone)
+        else {
+            return Ok(());
+        };
+        let mut fixed = Vec::new();
+        for parameter in &context.definition().generics {
+            if parameter.kind != crate::syntax::signatures::GenericKind::Type {
+                continue;
+            }
+            let index = usize::try_from(parameter.ordinal)
+                .map_err(|_| invalid("definition parameter ordinal overflow"))?;
+            let length = index
+                .checked_add(1)
+                .ok_or_else(|| invalid("definition parameter ordinal overflow"))?;
+            if fixed.len() < length {
+                fixed.resize(length, None);
+            }
+            fixed[index] = context.runtime_binding(crate::traits::term::ParamKey {
+                definition: context.definition().definition,
+                ordinal: parameter.ordinal,
+            });
+        }
+        self.set_partial_hint_with(slot, written, Some(PartialArguments::Fixed(fixed.into())))
+    }
     pub(crate) fn set_partial_hint(
         &mut self,
         slot: SlotId,
@@ -63,6 +99,18 @@ impl Frame {
     }
     pub(crate) fn clear_partial_hint(&mut self, slot: SlotId) {
         self.partial_hints.0.remove(&slot);
+    }
+    /// A selected pure value-forward edge preserves the actual written context
+    /// as well as its symbolic source; arithmetic operands do not use this.
+    pub(crate) fn forward_partial_hint(
+        &mut self,
+        parent: SlotId,
+        child: SlotId,
+    ) -> Result<(), Diagnostic> {
+        if let Some(hint) = self.partial_hints.0.get(&parent).cloned() {
+            self.set_partial_hint_with(child, hint.written, hint.arguments)?;
+        }
+        Ok(())
     }
     /// The type arguments a partial hint's construction has fixed so far.
     fn partial_arguments(

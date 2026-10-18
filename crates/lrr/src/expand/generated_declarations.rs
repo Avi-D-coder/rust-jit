@@ -214,6 +214,38 @@ impl GeneratedDeclarations {
         cfg: &CfgSet,
         projection: &crate::frontend::generated_headers::ActiveImplProjection,
     ) -> Result<Vec<(Digest, Digest)>, Diagnostic> {
+        let active = projection.active_impl_ranges(items, cfg, self.scan.scope(), self.epoch)?;
+        self.item_associated_headers(
+            items,
+            cfg,
+            active,
+            super::generated_items::GeneratedHeaderKind::Impl,
+            |item, _, header, _| (item, header),
+        )
+    }
+    pub(crate) fn item_trait_headers(
+        &self,
+        items: &super::generated_items::GeneratedItems,
+        cfg: &CfgSet,
+        plan: &crate::frontend::generated_headers::GeneratedHeaderPlan,
+    ) -> Result<Vec<(Digest, Digest, Digest, crate::syntax::spans::SourceRange)>, Diagnostic> {
+        let active = plan.active_trait_ranges(items, cfg, self.scan.scope(), self.epoch)?;
+        self.item_associated_headers(
+            items,
+            cfg,
+            active,
+            super::generated_items::GeneratedHeaderKind::Trait,
+            |item, identity, header, range| (item, identity, header, range),
+        )
+    }
+    fn item_associated_headers<T>(
+        &self,
+        items: &super::generated_items::GeneratedItems,
+        cfg: &CfgSet,
+        active: &[crate::syntax::spans::SourceRange],
+        kind: super::generated_items::GeneratedHeaderKind,
+        row: impl Fn(Digest, Digest, Digest, crate::syntax::spans::SourceRange) -> T,
+    ) -> Result<Vec<T>, Diagnostic> {
         if self.record.descriptor().fingerprint() != items.record().descriptor().fingerprint()
             || self.epoch != items.epoch()
             || self.scan.cfg() != cfg.fingerprint()
@@ -226,12 +258,7 @@ impl GeneratedDeclarations {
                 "impl item declaration owner differs",
             ));
         }
-        // Both admitted facets use the exact record's MacroItems arena. The
-        // declaration facet's enclosing SOURCE_FILE adds no tokens or offsets;
-        // text/origin agreement above excludes a different coordinate space.
-        // The common active Outline projection (not missing scan rows) selects
-        // the required impls. Raw headers can include cfg-disabled subtrees.
-        let active = projection.active_impl_ranges(items, cfg, self.scan.scope(), self.epoch)?;
+        // Both admitted facets use the same actual MacroItems source arena.
         if active
             .windows(2)
             .any(|pair| (pair[0].start, pair[0].end) >= (pair[1].start, pair[1].end))
@@ -243,7 +270,7 @@ impl GeneratedDeclarations {
         }
         active
             .len()
-            .checked_mul(std::mem::size_of::<(Digest, Digest)>())
+            .checked_mul(std::mem::size_of::<T>())
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "impl item attachment budget"))?;
         let mut pairs = Vec::new();
         pairs
@@ -251,9 +278,7 @@ impl GeneratedDeclarations {
             .map_err(|_| fault("LRR-E-METADATA-LIMIT", "impl item attachment allocation"))?;
         for range in active {
             let mut items = items.items().iter().filter(|item| {
-                item.kind == super::generated_items::GeneratedHeaderKind::Impl
-                    && item.start == range.start
-                    && item.end == range.end
+                item.kind == kind && item.start == range.start && item.end == range.end
             });
             let item = items.next().ok_or_else(|| {
                 fault(
@@ -267,26 +292,48 @@ impl GeneratedDeclarations {
                     "active impl raw attachment is ambiguous",
                 ));
             }
-            let mut headers = self
-                .scan
-                .impls()
-                .iter()
-                .filter(|header| header.range == *range);
-            let header = headers.next().ok_or_else(|| {
-                fault(
-                    "LRR-E-EXPANSION-INPUT",
-                    "owned item impl syntax attachment absent",
-                )
-            })?;
-            if headers.next().is_some() {
-                return Err(fault(
-                    "LRR-E-EXPANSION-INPUT",
-                    "owned impl declaration attachment is ambiguous",
-                ));
+            fn unique(
+                mut rows: impl Iterator<Item = (Digest, Digest)>,
+            ) -> Result<(Digest, Digest), Diagnostic> {
+                let row = rows.next().ok_or_else(|| {
+                    fault(
+                        "LRR-E-EXPANSION-INPUT",
+                        "owned associated declaration attachment absent",
+                    )
+                })?;
+                if rows.next().is_some() {
+                    return Err(fault(
+                        "LRR-E-EXPANSION-INPUT",
+                        "owned associated declaration attachment ambiguous",
+                    ));
+                }
+                Ok(row)
             }
+            let (identity, header) = match kind {
+                super::generated_items::GeneratedHeaderKind::Impl => unique(
+                    self.scan
+                        .impls()
+                        .iter()
+                        .filter(|row| row.range == *range)
+                        .map(|row| (row.identity, row.header_identity)),
+                )?,
+                super::generated_items::GeneratedHeaderKind::Trait => unique(
+                    self.scan
+                        .traits()
+                        .iter()
+                        .filter(|row| row.range == *range)
+                        .map(|row| (row.identity, row.header_identity)),
+                )?,
+                _ => {
+                    return Err(fault(
+                        "LRR-E-EXPANSION-INPUT",
+                        "associated declaration kind differs",
+                    ));
+                }
+            };
             // Attribute/unsupported-context producer retirement remains the
             // completed declaration job's authority, not this range join.
-            pairs.push((item.key.fingerprint(), header.header_identity));
+            pairs.push(row(item.key.fingerprint(), identity, header, *range));
         }
         Ok(pairs)
     }

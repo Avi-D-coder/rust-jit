@@ -1603,34 +1603,31 @@ impl PublishedMacroIndex {
                     name,
                     ..
                 } => {
-                    let (definition_context, definition_edition, definition_origin) =
+                    let (definition, definition_context, definition_origin) =
                         if let Some(context) = &body_context {
-                            let parsed = context.source().parsed();
-                            let shape = parsed.macro_definition_shape_at(event.range)?;
-                            let name_range = shape.name_range();
-                            if shape.name() != name.as_str() {
-                                return Err(error("prepared macro definition name differs"));
-                            }
+                            let (definition, name_range) =
+                                context.local_macro_definition(*identity).ok_or_else(|| {
+                                    error("actual local macro declaration occurrence absent")
+                                })?;
                             let raw = context
                                 .source()
                                 .identifier_context_or_original(name_range, self.index.context)?;
                             (
+                                definition.clone(),
                                 raw,
-                                parsed.token_edition(name_range)?,
                                 context.reference_origin(name_range)?,
                             )
                         } else {
                             (
+                                MacroDefinition {
+                                    identity: *identity,
+                                    defining_unit: module_scope.crate_key,
+                                    definition_edition: self.source().outline.parse.profile.edition,
+                                },
                                 self.index.context,
-                                self.source().outline.parse.profile.edition,
                                 None,
                             )
                         };
-                    let definition = MacroDefinition {
-                        identity: *identity,
-                        defining_unit: module_scope.crate_key,
-                        definition_edition,
-                    };
                     declarations.register(
                         definition.clone(),
                         definition_context,
@@ -2195,6 +2192,11 @@ impl EnteredMacroIndex<'_> {
         &self,
         identity: Digest,
     ) -> Result<Option<MacroDefinition>, Diagnostic> {
+        let identity = self
+            .body_context
+            .as_ref()
+            .and_then(|context| context.local_macro_definition(identity))
+            .map_or(identity, |(definition, _)| definition.identity);
         let mut selected = self.parent.index.definitions.get(&identity).cloned();
         let mut join = |declarations: &MacroDeclarations| -> Result<(), Diagnostic> {
             if let Some(definition) = declarations.definition_by_identity(identity) {

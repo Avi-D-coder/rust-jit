@@ -82,7 +82,7 @@ fn actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editi
     for edition in [2015, 2018, 2021, 2024] {
         let (mut d, _, identity) = pending(edition);
         assert_eq!(
-            d.item_impl_jobs.len(),
+            d.item_declaration_jobs.len(),
             1,
             "actual generic impl needs closure"
         );
@@ -98,7 +98,7 @@ fn actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editi
                 .producer_kind(actual_record.key().invocation)
                 .is_some()
         );
-        for frontier in d.item_impl_jobs.keys() {
+        for frontier in d.item_declaration_jobs.keys() {
             assert!(
                 !d.work
                     .completed_job(DiscoveryKind::ScanNestedDeclarations, *frontier)

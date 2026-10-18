@@ -226,6 +226,9 @@ pub struct BodyIndex {
     /// Derived from the explicitly encoded node ranges/IDs, never a second
     /// source identity. Equal ranges preserve original preorder selection.
     source_order: Vec<NodeId>,
+    /// Derived from the encoded primary value slots after all nodes are final.
+    /// Auxiliary slots and syntax-only nodes make slot/2 an invalid node ID.
+    value_nodes: Vec<(SlotId, NodeId)>,
     pattern_bindings: super::pattern_bindings::PatternBindings,
     /// Derived once from the final immutable explicitly encoded structure.
     semantic_identity: crate::core::digest::Digest,
@@ -285,6 +288,12 @@ impl BodyIndex {
     }
     pub fn slot_count(&self) -> u32 {
         self.slots
+    }
+    pub(crate) fn value_node(&self, slot: SlotId) -> Option<&StructuralNode> {
+        self.value_nodes
+            .binary_search_by_key(&slot.0, |(value, _)| value.0)
+            .ok()
+            .and_then(|index| self.nodes.get(self.value_nodes[index].1.0 as usize))
     }
     pub fn estimated_bytes(&self) -> usize {
         self.estimated_bytes
@@ -612,6 +621,7 @@ impl ParsedFile {
             cfg: cfg.clone(),
             nodes: Vec::new(),
             source_order: Vec::new(),
+            value_nodes: Vec::new(),
             pattern_bindings: super::pattern_bindings::PatternBindings::empty(),
             semantic_identity: crate::core::digest::Digest([0; 32]),
             scopes: Vec::new(),
@@ -1605,6 +1615,25 @@ impl ParsedFile {
         }
         // Build this once, after real syntax and administrative IDs are final.
         // Lookup must not rebuild or sort ranges during phase preparation.
+        let value_count = index.nodes.iter().filter(|node| node.value.is_some()).count();
+        index
+            .value_nodes
+            .try_reserve_exact(value_count)
+            .map_err(|_| limit("value node index allocation"))?;
+        let value_bytes = index
+            .value_nodes
+            .capacity()
+            .checked_mul(std::mem::size_of::<(SlotId, NodeId)>())
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Vec<(SlotId, NodeId)>>()))
+            .ok_or_else(|| limit("value node index metadata overflow"))?;
+        charge(&mut index.estimated_bytes, value_bytes, limits.metadata_bytes)?;
+        index.value_nodes.extend(index.nodes.iter().filter_map(|node| {
+            node.value.map(|value| (value, node.id))
+        }));
+        index.value_nodes.sort_unstable_by_key(|(value, _)| value.0);
+        if index.value_nodes.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+            return Err(fault("primary value slot has multiple syntax owners"));
+        }
         let row_bytes = index
             .nodes
             .len()

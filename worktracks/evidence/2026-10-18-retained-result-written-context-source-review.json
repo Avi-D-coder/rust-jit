@@ -4,10 +4,12 @@
   "files": {
     "crates/lrr/src/vm/context.rs": "ee136837c73cce09406f529e8455ef20f388434cf1a90b46d5957c5913842644",
     "crates/lrr/src/engine/run.rs": "5e6bc4b68f1f60f1ed3dd436402f08c80c57e5c98bb6deb0b32043f47d1555a8",
-    "crates/lrr/src/vm/frame_partial_hints.rs": "8fb58a7997a8623ffae3979ddfefd4f1593e4e90bab29575ee91f5584bac604d",
-    "crates/lrr/src/vm/step.rs": "a0ac709d9ec27f8a1551cd4d0f9463cf57109721a79c5f79cf03646b1edec8ee"
+    "crates/lrr/src/vm/frame_partial_hints.rs": "4fc33022425b95107548ae0e667741cd653cc5d6a9e197a6318e130b46619d8a",
+    "crates/lrr/src/vm/step.rs": "a0ac709d9ec27f8a1551cd4d0f9463cf57109721a79c5f79cf03646b1edec8ee",
+    "crates/lrr/src/vm/frame.rs": "b7ea9b943234398f799b8da2a9d2928aa93c0ed70e94b93c9b95d0c474fcacf0",
+    "crates/lrr/src/syntax/body_index.rs": "60bc2a15af286aa4d6542d945e31f8823e8d3e98d91463c7646d475d99cb059b"
   },
-  "shared_route": "RunMachine::prepare_selected_source_call retains actual source return WrittenType in GenericEnv; ordinary Op::SetHint DefinitionResult/DefinitionWrittenResult and initializer_root_hint use Frame::definition_result_partial_hint -> existing BorrowTarget partial hints -> ordinary structural constructor",
+  "shared_route": "RunMachine::prepare_selected_source_call retains actual source return WrittenType in GenericEnv; ordinary Op::SetHint DefinitionResult/DefinitionWrittenResult and initializer_root_hint use Frame::definition_result_partial_hint -> existing BorrowTarget partial hints -> ordinary structural constructor; Frame::numeric_hint pure-forward edge carries same PartialHint through selected block/parenthesis/branch values only",
   "source_boundary": "Existing closed_written_type/source_return_goals proof/written_template and SourceCallable revalidation unchanged. Same body definition guard and actual runtime ParamKey ordinals. Never recover nominal authority from raw TypeId or spelling.",
   "all8": {
     "1": "No evaluator or assertion runtime branch added.",
@@ -25,5 +27,11 @@
     "Ordinary and generated reference slice results, zero-array and generic runtime matrix require terminals",
     "Full generic initializer identity/runonce aggregate templates/cleanup still incomplete",
     "Unsupported pointer/object written forms unchanged; no gate closure"
-  ]
+  ],
+  "supersedes_root_receipt_sha256": "ba10d1c02c33070f0736fb3b2d7f1670c0fb5f633c3fa7c3b690240826028800",
+  "preserved_independent_fourleaf_review": "7f439c8a14ec3fc3645b50b2687b5b911381393b05ac10499275f65c21eaee6c",
+  "preserved_held_fiveleaf_review": "06b8082b9039ce16241579e9700f115d499ec2ca8a5b07362fa43fe53b878d82",
+  "pure_forward_evidence": "None/None plus actual parent indexed primary value and transparent paren/block/selected-control role, or actual Return/Break site; excludes unary Neg/Not arbitrary Output. Same direct BodyIndex only, no parser/source search.; Const is an ordinary transparent const-block value; Async/Gen do not inherit raw body result context.",
+  "preserved_slot_owner_held_review": "688876810f29d4ee50069260daa6f1a4ad678c688f63e810a5d00241976df9b4",
+  "value_owner_index": "BodyIndex derives sorted unique (primarySlotId,NodeId) from final actual encoded nodes once; capacity+Vec checked accounting, no new semantic/wire input; value_node binary lookup replaces both numeric_hint slot/2 assumptions."
 }

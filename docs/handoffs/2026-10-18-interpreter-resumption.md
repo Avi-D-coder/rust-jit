@@ -516,3 +516,39 @@ identity bridge, and actual trait producer lifecycle repair are source-only
 successors. Preserve their exact review/validation boundaries. No aggregate
 template/runonce/full generic cache, source authority, architecture, runtime
 acceptance or JIT gate is closed. [Portable V26 receipt](../../worktracks/evidence/2026-10-18-interpreter-v26-validation.json).
+
+## V27 actual runtime and source-goal progress
+
+Exact source `cd6f8e7eea60a6c1c040f9aa192bedb6ab60903da5347a64e9ddc391157caf68`,
+3330 leaves, compiled unchanged at HEAD68195da3483d755478002f67c9eb8304c32787d6
+(lib60acce/0, CLI96663b/0). Exact twelve compiled Rust leaves were staged before
+writers resumed; sealed binaries stayed unchanged throughout all queues.
+
+Primary unchanged roots **3/3 runtime-pass**, with one new witness:
+consts/const_in_pattern/custom-eq-branch-pass.rs now crosses main singleton and
+EMPTY initializer failures and completes its actual branch behavior. Struct
+update and match-const-fn-structs retain passes. This is 25 ever-new distinct
+witnesses across separately validated binaries in the resumption, not a current
+suite total. **10/11 controls pass**. Both global/local pure goal matrices and
+both ordinary/user/wrapper/stdmacro runtime matrices pass every tested edition
+and cold-branch route. Associated owning ancestry now reaches/passes direct
+impl/trait, alias and negative scope proofs. Nested-child trait completion is
+still unimplemented and was not exercised by that matrix.
+
+The failing lifecycle control asserts an actual macro invocation remains a
+producer before its declaration job completes; actual producer was retired.
+Its later completion assertions are unexecuted; source review must establish
+whether the assertion confuses expanded macro retirement with the separate
+typed declaration frontier. Do not weaken that oracle without actual proof.
+The unexplained fourth-call V25 control remains held and was not rerun.
+
+Two separately approved trait originals yield1/2: item-inside-macro passes,
+default-method/macro fails INTERNAL-SNAPSHOT at actual String::new Vec::new()
+(alloc/string.rs522..532). Both passed historical raw-v16, so this is a current
+regression relative to that old binary; its introducing source is unproven.
+A separate associated-const-type-parameters original fails Self::X in the real
+Foo::get_x, before later generic Proxy applications. No partial program pass
+is counted. Failure-only key/stamp diagnostic candidate is source-only next.
+Root common Copy guard and worker source application carrier are also separate
+uncompiled successors, with explicit full-template/application/cache holds.
+No full-fixture/architecture/interpreter/JIT gate closes. [Exact V27 receipt](../../worktracks/evidence/2026-10-18-interpreter-v27-validation.json).

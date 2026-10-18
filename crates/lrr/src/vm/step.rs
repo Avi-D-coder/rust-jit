@@ -174,6 +174,7 @@ pub(crate) fn initializer_root_hint(
     let descriptor = materialize_hint(frame, &hint, false, store)?;
     frame.declared_hint(child, descriptor)?;
     frame.set_source_view(child, frame.resolved_annotation_source(&hint)?)?;
+    frame.definition_result_partial_hint(child)?;
     Ok(())
 }
 fn materialize_hint(
@@ -1359,6 +1360,12 @@ fn execute(
                 store,
             )?;
             frame.declared_hint(*child, descriptor)?;
+            if matches!(
+                hint,
+                HintRecipe::DefinitionResult | HintRecipe::DefinitionWrittenResult
+            ) {
+                frame.definition_result_partial_hint(*child)?;
+            }
             // A written Type naming no single descriptor (`(_, u8)`, `&[u8]`)
             // stays a partial context for the value's own construction.
             if descriptor.is_none() {

@@ -1,0 +1,87 @@
+{
+  "scope": "failure-only actual prepared input mismatch evidence; not semantic repair",
+  "baseline": "exact V27 staged source preserved; successor working-tree only",
+  "witness": "tests/ui/traits/default-method/macro.rs unchanged run-pass owning2015",
+  "actual_failure": "candidate-v27/additional-trait-macros/stock-1.stdout: INTERNAL-SNAPSHOT at String::new Vec::new() bytes522..532,4calls37dispatches,incomplete",
+  "sources": [
+    {
+      "path": "crates/lrr/src/core/diagnostic.rs",
+      "sha256": "4d3306314f26608abec17ed3452c23e435bbea3a51e4f7d5fc21db14be8aefa3"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "75aaf433b43359a9d386aa024531823ddfad2e99065eecff3c216f75bfa7fa05"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "be9bdf7b020431241085806c5dfa6d17794b19f405cd526edbcf6a48cce658e1"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+      "sha256": "c0dcb6fc6fc1130f87e5f1dbd96ab29cf2a5ab9a0d0710a0c815ef49efef2351"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constants/query_failure.rs",
+      "sha256": "a5183138d0390d54b35221d1af03bd77f65cb61b43831f7c9394ceb471a77759"
+    }
+  ],
+  "review": [
+    {
+      "failure_mode": 1,
+      "name": "Separate assertion/expression evaluator",
+      "finding": "No evaluation path changed. PreparedInputGuard::require_current keeps the exact cached relevant stamp comparison; Diagnostic records only its failure."
+    },
+    {
+      "failure_mode": 2,
+      "name": "Literal/break-only generated execution",
+      "finding": "No lowering, opcode or body-selection change; unchanged runtime witness format!/default trait method follows existing ordinary source pipeline."
+    },
+    {
+      "failure_mode": 3,
+      "name": "Context-specific method/numeric inference",
+      "finding": "No source selection, comparison, type relation or coercion changed; String/Vec names are diagnostic mapping only and never dispatch conditions."
+    },
+    {
+      "failure_mode": 4,
+      "name": "Generated-source rejection",
+      "finding": "New evidence applies to every failing PreparedInputGuard irrespective of original/generated source. No origin/currentness check removed."
+    },
+    {
+      "failure_mode": 5,
+      "name": "Duplicate pattern/eager cold arms",
+      "finding": "No pattern, branch, callee-body publication or query preparation is added. Evidence has actual stale InputKey, not inferred cause."
+    },
+    {
+      "failure_mode": 6,
+      "name": "Repeated parsing/planning",
+      "finding": "Success path is byte-for-byte unchanged except Diagnostic struct None field; only mismatch clones one real InputKey and allocates one boxed receipt. No query/reparse/guard recapture."
+    },
+    {
+      "failure_mode": 7,
+      "name": "Global scans/unrelated invalidation",
+      "finding": "Same retained dependency vector and published_input(key) comparison; no namespace scan or added input dependency. Actual failing key remains unknown until next compiled capture."
+    },
+    {
+      "failure_mode": 8,
+      "name": "Body deep copy/whole-file searches",
+      "finding": "No BodyIndex or source clone/search. Only actual failed InputKey ownership is cloned for error lifetime; heap storage checked."
+    }
+  ],
+  "mechanical_integration": [
+    "Diagnostic::new initializes None; serde omits absent field; heap_bytes includes Box payload and actual key heap; Display prints failure-only key/stamps.",
+    "QueryValue::Error includes present evidence under explicit lrr/v1/diagnostic-prepared-input-change suffix; absent errors preserve original stable bytes.",
+    "RuntimeIntrinsicPlan held Diagnostic exhaustive pattern requires None; ConstantQueryFailure rejects live changed-input evidence. Other Diagnostic pattern uses ..; no literal constructors found besides Diagnostic::new."
+  ],
+  "acceptance": {
+    "source_review": "complete separate pass against exact hashes; independent review requested",
+    "compile": "unexecuted",
+    "existing_guard_controls": "unexecuted successor",
+    "unchanged_whole_main": "unexecuted successor; V27 fails",
+    "root_cause": "unproven until exact changed InputKey/stamps observed"
+  },
+  "holds": [
+    "No source guard weakening or arbitrary stale plan renewal authorized by this diagnostic component.",
+    "Existing macro-specific runtime plan remains held; one mechanical field match does not repair/promote it.",
+    "Nested child trait completion unimplemented/unexercised; item-inside-macro current wholemain passes but does not exercise it."
+  ]
+}

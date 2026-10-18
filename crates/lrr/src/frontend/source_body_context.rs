@@ -948,6 +948,110 @@ fn capture_inner(
 
 /// Fully retained ordinary lexical facts for the actual admitted body. This
 /// does not invent the module macro-rib insertion boundary for generated items.
+/// The body item's local identity and the expansion producer's identity name
+/// one actual declaration occurrence. Keep that join in cold source metadata;
+/// syntax-context marks never manufacture a declaration identity.
+struct BodyMacroDefinition {
+    event: Digest,
+    definition: crate::expand::scopes::MacroDefinition,
+    name_range: crate::syntax::spans::SourceRange,
+}
+fn prepare_body_macro_definitions(
+    source: &AdmittedBodyContext,
+    facts: &crate::syntax::entered_macros::EnteredMacroFacts,
+) -> Result<Box<[BodyMacroDefinition]>, Diagnostic> {
+    use crate::{
+        expand::scopes::{MacroDefinition, MacroName},
+        syntax::entered_macros::BodyMacroEventKind,
+    };
+    let count = facts
+        .events
+        .iter()
+        .filter(|event| matches!(event.kind, BodyMacroEventKind::Definition { .. }))
+        .count();
+    let mut definitions = Vec::new();
+    definitions
+        .try_reserve_exact(count)
+        .map_err(|_| crate::runtime::arena::resource())?;
+    for event in &facts.events {
+        let BodyMacroEventKind::Definition { identity, name, .. } = &event.kind else {
+            continue;
+        };
+        if !source.body().range.contains(event.range) {
+            return Err(fault("local macro declaration escapes actual body"));
+        }
+        let mut items = facts.items.iter().filter(|item| {
+            item.scope == event.scope
+                && item.item.def_key.item_kind == crate::source::manifest::ItemKind::Macro
+                && item.item.def_key.fingerprint() == *identity
+                && item.item.declaration_span == event.range
+        });
+        let item = items
+            .next()
+            .ok_or_else(|| fault("local macro declaration header absent"))?;
+        if items.next().is_some()
+            || item.item.header.profile != source.parsed().profile
+            || item.item.scope.crate_key != source.scope().crate_key
+            || item.item.scope.module_path != source.scope().module_path
+        {
+            return Err(fault("local macro declaration actual header/scope differs"));
+        }
+        let shape = source.parsed().macro_definition_shape_at(event.range)?;
+        let name_range = shape.name_range();
+        let edition = source.parsed().token_edition(name_range)?;
+        let actual_name = MacroName::parse(shape.name(), edition)?;
+        if actual_name != MacroName::parse(name, edition)?
+            || item.item.def_key.declared_name != actual_name.as_str()
+        {
+            return Err(fault("local macro declaration actual name differs"));
+        }
+        // Contexts are still consumed by the existing common name selector.
+        // Checking this occurrence here never substitutes an origin for one.
+        source.parsed().identifier_context(name_range)?;
+        let definition = match source.source_receipt.as_deref() {
+            Some(InputValue::RetainedSyntax(unit)) => {
+                if unit.key() != &source.parsed().key() {
+                    return Err(fault("local macro declaration retained parser differs"));
+                }
+                let anchors = unit.prepared().macro_definitions();
+                let anchor = anchors
+                    .binary_search_by_key(&event.range.start, |anchor| anchor.range().start)
+                    .ok()
+                    .and_then(|index| anchors.get(index))
+                    .filter(|anchor| anchor.range() == event.range)
+                    .ok_or_else(|| fault("local macro declaration retained occurrence absent"))?;
+                let actual = anchor.definition();
+                if actual.defining_unit != source.scope().crate_key
+                    || actual.definition_edition != edition
+                {
+                    return Err(fault("local macro declaration retained authority differs"));
+                }
+                actual.clone()
+            }
+            // These paths retain their existing admitted declaration identity.
+            // A retained assembly alone supplies the producer occurrence join.
+            Some(InputValue::GeneratedSyntax(_)) | None => MacroDefinition {
+                identity: *identity,
+                defining_unit: source.scope().crate_key,
+                definition_edition: edition,
+            },
+            _ => return Err(fault("local macro declaration source receipt differs")),
+        };
+        definitions.push(BodyMacroDefinition {
+            event: *identity,
+            definition,
+            name_range,
+        });
+    }
+    definitions.sort_unstable_by_key(|definition| definition.event);
+    if definitions
+        .windows(2)
+        .any(|pair| pair[0].event == pair[1].event)
+    {
+        return Err(fault("local macro declaration event identity is ambiguous"));
+    }
+    Ok(definitions.into_boxed_slice())
+}
 pub(crate) struct PreparedBodyContext {
     source: Arc<AdmittedBodyContext>,
     facts: Arc<crate::syntax::entered_macros::EnteredMacroFacts>,
@@ -957,6 +1061,7 @@ pub(crate) struct PreparedBodyContext {
     macro_ancestry: Option<Arc<super::macro_origins::ExpansionAncestry>>,
     macro_imports: import_occurrences::PreparedMacroImportOccurrences,
     body_types: type_occurrences::PreparedBodyTypeOccurrences,
+    macro_definitions: Box<[BodyMacroDefinition]>,
     exclusive_bytes: usize,
 }
 impl PreparedBodyContext {
@@ -965,6 +1070,21 @@ impl PreparedBodyContext {
     }
     pub(crate) fn facts(&self) -> &Arc<crate::syntax::entered_macros::EnteredMacroFacts> {
         &self.facts
+    }
+    pub(crate) fn local_macro_definition(
+        &self,
+        event: Digest,
+    ) -> Option<(
+        &crate::expand::scopes::MacroDefinition,
+        crate::syntax::spans::SourceRange,
+    )> {
+        self.macro_definitions
+            .binary_search_by_key(&event, |definition| definition.event)
+            .ok()
+            .map(|index| {
+                let definition = &self.macro_definitions[index];
+                (&definition.definition, definition.name_range)
+            })
     }
     pub(crate) fn generated_boundary(
         &self,
@@ -1492,6 +1612,10 @@ impl AdmittedBodyContext {
             Ok(facts) => facts,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
+        let macro_definitions = match prepare_body_macro_definitions(&self, &facts) {
+            Ok(definitions) => definitions,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
         let macro_imports =
             match import_occurrences::PreparedMacroImportOccurrences::prepare(&self, &facts) {
                 Ok(prepared) => prepared,
@@ -1507,6 +1631,13 @@ impl AdmittedBodyContext {
                     .checked_add(std::mem::size_of::<PreparedBodyContext>())
                     .and_then(|bytes| bytes.checked_add(macro_imports.extra_metadata_bytes()))
                     .and_then(|bytes| bytes.checked_add(body_types.extra_metadata_bytes()))
+                    .and_then(|bytes| {
+                        bytes.checked_add(
+                            macro_definitions
+                                .len()
+                                .checked_mul(std::mem::size_of::<BodyMacroDefinition>())?,
+                        )
+                    })
                     .and_then(|bytes| {
                         bytes.checked_add(macro_outers.capacity().checked_mul(
                             std::mem::size_of::<super::macro_boundary::RetainedMacroScope>(),
@@ -1526,6 +1657,7 @@ impl AdmittedBodyContext {
             macro_ancestry,
             macro_imports,
             body_types,
+            macro_definitions,
             exclusive_bytes,
         })))
     }

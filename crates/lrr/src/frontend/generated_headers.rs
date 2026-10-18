@@ -24,6 +24,10 @@ pub struct GeneratedHeaderPlan {
     routes: Vec<GeneratedRoute>,
     blocked: BTreeSet<Digest>,
     impl_frontier: Option<Digest>,
+    trait_frontier: Option<Digest>,
+    trait_ranges: Vec<crate::syntax::spans::SourceRange>,
+    cfg: Digest,
+    epoch: u64,
     impl_projection: Arc<ActiveImplProjection>,
     attributes: BTreeSet<Digest>,
     guard: Digest,
@@ -166,6 +170,8 @@ impl GeneratedHeaderPlan {
         });
         plan.blocked.clear();
         plan.impl_frontier = None;
+        plan.trait_frontier = None;
+        plan.trait_ranges.clear();
         plan.attributes.clear();
         plan.imports.clear();
         plan.module_sources.clear();
@@ -300,6 +306,48 @@ impl GeneratedHeaderPlan {
             e.u64(epoch);
             e.finish()
         });
+        let trait_scopes = outline
+            .items
+            .iter()
+            .filter(|item| item.def_key.item_kind == ItemKind::Trait)
+            .map(|item| {
+                (
+                    item.scope.module_path.as_slice(),
+                    item.def_key.fingerprint(),
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        let trait_frontier = (!trait_scopes.is_empty()).then(|| {
+            let mut e = crate::core::digest::StableEncoder::new(
+                "lrr/v1/generated-trait-declaration-frontier",
+            );
+            e.digest(items.record().descriptor().fingerprint());
+            e.record(&scope);
+            e.digest(cfg.fingerprint());
+            e.u64(epoch);
+            e.finish()
+        });
+        let mut trait_ranges = Vec::new();
+        trait_ranges
+            .try_reserve_exact(trait_scopes.len())
+            .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "trait range allocation"))?;
+        trait_ranges.extend(
+            outline
+                .items
+                .iter()
+                .filter(|item| item.def_key.item_kind == ItemKind::Trait)
+                .map(|item| item.declaration_span),
+        );
+        trait_ranges.sort_by_key(|range| (range.start, range.end));
+        if let Some(frontier) = trait_frontier {
+            blocked.insert(frontier);
+        }
+        let trait_owned_scope = |candidate: &ScopeKey| {
+            candidate.crate_key == scope.crate_key
+                && candidate.owner.is_some_and(|owner| {
+                    trait_scopes.contains(&(candidate.module_path.as_slice(), owner))
+                })
+        };
         let mut impl_ranges = Vec::new();
         impl_ranges
             .try_reserve_exact(
@@ -333,7 +381,15 @@ impl GeneratedHeaderPlan {
         };
         let mut routes = Vec::new();
         let mut bytes = impl_scope_bytes
-            .checked_add(impl_projection.metadata_bytes())
+            .checked_add(
+                trait_ranges
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<crate::syntax::spans::SourceRange>())
+                    .ok_or_else(|| {
+                        fault("LRR-E-DISCOVERY-LIMIT", "trait range storage overflow")
+                    })?,
+            )
+            .and_then(|bytes| bytes.checked_add(impl_projection.metadata_bytes()))
             .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "impl projection metadata limit"))?;
         for members in outline.scopes.values() {
             for b in &members.blockers {
@@ -524,6 +580,10 @@ impl GeneratedHeaderPlan {
                 if !contained_scope(&item.scope, &scope) && !impl_owned_scope(&item.scope) {
                     blocked.insert(items.record().key().invocation);
                 }
+            } else if trait_owned_scope(&item.scope) {
+                blocked.insert(trait_frontier.ok_or_else(|| {
+                    fault("LRR-E-EXPANSION-INPUT", "trait frontier owner absent")
+                })?);
             } else if !contained_scope(&item.scope, &scope) {
                 blocked.insert(items.record().key().invocation);
             } else if item.def_key.item_kind == ItemKind::Macro {
@@ -549,6 +609,10 @@ impl GeneratedHeaderPlan {
                 if impl_owned_scope(route_scope) {
                     blocked.insert(impl_frontier.ok_or_else(|| {
                         fault("LRR-E-EXPANSION-INPUT", "impl scope frontier absent")
+                    })?);
+                } else if trait_owned_scope(route_scope) {
+                    blocked.insert(trait_frontier.ok_or_else(|| {
+                        fault("LRR-E-EXPANSION-INPUT", "trait scope frontier absent")
                     })?);
                 } else {
                     blocked.insert(items.record().key().invocation);
@@ -620,6 +684,10 @@ impl GeneratedHeaderPlan {
             routes,
             blocked,
             impl_frontier,
+            trait_frontier,
+            trait_ranges,
+            cfg: cfg.fingerprint(),
+            epoch,
             impl_projection,
             attributes,
             guard: items.record().descriptor().fingerprint(),
@@ -642,6 +710,29 @@ impl GeneratedHeaderPlan {
     }
     pub(crate) fn impl_frontier(&self) -> Option<Digest> {
         self.impl_frontier
+    }
+    pub(crate) fn trait_frontier(&self) -> Option<Digest> {
+        self.trait_frontier
+    }
+    pub(crate) fn active_trait_ranges(
+        &self,
+        items: &GeneratedItems,
+        cfg: &CfgSet,
+        scope: &ScopeKey,
+        epoch: u64,
+    ) -> Result<&[crate::syntax::spans::SourceRange], Diagnostic> {
+        if self.guard != items.record().descriptor().fingerprint()
+            || self.cfg != cfg.fingerprint()
+            || &self.scope != scope
+            || self.epoch != epoch
+            || items.epoch() != epoch
+        {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "active trait projection owner differs",
+            ));
+        }
+        Ok(&self.trait_ranges)
     }
     pub(crate) fn active_impl_ranges(
         &self,

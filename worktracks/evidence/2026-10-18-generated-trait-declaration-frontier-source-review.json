@@ -1,0 +1,111 @@
+{
+  "scope": "V26 actual generated-trait ancestry fixedpoint prerequisite; direct original/source-derived output declaration completion only",
+  "head": "68195da3483d755478002f67c9eb8304c32787d6",
+  "files": {
+    "crates/lrr/src/frontend/generated_headers.rs": "434d2ec4c9feac8352afdcc41687e3a1f57e163f241bf0e92a8a0855c933867e",
+    "crates/lrr/src/expand/generated_declarations.rs": "c1a2542691ea6965238226355a9113f2aed6e157decec2e381835087af2d62e0",
+    "crates/lrr/src/expand/source_discovery.rs": "a343745accd40f2a08d1362a1910ff21ce49236d9ecdb5c3914bb5b3ae341823",
+    "crates/lrr/src/expand/source_discovery/item_boundary_tests.rs": "d1625e09aa6495552a2cf445377c453a9274d3ce0366c91a690080443272704d"
+  },
+  "precode": "worktracks/evidence/2026-10-18-generated-trait-declaration-frontier.md",
+  "failure": "artifacts/validation-resume-2026-10-18/candidate-v26/control-2.log: traitcase2015 selfblocked emitter83829... plus0e67...; implcase advanced, aliases later unexecuted",
+  "producer": [
+    "GeneratedHeaderPlan::prepare_using retains cfg-active actual Trait defkeys/positions and distinct lrr/v1/generated-trait-declaration-frontier keyed real record/scope/cfg/epoch",
+    "Actual trait-owned member scopes use that frontier and are excluded from module member publication; unrelated uncontained scopes still retain existing invocation blocker",
+    "active_trait_ranges checks current same record/scope/cfg/epoch; no forged impl projection"
+  ],
+  "join": [
+    "GeneratedDeclarations::item_trait_headers and item_impl_headers_from_projection delegate one item_associated_headers routine; exact current source record/text/origin/cfg/epoch/grammar, active actual positions, raw kind and unique scanned declaration header are required",
+    "Existing impl shape returns same pair without extra Vec mapping or new parser; Trait retains exact source trait identity/header/range"
+  ],
+  "completion": [
+    "SourceDiscovery original/source-derived output associate actual trait frontier to existing declaration-job identity and exact source scan/trait headers",
+    "Generalized item_impl_jobs -> typed item_declaration_jobs (Impl/Trait); existing impl active inventory check unchanged",
+    "Trait completion requires same scan/trait identity/header/range in actual completed fragment inventory and rejects coverage by existing generated replacement masks; raw retired scan facts cannot close it",
+    "Both frontiers stay opaque/scheduled/pending and absent from discharged macrodef/call IDs; shared ScanNestedDeclarations branch releases only after the actual requirement succeeds",
+    "Mechanical item_boundary_tests two private field names changed; fixture/expectations untouched"
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": [
+        "GeneratedHeaderPlan::prepare_using",
+        "SourceDiscovery::admit_expansion_inner",
+        "ItemDeclarationRequirements"
+      ],
+      "result": "Pure source preparation/job completion facts; no expression/assertion evaluator or synthetic function/body."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "item_associated_headers",
+        "item_declaration_jobs"
+      ],
+      "result": "Actual parsed output declaration source retained; no scalar/break macro execution."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "trait_owned_scope",
+        "owned_trait_completion"
+      ],
+      "result": "Exact owner/source/job identities and actual kind; no macro/method/numeric/fixture-name rules."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "active_trait_ranges",
+        "item_trait_headers",
+        "ItemDeclarationRequirements::require_present"
+      ],
+      "result": "Provides missing actual generated trait owner/completion join. No treating owner as module/impl or bypassing context; missing/retired/mismatched source fails. Nested child trait ancestor lane remains held further declaration discovery, not acceptance."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "item_associated_headers",
+        "ScanNestedDeclarations typed completion"
+      ],
+      "result": "Declaration inventories only; executable bodies/patterns/unselected arms not prepared or executed. Producer closure remains required, no second pattern engine."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "GeneratedHeaderPlan::prepare_using",
+        "item_associated_headers",
+        "ItemDeclarationRequirements::require_present"
+      ],
+      "result": "No additional parser or per-runtime operation planning. Cold actual Outline/scan matching and relevant replacement masks once at source job completion. Shared header join avoids duplicating metadata evaluator."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "trait_frontier",
+        "owned_trait_completion",
+        "discharged",
+        "item_declaration_jobs"
+      ],
+      "result": "Relevant scoped producer frontier retained with existing source/current record/cfg/epoch checks; no wildcard discharge or full-world namespace scan."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "trait_ranges",
+        "ItemDeclarationRequirements",
+        "item_associated_headers"
+      ],
+      "result": "Small checked source-header metadata vectors; no BodyIndex cloning or whole-file node searching. Cold join iterates actual header inventories (expected\u00d7actual) and relevant masks, not a hot path/performance claim."
+    }
+  ],
+  "held": [
+    "Nested child generated trait output still uses existing further-declaration-discovery refusal until an actual ancestor-completion trait lane is integrated; no nested/wrapper trait feature closure from this component.",
+    "Attributes replacing required trait declarations must match actual active current source; broader attribute trait reconciliation and exact replacement behavior unexecuted.",
+    "Later alias cases and valid/inconsistent associated scope proof assertions not yet reached by V26 terminal.",
+    "No runtime/fullfixture/JIT/macro architecture gate or release/performance acceptance claimed."
+  ],
+  "validation_plan": [
+    "service::retained_reference_source_tests::generated_owning_macro_boundaries_retain_actual_insertion_ancestry_all_editions",
+    "expand::source_discovery::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions (verify exact module selector by validator)"
+  ],
+  "validation": "No Cargo/tests/guest runs by implementation worker; three production leaves+two-reference mechanical test join source-reviewed only. Sole validator controls combined freeze/build/runs."
+}

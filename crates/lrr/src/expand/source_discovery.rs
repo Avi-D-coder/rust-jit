@@ -565,6 +565,89 @@ impl RouteInstallMemo {
         .then(|| namespaces.clone())
     }
 }
+/// Required active declarations of one real generated source job.
+#[derive(Clone)]
+enum ItemDeclarationRequirements {
+    Impl(Vec<Digest>),
+    Trait {
+        scan: Digest,
+        headers: Vec<(Digest, Digest, crate::syntax::spans::SourceRange)>,
+    },
+}
+impl ItemDeclarationRequirements {
+    fn traits(
+        scan: Digest,
+        rows: &[(Digest, Digest, Digest, crate::syntax::spans::SourceRange)],
+    ) -> Result<Self, Diagnostic> {
+        rows.len()
+            .checked_mul(std::mem::size_of::<(
+                Digest,
+                Digest,
+                crate::syntax::spans::SourceRange,
+            )>())
+            .ok_or_else(|| fault("trait frontier header storage overflow"))?;
+        let mut headers = Vec::new();
+        headers
+            .try_reserve_exact(rows.len())
+            .map_err(|_| fault("trait frontier header allocation"))?;
+        headers.extend(
+            rows.iter()
+                .map(|(_, identity, header, range)| (*identity, *header, *range)),
+        );
+        Ok(Self::Trait { scan, headers })
+    }
+    fn len(&self) -> usize {
+        match self {
+            Self::Impl(rows) => rows.len(),
+            Self::Trait { headers, .. } => headers.len(),
+        }
+    }
+    fn extend_members(&self, members: &mut Vec<Digest>) {
+        match self {
+            Self::Impl(rows) => members.extend(rows.iter().copied()),
+            Self::Trait { headers, .. } => {
+                members.extend(headers.iter().map(|(_, header, _)| *header))
+            }
+        }
+    }
+    fn require_present(
+        &self,
+        fragment: &super::declaration_fragment::CompletedDeclarationFragment,
+    ) -> Result<(), Diagnostic> {
+        let present = match self {
+            Self::Impl(rows) => rows.iter().all(|expected| {
+                fragment
+                    .inventory()
+                    .headers()
+                    .iter()
+                    .any(|actual| actual.header_identity == *expected)
+            }),
+            Self::Trait { scan, headers } => {
+                let masks = fragment.generated_replacement_masks()?;
+                let source = fragment
+                    .inventory()
+                    .scan_handles()
+                    .iter()
+                    .find(|source| source.fingerprint() == *scan)
+                    .ok_or_else(|| fault("completed item trait source absent"))?;
+                headers.iter().all(|(identity, header, range)| {
+                    !masks.iter().any(|(owner, mask)| {
+                        owner == scan && mask.start <= range.start && range.end <= mask.end
+                    }) && source.traits().iter().any(|actual| {
+                        actual.identity == *identity
+                            && actual.header_identity == *header
+                            && actual.range == *range
+                    })
+                })
+            }
+        };
+        if !present {
+            return Err(fault("completed required item declaration header absent"));
+        }
+        Ok(())
+    }
+}
+
 pub struct SourceDiscovery {
     sources: Vec<PreparedSourceView>,
     dependencies: std::sync::Arc<crate::source::dependencies::SourceDependencies>,
@@ -630,7 +713,14 @@ pub struct SourceDiscovery {
         BTreeMap<Digest, std::sync::Arc<super::source_replacement::SourceReplacementProof>>,
     replaced_source_producers:
         BTreeMap<Digest, std::sync::Arc<super::source_replacement::SourceReplacementProof>>,
-    item_impl_jobs: BTreeMap<Digest, (Digest, Vec<Digest>, crate::syntax::outline::ScopeKey)>,
+    item_declaration_jobs: BTreeMap<
+        Digest,
+        (
+            Digest,
+            ItemDeclarationRequirements,
+            crate::syntax::outline::ScopeKey,
+        ),
+    >,
     item_root_declarations: BTreeMap<Digest, Digest>,
     child_impl_frontiers: BTreeMap<Digest, item_impl_children::ChildImplFrontier>,
     item_impl_completions:
@@ -1244,7 +1334,7 @@ impl SourceDiscovery {
             original_prefix_jobs,
             source_replacements: BTreeMap::new(),
             replaced_source_producers: BTreeMap::new(),
-            item_impl_jobs: BTreeMap::new(),
+            item_declaration_jobs: BTreeMap::new(),
             item_root_declarations: BTreeMap::new(),
             child_impl_frontiers: BTreeMap::new(),
             item_impl_completions: BTreeMap::new(),
@@ -2830,6 +2920,21 @@ impl SourceDiscovery {
             self.epoch,
         )?;
         let impl_headers = declaration.item_impl_headers(&items, cfg, &plan)?;
+        let trait_headers = declaration.item_trait_headers(&items, cfg, &plan)?;
+        let trait_frontier = if trait_headers.is_empty() {
+            None
+        } else {
+            Some(
+                plan.trait_frontier()
+                    .ok_or_else(|| fault("derive trait frontier absent"))?,
+            )
+        };
+        if trait_frontier.is_some_and(|frontier| self.item_declaration_jobs.contains_key(&frontier))
+        {
+            return Err(fault("derive trait frontier conflict"));
+        }
+        let trait_requirements =
+            ItemDeclarationRequirements::traits(declaration.scan().fingerprint(), &trait_headers)?;
         if self.nested_jobs.contains_key(&declaration_job)
             || self.item_declaration_inputs.contains_key(&declaration_job)
             || self.item_root_declarations.contains_key(&id)
@@ -2842,6 +2947,14 @@ impl SourceDiscovery {
             .nested_bytes
             .checked_add(declaration.metadata_bytes()?)
             .and_then(|n| n.checked_add(impl_headers.len().checked_mul(256)?))
+            .and_then(|n| n.checked_add(trait_headers.len().checked_mul(256)?))
+            .and_then(|n| {
+                n.checked_add(if trait_headers.is_empty() {
+                    0
+                } else {
+                    call.scope.heap_bytes()
+                })
+            })
             .and_then(|n| n.checked_add(256))
             .and_then(|n| n.checked_add(call.scope.heap_bytes()))
             .ok_or_else(|| fault("source derive declaration metadata limit"))?;
@@ -2853,7 +2966,8 @@ impl SourceDiscovery {
                     .ok_or_else(|| fault("derive impl frontier absent"))?,
             )
         };
-        if impl_frontier.is_some_and(|frontier| self.item_impl_jobs.contains_key(&frontier)) {
+        if impl_frontier.is_some_and(|frontier| self.item_declaration_jobs.contains_key(&frontier))
+        {
             return Err(fault("derive impl frontier conflict"));
         }
         let catalog = crate::frontend::generated_macros::GeneratedMacroCatalog::for_discovery(
@@ -2984,9 +3098,19 @@ impl SourceDiscovery {
                 .insert(declaration_job, declaration);
             self.item_root_declarations.insert(id, declaration_job);
             if let Some(frontier) = impl_frontier {
-                self.item_impl_jobs.insert(
+                self.item_declaration_jobs.insert(
                     frontier,
-                    (declaration_job, bound_impl_headers, call.scope.clone()),
+                    (
+                        declaration_job,
+                        ItemDeclarationRequirements::Impl(bound_impl_headers),
+                        call.scope.clone(),
+                    ),
+                );
+            }
+            if let Some(frontier) = trait_frontier {
+                self.item_declaration_jobs.insert(
+                    frontier,
+                    (declaration_job, trait_requirements, call.scope.clone()),
                 );
             }
             self.nested_bytes = nested_bytes;
@@ -3342,10 +3466,48 @@ impl SourceDiscovery {
             })
             .transpose()?
             .unwrap_or_default();
+        let trait_headers = declaration_output
+            .as_ref()
+            .map(|output| {
+                output.item_trait_headers(
+                    &items,
+                    self.sources[ordinal].captured_macro_cfg()?,
+                    &plan,
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let trait_frontier = if trait_headers.is_empty() {
+            None
+        } else {
+            Some(
+                plan.trait_frontier()
+                    .ok_or_else(|| fault("item trait frontier absent"))?,
+            )
+        };
+        if trait_frontier.is_some_and(|frontier| self.item_declaration_jobs.contains_key(&frontier))
+        {
+            return Err(fault("item trait frontier conflict"));
+        }
+        let trait_requirements = match &declaration_output {
+            Some(output) => Some(ItemDeclarationRequirements::traits(
+                output.scan().fingerprint(),
+                &trait_headers,
+            )?),
+            None => None,
+        };
         let nested_bytes = self
             .nested_bytes
             .checked_add(declaration_bytes)
             .and_then(|n| n.checked_add(impl_headers.len().checked_mul(256)?))
+            .and_then(|n| n.checked_add(trait_headers.len().checked_mul(256)?))
+            .and_then(|n| {
+                n.checked_add(if trait_headers.is_empty() {
+                    0
+                } else {
+                    call.scope.heap_bytes()
+                })
+            })
             .and_then(|n| {
                 n.checked_add(if impl_headers.is_empty() {
                     0
@@ -3383,7 +3545,8 @@ impl SourceDiscovery {
                     .ok_or_else(|| fault("item impl frontier absent"))?,
             )
         };
-        if impl_frontier.is_some_and(|frontier| self.item_impl_jobs.contains_key(&frontier)) {
+        if impl_frontier.is_some_and(|frontier| self.item_declaration_jobs.contains_key(&frontier))
+        {
             return Err(fault("item impl frontier conflict"));
         }
         let headers = self
@@ -3498,12 +3661,18 @@ impl SourceDiscovery {
             (Some(_), None) => return Err(fault("impl frontier declaration job owner absent")),
             (None, _) => None,
         };
+        let owned_trait_completion = match (trait_frontier, declaration_identity) {
+            (Some(frontier), Some(declaration_job)) => Some((frontier, declaration_job)),
+            (Some(_), None) => return Err(fault("trait frontier declaration job owner absent")),
+            (None, _) => None,
+        };
         let can_publish_macros = plan.blocked().all(|id| {
             imports.contains(id)
                 || macro_ids.contains(id)
                 || call_frontiers.contains(id)
                 || module_ids.contains(id)
                 || owned_impl_completion.is_some_and(|(frontier, _)| frontier == *id)
+                || owned_trait_completion.is_some_and(|(frontier, _)| frontier == *id)
         });
         let deferred =
             can_publish_macros && catalog.as_ref().is_some_and(|c| !c.ready_for_outward());
@@ -3739,8 +3908,25 @@ impl SourceDiscovery {
             }
             self.item_root_declarations.insert(identity, job);
             if let Some((frontier, declaration_job)) = owned_impl_completion {
-                self.item_impl_jobs
-                    .insert(frontier, (declaration_job, bound_impl_headers, impl_scope));
+                self.item_declaration_jobs.insert(
+                    frontier,
+                    (
+                        declaration_job,
+                        ItemDeclarationRequirements::Impl(bound_impl_headers),
+                        impl_scope.clone(),
+                    ),
+                );
+            }
+            if let Some((frontier, declaration_job)) = owned_trait_completion {
+                self.item_declaration_jobs.insert(
+                    frontier,
+                    (
+                        declaration_job,
+                        trait_requirements
+                            .ok_or_else(|| fault("item trait requirements absent"))?,
+                        impl_scope,
+                    ),
+                );
             }
             self.nested_bytes = nested_bytes;
         }
@@ -3973,7 +4159,7 @@ impl SourceDiscovery {
         let impl_frontier = plan.impl_frontier();
         let child_impl = if let Some(frontier) = impl_frontier {
             if self.child_impl_frontiers.contains_key(&frontier)
-                || self.item_impl_jobs.contains_key(&frontier)
+                || self.item_declaration_jobs.contains_key(&frontier)
             {
                 return Err(fault("generated child impl frontier conflict or limit"));
             }
@@ -10604,19 +10790,11 @@ impl SourceDiscovery {
                                 continue;
                             }
                             if let Some((declaration_job, header, scope)) =
-                                self.item_impl_jobs.get(&job.identity).cloned()
+                                self.item_declaration_jobs.get(&job.identity).cloned()
                             {
                                 if let Some(fragment) = self.nested_completed.get(&declaration_job)
                                 {
-                                    if !header.iter().all(|expected| {
-                                        fragment
-                                            .inventory()
-                                            .headers()
-                                            .iter()
-                                            .any(|actual| actual.header_identity == *expected)
-                                    }) {
-                                        return Err(fault("completed item impl header absent"));
-                                    }
+                                    header.require_present(fragment)?;
                                     let mut members = Vec::new();
                                     members
                                         .try_reserve_exact(header.len().checked_add(1).ok_or_else(
@@ -10624,7 +10802,7 @@ impl SourceDiscovery {
                                         )?)
                                         .map_err(|_| fault("impl frontier member allocation"))?;
                                     members.push(job.identity);
-                                    members.extend(header.iter().copied());
+                                    header.extend_members(&mut members);
                                     self.work.complete(
                                         &ticket,
                                         DiscoveryUpdate {

@@ -1786,6 +1786,16 @@ impl RunMachine {
                             };
                         }
                     }
+                    let written = written.map(Arc::new);
+                    let context = match written.as_ref() {
+                        Some(written) => {
+                            match context.with_written_result_template(Arc::clone(written)) {
+                                Ok(context) => context,
+                                Err(error) => return QueryPoll::Ready(Err(error)),
+                            }
+                        }
+                        None => context,
+                    };
                     let descriptor = match written {
                         Some(written) => {
                             match written.materialize_with(&mut self.store, &|ordinal| {
@@ -1809,6 +1819,16 @@ impl RunMachine {
                     }
                 }
                 None => context,
+            };
+            let retained_bytes = match context
+                .retained_bytes()
+                .checked_sub(context_bytes)
+                .and_then(|additional| retained_bytes.checked_add(additional))
+            {
+                Some(bytes) => bytes,
+                None => {
+                    return QueryPoll::Ready(Err(call_fault("declared result retention size overflow")));
+                }
             };
             let body_lease = match db.pin_guest_body(body.body()) {
                 QueryPoll::Ready(Ok(lease)) => lease,

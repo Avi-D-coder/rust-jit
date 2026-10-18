@@ -1,0 +1,37 @@
+{
+  "status": "source-only physical prerequisite, not evaluated-template or runtime acceptance",
+  "claim": "LOCAL-044",
+  "tasks": [
+    "T032",
+    "T054"
+  ],
+  "source": {
+    "crates/lrr/src/runtime/cell_aggregate_copy.rs": "4aaae781bcf810b1339c32672f303a2b137983270415ac3aa6b3c3d41786dbb0"
+  },
+  "precode": "worktracks/evidence/2026-10-18-evaluated-template-copy-guard-prerequisite.md",
+  "ordinary_route": "Frame::begin_aggregate_copy/read and record-rest -> same AggregateCopy::begin/next/advance -> physical existing construction_push/commit_construction",
+  "replacement": "CopyDestination ownerless ObjectRecord/independent cells/initialized bitmap publication replaced by actual ConstructionId guards retaining complete field transfers until common commit. No second copier. Existing public Copy admission and stamps unchanged. Failed finish leaves guard in stack until commit succeeds. Per-field private-cell reservation removed; existing common commit reserves complete destination cells.",
+  "source_authority": "Same copy_layout initialized owning actual nominal active variant + nominal_copy inventory, structural actual descriptor contracts; replicas derive only from actual admitted source. No BoundNominal fabrication, source parse, public unchecked nominal constructor, or new CopyStatus. Structural member expected Types retained from descriptor; nominal from checked active actual fields as before.",
+  "cold_hot_cost": "Per reached aggregate O(membercount) actual physical layout contracts into preallocated common guard; field advances retain same iterative stack. Existing ConstructionRecord stores expected/fields/completion ordinals; normal destination object/cells allocated at common commit. No measured performance claim, resource limits, query or execution source planning.",
+  "all8": {
+    "1": "No assertion/expression evaluator",
+    "2": "Normal macro/source VM/read/recordrest route unchanged",
+    "3": "No numeric, membername or macroidentity inference",
+    "4": "Same actual source nominal authority from existing completed source value; no original-only restriction",
+    "5": "No pattern engine or cold executable changes",
+    "6": "No parser/query/plan reconstruction, reached physical fields only",
+    "7": "No namespace scan/invalidation changes; actual source stamps/currentphysicalownership validated",
+    "8": "No BodyIndex clone/file search; guard contains actual mutable fresh executionstate"
+  },
+  "required_evidence": [
+    "Existing frame_aggregate_copy original tuple/array, nestedgraph, sharedref, epochfault/resume controls",
+    "Unchanged struct partial-move/update/evaluation-order runtime contracts as ordinary engine regressions",
+    "Future template/Drop/cancellation/oncecache application controls before feature closure"
+  ],
+  "holds": [
+    "No template purpose/certificate/nonCopy admission implemented yet",
+    "No fullGenericArg initializer key/oncecache integration",
+    "NonCopy partial guard cleanup activation not enabled; keep Copy-only admission",
+    "Compile/runtime and independent review pending; no gate closure"
+  ]
+}

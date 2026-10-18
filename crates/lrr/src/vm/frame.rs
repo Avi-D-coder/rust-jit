@@ -4583,8 +4583,7 @@ impl Frame {
                 .is_none_or(|source| matches!(source, crate::traits::term::TyTerm::Primitive(_)))
             && self
                 .body
-                .nodes()
-                .get((child.0 / 2) as usize)
+                .value_node(child)
                 .is_some_and(|node| {
                     node.value == Some(child)
                         && node.role
@@ -4594,6 +4593,28 @@ impl Frame {
                 });
         if operator.is_none() && !primitive_borrow {
             self.set_source_view(child, self.source_view(parent)?)?;
+            // None/None is also used by Neg/Not, whose Output can differ
+            // from its operand. A value-forward edge additionally needs the
+            // actual indexed wrapper/control owner (or return/break site).
+            use crate::syntax::body_index::{ExpressionKind as K, NodeRole};
+            let forwards_value = self
+                .body
+                .value_node(parent)
+                .is_some_and(|node| {
+                    node.parenthesized
+                        || matches!(
+                            node.role,
+                            NodeRole::Expression(
+                                K::Block | K::Const | K::If | K::Match | K::Loop | K::While | K::For
+                            )
+                        )
+                        || self.body.nodes().get(self.pc.node as usize).is_some_and(|site| {
+                            matches!(site.role, NodeRole::Expression(K::Return | K::Break))
+                        })
+                });
+            if left.is_none() && forwards_value {
+                self.forward_partial_hint(parent, child)?;
+            }
         }
         self.slots[child.0 as usize].strict_hint = false;
         Ok(())

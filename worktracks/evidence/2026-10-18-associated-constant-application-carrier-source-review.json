@@ -1,0 +1,119 @@
+{
+  "status": "source_component_only_uncompiled_runtime_unexecuted",
+  "claim": "LOCAL-038 / root LOCAL-044 coordination",
+  "precode": "worktracks/04-calls-source-views/2026-10-18-associated-constant-application-carrier.md",
+  "tasks": [
+    "T032",
+    "T054",
+    "M018",
+    "M025"
+  ],
+  "changed": [
+    {
+      "path": "crates/lrr/src/frontend/member_index.rs",
+      "sha256": "2d12debe6f2c4a257be6e80cd7c2d019dfdc032e93d10e40ea47c7fbbdb4bdf4"
+    },
+    {
+      "path": "crates/lrr/src/frontend/associated_constant_applications.rs",
+      "sha256": "22085ad363a30bb3723e27e11cae27450b558fe6ac765cc7a3a26931b96ae60a"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "c6df31b92f24557500789fcbdd98d83bc3283a3afe271a0b56267b425457514e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "f93be8a33f4f1b195e526bba8d3bb4828ab190e52867f5233682729e21d24d63"
+    }
+  ],
+  "upstream_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs",
+    "sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+    "contract": "Same Proxy<T>::X item has different i32 values under actual Abc/Def owner applications. Original unchanged; no execution requested or claimed."
+  },
+  "source_routes": {
+    "selection": "MemberIndex::associated_const delegates existing candidate algorithm to associated_const_selection, retaining actual provider impl and trait-default provenance; ambiguity/priority unchanged.",
+    "occurrence": "Existing EnteredValueGoal -> actual retained PreparedSourceLocalPlan.require_current -> exact PathExpr from entered_node_syntax -> actual qualifier/member + full GenericArg AST observations using existing written_argument.",
+    "pending": "AssociatedConstPathOccurrence.demand always LexicalTypeAndSubstitution. Actual occurrence proves no semantic Type/member/application choice. No production consumer or new pure query/key/provider wiring yet.",
+    "legacy_hold": "CallResolver::associated_value/associated_value_path and initializer demand/packet/cache still erase application. Remove identity-only adapter consumers only after common pure application/substitution and runtime packet/cache transport is connected and validated."
+  },
+  "cost_and_dependencies": {
+    "cold": "O(P) path syntax traversal + existing argument site lookup O(A log N) using nodes_at_range; fixed-size A AST/observation rows. Same member candidate iteration as before.",
+    "retention": "Shared Rowan AST/source plan handles; no immutable BodyIndex clone. New fixed-size boxed rows and occurrence struct measured via checked sizeof. Exposes retained_plan for future query retirement accounting; no independently registered cache today.",
+    "reached": "None new: occurrence helper has no execution consumer. Existing Digest projection/selection behavior retained. Future installed operation may only consume retained owning query result, not call helper to replan.",
+    "currentness": "Existing source-plan require_current verifies actual environment/source/body/context/cfg/edition/epoch. This is source occurrence authority only; positive/negative lexical/type/member dependencies remain future owning query obligation."
+  },
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": [
+        "prepare_occurrence",
+        "associated_const_selection"
+      ],
+      "finding": "Metadata only, no assertion/expression evaluator or synthetic body."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "entered_node_syntax",
+        "AssociatedConstPathOccurrence.qualifier"
+      ],
+      "finding": "Actual ordinary retained AST including generated syntax; no literal/break execution vocabulary."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "associated_const_selection",
+        "AssociatedConstApplicationDemand"
+      ],
+      "finding": "Same candidate loop; no numeric/assertion/member-name specialcase. No unresolved qualifier resolved from runtime layout."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "PreparedSourceLocalPlan.require_current",
+        "identifier_context",
+        "token_edition"
+      ],
+      "finding": "Real source handles/context retained equally; absent lexical/type proof remains explicit demand. No generated-source blanket refusal."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "prepare_occurrence",
+        "written_argument"
+      ],
+      "finding": "Only actual selected path metadata; no cold initializer or function body lowering/execution, no pattern machinery changes."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "prepare_occurrence"
+      ],
+      "finding": "Cold helper only, no phase or installed execution consumer. Future owning pure query/immutable reuse mandatory; repeated runtime planning is explicitly not implemented."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "associated_const_selection",
+        "PreparedSourceLocalPlan.require_current"
+      ],
+      "finding": "Existing indexed member candidate scope only, no new full-world namespace construction/scan. Occurrence alone does not claim semantic name dependencies."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "AssociatedConstPathOccurrence",
+        "ItemGenericArgumentOccurrence",
+        "entered_node_syntax"
+      ],
+      "finding": "Shared Arc/Rowan handles and exact indexed node; path-local syntax walk only, no full-file search/deep clone."
+    }
+  ],
+  "validation_pending": [
+    "Independent exact-source review",
+    "Sole validator combined macOS Rust1.99 lib+CLI build",
+    "Metadata fixture controls/source application integration when actual owning query is implemented",
+    "Full runtime application/packet/cache/template and original runtime acceptance remain held"
+  ]
+}

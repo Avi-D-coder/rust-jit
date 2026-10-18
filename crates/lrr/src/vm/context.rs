@@ -32,6 +32,8 @@ pub struct GenericEnv {
     /// Cold call preparation instantiates the declared written template with
     /// actual runtime generic bindings (including anonymous callable Types).
     written_result: Option<(TyTerm, TypeId)>,
+    /// Actual source-selected result structure, including coercion sites.
+    written_result_template: Option<std::sync::Arc<crate::ir::written_type::WrittenType>>,
 }
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CALL-CONTEXT", message.into())
@@ -342,6 +344,7 @@ impl GenericEnv {
             }),
             structural_references: contracts.structural_references,
             written_result: None,
+            written_result_template: None,
         })
     }
     /// Attach the descriptor of the source-selected declared result after its
@@ -349,6 +352,27 @@ impl GenericEnv {
     pub(crate) fn with_written_result(mut self, source: TyTerm, descriptor: TypeId) -> Self {
         self.written_result = Some((source, descriptor));
         self
+    }
+    pub(crate) fn with_written_result_template(
+        mut self,
+        written: std::sync::Arc<crate::ir::written_type::WrittenType>,
+    ) -> Result<Self, Diagnostic> {
+        if self.written_result_template.is_some() {
+            return Err(invalid("declared result template already retained"));
+        }
+        self.bytes = self
+            .bytes
+            .checked_add(std::mem::size_of::<crate::ir::written_type::WrittenType>())
+            .and_then(|bytes| bytes.checked_add(2 * std::mem::size_of::<usize>()))
+            .and_then(|bytes| bytes.checked_add(written.heap_bytes()))
+            .ok_or_else(|| invalid("declared result template metadata overflow"))?;
+        self.written_result_template = Some(written);
+        Ok(self)
+    }
+    pub(crate) fn written_result_template(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::ir::written_type::WrittenType>> {
+        self.written_result_template.as_ref()
     }
     pub(crate) fn written_result_descriptor(&self) -> Option<TypeId> {
         self.written_result
