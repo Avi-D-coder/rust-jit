@@ -110,6 +110,11 @@ impl GenericEnv {
                         (Some(source @ TyTerm::Ref(crate::traits::term::RegionTerm::Static, _, _)), None) => {
                             crate::frontend::call_contracts::closed_term(source)
                         }
+                        // A closed fn-pointer result (E-R5-008); the return
+                        // boundary checks the returned value against it.
+                        (Some(source @ TyTerm::Function(_)), None) => {
+                            crate::frontend::call_contracts::closed_term(source)
+                        }
                         // A normalized associated-type result; the return
                         // boundary checks the returned value against it.
                         (Some(TyTerm::Primitive(_)), None) => {

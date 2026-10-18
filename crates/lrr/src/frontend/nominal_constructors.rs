@@ -65,6 +65,33 @@ impl NominalConstructorTarget {
             variant: Some(variant.name.clone()),
         })
     }
+    /// The target for a struct (or one variant of an enum) declared in an
+    /// entered body. Ownership comes from the published local declaration and
+    /// its owning body's current plan, never from a module outline.
+    /// `None`: the identity is no body-local nominal declaration.
+    pub(crate) fn local(
+        db: &mut Database,
+        identity: Digest,
+        variant: Option<&str>,
+    ) -> QueryPoll<Option<Self>> {
+        match super::source_types::local_nominal_owner(db, identity) {
+            QueryPoll::Ready(Ok(Some(owner))) => {
+                if !matches!(owner.definition.item_kind, ItemKind::Struct | ItemKind::Enum)
+                    || (owner.definition.item_kind == ItemKind::Enum) != variant.is_some()
+                {
+                    return QueryPoll::Ready(Ok(None));
+                }
+                QueryPoll::Ready(Ok(Some(Self {
+                    owner: owner.definition.clone(),
+                    identity,
+                    variant: variant.map(str::to_owned),
+                })))
+            }
+            QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
     pub(crate) fn owner(&self) -> &DefKey {
         &self.owner
     }

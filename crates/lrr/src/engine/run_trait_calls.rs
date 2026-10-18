@@ -87,6 +87,18 @@ impl RunMachine {
                 u32::try_from(fields.len()).map_err(|_| call_fault("tuple arity overflow"))?,
             )),
             TypeKey::Ref { mutable, .. } => Err(BuiltinSelf::Reference(*mutable)),
+            // E-R5-008: pointers select impls under their reserved identity.
+            TypeKey::RawPtr { mutable: true, .. } => {
+                Ok(crate::traits::pointer_terms::mut_pointer_identity())
+            }
+            TypeKey::RawPtr { mutable: false, .. } => {
+                Ok(crate::traits::pointer_terms::const_pointer_identity())
+            }
+            TypeKey::Function { .. } => Ok(crate::traits::pointer_terms::fn_pointer_identity()),
+            // A function item compares as the fn pointer it coerces to.
+            TypeKey::Callable { captures, .. } if captures.is_empty() => {
+                Ok(crate::traits::pointer_terms::fn_pointer_identity())
+            }
             _ => {
                 return Err(call_fault(
                     "self type awaits trait-object/closure impl selection",

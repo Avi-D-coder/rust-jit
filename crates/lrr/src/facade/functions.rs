@@ -125,6 +125,32 @@ pub enum LibraryFunction {
     /// `core::intrinsics::lrr_forget<T>(T)`: move a value into a
     /// never-retired location, so no destructor runs (`mem::forget`).
     Forget,
+    /// `core::intrinsics::lrr_ptr_null() -> *const ()`: the null pointer
+    /// (E-R5-008; coercion sites retype it to the written pointee).
+    PtrNull,
+    /// `core::intrinsics::lrr_ptr_offset<T>(*const T, isize) -> *const T`:
+    /// address arithmetic scaled by the pointee.
+    PtrOffset,
+    /// `core::intrinsics::lrr_ptr_offset_from<T>(*const T, *const T) -> isize`.
+    PtrOffsetFrom,
+    /// `core::intrinsics::lrr_ptr_read<T>(*const T) -> T`.
+    PtrRead,
+    /// `core::intrinsics::lrr_ptr_write<T>(*mut T, T)`.
+    PtrWrite,
+    /// `core::intrinsics::lrr_ptr_retype<T, U>(*const T) -> *const U`: the same
+    /// address (a pointer-to-pointer cast whose target is generic).
+    PtrRetype,
+    /// `core::intrinsics::lrr_slice_as_ptr<T>(&[T]) -> *const T`: the first
+    /// element of a slice, array or vector reference.
+    SliceAsPtr,
+    /// `core::intrinsics::lrr_slice_as_mut_ptr<T>(&mut [T]) -> *mut T`.
+    SliceAsMutPtr,
+    /// `core::intrinsics::lrr_ptr_null_mut() -> *mut ()`.
+    PtrNullMut,
+    /// `core::intrinsics::lrr_ptr_as_const<T>(*mut T) -> *const T`.
+    PtrAsConst,
+    /// `core::intrinsics::lrr_ptr_as_mut<T>(*const T) -> *mut T`.
+    PtrAsMut,
     /// `core::intrinsics::lrr_f64_bits(f64) -> u64`: the IEEE bit pattern.
     F64Bits,
     /// `core::intrinsics::lrr_f64_from_bits(u64) -> f64`.
@@ -214,6 +240,17 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
     (LibraryFunction::BoxLeak, "core", &["intrinsics", "lrr_box_leak"]),
     (LibraryFunction::RefEq, "core", &["intrinsics", "lrr_ref_eq"]),
     (LibraryFunction::Forget, "core", &["intrinsics", "lrr_forget"]),
+    (LibraryFunction::PtrNull, "core", &["intrinsics", "lrr_ptr_null"]),
+    (LibraryFunction::PtrOffset, "core", &["intrinsics", "lrr_ptr_offset"]),
+    (LibraryFunction::PtrOffsetFrom, "core", &["intrinsics", "lrr_ptr_offset_from"]),
+    (LibraryFunction::PtrRead, "core", &["intrinsics", "lrr_ptr_read"]),
+    (LibraryFunction::PtrWrite, "core", &["intrinsics", "lrr_ptr_write"]),
+    (LibraryFunction::PtrRetype, "core", &["intrinsics", "lrr_ptr_retype"]),
+    (LibraryFunction::SliceAsPtr, "core", &["intrinsics", "lrr_slice_as_ptr"]),
+    (LibraryFunction::SliceAsMutPtr, "core", &["intrinsics", "lrr_slice_as_mut_ptr"]),
+    (LibraryFunction::PtrNullMut, "core", &["intrinsics", "lrr_ptr_null_mut"]),
+    (LibraryFunction::PtrAsConst, "core", &["intrinsics", "lrr_ptr_as_const"]),
+    (LibraryFunction::PtrAsMut, "core", &["intrinsics", "lrr_ptr_as_mut"]),
     (LibraryFunction::F64Bits, "core", &["intrinsics", "lrr_f64_bits"]),
     (LibraryFunction::F64FromBits, "core", &["intrinsics", "lrr_f64_from_bits"]),
     (LibraryFunction::F32Bits, "core", &["intrinsics", "lrr_f32_bits"]),
@@ -267,6 +304,17 @@ impl LibraryFunction {
             Self::BoxLeak => 38,
             Self::RefEq => 39,
             Self::Forget => 40,
+            Self::PtrNull => 70,
+            Self::PtrOffset => 71,
+            Self::PtrOffsetFrom => 72,
+            Self::PtrRead => 73,
+            Self::PtrWrite => 74,
+            Self::PtrRetype => 75,
+            Self::SliceAsPtr => 76,
+            Self::SliceAsMutPtr => 77,
+            Self::PtrNullMut => 78,
+            Self::PtrAsConst => 79,
+            Self::PtrAsMut => 80,
             Self::F64Bits => 100,
             Self::F64FromBits => 101,
             Self::F32Bits => 102,
@@ -275,7 +323,7 @@ impl LibraryFunction {
             Self::F32Math => 105,
         }
     }
-    const ALL: [Self; 46] = [
+    const ALL: [Self; 57] = [
         Self::Panic,
         Self::PanicFmt,
         Self::PanicDisplay,
@@ -316,6 +364,17 @@ impl LibraryFunction {
         Self::BoxLeak,
         Self::RefEq,
         Self::Forget,
+        Self::PtrNull,
+        Self::PtrOffset,
+        Self::PtrOffsetFrom,
+        Self::PtrRead,
+        Self::PtrWrite,
+        Self::PtrRetype,
+        Self::SliceAsPtr,
+        Self::SliceAsMutPtr,
+        Self::PtrNullMut,
+        Self::PtrAsConst,
+        Self::PtrAsMut,
         Self::F64Bits,
         Self::F64FromBits,
         Self::F32Bits,
@@ -337,11 +396,14 @@ impl LibraryFunction {
             | Self::MemReplace
             | Self::MemSwap
             | Self::CellReplace
+            | Self::PtrOffset
+            | Self::PtrOffsetFrom
+            | Self::PtrWrite
             | Self::RefEq => 2,
             Self::F64Math | Self::F32Math => 4,
             Self::VecInsert | Self::SliceSwap | Self::StrSlice => 3,
             Self::FmtValue => 7,
-            Self::FmtSink => 0,
+            Self::FmtSink | Self::PtrNull | Self::PtrNullMut => 0,
             _ => 1,
         }
     }
@@ -380,6 +442,17 @@ impl LibraryFunction {
                 | Self::SharedToMut
                 | Self::BoxLeak
                 | Self::RefEq
+                | Self::PtrNull
+                | Self::PtrOffset
+                | Self::PtrOffsetFrom
+                | Self::PtrRead
+                | Self::PtrWrite
+                | Self::PtrRetype
+                | Self::SliceAsPtr
+                | Self::SliceAsMutPtr
+                | Self::PtrNullMut
+                | Self::PtrAsConst
+                | Self::PtrAsMut
                 | Self::Forget
                 | Self::F64Bits
                 | Self::F64FromBits

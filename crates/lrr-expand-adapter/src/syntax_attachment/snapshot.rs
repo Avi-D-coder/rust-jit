@@ -26,7 +26,16 @@ impl SyntaxSnapshot {
     }
 }
 impl SyntaxAttachment {
-    pub fn snapshot(&self) -> Result<SyntaxSnapshot, AdapterError> {
+    /// The owned snapshot of this tree state, shared between callers: the
+    /// export (materialize, origin records, identity) runs once per state.
+    pub fn snapshot(&self) -> Result<Arc<SyntaxSnapshot>, AdapterError> {
+        if let Some(cached) = self.snapshot_cache.get() {
+            return Ok(Arc::clone(cached));
+        }
+        let built = Arc::new(self.build_snapshot()?);
+        Ok(Arc::clone(self.snapshot_cache.get_or_init(|| built)))
+    }
+    fn build_snapshot(&self) -> Result<SyntaxSnapshot, AdapterError> {
         let origins = {
             let store = self
                 .store

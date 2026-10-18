@@ -560,13 +560,12 @@ mod tests {
             pointer_goal.goal(),
             ReturnTypeGoal::NeedName(SignatureName::NeedOwnerContext(_))
         ));
-        match prepare_local_query(&mut db, alias) {
-            QueryPoll::Ready(Err(error)) => {
-                assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
-                assert!(error.message.contains("AliasContext"), "{error:?}");
-            }
-            _ => panic!("unjoined local alias return authority was certified"),
-        }
+        // A non-generic body-local alias of a builtin Type (`type Named = u16;`)
+        // answers through the same prefix selection as any local Type use,
+        // provided no block item or import can shadow its target.
+        let alias_goal = ready(prepare_local_query(&mut db, alias));
+        assert!(matches!(alias_goal.goal(), ReturnTypeGoal::Ready(result)
+            if result.source() == &TyTerm::Primitive(P::U16)));
         no_child_code(&db, start);
     }
     #[test]

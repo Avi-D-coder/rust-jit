@@ -300,6 +300,60 @@ impl RunMachine {
         self.frame.demand_place_deref(base, mutable);
         Ok(QueryPoll::Ready(Ok(())))
     }
+    /// Whether a pattern matched against the scrutinee of the `match`, `let`
+    /// statement or `let` clause at `node` has a `ref mut` binding. Cold: read
+    /// from the retained syntax only when an overloaded dereference needs the
+    /// answer.
+    fn patterns_bind_ref_mut(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<bool> {
+        use crate::db::dependency::{InputKey, InputValue};
+        use ra_ap_syntax::{AstNode, ast};
+        let definition = self.frame.pc().body.definition;
+        let source = match db.input(&InputKey::DefinitionSource(definition)).as_deref() {
+            Some(InputValue::DefinitionSource(source)) => source.clone(),
+            _ => return QueryPoll::Ready(Ok(false)),
+        };
+        let handle = match db.input(&InputKey::DefinitionBody(definition)).as_deref() {
+            Some(InputValue::DefinitionBody(handle)) if handle.key() == self.frame.pc().body => {
+                handle.clone()
+            }
+            _ => return QueryPoll::Ready(Ok(false)),
+        };
+        let parsed = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(source)) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
+            return QueryPoll::Ready(Err(field_fault("place use parse kind differs")));
+        };
+        let syntax = match parsed.entered_node_syntax(&handle, &self.frame.body, node) {
+            Ok(Some(syntax)) => syntax,
+            Ok(None) => return QueryPoll::Ready(Ok(false)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let binds = |pattern: Option<ast::Pat>| {
+            pattern.is_some_and(|pattern| {
+                pattern.syntax().descendants().any(|inner| {
+                    ast::IdentPat::cast(inner)
+                        .is_some_and(|ident| ident.ref_token().is_some() && ident.mut_token().is_some())
+                })
+            })
+        };
+        let result = if let Some(matched) = ast::MatchExpr::cast(syntax.clone()) {
+            matched
+                .match_arm_list()
+                .into_iter()
+                .flat_map(|arms| arms.arms())
+                .any(|arm| binds(arm.pat()))
+        } else if let Some(statement) = ast::LetStmt::cast(syntax.clone()) {
+            binds(statement.pat())
+        } else if let Some(clause) = ast::LetExpr::cast(syntax) {
+            binds(clause.pat())
+        } else {
+            false
+        };
+        QueryPoll::Ready(Ok(result))
+    }
     /// Whether the place expression at the current node is used mutably:
     /// assigned to, compound-assigned, `&mut`-borrowed or a method receiver,
     /// through any chain of fields, indexing, parentheses and dereferences
@@ -340,6 +394,15 @@ impl RunMachine {
                         return QueryPoll::Ready(Ok(true));
                     }
                     FactKind::Borrow => return QueryPoll::Ready(Ok(parent.flag())),
+                    // A `ref mut` binding of the patterns matched against this
+                    // place borrows it mutably (rustc picks `DerefMut` when
+                    // any binding is `ref mut`).
+                    FactKind::Match if edge.ordinal == 0 => {
+                        return self.patterns_bind_ref_mut(db, edge.parent);
+                    }
+                    FactKind::Let if edge.ordinal == 1 => {
+                        return self.patterns_bind_ref_mut(db, edge.parent);
+                    }
                     // A receiver may take `&mut self`: the method is selected
                     // only after the place, so a `DerefMut` type is assumed
                     // to be used through it mutably.

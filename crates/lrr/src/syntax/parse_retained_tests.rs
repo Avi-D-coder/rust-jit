@@ -62,7 +62,7 @@ pub(super) fn captured(text: &str, rules: &str, edition: WireEdition) -> Arc<Syn
             FragmentSlot::Expression,
         )
         .unwrap();
-    Arc::new(syntax.snapshot().unwrap())
+    syntax.snapshot().unwrap()
 }
 fn parsed(snapshot: Arc<SyntaxSnapshot>) -> ParsedFile {
     ParsedFile::from_syntax_snapshot(snapshot, ProfileIdentity::current()).unwrap()
@@ -255,7 +255,7 @@ fn fused_tokens_can_cross_origin_intervals_without_resolving_their_names() {
         DeclarationGrammar::Items,
     )
     .unwrap();
-    let retained = parsed(Arc::new(syntax.snapshot().unwrap()));
+    let retained = parsed(syntax.snapshot().unwrap());
     let handle = body(&retained, "main");
     retained
         .index_body(&handle, BodyIndexLimits::default())
@@ -293,7 +293,7 @@ fn upstream_nested_statement_items_enter_the_normal_index_and_lexical_inventory(
             WireEdition::E2024 => 2024,
         };
         let parsed =
-            ParsedFile::from_syntax_snapshot(Arc::new(syntax.snapshot().unwrap()), profile)
+            ParsedFile::from_syntax_snapshot(syntax.snapshot().unwrap(), profile)
                 .unwrap();
         let handle = body(&parsed, "main");
         let index = parsed
@@ -337,7 +337,7 @@ fn non_item_snapshots_cannot_be_replayed_as_source_units() {
     .unwrap();
     assert!(
         ParsedFile::from_syntax_snapshot(
-            Arc::new(syntax.snapshot().unwrap()),
+            syntax.snapshot().unwrap(),
             ProfileIdentity::current()
         )
         .is_err()

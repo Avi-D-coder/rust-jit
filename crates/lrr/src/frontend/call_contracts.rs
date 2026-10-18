@@ -1117,14 +1117,24 @@ pub(crate) fn bind_runtime_parameters(
             }
         }
         TyTerm::Nominal(_, args) => {
-            if let TypeKey::Nominal { args: actual, .. } = store.type_descriptor(descriptor)?.key.as_ref() {
-                let types = args.iter().filter_map(|arg| match arg {
-                    crate::traits::term::GenericArg::Type(ty) => Some(ty),
-                    _ => None,
-                });
-                for (ty, actual) in types.zip(actual.iter()) {
-                    bind_runtime_parameters(ty, *actual, store, definition, runtime)?;
+            match store.type_descriptor(descriptor)?.key.as_ref() {
+                TypeKey::Nominal { args: actual, .. } => {
+                    let types = args.iter().filter_map(|arg| match arg {
+                        crate::traits::term::GenericArg::Type(ty) => Some(ty),
+                        _ => None,
+                    });
+                    for (ty, actual) in types.zip(actual.iter()) {
+                        bind_runtime_parameters(ty, *actual, store, definition, runtime)?;
+                    }
                 }
+                // `*const T` / `*mut T` (E-R5-008): the reserved-identity
+                // nominal binds its pointee like a type argument.
+                TypeKey::RawPtr { target: actual, .. } => {
+                    if let Some((_, pointee)) = crate::traits::pointer_terms::as_raw_pointer(template) {
+                        bind_runtime_parameters(pointee, *actual, store, definition, runtime)?;
+                    }
+                }
+                _ => {}
             }
         }
         _ => {}
@@ -1583,7 +1593,9 @@ fn prepare(
                         unsized_reference_descriptor(store, actual.descriptor, template)
                             .map(|descriptor| (source, descriptor))
                     })
-                    .transpose()?;
+                    .transpose()?
+                    // `&T` at a generic `*const U` parameter (E-R5-008).
+                    .or_else(|| pointer_coercion_view(store, template, actual));
                 let (source, descriptor) = match &coerced {
                     Some((source, descriptor)) => (source, *descriptor),
                     None => (&actual.source, actual.descriptor),
@@ -1616,6 +1628,11 @@ fn prepare(
             {
                 if super::signature_subst::erase_regions(template)
                     == super::signature_subst::erase_regions(&actual.source)
+                    || crate::traits::pointer_terms::same_function_pointer_reference(
+                        template,
+                        &actual.source,
+                    )
+                    || store.is_some_and(|store| function_item_reference(store, template, actual))
                 {
                     structural_generic = true;
                     descriptors.push(actual.descriptor);
@@ -1641,9 +1658,40 @@ fn prepare(
                     ));
                 }
             }
+            // A fn-pointer parameter (E-R5-008): a function item or fn pointer
+            // argument. The sealed packet applies the shared pointer
+            // coercion to the erased fn-pointer descriptor.
+            TyTerm::Function(_) => {
+                let Some(store) = store else {
+                    return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
+                        definition,
+                        syntax: signature.parameters[index].ty.clone(),
+                    })));
+                };
+                let descriptor = store
+                    .find_type(&crate::runtime::shape::TypeKey::erased_function_pointer())
+                    .ok_or_else(|| {
+                        fault(
+                            "LRR-E-CALL-ARG-TYPE",
+                            "fn pointer parameter requires an evaluated function item or pointer",
+                        )
+                    })?;
+                descriptors.push(descriptor);
+            }
             TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)
                 if closed_term(template) =>
             {
+                if &actual.source != template
+                    && let Some(store) = store
+                    && let Some((view, descriptor)) = pointer_coercion_view(store, template, actual)
+                    && super::signature_subst::erase_regions(&view)
+                        == super::signature_subst::erase_regions(template)
+                {
+                    // `&x` at a `*const T` parameter (E-R5-008).
+                    symbolic.constrain_argument(index, &view)?;
+                    descriptors.push(descriptor);
+                    continue;
+                }
                 if &actual.source != template {
                     return Err(fault(
                         "LRR-E-CALL-ARG-TYPE",
@@ -1742,7 +1790,13 @@ fn prepare(
     // `-> Option<T>`): the parameters the arguments left unbound bind from
     // the reached result context (`let v: Vec<i32> = Vec::new()`), and the
     // bindings close the result.
-    if signature.result_symbolic.is_none()
+    // A raw-pointer result (`-> *const T`, E-R5-008) is lowered to a term at
+    // signature capture and closes the same way.
+    if (signature.result_symbolic.is_none()
+        || signature
+            .result_symbolic
+            .as_ref()
+            .is_some_and(|result| crate::traits::pointer_terms::as_raw_pointer(result).is_some()))
         && let Some(result) = instantiated.result_symbolic.clone()
         && !matches!(result, TyTerm::Param(_))
         && contains_parameter(&result, definition)
@@ -1849,6 +1903,62 @@ pub(crate) fn unsizes_to(actual: &TyTerm, expected: &TyTerm) -> bool {
         && super::signature_subst::erase_regions(from_element)
             == super::signature_subst::erase_regions(to_element)
 }
+/// A reference to a function item (or to a fn pointer) at a reference to
+/// fn-pointer parameter: the operator impls for `fn()` compare code
+/// addresses, and a function item has one (E-R5-008).
+fn function_item_reference(
+    store: &crate::runtime::cell::GuestStore,
+    template: &TyTerm,
+    actual: &ArgumentType,
+) -> bool {
+    use crate::runtime::shape::TypeKey;
+    let TyTerm::Ref(_, _, pointee) = template else {
+        return false;
+    };
+    if !matches!(pointee.as_ref(), TyTerm::Function(_)) {
+        return false;
+    }
+    let Ok(descriptor) = store.type_descriptor(actual.descriptor) else {
+        return false;
+    };
+    let TypeKey::Ref { target, .. } = descriptor.key.as_ref() else {
+        return false;
+    };
+    store.type_descriptor(*target).is_ok_and(|target| {
+        matches!(
+            target.key.as_ref(),
+            TypeKey::Callable { captures, .. } if captures.is_empty()
+        )
+    })
+}
+/// The raw-pointer view and descriptor a reference or a pointer of the other
+/// mutability takes at a raw-pointer parameter `template` (E-R5-008); `None`
+/// when the argument already is one, or no pointer coercion applies.
+fn pointer_coercion_view(
+    store: &crate::runtime::cell::GuestStore,
+    template: &TyTerm,
+    actual: &ArgumentType,
+) -> Option<(TyTerm, TypeId)> {
+    use crate::{runtime::shape::TypeKey, traits::pointer_terms};
+    let (to_mutable, _) = pointer_terms::as_raw_pointer(template)?;
+    let (referent, from_mutable) = match store.type_descriptor(actual.descriptor).ok()?.key.as_ref() {
+        TypeKey::Ref { target, .. } => (*target, None),
+        TypeKey::RawPtr { target, mutable } => (*target, Some(*mutable)),
+        _ => return None,
+    };
+    if from_mutable == Some(to_mutable) {
+        return None;
+    }
+    let pointee = match &actual.source {
+        TyTerm::Ref(_, _, inner) => inner.as_ref().clone(),
+        source => pointer_terms::as_raw_pointer(source)?.1.clone(),
+    };
+    let descriptor = store.find_type(&TypeKey::RawPtr {
+        mutable: to_mutable,
+        target: referent,
+    })?;
+    Some((pointer_terms::raw_pointer(to_mutable, pointee), descriptor))
+}
 /// The `&[T]`/`&mut [T]` source view an array reference takes at a slice
 /// reference coercion site whose element may still be generic (`&[U]`).
 pub(crate) fn unsizing_view(template: &TyTerm, actual: &TyTerm) -> Option<TyTerm> {
@@ -1919,6 +2029,12 @@ pub(crate) fn closed_term(term: &TyTerm) -> bool {
         TyTerm::Tuple(fields) => fields.iter().all(closed_term),
         TyTerm::Array(element, crate::traits::term::ConstTerm::Value(_)) | TyTerm::Slice(element) => {
             closed_term(element)
+        }
+        // A fn pointer with closed parameter and result types (E-R5-008).
+        TyTerm::Function(function) => {
+            function.variables.is_empty()
+                && function.value.parameters.iter().all(closed_term)
+                && closed_term(&function.value.result)
         }
         _ => false,
     }

@@ -362,6 +362,13 @@ impl Constructed {
                 .collect(),
         )
     }
+    /// The constructed value's nominal Type with these type arguments.
+    pub(super) fn nominal_type_with(&self, arguments: Vec<TyTerm>) -> TyTerm {
+        TyTerm::Nominal(
+            self.definition,
+            arguments.into_iter().map(GenericArg::Type).collect(),
+        )
+    }
     /// The constructed value's nominal Type with each type argument a
     /// distinct variable of this declaration (position order), for a
     /// constructor whose arguments do not decide them.
@@ -488,10 +495,84 @@ impl<'a> Component<'a> {
                         && item.def_key.item_kind == ItemKind::Struct
                 }) {
                 Some(item) => NominalConstructorTarget::structure(item),
+                // A struct declared in the executing body is no module
+                // outline item: its published local declaration owns it.
+                None if db
+                    .input(&InputKey::LocalDeclarationOwner(identity))
+                    .is_some()
+                    && matches!(
+                        db.input(&InputKey::DefinitionHeader(identity)).as_deref(),
+                        Some(InputValue::DefinitionHeader(header))
+                            if header.tokens.iter().any(|token| token.text == "struct")
+                    ) =>
+                {
+                    match ready!(NominalConstructorTarget::local(db, identity, None)) {
+                        Some(target) => target,
+                        None => return QueryPoll::Ready(Ok(None)),
+                    }
+                }
                 None => return QueryPoll::Ready(Ok(None)),
             }
         };
-        let bound = match bind_constructor(db, graph, &sources, &target) {
+        self.bind_target(db, graph, &sources, &target)
+    }
+    /// The variant `Root::member` names when the entered Value goal selected
+    /// the root `enumeration` lexically (a block-local or imported enum).
+    fn rooted_constructor(
+        &mut self,
+        db: &mut Database,
+        enumeration: Digest,
+        member: &str,
+        local: bool,
+    ) -> QueryPoll<Option<Arc<Constructed>>> {
+        // Only an enum has variants; a module or type root names other items.
+        if !matches!(
+            db.input(&InputKey::DefinitionHeader(enumeration)).as_deref(),
+            Some(InputValue::DefinitionHeader(header))
+                if header.tokens.iter().any(|token| token.text == "enum")
+        ) {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let Some(environment) = ready!(self.environment_parts(db)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let sources: Vec<_> = environment.sources().iter().collect();
+        let graph = environment.names();
+        // Only a declared variant constructs; another member of the enum is
+        // an associated item.
+        let schema = ready!(db.fetch(&SyntaxProvider, QueryKey::TypeSchema(enumeration)));
+        let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("constraint rooted enum schema differs")));
+        };
+        if schema.variant(Some(member)).is_err() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let target = if local {
+            match ready!(NominalConstructorTarget::local(db, enumeration, Some(member))) {
+                Some(target) => target,
+                None => return QueryPoll::Ready(Ok(None)),
+            }
+        } else {
+            let variant = crate::frontend::names::EnumVariantDefinition {
+                enumeration,
+                name: member.to_owned(),
+            };
+            match NominalConstructorTarget::variant(&sources, &variant) {
+                Ok(target) => target,
+                Err(error) if super::not_closed(&error) => return QueryPoll::Ready(Ok(None)),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            }
+        };
+        self.bind_target(db, graph, &sources, &target)
+    }
+    fn bind_target(
+        &mut self,
+        db: &mut Database,
+        graph: &crate::frontend::names::NameNamespaces,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        target: &NominalConstructorTarget,
+    ) -> QueryPoll<Option<Arc<Constructed>>> {
+        let bound = match bind_constructor(db, graph, sources, target) {
             QueryPoll::Ready(Ok(bound)) => bound,
             QueryPoll::Ready(Err(error)) if super::not_closed(&error) => {
                 return QueryPoll::Ready(Ok(None));
@@ -601,6 +682,15 @@ impl<'a> Component<'a> {
         let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("constraint callee query variant differs")));
         };
+        // `Root::member` whose root the goal selected lexically: a variant
+        // of that enum, or an associated item (no constructor).
+        if let Some(member) = selected.rooted() {
+            let Some(declaration) = selected.declaration() else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            let (identity, local) = (declaration.identity(), declaration.owner().is_some());
+            return self.rooted_constructor(db, identity, member, local);
+        }
         // An enum variant is a member of its enum, not a published
         // declaration of its own: the Value goal names it as that demand.
         let identity = match (selected.declaration(), selected.pending()) {
@@ -644,6 +734,10 @@ impl<'a> Component<'a> {
             let (Some(declaration), None) = (selected.declaration(), selected.pending()) else {
                 return QueryPoll::Ready(Ok(None));
             };
+            if let Some(member) = selected.rooted() {
+                let (identity, local) = (declaration.identity(), declaration.owner().is_some());
+                return self.rooted_constructor(db, identity, member, local);
+            }
             return self.constructor_definition(db, declaration.identity());
         }
         let Some(environment) = ready!(self.environment_parts(db)) else {

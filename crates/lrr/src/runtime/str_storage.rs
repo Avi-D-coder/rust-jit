@@ -328,7 +328,9 @@ impl GuestStore {
         self.validate_reference_record(reference)?;
         match &reference.lease {
             ReferenceLease::Buffer(buffer) => self.strings.resolve(*buffer),
-            ReferenceLease::Location(_) | ReferenceLease::Elements(_) => Err(invalid()),
+            ReferenceLease::Location(_)
+            | ReferenceLease::Elements(_)
+            | ReferenceLease::Detached(_) => Err(invalid()),
         }
     }
 }
@@ -374,6 +376,7 @@ impl GuestStore {
                 "LRR-E-UNSUPPORTED",
                 "slice formatting requires its element-window formatting route".into(),
             )),
+            ReferenceLease::Detached(_) => Err(invalid()),
         }
     }
 }

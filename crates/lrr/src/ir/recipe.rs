@@ -958,6 +958,16 @@ impl StableEncode for Recipe {
                 e.option(left, |e, id| e.u32(id.0));
                 e.option(operator, |e, op| e.u32(op.tag()));
             }
+            Op::PointerCast {
+                source,
+                target,
+                destination,
+            } => {
+                e.u32(67);
+                e.u32(source.0);
+                e.record(target.as_ref());
+                e.u32(destination.0);
+            }
             Op::Unsupported(d) => {
                 e.u32(6);
                 e.string(&d.message);

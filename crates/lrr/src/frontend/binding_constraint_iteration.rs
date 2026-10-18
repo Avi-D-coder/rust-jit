@@ -122,7 +122,7 @@ fn with_holes(ty: &TyTerm, at: &mut Vec<Step>, paths: &mut Vec<Vec<Step>>) -> Ty
 }
 /// The numbered holes of an `Item` Type with the projection steps from the
 /// `Item` to each occurrence.
-fn item_holes(term: &TyTerm, at: &mut Vec<Step>, out: &mut Vec<(u32, Vec<Step>)>) {
+pub(super) fn item_holes(term: &TyTerm, at: &mut Vec<Step>, out: &mut Vec<(u32, Vec<Step>)>) {
     match term {
         TyTerm::Infer(key) if key.transaction == hole_transaction() => {
             out.push((key.ordinal, at.clone()))
@@ -216,6 +216,15 @@ fn project_item(item: &TyTerm, steps: &[Step]) -> ItemProjection {
         }
         term = match (step, term) {
             (Step::Deref, TyTerm::Ref(_, _, inner)) => *inner,
+            // `*p` of a raw pointer is its pointee (E-R5-008).
+            (Step::Deref, term)
+                if crate::traits::pointer_terms::as_raw_pointer(&term).is_some() =>
+            {
+                match crate::traits::pointer_terms::as_raw_pointer(&term) {
+                    Some((_, pointee)) => pointee.clone(),
+                    None => return ItemProjection::Unknown,
+                }
+            }
             (Step::Field(position), TyTerm::Tuple(mut members)) => {
                 if (*position as usize) < members.len() {
                     members.swap_remove(*position as usize)
@@ -306,9 +315,35 @@ impl<'a> Component<'a> {
         db: &mut Database,
         ty: &TyTerm,
     ) -> QueryPoll<ItemAnswer> {
-        let Some(into_iterator) = ready!(self.core_trait(db, "iter", "IntoIterator")) else {
+        self.associated_answer(db, ty, "iter", "IntoIterator", "Item")
+    }
+    /// `<ty as Trait>::Name` for a core trait (`module::trait_name`),
+    /// normalized by the shared projection normalizer over the run's impl
+    /// member index. The holes of `ty` stand for its still-unknown parts, so
+    /// the answer relates the projection to those parts.
+    pub(super) fn associated_answer(
+        &mut self,
+        db: &mut Database,
+        ty: &TyTerm,
+        module: &str,
+        trait_name: &str,
+        name: &str,
+    ) -> QueryPoll<ItemAnswer> {
+        let Some(trait_key) = ready!(self.core_trait(db, module, trait_name)) else {
             return QueryPoll::Ready(Ok(ItemAnswer::Unknown));
         };
+        self.associated_answer_of(db, ty, trait_key, name)
+    }
+    /// `<ty as Trait>::Name` for the trait `trait_key`, or for whichever trait
+    /// the Type's unique impl declares `Name` in when `trait_key` is the zero
+    /// digest (the shorthand `T::Name`).
+    pub(super) fn associated_answer_of(
+        &mut self,
+        db: &mut Database,
+        ty: &TyTerm,
+        trait_key: Digest,
+        name: &str,
+    ) -> QueryPoll<ItemAnswer> {
         let Some(environment) = ready!(self.environment(db)) else {
             return QueryPoll::Ready(Ok(ItemAnswer::Unknown));
         };
@@ -320,11 +355,11 @@ impl<'a> Component<'a> {
         let head = with_holes(ty, &mut Vec::new(), &mut paths);
         let projection = TyTerm::Projection(Box::new(ProjectionKey {
             trait_ref: TraitRef {
-                trait_key: into_iterator,
+                trait_key,
                 self_ty: head,
                 args: Vec::new(),
             },
-            item: crate::frontend::member_index::associated_name_key("Item"),
+            item: crate::frontend::member_index::associated_name_key(name),
             item_args: Vec::new(),
         }));
         let sources: Vec<_> = environment.sources().iter().collect();
@@ -337,7 +372,11 @@ impl<'a> Component<'a> {
         ) {
             QueryPoll::Ready(Ok(Some(item))) => item,
             QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(ItemAnswer::Unknown)),
-            QueryPoll::Ready(Err(error)) if super::not_closed(&error) => {
+            // Several candidate impls: rustc's selection by the trait's other
+            // arguments is not repeated here, so the projection is unanswered.
+            QueryPoll::Ready(Err(error))
+                if super::not_closed(&error) || error.code == "LRR-E-NAME-AMBIGUOUS" =>
+            {
                 return QueryPoll::Ready(Ok(ItemAnswer::Unknown));
             }
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),

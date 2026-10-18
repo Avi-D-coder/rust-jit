@@ -562,5 +562,11 @@ mod generic_boundary_tests;
 #[path = "initializer_tests.rs"]
 mod initializer_tests;
 #[cfg(test)]
+#[path = "pointer_tests.rs"]
+mod pointer_tests;
+#[cfg(test)]
+#[path = "local_item_tests.rs"]
+mod local_item_tests;
+#[cfg(test)]
 #[path = "int_method_tests.rs"]
 mod int_method_tests;

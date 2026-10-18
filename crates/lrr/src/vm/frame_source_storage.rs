@@ -37,6 +37,24 @@ impl Frame {
                 }
                 Some(bytes)
             }
+            // A closed fn-pointer view (E-R5-008).
+            TyTerm::Function(function) => {
+                let mut bytes = std::mem::size_of::<
+                    crate::traits::term::Binder<crate::traits::term::FunctionSignature>,
+                >()
+                .checked_add(
+                    function
+                        .value
+                        .parameters
+                        .capacity()
+                        .checked_mul(std::mem::size_of::<TyTerm>())?,
+                )?
+                .checked_add(std::mem::size_of::<TyTerm>())?;
+                for parameter in &function.value.parameters {
+                    bytes = bytes.checked_add(Self::retained_source_heap(parameter)?)?;
+                }
+                bytes.checked_add(Self::retained_source_heap(&function.value.result)?)
+            }
             _ => None,
         }
     }

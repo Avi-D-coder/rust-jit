@@ -489,9 +489,15 @@ pub(crate) fn lower_type(
             nested(reference.ty())?
                 .map(|t| T::Ref(region, reference.mut_token().is_some(), Box::new(t)))
         }
-        ast::Type::ForType(_) | ast::Type::FnPtrType(_) => Some(
-            super::symbolic_headers::capture_function_type(ty, definition, generics, depth)?,
-        ),
+        // `*const T` / `*mut T` (E-R5-008): the reserved-identity nominal.
+        ast::Type::PtrType(pointer) => nested(pointer.ty())?.map(|pointee| {
+            crate::traits::pointer_terms::raw_pointer(pointer.mut_token().is_some(), pointee)
+        }),
+        // A fn pointer whose leaves are not generic parameters (`fn(i32)`)
+        // stays owned syntax for the demand-driven source Type service.
+        ast::Type::ForType(_) | ast::Type::FnPtrType(_) => {
+            super::symbolic_headers::capture_function_type(ty, definition, generics, depth).ok()
+        }
         ast::Type::NeverType(_) => Some(T::Never),
         _ => None,
     };

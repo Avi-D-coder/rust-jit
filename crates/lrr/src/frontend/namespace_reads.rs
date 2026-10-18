@@ -425,23 +425,39 @@ impl NamespaceReads {
                 | NamespaceRead::Name {
                     scope, namespace, ..
                 } => {
-                    let source = match environment.scope_owner(scope) {
-                        SourceScopeOwner::Selected(source) => source,
-                        SourceScopeOwner::Missing | SourceScopeOwner::Ambiguous(_) => {
-                            return QueryPoll::Ready(Ok(NamespaceReadCertification::PendingOwner(
-                                scope.fingerprint(),
-                            )));
+                    // A scope no source owns (a module path a re-export names,
+                    // such as `std::cmp` for `core::cmp`) is decided by the
+                    // nearest owning ancestor's names: its scope certificate.
+                    let mut effective = scope.clone();
+                    let source = loop {
+                        match environment.scope_owner(&effective) {
+                            SourceScopeOwner::Selected(source) => break source,
+                            SourceScopeOwner::Ambiguous(_) => {
+                                return QueryPoll::Ready(Ok(
+                                    NamespaceReadCertification::PendingOwner(scope.fingerprint()),
+                                ));
+                            }
+                            SourceScopeOwner::Missing => {
+                                if effective.module_path.pop().is_none() {
+                                    return QueryPoll::Ready(Ok(
+                                        NamespaceReadCertification::PendingOwner(
+                                            scope.fingerprint(),
+                                        ),
+                                    ));
+                                }
+                            }
                         }
                     };
+                    let aliased = effective != *scope;
                     semantic.record(scope);
                     semantic.u32(namespace.tag());
                     semantic.record(&source.selection().outline);
                     match read {
-                        NamespaceRead::Scope { .. } => {
+                        _ if matches!(read, NamespaceRead::Scope { .. }) || aliased => {
                             semantic.u8(1);
                             let Some(certificate) = checked!(db.current_scope_certificate(
                                 source.selection(),
-                                scope,
+                                &effective,
                                 *namespace
                             )) else {
                                 return QueryPoll::Ready(Ok(
@@ -502,7 +518,9 @@ impl NamespaceReads {
                             }
                             checked!(observe(&request, answer));
                         }
-                        NamespaceRead::CompilerEnvironment(_) => unreachable!(),
+                        NamespaceRead::Scope { .. } | NamespaceRead::CompilerEnvironment(_) => {
+                            unreachable!()
+                        }
                     }
                 }
             }

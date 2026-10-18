@@ -14,6 +14,8 @@ mod vecs;
 mod interior;
 #[path = "cell_promoted.rs"]
 mod promoted;
+#[path = "cell_pointers.rs"]
+mod pointers;
 #[path = "cell_constant_instantiation.rs"]
 pub mod constant_instantiation;
 #[path = "cell_construction_cleanup.rs"]
@@ -268,6 +270,8 @@ pub struct GuestStore {
     leaked: u32,
     /// Run-long promoted constant temporaries (`&[1, 2]`, byte strings).
     promoted: promoted::PromotedStorage,
+    /// Synthetic addresses of cells, strings and functions (E-R5-008).
+    pointers: pointers::PointerTable,
 }
 impl GuestStore {
     // E-R5-006: ignored, remove at callers (`_max_handles`, `_max_bytes`).
@@ -298,6 +302,7 @@ impl GuestStore {
             leak_anchor: None,
             leaked: 0,
             promoted: promoted::PromotedStorage::default(),
+            pointers: pointers::PointerTable::default(),
         })
     }
     pub(crate) fn drop_inventory_installed(&self) -> bool {
@@ -404,6 +409,22 @@ impl GuestStore {
             TypeKey::Slice { element } => Some(TyTerm::Slice(Box::new(
                 self.descriptor_source_term(*element)?,
             ))),
+            // E-R5-008: pointers are reserved-identity nominals / fn terms.
+            TypeKey::RawPtr { mutable, target } => Some(
+                crate::traits::pointer_terms::raw_pointer(
+                    *mutable,
+                    self.descriptor_source_term(*target)?,
+                ),
+            ),
+            TypeKey::Function { params, result } => Some(
+                crate::traits::pointer_terms::fn_pointer(
+                    params
+                        .iter()
+                        .map(|param| self.descriptor_source_term(*param))
+                        .collect::<Option<Vec<_>>>()?,
+                    self.descriptor_source_term(*result)?,
+                ),
+            ),
             _ => None,
         }
     }
@@ -415,7 +436,29 @@ impl GuestStore {
         term: &crate::traits::term::TyTerm,
     ) -> Result<Option<TypeId>, Diagnostic> {
         use crate::traits::term::{ConstTerm, TyTerm};
+        if let Some((mutable, pointee)) = crate::traits::pointer_terms::as_raw_pointer(term) {
+            let Some(target) = self.intern_structural_term(pointee)? else {
+                return Ok(None);
+            };
+            return Ok(Some(self.intern_type(TypeKey::RawPtr { mutable, target })?));
+        }
         Ok(match term {
+            TyTerm::Function(function) => {
+                let mut params = Vec::new();
+                for param in &function.value.parameters {
+                    let Some(id) = self.intern_structural_term(param)? else {
+                        return Ok(None);
+                    };
+                    params.push(id);
+                }
+                let Some(result) = self.intern_structural_term(&function.value.result)? else {
+                    return Ok(None);
+                };
+                Some(self.intern_type(TypeKey::Function {
+                    params: params.into_boxed_slice(),
+                    result,
+                })?)
+            }
             TyTerm::Primitive(primitive) => {
                 Some(super::shape::PrimitiveIdentity::from_recipe(*primitive)?.id())
             }
@@ -465,7 +508,24 @@ impl GuestStore {
         term: &crate::traits::term::TyTerm,
     ) -> Option<TypeId> {
         use crate::traits::term::{ConstTerm, TyTerm};
+        if let Some((mutable, pointee)) = crate::traits::pointer_terms::as_raw_pointer(term) {
+            let target = self.find_structural_term(pointee)?;
+            return self.find_type(&TypeKey::RawPtr { mutable, target });
+        }
         match term {
+            TyTerm::Function(function) => {
+                let params = function
+                    .value
+                    .parameters
+                    .iter()
+                    .map(|param| self.find_structural_term(param))
+                    .collect::<Option<Vec<_>>>()?;
+                let result = self.find_structural_term(&function.value.result)?;
+                self.find_type(&TypeKey::Function {
+                    params: params.into_boxed_slice(),
+                    result,
+                })
+            }
             TyTerm::Primitive(primitive) => super::shape::PrimitiveIdentity::from_recipe(*primitive)
                 .ok()
                 .map(|identity| identity.id()),
@@ -573,6 +633,10 @@ impl GuestStore {
         let cell = self.cells.get(id)?;
         if cell.retired {
             return Err(stale());
+        }
+        // `p as usize`: a pointer value casts as its address (E-R5-008).
+        if let Some(address) = self.pointer_address_operand(id)? {
+            return Ok(Some(address));
         }
         let CellState::Live(value) = cell.state else {
             return Ok(None);
@@ -1261,6 +1325,17 @@ impl GuestStore {
                 )?;
                 self.validate_source_projection_steps(&base.enclosing, &base.source_projections)
             }
+            ReferenceLease::Detached(_) => {
+                // E-R5-008: an address names no lease; only a raw pointer
+                // record may carry one.
+                if !reference.raw
+                    || reference.owner.is_some()
+                    || reference.access != Access::Shared
+                {
+                    return Err(access_fault());
+                }
+                Ok(())
+            }
         }
     }
     fn validate_source_projection_steps(
@@ -1466,7 +1541,7 @@ impl GuestStore {
         place: &Place,
         usage: PlaceUse,
     ) -> Result<ResolvedPlace, PlaceFailure> {
-        let (root, mut target, writable, prefix, mut source_projections, mut window, interior) = match place
+        let (root, mut target, writable, prefix, mut source_projections, mut window, interior, raw_root) = match place
             .root
         {
             PlaceRoot::Cell(id) => {
@@ -1482,10 +1557,25 @@ impl GuestStore {
                     .checked_add(place.projections.len())
                     .ok_or_else(resource)?;
                 checked_chain_bytes(count)?;
-                (root, id, writable, enclosing, Vec::new(), None, false)
+                (root, id, writable, enclosing, Vec::new(), None, false, false)
             }
             PlaceRoot::Deref(id) => {
                 let reference = self.references.get(id)?;
+                if reference.raw
+                    && let ReferenceLease::Detached(address) = &reference.lease
+                {
+                    // E-R5-008: a thin raw pointer re-derives its location from
+                    // its address at the moment of use.
+                    let cell = self.cell_at(*address, reference.target).ok_or_else(|| {
+                        Diagnostic::new(
+                            "LRR-E-POINTER-DANGLING",
+                            "raw pointer designates no live guest location".into(),
+                        )
+                    })?;
+                    let (root, enclosing, _) =
+                        self.canonical_place_root(cell, usage == PlaceUse::Address)?;
+                    (root, cell, true, enclosing, Vec::new(), None, false, true)
+                } else {
                 self.validate_reference_record(reference)?;
                 // A slice reference dereferences to its element window of the
                 // borrowed array location.
@@ -1520,7 +1610,9 @@ impl GuestStore {
                     },
                     window,
                     reference.interior,
+                    reference.raw,
                 )
+                }
             }
         };
         let count = prefix
@@ -1683,7 +1775,8 @@ impl GuestStore {
                 self.place_stamp(target)?
             },
             ty,
-            writable,
+            // A raw pointer dereference is writable (E-R5-008).
+            writable: writable || raw_root,
             source_projections,
             window,
             interior,
@@ -1932,7 +2025,7 @@ impl GuestStore {
     pub(crate) fn dereference_place(&self, place: &Place) -> Result<Place, PlaceFailure> {
         let resolved = self.resolve_place(place)?;
         match self.type_descriptor(resolved.ty)?.key.as_ref() {
-            TypeKey::Ref { .. } => {}
+            TypeKey::Ref { .. } | TypeKey::RawPtr { .. } => {}
             // The builtin box dereference projects the box's heap cell.
             TypeKey::Nominal { identity, .. } if self.owned_box == Some(*identity) => {
                 return self.dereference_box(place);
@@ -1975,7 +2068,7 @@ impl GuestStore {
         let incoming = self.admit_move(source)?;
         let value = match self.type_descriptor(resolved.ty)?.key.as_ref() {
             TypeKey::Primitive(_) => self.preview_scalar(source, Some(resolved.ty))?,
-            TypeKey::Ref { .. } => {
+            TypeKey::Ref { .. } | TypeKey::RawPtr { .. } | TypeKey::Function { .. } => {
                 self.admit_new_contract(Some(resolved.ty), incoming)?;
                 incoming
             }
@@ -2657,6 +2750,9 @@ impl GuestStore {
                     {
                         Ok(())
                     }
+                    // A raw pointer or fn pointer value over a raw record
+                    // (E-R5-008); its pointee may differ from the record's.
+                    TypeKey::RawPtr { .. } | TypeKey::Function { .. } if record.raw => Ok(()),
                     _ => Err(invalid()),
                 }
             }
@@ -2804,6 +2900,10 @@ impl GuestStore {
                 Ok(incoming.map_or(StorageContract::NumericLiteral, StorageContract::Exact))
             }
             StorageContract::Exact(expected) if incoming == Some(expected) => Ok(cell.declared),
+            // A pointer-typed location accepts any pointer of its family.
+            StorageContract::Exact(expected) if self.contract_admits(Some(expected), incoming) => {
+                Ok(cell.declared)
+            }
             _ => Err(ownership()),
         }
     }
@@ -3180,7 +3280,7 @@ impl GuestStore {
         value: ValueRepr,
     ) -> Result<(), Diagnostic> {
         self.validate_value(value)?;
-        if expected.is_some() && self.effective_type(value)? != expected {
+        if expected.is_some() && !self.contract_admits(expected, self.effective_type(value)?) {
             return Err(ownership());
         }
         Ok(())
@@ -3263,6 +3363,8 @@ impl GuestStore {
             } else {
                 IntrinsicRead::CopyScalar
             }),
+            // Raw pointers and fn pointers are Copy (E-R5-008).
+            TypeKey::RawPtr { .. } | TypeKey::Function { .. } => Ok(IntrinsicRead::CopyScalar),
             TypeKey::Facade { .. } if self.types.is_string(TypeId(value.type_id)) => {
                 Ok(IntrinsicRead::Move)
             }
@@ -4003,6 +4105,7 @@ impl GuestStore {
         self.frames.reset(new_epoch)?;
         self.constructions.reset(new_epoch)?;
         self.references.reset(new_epoch)?;
+        self.reset_pointers();
         self.leak_anchor = None;
         self.leaked = 0;
         self.budget = RunBudget::for_epoch(new_epoch)?;

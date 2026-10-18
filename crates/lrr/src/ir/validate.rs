@@ -1202,6 +1202,36 @@ fn verify_inner(
                 }
                 Some(*destination)
             }
+            Op::PointerCast {
+                source,
+                target,
+                destination,
+            } => {
+                use crate::traits::term::RegionTerm;
+                slot(body, *source, SlotKind::Value)?;
+                slot(body, *destination, SlotKind::Value)?;
+                if source == destination {
+                    return Err(invalid("pointer cast aliases its operand"));
+                }
+                let definition = draft.key.body.definition;
+                if !target.is_pointer()
+                    || !target.regions_satisfy(&mut |region| match region {
+                        RegionTerm::Static => true,
+                        RegionTerm::Local {
+                            definition: owner,
+                            start,
+                            end,
+                        } => *owner == definition && start < end,
+                        _ => false,
+                    })
+                {
+                    return Err(invalid(
+                        "pointer cast target is not a pointer type with admitted regions",
+                    ));
+                }
+                charge(&mut bytes, target.heap_bytes())?;
+                Some(*destination)
+            }
             Op::ScopeEnter { scope } | Op::ScopeLeave { scope } => {
                 if scope.0 as usize >= body.scopes().len() {
                     return Err(invalid("recipe scope absent"));

@@ -194,19 +194,25 @@ fn unchanged_local_import_requires_its_actual_dependency_before_module_tail() {
     for edition in [2015, 2018, 2021, 2024] {
         let (_db, plan) = prepare(ORIGINAL, "main", edition);
         let import = plan.context().facts().imports.first().unwrap();
-        let at = ORIGINAL.find("g(Data2").unwrap() + 2;
+        let at = ORIGINAL.find("g(Data2").unwrap();
         // This private request control uses the actual entered NameRef. It may
         // only test the typed import hold; it cannot mint LocalTypePrefix.
-        let site = OrdinaryNameSite {
+        let site = |name: &'static str, at: usize| OrdinaryNameSite {
             source: plan.entered.parent.source(),
             body: &plan.entered.body,
             at: at as u64,
-            name: "Data2",
+            name,
             context: plan.adapter().context(),
             namespace: crate::source::manifest::Namespace::Type,
         };
+        // A named import binds exactly its own alias: a lookup of that name
+        // needs the import's resolution before any module tail...
         assert!(
-            matches!(plan.adapter().lookup_prepared_type_prefix(&site,&plan.type_names,edition).unwrap(),super::super::PrefixResolution::NeedImport(identity) if identity==import.source.identity)
+            matches!(plan.adapter().lookup_prepared_type_prefix(&site("g", at),&plan.type_names,edition).unwrap(),super::super::PrefixResolution::NeedImport(identity) if identity==import.source.identity)
+        );
+        // ...while a lookup of another name (`Data2`) is unaffected by it.
+        assert!(
+            !matches!(plan.adapter().lookup_prepared_type_prefix(&site("Data2", at + 2),&plan.type_names,edition).unwrap(),super::super::PrefixResolution::NeedImport(_))
         );
     }
 }

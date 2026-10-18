@@ -124,6 +124,17 @@ fn parse(
             function_type(function, BTreeMap::new(), scopes, depth + 1, context)
         }
         ast::Type::SliceType(slice) => slice_type(slice, scopes, depth, context, elision),
+        // `*const T` / `*mut T` (E-R5-008): the reserved-identity nominal.
+        ast::Type::PtrType(pointer) => Ok(crate::traits::pointer_terms::raw_pointer(
+            pointer.mut_token().is_some(),
+            parse(
+                &pointer.ty().ok_or_else(unsupported)?,
+                scopes,
+                depth + 1,
+                context,
+                elision,
+            )?,
+        )),
         ast::Type::ArrayType(array) => array_type(array, scopes, depth, context, elision),
         ast::Type::PathType(_) | ast::Type::NeverType(_) => named_type(ty, depth, context),
         _ => Err(unsupported()),
@@ -348,11 +359,9 @@ fn function_type(
     depth: u32,
     context: Option<(Digest, &[DefinitionParameter])>,
 ) -> Result<TyTerm, Diagnostic> {
-    if function.abi().is_some()
-        || function.unsafe_token().is_some()
-        || function.async_token().is_some()
-        || function.const_token().is_some()
-    {
+    // The ABI and `unsafe` qualifiers are not part of a runtime fn pointer
+    // (E-R5-008); `async`/`const` function types do not exist.
+    if function.async_token().is_some() || function.const_token().is_some() {
         return Err(unsupported());
     }
     let mut variable_count = u32::try_from(variables.len()).map_err(|_| limit())?;

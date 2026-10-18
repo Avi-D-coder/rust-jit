@@ -103,6 +103,17 @@ impl RunMachine {
                 },
                 TypeKey::Slice { .. } => break Err(BuiltinSelf::Slice),
                 TypeKey::Array { .. } => break Err(BuiltinSelf::Array),
+                // Raw and fn pointers select impls under their reserved
+                // identities (E-R5-008).
+                TypeKey::RawPtr { mutable: true, .. } => {
+                    break Ok(crate::traits::pointer_terms::mut_pointer_identity());
+                }
+                TypeKey::RawPtr { mutable: false, .. } => {
+                    break Ok(crate::traits::pointer_terms::const_pointer_identity());
+                }
+                TypeKey::Function { .. } => {
+                    break Ok(crate::traits::pointer_terms::fn_pointer_identity());
+                }
                 TypeKey::Tuple(fields) => match u32::try_from(fields.len()) {
                     Ok(arity) => break Err(BuiltinSelf::Tuple(arity)),
                     Err(_) => return QueryPoll::Ready(Err(call_fault("tuple arity overflow"))),

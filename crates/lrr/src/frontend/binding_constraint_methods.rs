@@ -16,7 +16,7 @@ use crate::{
     frontend::member_index::BuiltinSelf,
     ir::{op::PrimitiveType, pc::NodeId},
     source::manifest::ItemKind,
-    syntax::source_constraints::{FactKind, PatternStep, SourceOperator},
+    syntax::source_constraints::{FactKind, SourceOperator},
     traits::term::{ConstTerm, InferVarKey, PlaceholderKey, RegionTerm, TyTerm},
 };
 
@@ -131,12 +131,41 @@ fn probe_self(mut term: &TyTerm) -> Option<Result<Digest, BuiltinSelf>> {
     }
     Some(match term {
         TyTerm::Nominal(identity, _) => Ok(*identity),
+        TyTerm::Primitive(PrimitiveType::Unit) => Err(BuiltinSelf::Tuple(0)),
         TyTerm::Primitive(primitive) => Err(BuiltinSelf::Primitive(*primitive)),
         TyTerm::Str => Err(BuiltinSelf::Str),
         TyTerm::Slice(_) => Err(BuiltinSelf::Slice),
         TyTerm::Array(..) => Err(BuiltinSelf::Array),
+        TyTerm::Tuple(items) => Err(BuiltinSelf::Tuple(u32::try_from(items.len()).ok()?)),
         _ => return None,
     })
+}
+/// rustc's probe at one autoderef step: the methods whose self type is the
+/// step's type, else the methods of the autoref'd `&` / `&mut` forms (an
+/// `impl Trait for &[T]` method taking `self` by value).
+fn probe_methods(
+    members: &crate::frontend::member_index::MemberIndex,
+    self_type: Result<Digest, BuiltinSelf>,
+    name: &str,
+) -> Result<crate::frontend::member_index::MethodAlternatives, crate::core::diagnostic::Diagnostic>
+{
+    let found = members.method_alternatives(self_type, name);
+    match &found {
+        Err(error) if super::not_closed(error) => {}
+        _ => return found,
+    }
+    for mutable in [false, true] {
+        match members.method_alternatives_of(
+            Err(BuiltinSelf::Reference(mutable)),
+            Some(self_type),
+            name,
+        ) {
+            Ok(alternatives) => return Ok(alternatives),
+            Err(error) if super::not_closed(&error) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    found
 }
 
 impl<'a> Component<'a> {
@@ -190,6 +219,13 @@ impl<'a> Component<'a> {
                 };
                 match (fact.operation(), inner) {
                     (Some(SourceOperator::Deref), Some(TyTerm::Ref(_, _, inner))) => Some(*inner),
+                    // `*p` of a raw pointer is its pointee (E-R5-008).
+                    (Some(SourceOperator::Deref), Some(term))
+                        if crate::traits::pointer_terms::as_raw_pointer(&term).is_some() =>
+                    {
+                        crate::traits::pointer_terms::as_raw_pointer(&term)
+                            .map(|(_, pointee)| pointee.clone())
+                    }
                     (
                         Some(SourceOperator::Negate | SourceOperator::Not),
                         Some(term @ (TyTerm::Primitive(_) | TyTerm::Infer(_))),
@@ -243,6 +279,8 @@ impl<'a> Component<'a> {
                             None => None,
                         }
                     }
+                    // A callable value's written result Type.
+                    Some(super::Callee::Bound(bound)) => bound.result.clone(),
                     _ => None,
                 },
             },
@@ -273,7 +311,7 @@ impl<'a> Component<'a> {
                     None => None,
                 }
             }
-            FactKind::Index if fact.flag() => match fact.operand(0) {
+            FactKind::Index if ready!(self.index_is_element(db, node)) => match fact.operand(0) {
                 Some(base) => match ready!(self.expression_type(db, base)) {
                     Some(base) => {
                         ready!(self.project_term(db, &base, &[Step::AutoDeref, Step::Element]))
@@ -329,6 +367,25 @@ impl<'a> Component<'a> {
                 })
             }
             FactKind::Cast => ready!(self.annotation_term(db, node)),
+            // The value of a `match` or `if` has the Type of its first branch
+            // that states one (a diverging branch states none).
+            FactKind::Match | FactKind::If => {
+                let branches: Vec<Option<NodeId>> = if fact.kind() == FactKind::Match {
+                    fact.operands().iter().skip(2).step_by(2).copied().collect()
+                } else {
+                    vec![fact.operand(1), fact.operand(2)]
+                };
+                let mut found = None;
+                for branch in branches.into_iter().flatten() {
+                    if let Some(term) = ready!(self.expression_type(db, branch))
+                        && term != TyTerm::Never
+                    {
+                        found = Some(term);
+                        break;
+                    }
+                }
+                found
+            }
             _ => None,
         }))
     }
@@ -412,7 +469,59 @@ impl<'a> Component<'a> {
     fn constructed_type(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<Option<TyTerm>> {
         let constructed =
             ready!(self.constructor(db, super::nominal::ConstructorSite::Expression(node)));
-        QueryPoll::Ready(Ok(constructed.map(|constructed| constructed.nominal_type())))
+        let Some(constructed) = constructed else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        // A type argument a field's operand states (a bare parameter field,
+        // or a structure around it) is the matching part of that operand's
+        // static Type; the others are left to inference.
+        let plan = self.plan;
+        let fact = match self.fact(node) {
+            Ok(fact) => fact,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut operands: Vec<(u32, NodeId)> = Vec::new();
+        match fact.kind() {
+            FactKind::Call => {
+                for (ordinal, operand) in fact.operands().iter().enumerate().skip(1) {
+                    if let (Some(operand), Ok(field)) = (operand, u32::try_from(ordinal - 1)) {
+                        operands.push((field, *operand));
+                    }
+                }
+            }
+            FactKind::Record => {
+                for (ordinal, row) in plan.record_fields(node).unwrap_or(&[]).iter().enumerate() {
+                    if let (Some(field), Some(operand)) = (
+                        self.written_field(&constructed, *row),
+                        fact.operand(ordinal),
+                    ) {
+                        operands.push((field, operand));
+                    }
+                }
+            }
+            _ => {}
+        }
+        let mut arguments = vec![open(); constructed.type_parameter_count()];
+        for (field, operand) in operands {
+            let Some(actual) = ready!(self.expression_type(db, operand)) else {
+                continue;
+            };
+            for (parameter, path) in constructed.field_parameters(field) {
+                let Some(slot) = arguments.get_mut(parameter as usize) else {
+                    continue;
+                };
+                if *slot != open() {
+                    continue;
+                }
+                if let Some(part) = ready!(self.project_term(db, &actual, &path))
+                    && part != open()
+                {
+                    // `slot` borrows `arguments`; re-index for the write.
+                    arguments[parameter as usize] = part;
+                }
+            }
+        }
+        QueryPoll::Ready(Ok(Some(constructed.nominal_type_with(arguments))))
     }
     /// A path's selected local binding Type or own parameter Type.
     fn path_type(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<Option<TyTerm>> {
@@ -423,12 +532,13 @@ impl<'a> Component<'a> {
         let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("binding use query variant differs")));
         };
-        if observed.pending().is_some() {
+        let local = super::selected_local(observed);
+        if observed.pending().is_some() && local.is_none() {
             // A fieldless constructor named as a value (`None`) has its
             // nominal Type; any other pending goal states nothing.
             return self.constructed_type(db, node);
         }
-        let Some(identity) = observed.local_binding() else {
+        let Some(identity) = local else {
             return match observed.declaration() {
                 Some(declaration) => {
                     let identity = declaration.identity();
@@ -519,67 +629,22 @@ impl<'a> Component<'a> {
     fn binding_type(&mut self, db: &mut Database, pattern: NodeId) -> QueryPoll<Option<TyTerm>> {
         let plan = self.plan;
         let Some(occurrence) = plan.occurrence(pattern) else {
-            return QueryPoll::Ready(Ok(None));
+            // A closure parameter: its written Type, else the parameter Type
+            // the closure is passed for.
+            return self.closure_parameter_type(db, pattern);
         };
-        let mut matched = None;
-        // A `for` pattern is the loop's `Some(PAT)` test: its first step
-        // selects the `Some` field of the head's `Item`.
-        let mut skipped = 0;
-        for edge in plan.uses(occurrence.root) {
-            let Some(parent) = plan.fact(edge.parent) else {
-                continue;
-            };
-            matched = match parent.kind() {
-                FactKind::For if edge.ordinal == 1 => {
-                    skipped = 1;
-                    match parent.operand(0) {
-                        Some(head) => match ready!(self.expression_type(db, head)) {
-                            Some(head) => {
-                                ready!(self.project_term(db, &head, &[Step::Item]))
-                            }
-                            None => None,
-                        },
-                        None => None,
-                    }
-                }
-                FactKind::Let if edge.ordinal == 0 => {
-                    match ready!(self.annotation_term(db, edge.parent)) {
-                        Some(term) => Some(term),
-                        None if parent.annotation().is_some() => None,
-                        None => match parent.operand(1) {
-                            Some(initializer) => ready!(self.expression_type(db, initializer)),
-                            None => None,
-                        },
-                    }
-                }
-                FactKind::Match if edge.ordinal % 2 == 1 => match parent.operand(0) {
-                    Some(scrutinee) => ready!(self.expression_type(db, scrutinee)),
-                    None => None,
-                },
-                _ => None,
-            };
-            break;
-        }
+        let (matched, skipped) = ready!(self.root_matched_type(db, occurrence.root));
         let Some(matched) = matched else {
             return QueryPoll::Ready(Ok(None));
         };
-        let mut steps = Vec::with_capacity(occurrence.steps.len());
-        for step in occurrence.steps.iter().skip(skipped) {
-            steps.push(match *step {
-                PatternStep::Deref => Step::Deref,
-                PatternStep::Field(position) => Step::Field(position),
-                PatternStep::Element => Step::Element,
-                PatternStep::Constructor { slot, written } => match ready!(
-                    self.occurrence_constructor_step(db, occurrence.root, slot, written)
-                ) {
-                    Some(step) => step,
-                    None => return QueryPoll::Ready(Ok(None)),
-                },
-            });
-        }
-        let projected = ready!(self.project_term(db, &matched, &steps));
+        let Some((steps, by_reference)) =
+            ready!(self.occurrence_steps(db, occurrence, skipped, Some(matched.clone())))
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let projected = ready!(self.project_term(db, &matched, &steps[skipped..]));
         QueryPoll::Ready(Ok(projected.map(|term| {
-            if occurrence.by_reference {
+            if by_reference {
                 borrowed(term)
             } else {
                 term
@@ -647,7 +712,7 @@ impl<'a> Component<'a> {
         // arguments, which rustc selects by the argument types): the
         // dispatcher selects at the reached call. Ambiguity rustc would
         // report is not re-enforced here.
-        match members.method_alternatives(self_type, name) {
+        match probe_methods(&members, self_type, name) {
             Ok(alternatives) => match alternatives.functions.as_slice() {
                 [function] => QueryPoll::Ready(Ok(Some(*function))),
                 _ => QueryPoll::Ready(Ok(None)),
@@ -685,13 +750,13 @@ impl<'a> Component<'a> {
             return self.dyn_method(db, principal.0, &name);
         }
         let Some(element) = ready!(self.vec_elements(db, term)) else {
-            return QueryPoll::Ready(Ok(None));
+            return self.overloaded_deref_method(db, members, term, name);
         };
         let target = TyTerm::Slice(Box::new(element));
         let Some(bucket) = probe_self(&target) else {
             return QueryPoll::Ready(Ok(None));
         };
-        match members.method_alternatives(bucket, name) {
+        match probe_methods(members, bucket, name) {
             Ok(alternatives) => QueryPoll::Ready(Ok(match alternatives.functions.as_slice() {
                 [function] => Some(*function),
                 _ => None,
@@ -699,6 +764,44 @@ impl<'a> Component<'a> {
             Err(error) if super::not_closed(&error) => QueryPoll::Ready(Ok(None)),
             Err(error) => QueryPoll::Ready(Err(error)),
         }
+    }
+    /// The method the probe selects after the receiver's overloaded `Deref`
+    /// chain (`String` to `str`, `Rc<T>` to `T`, a user smart pointer to its
+    /// `Target`), to rustc's autoderef `recursion_limit`. The receiver's
+    /// parts map onto the selected method's declared receiver Type by the
+    /// same dereferences (`adjust_receiver`).
+    fn overloaded_deref_method(
+        &mut self,
+        db: &mut Database,
+        members: &crate::frontend::member_index::MemberIndex,
+        receiver: &TyTerm,
+        name: &str,
+    ) -> QueryPoll<Option<Digest>> {
+        let mut current = receiver.clone();
+        for _ in 0..super::RECURSION_LIMIT {
+            if !matches!(current, TyTerm::Nominal(..)) {
+                break;
+            }
+            let Some(mut target) = ready!(self.deref_target(db, &current)) else {
+                break;
+            };
+            while let TyTerm::Ref(_, _, inner) = target {
+                target = *inner;
+            }
+            if let Some(bucket) = probe_self(&target) {
+                match probe_methods(members, bucket, name) {
+                    Ok(alternatives) => {
+                        if let [function] = alternatives.functions.as_slice() {
+                            return QueryPoll::Ready(Ok(Some(*function)));
+                        }
+                    }
+                    Err(error) if super::not_closed(&error) => {}
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            }
+            current = target;
+        }
+        QueryPoll::Ready(Ok(None))
     }
     /// The selected method's declared signature.
     pub(super) fn method_signature(
@@ -776,26 +879,40 @@ impl<'a> Component<'a> {
                 steps = rest;
             }
             let steps = steps.to_vec();
-            match ready!(self.project_parametric(db, &declared, &steps)) {
-                super::generics::TermProjection::Leaf(TyTerm::Primitive(primitive)) => {
-                    return QueryPoll::Ready(self.constrain(call, primitive));
+            // The receiver may have been dereferenced to the declared self
+            // type by the probe (`Vec<T>` to `[T]`, `Rc<T>` to `T`).
+            let Some(candidates) = ready!(self.adjust_receiver(db, call, &declared, steps)) else {
+                self.defer(call, ConstraintDemand::MethodSelection);
+                return QueryPoll::Ready(Ok(()));
+            };
+            let mut handled = false;
+            for steps in candidates {
+                match ready!(self.project_parametric(db, &declared, &steps)) {
+                    super::generics::TermProjection::Leaf(TyTerm::Primitive(primitive)) => {
+                        ready!(QueryPoll::Ready(self.constrain(call, primitive)));
+                        handled = true;
+                    }
+                    // The impl's self type states the part (`impl W<u8> { .. }`).
+                    super::generics::TermProjection::Leaf(term)
+                        if self.open && crate::frontend::call_contracts::closed_term(&term) =>
+                    {
+                        self.candidate(call, term);
+                        handled = true;
+                    }
+                    // The part is the impl's own type parameter: every other
+                    // position of it in the method's signature (the arguments and
+                    // the result) holds the same Type.
+                    super::generics::TermProjection::Parameter(key, remaining)
+                        if key.definition == function =>
+                    {
+                        ready!(self.relate_parameter(db, call, function, key, remaining));
+                        handled = true;
+                    }
+                    _ => {}
                 }
-                // The impl's self type states the part (`impl W<u8> { .. }`).
-                super::generics::TermProjection::Leaf(term)
-                    if self.open && crate::frontend::call_contracts::closed_term(&term) =>
-                {
-                    self.candidate(call, term);
-                    return QueryPoll::Ready(Ok(()));
-                }
-                // The part is the impl's own type parameter: every other
-                // position of it in the method's signature (the arguments and
-                // the result) holds the same Type.
-                super::generics::TermProjection::Parameter(key, remaining)
-                    if key.definition == function =>
-                {
-                    return self.relate_parameter(db, call, function, key, remaining);
-                }
-                _ => {}
+            }
+            if handled {
+                return QueryPoll::Ready(Ok(()));
             }
         }
         // The declared goals, read without recording this component's own
@@ -852,7 +969,7 @@ impl<'a> Component<'a> {
                     self.constrain(index, PrimitiveType::Usize)
                 ));
             }
-            _ => self.unrecorded = true,
+            _ => self.mark_unrecorded(),
         }
         QueryPoll::Ready(Ok(()))
     }

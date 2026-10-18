@@ -106,7 +106,8 @@ pub(crate) enum NameForm {
 pub(crate) struct PatternName {
     pub(crate) spelling: String,
     pub(crate) form: NameForm,
-    /// A plain identifier that may name a block-local Value item: the
+    /// A plain identifier, or the single-name path of a path, tuple-struct
+    /// or record pattern, that a block-local item or `use` may bind: the
     /// dispatcher selects it through the entered lexical Value goal of this
     /// indexed pattern node (block items shadow module items), never by a
     /// module-level lookup of its spelling.
@@ -589,15 +590,25 @@ impl Builder<'_> {
     /// value path or callee so it resolves through the same route.
     fn path_slot(
         &mut self,
+        owner: &ast::Pat,
         path: Option<ast::Path>,
         form: NameForm,
     ) -> Result<Result<u32, String>, Diagnostic> {
         let Some(path) = path else {
             return Ok(Err("pattern path absent".into()));
         };
+        // A single name a block item or `use` may bind is selected through
+        // the entered lexical Value goal of the pattern itself (block items
+        // shadow module items), never by a module-level lookup.
+        let lexical = self.parsed.pattern_path_binder(&path, self.index.cfg())?;
         match self.parsed.written_pattern_path(path, self.index.cfg())? {
             super::value_paths::WrittenValuePath::Spelled(spelling) => {
-                self.slot(&spelling, form).map(Ok)
+                let slot = self.slot(&spelling, form)?;
+                if lexical {
+                    let occurrence = self.indexed(owner)?;
+                    self.names[slot as usize].lexical = Some(occurrence);
+                }
+                Ok(Ok(slot))
             }
             super::value_paths::WrittenValuePath::Refused(reason) => Ok(Err(reason.into())),
         }
@@ -689,7 +700,7 @@ impl Builder<'_> {
             ast::Pat::RestPat(_) => {
                 PatternNode::Unsupported("rest pattern outside a tuple or slice".into())
             }
-            ast::Pat::PathPat(path) => match self.path_slot(path.path(), NameForm::Path)? {
+            ast::Pat::PathPat(path) => match self.path_slot(pattern, path.path(), NameForm::Path)? {
                 Ok(slot) => PatternNode::Constructor {
                     slot,
                     form: ConstructorForm::Path,
@@ -714,7 +725,7 @@ impl Builder<'_> {
                     }
                     items.push(self.build(&item, depth + 1)?);
                 }
-                match self.path_slot(tuple.path(), NameForm::Tuple)? {
+                match self.path_slot(pattern, tuple.path(), NameForm::Tuple)? {
                     Ok(slot) => PatternNode::Constructor {
                         slot,
                         form: ConstructorForm::Tuple {
@@ -778,7 +789,11 @@ impl Builder<'_> {
                     fields.push(node);
                 }
                 let rest = list.rest_pat().is_some();
-                match self.path_slot(record.path(), NameForm::Record(names.into_boxed_slice()))? {
+                match self.path_slot(
+                    pattern,
+                    record.path(),
+                    NameForm::Record(names.into_boxed_slice()),
+                )? {
                     Ok(slot) => PatternNode::Constructor {
                         slot,
                         form: ConstructorForm::Record {

@@ -178,6 +178,14 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredTypeGo
                 "entered Type parameter needs reached source substitution",
             )));
         }
+        // An alias the owning alias service normalized to a primitive is that
+        // primitive's source Type.
+        NamedTypePreparation::Alias(crate::frontend::type_aliases::AliasTarget::Type(
+            crate::traits::term::TyTerm::Primitive(primitive),
+        )) => match SourceType::selected_primitive(primitive) {
+            Ok(source) => source,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        },
         NamedTypePreparation::Alias(_) => {
             return QueryPoll::Ready(Err(fault(
                 "entered Type alias needs contextual normalization",

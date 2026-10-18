@@ -15,6 +15,9 @@ pub(crate) struct UnsizeCoercion {
     access: Access,
     slice: TypeId,
     len: u32,
+    /// A pointer coercion (`&T` to `*const T`, fn item to fn pointer;
+    /// E-R5-008) rather than an unsizing of an array.
+    pointer: bool,
 }
 
 impl GuestStore {
@@ -25,6 +28,15 @@ impl GuestStore {
         value: ValueRepr,
         expected: TypeId,
     ) -> Result<Option<UnsizeCoercion>, Diagnostic> {
+        // `&T` to `*const T`, a function item to a fn pointer (E-R5-008).
+        if (value.kind == 9 || value.kind == 8) && self.pointer_coercion(value, expected)? {
+            return Ok(Some(UnsizeCoercion {
+                access: Access::Shared,
+                slice: expected,
+                len: 0,
+                pointer: true,
+            }));
+        }
         // `Box<[T; N]>` -> `Box<[T]>` (see `cell_boxes.rs`).
         if value.kind == 8 {
             return Ok(self
@@ -33,6 +45,7 @@ impl GuestStore {
                     access: Access::Shared,
                     slice,
                     len,
+                    pointer: false,
                 }));
         }
         if value.kind != 9 {
@@ -86,6 +99,7 @@ impl GuestStore {
             },
             slice: *slice,
             len,
+            pointer: false,
         }))
     }
     /// Consume an owned reference value and publish its coerced `[T]` view.
@@ -99,6 +113,9 @@ impl GuestStore {
         let coercion = self
             .unsizing_coercion(value, expected)?
             .ok_or_else(ownership)?;
+        if coercion.pointer {
+            return self.coerce_to_pointer(value, expected);
+        }
         if value.kind == 8 {
             return self.coerce_unsized_box(value, expected);
         }
@@ -193,6 +210,7 @@ impl GuestStore {
         match &record.lease {
             ReferenceLease::Elements(elements) => Ok(u64::from(elements.len)),
             ReferenceLease::Buffer(buffer) => Ok(self.strings.resolve(*buffer)?.len() as u64),
+            ReferenceLease::Detached(_) => Err(invalid()),
             ReferenceLease::Location(_) => match self.types.descriptor(record.target)?.key.as_ref()
             {
                 TypeKey::Array { len, .. } => Ok(u64::from(*len)),

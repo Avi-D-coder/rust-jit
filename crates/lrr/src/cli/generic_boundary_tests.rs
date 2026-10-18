@@ -192,3 +192,80 @@ fn primitive_cast_results_carry_their_target_type_as_a_local_source() {
         "Less false\n44 , 44\n6\n",
     );
 }
+
+#[test]
+fn macro_labels_are_hygienic_for_break_and_continue() {
+    // A macro's own `'x` is not the caller's `'x`: the call-site `break 'x`
+    // and `continue 'x` select the caller's enclosing loop.
+    prints(
+        "label-hygiene",
+        "macro_rules! loop_x {
+    ($e: expr) => {
+        'x: loop {
+            $e
+        }
+    };
+}
+fn main() {
+    let mut n = 0;
+    'x: for _i in 0..3 {
+        n += 1;
+        loop_x!(break 'x);
+        n += 100;
+    }
+    'x: for _i in 0..3 {
+        n += 1;
+        loop_x!(continue 'x);
+        #[allow(unreachable_code)]
+        { n += 100; }
+    }
+    println!(\"{}\", n);
+}
+",
+        "4\n",
+    );
+}
+
+#[test]
+fn overloaded_deref_in_a_scrutinee_follows_the_mutability_of_its_ref_bindings() {
+    // `match *b { ref mut n => .. }` and `let ref mut z = *y` use `DerefMut`;
+    // a `ref` binding uses `Deref`; any `ref mut` among the bindings of a
+    // pattern selects `DerefMut`.
+    prints(
+        "deref-ref-patterns",
+        "use std::ops::{Deref, DerefMut};
+struct DerefOk<T>(T);
+struct DerefMutOk<T>(T);
+impl<T> Deref for DerefOk<T> {
+    type Target = T;
+    fn deref(&self) -> &T { &self.0 }
+}
+impl<T> DerefMut for DerefOk<T> {
+    fn deref_mut(&mut self) -> &mut T { panic!(\"wrong: DerefMut\") }
+}
+impl<T> Deref for DerefMutOk<T> {
+    type Target = T;
+    fn deref(&self) -> &T { panic!(\"wrong: Deref\") }
+}
+impl<T> DerefMut for DerefMutOk<T> {
+    fn deref_mut(&mut self) -> &mut T { &mut self.0 }
+}
+fn main() {
+    let mut b = DerefMutOk(0i32);
+    match *b { ref mut n => { *n += 1i32; } }
+    let mut y = DerefMutOk(1i32);
+    let ref mut z = *y;
+    *z += 1i32;
+    let b = DerefOk(2i32);
+    match *b { ref n => { assert_eq!(*n, 2i32); } }
+    let y = DerefOk(3i32);
+    let ref z = *y;
+    assert_eq!(*z, 3i32);
+    let mut m = DerefMutOk((0i32, 9i32));
+    match *m { (ref a, ref mut c) => { *c += *a; } }
+    println!(\"ok {} {}\", b.0, y.0);
+}
+",
+        "ok 2 3\n",
+    );
+}

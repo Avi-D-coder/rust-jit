@@ -10,7 +10,7 @@
 //! projection descends through has an impl with an explicit other `Rhs`
 //! (`impl PartialEq<Other> for T`), in which case selection by the other
 //! operand's Type is the dispatcher's and the relation stays unrecorded.
-use super::{Component, ConstraintDemand, Step};
+use super::{Component, ConstraintDemand, Step, Via};
 use crate::{
     core::digest::Digest,
     db::{memo::Database, poll::QueryPoll},
@@ -88,17 +88,22 @@ impl<'a> Component<'a> {
         &mut self,
         db: &mut Database,
         operand: NodeId,
+        steps: &[Step],
     ) -> QueryPoll<Option<bool>> {
         let Some(mut term) = ready!(self.expression_type(db, operand)) else {
             return QueryPoll::Ready(Ok(None));
         };
-        let steps = self.via.steps.clone();
-        for step in &steps {
+        for step in steps {
             let mut head = &term;
             while let TyTerm::Ref(_, _, inner) = head {
                 head = inner;
             }
+            // A growable array compares element-wise with every sequence
+            // (`Vec<T>: PartialEq<[U; N]>`, `PartialEq<[U]>`,
+            // `PartialEq<Vec<U>>`): those impls' `T: PartialEq<U>` bounds
+            // relate elements, which hold primitive numbers of one Type.
             if let TyTerm::Nominal(definition, _) = head
+                && ready!(self.vec_elements(db, head)).is_none()
                 && !ready!(self.self_rhs_only(db, *definition))
             {
                 return QueryPoll::Ready(Ok(Some(false)));
@@ -148,6 +153,33 @@ impl<'a> Component<'a> {
         QueryPoll::Ready(Ok(true))
     }
 
+    /// The current member's projection as the other comparison operand
+    /// states it: a growable array's element is `TypeArgument(0)` to the
+    /// declared Types that name it and `Element` to the arrays and slices it
+    /// compares with (and to its own element projection), so the position
+    /// of a `Vec<T>` operand is rewritten to the `Element` step.
+    fn mirrored_via(&mut self, db: &mut Database, operand: NodeId) -> QueryPoll<Via> {
+        let mut via = self.via.clone();
+        let Some(mut term) = ready!(self.expression_type(db, operand)) else {
+            return QueryPoll::Ready(Ok(via));
+        };
+        let source = self.via.steps.clone();
+        for (index, step) in source.iter().enumerate() {
+            let mut head = &term;
+            while let TyTerm::Ref(_, _, inner) = head {
+                head = inner;
+            }
+            if *step == Step::TypeArgument(0) && ready!(self.vec_elements(db, head)).is_some() {
+                via.steps[index] = Step::Element;
+            }
+            term = match ready!(self.project_term(db, &term, std::slice::from_ref(step))) {
+                Some(next) => next,
+                None => break,
+            };
+        }
+        QueryPoll::Ready(Ok(via))
+    }
+
     /// The comparison `parent` of the current member `node` when the member
     /// sits inside an aggregate: both operands hold the same Type at that
     /// depth, provided no operand whose Type is stated has an impl naming
@@ -162,15 +194,21 @@ impl<'a> Component<'a> {
     ) -> QueryPoll<()> {
         let mut verified = false;
         let mut refused = false;
-        for operand in [Some(node), other].into_iter().flatten() {
-            match ready!(self.self_rhs_projection(db, operand)) {
+        // The other operand holds the member at the mirrored projection.
+        let mirrored = ready!(self.mirrored_via(db, node));
+        let own = self.via.steps.clone();
+        for (operand, steps) in [(Some(node), own), (other, mirrored.steps.clone())] {
+            let Some(operand) = operand else {
+                continue;
+            };
+            match ready!(self.self_rhs_projection(db, operand, &steps)) {
                 Some(true) => verified = true,
                 Some(false) => refused = true,
                 None => {}
             }
         }
         if verified && !refused {
-            self.expression(other);
+            self.expression_via(other, mirrored);
         } else {
             self.defer(parent, ConstraintDemand::ExpressionRelation);
         }

@@ -138,7 +138,7 @@ fn copied_original_token_origins_never_restore_original_structural_position() {
     let original = assembly.occurrences.occurrence(original_name).unwrap();
     assert!(matches!(original, SourceOccurrence::Original { .. }));
     let before_parsed = ParsedFile::from_syntax_snapshot(
-        Arc::new(assembly.tree.snapshot().unwrap()),
+        assembly.tree.snapshot().unwrap(),
         provider.profile().clone(),
     )
     .unwrap();

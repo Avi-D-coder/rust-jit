@@ -67,7 +67,7 @@ impl SourceSyntaxAssembly {
             .find(|anchor| anchor.original_definition() == definition)
             .and_then(OriginalDeclarationAnchor::body_range)
             .ok_or_else(|| fault("selected assembly body anchor absent"))?;
-        let snapshot = Arc::new(self.tree.snapshot().map_err(adapter)?);
+        let snapshot = self.tree.snapshot().map_err(adapter)?;
         verify_calls(&self.calls, &snapshot.syntax().calls)?;
         let parsed = ParsedFile::from_syntax_snapshot(
             snapshot.clone(),
@@ -132,7 +132,7 @@ impl SourceSyntaxAssembly {
         &self,
         target: &GeneratedBodyTarget,
     ) -> Result<(SourceRange, SourceRange, Option<(Digest, Digest)>), Diagnostic> {
-        let snapshot = Arc::new(self.tree.snapshot().map_err(adapter)?);
+        let snapshot = self.tree.snapshot().map_err(adapter)?;
         verify_calls(&self.calls, &snapshot.syntax().calls)?;
         let parsed = ParsedFile::from_syntax_snapshot(
             snapshot.clone(),

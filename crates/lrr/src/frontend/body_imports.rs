@@ -67,7 +67,6 @@ pub(super) fn lookup(
             &mut bytes,
         )?;
         if let Some(input) = prefix.pending.first() {
-            eprintln!("TMPDBG prefix pending {:?}", input);
             return Ok(Some(PathLookup::NeedInput(*input)));
         }
         if !prefix.denied.is_empty() {
@@ -130,7 +129,6 @@ pub(super) fn lookup(
                     continue;
                 }
                 if let Some(input) = row.attribute_input {
-                    eprintln!("TMPDBG attribute_input {:?}", input);
                     return Ok(Some(PathLookup::NeedInput(input)));
                 }
                 if name(row, edition)?.as_ref() == Some(&first) {
@@ -168,7 +166,6 @@ pub(super) fn lookup(
                     &mut bytes,
                 )?;
                 if let Some(input) = target.pending.first() {
-                    eprintln!("TMPDBG glob target pending {:?}", input);
                     return Ok(Some(PathLookup::NeedInput(*input)));
                 }
                 if !target.denied.is_empty() {
@@ -369,7 +366,6 @@ impl Candidates {
         }
         self.add(strong)?;
         if let Some(input) = self.pending.first() {
-            eprintln!("TMPDBG finish pending {:?}", input);
             return Ok(PathLookup::NeedInput(*input));
         }
         Ok(match self.definitions.len() {

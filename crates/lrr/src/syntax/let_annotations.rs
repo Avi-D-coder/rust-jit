@@ -42,6 +42,17 @@ pub(crate) enum AnnotationShape {
     Infer,
     /// `dyn Trait`: the principal trait `PathType`'s canonical Syntax node.
     Dyn(NodeId),
+    /// `*const T` / `*mut T` (E-R5-008).
+    Ptr {
+        mutable: bool,
+        target: Box<AnnotationShape>,
+    },
+    /// `fn(A) -> R`, `unsafe fn(..)`, `extern "C" fn(..)`: the ABI and
+    /// `unsafe` qualifiers are not part of the runtime fn pointer.
+    FnPtr {
+        params: Vec<AnnotationShape>,
+        result: Box<AnnotationShape>,
+    },
 }
 pub(crate) struct LetAnnotationSite {
     pub(crate) range: SourceRange,
@@ -235,9 +246,10 @@ impl ParsedFile {
                 };
                 let region = match reference.lifetime() {
                     Some(lifetime) if lifetime.syntax().text() == "'static" => RegionTerm::Static,
-                    // A named region of the enclosing signature needs its
-                    // generic region binding; it is not an elided local one.
-                    Some(lifetime) if lifetime.syntax().text() != "'_" => return Ok(None),
+                    // A named region of the enclosing signature: regions are
+                    // not runtime data, so the annotation names it erased, as
+                    // every other written-type kernel does.
+                    Some(lifetime) if lifetime.syntax().text() != "'_" => RegionTerm::Static,
                     _ => {
                         let range = reference.syntax().text_range();
                         RegionTerm::Local {
@@ -251,6 +263,57 @@ impl ParsedFile {
                     region,
                     mutable: reference.mut_token().is_some(),
                     target: Box::new(target),
+                }
+            }
+            ast::Type::PtrType(pointer) => {
+                let Some(target) = pointer.ty() else {
+                    return Ok(None);
+                };
+                let Some(target) = self.annotation_shape(body, index, definition, &target)? else {
+                    return Ok(None);
+                };
+                AnnotationShape::Ptr {
+                    mutable: pointer.mut_token().is_some(),
+                    target: Box::new(target),
+                }
+            }
+            // `for<'a> fn(&'a T)`: the binder names regions only.
+            ast::Type::ForType(for_type) => {
+                let Some(inner @ ast::Type::FnPtrType(_)) = for_type.ty() else {
+                    return Ok(None);
+                };
+                return self.annotation_shape(body, index, definition, &inner);
+            }
+            ast::Type::FnPtrType(function) => {
+                let Some(list) = function.param_list() else {
+                    return Ok(None);
+                };
+                let mut params = Vec::new();
+                for parameter in list.params() {
+                    let Some(ty) = parameter.ty() else {
+                        return Ok(None);
+                    };
+                    let Some(shape) = self.annotation_shape(body, index, definition, &ty)? else {
+                        return Ok(None);
+                    };
+                    params.push(shape);
+                }
+                let result = match function.ret_type() {
+                    Some(ret) => {
+                        let Some(ty) = ret.ty() else {
+                            return Ok(None);
+                        };
+                        let Some(shape) = self.annotation_shape(body, index, definition, &ty)?
+                        else {
+                            return Ok(None);
+                        };
+                        shape
+                    }
+                    None => AnnotationShape::Tuple(Vec::new()),
+                };
+                AnnotationShape::FnPtr {
+                    params,
+                    result: Box::new(result),
                 }
             }
             ast::Type::InferType(_) => AnnotationShape::Infer,

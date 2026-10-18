@@ -98,22 +98,37 @@ impl RunMachine {
             };
             return match self.entered_value_declaration(db, key) {
                 QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(PatternTarget::Binding)),
-                QueryPoll::Ready(Ok(Some((identity, kind)))) => {
-                    let module_item = self
-                        .sources
-                        .iter()
-                        .any(|source| source.outline_item(identity).is_some());
-                    // A block-local constructor needs its local type schema;
-                    // its module-level spelling must never stand in for it.
-                    if !module_item
-                        && !matches!(kind, Some(ItemKind::Constant | ItemKind::Function))
-                    {
+                QueryPoll::Ready(Ok(Some(selected))) => {
+                    // A constructor (a local or imported struct, an enum
+                    // variant) binds through the service constructor
+                    // expressions use.
+                    match self.lexical_constructor(db, &selected) {
+                        QueryPoll::Ready(Ok(Some(bound))) => {
+                            return self.pattern_constructor_target(
+                                db,
+                                name,
+                                bound,
+                                selected
+                                    .variant
+                                    .as_ref()
+                                    .map(|v| v.name.as_str())
+                                    .or(selected.rooted.as_deref()),
+                            );
+                        }
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                    // `Root::member` that names no variant of the selected
+                    // enum: an associated item of a block-scoped or imported
+                    // type is not selected here.
+                    if selected.rooted.is_some() {
                         return QueryPoll::Ready(Err(unsupported(format!(
-                            "pattern `{}` names a block-local constructor; local type schemas await integration",
+                            "pattern path `{}` names an associated item of a block-scoped or imported type; its member selection awaits integration",
                             name.spelling
                         ))));
                     }
-                    self.pattern_declaration_target(db, name, identity, kind)
+                    self.pattern_declaration_target(db, name, selected.identity, selected.kind)
                 }
                 QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
@@ -255,6 +270,17 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         };
+        self.pattern_constructor_target(db, name, bound, variant.as_ref().map(|v| v.name.as_str()))
+    }
+    /// The matcher target of a bound constructor, mapping written record
+    /// fields to declaration ordinals through its declaration's schema.
+    pub(super) fn pattern_constructor_target(
+        &mut self,
+        db: &mut Database,
+        name: &PatternName,
+        bound: crate::frontend::nominal_constructors::BoundConstructor,
+        variant_name: Option<&str>,
+    ) -> QueryPoll<PatternTarget> {
         let ordinals: Box<[u32]> = match &name.form {
             NameForm::Record(written) => {
                 let schema = match db.fetch(
@@ -268,7 +294,7 @@ impl RunMachine {
                 let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
                     return QueryPoll::Ready(Err(call_fault("record pattern schema differs")));
                 };
-                let recipe = match schema.variant(variant.as_ref().map(|v| v.name.as_str())) {
+                let recipe = match schema.variant(variant_name) {
                     Ok(recipe) => recipe,
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 };

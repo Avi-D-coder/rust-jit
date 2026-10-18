@@ -1166,13 +1166,57 @@ fn parameter_from(
     }
     Ok(None)
 }
+/// The lifetime token range of the label of the loop or block at `node`.
+fn label_lifetime_range(
+    parsed: &ParsedFile,
+    index: &BodyIndex,
+    body: &BodyHandle,
+    node: NodeId,
+) -> Result<Option<crate::syntax::spans::SourceRange>, Diagnostic> {
+    let structural = &index.nodes()[node.0 as usize];
+    let start = body
+        .range
+        .start
+        .checked_add(structural.range.start)
+        .ok_or_else(|| error("label source start overflow"))?;
+    let end = body
+        .range
+        .start
+        .checked_add(structural.range.end)
+        .ok_or_else(|| error("label source end overflow"))?;
+    let root = parsed.entered_body_root(body)?;
+    let labeled = root
+        .covering_element(ra_ap_syntax::TextRange::new(start.into(), end.into()))
+        .ancestors()
+        .find(|syntax| {
+            let range = syntax.text_range();
+            u32::from(range.start()) == start && u32::from(range.end()) == end
+        });
+    let lifetime = labeled.and_then(|syntax| match ast::Expr::cast(syntax)? {
+        ast::Expr::LoopExpr(e) => e.label(),
+        ast::Expr::WhileExpr(e) => e.label(),
+        ast::Expr::ForExpr(e) => e.label(),
+        ast::Expr::BlockExpr(e) => e.label(),
+        _ => None,
+    });
+    Ok(lifetime
+        .and_then(|label| label.lifetime())
+        .map(|lifetime| super::ast_adapter::range(lifetime.syntax().text_range())))
+}
 fn control_target(
     parsed: &ParsedFile,
     index: &BodyIndex,
+    body: &BodyHandle,
     node: &super::body_index::StructuralNode,
     lifetime: Option<ast::Lifetime>,
     continuing: bool,
 ) -> Result<Option<super::body_index::LabelId>, Diagnostic> {
+    // Labels are hygienic like locals: the written label must share the
+    // label occurrence's local-name class (a macro's own `'x` is not the
+    // caller's `'x`).
+    let wanted_range = lifetime
+        .as_ref()
+        .map(|l| super::ast_adapter::range(l.syntax().text_range()));
     let wanted = lifetime
         .and_then(|l| l.lifetime_ident_token())
         .map(|t| t.text().to_string());
@@ -1184,12 +1228,25 @@ fn control_target(
             .labels()
             .get(id.0 as usize)
             .ok_or_else(|| error("control label ancestry absent"))?;
-        if wanted.as_ref().map_or(label.is_loop, |wanted| {
+        let named = wanted.as_ref().map_or(label.is_loop, |wanted| {
             label
                 .spelling
                 .as_ref()
                 .is_some_and(|s| canonical(s).is_some() && canonical(s) == canonical(wanted))
-        }) {
+        });
+        let hygienic = named
+            && match (wanted_range, wanted.is_some()) {
+                (Some(wanted_range), true) => {
+                    match label_lifetime_range(parsed, index, body, label.node)? {
+                        Some(label_range) => {
+                            parsed.same_local_name_context(wanted_range, label_range)?
+                        }
+                        None => true,
+                    }
+                }
+                _ => true,
+            };
+        if hygienic {
             return Ok((!continuing || label.is_loop).then_some(id));
         }
         target = label.parent;
@@ -3210,24 +3267,6 @@ impl ParsedFile {
                                                 == target_name
                                         })
                                     }
-                                    ast::Stmt::Item(ast::Item::Struct(item)) if qualified => {
-                                        item.name().is_some_and(|n| {
-                                            MacroName::parse(n.text(), self.edition).ok()
-                                                == target_name
-                                        })
-                                    }
-                                    ast::Stmt::Item(ast::Item::Enum(item)) if qualified => {
-                                        item.name().is_some_and(|n| {
-                                            MacroName::parse(n.text(), self.edition).ok()
-                                                == target_name
-                                        })
-                                    }
-                                    ast::Stmt::Item(ast::Item::Union(item)) if qualified => {
-                                        item.name().is_some_and(|n| {
-                                            MacroName::parse(n.text(), self.edition).ok()
-                                                == target_name
-                                        })
-                                    }
                                     _ => false,
                                 })
                             });
@@ -3236,10 +3275,14 @@ impl ParsedFile {
                     // before any argument or call opcode; it is not a name proof.
                     let lexical_function = relative
                         && !qualified
-                        && self.generated_origin.is_none()
                         && self.lexical_function_recipe_candidate(&path, index.cfg())?;
+                    // A callee (or two-segment path root) a block-level import
+                    // or item binds is selected by the dispatcher's entered
+                    // lexical Value goal, which refuses what it cannot select
+                    // rather than falling back to a same-named module item.
                     if local_item && !lexical_function
                         || relative
+                            && components.len() > 2
                             && self.enclosing_import_may_bind(
                                 path.syntax(),
                                 &root_name,
@@ -3428,7 +3471,7 @@ impl ParsedFile {
             }
             (SyntaxKind::BREAK_EXPR, phase) => {
                 let expression = ast::BreakExpr::cast(syntax).expect("checked break");
-                let Some(target) = control_target(self, index, node, expression.lifetime(), false)?
+                let Some(target) = control_target(self, index, body, node, expression.lifetime(), false)?
                 else {
                     return unsupported("break target is absent");
                 };
@@ -3513,7 +3556,7 @@ impl ParsedFile {
             }
             (SyntaxKind::CONTINUE_EXPR, Phase::Entry) => {
                 let expression = ast::ContinueExpr::cast(syntax).expect("checked continue");
-                let Some(target) = control_target(self, index, node, expression.lifetime(), true)?
+                let Some(target) = control_target(self, index, body, node, expression.lifetime(), true)?
                 else {
                     return unsupported("continue target is absent or not a loop");
                 };
@@ -4424,11 +4467,49 @@ impl ParsedFile {
                             == coercion.range
                     })
                 {
+                    // E-R5-008: a written raw-pointer or fn-pointer target. An
+                    // unsuffixed integer literal operand is `usize` (rustc's
+                    // `0 as *const T`); every other operand is evaluated
+                    // as written and then converted by `Op::PointerCast`.
+                    let pointer_default = if coercion.written.is_pointer() {
+                        super::numeric_fallback::cast_operand(
+                            &child,
+                            crate::ir::op::PrimitiveType::Usize,
+                        )?
+                    } else {
+                        None
+                    };
                     let child = id_for(index, body, child.syntax())?;
                     let source = index.nodes()[child.0 as usize]
                         .value
                         .ok_or_else(|| error("cast operand value absent"))?;
                     let destination = node.value.ok_or_else(|| error("cast value absent"))?;
+                    if coercion.written.is_pointer() {
+                        return match phase {
+                            Phase::Entry => draft(
+                                index,
+                                key,
+                                vec![Op::SetHint {
+                                    child: source,
+                                    hint: pointer_default
+                                        .map(HintRecipe::Primitive)
+                                        .unwrap_or(HintRecipe::None),
+                                }],
+                                RecipeExit::Next(index.pc(child, Phase::Entry)?),
+                            ),
+                            Phase::Operand(0) => draft(
+                                index,
+                                key,
+                                vec![Op::PointerCast {
+                                    source,
+                                    target: std::sync::Arc::clone(&coercion.written),
+                                    destination,
+                                }],
+                                RecipeExit::Next(return_pc(index, body, expression.syntax())?),
+                            ),
+                            _ => unsupported("invalid pointer cast phase"),
+                        };
+                    }
                     return match phase {
                         Phase::Entry => draft(
                             index,
@@ -5345,9 +5426,10 @@ impl ParsedFile {
         key: &PcKey,
         expected_name: &str,
     ) -> Result<bool, Diagnostic> {
-        if self.generated_origin.is_some() || expected_name.contains("::") {
-            return Ok(false);
-        }
+        // The probe is a conservative syntactic superset (any same-named
+        // block item or import "may bind"; the entered goal decides exactly),
+        // so it applies equally to assembled or macro-generated syntax:
+        // answering `false` there would hand the name to the module route.
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("lexical dispatch caller body identity differs"));
         }
@@ -5355,11 +5437,19 @@ impl ParsedFile {
             return Err(error("lexical dispatch exact PC differs"));
         }
         let node = &index.nodes()[key.node as usize];
+        // A qualified callee that is no ordinary call (a lowered range or
+        // other language call) is never a block-lexical path.
+        if expected_name.contains("::") && node.role != NodeRole::Expression(ExpressionKind::Call) {
+            return Ok(false);
+        }
         // A verified assertion predicate CallSeal belongs to its Macro PC,
         // whose operands are opaque token trees, not indexed CallExpr nodes.
         // RuntimeMacroPlan already requires the exact original predicate and
         // refuses lexical shadowing before preparing this module-call recipe.
         if node.role == NodeRole::Expression(ExpressionKind::Macro) {
+            if expected_name.contains("::") {
+                return Ok(false);
+            }
             self.require_module_predicate_call(body, index, key, expected_name)?;
             return Ok(false);
         }
@@ -5389,6 +5479,21 @@ impl ParsedFile {
         let Some(ast::Expr::PathExpr(path)) = call.expr() else {
             return Err(error("lexical dispatch direct source path absent"));
         };
+        // `Root::member`: lexical only if a block item or import may bind
+        // its root; the entered goal then decides whether it actually does.
+        if expected_name.contains("::") {
+            let Some(written) = path.path() else {
+                return Ok(false);
+            };
+            return Ok(match Self::lexical_root_name(&written) {
+                Some((root, Some(member)))
+                    if format!("{}::{}", root.text(), member.text()) == expected_name =>
+                {
+                    self.lexical_binder_may_bind(&path, index.cfg())?
+                }
+                _ => false,
+            });
+        }
         let name = path
             .path()
             .and_then(|path| path.segment())
@@ -5399,7 +5504,11 @@ impl ParsedFile {
         {
             return Err(error("lexical dispatch recipe name differs from source"));
         }
-        self.lexical_function_recipe_candidate(&path, index.cfg())
+        // Any block item or block-level import that may bind the callee's
+        // name: functions, tuple-struct and variant constructors, imported
+        // functions. The dispatcher selects it through its lexical Value goal.
+        Ok(self.lexical_function_recipe_candidate(&path, index.cfg())?
+            || self.lexical_binder_may_bind(&path, index.cfg())?)
     }
     fn lexical_function_recipe_candidate(
         &self,

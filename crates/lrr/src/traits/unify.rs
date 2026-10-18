@@ -28,6 +28,13 @@ fn children(term: &TyTerm) -> Vec<&TyTerm> {
             })
             .collect(),
         TyTerm::Array(t, _) | TyTerm::Slice(t) | TyTerm::Ref(_, _, t) => vec![t],
+        // A fn pointer without bound regions (E-R5-008).
+        TyTerm::Function(function) if function.variables.is_empty() => function
+            .value
+            .parameters
+            .iter()
+            .chain(std::iter::once(function.value.result.as_ref()))
+            .collect(),
         _ => vec![],
     }
 }
@@ -47,12 +54,9 @@ fn validate(term: &TyTerm, transaction: Digest, universe: u32) -> Result<usize, 
         }
         if matches!(
             term,
-            TyTerm::Bound { .. }
-                | TyTerm::Function(_)
-                | TyTerm::Projection(_)
-                | TyTerm::Dyn(_)
-                | TyTerm::Opaque(_, _)
-        ) {
+            TyTerm::Bound { .. } | TyTerm::Projection(_) | TyTerm::Dyn(_) | TyTerm::Opaque(_, _)
+        ) || matches!(term, TyTerm::Function(function) if !function.variables.is_empty())
+        {
             return Err(fault(
                 "symbolic function/bound/projection/dyn/opaque terms require ordered schema, universe or normalization integration",
             ));
@@ -170,7 +174,22 @@ impl Unifier {
                 (TyTerm::Tuple(a), TyTerm::Tuple(b)) if a.len() == b.len() => {
                     work.extend(a.into_iter().zip(b))
                 }
-                (TyTerm::Nominal(a, x), TyTerm::Nominal(b, y)) if a == b && x.len() == y.len() => {
+                // A fn pointer type unifies structurally (E-R5-008).
+                (TyTerm::Function(a), TyTerm::Function(b))
+                    if a.variables.is_empty()
+                        && b.variables.is_empty()
+                        && a.value.parameters.len() == b.value.parameters.len() =>
+                {
+                    let (a, b) = (a.value, b.value);
+                    work.extend(a.parameters.into_iter().zip(b.parameters));
+                    work.push((*a.result, *b.result));
+                }
+                // `*mut T` coerces to `*const T`: the two pointer identities
+                // unify through their pointees (rustc checked mutability).
+                (TyTerm::Nominal(a, x), TyTerm::Nominal(b, y))
+                    if (a == b || super::pointer_terms::both_pointer_identities(&a, &b))
+                        && x.len() == y.len() =>
+                {
                     for (a, b) in x.into_iter().zip(y) {
                         match (a, b) {
                             (GenericArg::Type(a), GenericArg::Type(b)) => work.push((a, b)),

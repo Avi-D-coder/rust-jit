@@ -188,10 +188,7 @@ impl<'a> Component<'a> {
                             "projection literal query variant differs",
                         )));
                     };
-                    let Some(identity) = observed
-                        .local_binding()
-                        .filter(|_| observed.pending().is_none())
-                    else {
+                    let Some(identity) = super::selected_local(observed) else {
                         return QueryPoll::Ready(Ok(None));
                     };
                     let Some(pattern) = ready!(self.binding_pattern(db, node, identity)) else {

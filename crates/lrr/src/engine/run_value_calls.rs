@@ -28,13 +28,37 @@ impl RunMachine {
             return QueryPoll::Ready(Ok(false));
         }
         let callee = (|| {
-            let (_, mut ty) = self.frame.value_callee(site, &self.store)?;
+            let (mut place, mut ty) = self.frame.value_callee(site, &self.store)?;
+            let place_fault = |failure: crate::runtime::place::PlaceFailure| match failure {
+                crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                    call_fault("callee dereference panicked")
+                }
+            };
             // `(&f)(x)`: a reference to a callable calls its referent.
             loop {
                 let key = self.store.type_descriptor(ty)?.key.clone();
                 match key.as_ref() {
-                    TypeKey::Ref { target, .. } => ty = *target,
+                    TypeKey::Ref { target, .. } => {
+                        place = self.store.dereference_place(&place).map_err(place_fault)?;
+                        ty = *target;
+                    }
                     TypeKey::Callable { identity, .. } => return Ok(*identity),
+                    // A fn pointer (E-R5-008): its code address names the
+                    // function item it was made from; the call proceeds as a
+                    // call of that item.
+                    TypeKey::Function { .. } => {
+                        let value = self.store.read_place(&place).map_err(place_fault)?;
+                        let address = self.store.pointer_address_peek(value)?.ok_or_else(|| {
+                            call_fault("fn pointer value holds no code address")
+                        })?;
+                        return self.store.function_at(address).ok_or_else(|| {
+                            Diagnostic::new(
+                                "LRR-E-POINTER-DANGLING",
+                                "call through a fn pointer that designates no function".into(),
+                            )
+                        });
+                    }
                     _ => {
                         return Err(Diagnostic::new(
                             "LRR-E-OP-TYPE",

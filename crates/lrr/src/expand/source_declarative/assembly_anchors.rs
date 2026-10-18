@@ -71,7 +71,7 @@ pub(super) fn capture(
     tree: &SyntaxAttachment,
 ) -> Result<Vec<OriginalDeclarationAnchor>, Diagnostic> {
     let original = source.outline();
-    let normalized = outline(source, Arc::new(tree.snapshot().map_err(adapter)?))?;
+    let normalized = outline(source, tree.snapshot().map_err(adapter)?)?;
     let mut source_items = original
         .items
         .iter()

@@ -93,6 +93,7 @@ impl GuestStore {
             access: Access::Mutable,
             owner: None,
             interior: true,
+            raw: false,
             target,
             lease: ReferenceLease::Location(lease),
         };

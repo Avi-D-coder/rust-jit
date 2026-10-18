@@ -223,6 +223,17 @@ struct LocalImportFrontiers {
     glob: Option<crate::core::digest::Digest>,
     named:
         std::collections::BTreeMap<crate::expand::scopes::MacroName, crate::core::digest::Digest>,
+    /// The glob imports themselves: whether one binds a macro name depends
+    /// on what its target module exports.
+    globs: Vec<LocalGlobImport>,
+}
+/// One block-level glob import (`use path::*;`), as written.
+#[derive(Clone)]
+pub(crate) struct LocalGlobImport {
+    pub(crate) identity: crate::core::digest::Digest,
+    pub(crate) path: Vec<crate::syntax::imports::ImportSegment>,
+    pub(crate) absolute: bool,
+    pub(crate) scope: crate::syntax::outline::ScopeKey,
 }
 
 /// Unsealed lexical candidates for cold declaration discovery. This is not a
@@ -359,6 +370,12 @@ impl DeclarationMacroIndex {
                         .glob
                         .map_or(row.source.identity, |id| id.min(row.source.identity)),
                 );
+                frontier.globs.push(LocalGlobImport {
+                    identity: row.source.identity,
+                    path: row.source.path.clone(),
+                    absolute: row.source.absolute,
+                    scope: row.source.scope.clone(),
+                });
             }
         }
         let declaration_bytes = declarations.metadata_bytes()?;
@@ -592,6 +609,32 @@ impl DeclarationMacroIndex {
                 && let Some(input) = frontier.named.get(&head).copied().or(frontier.glob)
             {
                 return Ok(Some(input));
+            }
+            scope = self.scopes.parent(current)?.map(|(parent, _)| parent);
+        }
+        Ok(None)
+    }
+    /// `local_import_frontier` where a glob import blocks the name only when
+    /// `glob_binds` says its target can supply it (a named import blocks its
+    /// own name exactly as before).
+    pub(crate) fn local_import_frontier_with(
+        &self,
+        invocation: crate::core::digest::Digest,
+        head: &str,
+        glob_binds: &mut dyn FnMut(&LocalGlobImport) -> Result<bool, Diagnostic>,
+    ) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
+        let head = super::names::owned_name(head, self.scan.parse().profile.edition)?;
+        let mut scope = Some(self.producer(invocation)?.lexical_scope);
+        while let Some(current) = scope {
+            if let Some(frontier) = self.local_import_frontiers.get(&current) {
+                if let Some(input) = frontier.named.get(&head).copied() {
+                    return Ok(Some(input));
+                }
+                for glob in &frontier.globs {
+                    if glob_binds(glob)? {
+                        return Ok(Some(glob.identity));
+                    }
+                }
             }
             scope = self.scopes.parent(current)?.map(|(parent, _)| parent);
         }

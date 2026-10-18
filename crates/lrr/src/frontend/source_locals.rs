@@ -1799,7 +1799,9 @@ impl SourceLocalIndex<'_> {
         evidence: &owned_plan::LocalTypeNames,
         names: &super::names::NameNamespaces,
     ) -> Result<(PrefixResolution, super::names::reads::NamespaceReads), Diagnostic> {
-        if site.namespace != crate::source::manifest::Namespace::Value {
+        // Value paths and call callees select in the Value namespace; a
+        // record pattern's name is a Type-namespace name of the same prefix.
+        if site.namespace == crate::source::manifest::Namespace::Macro {
             return Err(error("prepared Value prefix namespace differs"));
         }
         let observed = super::names::reads::ObservedNames::new(names);
@@ -2012,6 +2014,12 @@ impl SourceLocalIndex<'_> {
                     continue;
                 }
                 let Some(names) = names else {
+                    // Without the module graph a named import cannot be
+                    // resolved, but it binds only its own alias: a lookup of
+                    // any other name is unaffected by it.
+                    if alias != &name {
+                        continue;
+                    }
                     return Ok(PrefixResolution::NeedImport(
                         self.namespace().imports[indices[0]].source.identity,
                     ));

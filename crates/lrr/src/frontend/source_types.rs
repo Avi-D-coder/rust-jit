@@ -453,6 +453,45 @@ pub(crate) fn resolve_written_type(
                 },
                 None => QueryPoll::Ready(Ok(None)),
             },
+            // `*const T` / `*mut T` (E-R5-008): the reserved-identity nominal.
+            ast::Type::PtrType(pointer) => match pointer.ty() {
+                Some(pointee) => match walk(db, graph, sources, signature, &pointee) {
+                    QueryPoll::Ready(Ok(Some(pointee))) => {
+                        QueryPoll::Ready(Ok(Some(crate::traits::pointer_terms::raw_pointer(
+                            pointer.mut_token().is_some(),
+                            pointee,
+                        ))))
+                    }
+                    other => other,
+                },
+                None => QueryPoll::Ready(Ok(None)),
+            },
+            // `fn(A) -> R` (any ABI; `for<'a>` binders name regions only).
+            ast::Type::FnPtrType(function) => {
+                let Some(list) = function.param_list() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let mut parameters = Vec::new();
+                for parameter in list.params() {
+                    let Some(ty) = parameter.ty() else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    match walk(db, graph, sources, signature, &ty) {
+                        QueryPoll::Ready(Ok(Some(term))) => parameters.push(term),
+                        other => return other,
+                    }
+                }
+                let result = match function.ret_type().and_then(|ret| ret.ty()) {
+                    Some(ty) => match walk(db, graph, sources, signature, &ty) {
+                        QueryPoll::Ready(Ok(Some(term))) => term,
+                        other => return other,
+                    },
+                    None => TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit),
+                };
+                QueryPoll::Ready(Ok(Some(crate::traits::pointer_terms::fn_pointer(
+                    parameters, result,
+                ))))
+            }
             ast::Type::ArrayType(array) => {
                 let Some(element) = array.ty() else {
                     return QueryPoll::Ready(Ok(None));

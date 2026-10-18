@@ -240,7 +240,6 @@ impl Discovery {
     }
     pub fn block(&mut self, t: &JobTicket, mut waiting: Vec<Digest>) -> Result<(), Diagnostic> {
         self.ticket(t)?;
-        if std::env::var("TMPDBG_BLOCK").is_ok() { eprintln!("TMPDBG block {:?} kind={:?} waiting={:?}\n{}", t.job.identity, t.job.kind, waiting, std::backtrace::Backtrace::force_capture()); }
         if waiting.is_empty() {
             return Err(limit());
         }

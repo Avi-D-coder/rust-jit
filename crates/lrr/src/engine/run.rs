@@ -419,10 +419,7 @@ pub struct RunMachine {
         crate::core::digest::Digest,
         Arc<crate::frontend::callables::ordinary_local::OrdinaryLocalAdmission>,
     >,
-    lexical_values: BTreeMap<
-        PcKey,
-        Option<(crate::core::digest::Digest, Option<crate::source::manifest::ItemKind>)>,
-    >,
+    lexical_values: BTreeMap<PcKey, Option<value_items::LexicalSelection>>,
     /// Run-global static storage: one cell per static, initialized once from
     /// its const-evaluated initializer, owned by a never-retired anchor.
     static_cells: BTreeMap<crate::core::digest::Digest, crate::runtime::cell::CellId>,
@@ -853,9 +850,11 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         }
-        // A lowered lexical source path must never fall back to a same-named
-        // module callable when its entered namespace context was not supplied.
-        if !name.contains("::") {
+        // A lowered lexical source path (a single name, or `Root::member`
+        // whose root a block item or import bound) must never fall back to a
+        // same-named module callable when its entered namespace context was
+        // not supplied.
+        if !name.starts_with('.') {
             match self.requires_lexical_callee_context(db, name) {
                 QueryPoll::Ready(Ok(true)) => {
                     return QueryPoll::Ready(Err(Diagnostic::new(
@@ -1792,8 +1791,22 @@ impl RunMachine {
             };
             // Regions are not runtime data: a returned `&'x [T]` view meets
             // its declared `&'a [T]` result up to region names.
+            // A function item returned at a declared fn-pointer result
+            // (a `static f: fn() = foo;` initializer) is the pointer's value.
+            let function_item = matches!(expected, crate::traits::term::TyTerm::Function(_))
+                && self.store.type_descriptor(actual).is_ok_and(|descriptor| {
+                    matches!(
+                        descriptor.key.as_ref(),
+                        crate::runtime::shape::TypeKey::Callable { captures, .. }
+                            if captures.is_empty()
+                    )
+                });
             if found.as_ref().map(crate::frontend::signature_subst::erase_regions)
                 != Some(crate::frontend::signature_subst::erase_regions(expected))
+                && !function_item
+                && !found.as_ref().is_some_and(|found| {
+                    crate::traits::pointer_terms::same_pointer_family(found, expected)
+                })
             {
                 return Err(Diagnostic::new(
                     "LRR-E-CALL-RETURN-TYPE",
@@ -2797,6 +2810,16 @@ impl RunMachine {
                         explicit,
                         arguments,
                     } => {
+                        // A `Root::member` callee whose root an import binds to a
+                        // module is the module route's written path.
+                        let name = match self.lexical_module_name(db, site.0, name) {
+                            QueryPoll::Ready(Ok(name)) => name,
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        };
                         if name == value_calls::VALUE_CALL_NAME {
                             match self.select_value_call(db, site.0, &arguments) {
                                 QueryPoll::Ready(Ok(false)) => {}
@@ -3114,6 +3137,16 @@ impl RunMachine {
                         explicit,
                         arguments,
                     } if self.prepared_call.is_none() => {
+                        // A `Root::member` callee whose root an import binds to a
+                        // module is the module route's written path.
+                        let name = match self.lexical_module_name(db, site.0, name) {
+                            QueryPoll::Ready(Ok(name)) => name,
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        };
                         if name == value_calls::VALUE_CALL_NAME {
                             match self.select_value_call(db, site.0, &arguments) {
                                 QueryPoll::Ready(Ok(false)) => {}

@@ -110,6 +110,11 @@ pub(crate) struct SelectedValueDeclaration {
     header: Digest,
     context: DeclarationContext,
     owner: Option<BodyKey>,
+    /// An enum variant selected through the enum's module-like namespace (a
+    /// named import or glob of its variants). Its source, header and context
+    /// are the owning enum's declaration; `definition.identity` is the
+    /// variant's own identity.
+    variant: Option<crate::frontend::names::EnumVariantDefinition>,
 }
 impl SelectedValueDeclaration {
     pub(crate) fn identity(&self) -> Digest {
@@ -130,6 +135,9 @@ impl SelectedValueDeclaration {
     pub(crate) fn owner(&self) -> Option<&BodyKey> {
         self.owner.as_ref()
     }
+    pub(crate) fn variant(&self) -> Option<&crate::frontend::names::EnumVariantDefinition> {
+        self.variant.as_ref()
+    }
 }
 #[derive(Clone)]
 pub struct EnteredValueGoal {
@@ -140,6 +148,17 @@ pub struct EnteredValueGoal {
     declaration: Option<SelectedValueDeclaration>,
     // The ordinary Value lookup selected a closed library facade function.
     facade: Option<crate::facade::functions::LibraryFunction>,
+    // The selected facade function's definition identity.
+    facade_identity: Option<Digest>,
+    // A record pattern's name lives in the Type namespace; every other
+    // goal selects in the Value namespace.
+    type_namespace: bool,
+    // `Root::member`: the root selected lexically (a block item or import
+    // binds it) and the member name left for the dispatcher to resolve
+    // against the selected root (an enum's variant).
+    rooted: Option<String>,
+    // The written path is qualified (`a::b`), whichever route selected it.
+    qualified_path: bool,
     // Selected through a qualified written path (the dispatcher's route).
     qualified: bool,
     demand: Option<ValueGoalDemand>,
@@ -189,6 +208,19 @@ impl EnteredValueGoal {
     /// `CallResolver::select` selects it for the dispatcher.
     pub(crate) fn facade(&self) -> Option<crate::facade::functions::LibraryFunction> {
         self.facade
+    }
+    /// The definition identity of the selected closed facade function.
+    pub(crate) fn facade_identity(&self) -> Option<Digest> {
+        self.facade_identity
+    }
+    /// The member of a `Root::member` path whose root was selected lexically.
+    pub(crate) fn rooted(&self) -> Option<&str> {
+        self.rooted.as_deref()
+    }
+    /// Whether the written path is qualified (the module route selects it
+    /// unless its root is lexically bound, see `rooted`).
+    pub(crate) fn is_qualified_path(&self) -> bool {
+        self.qualified_path
     }
     /// Whether this selection came from a qualified written path, which the
     /// dispatcher resolves on its own written-path route.
@@ -248,9 +280,16 @@ impl StableEncode for EnteredValueGoal {
             e.digest(declaration.header);
             e.record(&declaration.context);
             e.option(&declaration.owner, |e, owner| e.record(owner));
+            e.option(&declaration.variant, |e, variant| {
+                e.digest(variant.enumeration);
+                e.string(&variant.name);
+            });
         });
         // The facade function's definition identity is folded into `reads`.
         e.bool(self.facade.is_some());
+        e.bool(self.type_namespace);
+        e.option(&self.rooted, |e, member| e.string(member));
+        e.bool(self.qualified_path);
         e.bool(self.qualified);
         e.option(&self.demand, |e, demand| match demand {
             ValueGoalDemand::Occurrence => e.u8(0),
@@ -323,6 +362,10 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
         target: None,
         declaration: None,
         facade: None,
+        facade_identity: None,
+        type_namespace: false,
+        rooted: None,
+        qualified_path: false,
         qualified: false,
         demand: None,
         occurrence: Digest([0; 32]),
@@ -349,7 +392,71 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
     let adapter = plan.adapter();
     // The owning root pattern of a binding target (absolute source range).
     let mut recipe_root = crate::syntax::spans::SourceRange { start: 0, end: 0 };
+    // A path, tuple-struct or record pattern names a constructor through its
+    // single written name; a record pattern's name is a Type-namespace name.
+    let pattern_path = if indexed.role == NodeRole::Pattern {
+        ast::TupleStructPat::cast(syntax.clone())
+            .and_then(|pattern| pattern.path().map(|path| (path, false)))
+            .or_else(|| {
+                ast::RecordPat::cast(syntax.clone())
+                    .and_then(|pattern| pattern.path().map(|path| (path, true)))
+            })
+            .or_else(|| {
+                ast::PathPat::cast(syntax.clone())
+                    .and_then(|pattern| pattern.path().map(|path| (path, false)))
+            })
+    } else {
+        None
+    };
+    // A record expression's written path (`Root::Variant { .. }`) names its
+    // root in the Type namespace like a record pattern does.
+    let record_path = if matches!(indexed.role, NodeRole::Expression(kind) if kind != ExpressionKind::Path)
+    {
+        ast::RecordExpr::cast(syntax.clone()).and_then(|record| record.path())
+    } else {
+        None
+    };
+    // A `Root::member` expression path whose lexical root does not bind
+    // returns to the module route at the prefix result.
+    let mut rooted_fallback: Option<ast::PathExpr> = None;
     let (name, name_range, target) = match indexed.role {
+        NodeRole::Expression(_) if record_path.is_some() => {
+            let Some(path) = record_path else {
+                return goal.needs(ValueGoalDemand::Occurrence);
+            };
+            let Some((name, member)) = crate::syntax::parse::ParsedFile::lexical_root_name(&path)
+            else {
+                return goal.needs(ValueGoalDemand::PathAdjustment);
+            };
+            goal.qualified_path = path.qualifier().is_some();
+            goal.type_namespace = true;
+            goal.rooted = member.map(|member| member.text().to_string());
+            (
+                checked!(owned_spelling(name.text())),
+                range(name.syntax().text_range()),
+                None,
+            )
+        }
+        NodeRole::Pattern if pattern_path.is_some() => {
+            let Some((path, record)) = pattern_path else {
+                return goal.needs(ValueGoalDemand::Occurrence);
+            };
+            let qualified_pattern = path.qualifier().is_some() || path.coloncolon_token().is_some();
+            let Some((name, member)) = crate::syntax::parse::ParsedFile::lexical_root_name(&path)
+            else {
+                return goal.needs(ValueGoalDemand::PathAdjustment);
+            };
+            goal.qualified_path = qualified_pattern;
+            // The root of `Root::member` names a type; a single name is a
+            // Type-namespace name only for a record pattern.
+            goal.type_namespace = record || member.is_some();
+            goal.rooted = member.map(|member| member.text().to_string());
+            (
+                checked!(owned_spelling(name.text())),
+                range(name.syntax().text_range()),
+                None,
+            )
+        }
         NodeRole::Pattern => {
             let Some(pattern) = ast::IdentPat::cast(syntax) else {
                 return goal.needs(ValueGoalDemand::Occurrence);
@@ -404,22 +511,50 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
             if path.qualifier().is_some() || path.coloncolon_token().is_some() {
-                return qualified(db, goal, &expression);
+                goal.qualified_path = true;
+                // `Root::member` whose root a block item or import may bind:
+                // the root is selected through the entered lexical prefix;
+                // any other qualified path keeps the module route.
+                let lexical = match crate::syntax::parse::ParsedFile::lexical_root_name(&path) {
+                    Some((root, Some(member))) => {
+                        let binds = checked!(
+                            source.parsed().entered_value_requires_lexical_context(
+                                source.body(),
+                                source.index(),
+                                &goal.key
+                            )
+                        );
+                        binds.then_some((root, member))
+                    }
+                    _ => None,
+                };
+                let Some((root, member)) = lexical else {
+                    return qualified(db, goal, &expression);
+                };
+                goal.type_namespace = true;
+                goal.rooted = Some(member.text().to_string());
+                rooted_fallback = Some(expression);
+                (
+                    checked!(owned_spelling(root.text())),
+                    range(root.syntax().text_range()),
+                    None,
+                )
+            } else {
+                let Some(segment) = path.segment() else {
+                    return goal.needs(ValueGoalDemand::Occurrence);
+                };
+                // This query selects the actual base Value declaration only.
+                // Written generic arguments stay with the normal call/type/const
+                // consumer; they grant no execution or substitution authority here.
+                let Some(name) = segment.name_ref() else {
+                    return goal.needs(ValueGoalDemand::PathAdjustment);
+                };
+                (
+                    checked!(owned_spelling(name.text())),
+                    range(name.syntax().text_range()),
+                    None,
+                )
             }
-            let Some(segment) = path.segment() else {
-                return goal.needs(ValueGoalDemand::Occurrence);
-            };
-            // This query selects the actual base Value declaration only.
-            // Written generic arguments stay with the normal call/type/const
-            // consumer; they grant no execution or substitution authority here.
-            let Some(name) = segment.name_ref() else {
-                return goal.needs(ValueGoalDemand::PathAdjustment);
-            };
-            (
-                checked!(owned_spelling(name.text())),
-                range(name.syntax().text_range()),
-                None,
-            )
         }
         _ => return goal.needs(ValueGoalDemand::Occurrence),
     };
@@ -506,13 +641,18 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
         return goal.needs(ValueGoalDemand::ModulePublication);
     };
     let environment = environment.macros().source_environment();
+    let namespace = if goal.type_namespace {
+        Namespace::Type
+    } else {
+        Namespace::Value
+    };
     let site = OrdinaryNameSite {
         source: plan.entered.parent.source(),
         body,
         at: u64::from(name_range.start),
         name: &name,
         context: raw,
-        namespace: Namespace::Value,
+        namespace,
     };
     let (prefix, reads) = checked!(adapter.lookup_prepared_value_prefix_observed(
         &site,
@@ -521,6 +661,14 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
     ));
     let lookup = match prefix {
         PrefixResolution::Name(lookup) => lookup,
+        PrefixResolution::ModuleTail if rooted_fallback.is_some() => {
+            let Some(expression) = rooted_fallback else {
+                return goal.needs(ValueGoalDemand::Occurrence);
+            };
+            goal.rooted = None;
+            goal.type_namespace = false;
+            return qualified(db, goal, &expression);
+        }
         PrefixResolution::ModuleTail => {
             match checked!(plan.lexical_module.route(&hygiene, raw)) {
                 ModuleRoute::Definition(expansion) => {
@@ -531,7 +679,7 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             let request = checked!(plan.lexical_module.request_in_namespace(
                 &name,
                 edition,
-                Namespace::Value
+                namespace
             ));
             let Some(request) = request else {
                 return goal.needs(ValueGoalDemand::ModulePublication);
@@ -769,7 +917,12 @@ fn declaration(
     impl_owned: bool,
 ) -> QueryPoll<EnteredValueGoal> {
     let id = selected.identity;
-    if selected.namespace != Namespace::Value {
+    let expected = if goal.type_namespace {
+        Namespace::Type
+    } else {
+        Namespace::Value
+    };
+    if selected.namespace != expected {
         return QueryPoll::Ready(Err(error("Value goal selected another namespace")));
     }
     // A closed library facade function has no source declaration; the
@@ -782,13 +935,27 @@ fn declaration(
         identity.digest(id);
         goal.reads = identity.finish();
         goal.facade = Some(function);
+        goal.facade_identity = Some(id);
         return QueryPoll::Ready(goal.finish());
     }
-    let source = db.input(&InputKey::DefinitionSource(id));
-    let header = db.input(&InputKey::DefinitionHeader(id));
-    let context = db.input(&InputKey::DeclarationContext(id));
+    // A variant owns no declaration inputs: they are its enum's.
+    let enum_variant = goal
+        .plan
+        .environment()
+        .and_then(|environment| {
+            environment
+                .macros()
+                .source_environment()
+                .names()
+                .enum_variant(id)
+                .cloned()
+        });
+    let input_id = enum_variant.as_ref().map_or(id, |variant| variant.enumeration);
+    let source = db.input(&InputKey::DefinitionSource(input_id));
+    let header = db.input(&InputKey::DefinitionHeader(input_id));
+    let context = db.input(&InputKey::DeclarationContext(input_id));
     let (Some(source), Some(header), Some(context)) = (source, header, context) else {
-        return goal.needs(ValueGoalDemand::DeclarationPublication(id));
+        return goal.needs(ValueGoalDemand::DeclarationPublication(input_id));
     };
     let (
         InputValue::DefinitionSource(source),
@@ -802,11 +969,11 @@ fn declaration(
         return QueryPoll::Ready(Err(error("Value goal declaration source/profile differs")));
     }
     let header_stamp = checked!(
-        db.published_input(&InputKey::DefinitionHeader(id))
+        db.published_input(&InputKey::DefinitionHeader(input_id))
             .map(|(_, stamp)| stamp)
             .ok_or_else(|| error("Value goal actual header stamp absent"))
     );
-    let cached_header = checked!(goal.plan.field_types.header_identity(id, header_stamp));
+    let cached_header = checked!(goal.plan.field_types.header_identity(input_id, header_stamp));
     let owner = if context.scope.owner.is_some() && !impl_owned {
         let owner = db.input(&InputKey::LocalDeclarationOwner(id));
         let Some(owner) = owner else {
@@ -839,6 +1006,19 @@ fn declaration(
     } else {
         None
     };
+    if goal.target.is_some() && enum_variant.is_some() {
+        // An enum variant is never a function: an identifier pattern naming
+        // one (a named import or glob of its variants) is a path to it.
+        goal.declaration = Some(SelectedValueDeclaration {
+            definition: selected,
+            source: source.clone(),
+            header: cached_header.unwrap_or_else(|| header.fingerprint()),
+            context: context.clone(),
+            owner,
+            variant: enum_variant,
+        });
+        return QueryPoll::Ready(goal.finish());
+    }
     if goal.target.is_some() {
         // A positive Value answer is not automatically a constant. rustc's
         // late::try_resolve_as_non_binding permits fresh bindings to shadow
@@ -869,6 +1049,7 @@ fn declaration(
         header: cached_header.unwrap_or_else(|| header.fingerprint()),
         context: context.clone(),
         owner,
+        variant: enum_variant,
     });
     QueryPoll::Ready(goal.finish())
 }
@@ -923,6 +1104,7 @@ pub(super) fn shadowed_definition_binding(
             header: cached_header.unwrap_or_else(|| header.fingerprint()),
             context: context.clone(),
             owner,
+            variant: None,
         });
         return QueryPoll::Ready(goal.finish());
     }

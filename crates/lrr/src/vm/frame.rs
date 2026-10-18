@@ -24,6 +24,8 @@ pub(crate) mod closures_frame;
 mod slices_frame;
 #[path = "frame_coercions.rs"]
 mod coercions_frame;
+#[path = "frame_pointers.rs"]
+mod pointers_frame;
 #[path = "frame_string_literals.rs"]
 mod string_literal_frame;
 #[path = "frame_partial_hints.rs"]
@@ -854,6 +856,27 @@ impl Frame {
             // Rigid parameters retain their identities under the existing
             // prepared definition environment; no incidental method is selected.
             Some(TyTerm::Param(_)) | None => Ok(()),
+            // A fn-pointer parameter accepts any fn pointer value (E-R5-008).
+            Some(TyTerm::Function(_)) => {
+                if matches!(store.type_descriptor(ty)?.key.as_ref(), TypeKey::Function { .. }) {
+                    Ok(())
+                } else {
+                    Err(Diagnostic::new(
+                        "LRR-E-OWNERSHIP",
+                        "fn pointer parameter received a non-pointer value".into(),
+                    ))
+                }
+            }
+            // A raw-pointer parameter accepts any raw pointer value.
+            Some(source)
+                if crate::traits::pointer_terms::as_raw_pointer(source).is_some()
+                    && matches!(
+                        store.type_descriptor(ty)?.key.as_ref(),
+                        TypeKey::RawPtr { .. }
+                    ) =>
+            {
+                Ok(())
+            }
             Some(source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)))
                 if crate::frontend::call_contracts::closed_term(source) =>
             {
@@ -960,7 +983,11 @@ impl Frame {
             ));
         }
         match source {
-            TyTerm::Primitive(_) | TyTerm::Ref(..) => {
+            TyTerm::Primitive(_) | TyTerm::Ref(..) | TyTerm::Function(..) => {
+                self.preflight_parameter_source(ordinal, ty, store)?;
+            }
+            // A raw-pointer parameter accepts any raw pointer (E-R5-008).
+            TyTerm::Nominal(..) if crate::traits::pointer_terms::as_raw_pointer(source).is_some() => {
                 self.preflight_parameter_source(ordinal, ty, store)?;
             }
             // These are already understood by source-aware place checks. The
@@ -1416,7 +1443,11 @@ impl Frame {
                         || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty()))
                 || (matches!(
                     source,
-                    TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..) | TyTerm::Ref(..)
+                    TyTerm::Nominal(..)
+                        | TyTerm::Tuple(..)
+                        | TyTerm::Array(..)
+                        | TyTerm::Ref(..)
+                        | TyTerm::Function(..)
                 ) && crate::frontend::call_contracts::closed_term(source)))
     }
     /// Closed reference views retain their actual caller source; nominal
@@ -1521,6 +1552,8 @@ impl Frame {
             || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str)
                 || (matches!(target.as_ref(), TyTerm::Tuple(_)) && Self::supported_structural_source(target))
                 || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
+                || (matches!(target.as_ref(), TyTerm::Function(_))
+                    && crate::frontend::call_contracts::closed_term(target))
                 || Self::closed_nominal_source(target)
                 || matches!(target.as_ref(), TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
                     if Self::supported_element(element) && u32::try_from(*len).is_ok())
@@ -1537,6 +1570,9 @@ impl Frame {
             || matches!(source, TyTerm::Slice(element) if Self::supported_element(element))
             // An unsized `str` place (`*s` of a `&str`).
             || matches!(source, TyTerm::Str)
+            // A closed fn-pointer view (E-R5-008).
+            || (matches!(source, TyTerm::Function(_))
+                && crate::frontend::call_contracts::closed_term(source))
     }
     /// An array or slice element view: any closed admitted value Type.
     fn supported_element(element: &crate::traits::term::TyTerm) -> bool {
@@ -2676,6 +2712,22 @@ impl Frame {
         if let Some(contents) = store.box_contents_type(actual)? {
             return self.preflight_box_deref(reference, destination, contents, store);
         }
+        // `*p` of a raw pointer (E-R5-008): the pointee view is the pointer
+        // view's argument; the pointee may be a punned cell, so the borrow
+        // source-target predicate does not apply.
+        if matches!(
+            store.type_descriptor(actual)?.key.as_ref(),
+            crate::runtime::shape::TypeKey::RawPtr { .. }
+        ) {
+            let pointee = self
+                .place_slot(reference)?
+                .source
+                .as_ref()
+                .and_then(crate::traits::pointer_terms::as_raw_pointer)
+                .map(|(_, pointee)| pointee);
+            self.preflight_source_view(destination, pointee)?;
+            return Ok(());
+        }
         let crate::runtime::shape::TypeKey::Ref { mutable, target } =
             store.type_descriptor(actual)?.key.as_ref()
         else {
@@ -2856,6 +2908,12 @@ impl Frame {
         let source = match self.place_slot(reference)?.source.as_ref() {
             Some(crate::traits::term::TyTerm::Ref(_, _, pointee)) => {
                 self.clone_source(Some(pointee.as_ref()))?
+            }
+            // `*p` of a raw pointer: the pointer view's pointee (E-R5-008).
+            Some(source) if crate::traits::pointer_terms::as_raw_pointer(source).is_some() => {
+                self.clone_source(
+                    crate::traits::pointer_terms::as_raw_pointer(source).map(|(_, pointee)| pointee),
+                )?
             }
             // `*b`: the box view's contents `T`.
             Some(source) => self.clone_source(Self::box_contents_source(source, store))?,
@@ -3083,6 +3141,13 @@ impl Frame {
                 }
                 _ => false,
             },
+            // A fn-pointer view matches any fn-pointer descriptor: the erased
+            // operator impls (`impl PartialEq for fn()`) serve every signature
+            // (E-R5-008).
+            Some(TyTerm::Function(_)) => matches!(
+                store.type_descriptor(target)?.key.as_ref(),
+                TypeKey::Function { .. } | TypeKey::Callable { .. }
+            ),
             // Any other closed source type: its descriptor records it exactly,
             // up to regions (a reached reference descriptor is `'static`).
             Some(source) if crate::frontend::call_contracts::closed_term(source) => store
@@ -3140,7 +3205,13 @@ impl Frame {
             return Err(invalid("borrow result scope inactive").into());
         }
         let unsize = self.borrow_unsizing(destination, target, access == Access::Mutable, store)?;
-        if let Some(source) = result.source.as_ref() {
+        // A raw-pointer expectation (`let p: *const T = &x`; E-R5-008) meets
+        // the borrow by the shared pointer coercion at the result's write.
+        let pointer_expected = result
+            .source
+            .as_ref()
+            .is_some_and(|source| crate::traits::pointer_terms::as_raw_pointer(source).is_some());
+        if !pointer_expected && let Some(source) = result.source.as_ref() {
             use crate::traits::term::TyTerm;
             let TyTerm::Ref(_, mutable, pointee) = source else {
                 return Err(Diagnostic::new(
@@ -3179,6 +3250,7 @@ impl Frame {
         if let Some(expected) = expected
             && Some(expected) != unsize
             && !matches!(store.type_descriptor(expected)?.key.as_ref(), TypeKey::Ref { mutable, target: expected_target } if *mutable == (access == Access::Mutable) && *expected_target == target)
+            && !matches!(store.type_descriptor(expected)?.key.as_ref(), TypeKey::RawPtr { .. })
         {
             return Err(Diagnostic::new(
                 "LRR-E-OWNERSHIP",

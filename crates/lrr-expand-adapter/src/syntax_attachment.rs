@@ -60,6 +60,9 @@ pub struct SyntaxAttachment {
     // Conservative cumulative charge, including superseded records. Admission
     // happens before cloning the span store, not after retaining another input.
     retained_input_bytes: usize,
+    /// The owned snapshot of this exact tree state, built on first request
+    /// and dropped by any in-place edit (`apply`).
+    snapshot_cache: std::sync::OnceLock<Arc<snapshot::SyntaxSnapshot>>,
 }
 
 struct PreparedFragment {
@@ -179,6 +182,7 @@ impl SyntaxAttachment {
             origins: Arc::new(origins),
             store: Arc::new(Mutex::new(store)),
             retained_input_bytes,
+            snapshot_cache: std::sync::OnceLock::new(),
         })
     }
 
@@ -292,6 +296,7 @@ impl SyntaxAttachment {
         self.origins = Arc::new(origins);
         self.store = Arc::new(Mutex::new(prepared.store));
         self.retained_input_bytes = prepared.retained_input_bytes;
+        self.snapshot_cache = std::sync::OnceLock::new();
         Ok(edit)
     }
 

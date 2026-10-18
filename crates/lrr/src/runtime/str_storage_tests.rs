@@ -25,7 +25,7 @@ fn lease(store: &GuestStore, ticket: TicketId) -> (RefId, BufferLease) {
     let id = RefId::from_bits(store.peek_ticket(ticket).unwrap().payload);
     match &store.references.get(id).unwrap().lease {
         ReferenceLease::Buffer(buffer) => (id, *buffer),
-        ReferenceLease::Location(_) | ReferenceLease::Elements(_) => {
+        ReferenceLease::Location(_) | ReferenceLease::Elements(_) | ReferenceLease::Detached(_) => {
             panic!("expected actual buffer lease")
         }
     }

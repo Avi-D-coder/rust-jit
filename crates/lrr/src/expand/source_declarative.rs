@@ -2699,7 +2699,23 @@ impl SourceDeclarative {
         if !syntax.absolute()
             && let Some(crate::syntax::imports::ImportSegment::Name(head)) =
                 syntax.segments().first()
-            && let Some(input) = index.local_import_frontier(invocation, head)?
+            && let Some(input) = index.local_import_frontier_with(invocation, head, &mut |glob| {
+                // A block-level glob blocks the call only if its target
+                // module can supply a macro of this name.
+                let mut segments = glob.path.clone();
+                segments.push(crate::syntax::imports::ImportSegment::Name(head.clone()));
+                let mut module_scope = glob.scope.clone();
+                module_scope.owner = None;
+                Ok(!matches!(
+                    namespaces.lookup_invocation_segments(
+                        &segments,
+                        glob.absolute,
+                        &module_scope,
+                        selection.outline.parse.profile.edition,
+                    )?,
+                    PathLookup::Absent | PathLookup::Inaccessible(_)
+                ))
+            })?
         {
             return Ok(SourceDeclarativeDemand::NeedInput(input));
         }

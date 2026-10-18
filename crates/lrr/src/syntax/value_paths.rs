@@ -166,7 +166,7 @@ impl ParsedFile {
             && !components[0].starts_with('<');
         if relative {
             let root = MacroName::parse(&components[0], self.edition)?;
-            if !(lexical_value && components.len() == 1)
+            if components.len() > 2
                 && (self.lexical_item_may_bind(anchor, &root, cfg)?
                     || self.enclosing_import_may_bind(anchor, &components[0], cfg)?)
             {
@@ -291,15 +291,82 @@ impl ParsedFile {
         let Some(written) = path.path() else {
             return Ok(false);
         };
-        if written.qualifier().is_some() || written.coloncolon_token().is_some() {
-            return Ok(false);
-        }
-        let Some(name) = written.segment().and_then(|segment| segment.name_ref()) else {
+        // A single name, or the root of `Root::member`: the entered lexical
+        // Value goal decides whether a block item or import really binds it.
+        let Some((name, _)) = Self::lexical_root_name(&written) else {
             return Ok(false);
         };
         let wanted = MacroName::parse(name.text(), self.edition)?;
         Ok(self.lexical_item_may_bind(path.syntax(), &wanted, index.cfg())?
             || self.enclosing_import_may_bind(path.syntax(), name.text(), index.cfg())?)
+    }
+    /// The name a block item or block-level `use` could bind in a written
+    /// path: its only segment, or the first of exactly two (`Root::member`).
+    /// Both must be plain identifiers without generic arguments and the path
+    /// must not be absolute; any other shape is the module route's.
+    pub(crate) fn lexical_root_name(
+        path: &ast::Path,
+    ) -> Option<(ast::NameRef, Option<ast::NameRef>)> {
+        let plain = |segment: ast::PathSegment| {
+            if segment.generic_arg_list().is_some() || segment.coloncolon_token().is_some() {
+                return None;
+            }
+            // A path keyword (`Self`, `self`, `super`, `crate`, `$crate`) is
+            // never the name of a block item or import.
+            segment.name_ref().filter(|name| {
+                let text = name.text();
+                !matches!(&*text, "$crate" | "Self" | "self" | "super" | "crate")
+            })
+        };
+        match path.qualifier() {
+            None => path.segment().and_then(plain).map(|name| (name, None)),
+            Some(root) => {
+                if root.qualifier().is_some() {
+                    return None;
+                }
+                let root = root.segment().and_then(plain)?;
+                // The member segment may carry its own generic arguments
+                // (`mem::size_of::<T>`); they belong to the member, not the root.
+                let member = path.segment().and_then(|segment| segment.name_ref())?;
+                Some((root, Some(member)))
+            }
+        }
+    }
+    /// Whether a block item or block-level `use` may bind the single name (or
+    /// the root of a two-segment path) of a path, tuple-struct or record
+    /// pattern's path. Such a pattern name is selected through the entered
+    /// lexical Value goal of the pattern itself.
+    pub(super) fn pattern_path_binder(
+        &self,
+        path: &ast::Path,
+        cfg: &crate::source::snapshot::CfgSet,
+    ) -> Result<bool, Diagnostic> {
+        let Some((name, _)) = Self::lexical_root_name(path) else {
+            return Ok(false);
+        };
+        let wanted = MacroName::parse(name.text(), self.edition)?;
+        Ok(self.lexical_item_may_bind(path.syntax(), &wanted, cfg)?
+            || self.enclosing_import_may_bind(path.syntax(), name.text(), cfg)?)
+    }
+    /// Whether a block item or block-level `use` of an enclosing statement
+    /// list may bind the single name (or the root of a two-segment path) of
+    /// this callee path. Such a
+    /// callee is selected through the entered lexical Value goal, never by a
+    /// module-graph lookup of its spelling.
+    pub(super) fn lexical_binder_may_bind(
+        &self,
+        path: &ast::PathExpr,
+        cfg: &crate::source::snapshot::CfgSet,
+    ) -> Result<bool, Diagnostic> {
+        let Some(written) = path.path() else {
+            return Ok(false);
+        };
+        let Some((name, _)) = Self::lexical_root_name(&written) else {
+            return Ok(false);
+        };
+        let wanted = MacroName::parse(name.text(), self.edition)?;
+        Ok(self.lexical_item_may_bind(path.syntax(), &wanted, cfg)?
+            || self.enclosing_import_may_bind(path.syntax(), name.text(), cfg)?)
     }
     /// Any enabled body-local item of the same name in an enclosing statement
     /// list. Its namespace is irrelevant: the module graph cannot see it.

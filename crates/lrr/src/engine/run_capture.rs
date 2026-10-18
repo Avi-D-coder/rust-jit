@@ -127,7 +127,8 @@ impl RunCapture {
                 | Op::Discard { .. }
                 | Op::NumericBinary { .. }
                 | Op::NumericUnary { .. }
-                | Op::PrimitiveCast { .. } => {}
+                | Op::PrimitiveCast { .. }
+                | Op::PointerCast { .. } => {}
                 Op::Pattern { .. } => {}
                 Op::Unsupported(_) => add(&mut facts.unsupported_operation_candidates, 1)?,
             }

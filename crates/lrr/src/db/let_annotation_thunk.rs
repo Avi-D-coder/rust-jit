@@ -147,6 +147,20 @@ pub(crate) fn select(
             target: Box::new(ready!(select(db, pc, target, guards))),
         },
         AnnotationShape::Infer => WrittenType::Infer,
+        AnnotationShape::Ptr { mutable, target } => WrittenType::Ptr {
+            mutable: *mutable,
+            target: Box::new(ready!(select(db, pc, target, guards))),
+        },
+        AnnotationShape::FnPtr { params, result } => {
+            let mut written = Vec::new();
+            for param in params {
+                written.push(ready!(select(db, pc, param, guards)));
+            }
+            WrittenType::FnPtr {
+                params: written,
+                result: Box::new(ready!(select(db, pc, result, guards))),
+            }
+        }
         AnnotationShape::Dyn(node) => {
             let principal = ready!(
                 crate::frontend::nominal_constructors::dyn_annotation_principal(

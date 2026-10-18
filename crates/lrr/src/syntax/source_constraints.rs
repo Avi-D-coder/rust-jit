@@ -23,7 +23,7 @@ use ra_ap_syntax::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 11;
+pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 12;
 fn overflow() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-METADATA-LIMIT",
@@ -244,6 +244,15 @@ pub(crate) enum PatternStep {
         slot: u32,
         written: u32,
     },
+    /// A tuple position counted from the end: the `k`th item from the last
+    /// one (a pattern after `..`; the arity is the matched Type's).
+    TupleFromEnd(u32),
+    /// A tuple-struct or variant field counted from the end of the
+    /// declaration (a pattern after `..`; the arity is the declaration's).
+    ConstructorFromEnd {
+        slot: u32,
+        from_end: u32,
+    },
 }
 /// The written structure of an annotation or cast target Type node: which
 /// child Type a projection step selects. Named Types stay with the entered
@@ -263,6 +272,8 @@ pub(crate) enum TypeShape {
     Generic(NodeId, Vec<NodeId>),
     /// `_`: a written hole the initializer's Type fills.
     Infer,
+    /// `*const T` / `*mut T` (E-R5-008): mutability and the pointee node.
+    RawPointer(bool, NodeId),
 }
 
 /// Where a binding occurs inside its owner's retained `PatternTree`: the
@@ -272,6 +283,8 @@ pub(crate) struct PatternOccurrence {
     pub(crate) root: NodeId,
     pub(crate) steps: Vec<PatternStep>,
     pub(crate) by_reference: bool,
+    /// `mut x`: a by-value binding even under a reference default binding mode.
+    pub(crate) mutable: bool,
 }
 
 /// Derived reverse edges permit a demand to visit only its connected syntax.
@@ -891,6 +904,15 @@ fn annotate(
                 }
                 None => None,
             },
+            ast::Type::PtrType(pointer) => match pointer.ty() {
+                Some(inner) => {
+                    let child = type_node(body, index, &inner)?;
+                    pending.push(inner);
+                    let mutable = pointer.mut_token().is_some();
+                    child.map(|child| TypeShape::RawPointer(mutable, child))
+                }
+                None => None,
+            },
             ast::Type::ParenType(group) => match group.ty() {
                 Some(inner) => {
                     let child = type_node(body, index, &inner)?;
@@ -1031,6 +1053,7 @@ fn record_occurrences(
         PatternNode::Binding {
             occurrence,
             by_reference,
+            mutable,
             subpattern,
             ..
         } => {
@@ -1040,6 +1063,7 @@ fn record_occurrences(
                     root,
                     steps: steps.clone(),
                     by_reference: *by_reference,
+                    mutable: *mutable,
                 },
             );
             if let Some(subpattern) = subpattern {
@@ -1052,10 +1076,15 @@ fn record_occurrences(
                 let Ok(ordinal) = u32::try_from(ordinal) else {
                     return;
                 };
+                // A position after `..` is counted from the end.
                 if rest.is_some_and(|rest| ordinal >= rest) {
-                    break;
+                    let Ok(from_end) = u32::try_from(items.len() - 1 - ordinal as usize) else {
+                        return;
+                    };
+                    steps.push(PatternStep::TupleFromEnd(from_end));
+                } else {
+                    steps.push(PatternStep::Field(ordinal));
                 }
-                steps.push(PatternStep::Field(ordinal));
                 record_occurrences(item, root, steps, occurrences, structural);
                 steps.pop();
             }
@@ -1090,14 +1119,21 @@ fn record_occurrences(
                 let Ok(written) = u32::try_from(written) else {
                     return;
                 };
-                // A position after `..` needs the declared arity.
+                // A position after `..` is counted from the declared end.
                 if rest.is_some_and(|rest| written >= rest) {
-                    break;
+                    let Ok(from_end) = u32::try_from(items.len() - 1 - written as usize) else {
+                        return;
+                    };
+                    steps.push(PatternStep::ConstructorFromEnd {
+                        slot: *slot,
+                        from_end,
+                    });
+                } else {
+                    steps.push(PatternStep::Constructor {
+                        slot: *slot,
+                        written,
+                    });
                 }
-                steps.push(PatternStep::Constructor {
-                    slot: *slot,
-                    written,
-                });
                 record_occurrences(item, root, steps, occurrences, structural);
                 steps.pop();
             }
@@ -1532,8 +1568,18 @@ impl StableEncode for SourceConstraintPlan {
                         e.u32(*slot);
                         e.u32(*written);
                     }
+                    PatternStep::TupleFromEnd(from_end) => {
+                        e.u8(4);
+                        e.u32(*from_end);
+                    }
+                    PatternStep::ConstructorFromEnd { slot, from_end } => {
+                        e.u8(5);
+                        e.u32(*slot);
+                        e.u32(*from_end);
+                    }
                 });
                 e.bool(occurrence.by_reference);
+                e.bool(occurrence.mutable);
             },
         );
         e.sequence(
@@ -1558,6 +1604,11 @@ impl StableEncode for SourceConstraintPlan {
                         e.u32(inner.0);
                     }
                     TypeShape::Infer => e.u8(5),
+                    TypeShape::RawPointer(mutable, inner) => {
+                        e.u8(7);
+                        e.bool(*mutable);
+                        e.u32(inner.0);
+                    }
                     TypeShape::Dyn(principal) => {
                         e.u8(6);
                         e.u32(principal.0);

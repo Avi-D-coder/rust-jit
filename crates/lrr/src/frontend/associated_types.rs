@@ -243,7 +243,14 @@ fn bind(
         }
         (TyTerm::Slice(inner), TyTerm::Slice(value)) => bind(inner, value, owner, map),
         (TyTerm::Array(inner, length), TyTerm::Array(value, other)) => {
-            length == other && bind(inner, value, owner, map)
+            // `impl<T, const N: usize> .. for [T; N]`: the impl's own const
+            // parameter stands for any length (including the unknown count
+            // of a repeat expression). No type depends on it here.
+            let length_matches = matches!(
+                length,
+                crate::traits::term::ConstTerm::Param(key) if key.definition == owner
+            ) || length == other;
+            length_matches && bind(inner, value, owner, map)
         }
         (TyTerm::Tuple(items), TyTerm::Tuple(values)) => {
             items.len() == values.len()

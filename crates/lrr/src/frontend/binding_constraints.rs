@@ -221,6 +221,18 @@ impl PreparedBindingConstraints {
         QueryPoll::Ready(Ok(self))
     }
 }
+/// The local binding a path use selects. A use whose goal awaits only the
+/// classification of the prior pattern (`BindingClassification(id)`) has
+/// selected that binding `id`: the pattern's own classification is answered
+/// by `patterns::unclassified_binding`.
+fn selected_local(goal: &crate::frontend::source_value_goals::EnteredValueGoal) -> Option<Digest> {
+    use crate::frontend::source_value_goals::ValueGoalDemand;
+    match goal.pending() {
+        None => goal.local_binding(),
+        Some(ValueGoalDemand::BindingClassification(id)) => Some(id),
+        Some(_) => None,
+    }
+}
 /// A declaration owned by a body (its retained goal memos need no module
 /// environment).
 fn is_local(db: &mut Database, definition: Digest) -> bool {
@@ -350,6 +362,12 @@ enum Step {
 }
 #[path = "binding_constraint_comparison.rs"]
 mod comparison;
+#[path = "binding_constraint_bounds.rs"]
+mod bounds;
+#[path = "binding_constraint_callables.rs"]
+mod callables;
+#[path = "binding_constraint_deref.rs"]
+mod deref;
 #[path = "binding_constraint_generics.rs"]
 mod generics;
 #[path = "binding_constraint_iteration.rs"]
@@ -358,10 +376,14 @@ mod iteration;
 mod lang;
 #[path = "binding_constraint_methods.rs"]
 mod methods;
+#[path = "binding_constraint_modes.rs"]
+mod modes;
 #[path = "binding_constraint_nominal.rs"]
 mod nominal;
 #[path = "binding_constraint_open.rs"]
 mod open;
+#[path = "binding_constraint_patterns.rs"]
+mod patterns;
 #[path = "binding_constraint_projection.rs"]
 mod projection;
 use nominal::ConstructorSite;
@@ -441,6 +463,9 @@ enum Callee {
     /// A local bound directly to a closure expression (its node): a closure
     /// has a unique type, so the local always calls that closure's body.
     Closure(NodeId),
+    /// A parameter of the executing function whose Type states its
+    /// `Fn*(..) -> R` signature (`binding_constraint_callables.rs`).
+    Bound(Arc<callables::FnBound>),
 }
 
 /// One numeric inference variable's connected source component.
@@ -495,6 +520,15 @@ struct Component<'a> {
     /// The member projection at the root of the pattern being walked: the
     /// steps a nested pattern has consumed are the root's, less its own.
     root_via: Option<Via>,
+    /// The `Fn*(..) -> R` bounds of selected functions' generic parameters,
+    /// read once per demand.
+    fn_bounds: BTreeMap<(Digest, u32), Option<Arc<callables::FnBound>>>,
+    /// How many parameter bounds with associated-type bindings enclose the
+    /// bound being read (`bounds.rs`).
+    bound_depth: usize,
+    /// The pattern being walked sits below a non-reference pattern that
+    /// dereferenced a reference: rustc's default binding mode is `ref`.
+    peeled: bool,
 }
 impl<'a> Component<'a> {
     fn new(key: &'a PcKey, plan: &'a SourceConstraintPlan, floating: bool) -> Self {
@@ -525,9 +559,46 @@ impl<'a> Component<'a> {
             goals: BTreeMap::new(),
             deferred: None,
             root_via: None,
+            fn_bounds: BTreeMap::new(),
+            bound_depth: 0,
+            peeled: false,
         }
     }
+    #[track_caller]
+    fn mark_unrecorded(&mut self) {
+        // TEMPTRACE
+        if std::env::var_os("LRR_NUM_TRACE").is_some() {
+            let at = std::panic::Location::caller();
+            eprintln!("NUMTRACE unrecorded {}:{} via={:?}", at.file().rsplit('/').next().unwrap_or(""), at.line(), self.via.steps);
+        }
+        self.unrecorded = true;
+    }
+    #[track_caller]
     fn defer(&mut self, node: NodeId, demand: ConstraintDemand) {
+        // TEMPTRACE
+        if std::env::var_os("LRR_NUM_TRACE").is_some() {
+            let at = std::panic::Location::caller();
+            let kind = self.plan.fact(node).map(|f| f.kind());
+            let member = self
+                .plan
+                .fact(node)
+                .and_then(|f| f.member())
+                .and_then(|row| self.plan.member(row))
+                .unwrap_or("");
+            let name = self.plan.name_of(node).map(|(n, _)| n).unwrap_or("");
+            eprintln!(
+                "NUMTRACE defer {}:{} node={} kind={:?}/{}{} demand={:?} via={:?} strict={}",
+                at.file().rsplit('/').next().unwrap_or(""),
+                at.line(),
+                node.0,
+                kind,
+                member,
+                name,
+                demand,
+                self.via.steps,
+                self.via.strict
+            );
+        }
         if let Some(log) = &mut self.deferred {
             log.push(demand);
         }
@@ -650,6 +721,15 @@ impl<'a> Component<'a> {
                 term = contents;
                 continue;
             }
+            // `*x` of another Type with an overloaded `Deref` (`Rc<T>`, a
+            // user smart pointer): its `Target`.
+            if *step == Step::Deref
+                && matches!(term, TyTerm::Nominal(..))
+                && let Some(target) = ready!(self.deref_target(db, &term))
+            {
+                term = target;
+                continue;
+            }
             // `v[i]` of a `Vec<T>` is its element place: `T`.
             if *step == Step::Element
                 && let Some(element) = ready!(self.vec_elements(db, &term))
@@ -691,6 +771,15 @@ impl<'a> Component<'a> {
                     }
                 }
                 (Step::Deref, TyTerm::Ref(_, _, inner)) => *inner,
+                // `*p` of a raw pointer is its pointee (E-R5-008).
+                (Step::Deref, term)
+                    if crate::traits::pointer_terms::as_raw_pointer(&term).is_some() =>
+                {
+                    match crate::traits::pointer_terms::as_raw_pointer(&term) {
+                        Some((_, pointee)) => pointee.clone(),
+                        None => return QueryPoll::Ready(Ok(None)),
+                    }
+                }
                 (Step::Field(index), TyTerm::Tuple(mut elements)) => {
                     if (*index as usize) < elements.len() {
                         elements.swap_remove(*index as usize)
@@ -776,6 +865,19 @@ impl<'a> Component<'a> {
             Some(term) if term == hole() => QueryPoll::Ready(Ok(())),
             // `!` coerces to every Type; it constrains nothing.
             Some(TyTerm::Never) => QueryPoll::Ready(Ok(())),
+            // A numeric variable is never a reference itself: a reference to
+            // a primitive at its position is an operand the built-in
+            // operators auto-reference (`&u32 * 2`), whose other operand has
+            // the primitive's Type.
+            Some(TyTerm::Ref(_, _, inner)) if !self.open && matches!(*inner, TyTerm::Primitive(_)) => {
+                match *inner {
+                    TyTerm::Primitive(primitive) => QueryPoll::Ready(self.constrain(node, primitive)),
+                    _ => {
+                        self.defer(node, demand);
+                        QueryPoll::Ready(Ok(()))
+                    }
+                }
+            }
             // A numeric variable unsized to a trait object must implement
             // its principal trait.
             Some(TyTerm::Dyn(principal)) if !self.open => {
@@ -837,6 +939,12 @@ impl<'a> Component<'a> {
                 false,
                 Box::new(ready!(self.written_term(db, *inner))),
             ),
+            Some(TypeShape::RawPointer(mutable, inner)) => {
+                crate::traits::pointer_terms::raw_pointer(
+                    *mutable,
+                    ready!(self.written_term(db, *inner)),
+                )
+            }
             Some(TypeShape::Element(inner)) => {
                 TyTerm::Slice(Box::new(ready!(self.written_term(db, *inner))))
             }
@@ -1121,13 +1229,18 @@ impl<'a> Component<'a> {
     /// as rustc's would without that callee's `Fn*` bound.
     fn closure_calls(&mut self, db: &mut Database, closure: NodeId) -> QueryPoll<()> {
         let plan: &'a SourceConstraintPlan = self.plan;
+        // A closure written for a parameter bounded by `Fn*(..) -> R` returns
+        // that `R`.
+        ready!(self.closure_result_bound(db, closure));
         for edge in plan.uses(closure) {
             let Some(parent) = plan.fact(edge.parent) else {
                 continue;
             };
             match parent.kind() {
                 FactKind::Call if edge.ordinal == 0 => self.expression(Some(edge.parent)),
-                FactKind::Parenthesis => ready!(self.closure_calls(db, edge.parent)),
+                FactKind::Parenthesis | FactKind::Block => {
+                    ready!(self.closure_calls(db, edge.parent))
+                }
                 FactKind::Let if edge.ordinal == 1 => {
                     let Some(pattern) = parent.operand(0) else {
                         continue;
@@ -1148,7 +1261,7 @@ impl<'a> Component<'a> {
                                 "closure use query variant differs",
                             )));
                         };
-                        if observed.local_binding() != Some(identity) {
+                        if selected_local(observed) != Some(identity) {
                             continue;
                         }
                         for call in plan.uses(use_node) {
@@ -1186,7 +1299,8 @@ impl<'a> Component<'a> {
         }
         match fact.kind() {
             FactKind::Closure => QueryPoll::Ready(Ok(Some(node))),
-            FactKind::Parenthesis => match fact.operand(0) {
+            // A block's value is its tail expression (`let f = {|i| i};`).
+            FactKind::Parenthesis | FactKind::Block => match fact.operand(0) {
                 Some(inner) => self.closure_of(db, inner, depth + 1),
                 None => QueryPoll::Ready(Ok(None)),
             },
@@ -1210,11 +1324,9 @@ impl<'a> Component<'a> {
                 let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
                     return QueryPoll::Ready(Err(fault("closure callee query variant differs")));
                 };
-                match selected.local_binding() {
-                    Some(identity) if selected.pending().is_none() => {
-                        self.bound_closure(db, node, identity)
-                    }
-                    _ => QueryPoll::Ready(Ok(None)),
+                match selected_local(selected) {
+                    Some(identity) => self.bound_closure(db, node, identity),
+                    None => QueryPoll::Ready(Ok(None)),
                 }
             }
             _ => QueryPoll::Ready(Ok(None)),
@@ -1238,7 +1350,16 @@ impl<'a> Component<'a> {
             if statement.kind() != FactKind::Let || edge.ordinal != 0 {
                 continue;
             }
-            if let Some(initializer) = statement.operand(1)
+            // The closure may sit in parentheses or as a block's tail value.
+            let mut initializer = statement.operand(1);
+            while let Some(node) = initializer
+                && plan
+                    .fact(node)
+                    .is_some_and(|fact| matches!(fact.kind(), FactKind::Parenthesis | FactKind::Block))
+            {
+                initializer = plan.fact(node).and_then(|fact| fact.operand(0));
+            }
+            if let Some(initializer) = initializer
                 && plan
                     .fact(initializer)
                     .is_some_and(|fact| fact.kind() == FactKind::Closure)
@@ -1302,7 +1423,55 @@ impl<'a> Component<'a> {
         if self.literal_start {
             self.defer(callee, ConstraintDemand::SelectedDeclaration);
         } else {
-            self.unrecorded = true;
+            self.mark_unrecorded();
+        }
+    }
+    /// `module::member` where the root the Value goal selected is a module
+    /// (`use std::mem; mem::swap`): the member the module route selects from
+    /// the module's path spelled at its defining crate, as the dispatcher does.
+    fn module_rooted_callee(
+        &mut self,
+        db: &mut Database,
+        module: Digest,
+        member: &str,
+    ) -> QueryPoll<Option<Callee>> {
+        let Some(environment) = ready!(self.environment(db)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let sources: Vec<_> = environment.sources().iter().collect();
+        let Some(item) = sources
+            .iter()
+            .find_map(|source| source.outline_item(module))
+            .filter(|item| item.def_key.item_kind == crate::source::manifest::ItemKind::Module)
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let mut segments: Vec<&str> = item.def_key.module_path.iter().map(String::as_str).collect();
+        segments.push(&item.def_key.declared_name);
+        let spelled = format!(
+            "{}::{}::{member}",
+            super::callables::dollar_crate_segment(item.def_key.crate_key),
+            segments.join("::")
+        );
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let resolver = match super::callables::CallResolver::new(environment.names(), &sources) {
+            Ok(resolver) => resolver.with_members(Some(&members)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        match resolver.source_function(db, self.key.body.definition, &spelled) {
+            QueryPoll::Ready(Ok(super::callables::CallSelection::Source(callable))) => {
+                QueryPoll::Ready(Ok(Some(Callee::Source(callable.identity()))))
+            }
+            QueryPoll::Ready(Ok(super::callables::CallSelection::Facade(function, _))) => {
+                QueryPoll::Ready(Ok(Some(Callee::Facade(function))))
+            }
+            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) if not_closed(&error) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
         }
     }
     fn callee(&mut self, db: &mut Database, call: NodeId) -> QueryPoll<Option<Callee>> {
@@ -1335,14 +1504,15 @@ impl<'a> Component<'a> {
         let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("constraint callee query variant differs")));
         };
-        if selected.pending().is_some() {
+        let local = selected_local(selected);
+        if selected.pending().is_some() && local.is_none() {
             self.defer(callee, ConstraintDemand::SelectedDeclaration);
             return QueryPoll::Ready(Ok(None));
         }
         if let Some(function) = selected.facade() {
             return QueryPoll::Ready(Ok(Some(Callee::Facade(function))));
         }
-        if let Some(identity) = selected.local_binding() {
+        if let Some(identity) = local {
             if let Some(closure) = ready!(self.bound_closure(db, callee, identity)) {
                 return QueryPoll::Ready(Ok(Some(Callee::Closure(closure))));
             }
@@ -1350,6 +1520,26 @@ impl<'a> Component<'a> {
             // that function's signature.
             if let Some(function) = ready!(self.bound_function_item(db, callee, identity)) {
                 return QueryPoll::Ready(Ok(Some(Callee::Source(function))));
+            }
+            // A parameter of the executing function whose Type states the
+            // signature it is called with.
+            if ready!(self.binding_pattern(db, callee, identity)).is_none()
+                && let Some(bound) = ready!(self.parameter_fn_bound(db, callee))
+            {
+                return QueryPoll::Ready(Ok(Some(Callee::Bound(bound))));
+            }
+            self.runtime_callee(callee);
+            return QueryPoll::Ready(Ok(None));
+        }
+        // `Root::member` through a block item or import: the dispatcher selects
+        // the member against its root at run time (the declaration here is the
+        // root itself, an enum or module, not a callable).
+        if let Some(member) = selected.rooted() {
+            if let Some(declaration) = selected.declaration() {
+                let identity = declaration.identity();
+                if let Some(found) = ready!(self.module_rooted_callee(db, identity, member)) {
+                    return QueryPoll::Ready(Ok(Some(found)));
+                }
             }
             self.runtime_callee(callee);
             return QueryPoll::Ready(Ok(None));
@@ -1382,6 +1572,10 @@ impl<'a> Component<'a> {
                 self.expression(Some(call));
                 return QueryPoll::Ready(Ok(()));
             }
+            // The written parameter Type of the callable's signature.
+            Some(Callee::Bound(bound)) => {
+                return self.bound_argument(db, call, &bound, ordinal - 1);
+            }
             // No other facade parameter is numeric; `assert_failed`'s `&T`
             // and `&U` are generic formatting operands.
             Some(Callee::Facade(_)) | None => return QueryPoll::Ready(Ok(())),
@@ -1397,15 +1591,35 @@ impl<'a> Component<'a> {
         definition: Digest,
         ordinal: u32,
     ) -> QueryPoll<()> {
-        match ready!(self.parameter_term(db, call, definition, ordinal)) {
-            Some(term) => self.constrain_declared(
+        let Some(term) = ready!(self.parameter_term(db, call, definition, ordinal)) else {
+            return QueryPoll::Ready(Ok(()));
+        };
+        // A reference argument may deref-coerce to the declared reference
+        // Type (`&Vec<T>` to `&[T]`): the variable is then at the coerced
+        // Type's position.
+        match ready!(self.coerce_argument(db, call, ordinal, &term)) {
+            Some(coerced) => {
+                let current = self.via.clone();
+                for via in coerced {
+                    self.via = via;
+                    ready!(self.constrain_declared(
+                        db,
+                        call,
+                        definition,
+                        &term,
+                        ConstraintDemand::ParameterType,
+                    ));
+                }
+                self.via = current;
+                QueryPoll::Ready(Ok(()))
+            }
+            None => self.constrain_declared(
                 db,
                 call,
                 definition,
                 &term,
                 ConstraintDemand::ParameterType,
             ),
-            None => QueryPoll::Ready(Ok(())),
         }
     }
     /// Parameter `ordinal`'s declared Type term, or `None` after deferring
@@ -1604,7 +1818,8 @@ impl<'a> Component<'a> {
                 let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
                     return QueryPoll::Ready(Err(fault("binding use query variant differs")));
                 };
-                if observed.pending().is_some() {
+                let local = selected_local(observed);
+                if observed.pending().is_some() && local.is_none() {
                     // A fieldless constructor named as a value (`None`) is
                     // a constructed value of its declaration's Type.
                     match ready!(self.constructor(db, ConstructorSite::Expression(node))) {
@@ -1613,7 +1828,7 @@ impl<'a> Component<'a> {
                         }
                         None => self.defer(node, ConstraintDemand::ValueUse),
                     }
-                } else if let Some(identity) = observed.local_binding() {
+                } else if let Some(identity) = local {
                     if !self.bindings.contains_key(&(identity, self.via.clone())) {
                         let pattern = ready!(self.binding_pattern(db, node, identity));
                         match pattern {
@@ -1730,10 +1945,15 @@ impl<'a> Component<'a> {
                 }
                 None => self.defer(node, ConstraintDemand::ExpressionRelation),
             },
-            // `base[literal]` is one element of the auto-dereferenced base.
-            FactKind::Index if fact.flag() => {
-                let via = self.via.wrap(Step::Element).wrap(Step::AutoDeref);
-                self.expression_via(fact.operand(0), via);
+            // `base[index]` is one element of the auto-dereferenced base
+            // (a range index is `IndexRange`).
+            FactKind::Index => {
+                if ready!(self.index_is_element(db, node)) {
+                    let via = self.via.wrap(Step::Element).wrap(Step::AutoDeref);
+                    self.expression_via(fact.operand(0), via);
+                } else {
+                    self.defer(node, ConstraintDemand::ExpressionRelation);
+                }
             }
             // `base[range]` is a slice of the auto-dereferenced base: both
             // hold the same elements.
@@ -1796,6 +2016,8 @@ impl<'a> Component<'a> {
                     Some(Callee::Facade(LibraryFunction::MustUse)) => {
                         self.expression(fact.operand(1))
                     }
+                    // The written result Type of the callable's signature.
+                    Some(Callee::Bound(bound)) => ready!(self.bound_result(db, node, &bound)),
                     // `!` coerces to every Type.
                     Some(Callee::Facade(function)) if function.diverges() => {}
                     // `()` or `String`.
@@ -1823,7 +2045,7 @@ impl<'a> Component<'a> {
                 let definition = self.key.body.definition;
                 ready!(self.result(db, node, definition));
             } else {
-                self.unrecorded = true;
+                self.mark_unrecorded();
             }
             return QueryPoll::Ready(Ok(()));
         }
@@ -1851,21 +2073,9 @@ impl<'a> Component<'a> {
                             self.expression_via(Some(edge.parent), via)
                         }
                         // `*b` of a `Box<T>` is its content, the box's own
-                        // type argument (the builtin dereference).
-                        Some(Step::TypeArgument(0)) => {
-                            let boxed = match ready!(self.expression_type(db, node)) {
-                                Some(term) => ready!(self.box_contents(db, &term)).is_some(),
-                                None => false,
-                            };
-                            if boxed {
-                                let via =
-                                    self.via.unwrap(Step::TypeArgument(0)).expect("checked step");
-                                self.expression_via(Some(edge.parent), via)
-                            } else {
-                                self.defer(edge.parent, ConstraintDemand::ExpressionRelation)
-                            }
-                        }
-                        _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
+                        // type argument (the builtin dereference); another
+                        // Type with an overloaded `Deref` has its `Target`.
+                        _ => ready!(self.deref_outward(db, node, edge.parent)),
                     },
                     _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
                 },
@@ -2013,35 +2223,60 @@ impl<'a> Component<'a> {
                     let via = self.via.wrap(Step::Element);
                     self.expression_via(Some(edge.parent), via);
                 }
-                // The base of `base[literal]`: its element is the read.
-                FactKind::Index if edge.ordinal == 0 && parent.flag() => {
-                    let steps = &self.via.steps;
-                    let derefs = steps
-                        .iter()
-                        .take_while(|step| matches!(step, Step::Deref | Step::AutoDeref))
-                        .count();
-                    match steps.get(derefs) {
-                        Some(Step::Element) => {
-                            let via = Via {
-                                steps: steps[derefs + 1..].to_vec(),
-                                strict: false,
-                            };
-                            self.expression_via(Some(edge.parent), via);
+                // The base of `base[index]`: its element is the read. A growable
+                // array's element is its type argument.
+                FactKind::Index if edge.ordinal == 0 => {
+                    if !ready!(self.index_is_element(db, edge.parent)) {
+                        self.defer(edge.parent, ConstraintDemand::ExpressionRelation);
+                    } else {
+                        let steps = self.via.steps.clone();
+                        let derefs = steps
+                            .iter()
+                            .take_while(|step| matches!(step, Step::Deref | Step::AutoDeref))
+                            .count();
+                        let vector = matches!(steps.get(derefs), Some(Step::TypeArgument(0)))
+                            && ready!(self.is_vec_expression(db, node));
+                        match steps.get(derefs) {
+                            Some(Step::Element) => {
+                                let via = Via {
+                                    steps: steps[derefs + 1..].to_vec(),
+                                    strict: false,
+                                };
+                                self.expression_via(Some(edge.parent), via);
+                            }
+                            Some(Step::TypeArgument(0)) if vector => {
+                                let via = Via {
+                                    steps: steps[derefs + 1..].to_vec(),
+                                    strict: false,
+                                };
+                                self.expression_via(Some(edge.parent), via);
+                            }
+                            _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
                         }
-                        _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
                     }
                 }
                 // The base of `base[range]`: its elements are the slice's.
                 FactKind::IndexRange if edge.ordinal == 0 => {
-                    let steps = &self.via.steps;
+                    let steps = self.via.steps.clone();
                     let derefs = steps
                         .iter()
                         .take_while(|step| matches!(step, Step::Deref | Step::AutoDeref))
                         .count();
+                    let vector = matches!(steps.get(derefs), Some(Step::TypeArgument(0)))
+                        && ready!(self.is_vec_expression(db, node));
                     match steps.get(derefs) {
                         Some(Step::Element) => {
                             let via = Via {
                                 steps: steps[derefs..].to_vec(),
+                                strict: false,
+                            };
+                            self.expression_via(Some(edge.parent), via);
+                        }
+                        Some(Step::TypeArgument(0)) if vector => {
+                            let mut rewritten = steps[derefs..].to_vec();
+                            rewritten[0] = Step::Element;
+                            let via = Via {
+                                steps: rewritten,
                                 strict: false,
                             };
                             self.expression_via(Some(edge.parent), via);
@@ -2207,15 +2442,44 @@ impl<'a> Component<'a> {
         root: NodeId,
         node: &PatternNode,
     ) -> QueryPoll<()> {
+        let peeled = self.peeled;
+        let result = self.walk_node(db, root, node);
+        self.peeled = peeled;
+        result
+    }
+    fn walk_node(
+        &mut self,
+        db: &mut Database,
+        root: NodeId,
+        node: &PatternNode,
+    ) -> QueryPoll<()> {
+        // Default binding modes: a pattern that is not a reference pattern
+        // or a binding, matched against a reference, matches the referent
+        // and binds its names by reference.
+        if matches!(
+            node,
+            PatternNode::Tuple { .. }
+                | PatternNode::Array { .. }
+                | PatternNode::Constructor { .. }
+                | PatternNode::Literal(_)
+                | PatternNode::Range { .. }
+        ) {
+            while let Some(via) = self.via.unwrap(Step::Deref) {
+                self.via = via;
+                self.peeled = true;
+            }
+        }
         match node {
             PatternNode::Wildcard => {}
             PatternNode::Binding {
                 occurrence,
                 binding,
                 by_reference,
+                mutable,
                 subpattern,
                 ..
             } => {
+                let by_reference = &(*by_reference || (self.peeled && !*mutable));
                 // Or-alternatives share the canonical binding's identity.
                 match ready!(self.pattern_binding(db, *binding)) {
                     Some(identity) if *by_reference => {
@@ -2225,7 +2489,36 @@ impl<'a> Component<'a> {
                         self.via = current;
                     }
                     Some(identity) => self.binding(identity, *binding),
-                    None => self.defer(*occurrence, ConstraintDemand::Binding),
+                    // An identifier naming a constant or a unit constructor
+                    // matches by value: a constant states its declared Type.
+                    None => {
+                        let observed = ready!(db.fetch(
+                            &SyntaxProvider,
+                            QueryKey::EnteredValue(entry(self.key, *binding))
+                        ));
+                        let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
+                            return QueryPoll::Ready(Err(fault("pattern name query variant differs")));
+                        };
+                        match observed.declaration() {
+                            Some(declaration)
+                                if observed.pending().is_none()
+                                    && observed.local_binding().is_none() =>
+                            {
+                                let identity = declaration.identity();
+                                if let Some(term) =
+                                    ready!(self.declared_item_type(db, observed, identity))
+                                {
+                                    ready!(self.constrain_term(
+                                        db,
+                                        *occurrence,
+                                        &term,
+                                        ConstraintDemand::SelectedDeclaration
+                                    ));
+                                }
+                            }
+                            _ => self.defer(*occurrence, ConstraintDemand::Binding),
+                        }
+                    }
                 }
                 if let Some(subpattern) = subpattern {
                     let via = self.via.clone();
@@ -2245,7 +2538,7 @@ impl<'a> Component<'a> {
                                 return QueryPoll::Ready(Err(error));
                             }
                         }
-                        Err(_) => self.unrecorded = true,
+                        Err(_) => self.mark_unrecorded(),
                     }
                 }
             }
@@ -2273,7 +2566,7 @@ impl<'a> Component<'a> {
                                     }
                                 }
                             }
-                            None => self.unrecorded = true,
+                            None => self.mark_unrecorded(),
                         }
                     } else if let Some(item) = items.get(ordinal as usize) {
                         ready!(self.walk(db, root, item, via));
@@ -2286,7 +2579,11 @@ impl<'a> Component<'a> {
                 _ => self.defer(root, ConstraintDemand::Binding),
             },
             PatternNode::Reference { inner, .. } => match self.via.unwrap(Step::Deref) {
-                Some(via) => ready!(self.walk(db, root, inner, via)),
+                Some(via) => {
+                    // A reference pattern resets the default binding mode.
+                    self.peeled = false;
+                    ready!(self.walk(db, root, inner, via))
+                }
                 None => self.defer(root, ConstraintDemand::Binding),
             },
             PatternNode::Or(alternatives) => {
@@ -2308,7 +2605,7 @@ impl<'a> Component<'a> {
             PatternNode::Constructor { slot, form } => {
                 ready!(self.walk_constructor(db, root, *slot, form))
             }
-            PatternNode::Unsupported(_) => self.unrecorded = true,
+            PatternNode::Unsupported(_) => self.mark_unrecorded(),
         }
         QueryPoll::Ready(Ok(()))
     }
@@ -2355,32 +2652,27 @@ impl<'a> Component<'a> {
         // The value this binding's root pattern matches, at its position.
         match plan.occurrence(pattern) {
             Some(occurrence) => {
-                let bound = if occurrence.by_reference {
-                    self.via.unwrap(Step::Deref)
-                } else {
-                    Some(self.via.clone())
-                };
-                let mut steps = Vec::with_capacity(occurrence.steps.len());
-                for step in &occurrence.steps {
-                    let step = match *step {
-                        PatternStep::Deref => Some(Step::Deref),
-                        PatternStep::Field(position) => Some(Step::Field(position)),
-                        PatternStep::Element => Some(Step::Element),
-                        PatternStep::Constructor { slot, written } => ready!(
-                            self.occurrence_constructor_step(db, occurrence.root, slot, written)
-                        ),
-                    };
-                    match step {
-                        Some(step) => steps.push(step),
-                        None => break,
+                let (matched, skipped) = ready!(self.root_matched_type(db, occurrence.root));
+                match ready!(self.occurrence_steps(db, occurrence, skipped, matched)) {
+                    Some((steps, by_reference)) => {
+                        // A reference binding's projection starts at its
+                        // referent (a field access autoderefs it).
+                        let bound = if by_reference {
+                            self.via
+                                .unwrap(Step::Deref)
+                                .or_else(|| self.via.unwrap(Step::AutoDeref))
+                        } else {
+                            Some(self.via.clone())
+                        };
+                        match bound {
+                            Some(bound) => {
+                                let via = bound.within(&steps);
+                                self.pattern_via(Some(occurrence.root), via);
+                            }
+                            None => self.defer(pattern, ConstraintDemand::Binding),
+                        }
                     }
-                }
-                match bound {
-                    Some(bound) if steps.len() == occurrence.steps.len() => {
-                        let via = bound.within(&steps);
-                        self.pattern_via(Some(occurrence.root), via);
-                    }
-                    _ => self.defer(pattern, ConstraintDemand::Binding),
+                    None => self.defer(pattern, ConstraintDemand::Binding),
                 }
             }
             // A closure parameter has its written Type, if any; without one
@@ -2394,6 +2686,10 @@ impl<'a> Component<'a> {
                     .is_some_and(|fact| fact.annotation_node().is_some())
                 {
                     ready!(self.annotation(db, pattern));
+                } else {
+                    // Passed for a parameter bounded by `Fn*(A, ..) -> R`: the
+                    // parameter holds the bound's `A`.
+                    ready!(self.closure_parameter_bound(db, pattern));
                 }
             }
             // A parameter, loop or `if let` binding: its Type needs the
@@ -2406,7 +2702,7 @@ impl<'a> Component<'a> {
         };
         // An unindexed region after the declaration may read this local.
         if row.hidden().iter().any(|region| *region > pattern) {
-            self.unrecorded = true;
+            self.mark_unrecorded();
         }
         for use_node in row.paths().iter().copied() {
             let observed = ready!(db.fetch(
@@ -2416,15 +2712,55 @@ impl<'a> Component<'a> {
             let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
                 return QueryPoll::Ready(Err(fault("binding use query variant differs")));
             };
-            if observed.pending().is_some() {
+            let local = selected_local(observed);
+            if observed.pending().is_some() && local.is_none() {
                 self.defer(use_node, ConstraintDemand::ValueUse);
                 continue;
             }
-            if observed.local_binding() == Some(identity) {
+            if local == Some(identity) {
                 self.expression(Some(use_node));
             }
         }
         QueryPoll::Ready(Ok(()))
+    }
+
+    /// Whether the index expression `index` (`base[i]`) reads one element
+    /// place: a literal index certainly does; another index operand does
+    /// unless its static Type is a nominal (a `Range` value slices).
+    pub(super) fn index_is_element(
+        &mut self,
+        db: &mut Database,
+        index: NodeId,
+    ) -> QueryPoll<bool> {
+        let fact = match self.fact(index) {
+            Ok(fact) => fact,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        if fact.flag() {
+            return QueryPoll::Ready(Ok(true));
+        }
+        let Some(operand) = fact.operand(1) else {
+            return QueryPoll::Ready(Ok(false));
+        };
+        QueryPoll::Ready(Ok(!matches!(
+            ready!(self.expression_type(db, operand)),
+            Some(TyTerm::Nominal(..))
+        )))
+    }
+    /// Whether the static Type of `node`, through references, is the
+    /// growable array lang item.
+    pub(super) fn is_vec_expression(
+        &mut self,
+        db: &mut Database,
+        node: NodeId,
+    ) -> QueryPoll<bool> {
+        let Some(mut term) = ready!(self.expression_type(db, node)) else {
+            return QueryPoll::Ready(Ok(false));
+        };
+        while let TyTerm::Ref(_, _, inner) = term {
+            term = *inner;
+        }
+        QueryPoll::Ready(Ok(ready!(self.vec_elements(db, &term)).is_some()))
     }
 
     fn solve(&mut self, db: &mut Database) -> QueryPoll<()> {
@@ -2465,8 +2801,15 @@ fn pattern_binding(db: &mut Database, key: &PcKey, pattern: NodeId) -> QueryPoll
     let QueryValue::EnteredValue(target) = selected.value.as_ref() else {
         return QueryPoll::Ready(Err(fault("binding target query variant differs")));
     };
-    let (Some(binding), Some(target)) = (target.local_binding(), target.binding_target()) else {
-        return QueryPoll::Ready(Ok(None));
+    let goal = target;
+    let (Some(binding), Some(target)) = (goal.local_binding(), goal.binding_target()) else {
+        // The pattern's module classification is not published yet: its
+        // retained occurrence row still states the binding's identity.
+        // TEMPTRACE
+        if std::env::var_os("LRR_NUM_TRACE").is_some() {
+            eprintln!("NUMTRACE pattern_binding none node={} pending={:?} local={:?} target={}", pattern.0, goal.pending(), goal.local_binding().is_some(), goal.binding_target().is_some());
+        }
+        return patterns::unclassified_binding(db, key, pattern, goal);
     };
     if binding != target.identity() {
         return QueryPoll::Ready(Err(fault("binding target occurrence identity differs")));
@@ -2515,10 +2858,7 @@ pub(crate) fn declaring_let(db: &mut Database, key: &PcKey) -> QueryPoll<Option<
     let QueryValue::EnteredValue(observed) = observed.value.as_ref() else {
         return QueryPoll::Ready(Err(fault("binding use query variant differs")));
     };
-    let Some(identity) = observed
-        .local_binding()
-        .filter(|_| observed.pending().is_none())
-    else {
+    let Some(identity) = selected_local(observed) else {
         return QueryPoll::Ready(Ok(None));
     };
     let Some(pattern) = ready!(binding_pattern(db, key, plan, node, identity)) else {
@@ -2644,6 +2984,10 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
         }
         _ => return QueryPoll::Ready(Ok(result)),
     };
+    // TEMPTRACE
+    if std::env::var_os("LRR_NUM_TRACE").is_some() {
+        eprintln!("NUMTRACE start node={} kind={:?}", key.node, fact.kind());
+    }
     let mut component = Component::new(key, plan, floating);
     component.literal_start = matches!(start, Start::Literal(_));
     match start {
@@ -2669,6 +3013,10 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
             PrimitiveType::I32
         }),
     };
+    // TEMPTRACE
+    if std::env::var_os("LRR_NUM_TRACE").is_some() {
+        eprintln!("NUMTRACE end node={} state={:?}", key.node, result.state);
+    }
     if matches!(result.state, BindingConstraintState::Resolved(_)) {
         result.members = component.members();
     }

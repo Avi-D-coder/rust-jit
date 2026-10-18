@@ -44,8 +44,23 @@ impl RunMachine {
         if self.frame.facade_calls.contains_key(&identity) {
             return QueryPoll::Ready(Ok(true));
         }
-        if !library_candidate(name) || self.pending.contains_key(&identity) {
+        if self.pending.contains_key(&identity) {
             return QueryPoll::Ready(Ok(false));
+        }
+        // A relative callee a block-level import binds is selected by its
+        // entered lexical Value goal, as the written library path is below.
+        if !library_candidate(name) {
+            return match self.lexical_facade_call(db, site, name) {
+                QueryPoll::Ready(Ok(Some((function, definition)))) => {
+                    self.frame
+                        .facade_calls
+                        .insert(identity, (function, definition));
+                    QueryPoll::Ready(Ok(true))
+                }
+                QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(false)),
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            };
         }
         let Some(graph) = &self.graph else {
             return QueryPoll::Ready(Ok(false));
@@ -659,6 +674,63 @@ fn execute(
         LibraryFunction::VecAsStr => {
             let reference = store.peek_ticket(argument()?)?;
             Ok(FacadeOutcome::Value(store.vec_str(reference)?))
+        }
+        // Raw pointers (E-R5-008): the address table and place operations
+        // live in `runtime/cell_pointers.rs`.
+        LibraryFunction::PtrNull | LibraryFunction::PtrNullMut => {
+            let pointer = store.raw_pointer_type(
+                function == LibraryFunction::PtrNullMut,
+                crate::runtime::shape::TypeId(1),
+            )?;
+            let value = store.null_pointer(pointer)?;
+            Ok(FacadeOutcome::Value(store.ticket(value)?))
+        }
+        LibraryFunction::PtrAsConst | LibraryFunction::PtrAsMut => {
+            let pointer = store.peek_ticket(argument()?)?;
+            let value =
+                store.pointer_with_mutability(pointer, function == LibraryFunction::PtrAsMut)?;
+            Ok(FacadeOutcome::Value(store.ticket(value)?))
+        }
+        LibraryFunction::PtrOffset => {
+            let [pointer, count] = tickets else {
+                return Err(facade_fault("pointer offset arguments differ"));
+            };
+            let (pointer, count) = (store.peek_ticket(*pointer)?, store.peek_ticket(*count)?);
+            let moved = store.pointer_offset(pointer, count.payload as i64)?;
+            Ok(FacadeOutcome::Value(store.ticket(moved)?))
+        }
+        LibraryFunction::PtrOffsetFrom => {
+            let [pointer, origin] = tickets else {
+                return Err(facade_fault("pointer distance arguments differ"));
+            };
+            let (pointer, origin) = (store.peek_ticket(*pointer)?, store.peek_ticket(*origin)?);
+            let distance = store.pointer_offset_from(pointer, origin)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::signed(
+                crate::runtime::shape::TypeId(8),
+                distance,
+            )?)?))
+        }
+        LibraryFunction::PtrRead => {
+            let pointer = store.peek_ticket(argument()?)?;
+            Ok(FacadeOutcome::Value(store.pointer_read(pointer)?))
+        }
+        LibraryFunction::PtrWrite => {
+            let [pointer, value] = tickets else {
+                return Err(facade_fault("pointer write arguments differ"));
+            };
+            let pointer = store.peek_ticket(*pointer)?;
+            moved_in.push(*value);
+            store.pointer_write(pointer, *value)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unit())?))
+        }
+        LibraryFunction::PtrRetype => Ok(FacadeOutcome::Value(argument()?)),
+        LibraryFunction::SliceAsPtr | LibraryFunction::SliceAsMutPtr => {
+            let reference = store.peek_ticket(argument()?)?;
+            let pointer = store.elements_pointer(
+                reference,
+                function == LibraryFunction::SliceAsMutPtr,
+            )?;
+            Ok(FacadeOutcome::Value(store.ticket(pointer)?))
         }
         LibraryFunction::Unsupported => Err(Diagnostic::new(
             "LRR-E-FACADE-MISSING",

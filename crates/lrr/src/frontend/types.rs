@@ -513,6 +513,17 @@ impl<'a> SchemaNames<'a> {
                     WrittenType::Array(Box::new(index(*element, schema)?), len)
                 }
                 WrittenType::Slice(element) => WrittenType::Slice(Box::new(index(*element, schema)?)),
+                WrittenType::Ptr { mutable, target } => WrittenType::Ptr {
+                    mutable,
+                    target: Box::new(index(*target, schema)?),
+                },
+                WrittenType::FnPtr { params, result } => WrittenType::FnPtr {
+                    params: params
+                        .into_iter()
+                        .map(|param| index(param, schema))
+                        .collect::<Option<_>>()?,
+                    result: Box::new(index(*result, schema)?),
+                },
                 WrittenType::Ref {
                     region,
                     mutable,
@@ -618,6 +629,36 @@ impl<'a> SchemaNames<'a> {
                     return QueryPoll::Ready(Ok(None));
                 };
                 WrittenType::Array(Box::new(nested!(&element)), len)
+            }
+            // `*const T` / `*mut T` and `fn(A) -> R` fields (E-R5-008).
+            ast::Type::PtrType(pointer) => {
+                let Some(target) = pointer.ty() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                WrittenType::Ptr {
+                    mutable: pointer.mut_token().is_some(),
+                    target: Box::new(nested!(&target)),
+                }
+            }
+            ast::Type::FnPtrType(function) => {
+                let Some(list) = function.param_list() else {
+                    return QueryPoll::Ready(Ok(None));
+                };
+                let mut params = Vec::new();
+                for parameter in list.params() {
+                    let Some(ty) = parameter.ty() else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    params.push(nested!(&ty));
+                }
+                let result = match function.ret_type().and_then(|ret| ret.ty()) {
+                    Some(ty) => nested!(&ty),
+                    None => WrittenType::Primitive(crate::ir::op::PrimitiveType::Unit),
+                };
+                WrittenType::FnPtr {
+                    params,
+                    result: Box::new(result),
+                }
             }
             // A field's region is a declaration lifetime parameter; regions
             // are not runtime data, so the projected view names it erased.

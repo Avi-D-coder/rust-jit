@@ -54,6 +54,19 @@ pub enum WrittenType {
     /// declaration's type parameters), instantiated by the value's
     /// `TypeKey::Nominal` args.
     Parameter(u32),
+    /// `*const T` / `*mut T` (E-R5-008). Like a slice or trait-object pointee
+    /// it is reached through a coercion or an `as` cast, so it names no single
+    /// exact descriptor (`exact()` is false).
+    Ptr {
+        mutable: bool,
+        target: Box<WrittenType>,
+    },
+    /// `fn(A, B) -> R`, `unsafe fn` or `extern "C" fn`: the ABI and `unsafe`
+    /// qualifiers are not part of a runtime fn pointer.
+    FnPtr {
+        params: Vec<WrittenType>,
+        result: Box<WrittenType>,
+    },
 }
 impl WrittenType {
     /// Whether this annotation names one exact runtime descriptor. An
@@ -66,8 +79,18 @@ impl WrittenType {
             Self::Array(element, _) => element.exact(),
             Self::Ref { target, .. } => target.exact(),
             Self::Generic { args, .. } => args.iter().all(Self::exact),
-            Self::Slice(_) | Self::Infer | Self::Dyn(_) | Self::Parameter(_) => false,
+            Self::Slice(_)
+            | Self::Infer
+            | Self::Dyn(_)
+            | Self::Parameter(_)
+            | Self::Ptr { .. }
+            | Self::FnPtr { .. } => false,
         }
+    }
+    /// Whether this is a raw pointer or fn pointer annotation, whose values
+    /// arrive by pointer coercion or cast (E-R5-008).
+    pub(crate) fn is_pointer(&self) -> bool {
+        matches!(self, Self::Ptr { .. } | Self::FnPtr { .. })
     }
     /// Whether no part of this Type is left to inference or reached through a
     /// coercion (an inference hole, a slice or a trait object); declaration
@@ -79,7 +102,9 @@ impl WrittenType {
             Self::Array(element, _) => element.coercion_free(),
             Self::Ref { target, .. } => target.coercion_free(),
             Self::Generic { args, .. } => args.iter().all(Self::coercion_free),
-            Self::Slice(_) | Self::Infer | Self::Dyn(_) => false,
+            Self::Slice(_) | Self::Infer | Self::Dyn(_) | Self::Ptr { .. } | Self::FnPtr { .. } => {
+                false
+            }
         }
     }
     /// Whether a declaration type parameter occurs in this Type.
@@ -93,7 +118,13 @@ impl WrittenType {
             | Self::Slice(element)
             | Self::Ref {
                 target: element, ..
+            }
+            | Self::Ptr {
+                target: element, ..
             } => element.has_parameters(),
+            Self::FnPtr { params, result } => {
+                params.iter().any(Self::has_parameters) || result.has_parameters()
+            }
         }
     }
     /// The source Type this annotation names; `None` while a leaf is left to
@@ -148,6 +179,18 @@ impl WrittenType {
             Self::Infer => return None,
             Self::Dyn(schema) => TyTerm::Dyn(*schema),
             Self::Parameter(index) => store?.descriptor_source_term(*args.get(*index as usize)?)?,
+            Self::Ptr { mutable, target } => {
+                crate::traits::pointer_terms::raw_pointer(*mutable, target.source_in(store, args)?)
+            }
+            Self::FnPtr { params, result } => {
+                crate::traits::pointer_terms::fn_pointer(
+                    params
+                        .iter()
+                        .map(|param| param.source_in(store, args))
+                        .collect::<Option<Vec<_>>>()?,
+                    result.source_in(store, args)?,
+                )
+            }
         })
     }
     /// Every written region, for recipe verification.
@@ -162,6 +205,11 @@ impl WrittenType {
             Self::Tuple(members) => members.iter().all(|member| member.regions_satisfy(check)),
             Self::Generic { args, .. } => args.iter().all(|arg| arg.regions_satisfy(check)),
             Self::Array(element, _) | Self::Slice(element) => element.regions_satisfy(check),
+            Self::Ptr { target, .. } => target.regions_satisfy(check),
+            Self::FnPtr { params, result } => {
+                params.iter().all(|param| param.regions_satisfy(check))
+                    && result.regions_satisfy(check)
+            }
             Self::Ref { region, target, .. } => check(region) && target.regions_satisfy(check),
         }
     }
@@ -182,7 +230,8 @@ impl WrittenType {
     /// The already interned descriptor of an exact annotation, if any; never
     /// interns.
     pub(crate) fn find(&self, store: &GuestStore) -> Result<Option<TypeId>, Diagnostic> {
-        if !self.exact() {
+        // A written pointer names one descriptor when its parts are closed.
+        if !self.exact() && !self.is_pointer() {
             return Ok(None);
         }
         self.find_in(store, &[])
@@ -251,13 +300,40 @@ impl WrittenType {
                 }
                 store.find_type(&Self::generic_key(identity, definition, schema, ids))
             }
+            Self::Ptr { mutable, target } => {
+                let Some(target) = target.find_in(store, args)? else {
+                    return Ok(None);
+                };
+                store.find_type(&TypeKey::RawPtr {
+                    mutable: *mutable,
+                    target,
+                })
+            }
+            Self::FnPtr { params, result } => {
+                let mut ids = Vec::new();
+                for param in params {
+                    let Some(id) = param.find_in(store, args)? else {
+                        return Ok(None);
+                    };
+                    ids.push(id);
+                }
+                let Some(result) = result.find_in(store, args)? else {
+                    return Ok(None);
+                };
+                store.find_type(&TypeKey::Function {
+                    params: ids.into_boxed_slice(),
+                    result,
+                })
+            }
             Self::Infer | Self::Dyn(_) => None,
         })
     }
     /// Intern the run-local descriptor of an exact annotation; `None` for a
     /// structure that names no single descriptor.
     pub(crate) fn materialize(&self, store: &mut GuestStore) -> Result<Option<TypeId>, Diagnostic> {
-        if !self.exact() {
+        // A written pointer is interned even though it is reached through a
+        // coercion: the slot it hints then coerces its value to it (E-R5-008).
+        if !self.exact() && !self.is_pointer() {
             return Ok(None);
         }
         self.materialize_in(store, &[])
@@ -337,6 +413,31 @@ impl WrittenType {
                 }
                 store.intern_type(Self::generic_key(identity, definition, schema, ids))?
             }
+            Self::Ptr { mutable, target } => {
+                let Some(target) = target.materialize_with(store, args)? else {
+                    return Ok(None);
+                };
+                store.intern_type(TypeKey::RawPtr {
+                    mutable: *mutable,
+                    target,
+                })?
+            }
+            Self::FnPtr { params, result } => {
+                let mut ids = Vec::new();
+                for param in params {
+                    let Some(id) = param.materialize_with(store, args)? else {
+                        return Ok(None);
+                    };
+                    ids.push(id);
+                }
+                let Some(result) = result.materialize_with(store, args)? else {
+                    return Ok(None);
+                };
+                store.intern_type(TypeKey::Function {
+                    params: ids.into_boxed_slice(),
+                    result,
+                })?
+            }
             Self::Infer | Self::Dyn(_) => return Ok(None),
         }))
     }
@@ -403,6 +504,32 @@ impl WrittenType {
                 },
             ) => mutable == actual && target.bind(*id, store, args)?,
             (
+                Self::Ptr {
+                    mutable, target, ..
+                },
+                TypeKey::RawPtr {
+                    mutable: actual,
+                    target: id,
+                },
+            ) => mutable == actual && target.bind(*id, store, args)?,
+            (
+                Self::FnPtr { params, result },
+                TypeKey::Function {
+                    params: ids,
+                    result: actual,
+                },
+            ) => {
+                if params.len() != ids.len() {
+                    return Ok(false);
+                }
+                for (param, id) in params.iter().zip(ids.iter()) {
+                    if !param.bind(*id, store, args)? {
+                        return Ok(false);
+                    }
+                }
+                result.bind(*actual, store, args)?
+            }
+            (
                 Self::Generic {
                     identity,
                     args: written,
@@ -443,7 +570,17 @@ impl WrittenType {
             | Self::Slice(element)
             | Self::Ref {
                 target: element, ..
+            }
+            | Self::Ptr {
+                target: element, ..
             } => boxed(element),
+            Self::FnPtr { params, result } => params.iter().fold(
+                params
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<Self>())
+                    .saturating_add(boxed(result)),
+                |bytes, param| bytes.saturating_add(param.heap_bytes()),
+            ),
             Self::Generic { args, .. } => args.iter().fold(
                 args.capacity().saturating_mul(std::mem::size_of::<Self>()),
                 |bytes, arg| bytes.saturating_add(arg.heap_bytes()),
@@ -507,6 +644,16 @@ impl StableEncode for WrittenType {
             Self::Parameter(index) => {
                 e.u32(10);
                 e.u32(*index);
+            }
+            Self::Ptr { mutable, target } => {
+                e.u32(11);
+                e.bool(*mutable);
+                e.record(target.as_ref());
+            }
+            Self::FnPtr { params, result } => {
+                e.u32(12);
+                e.sequence(params, |e, param| e.record(param));
+                e.record(result.as_ref());
             }
         }
     }

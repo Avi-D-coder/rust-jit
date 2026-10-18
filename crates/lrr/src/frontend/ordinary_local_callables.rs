@@ -301,6 +301,14 @@ fn admit_entered_local(
     if let Some(binding) = goal.local_binding() {
         return QueryPoll::Ready(Ok(EnteredLocalCall::Binding(binding)));
     }
+    // A closed library facade function has no source declaration: the
+    // dispatcher selects it by its definition identity. A `Root::member`
+    // path selects the member against its lexically selected root there too.
+    if goal.facade().is_some() || goal.rooted().is_some() {
+        return QueryPoll::Ready(Ok(EnteredLocalCall::Pending(
+            ValueGoalDemand::PathAdjustment,
+        )));
+    }
     let Some(declaration) = goal.declaration() else {
         return QueryPoll::Ready(Err(fault(
             "ordinary callable Value selection has no declaration",
@@ -324,7 +332,15 @@ fn admit_entered_local(
     let Some((item_index, row)) = rows.next() else {
         return QueryPoll::Ready(Err(fault("ordinary callable canonical declaration absent")));
     };
-    if rows.next().is_some()
+    let unique = rows.next().is_none();
+    // A Value item that is no function (a tuple struct's constructor) is no
+    // source callable: the dispatcher binds it as a constructor.
+    if unique && row.attribute_input.is_none() && row.item.def_key.item_kind == ItemKind::Struct {
+        return QueryPoll::Ready(Ok(EnteredLocalCall::Pending(
+            ValueGoalDemand::BindingClassification(declaration.identity()),
+        )));
+    }
+    if !unique
         || row.attribute_input.is_some()
         || row.item.def_key.item_kind != ItemKind::Function
         || row.item.scope != declaration.context().scope

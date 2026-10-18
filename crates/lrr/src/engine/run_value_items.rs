@@ -16,6 +16,29 @@ fn unsupported(message: String) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message)
 }
 
+/// The declaration an entered lexical Value goal selected (block items and
+/// block-level imports shadow module items).
+#[derive(Debug, Clone)]
+pub(super) struct LexicalSelection {
+    /// The item's identity; an enum variant's own identity for a variant.
+    pub(super) identity: crate::core::digest::Digest,
+    pub(super) kind: Option<ItemKind>,
+    /// The enum variant a named import or glob of its variants selected.
+    pub(super) variant: Option<crate::frontend::names::EnumVariantDefinition>,
+    /// Declared in the executing body (not a module item reached by an import).
+    pub(super) local: bool,
+    /// A closed library facade function a block-level import brought into
+    /// scope, with its definition identity.
+    pub(super) facade: Option<(crate::facade::functions::LibraryFunction, crate::core::digest::Digest)>,
+    /// `Root::member`: the written member, `identity`/`kind` naming the root
+    /// the entered lexical prefix selected (an enum, whose variant it is).
+    pub(super) rooted: Option<String>,
+    /// A module the root selected (`use std::mem; mem::swap`): the module's
+    /// path spelled from its defining crate's root, which the module route
+    /// resolves like any written path.
+    pub(super) module_root: Option<String>,
+}
+
 fn primitive_view(value: &crate::runtime::value::ValueRepr) -> Option<crate::ir::op::PrimitiveType> {
     use crate::ir::op::PrimitiveType as P;
     Some(match value.type_id {
@@ -48,27 +71,68 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         path: &str,
+        stated: Option<&crate::ir::written_type::WrittenType>,
     ) -> QueryPoll<bool> {
-        if path.contains("::") {
+        // A single name, or `Root::member` whose root a block item or import
+        // may bind; longer or anchored paths are the module route's.
+        if path.starts_with("::") || path.matches("::").count() > 1 {
             return QueryPoll::Ready(Ok(false));
         }
         let pc = self.frame.pc().clone();
         let selected = match self.lexical_values.get(&pc) {
-            Some(selected) => *selected,
+            Some(selected) => selected.clone(),
             None => {
                 let selected = match self.select_lexical_value(db) {
                     QueryPoll::Ready(Ok(selected)) => selected,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 };
-                self.lexical_values.insert(pc, selected);
+                self.lexical_values.insert(pc.clone(), selected.clone());
                 selected
             }
         };
-        let Some((identity, kind)) = selected else {
+        let Some(selected) = selected else {
             return QueryPoll::Ready(Ok(false));
         };
-        if kind == Some(ItemKind::Function) && !self.local_function_values.contains_key(&identity) {
+        // A unit struct or unit variant is a constructor value, bound by the
+        // same service module-level constructor paths use.
+        match self.lexical_constructor(db, &selected) {
+            QueryPoll::Ready(Ok(Some(bound))) => {
+                return self.prepare_lexical_constructor_value(bound, stated).map(|()| true);
+            }
+            QueryPoll::Ready(Ok(None)) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        // `Module::item` through an import of the module: the item's path
+        // spelled from the module's defining crate, selected by the ordinary
+        // module route (constructors, then constants, statics and functions).
+        if let (Some(root), Some(member)) = (&selected.module_root, &selected.rooted) {
+            let rewritten = format!("{root}::{member}");
+            match self.select_nominal_constructor(db, &rewritten) {
+                QueryPoll::Ready(Ok(Some(bound))) => {
+                    return self.prepare_lexical_constructor_value(bound, stated).map(|()| true);
+                }
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            return self.prepare_item_value_path(db, &rewritten).map(|()| true);
+        }
+        // The root of `Root::member` was selected lexically but names no
+        // enum variant: an associated item of a block-scoped or imported
+        // type, resolved through the member index, is not selected here and
+        // must not fall back to a same-named module item.
+        if selected.rooted.is_some() {
+            return QueryPoll::Ready(Err(unsupported(format!(
+                "value path `{path}` is an associated item of a block-scoped or imported type; its member selection awaits integration"
+            ))));
+        }
+        let LexicalSelection { identity, kind, .. } = selected;
+        if kind == Some(ItemKind::Function)
+            && selected.local
+            && !self.local_function_values.contains_key(&identity)
+        {
             let module_item = self
                 .sources
                 .iter()
@@ -83,6 +147,81 @@ impl RunMachine {
         }
         self.prepare_selected_item_value(db, path, identity, kind)
             .map(|()| true)
+    }
+    /// The bound constructor a lexical selection names, if it names one: a
+    /// struct (local or reached through an import) or an enum variant.
+    pub(super) fn lexical_constructor(
+        &self,
+        db: &mut Database,
+        selected: &LexicalSelection,
+    ) -> QueryPoll<Option<crate::frontend::nominal_constructors::BoundConstructor>> {
+        use crate::frontend::nominal_constructors::{NominalConstructorTarget, bind_constructor};
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Err(call_fault("value paths require a checked source catalogue")));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
+        // `Enum::Variant`: the root selected an enum declared in this body
+        // or imported; only a member naming a declared variant is a
+        // constructor (an associated function of the enum is not).
+        if let Some(member) = &selected.rooted {
+            if selected.kind != Some(ItemKind::Enum) {
+                return QueryPoll::Ready(Ok(None));
+            }
+            let schema = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(selected.identity)) {
+                QueryPoll::Ready(Ok(schema)) => schema,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+                return QueryPoll::Ready(Err(call_fault("lexical enum schema outcome differs")));
+            };
+            if schema.variant(Some(member.as_str())).is_err() {
+                return QueryPoll::Ready(Ok(None));
+            }
+            let target = if selected.local {
+                match NominalConstructorTarget::local(db, selected.identity, Some(member.as_str())) {
+                    QueryPoll::Ready(Ok(Some(target))) => target,
+                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            } else {
+                let variant = crate::frontend::names::EnumVariantDefinition {
+                    enumeration: selected.identity,
+                    name: member.clone(),
+                };
+                match NominalConstructorTarget::variant(&sources, &variant) {
+                    Ok(target) => target,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            };
+            return bind_constructor(db, graph, &sources, &target).map(Some);
+        }
+        let target = match (&selected.variant, selected.kind) {
+            (Some(variant), _) => match NominalConstructorTarget::variant(&sources, variant) {
+                Ok(target) => target,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            },
+            (None, Some(ItemKind::Struct)) if selected.local => {
+                match NominalConstructorTarget::local(db, selected.identity, None) {
+                    QueryPoll::Ready(Ok(Some(target))) => target,
+                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
+            (None, Some(ItemKind::Struct)) => {
+                match sources
+                    .iter()
+                    .find_map(|source| source.outline_item(selected.identity))
+                {
+                    Some(item) => NominalConstructorTarget::structure(item),
+                    None => return QueryPoll::Ready(Ok(None)),
+                }
+            }
+            _ => return QueryPoll::Ready(Ok(None)),
+        };
+        bind_constructor(db, graph, &sources, &target).map(Some)
     }
     /// A static read by value at an already selected PC: only the cell's
     /// current state is read (no name selection or source work). A Copy
@@ -153,7 +292,7 @@ impl RunMachine {
     fn select_lexical_value(
         &mut self,
         db: &mut Database,
-    ) -> QueryPoll<Option<(crate::core::digest::Digest, Option<ItemKind>)>> {
+    ) -> QueryPoll<Option<LexicalSelection>> {
         use crate::db::dependency::{InputKey, InputValue};
         let pc = self.frame.pc().clone();
         let definition = pc.body.definition;
@@ -191,7 +330,7 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         key: PcKey,
-    ) -> QueryPoll<Option<(crate::core::digest::Digest, Option<ItemKind>)>> {
+    ) -> QueryPoll<Option<LexicalSelection>> {
         let pc = key.clone();
         let goal = match db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key)) {
             QueryPoll::Ready(Ok(goal)) => goal,
@@ -204,11 +343,27 @@ impl RunMachine {
         if goal.body() != &pc.body || goal.node().0 != pc.node {
             return QueryPoll::Ready(Err(call_fault("lexical value goal site differs")));
         }
+        // A qualified path whose root no block item or import binds belongs
+        // to the module route.
+        if goal.is_qualified_path() && goal.rooted().is_none() {
+            return QueryPoll::Ready(Ok(None));
+        }
         if let Some(demand) = goal.pending() {
             return QueryPoll::Ready(Err(Diagnostic::new(
                 "LRR-E-CALL-CONTEXT",
                 format!("lexical value path requires exact entered source context ({demand:?})"),
             )));
+        }
+        if let (Some(function), Some(identity)) = (goal.facade(), goal.facade_identity()) {
+            return QueryPoll::Ready(Ok(Some(LexicalSelection {
+                identity,
+                kind: None,
+                variant: None,
+                local: false,
+                facade: Some((function, identity)),
+                rooted: None,
+                module_root: None,
+            })));
         }
         let Some(declaration) = goal.declaration() else {
             if goal.local_binding().is_some() {
@@ -219,6 +374,7 @@ impl RunMachine {
             )));
         };
         let identity = declaration.identity();
+        let local = declaration.owner().is_some();
         let kind = match declaration.owner() {
             // The owning body's actual entered item row, published with it.
             Some(owner) if owner == &pc.body => goal
@@ -234,13 +390,43 @@ impl RunMachine {
                     "lexical value declaration belongs to another body",
                 )));
             }
+            // A variant has no outline row of its own: it is its enum's member.
+            None if declaration.variant().is_some() => None,
             None => self
                 .sources
                 .iter()
                 .find_map(|source| source.outline_item(identity))
                 .map(|item| item.def_key.item_kind),
         };
-        QueryPoll::Ready(Ok(Some((identity, kind))))
+        // A module-level root (a module, or a type or trait an import brings
+        // into scope): its path spelled from the defining crate, so `Root::item`
+        // resolves through the module route (associated items included).
+        let module_root = match (kind, goal.rooted(), local) {
+            (Some(_), Some(_), false) => self
+                .sources
+                .iter()
+                .find_map(|source| source.outline_item(identity))
+                .map(|item| {
+                    let mut segments: Vec<&str> =
+                        item.def_key.module_path.iter().map(String::as_str).collect();
+                    segments.push(&item.def_key.declared_name);
+                    format!(
+                        "{}::{}",
+                        crate::frontend::callables::dollar_crate_segment(item.def_key.crate_key),
+                        segments.join("::")
+                    )
+                }),
+            _ => None,
+        };
+        QueryPoll::Ready(Ok(Some(LexicalSelection {
+            identity,
+            kind,
+            variant: declaration.variant().cloned(),
+            local,
+            facade: None,
+            rooted: goal.rooted().map(str::to_owned),
+            module_root,
+        })))
     }
     pub(super) fn prepare_item_value_path(&mut self, db: &mut Database, path: &str) -> QueryPoll<()> {
         let pc = self.frame.pc().clone();
@@ -475,6 +661,17 @@ impl RunMachine {
             // type; calling it selects the same source function a direct
             // call of its path selects.
             Some(ItemKind::Function) => {
+                // The erased fn-pointer descriptor a fn-pointer parameter or
+                // location of this value names (E-R5-008).
+                if let Err(error) = self
+                    .store
+                    .intern_type(crate::runtime::shape::TypeKey::erased_function_pointer())
+                {
+                    return QueryPoll::Ready(Err(error));
+                }
+                // Its code address, so the item casts and compares as a fn
+                // pointer.
+                self.store.function_address(definition.identity);
                 match self.store.intern_type(crate::runtime::shape::TypeKey::Callable {
                     identity: definition.identity,
                     captures: Box::new([]),

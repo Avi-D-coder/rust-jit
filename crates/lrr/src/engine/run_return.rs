@@ -213,7 +213,7 @@ impl RunMachine {
         if suspended
             .caller
             .hint(result)?
-            .is_some_and(|expected| expected != actual)
+            .is_some_and(|expected| !self.store.contract_admits(Some(expected), Some(actual)))
         {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-RETURN-TYPE",
@@ -326,6 +326,22 @@ impl RunMachine {
             if let Err(error) = proof.recheck_result_ticket(&self.store, ticket) {
                 self.calls.push(suspended);
                 return Err(error);
+            }
+        }
+        // A returned raw pointer takes the call's closed declared pointer
+        // type (E-R5-008): the intrinsics behind `null`, `cast` and `as_ptr`
+        // return pointers with an erased pointee.
+        if let Some(term) = suspended.call.contracts.source_result.as_ref()
+            && crate::traits::pointer_terms::as_raw_pointer(term).is_some()
+            && crate::frontend::call_contracts::closed_term(term)
+        {
+            let value = self.store.peek_ticket(ticket)?;
+            if value.kind == 9
+                && let Some(expected) = self.store.intern_structural_term(term)?
+                && expected.0 != value.type_id
+                && self.store.pointer_coercion(value, expected)?
+            {
+                self.store.coerce_unsized_ticket(ticket, expected)?;
             }
         }
         let bytes = match self.call_bytes.checked_sub(suspended.call.retained_bytes) {

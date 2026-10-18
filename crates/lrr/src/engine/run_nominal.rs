@@ -22,6 +22,18 @@ pub(super) struct NominalRunFacts {
     values: BTreeMap<PcKey, Arc<BoundConstructor>>,
     /// `None` records a call site whose callee is not a constructor.
     calls: BTreeMap<(BodyKey, crate::vm::call::CallIdentity), Option<Arc<BoundConstructor>>>,
+    /// Whether each call site's callee is bound lexically (a block item or
+    /// import), decided once per site.
+    lexical_callees: BTreeMap<(BodyKey, crate::vm::call::CallIdentity), bool>,
+    /// A `Root::member` callee whose root an import binds to a module,
+    /// rewritten to the module route's spelling (`None`: unchanged).
+    module_names: BTreeMap<(BodyKey, crate::vm::call::CallIdentity), Option<String>>,
+    /// Call sites whose lexical callee is a closed facade function a
+    /// block-level import brought into scope (`None`: it is not one).
+    lexical_facades: BTreeMap<
+        (BodyKey, crate::vm::call::CallIdentity),
+        Option<(crate::facade::functions::LibraryFunction, crate::core::digest::Digest)>,
+    >,
     /// Positional members (`t.0`) keyed by PC and the base's nominal identity.
     positional:
         BTreeMap<(PcKey, crate::core::digest::Digest), crate::frontend::types::BoundNominalField>,
@@ -236,8 +248,17 @@ impl RunMachine {
         if let Some((cell, view)) = self.static_reads.get(&pc).cloned() {
             return QueryPoll::Ready(self.read_static_value(cell, view));
         }
+        // A constructor already selected for this PC (lexically or through
+        // the module graph) is only installed on each execution.
+        if let Some(bound) = self.nominal.values.get(&pc) {
+            return QueryPoll::Ready(self.frame.prepare_nominal_value(
+                Arc::clone(bound.variant()),
+                stated,
+                &mut self.store,
+            ));
+        }
         // Lexical (body-local) scope precedes the module graph.
-        match self.prepare_lexical_value_path(db, path) {
+        match self.prepare_lexical_value_path(db, path, stated) {
             QueryPoll::Ready(Ok(true)) => return QueryPoll::Ready(Ok(())),
             QueryPoll::Ready(Ok(false)) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -278,6 +299,36 @@ impl RunMachine {
             &mut self.store,
         ))
     }
+    /// A lexically selected constructor read as a value: only a unit
+    /// constructor is a value (a tuple constructor is a function value).
+    pub(super) fn prepare_lexical_constructor_value(
+        &mut self,
+        bound: BoundConstructor,
+        stated: Option<&crate::ir::written_type::WrittenType>,
+    ) -> QueryPoll<()> {
+        match bound.shape() {
+            FieldShape::Unit => {}
+            FieldShape::Tuple => {
+                return QueryPoll::Ready(Err(unsupported(
+                    "tuple constructor function value awaits function-value integration",
+                )));
+            }
+            FieldShape::Record => {
+                return QueryPoll::Ready(Err(Diagnostic::new(
+                    "LRR-E-NAME-CONTEXT",
+                    "record struct or variant is not a value; use its record constructor".into(),
+                )));
+            }
+        }
+        let pc = self.frame.pc().clone();
+        let bound = Arc::new(bound);
+        self.nominal.values.insert(pc, Arc::clone(&bound));
+        QueryPoll::Ready(self.frame.prepare_nominal_value(
+            Arc::clone(bound.variant()),
+            stated,
+            &mut self.store,
+        ))
+    }
     /// Select (once per call site) whether this call names a tuple struct or
     /// tuple variant constructor. An unqualified callee that requires its
     /// entered lexical context keeps the ordinary source-call route.
@@ -304,25 +355,32 @@ impl RunMachine {
                 None => return QueryPoll::Ready(Ok(false)),
             }
         } else {
-            if !name.contains("::") {
-                match self.requires_lexical_callee_context(db, name) {
-                    QueryPoll::Ready(Ok(true)) => {
-                        self.nominal.calls.insert(key, None);
-                        return QueryPoll::Ready(Ok(false));
-                    }
-                    QueryPoll::Ready(Ok(false)) => {}
+            // A callee a block item or import may bind is selected by its
+            // entered lexical Value goal, never by the module graph.
+            let lexical = match self.requires_lexical_callee_context(db, name) {
+                QueryPoll::Ready(Ok(lexical)) => lexical,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let selected = if lexical {
+                match self.lexical_call_constructor(db, site) {
+                    QueryPoll::Ready(Ok(selected)) => selected,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 }
-            }
-            let bound = match self.select_nominal_constructor_with(db, name, true) {
-                QueryPoll::Ready(Ok(Some(bound))) => bound,
-                QueryPoll::Ready(Ok(None)) => {
+            } else {
+                match self.select_nominal_constructor_with(db, name, true) {
+                    QueryPoll::Ready(Ok(selected)) => selected,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+            let bound = match selected {
+                Some(bound) => bound,
+                None => {
                     self.nominal.calls.insert(key, None);
                     return QueryPoll::Ready(Ok(false));
                 }
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
             match bound.shape() {
                 FieldShape::Tuple => {}
@@ -346,6 +404,137 @@ impl RunMachine {
         self.frame
             .select_constructor_call(site, Arc::clone(bound.variant()));
         QueryPoll::Ready(Ok(true))
+    }
+    /// The written callee of a `Root::member` call whose root a block-level
+    /// import binds to a module (`use std::mem; mem::swap(..)`), spelled from
+    /// the module's defining crate so the module route resolves it; any other
+    /// name is returned unchanged. Decided once per call site.
+    pub(super) fn lexical_module_name(
+        &mut self,
+        db: &mut Database,
+        site: u32,
+        name: String,
+    ) -> QueryPoll<String> {
+        if !name.contains("::") || name.starts_with(['$', '<', ':']) {
+            return QueryPoll::Ready(Ok(name));
+        }
+        let key = (self.frame.pc().body.clone(), self.frame.call_identity(site));
+        if let Some(known) = self.nominal.module_names.get(&key) {
+            return QueryPoll::Ready(Ok(known.clone().unwrap_or(name)));
+        }
+        let lexical = match self.requires_lexical_callee_context(db, &name) {
+            QueryPoll::Ready(Ok(lexical)) => lexical,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let mut rewritten = None;
+        if lexical
+            && let Some(path) = self
+                .frame
+                .body
+                .nodes()
+                .get(site as usize)
+                .and_then(|call| call.operands.first().copied())
+        {
+            let goal = PcKey {
+                body: self.frame.pc().body.clone(),
+                node: path.0,
+                phase: 0,
+            };
+            match self.entered_value_declaration(db, goal) {
+                QueryPoll::Ready(Ok(Some(selected))) => {
+                    if let (Some(root), Some(member)) = (&selected.module_root, &selected.rooted) {
+                        rewritten = Some(format!("{root}::{member}"));
+                    }
+                }
+                QueryPoll::Ready(Ok(None)) | QueryPoll::Ready(Err(_)) => {}
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
+        if rewritten.is_some() {
+            // The module route now owns this site: it is no longer lexical.
+            self.nominal.lexical_callees.insert(key.clone(), false);
+        }
+        self.nominal.module_names.insert(key, rewritten.clone());
+        QueryPoll::Ready(Ok(rewritten.unwrap_or(name)))
+    }
+    /// The closed facade function the entered lexical Value goal of this
+    /// call's callee selects (`use std::cmp::max; max(a, b)`), if any. Cold
+    /// once per call site; later executions find the cached answer.
+    pub(super) fn lexical_facade_call(
+        &mut self,
+        db: &mut Database,
+        site: u32,
+        name: &str,
+    ) -> QueryPoll<Option<(crate::facade::functions::LibraryFunction, crate::core::digest::Digest)>> {
+        if name.contains("::") || name.starts_with('.') {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let key = (self.frame.pc().body.clone(), self.frame.call_identity(site));
+        if let Some(cached) = self.nominal.lexical_facades.get(&key) {
+            return QueryPoll::Ready(Ok(*cached));
+        }
+        let lexical = match self.requires_lexical_callee_context(db, name) {
+            QueryPoll::Ready(Ok(lexical)) => lexical,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let mut selected = None;
+        if lexical && let Some(path) = self
+            .frame
+            .body
+            .nodes()
+            .get(site as usize)
+            .and_then(|call| call.operands.first().copied())
+        {
+            let goal = PcKey {
+                body: self.frame.pc().body.clone(),
+                node: path.0,
+                phase: 0,
+            };
+            match self.entered_value_declaration(db, goal) {
+                QueryPoll::Ready(Ok(found)) => selected = found.and_then(|found| found.facade),
+                // An unsettled goal leaves the callee to the source-call
+                // route, which reports its own missing evidence.
+                QueryPoll::Ready(Err(_)) => {}
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
+        self.nominal.lexical_facades.insert(key, selected);
+        QueryPoll::Ready(Ok(selected))
+    }
+    /// The constructor the entered lexical Value goal of this call's callee
+    /// path selects (a block-local struct, or a struct or variant a
+    /// block-level import brings into scope). `None`: the callee is some
+    /// other item or a binding, selected by the ordinary source-call route.
+    fn lexical_call_constructor(
+        &mut self,
+        db: &mut Database,
+        site: u32,
+    ) -> QueryPoll<Option<BoundConstructor>> {
+        let Some(path) = self
+            .frame
+            .body
+            .nodes()
+            .get(site as usize)
+            .and_then(|call| call.operands.first().copied())
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let key = PcKey {
+            body: self.frame.pc().body.clone(),
+            node: path.0,
+            phase: 0,
+        };
+        let selected = match self.entered_value_declaration(db, key) {
+            QueryPoll::Ready(Ok(Some(selected))) => selected,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+            // A goal that cannot be settled leaves the callee to the source
+            // call route, which reports its own missing evidence.
+            QueryPoll::Ready(Err(_)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        self.lexical_constructor(db, &selected)
     }
     /// Constructor arguments take their declared field Types as hints, so a
     /// written literal is typed by its field exactly as by a callee parameter.
@@ -457,16 +646,53 @@ impl RunMachine {
         db: &mut Database,
         name: &str,
     ) -> QueryPoll<bool> {
+        // The answer is a fact of the call site's source and goal: cold once.
+        let site = (
+            self.frame.pc().body.clone(),
+            self.frame.call_identity(self.frame.pc().node),
+        );
+        if let Some(known) = self.nominal.lexical_callees.get(&site) {
+            return QueryPoll::Ready(Ok(*known));
+        }
+        match self.lexical_callee_context(db, name) {
+            QueryPoll::Ready(Ok(lexical)) => {
+                self.nominal.lexical_callees.insert(site, lexical);
+                QueryPoll::Ready(Ok(lexical))
+            }
+            other => other,
+        }
+    }
+    fn lexical_callee_context(&mut self, db: &mut Database, name: &str) -> QueryPoll<bool> {
         use crate::db::dependency::{InputKey, InputValue};
+        // Only `Root::member` can be lexical among qualified names: longer,
+        // anchored, `$crate`, `<T as Trait>` and `Self` paths are the module
+        // route's and need no caller source.
+        let qualified = name.contains("::");
+        if qualified {
+            let mut parts = name.split("::");
+            let (Some(root), Some(member), None) = (parts.next(), parts.next(), parts.next())
+            else {
+                return QueryPoll::Ready(Ok(false));
+            };
+            if root.is_empty()
+                || member.is_empty()
+                || root.starts_with(['$', '<'])
+                || matches!(root, "crate" | "self" | "super" | "Self")
+            {
+                return QueryPoll::Ready(Ok(false));
+            }
+        }
         let definition = self.frame.pc().body.definition;
         let source = match db.input(&InputKey::DefinitionSource(definition)).as_deref() {
             Some(InputValue::DefinitionSource(source)) => source.clone(),
+            _ if qualified => return QueryPoll::Ready(Ok(false)),
             _ => return QueryPoll::Ready(Err(call_fault("reached caller source absent"))),
         };
         let handle = match db.input(&InputKey::DefinitionBody(definition)).as_deref() {
             Some(InputValue::DefinitionBody(handle)) if handle.key() == self.frame.pc().body => {
                 handle.clone()
             }
+            _ if qualified => return QueryPoll::Ready(Ok(false)),
             _ => {
                 return QueryPoll::Ready(Err(call_fault("reached caller body identity differs")));
             }
@@ -479,11 +705,43 @@ impl RunMachine {
         let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
             return QueryPoll::Ready(Err(call_fault("reached caller parse kind differs")));
         };
-        QueryPoll::Ready(parsed.entered_call_requires_lexical_context(
+        let syntactic = match parsed.entered_call_requires_lexical_context(
             &handle,
             &self.frame.body,
             self.frame.pc(),
             name,
-        ))
+        ) {
+            Ok(syntactic) => syntactic,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        if !syntactic || !name.contains("::") {
+            return QueryPoll::Ready(Ok(syntactic));
+        }
+        // `Root::member`: a block item or import may bind the root, but the
+        // callee is lexical only when the entered Value goal actually bound
+        // it; otherwise the module route selects the written path.
+        let Some(path) = self
+            .frame
+            .body
+            .nodes()
+            .get(self.frame.pc().node as usize)
+            .and_then(|call| call.operands.first().copied())
+        else {
+            return QueryPoll::Ready(Ok(false));
+        };
+        let key = PcKey {
+            body: self.frame.pc().body.clone(),
+            node: path.0,
+            phase: 0,
+        };
+        let goal = match db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key)) {
+            QueryPoll::Ready(Ok(goal)) => goal,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::EnteredValue(goal) = goal.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("lexical callee goal variant differs")));
+        };
+        QueryPoll::Ready(Ok(goal.rooted().is_some()))
     }
 }

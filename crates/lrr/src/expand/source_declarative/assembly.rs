@@ -550,7 +550,7 @@ impl SourceSyntaxAssembly {
         // An unowned structural call must not vanish from the completeness
         // result. Its anchor records pending work; it grants no producer ID.
         pending.extend(self.calls.iter().map(|c| c.invocation.unwrap_or(c.anchor)));
-        let syntax = Arc::new(self.tree.snapshot().map_err(adapter)?);
+        let syntax = self.tree.snapshot().map_err(adapter)?;
         self.occurrences.validate(
             u32::try_from(syntax.syntax().text.len())
                 .map_err(|_| fault("final occurrence root length overflow"))?,

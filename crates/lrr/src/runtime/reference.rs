@@ -41,6 +41,10 @@ pub(crate) enum ReferenceLease {
     Location(LocationLease),
     Buffer(BufferLease),
     Elements(ElementsLease),
+    /// E-R5-008: a raw pointer's bare synthetic address (null, `usize as
+    /// *const T`, one-past-the-end, pointer arithmetic). It names no lease;
+    /// the address table re-derives one when the pointer is used.
+    Detached(u64),
 }
 /// Fields stay private to the checked store; callers cannot forge a lease.
 pub struct ReferenceRecord {
@@ -53,6 +57,11 @@ pub struct ReferenceRecord {
     /// (`UnsafeCell`'s contents): writes through it do not require a
     /// writable root, as the shared reference they came from did not.
     pub(crate) interior: bool,
+    /// E-R5-008: the record is a raw pointer (or fn pointer) value. It is
+    /// `Shared` with no value owner, so copies need no ownership transfer, and
+    /// a dereference through it is writable without a root check (rustc calls
+    /// misuse undefined behaviour; the interpreter is looser, never stricter).
+    pub(crate) raw: bool,
 }
 impl ReferenceRecord {
     pub(crate) fn from_place(place: ResolvedPlace, access: Access) -> Self {
@@ -66,6 +75,7 @@ impl ReferenceRecord {
             access,
             owner: None,
             interior: place.interior && access == Access::Mutable,
+            raw: false,
             target: place.ty,
             // A resolved element window (`&a[1..3]`, `&*s`) borrows exactly
             // those elements of its array location.
@@ -98,6 +108,7 @@ impl ReferenceRecord {
             access,
             owner: None,
             interior: self.interior,
+            raw: self.raw,
             target: slice,
             lease: ReferenceLease::Elements(ElementsLease {
                 base: LocationLease {
@@ -123,6 +134,7 @@ impl ReferenceRecord {
             access: Access::Shared,
             owner: None,
             interior: false,
+            raw: false,
             target: TypeId(16),
             lease: ReferenceLease::Buffer(lease),
         }
@@ -138,13 +150,20 @@ impl ReferenceRecord {
                 "LRR-E-UNSUPPORTED",
                 "slice reference requires its element-window operation".into(),
             )),
+            ReferenceLease::Detached(_) => Err(Diagnostic::new(
+                "LRR-E-POINTER-PROVENANCE",
+                "raw pointer without a live location (null, dangling or not yet resolved)"
+                    .into(),
+            )),
         }
     }
     #[cfg(test)]
     pub(crate) fn location_mut(&mut self) -> Result<&mut LocationLease, Diagnostic> {
         match &mut self.lease {
             ReferenceLease::Location(location) => Ok(location),
-            ReferenceLease::Buffer(_) | ReferenceLease::Elements(_) => Err(access_fault()),
+            ReferenceLease::Buffer(_)
+            | ReferenceLease::Elements(_)
+            | ReferenceLease::Detached(_) => Err(access_fault()),
         }
     }
     pub(crate) fn owned_bytes(&self) -> Result<usize, Diagnostic> {
@@ -158,7 +177,7 @@ impl ReferenceRecord {
                     )?)
                     .ok_or_else(super::arena::resource)
             }
-            ReferenceLease::Buffer(_) => Ok(0),
+            ReferenceLease::Buffer(_) | ReferenceLease::Detached(_) => Ok(0),
         }
     }
 }

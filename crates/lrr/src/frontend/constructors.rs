@@ -129,6 +129,36 @@ pub(crate) fn bind_prepared_record_constructor(
                     locals.context().source().scope(),
                 );
             }
+            // `Root::Variant { .. }` whose root a block item or import binds
+            // (a block-local enum): the entered lexical Value goal of this
+            // record expression selects the root and the member names its
+            // variant.
+            let goal = match db.fetch(
+                &SyntaxProvider,
+                QueryKey::EnteredValue(crate::source::manifest::PcKey {
+                    body: body.body().clone(),
+                    node: plan.node().0,
+                    phase: 0,
+                }),
+            ) {
+                QueryPoll::Ready(Ok(goal)) => goal,
+                QueryPoll::Ready(Err(_)) => return deferred(RecordConstructorDemand::TypeContext),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            if let QueryValue::EnteredValue(goal) = goal.value.as_ref()
+                && goal.pending().is_none()
+                && let (Some(member), Some(declaration)) = (goal.rooted(), goal.declaration())
+            {
+                return bind_variant_record_constructor(
+                    db,
+                    graph,
+                    sources,
+                    plan,
+                    declaration.identity(),
+                    Some(member),
+                    locals.context().source().scope(),
+                );
+            }
             return deferred(RecordConstructorDemand::TypeContext);
         }
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),

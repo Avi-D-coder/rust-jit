@@ -129,6 +129,32 @@ const NATIVE_PRIMITIVE_TRAITS: &[(&str, &str)] = &[
     ("fmt", "LowerExp"),
     ("fmt", "UpperExp"),
     ("hash", "Hash"),
+    // The built-in operators of the numeric primitives (rustc's builtin
+    // binary-op and unary-op impls): every integer type of a variable's
+    // family implements them, so they leave the variable to its other
+    // relations and the integer/float fallback.
+    ("ops", "Add"),
+    ("ops", "Sub"),
+    ("ops", "Mul"),
+    ("ops", "Div"),
+    ("ops", "Rem"),
+    ("ops", "Neg"),
+    ("ops", "Not"),
+    ("ops", "BitAnd"),
+    ("ops", "BitOr"),
+    ("ops", "BitXor"),
+    ("ops", "Shl"),
+    ("ops", "Shr"),
+    ("ops", "AddAssign"),
+    ("ops", "SubAssign"),
+    ("ops", "MulAssign"),
+    ("ops", "DivAssign"),
+    ("ops", "RemAssign"),
+    ("ops", "BitAndAssign"),
+    ("ops", "BitOrAssign"),
+    ("ops", "BitXorAssign"),
+    ("ops", "ShlAssign"),
+    ("ops", "ShrAssign"),
 ];
 /// Whether `trait_key` is one of the core traits in
 /// `NATIVE_PRIMITIVE_TRAITS`, by its facade declaration identity.
@@ -175,7 +201,7 @@ impl BoundAnswer {
     }
 }
 /// Split `tokens` at depth-0 occurrences of `separator`.
-fn split<'t>(tokens: &'t [TokenRecipe], separator: &str) -> Vec<&'t [TokenRecipe]> {
+pub(super) fn split<'t>(tokens: &'t [TokenRecipe], separator: &str) -> Vec<&'t [TokenRecipe]> {
     let mut parts = Vec::new();
     let mut depth = 0i32;
     let mut start = 0;
@@ -449,16 +475,24 @@ impl<'a> Component<'a> {
                 related(self, call, path);
             }
         }
+        // Closures written for parameters bounded by `Fn*(..) -> R` hold the
+        // parameter wherever that bound names it.
+        ready!(self.relate_fn_bounds(db, call, definition, &key, &remaining));
+        // The variable is only a part of the instantiated parameter: the
+        // parameter's bounds are obligations on the whole Type.
+        if !remaining.is_empty() {
+            return self.inside_bounds(db, call, definition, &key, &remaining);
+        }
         match ready!(self.parameter_bounds(db, definition, &key)) {
             BoundAnswer::Unconstraining => {}
             // The variable is the parameter itself: the one applicable impl
             // fixes it.
-            BoundAnswer::Selected(primitive) if remaining.is_empty() => {
+            BoundAnswer::Selected(primitive) => {
                 if let Err(error) = self.constrain(call, primitive) {
                     return QueryPoll::Ready(Err(error));
                 }
             }
-            _ => self.defer(call, ConstraintDemand::ParameterType),
+            BoundAnswer::Unknown => self.defer(call, ConstraintDemand::ParameterType),
         }
         QueryPoll::Ready(Ok(()))
     }
@@ -556,6 +590,11 @@ impl<'a> Component<'a> {
                         None => return QueryPoll::Ready(Ok(None)),
                     }
                 }
+                // Another parameter's `Fn*(..) -> R` bound names the parameter
+                // only through the closure written for it
+                // (`relate_fn_bounds`): no obligation on this parameter.
+                [_, colon, bounds @ ..]
+                    if colon.text == ":" && super::callables::fn_sugar(bounds).is_some() => {}
                 _ if mentions => return QueryPoll::Ready(Ok(None)),
                 _ => {}
             }

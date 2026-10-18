@@ -135,6 +135,13 @@ pub enum TypeKey {
         family: FacadeType,
         args: Box<[TypeId]>,
     },
+    /// `*const T` / `*mut T` (E-R5-008). The value is a `Copy` pointer over a
+    /// raw reference record; `target` is the written pointee, which may differ
+    /// from the type of the cell the pointer designates after a pointer cast.
+    RawPtr {
+        mutable: bool,
+        target: TypeId,
+    },
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ShapeCategory {
@@ -146,6 +153,7 @@ pub enum ShapeCategory {
     Nominal,
     Function,
     Facade,
+    Pointer,
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CopyStatus {
@@ -366,6 +374,10 @@ impl TypeRegistry {
                 self.require(*result)?;
                 (ShapeCategory::Function, None, CopyStatus::Copy)
             }
+            TypeKey::RawPtr { target, .. } => {
+                self.require(*target)?;
+                (ShapeCategory::Pointer, None, CopyStatus::Copy)
+            }
             TypeKey::Facade { family, args } => {
                 let arity = match family {
                     FacadeType::String => 0,
@@ -417,6 +429,10 @@ impl TypeRegistry {
             }
             _ => None,
         };
+        let reference_target = match key.as_ref() {
+            TypeKey::Ref { target, .. } => Some(*target),
+            _ => None,
+        };
         self.descriptors.push(TypeDescriptor {
             key,
             shape,
@@ -426,6 +442,13 @@ impl TypeRegistry {
             representation_version: 1,
             discriminants: None,
         });
+        // Every reference Type has its raw-pointer views, so call contracts and
+        // pointer coercions can name them without interning (E-R5-008).
+        if let Some(target) = reference_target {
+            for mutable in [false, true] {
+                self.intern(TypeKey::RawPtr { mutable, target })?;
+            }
+        }
         // Every array Type has its unsized `[T]` element-window view and the
         // reference Types an unsizing coercion produces, so read-only place
         // resolution and call contracts can name them without interning.
@@ -476,12 +499,24 @@ impl TypeRegistry {
     }
 }
 impl TypeKey {
+    /// The fn-pointer descriptor with its signature erased: runtime fn
+    /// pointer values are interchangeable (E-R5-008), so a parameter, field
+    /// or `let` of any fn-pointer type names this one descriptor when the
+    /// signature's own descriptors are not at hand.
+    pub fn erased_function_pointer() -> Self {
+        Self::Function {
+            params: Box::new([]),
+            result: TypeId(1),
+        }
+    }
     fn heap_bytes(&self) -> Option<usize> {
         let ids = |members: &[TypeId]| members.len().checked_mul(std::mem::size_of::<TypeId>());
         match self {
-            Self::Primitive(_) | Self::Ref { .. } | Self::Slice { .. } | Self::Array { .. } => {
-                Some(0)
-            }
+            Self::Primitive(_)
+            | Self::Ref { .. }
+            | Self::RawPtr { .. }
+            | Self::Slice { .. }
+            | Self::Array { .. } => Some(0),
             Self::Tuple(members) => ids(members),
             Self::Callable {
                 captures, borrowed, ..
@@ -580,6 +615,11 @@ impl StableEncode for TypeKey {
                 e.digest(*identity);
                 e.sequence(captures, |e, id| e.u32(id.0));
                 e.sequence(borrowed, |e, flag| e.bool(*flag));
+            }
+            Self::RawPtr { mutable, target } => {
+                e.u32(9);
+                e.bool(*mutable);
+                e.u32(target.0);
             }
         }
     }

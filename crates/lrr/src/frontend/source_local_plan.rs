@@ -379,6 +379,13 @@ impl PreparedSourceLocalPlan {
     pub(crate) fn environment(&self) -> Option<&Arc<crate::db::BodyEnvironmentInput>> {
         self.environment.as_ref()
     }
+    /// The body's written pattern binding occurrences and their hygienic
+    /// local identities (source facts only, no name classification).
+    pub(crate) fn pattern_occurrences(
+        &self,
+    ) -> &crate::frontend::pattern_binding_occurrences::PreparedPatternBindingOccurrences {
+        &self.pattern_occurrences
+    }
     pub(crate) fn require_current(&self, db: &mut Database) -> QueryPoll<()> {
         let Some(environment) = &self.environment else {
             return self.context.require_current(db);
@@ -892,6 +899,7 @@ impl LocalTypePrefix {
             };
         }
         ready!(self.retained_plan().require_current(db));
+        let plan = Arc::clone(self.retained_plan());
         if let LocalTypePrefixSelection::Parameter(parameter) = self.selection() {
             return QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(*parameter)));
         }
@@ -932,6 +940,102 @@ impl LocalTypePrefix {
             ) if generic_base => QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
                 crate::frontend::type_aliases::AliasTarget::Nominal(identity),
             ))),
+            // A module-level alias the body prefix selected: normalized by the
+            // same alias service signature Types use, in the alias's own
+            // declaration context.
+            type_declarations::BodyTypeOutcome::Pending(
+                type_declarations::BodyTypeDemand::AliasContext(identity),
+            ) => {
+                // A body-local alias (`type N = i32;` in a block) is declared
+                // in a lexical scope the module alias service cannot read: it
+                // stays an explicit, named refusal until its target resolves
+                // through this body's own prefix.
+                if matches!(
+                    db.input(&crate::db::dependency::InputKey::DeclarationContext(identity))
+                        .as_deref(),
+                    Some(InputValue::DeclarationContext(context)) if context.scope.owner.is_some()
+                ) {
+                    // A non-generic alias whose written target is already a
+                    // closed symbolic term (a primitive) needs no lookup.
+                    let outcome = ready!(db.fetch(
+                        &crate::db::provider::SyntaxProvider,
+                        crate::db::key::QueryKey::TypeAlias(identity)
+                    ));
+                    if let crate::db::value::QueryValue::TypeAlias(alias) = outcome.value.as_ref()
+                        && alias.generics.is_empty()
+                    {
+                        if let Some(term) = &alias.symbolic {
+                            return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                                crate::frontend::type_aliases::AliasTarget::Type(term.clone()),
+                            )));
+                        }
+                        // A single builtin Type name (`type N = i32;`), when no
+                        // block item or import of this body can shadow it.
+                        if let [target] = alias.target.as_slice() {
+                            use crate::syntax::imports::{ImportKind, ImportSegment};
+                            let facts = plan.context().facts();
+                            let shadowed = facts
+                                .items
+                                .iter()
+                                .any(|row| row.item.def_key.declared_name == target.text)
+                                || facts.imports.iter().any(|row| match &row.source.kind {
+                                    ImportKind::Glob => true,
+                                    ImportKind::Named { alias: Some(name) } => *name == target.text,
+                                    ImportKind::Named { alias: None } => matches!(
+                                        row.source.path.last(),
+                                        Some(ImportSegment::Name(name)) if *name == target.text
+                                    ),
+                                    ImportKind::Anonymous => false,
+                                });
+                            if !shadowed {
+                                match crate::frontend::signature_names::classify_completed_type_lookup(
+                                    &target.text,
+                                    alias.header.profile.edition,
+                                    NameLookup::Absent,
+                                ) {
+                                    Ok(SignatureName::Primitive(primitive)) => {
+                                        return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                                            crate::frontend::type_aliases::AliasTarget::Type(
+                                                crate::traits::term::TyTerm::Primitive(primitive),
+                                            ),
+                                        )));
+                                    }
+                                    Ok(SignatureName::Str) => {
+                                        return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                                            crate::frontend::type_aliases::AliasTarget::Str,
+                                        )));
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    return QueryPoll::Ready(Err(Diagnostic::new(
+                        "LRR-E-TYPE-CONTEXT",
+                        format!(
+                            "Type requires actual source authority: AliasContext({identity:?}); a body-local alias awaits lexical alias normalization"
+                        ),
+                    )));
+                }
+                let Some(environment) = plan.environment() else {
+                    return QueryPoll::Ready(Err(error("alias Type environment absent")));
+                };
+                let completed = std::sync::Arc::clone(environment.macros().source_environment());
+                let views: Vec<&crate::source::changes::PreparedSourceView> =
+                    completed.sources().iter().collect();
+                let selected = crate::frontend::names::NameDefinition {
+                    namespace: crate::source::manifest::Namespace::Type,
+                    identity,
+                    defining_unit: Default::default(),
+                    definition_edition: 0,
+                };
+                crate::frontend::source_types::prepare_selected(
+                    db,
+                    completed.names(),
+                    &views,
+                    SignatureName::Source(selected),
+                )
+            }
             type_declarations::BodyTypeOutcome::Pending(demand) => QueryPoll::Ready(Err(
                 Diagnostic::new("LRR-E-TYPE-CONTEXT", format!("Type requires actual source authority: {demand:?}")),
             )),

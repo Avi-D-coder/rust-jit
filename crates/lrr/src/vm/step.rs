@@ -1497,6 +1497,11 @@ fn execute(
         Op::IteratorCall { .. } => Err(invalid(
             "iterator call bypassed its trait method dispatch",
         )),
+        Op::PointerCast {
+            source,
+            target,
+            destination,
+        } => frame.pointer_cast(*source, target, *destination, store),
         Op::NumericBinary { .. } | Op::NumericUnary { .. } | Op::PrimitiveCast { .. } => Err(
             invalid("numeric opcode bypassed its typed execution boundary"),
         ),

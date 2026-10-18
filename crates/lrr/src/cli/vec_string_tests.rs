@@ -1208,7 +1208,7 @@ fn main() {
     let cloned = inv.clone();
     println!("{}", cloned == inv);
     let mut set: BTreeSet<i32> = BTreeSet::new();
-    for x in [5, 1, 3, 1, 5] {
+    for x in [5i32, 1, 3, 1, 5] {
         set.insert(x);
     }
     println!("{:?} {}", set, set.len());

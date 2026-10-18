@@ -129,6 +129,12 @@ pub fn from_ref<T>(s: &T) -> &[T] {
 }
 
 impl<T> [T] {
+    pub fn as_ptr(&self) -> *const T {
+        core::intrinsics::lrr_slice_as_ptr(self)
+    }
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        core::intrinsics::lrr_slice_as_mut_ptr(self)
+    }
     pub const fn len(&self) -> usize {
         core::intrinsics::lrr_slice_len(self)
     }

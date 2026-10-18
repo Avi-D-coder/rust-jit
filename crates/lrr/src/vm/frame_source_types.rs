@@ -26,6 +26,8 @@ impl Frame {
                 matches!(arg, crate::traits::term::GenericArg::Type(ty)
                     if Self::structural_source_shape(ty))
             }),
+            // A closed fn-pointer member (E-R5-008).
+            TyTerm::Function(_) => crate::frontend::call_contracts::closed_term(source),
             _ => false,
         }
     }
@@ -48,6 +50,20 @@ impl Frame {
                 "structural source differs from its target descriptor".into(),
             )
         };
+        // A raw pointer or fn pointer view matches any descriptor of its
+        // family; the pointee may differ after a pointer cast (E-R5-008).
+        if crate::traits::pointer_terms::as_raw_pointer(source).is_some() {
+            return match actual.key.as_ref() {
+                TypeKey::RawPtr { .. } => Ok(()),
+                _ => Err(mismatch()),
+            };
+        }
+        if matches!(source, TyTerm::Function(_)) {
+            return match actual.key.as_ref() {
+                TypeKey::Function { .. } => Ok(()),
+                _ => Err(mismatch()),
+            };
+        }
         match source {
             TyTerm::Primitive(primitive) => {
                 if crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id() != target

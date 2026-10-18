@@ -30,8 +30,21 @@ fn object(shape: &AnnotationShape) -> bool {
         AnnotationShape::Tuple(members) => members.iter().any(object),
         AnnotationShape::Generic(_, arguments) => arguments.iter().any(object),
         AnnotationShape::Array(inner, _) | AnnotationShape::Slice(inner) => object(inner),
-        AnnotationShape::Ref { target, .. } => object(target),
+        AnnotationShape::Ref { target, .. } | AnnotationShape::Ptr { target, .. } => {
+            object(target)
+        }
+        AnnotationShape::FnPtr { params, result } => {
+            params.iter().any(object) || object(result)
+        }
     }
+}
+/// A written raw-pointer or fn-pointer target (E-R5-008): the cast converts
+/// its operand with the pointer cast operation.
+fn pointer(shape: &AnnotationShape) -> bool {
+    matches!(
+        shape,
+        AnnotationShape::Ptr { .. } | AnnotationShape::FnPtr { .. }
+    )
 }
 /// A generic target with an unsized slice argument (`Box<[T]>`) or a
 /// reference to a slice (`&[u8]`, `&W<[T]>`): rustc's unsizing coercion cast
@@ -58,6 +71,42 @@ macro_rules! ready {
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-CONTEXT", message.into())
+}
+/// A cast whose written target is a coercion target (a trait object, an
+/// unsizing target, a raw or fn pointer, or a named non-primitive Type): the
+/// recipe applies the target as a `let` annotation of that Type would.
+fn coercion_cast(
+    db: &mut Database,
+    parsed: &ParsedFile,
+    body: &BodyHandle,
+    index: &BodyIndex,
+    pc: &PcKey,
+    shape: &AnnotationShape,
+    written: &ast::Type,
+) -> QueryPoll<Option<Provided>> {
+    let mut guards = Vec::new();
+    let selected = ready!(super::let_annotation_thunk::select(db, pc, shape, &mut guards));
+    let guard = {
+        let borrowed: Vec<&PreparedInputGuard> = guards.iter().map(Arc::as_ref).collect();
+        match PreparedInputGuard::join(&borrowed) {
+            Ok(guard) => guard,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        }
+    };
+    let coercion = LetAnnotation {
+        range: crate::syntax::ast_adapter::range(written.syntax().text_range()),
+        written: Arc::new(selected),
+    };
+    let recipe = match parsed.initial_thunk_with_cast_coercion(body, index, pc, &coercion) {
+        Ok(recipe) => recipe,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    QueryPoll::Ready(recipe.with_shared_prepared_inputs(Arc::new(guard)).map(|recipe| {
+        Some(Provided {
+            value: QueryValue::Thunk(Box::new(recipe)),
+            cacheable: true,
+        })
+    }))
 }
 pub(super) fn thunk(
     db: &mut Database,
@@ -135,32 +184,15 @@ pub(super) fn thunk(
     match &shape {
         // A named (possibly parenthesized) target: its entered Type goal.
         Some(AnnotationShape::Leaf(_)) => {}
-        Some(shape) if object(shape) || unsizing(shape) => {
-            let mut guards = Vec::new();
-            let selected = ready!(super::let_annotation_thunk::select(db, pc, shape, &mut guards));
-            let guard = {
-                let borrowed: Vec<&PreparedInputGuard> = guards.iter().map(Arc::as_ref).collect();
-                match PreparedInputGuard::join(&borrowed) {
-                    Ok(guard) => guard,
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                }
-            };
-            let coercion = LetAnnotation {
-                range: crate::syntax::ast_adapter::range(written.syntax().text_range()),
-                written: Arc::new(selected),
-            };
-            let recipe = match parsed.initial_thunk_with_cast_coercion(body, index, pc, &coercion) {
-                Ok(recipe) => recipe,
-                Err(error) => return QueryPoll::Ready(Err(error)),
-            };
-            return QueryPoll::Ready(recipe.with_shared_prepared_inputs(Arc::new(guard)).map(
-                |recipe| {
-                    Some(Provided {
-                        value: QueryValue::Thunk(Box::new(recipe)),
-                        cacheable: true,
-                    })
-                },
-            ));
+        // A reference target (`x as &[u8; 1]`, `p as &str`) is the coercion a
+        // `let` annotation of that Type applies.
+        Some(shape)
+            if object(shape)
+                || unsizing(shape)
+                || pointer(shape)
+                || matches!(shape, AnnotationShape::Ref { .. }) =>
+        {
+            return coercion_cast(db, parsed, body, index, pc, shape, &written);
         }
         _ => {
             return QueryPoll::Ready(Err(Diagnostic::new(
@@ -183,6 +215,13 @@ pub(super) fn thunk(
     };
     if !prepared.cacheable {
         return QueryPoll::Ready(Err(fault("Type consumer dependencies are not retained")));
+    }
+    // A named non-primitive target (`A(1) as A`): the identity cast applies
+    // the Type as a `let` annotation of it would.
+    if plan.goal().source_type().primitive().is_none()
+        && let Some(leaf @ AnnotationShape::Leaf(_)) = &shape
+    {
+        return coercion_cast(db, parsed, body, index, pc, leaf, &written);
     }
     let recipe = match parsed.initial_thunk_with_source_type(body, index, pc, plan.goal()) {
         Ok(recipe) => recipe,

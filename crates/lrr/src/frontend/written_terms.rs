@@ -84,7 +84,25 @@ fn written_type(
     if template.is_some() && let TyTerm::Dyn(schema) = term {
         return QueryPoll::Ready(Ok(Some(WrittenType::Dyn(*schema))));
     }
+    // `*const T` / `*mut T` are reserved-identity nominals with no catalogued
+    // declaration (E-R5-008).
+    if let Some((mutable, pointee)) = crate::traits::pointer_terms::as_raw_pointer(term) {
+        return QueryPoll::Ready(Ok(Some(WrittenType::Ptr {
+            mutable,
+            target: Box::new(nested!(pointee)),
+        })));
+    }
     QueryPoll::Ready(Ok(Some(match term {
+        TyTerm::Function(function) => {
+            let mut params = Vec::new();
+            for param in &function.value.parameters {
+                params.push(nested!(param));
+            }
+            WrittenType::FnPtr {
+                params,
+                result: Box::new(nested!(&function.value.result)),
+            }
+        }
         TyTerm::Primitive(primitive) => WrittenType::Primitive(*primitive),
         TyTerm::Str => WrittenType::Str,
         TyTerm::Tuple(members) if members.is_empty() => {

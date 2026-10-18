@@ -317,7 +317,10 @@ pub const ITERATOR_CALL_OPCODE: u8 = 65;
 // Tag 66 addresses a promoted constant temporary (rustc's rvalue static
 // promotion of `&<constant expression>`).
 pub const PROMOTED_PLACE_OPCODE: u8 = 66;
-pub const OPCODE_COUNT: usize = 67;
+// Tag 67 converts an operand to a written raw-pointer or fn-pointer type
+// (`e as *const T`, `e as fn()`; E-R5-008).
+pub const POINTER_CAST_OPCODE: u8 = 67;
+pub const OPCODE_COUNT: usize = 68;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -819,6 +822,14 @@ pub enum Op {
         target: PrimitiveType,
         destination: SlotId,
     },
+    /// `e as *const T` / `*mut T` / `fn(..)` (E-R5-008): convert the evaluated
+    /// operand (a reference, pointer, function item, closure or integer) to
+    /// the written pointer type. Pointer to integer is `PrimitiveCast`.
+    PointerCast {
+        source: SlotId,
+        target: std::sync::Arc<super::written_type::WrittenType>,
+        destination: SlotId,
+    },
     Unsupported(DiagnosticTemplate),
 }
 impl Op {
@@ -854,6 +865,7 @@ impl Op {
             Self::NumericBinary { .. } => 10,
             Self::NumericUnary { .. } => 11,
             Self::PrimitiveCast { .. } => 12,
+            Self::PointerCast { .. } => POINTER_CAST_OPCODE,
             Self::NumericHint { .. } => 13,
             Self::DeclareLocal { .. } => 14,
             Self::LocalHint { .. } => 15,
@@ -936,6 +948,7 @@ impl Op {
             | Self::CallAdvance { .. }
             | Self::ReadParameter { .. }
             | Self::CallSeal { .. }
+            | Self::PointerCast { .. }
             | Self::ResultTransfer { .. }
             | Self::BindLocal { .. }
             | Self::ReadLocal { .. }

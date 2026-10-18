@@ -82,6 +82,7 @@ impl SyntaxAttachmentSeed {
             origins: Arc::clone(&self.origins),
             store: Arc::clone(&self.store),
             retained_input_bytes: self.retained_input_bytes,
+            snapshot_cache: std::sync::OnceLock::new(),
         })
     }
     pub fn identity(&self) -> Key {

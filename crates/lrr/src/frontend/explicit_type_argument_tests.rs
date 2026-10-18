@@ -116,7 +116,7 @@ fn official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_calle
 }
 
 #[test]
-fn type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_refuses_caller_alias() {
+fn type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias() {
     const COLD: &str = "struct Marker{field:UnsupportedColdLayout} fn callee<'a,T>(){unsupported_cold_body();} fn main(){callee::<Marker>();}";
     let (mut db, parent) = world(COLD, 2024, false);
     let sites = calls(&parent);
@@ -170,21 +170,27 @@ fn type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_refuses_cal
         BodyTypeOutcome::Pending(BodyTypeDemand::AliasContext(_))
     ));
     let start = db.trace.events.len();
-    match db.fetch(
+    // The caller's own alias `u8 = u16` shadows the builtin: the explicit
+    // argument is that alias's target, selected without call-entry authority.
+    let prepared = ready(db.fetch(
         &SyntaxProvider,
         QueryKey::PreparedExplicitTypeArguments(sites[0].clone()),
-    ) {
-        QueryPoll::Ready(Err(error)) => {
-            assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
-            assert!(error.message.contains("AliasContext"), "{error:?}");
-        }
-        _ => panic!("actual caller alias u8 acquired primitive or call-entry authority"),
-    }
-    assert!(
-        db.trace.events[start..]
-            .iter()
-            .all(|event| !matches!(&event.key, QueryKey::Thunk(_) | QueryKey::BodyStructure(_)))
+    ));
+    let QueryValue::PreparedExplicitTypeArguments(plan) = prepared.value.as_ref() else {
+        panic!()
+    };
+    assert_eq!(plan.rows().len(), 1);
+    assert_eq!(
+        plan.rows()[0].source().source(),
+        &TyTerm::Primitive(crate::ir::op::PrimitiveType::U16)
     );
+    // The caller's alias is read from its own declaration: the unsupported
+    // callee stays cold.
+    assert!(db.trace.events[start..].iter().all(|event| match &event.key {
+        QueryKey::BodyStructure(body) => body.definition != callee,
+        QueryKey::Thunk(pc) => pc.body.definition != callee,
+        _ => true,
+    }));
     assert!(db.trace.events[start..].iter().any(|event| {
         event.key.kind() == "PreparedExplicitTypeArguments" && event.action == Action::ProviderRun
     }));

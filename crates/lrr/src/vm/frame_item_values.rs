@@ -103,9 +103,16 @@ impl Frame {
                 store,
             ),
             Some(ItemValue::Function { ty }) => {
-                self.preflight_write_type(destination, *ty, store)?;
-                if let Some(cell) = self.slot(destination)?.cell {
-                    store.validate_constructor_destination(cell, *ty)?;
+                // A fn-pointer expectation coerces the item (E-R5-008): the
+                // destination is admitted at its own pointer descriptor.
+                match self.function_pointer_expectation(destination, store)? {
+                    Some(pointer) => self.preflight_write_type(destination, pointer, store)?,
+                    None => {
+                        self.preflight_write_type(destination, *ty, store)?;
+                        if let Some(cell) = self.slot(destination)?.cell {
+                            store.validate_constructor_destination(cell, *ty)?;
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -179,10 +186,22 @@ impl Frame {
                 Ok(())
             }
             ItemValue::Function { ty } => {
+                let pointer = self.function_pointer_expectation(destination, store)?.is_some();
                 let cell = self.prepare_write(destination, store)?;
-                store.validate_constructor_destination(cell, ty)?;
+                if !pointer {
+                    store.validate_constructor_destination(cell, ty)?;
+                }
                 let guard = store.begin_construction(&[])?;
                 let ticket = store.commit_construction(guard, ty)?;
+                if pointer {
+                    // The function item meets its fn-pointer expectation by
+                    // the shared pointer coercion.
+                    let value = store.peek_ticket(ticket)?;
+                    let expected = self
+                        .write_unsizing(destination, value, store)?
+                        .ok_or_else(|| invalid("function item does not coerce to its fn pointer"))?;
+                    store.coerce_unsized_ticket(ticket, expected)?;
+                }
                 store.initialize(cell, ticket)
             }
             ItemValue::Static { cell, view } => {

@@ -582,6 +582,16 @@ impl MemberIndex {
                 let mut self_ty = implementation.self_ty();
                 let mut self_nominal = match &self_ty {
                     Some(ast::Type::PathType(path)) => resolve(path.path())?,
+                    // E-R5-008: raw and fn pointer self types are the
+                    // reserved identities of `traits::pointer_terms`.
+                    Some(ast::Type::PtrType(pointer)) => Some(if pointer.mut_token().is_some() {
+                        crate::traits::pointer_terms::mut_pointer_identity()
+                    } else {
+                        crate::traits::pointer_terms::const_pointer_identity()
+                    }),
+                    Some(ast::Type::FnPtrType(_)) => {
+                        Some(crate::traits::pointer_terms::fn_pointer_identity())
+                    }
                     _ => None,
                 };
                 // `type Foo = W<u32>; impl Foo {..}`: an impl of a type alias
