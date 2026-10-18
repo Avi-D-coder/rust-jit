@@ -361,6 +361,7 @@ impl Packet {
                 | QueryKey::ExpansionInput(_)
                 | QueryKey::TypeSchema(_)
                 | QueryKey::ConstructorPlan(_)
+                | QueryKey::AssociatedItemQualifier(_)
                 | QueryKey::AssociatedEquations(_)
                 | QueryKey::NominalMember(_)
                 | QueryKey::BoundRecordConstructor(_)

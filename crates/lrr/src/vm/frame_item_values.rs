@@ -40,6 +40,12 @@ pub(crate) enum ItemValue {
         cell: crate::runtime::cell::CellId,
         view: Option<TyTerm>,
     },
+    /// An immutable VM result replicated through the ordinary structural work
+    /// activation; the seal does not change the Type's Copy trait.
+    ConstTemplate {
+        template: crate::runtime::cell::aggregate_copy::VmTemplate,
+        view: Option<TyTerm>,
+    },
     /// A constant value its initializer produced for this one read.
     Ticket {
         ticket: crate::runtime::cell::TicketId,
@@ -124,6 +130,15 @@ impl Frame {
             Some(ItemValue::Aggregate { ty, view, .. }) => {
                 self.preflight_source_view(destination, view.as_ref())?;
                 self.preflight_write_type(destination, *ty, store)
+            }
+            Some(ItemValue::ConstTemplate { template, view }) => {
+                store.validate_vm_template(template)?;
+                let cell = template.cell();
+                let crate::runtime::cell::CellState::Live(value) = store.state(cell)? else {
+                    return Err(invalid("evaluated template storage is not live"));
+                };
+                self.preflight_source_view(destination, view.as_ref())?;
+                self.preflight_write_type(destination, TypeId(value.type_id), store)
             }
             Some(ItemValue::ConstCell { cell, view }) => {
                 let crate::runtime::cell::CellState::Live(value) = store.state(*cell)? else {
@@ -218,6 +233,9 @@ impl Frame {
                 self.write(destination, ticket, store)?;
                 self.set_source_view(destination, view)
             }
+            ItemValue::ConstTemplate { .. } => Err(invalid(
+                "VM template requires its ordinary resumable work activation",
+            )),
             ItemValue::Ticket { ticket, view } => {
                 self.write(destination, ticket, store)?;
                 self.set_source_view(destination, view)
@@ -246,30 +264,7 @@ impl Frame {
                         return self.write_value_path(destination, store);
                     }
                 };
-                let value = store.peek_ticket(ticket)?;
-                let ty = if store.value_promotable(value)? {
-                    store.effective_type(value)?
-                } else {
-                    None
-                };
-                let Some(ty) = ty else {
-                    // A fresh temporary for this use.
-                    self.write(destination, ticket, store)?;
-                    return self.set_source_view(destination, view);
-                };
-                let site = crate::core::digest::StableEncode::fingerprint(&self.pc);
-                let promoted = match store.promoted_cell(site, ty) {
-                    Some(promoted) => {
-                        // Later executions address the installed location; the
-                        // equal fresh value is an ordinary temporary.
-                        self.write(destination, ticket, store)?;
-                        self.set_source_view(destination, view.clone())?;
-                        promoted
-                    }
-                    None => store.install_promoted(site, ty, ticket)?,
-                };
-                self.item_values.static_place = Some((destination, promoted, view));
-                Ok(())
+                self.write_promotable_item(destination, ticket, view, store)
             }
             ItemValue::Aggregate {
                 value,
@@ -284,5 +279,72 @@ impl Frame {
                 self.set_source_view(destination, view)
             }
         }
+    }
+    pub(super) fn item_template_read(
+        &self,
+    ) -> Option<(
+        crate::runtime::cell::aggregate_copy::VmTemplate,
+        Option<TyTerm>,
+        bool,
+    )> {
+        let (value, promote) = match self.selected_item_value()? {
+            ItemValue::Promotable(inner) => (inner.as_ref(), true),
+            value => (value, false),
+        };
+        match value {
+            ItemValue::ConstTemplate { template, view } => {
+                Some((template.clone(), view.clone(), promote))
+            }
+            _ => None,
+        }
+    }
+    pub(super) fn finish_template_read(
+        &mut self,
+        destination: SlotId,
+        ticket: crate::runtime::cell::TicketId,
+        view: Option<TyTerm>,
+        promote: bool,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        if promote {
+            self.write_promotable_item(destination, ticket, view, store)?;
+        } else {
+            self.write(destination, ticket, store)?;
+            self.set_source_view(destination, view)?;
+        }
+        self.item_values.value = None;
+        Ok(())
+    }
+    fn write_promotable_item(
+        &mut self,
+        destination: SlotId,
+        ticket: crate::runtime::cell::TicketId,
+        view: Option<TyTerm>,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        let value = store.peek_ticket(ticket)?;
+        let ty = if store.value_promotable(value)? {
+            store.effective_type(value)?
+        } else {
+            None
+        };
+        let Some(ty) = ty else {
+            // A fresh temporary for this use.
+            self.write(destination, ticket, store)?;
+            return self.set_source_view(destination, view);
+        };
+        let site = crate::core::digest::StableEncode::fingerprint(&self.pc);
+        let promoted = match store.promoted_cell(site, ty) {
+            Some(promoted) => {
+                // Later executions address the installed location; the
+                // equal fresh value is an ordinary temporary.
+                self.write(destination, ticket, store)?;
+                self.set_source_view(destination, view.clone())?;
+                promoted
+            }
+            None => store.install_promoted(site, ty, ticket)?,
+        };
+        self.item_values.static_place = Some((destination, promoted, view));
+        Ok(())
     }
 }

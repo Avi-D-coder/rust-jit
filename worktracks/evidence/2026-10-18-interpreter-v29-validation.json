@@ -1,0 +1,84 @@
+{
+  "status": "COMPILE_FAILED exact unchanged source; no CLI build or runtime tests",
+  "head": "b1fe6ef6f8fa43617d18c7b7f50e346b6768c111",
+  "source_sha256": "8231fd90da59a9cf44ee565669278d536d69d7a49c2f66701b0bf92949060724",
+  "source_file_count": 3332,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "lib_build": {
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "test",
+      "--offline",
+      "--locked",
+      "-p",
+      "lrr",
+      "--lib",
+      "--no-run"
+    ],
+    "exit": 101,
+    "seconds": 17.058,
+    "log": "compile.log",
+    "session_id": 78879,
+    "initial_chunk": "40ef9e",
+    "terminal_chunk": "0b3989"
+  },
+  "source_unchanged_through_build": true,
+  "head_unchanged_through_build": true,
+  "generator_unchanged_through_build": true,
+  "warnings": 11,
+  "compiler_errors": [
+    {
+      "code": "E0599",
+      "file": "crates/lrr/src/frontend/associated_constant_applications.rs",
+      "line": 741,
+      "message": "TypeBound has no path_type method; use genuine ty Type AST",
+      "owner": "worker2"
+    },
+    {
+      "code": "E0599",
+      "file": "crates/lrr/src/frontend/source_types.rs",
+      "line": 1597,
+      "message": "AssocTypeArg generic_arg_list extension trait HasGenericArgs not in scope",
+      "owner": "worker1"
+    },
+    {
+      "code": "E0382",
+      "file": "crates/lrr/src/runtime/cell_aggregate_copy.rs",
+      "line": 320,
+      "message": "Option<VmTemplate> moved into Self then reused via template.is_some",
+      "owner": "root"
+    }
+  ],
+  "cli_build": "unexecuted",
+  "runtime_contract_results": "unexecuted",
+  "supplemental_control_results": "unexecuted",
+  "old_binaries": "Unchanged V28 artifacts; never executed as V29 source evidence.",
+  "review_correction": "Independent source review erroneously identified generated AST path_type method as TypeBound API. Actual compile contradicts; prior review remains exact source-only, not successful API/build evidence.",
+  "holds": [
+    "Nominal initializer template authority withdrawn; candidate structural-owned-graphs only.",
+    "Initial nonlocal impl/Drop completeness, full GenericArg owner packet/cache and cancellation remain interpreter blockers.",
+    "Prepared8roots12controls are unexecuted and count as no runtime acceptance.",
+    "No full-suite/current global passing count/JIT gate claim."
+  ],
+  "schema": "lrr/interpreter-focused-validation/v1",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "raw_artifacts": {
+    "directory": "artifacts/validation-resume-2026-10-18/candidate-v29",
+    "sha256_index": {
+      "after-lib.json": "7cdd7bd71e6da868a9c2ba113ff724b8da0b753dda09721775c829adea17601a",
+      "before.json": "3e12fba5db4d68eb1f5fc708df0d0fc27c2c40a4a40746f6102dee38dcec4858",
+      "compile-terminal.json": "56e645f65bb25d3e4a66597bcb9cbc691d77d28978ca62e1cc34c0b12138e0ad",
+      "compile.exit": "39b8dc3fc8b44765c8e6f1adee04c5b465e555ab791cc42d0d9e810d5b64297c",
+      "compile.log": "62db590e9b293d09d6055a54199a1e91d4994b4a15cf478f9a54e04fcc504afc",
+      "input-proof.json": "034447248ec166da793431f86bb6a09429dab4a18dbd729231ec1719679285c1",
+      "portable-report-skeleton.json": "a20bc6eebf39a2f6fa904eac6d6af656b2f4db7100291d1194590d19e15a4138",
+      "queue-plan.json": "cc2b426791e6a2ad1e33e9f4a0fe29fce331def1e541263a65428c4a950a4e17",
+      "report.json": "c6bad85cb42ec726ef7e54289b6d72a94dc414d5da27ce2a075fe3a5ceffee92",
+      "roots.json": "088ab1afef2e8b3faaddc9be0e2bbc6a07b00360465870e055f57408006ecd75",
+      "selected-controls.json": "aea3466c69293dbb949152e61667d8d0188d3e5eb9ab5c61347fe52fb2bec486",
+      "source-review-files.json": "f4e97a25a41c6d2cef0b7dabc5d9987dde3888e455c9e1552058ef94ddf256c7"
+    }
+  }
+}

@@ -90,9 +90,9 @@ impl RunMachine {
             let PatternTarget::Initializer(identity) = target else {
                 continue;
             };
-            let root = if let Some((cell, _)) = self.const_cells.get(identity) {
+            let root = if let Some(stored) = self.const_cells.get(identity) {
                 Some(crate::runtime::cell::pattern_constants::ConstantRoot::Cell(
-                    *cell,
+                    stored.cell,
                 ))
             } else if let Some((ticket, _)) = self.initialized_values.get(&(pc.clone(), *identity))
             {

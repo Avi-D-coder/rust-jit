@@ -85,7 +85,7 @@ impl RunMachine {
                 .as_deref()
                 .ok_or_else(|| call_fault("enum variant lacks its name"))?;
             let row = crate::syntax::outline::discriminant_def_key(&definition, name).fingerprint();
-            let Some((cell, _)) = self.const_cells.get(&row).cloned() else {
+            let Some(stored) = self.const_cells.get(&row).cloned() else {
                 // Source preparation publishes the rows of module enums, and
                 // body entry those of block-local enums; an enum declared by
                 // a published generated unit has none (E-R5-013 records the
@@ -102,7 +102,7 @@ impl RunMachine {
                 self.demand_initializer(row, false);
                 return Ok(QueryPoll::Ready(Ok(())));
             };
-            let value = self.store.read_scalar(cell)?;
+            let value = self.store.read_scalar(stored.cell)?;
             let value = match value.kind {
                 4 => i128::from(value.payload as i64),
                 5 => i128::from(value.payload),

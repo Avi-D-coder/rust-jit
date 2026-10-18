@@ -1,0 +1,181 @@
+{
+  "status": "corrected_source_candidate_uncompiled_runtime_pending",
+  "tasks": [
+    "T032",
+    "T054",
+    "M018",
+    "M025"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-associated-constant-application-carrier.md",
+  "changed": [
+    {
+      "path": "crates/lrr/src/frontend/associated_constant_applications.rs",
+      "sha256": "d01a74b4a608527f4db9503b558bc83021155ef6981d53e33ec62ae44a1390b3"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "545ee3493b07005bca6df89b4e4e4de795e123ce851f440958f93a24f058799e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "74d1f18d56fa92af120321739e91a4037abd35b7c385d6f509076df030d716b5"
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "sha256": "7b28d11908fe2d7186130e593b0324345109fb8b26ec6abda19ab82f9e694111"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "8fe4b83205a82ef7efbb3f3f6bab14b096aa19204ed19349c0757dc22f14f15f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "f2c0c5ee8f578605d36621bb3d3205a698c3f03db8ec53a86a32c21b9e499cf1"
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "079b0445d3415581f64d2cde6aff3dca3855b958aeab690e7c8edcb9e01d6705"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "d0087dbb54c48e84293dedf05124d37b50a667cec0a0b2ddb330eb5b111470b2"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "62c248d84865451b75331379e83ddd1ad7aee64bd851f8d34cd0db5d89eb2966"
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "sha256": "2d0da7caea05d5fc414e99de99613b6446880e03d8344587b246a712aec361c3"
+    },
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "sha256": "9cf5fb557a51a838bb7d55df9b2937f29ee29d5314251ef4748c8d02f6f2c70c"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "05694a48ef9ddaefbe7504addd80580d7258679c9a970d0569dcbe2acd79e9bb"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_trait_calls.rs",
+      "sha256": "7c1a4c7eddac23132cc6c8d5ab488a29661abdf1f979d02b8a0419341b28a211"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "19d922a5fbf86b5128f2cdbc40d81db611cefec7927a7835ffef97a76aca21c4"
+    }
+  ],
+  "shared_leaf_scope": {
+    "engine/run.rs": [
+      "SelectedArgumentCall owner_application",
+      "finish_selected_argument_call implicit Self/guard/metadata",
+      "prepare_source_call guard recheck"
+    ],
+    "engine/run_value_items.rs": [
+      "associated_value_path only"
+    ],
+    "engine/run_trait_calls.rs": [
+      "owner_application None mechanical field only"
+    ],
+    "unreviewed_other_owner_edits": "Root may update separate initializer/cache/result blocks in shared engine leaves. These hashes are snapshot-bound, and final delta needs source accounting; no other-owner blocks reviewed by this receipt."
+  },
+  "actual_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs",
+    "unchanged_sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+    "sealed_v27": "Self::X unsupported, actual original75..82/1 source call/236 dispatches/457 ops, capture incomplete; artifact candidate-v27/additional-constant-application/stock-0.stdout. No successor execution yet."
+  },
+  "key_and_dependencies": {
+    "tag": 51,
+    "tag_census": "Existing QueryKey/QueryValue stable tags through50; no collision; old tags unchanged. BodyTypeOccurrences new usage/segment tags encoded under v3 domain, old tag identities retained.",
+    "query_route": "AssociatedItemQualifier actual Path PC -> EnteredValue + SourceLocalPlan -> exact actual Path qualifier -> ordinary prepare_named_body_type/Type prefix/declaration service -> actual SourceType or declared ParamKey, no invented Type/parser.",
+    "currentness": "Owning qualifier query and PreparedInputGuard retain actual Type/source lookup closure. Guard retained across argument effects and checked before ordinary call contract/argument seal. SourceLocalPlan retains actual current body/environment/context/cfg/edition/epoch. Source member/provider application memo/guard remains future separate prerequisite.",
+    "cold": "One path-local occurrence preparation and existing relevant Type/member services per memo generation; no executable cold body preparation for Type answer.",
+    "hot": "Select retained query outcome, instantiate actual source parameter/descriptor pair, ordinary explicit argument/GenericEnv/call entry; guard checks no parsing/namespace census.",
+    "retention": "New QueryValue source roots expose actual SourceLocalPlan; AST/plan handles shared. Checked owned metadata counts, no new cap. Pending retains all actual GenericArg occurrences."
+  },
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": [
+        "AssociatedItemQualifier",
+        "finish_selected_argument_call"
+      ],
+      "finding": "No assertion/expression evaluator; metadata adds ordinary explicit Self argument to existing call/VM route."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "PreparedBodyTypeOccurrences::prepare",
+        "prepare_occurrence"
+      ],
+      "finding": "Genuine retained AST qualifiers enter same Type kernel; no scalar/break output interpreter."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "SourceLocalPlan::type_prefix_with",
+        "associated_value_for_source"
+      ],
+      "finding": "Reserved actual Self keyword uses genuine owner binder; A/Abc existing hygienic lookup; same member candidate loop, no macro/numeric/name whitelist."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "BodyTypeUse::ValueQualifier",
+        "original_survival",
+        "type_prefix_with"
+      ],
+      "finding": "Actual source/generated occurrence/currentness joins retained. Unsupported impl/generic application remains named pending; no blanket generated syntax exclusion."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "AssociatedItemQualifier prepare",
+        "FunctionSignature query"
+      ],
+      "finding": "Only source/header/Type facts; no callee body/index/thunk demand for qualifier, no pattern engine or unselected-arm lowering."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "QueryKey::AssociatedItemQualifier",
+        "SelectedArgumentCall::owner_application"
+      ],
+      "finding": "One immutable pure memo; retained outcome/guard consumed. No installed source planning. Full applied member/provider memo remains held, not claimed completed."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "prepare_named_body_type",
+        "associated_const_selection"
+      ],
+      "finding": "Existing relevant Type/declaration/kernel services and member index; no new global namespace map/dispatch census. Full member/provider dependency closure still held."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "AssociatedConstPathOccurrence",
+        "QueryValue::source_roots"
+      ],
+      "finding": "Shared Rowan/Arc actual source plan and direct indexed node, path-local traversal only; no immutable body clone/whole-file search."
+    }
+  ],
+  "pending": [
+    "Independent exact-source review",
+    "Combined lib+CLI compile and actual unchanged witness capture",
+    "Shared leaf root delta accounting if root edits disjoint blocks after this snapshot",
+    "Generic Proxy owner substitution, full Const/Region canonical packet/cache/template and applied provider query remain held",
+    "Required all-context/edition/currentness runtime matrix not inferred from source"
+  ],
+  "predecessor_review": {
+    "path": "worktracks/evidence/2026-10-18-associated-self-qualifier-source-review.json",
+    "sha256": "168b1e1c8f860ea059fc770c401c3ad6d035869b5c57761b2ca4d2d342c1434f",
+    "status": "held_source_snapshot_before_typed_pending_refinement_not_runtime_evidence"
+  },
+  "delta": {
+    "common_typed_finalizer": "LocalTypePrefix::prepare_named_outcome_with is the same existing Type/alias/builtin algorithm; old prepare_named_with adapter emits exactly retained pending diagnostic. New owning qualifier query consumes typed Pending without catching diagnostics or reconstructing prefix. Actual invalid source failures remain errors.",
+    "self_inference": "Only positively selected concrete/parameter qualifier binds implicit Self. Pending trait qualifier does not refuse ordinary argument/result Self inference. No Empty/erased substitute.",
+    "root_shared_leaves": "Snapshot includes parent independent E007 edits if present, which this receipt does not review.",
+    "source_bucket": "New source-based selector preserves existing Unit-as-tuple0 bucket; reference/pointee selection remains unsupported rather than erased."
+  }
+}

@@ -519,12 +519,52 @@ impl RunMachine {
             )));
         };
         let sources: Vec<_> = self.sources.iter().collect();
-        match CallResolver::new(graph, &sources) {
-            Ok(resolver) => resolver
-                .with_members(self.members.as_deref())
-                .associated_value(db, self.frame.pc().body.definition, path),
-            Err(error) => QueryPoll::Ready(Err(error)),
+        let key = QueryKey::AssociatedItemQualifier(PcKey {
+            body: self.frame.pc().body.clone(), node: self.frame.pc().node, phase: 0,
+        });
+        let selected = match db.fetch(&SyntaxProvider, key.clone()) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::AssociatedItemQualifier(qualifier) = selected.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("associated value qualifier query variant differs")));
+        };
+        if !selected.cacheable { return QueryPoll::Ready(Err(call_fault("associated value qualifier is not retained"))); }
+        let resolver = match CallResolver::new(graph, &sources) {
+            Ok(resolver) => resolver.with_members(self.members.as_deref()),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        if let Some(source) = qualifier.source() {
+            if let crate::frontend::explicit_type_arguments::ExplicitType::Parameter(crate::traits::term::TyTerm::Param(parameter)) = source {
+                match self.frame.parameter_hint(*parameter) {
+                    Ok(Some(_)) => {},
+                    Ok(None) => return QueryPoll::Ready(Err(call_fault("associated qualifier source parameter has no paired runtime binding"))),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            }
+            let actual = self.frame.bound_view(source.source(), &self.store);
+            // Source arguments are never dropped to pretend the declaration
+            // alone identifies an initializer application. Its ordinary packet
+            // and once-per-application storage transport is the next join.
+            if matches!(&actual, crate::traits::term::TyTerm::Nominal(_, args) if !args.is_empty()) {
+                return QueryPoll::Ready(Err(call_fault("associated constant owner application requires its generic argument packet")));
+            }
+            let Some(member) = qualifier.member() else { return QueryPoll::Ready(Err(call_fault("associated value member occurrence absent"))); };
+            let Some(name) = crate::syntax::ast_adapter::semantic_name(member.text()) else { return QueryPoll::Ready(Err(call_fault("associated value member name differs"))); };
+            let guard = match db.prepare_input_guard(&SyntaxProvider, &key, selected.fingerprint) {
+                QueryPoll::Ready(Ok(guard)) => guard,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            if let Err(error) = guard.require_current(db) { return QueryPoll::Ready(Err(error)); }
+            let member_context = qualifier.member_traits();
+            return QueryPoll::Ready(resolver.associated_value_for_source(&actual, &name, member_context).map(|selected| selected.map(|selected| selected.definition())));
         }
+        if qualifier.pending().is_some() {
+            return QueryPoll::Ready(Err(call_fault("associated constant qualifier requires its actual source Type application")));
+        }
+        resolver.associated_value(db, self.frame.pc().body.definition, path)
     }
     /// Whether the written path at `pc` is in place context: its own Exit
     /// recipe addresses its value as a place (`ValuePlace`), as a borrow,
@@ -632,8 +672,17 @@ impl RunMachine {
                         .prepare_item_value(promote(ItemValue::Ticket { ticket, view }));
                     return QueryPoll::Ready(Ok(()));
                 }
-                if let Some((cell, view)) = self.const_cells.get(&definition.identity).cloned() {
-                    promote(ItemValue::ConstCell { cell, view })
+                if let Some(stored) = self.const_cells.get(&definition.identity).cloned() {
+                    promote(match stored.template {
+                        Some(template) => ItemValue::ConstTemplate {
+                            template,
+                            view: stored.view,
+                        },
+                        None => ItemValue::ConstCell {
+                            cell: stored.cell,
+                            view: stored.view,
+                        },
+                    })
                 } else {
                     self.demand_initializer(definition.identity, false);
                     return QueryPoll::Ready(Ok(()));

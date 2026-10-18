@@ -124,7 +124,7 @@ impl ExplicitType {
             }),
         }
     }
-    fn heap_bytes(&self) -> Result<usize, Diagnostic> {
+    pub(super) fn heap_bytes(&self) -> Result<usize, Diagnostic> {
         match self {
             Self::Selected(source) => source.heap_bytes(),
             Self::Written { term, .. } => term

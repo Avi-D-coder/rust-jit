@@ -1,0 +1,85 @@
+{
+  "status": "READY bounded source component; not compiled/runtime validated",
+  "scope": "single canonical lexical declaration traversal with ordered deferred binding requests; no impl/header type resolution or completeness authority installed",
+  "sources": [
+    {
+      "path": "crates/lrr/src/syntax/entered_macros.rs",
+      "sha256": "3c2575609bc466ee2c23e42df5709fdf24e62e0dd1518d4bdccd86c2517c61b1"
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scope_plan.rs",
+      "sha256": "af961dcdc1994d9f354d82c3b7e43d76f3f27b122812e8ef60b2987f7430a2a2"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "sha256": "09fc9c460632d85bfa9fe3bcc0da285ec37b5a0e69b0327adc5897ebcc7ff428"
+    }
+  ],
+  "entry_census": [
+    "ParsedFile::entered_macro_facts -> declaration_scope_plan -> lexical_declarations -> DeclarationScopePlan::into_entered",
+    "ParsedFile::entered_container_facts -> same lexical_declarations -> same into_entered",
+    "All original BindingBudget::receiver/collect sites removed from canonical walker and captured in original traversal order; sole new BindingBudget constructed in DeferredBindings::apply",
+    "BodyItemBudget::collect and collect_container_members unchanged; body_namespace composition public owned representation unchanged"
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "lexical_declarations / DeferredBindings::apply",
+      "review": "No assertion hooks, expression evaluator or runtime operation changes."
+    },
+    {
+      "mode": 2,
+      "symbols": "existing ParsedFile retained root/BodyItemBudget producer",
+      "review": "No generated executor/opcodes or scalar/literal route; parser handle and body/containing context retained."
+    },
+    {
+      "mode": 3,
+      "symbols": "same existing scope ordinal counters, BodyItemBudget::collect, collect_container_members, import/event producer ordering",
+      "review": "No fixture/Drop/method/numeric conditions. Binding requests retain same scope/at/form ordering as former direct calls; canonical DefKeys/bodyhandles remain same producer."
+    },
+    {
+      "mode": 4,
+      "symbols": "declaration_scope_plan exact entered_body_root, body.require_entry, parsed.key; container exact kind/range/content gate",
+      "review": "Original/retained/generated parser handling unchanged; no new origin exclusion or invented source owner. Owning editions and token contexts stay on actual parser/header metadata. The pure syntax result is not entry/currentness authority."
+    },
+    {
+      "mode": 5,
+      "symbols": "DeferredBindings::apply / single lexical_declarations",
+      "review": "Cold capture constructs no BindingBudget, PatternTree, BodyIndex, SourceLocalPlan or BodyEnvironment; for/match reached shape checks deferred as actual AST requests. Source macro producer AST pattern scan remains for canonical producer IDs, no pattern evaluation. Entry applies all requests in original order; different malformed-source error priority relative to later declaration errors is possible and is not claimed exact diagnostic compatibility."
+    },
+    {
+      "mode": 6,
+      "symbols": "DeclarationScopePlan ownership / into_entered",
+      "review": "One existing lexical walk captures headers/scopes and binding handles, then one ordered request pass without source walk. Fresh entry moves owned metadata, no header/body clone. Full cross-consumer memo/cache/retained-plan later-entry adoption not installed and remains explicit prerequisite; no per-operation planner added. metadata_bytes adds one cold header-metadata traversal; no performance claim."
+    },
+    {
+      "mode": 7,
+      "symbols": "plan ParseKey/body/range/blockoffset/containing scope/cfg/header-context fingerprint",
+      "review": "No database queries/global namespace maps or negative trait claims; no source effect. Raw declaration metadata must not mint no-Drop proof."
+    },
+    {
+      "mode": 8,
+      "symbols": "BindingRequest actual AST handles, retained body check, same scope traversal",
+      "review": "No BodyIndex clone or repeated whole-file lookup per operation. AST handles retain shared immutable syntax; requests capacity/accounting uses checked arithmetic. Plan has no address-space/resource ceiling."
+    }
+  ],
+  "control": {
+    "selector": "syntax::declaration_scope_plan::tests::unchanged_local_drop_headers_keep_canonical_identity_without_binding_preparation",
+    "kind": "LRR metadata integration control using exact unchanged upstream original, not wholemain execution",
+    "original": "fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs",
+    "original_sha256": "34adb67b8cf73f5558f1fe1a8e0ce62ed6b9dd132a2c0dec6aa99a3564ea2453",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "assertions": "cold bindings absent/requests retained; actual local Foo+impl+drop member and body identities; deterministic plan key; consume plan creates only original _x binding while canonical declaration headers/DefKeys/bodyhandles remain identical"
+  },
+  "holds": [
+    "Source plan not yet memoized/shared across discovery and later body entry; do not install until immutable retention/move or sharing join exists.",
+    "Canonical owner adapter to checked ScannedImpl / actual header-Type prefix / member publication absent; cold nested child owner plans not recursively demanded.",
+    "Complete configured graph producer closure and common tabled trait goal/negative completeness service absent; no Drop/noDrop authority.",
+    "New control and existing runtime/macro/origin/scope regression tests unexecuted successor. No fixture/feature/interpreter/JIT/performance acceptance claim."
+  ]
+}

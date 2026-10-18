@@ -1299,7 +1299,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "T023/T025 shared wide integer runtime and ordinary primitive/fold source library. V10 literals advance wholei128, six scoped controls pass. Fullwide/Clone/fold acceptance pending; no JIT gate.",
+      "scope": "T023/T025 shared wide integer runtime and ordinary primitive/fold source library. V10 literals advance wholei128, six scoped controls pass. Fullwide/Clone/fold acceptance pending; no JIT gate. Root retains cell.rs shared live Drop handle field/install/cleanup edits for LOCAL-044 template prerequisite; no other writer.",
       "paths": [
         "crates/lrr/src/runtime/value.rs",
         "crates/lrr/src/runtime/shape.rs",
@@ -1328,7 +1328,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "E007 ordinary VM initializer and shared Search constant patterns. V22 scalar/origin matrices pass; non-scalar constant patterns fail explicitly. Root extends checked nonconsuming structural storage comparison using actual retained cell/ticket; root LOCAL043 owns cell.rs module declaration. Aggregate template/runonce and generic initializer keys held independently. V26 exact source context crosses singleton array to EMPTY initializer; successor retains actual prepared WrittenType in common result hints, source-only. See retained-result-written-context.md. No acceptance/oncecache closure. Next source-only E007 physical prerequisite: replace shared AggregateCopy private ownerless destination implementation with existing checked ConstructionId guards, retaining Copy admission and source stamps; full template purpose/cleanup integration separate holds.",
+      "scope": "E007 ordinary VM initializer and shared Search constant patterns. V22 scalar/origin matrices pass; non-scalar constant patterns fail explicitly. Root extends checked nonconsuming structural storage comparison using actual retained cell/ticket; root LOCAL043 owns cell.rs module declaration. Aggregate template/runonce and generic initializer keys held independently. V26 exact source context crosses singleton array to EMPTY initializer; successor retains actual prepared WrittenType in common result hints, source-only. See retained-result-written-context.md. No acceptance/oncecache closure. Next source-only E007 physical prerequisite: replace shared AggregateCopy private ownerless destination implementation with existing checked ConstructionId guards, retaining Copy admission and source stamps; full template purpose/cleanup integration separate holds. Next source-only actual nongeneric plain-data VM template through same AggregateCopy private seal; no global Copy override. Full generic/Drop/heap/cancellation holds; precode plain-data-evaluated-template.md. Shared live Drop facts from MemberIndex publication replace stale store snapshot; relevant-key NoDrop proof guards private template. Independent/source/runtime acceptance pending. Initial non-local impl completeness discovered; false NoDropProof removed, owned nominal template caching held. Actual structural-only template class remains source-only pending review.",
       "paths": [
         "crates/lrr/src/engine/run_initializers.rs",
         "crates/lrr/src/engine/run_pattern_tests.rs",
@@ -1346,7 +1346,14 @@
         "crates/lrr/src/vm/step.rs",
         "crates/lrr/src/vm/frame.rs",
         "crates/lrr/src/syntax/body_index.rs",
-        "crates/lrr/src/runtime/cell_aggregate_copy.rs"
+        "crates/lrr/src/runtime/cell_aggregate_copy.rs",
+        "crates/lrr/src/engine/run_enum_discriminants.rs",
+        "crates/lrr/src/vm/frame_aggregate_copy.rs",
+        "crates/lrr/src/frontend/member_index.rs",
+        "crates/lrr/src/runtime/drop_facts.rs",
+        "crates/lrr/src/runtime/cell_promoted.rs",
+        "crates/lrr/src/runtime/mod.rs",
+        "crates/lrr/src/engine/run_drop_inventory.rs"
       ],
       "issue": null,
       "pull_request": null,
@@ -1410,7 +1417,6 @@
         "crates/lrr/src/syntax/thunks.rs",
         "crates/lrr/src/frontend/constructors.rs",
         "crates/lrr/src/engine/install.rs",
-        "crates/lrr/src/vm/frame_aggregate_copy.rs",
         "crates/lrr/src/vm/frame_record_update.rs",
         "crates/lrr/src/cli/mod.rs",
         "crates/lrr/src/cli/reached_record_update_tests.rs",
@@ -1427,7 +1433,8 @@
       "review_after": "2026-10-18T09:44:05.987318+00:00",
       "transferred_paths": [
         "crates/lrr/src/vm/step.rs",
-        "crates/lrr/src/vm/frame.rs"
+        "crates/lrr/src/vm/frame.rs",
+        "crates/lrr/src/vm/frame_aggregate_copy.rs"
       ]
     },
     {

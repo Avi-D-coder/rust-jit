@@ -118,6 +118,7 @@ pub enum QueryValue {
     DeclaredParameterGoal(Box<crate::frontend::source_parameter_goals::ParameterGoalObservation>),
     SourceConstraints(Box<crate::syntax::source_constraints::SourceConstraintPlan>),
     QualifiedBodyType(Box<crate::frontend::qualified_type_names::QualifiedTypeObservation>),
+    AssociatedItemQualifier(Box<crate::frontend::associated_constant_applications::PreparedAssociatedItemQualifier>),
     AssociatedEquations(Box<crate::frontend::associated_equations::PreparedAssociatedEquations>),
     NominalMember(Box<crate::frontend::nominal_member_goals::PreparedNominalMember>),
     BoundRecordConstructor(Box<crate::frontend::prepared_constructors::PreparedRecordConstructor>),
@@ -157,6 +158,7 @@ impl QueryValue {
             _ => None,
         };
         let local = match self {
+            Self::AssociatedItemQualifier(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::NominalMember(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::PreparedBodySyntax(value) => Some(SourceArtifactRef::PreparedBodySyntax(value)),
             Self::PreparedExplicitTypeArguments(value) => {
@@ -214,6 +216,7 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::AssociatedItemQualifier(value), QueryKey::AssociatedItemQualifier(key)) = (self, key) { return value.key() == key; }
         if let (Self::AssociatedEquations(value), QueryKey::AssociatedEquations(key)) = (self, key)
         {
             return value.key() == key.as_ref();
@@ -404,6 +407,7 @@ impl QueryValue {
                 e.u32(36);
                 e.digest(value.fingerprint());
             }
+            Self::AssociatedItemQualifier(value) => { e.u32(51); e.record(value.as_ref()); }
             Self::AssociatedEquations(value) => {
                 e.u32(50);
                 e.record(value.as_ref());
@@ -585,6 +589,7 @@ impl QueryValue {
             Self::TypeAlias(v) => v.estimated_bytes(),
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
+            Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::BoundRecordConstructor(v) => v.metadata_bytes().unwrap_or(usize::MAX),

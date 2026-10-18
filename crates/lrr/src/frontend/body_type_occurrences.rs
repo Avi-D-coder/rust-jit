@@ -64,6 +64,7 @@ pub(crate) enum BodyTypeSegment {
     Crate(BodyTypeIdentifier),
     SelfModule(BodyTypeIdentifier),
     Super(BodyTypeIdentifier),
+    SelfType(BodyTypeIdentifier),
     NeedQualifiedType,
 }
 /// A query must consume a cached genuine local/import prefix before asking the
@@ -79,6 +80,7 @@ pub(crate) enum BodyTypeAuthorityDemand {
 pub(crate) enum BodyTypeUse {
     RecordConstructor,
     TypeSyntax,
+    ValueQualifier,
 }
 pub(crate) struct BodyTypeOccurrence {
     owner: Digest,
@@ -213,7 +215,8 @@ fn retained_original_origin(
                 BodyTypeSegment::Name(identifier)
                 | BodyTypeSegment::Crate(identifier)
                 | BodyTypeSegment::SelfModule(identifier)
-                | BodyTypeSegment::Super(identifier) => identifier,
+                | BodyTypeSegment::Super(identifier)
+                | BodyTypeSegment::SelfType(identifier) => identifier,
                 BodyTypeSegment::NeedQualifiedType => return Ok(None),
             };
             let Some(context) = source.parsed().identifier_context(identifier.range())? else {
@@ -360,6 +363,10 @@ fn retained_original_origin(
                     BodyTypeUse::TypeSyntax => {
                         ast::PathType::can_cast(parent.kind()) && range(parent.text_range()) == at
                     }
+                    BodyTypeUse::ValueQualifier => ast::Path::cast(parent)
+                        .filter(|full| full.syntax().parent().is_some_and(|parent| ast::PathExpr::can_cast(parent.kind())))
+                        .and_then(|full| full.qualifier())
+                        .is_some_and(|actual| actual.syntax() == &path),
                     BodyTypeUse::RecordConstructor => ast::RecordExpr::cast(parent)
                         .and_then(|record| record.path())
                         .is_some_and(|actual| actual.syntax() == &path),
@@ -479,8 +486,11 @@ impl PreparedBodyTypeOccurrences {
             };
             let (path, usage) = if let Some(record) = ast::RecordExpr::cast(syntax.clone()) {
                 (record.path(), BodyTypeUse::RecordConstructor)
-            } else if let Some(ty) = ast::PathType::cast(syntax) {
+            } else if let Some(ty) = ast::PathType::cast(syntax.clone()) {
                 (ty.path(), BodyTypeUse::TypeSyntax)
+            } else if let Some(value) = ast::PathExpr::cast(syntax) {
+                let Some(qualifier) = value.path().and_then(|path| path.qualifier()) else { continue; };
+                (Some(qualifier), BodyTypeUse::ValueQualifier)
             } else {
                 continue;
             };
@@ -510,6 +520,14 @@ impl PreparedBodyTypeOccurrences {
                             range: actual,
                             raw_context: source.identifier_context(actual)?,
                             edition,
+                        })
+                    }
+                    Some(ast::PathSegmentKind::SelfTypeKw) => {
+                        let actual = range(segment.syntax().text_range());
+                        BodyTypeSegment::SelfType(BodyTypeIdentifier {
+                            name: "Self".into(), range: actual,
+                            raw_context: source.identifier_context(actual)?,
+                            edition: source.parsed().token_edition(actual)?,
                         })
                     }
                     Some(
@@ -581,7 +599,8 @@ impl PreparedBodyTypeOccurrences {
                     BodyTypeSegment::Name(name)
                     | BodyTypeSegment::Crate(name)
                     | BodyTypeSegment::SelfModule(name)
-                    | BodyTypeSegment::Super(name) => {
+                    | BodyTypeSegment::Super(name)
+                    | BodyTypeSegment::SelfType(name) => {
                         extra_bytes = add(extra_bytes, name.name.capacity())?
                     }
                     BodyTypeSegment::NeedQualifiedType => {}
@@ -627,7 +646,7 @@ impl PreparedBodyTypeOccurrences {
 }
 
 impl StableEncode for PreparedBodyTypeOccurrences {
-    const DOMAIN: &'static str = "lrr/v2/prepared-body-type-occurrences";
+    const DOMAIN: &'static str = "lrr/v3/prepared-body-type-occurrences";
     fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
         let identifier = |e: &mut crate::core::digest::StableEncoder, name: &BodyTypeIdentifier| {
             e.string(name.name());
@@ -647,6 +666,7 @@ impl StableEncode for PreparedBodyTypeOccurrences {
             e.u8(match row.usage() {
                 BodyTypeUse::RecordConstructor => 0,
                 BodyTypeUse::TypeSyntax => 1,
+                BodyTypeUse::ValueQualifier => 2,
             });
             match row.origin() {
                 BodyTypeOrigin::Original => e.u8(0),
@@ -679,6 +699,7 @@ impl StableEncode for PreparedBodyTypeOccurrences {
                     e.u8(3);
                     identifier(e, name);
                 }
+                BodyTypeSegment::SelfType(name) => { e.u8(5); identifier(e, name); }
                 BodyTypeSegment::NeedQualifiedType => e.u8(4),
             });
         });

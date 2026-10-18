@@ -18,6 +18,14 @@ pub(super) struct OpActivation {
     work: CopyOperation,
 }
 enum CopyOperation {
+    Template {
+        copy: AggregateCopy,
+        template: crate::runtime::cell::aggregate_copy::VmTemplate,
+        destination: SlotId,
+        source_view: Option<crate::traits::term::TyTerm>,
+        promote: bool,
+        ticket: Option<TicketId>,
+    },
     Read {
         copy: AggregateCopy,
         source: CellId,
@@ -80,6 +88,29 @@ impl Frame {
     ) -> Result<bool, Diagnostic> {
         if self.copy_activation.is_some() {
             return Err(invalid("copy activation already active"));
+        }
+        if let Op::ValuePath { destination, .. } = op
+            && let Some((template, source_view, promote)) = self.item_template_read()
+        {
+            self.preflight_source_view(*destination, source_view.as_ref())?;
+            store.reserve_owning_read_result(self.slot(*destination)?.cell.is_none(), false)?;
+            self.prepare_write(*destination, store)?;
+            let copy = AggregateCopy::begin_template(store, template.clone())?;
+            self.copy_activation = Some(OpActivation {
+                pc: self.pc.fingerprint(),
+                operation_index: u32::try_from(index)
+                    .map_err(|_| invalid("copy operation index overflow"))?,
+                expected: op.clone(),
+                work: CopyOperation::Template {
+                    copy,
+                    template,
+                    destination: *destination,
+                    source_view,
+                    promote,
+                    ticket: None,
+                },
+            });
+            return Ok(true);
         }
         if let Op::ConstructRest { guard, base } = op {
             let work = self.begin_record_rest(*guard, *base, store)?;
@@ -169,6 +200,37 @@ impl Frame {
                 .take()
                 .ok_or_else(|| invalid("copy activation absent"))?;
             let progress = match &mut activation.work {
+                CopyOperation::Template {
+                    copy,
+                    template,
+                    destination,
+                    source_view,
+                    promote,
+                    ticket,
+                } => (|| {
+                    if self.item_template_read()
+                        != Some((template.clone(), source_view.clone(), *promote))
+                    {
+                        return Err(invalid("evaluated template operation source changed"));
+                    }
+                    if ticket.is_none() {
+                        match self.advance_copy_work(copy, store)? {
+                            CopyProgress::Pending => return Ok(false),
+                            CopyProgress::Complete(value) => *ticket = Some(value),
+                        }
+                    }
+                    let result =
+                        ticket.ok_or_else(|| invalid("evaluated template result absent"))?;
+                    self.finish_template_read(
+                        *destination,
+                        result,
+                        source_view.clone(),
+                        *promote,
+                        store,
+                    )?;
+                    *ticket = None;
+                    Ok(true)
+                })(),
                 CopyOperation::RecordRest(rest) => self.advance_record_rest(rest, store),
                 CopyOperation::Read {
                     copy,

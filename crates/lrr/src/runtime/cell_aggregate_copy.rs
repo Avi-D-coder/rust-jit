@@ -35,25 +35,141 @@ pub(crate) struct AggregateCopy {
     root_value: ValueRepr,
     stack: Vec<CopyFrame>,
     complete: bool,
+    template: Option<VmTemplate>,
+}
+/// Physical preparation of a source-checked VM result. This confers no source
+/// identity or generic application authority; the interpreter owns those.
+pub(crate) struct PreparedVmTemplate {
+    session: StoreSession,
+    epoch: u32,
+    ticket: TicketId,
+    value: ValueRepr,
+}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct VmTemplate {
+    session: StoreSession,
+    epoch: u32,
+    root: CellStamp,
+    value: ValueRepr,
+}
+impl VmTemplate {
+    pub(crate) fn cell(&self) -> CellId {
+        self.root.cell
+    }
 }
 impl GuestStore {
+    pub(crate) fn prepare_vm_template(
+        &self,
+        ticket: TicketId,
+    ) -> Result<Option<PreparedVmTemplate>, Diagnostic> {
+        let value = self.peek_ticket(ticket)?;
+        self.object_owner(value, ValueOwner::Ticket(ticket))?;
+        if value.kind != 8 || !self.value_promotable(value)? {
+            return Ok(None);
+        }
+        // The same physical work engine must be able to replicate every
+        // nonaggregate leaf without invoking Clone or guest code.
+        let mut pending = vec![value];
+        while let Some(value) = pending.pop() {
+            // An unentered function may contain an impl affecting a global
+            // nominal. Published impl rows alone do not prove Drop absence.
+            // Until the common producer/declaration closure supplies that
+            // proof, only intrinsically structural owned graphs qualify.
+            if matches!(
+                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
+                TypeKey::Nominal { .. }
+            ) {
+                return Ok(None);
+            }
+            let object = ObjectId::from_bits(value.payload);
+            let ObjectStorage::Aggregate(storage) = &self.objects.get(object)?.storage else {
+                return Ok(None);
+            };
+            if !storage.initialized.complete_value() {
+                return Err(ownership());
+            }
+            for (index, field) in storage.fields.iter().enumerate() {
+                if self.cells.get(*field)?.owner
+                    != (CellOwner::Field {
+                        object,
+                        index: u32::try_from(index).map_err(|_| resource())?,
+                    })
+                {
+                    return Err(ownership());
+                }
+                let member = self.admit_move(*field)?;
+                if member.kind == 8 {
+                    pending.push(member);
+                } else {
+                    self.admit_copy(*field)?;
+                }
+            }
+        }
+        Ok(Some(PreparedVmTemplate {
+            session: self.pattern_binding_session(),
+            epoch: self.budget.epoch(),
+            ticket,
+            value,
+        }))
+    }
+    /// Move-to-cell is the only operation between preparation and sealing.
+    /// The source graph never escapes into a guest-visible mutable place.
+    pub(crate) fn seal_vm_template(
+        &self,
+        prepared: PreparedVmTemplate,
+        cell: CellId,
+    ) -> Result<VmTemplate, Diagnostic> {
+        if prepared.session != self.pattern_binding_session()
+            || prepared.epoch != self.budget.epoch()
+            || !matches!(self.tickets.get(prepared.ticket), Err(error) if error.code == "LRR-E-STALE-HANDLE")
+            || self.cells.get(cell)?.writable
+            || self.admit_move(cell)? != prepared.value
+        {
+            return Err(ownership());
+        }
+        let template = VmTemplate {
+            session: prepared.session,
+            epoch: prepared.epoch,
+            root: self.place_stamp(cell)?,
+            value: prepared.value,
+        };
+        self.validate_vm_template(&template)?;
+        Ok(template)
+    }
+    pub(crate) fn validate_vm_template(&self, template: &VmTemplate) -> Result<(), Diagnostic> {
+        if template.session != self.pattern_binding_session()
+            || template.epoch != self.budget.epoch()
+        {
+            return Err(lease_fault());
+        }
+        self.copy_source(template.root, template.value)?;
+        if self.cells.get(template.root.cell)?.writable {
+            return Err(ownership());
+        }
+        Ok(())
+    }
     fn copy_source(&self, stamp: CellStamp, value: ValueRepr) -> Result<(), Diagnostic> {
         if self.place_stamp(stamp.cell)? != stamp || self.admit_move(stamp.cell)? != value {
             return Err(lease_fault());
         }
         Ok(())
     }
-    fn copy_layout(&self, source: CellId) -> Result<(TypeId, usize, Option<u32>), Diagnostic> {
+    fn copy_layout(
+        &self,
+        source: CellId,
+        template: bool,
+    ) -> Result<(TypeId, usize, Option<u32>), Diagnostic> {
         let value = self.admit_move(source)?;
         let ty = TypeId(value.type_id);
         let descriptor = self.types.descriptor(ty)?;
         if value.kind != 8 {
             return Err(requires_activation());
         }
-        // A nominal value is Copy exactly when its declaration has a Copy
-        // impl in the run's complete impl inventory.
+        // Ordinary Copy still requires the declaration's real Copy fact.
+        // A private sealed plain-data template permits physical replication
+        // without changing that trait fact.
         if let TypeKey::Nominal { identity, .. } = descriptor.key.as_ref() {
-            if !self.nominal_copy(*identity) {
+            if !template && !self.nominal_copy(*identity) {
                 return Err(requires_activation());
             }
             let (_, storage) = self.place_object(source)?;
@@ -62,8 +178,9 @@ impl GuestStore {
             }
             return Ok((ty, storage.fields.len(), storage.variant));
         }
-        if descriptor.copy != CopyStatus::Copy
-            && !(descriptor.copy == CopyStatus::Deferred && self.fields_copy(source)?)
+        if !template
+            && (descriptor.copy != CopyStatus::Copy
+                && !(descriptor.copy == CopyStatus::Deferred && self.fields_copy(source)?))
         {
             return Err(requires_activation());
         }
@@ -84,8 +201,12 @@ impl GuestStore {
         }
         Ok((ty, count, None))
     }
-    fn begin_copy_destination(&mut self, source: CellId) -> Result<CopyDestination, Diagnostic> {
-        let (ty, count, variant) = self.copy_layout(source)?;
+    fn begin_copy_destination(
+        &mut self,
+        source: CellId,
+        template: bool,
+    ) -> Result<CopyDestination, Diagnostic> {
+        let (ty, count, variant) = self.copy_layout(source, template)?;
         // The source is already an owning, fully initialized value admitted by
         // the same Copy rule above. Its real field contracts, rather than an
         // invented source constructor, determine this physical replica guard.
@@ -171,17 +292,32 @@ impl GuestStore {
 }
 impl AggregateCopy {
     pub(crate) fn begin(store: &mut GuestStore, source: CellId) -> Result<Self, Diagnostic> {
+        Self::begin_with_source(store, source, None)
+    }
+    pub(crate) fn begin_template(
+        store: &mut GuestStore,
+        template: VmTemplate,
+    ) -> Result<Self, Diagnostic> {
+        store.validate_vm_template(&template)?;
+        Self::begin_with_source(store, template.root.cell, Some(template))
+    }
+    fn begin_with_source(
+        store: &mut GuestStore,
+        source: CellId,
+        template: Option<VmTemplate>,
+    ) -> Result<Self, Diagnostic> {
         let root = store.place_stamp(source)?;
         let root_value = store.admit_move(source)?;
-        store.copy_layout(source)?;
+        store.copy_layout(source, template.is_some())?;
         let mut copy = Self {
             root,
             root_value,
             stack: Vec::new(),
             complete: false,
+            template,
         };
         copy.reserve_frame()?;
-        let destination = store.begin_copy_destination(source)?;
+        let destination = store.begin_copy_destination(source, copy.template.is_some())?;
         copy.stack.push(CopyFrame {
             source: root,
             value: root_value,
@@ -197,6 +333,9 @@ impl AggregateCopy {
     pub(crate) fn next(&self, store: &GuestStore) -> Result<CopyWork, Diagnostic> {
         if self.complete {
             return Err(ownership());
+        }
+        if let Some(template) = self.template.as_ref() {
+            store.validate_vm_template(template)?;
         }
         store.copy_source(self.root, self.root_value)?;
         let frame = self.stack.last().ok_or_else(ownership)?;
@@ -222,7 +361,7 @@ impl AggregateCopy {
             return Err(ownership());
         }
         if value.kind == 8 {
-            store.copy_layout(field)?;
+            store.copy_layout(field, self.template.is_some())?;
         } else {
             store.admit_copy(field)?;
         }
@@ -235,7 +374,8 @@ impl AggregateCopy {
                 if value.kind == 8 {
                     self.reserve_frame()?;
                     let stamp = store.place_stamp(source)?;
-                    let destination = store.begin_copy_destination(source)?;
+                    let destination =
+                        store.begin_copy_destination(source, self.template.is_some())?;
                     self.stack.push(CopyFrame {
                         source: stamp,
                         value,
@@ -268,5 +408,61 @@ impl AggregateCopy {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod template_authority_tests {
+    use super::*;
+
+    fn sealed(store: &mut GuestStore) -> VmTemplate {
+        let ty = store
+            .intern_type(TypeKey::Tuple(vec![TypeId(6)].into()))
+            .unwrap();
+        let guard = store.begin_construction(&[TypeId(6)]).unwrap();
+        let member = store
+            .ticket(ValueRepr::signed(TypeId(6), 7).unwrap())
+            .unwrap();
+        store.construction_push(guard, 0, member).unwrap();
+        let value = store.commit_construction(guard, ty).unwrap();
+        let prepared = store.prepare_vm_template(value).unwrap().unwrap();
+        let frame = store.new_frame_anchor().unwrap();
+        let cell = store
+            .new_cell(
+                StorageContract::Exact(ty),
+                false,
+                CellOwner::FrameSlot { frame, slot: 0 },
+            )
+            .unwrap();
+        store.initialize(cell, value).unwrap();
+        store.seal_vm_template(prepared, cell).unwrap()
+    }
+
+    #[test]
+    fn evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication() {
+        let mut a = GuestStore::for_epoch(1).unwrap();
+        let mut b = GuestStore::for_epoch(1).unwrap();
+        let first = sealed(&mut a);
+        let second = sealed(&mut b);
+        assert_eq!(first.cell().bits(), second.cell().bits());
+        let before = b.state(second.cell()).unwrap();
+        assert_eq!(
+            AggregateCopy::begin_template(&mut b, first.clone())
+                .err()
+                .unwrap()
+                .code,
+            "LRR-E-STALE-HANDLE"
+        );
+        assert_eq!(b.state(second.cell()).unwrap(), before);
+        b.validate_vm_template(&second).unwrap();
+        let moved = a.move_from(first.cell()).unwrap();
+        assert_eq!(
+            AggregateCopy::begin_template(&mut a, first.clone())
+                .err()
+                .unwrap()
+                .code,
+            "LRR-E-STALE-HANDLE"
+        );
+        assert_eq!(a.peek_ticket(moved).unwrap(), first.value);
     }
 }

@@ -1,0 +1,82 @@
+{
+  "status": "source_candidate_stationary_uncompiled_runtime_unexecuted",
+  "task_ids": [
+    "T032",
+    "M018",
+    "M025"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-dollar-crate-type-qualifier-repair.md",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "aae7590c44c841a1c02ea287bc8f2d7fd4e62e954109b00aa2ead30eb9fab3b6"
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "sha256": "711c7cabe42280cca7c3f3a1a36eea31b3d6cb52c101dfdb6c8307d50f19e976"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "c9bf1a48f19c4f853e5bf2fb59471bb5548c749a25b3659787e4cb536f3993da"
+    }
+  ],
+  "actual_failure": "V30 actual7stock roots and promotion control fail before observation with invalid macro identifier $crate edition2024; no entry body/capturefalse, raw candidate-v30/stock-0.stdout. Both owner and validator confirmed unconditional MacroName::parse in new ValueQualifier body occurrence inventory.",
+  "route": [
+    "PreparedBodyTypeOccurrences::prepare retains typed DollarCrate at actual NameRef range using ParsedFile::dollar_crate_root, same pinned raw context and owning token edition. No MacroName relaxation; ordinary identifiers unchanged. Missing exact token attachment stays None evidence for later pending, not successful Type authority.",
+    "QualifiedTypeNames::prepare requires actual first nonabsolute DollarCrate, retained root and same local hygiene.dollar_crate(raw) equality. Body source/origin and identifier raw context checks unchanged. Dollar root is structural Crate part, not a caller alias; standalone crate root is only module, so remains typed PathAdjustment rather than invalid name conversion.",
+    "SourceLocalIndex same qualified-module kernel accepts a checked optional defining-root argument. Old callers use None. Some-root requires first structural Crate, nonabsolute and raw-context defining-unit equality, exact source/body/position, normal hygiene and names.require_source. It supplies actual root scope to same import_routes/ObservedNames target resolution and existing bucket/currentness certification.",
+    "BodyTypeOccurrences stable domain v3 to v4; existing tags0..5 retained, new DollarCrate tag6 includes actual identifier+optionalunit; metadata/origin exhaustive joins updated. No source index schema/opcode/evaluator fork."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "body Type inventory / qualified Type query",
+      "conclusion": "No assertion operand/expression compiler or evaluator. Source root identity feeds existing Type preparation only."
+    },
+    {
+      "mode": 2,
+      "symbols": "ParsedFile::dollar_crate_root / ordinary qualified module kernel",
+      "conclusion": "Actual generated syntax/source facts enter common ordinary Type path, no payload/scalar/break executor."
+    },
+    {
+      "mode": 3,
+      "symbols": "BodyTypeSegment::DollarCrate / HygieneFacts::dollar_crate",
+      "conclusion": "Special Rust hygienic keyword preserved as typed root, not ordinary MacroName or named macro whitelist. No numeric/method context semantics."
+    },
+    {
+      "mode": 4,
+      "symbols": "BodyTypeOccurrence origin/currentness / qualified root proof",
+      "conclusion": "No path/origin exclusion or blanket caught error. Genuine source identity/context retained, unknown root authority pending. Existing mixed-token edition path adjustment hold unchanged."
+    },
+    {
+      "mode": 5,
+      "symbols": "PreparedBodyTypeOccurrences / QualifiedTypeNames",
+      "conclusion": "No executable cold-body or unselected-arm preparation; no pattern machinery changes. Inventory token metadata does not turn non-Type module root into execution authority."
+    },
+    {
+      "mode": 6,
+      "symbols": "immutable occurrence inventory / rooted observed wrapper",
+      "conclusion": "One cold actual path/token lookup in existing memo preparation. Existing retained Type outcomes/guards used at execution; no installed planning/reparse."
+    },
+    {
+      "mode": 7,
+      "symbols": "ObservedNames / NamespaceReads::certify",
+      "conclusion": "Same relevant namespace observations/source/bucket proof, rooted scope is actual defining unit rather than guessed caller module. No global world map/census or new broad invalidation."
+    },
+    {
+      "mode": 8,
+      "symbols": "BodyIndex nodes / parsed token context / retained Arc plan",
+      "conclusion": "Shared parser/body structures and direct source locations. No immutable BodyIndex clone or whole-file node search. dollar_crate_root context ancestry traversal cold, O(context depth)."
+    }
+  ],
+  "cost": {
+    "cold": "Existing path segment inventory plus exact token-context lookup/context ancestry for dollar keyword; ordinary relevant names only when Type goal demanded. Same retained body Arc and immutable source fingerprints.",
+    "hot": "Existing retained query/guard route, no new parser, source path planning or namespace census."
+  },
+  "pending": [
+    "Independent exact3leaf review then sole-validator fresh lib+CLI build",
+    "Actual failedstock roots/promotion control and relevant existing ordinary/generated Type source controls must be captured after build",
+    "Existing mixed-origin token edition path adjustment remains unclosed; no all-edition qualifiedType acceptance inferred",
+    "Applied generic initializer packet/cache remains separate held work; no feature/JIT gate closure"
+  ]
+}

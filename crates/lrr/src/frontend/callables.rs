@@ -735,6 +735,51 @@ impl<'a> CallResolver<'a> {
         })();
         QueryPoll::Ready(result)
     }
+    /// Select from an actual source Type application, supplied by the owning
+    /// qualifier plan and reached source substitution. No runtime descriptor
+    /// or spelling is converted into a Type here. The full application stays
+    /// with the caller; this row retains the actual selected impl/default.
+    pub(crate) fn associated_value_for_source(
+        &self,
+        source: &crate::traits::term::TyTerm,
+        name: &str,
+        context: Option<super::associated_constant_applications::AssociatedConstMemberContext<'_>>,
+    ) -> Result<Option<super::member_index::AssociatedConstSelection>, Diagnostic> {
+        use crate::traits::term::TyTerm;
+        use super::member_index::BuiltinSelf;
+        let Some(members) = self.members else { return Ok(None); };
+        let ty = match source {
+            TyTerm::Nominal(identity, _) => Ok(*identity),
+            TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit) => Err(BuiltinSelf::Tuple(0)),
+            TyTerm::Primitive(primitive) => Err(BuiltinSelf::Primitive(*primitive)),
+            TyTerm::Str => Err(BuiltinSelf::Str),
+            TyTerm::Slice(_) => Err(BuiltinSelf::Slice),
+            TyTerm::Array(..) => Err(BuiltinSelf::Array),
+            TyTerm::Tuple(fields) => Err(BuiltinSelf::Tuple(u32::try_from(fields.len()).map_err(|_| fault("associated constant tuple arity overflow"))?)),
+            _ => return Ok(None),
+        };
+        let Some(context) = context else {
+            return members.associated_const_selection(ty, None, name);
+        };
+        // A provided trait body resolves its own member in that trait before
+        // considering genuine supertrait bounds; inherent/other traits cannot
+        // shadow it. Ordinary generic parameters have no preferred owner.
+        if let Some(owner) = context.owner()? {
+            if let Some(selected) = members.associated_const_selection(ty, Some(owner), name)? {
+                return Ok(Some(selected));
+            }
+        }
+        let mut selected = None;
+        for trait_key in context.bounds() {
+            if let Some(candidate) = members.associated_const_selection(ty, Some(trait_key?), name)? {
+                if selected.is_some_and(|previous| previous != candidate) {
+                    return Err(fault("associated constant source bounds select different members"));
+                }
+                selected = Some(candidate);
+            }
+        }
+        Ok(selected)
+    }
     /// The member-index self type a written type path names from the
     /// caller's module scope: `Self` as the caller's impl self type, else a
     /// nominal declaration of the Type namespace, else (for an `anchored`

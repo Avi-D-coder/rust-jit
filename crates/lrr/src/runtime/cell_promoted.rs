@@ -90,7 +90,7 @@ impl GuestStore {
                             || self
                                 .user_drop_types
                                 .as_ref()
-                                .is_none_or(|types| types.contains(identity)))
+                                .is_none_or(|facts| !facts.definitely_no_drop(identity)))
                     {
                         return Ok(false);
                     }

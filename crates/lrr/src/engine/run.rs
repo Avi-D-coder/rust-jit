@@ -245,6 +245,9 @@ struct SelectedArgumentCall {
     callee: Arc<SourceCallable>,
     explicit: Vec<(u32, ArgumentType)>,
     typed: Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
+    /// Actual qualifier Type plan and dependency guard retained across argument
+    /// effects/suspension; source application is never reconstructed at entry.
+    owner_application: Option<(Arc<QueryValue>, Arc<crate::db::memo::PreparedInputGuard>)>,
     hints: Vec<ArgumentHint>,
     argument_slots: Vec<SlotId>,
     result_hint: Option<ArgumentType>,
@@ -470,13 +473,7 @@ pub struct RunMachine {
     /// A `ValuePath`'s demanded `const`/`static` initializer (E-R5-007).
     initializer_demand: Option<initializers::InitializerDemand>,
     /// Evaluated constants copied on each use, with their returned views.
-    const_cells: BTreeMap<
-        crate::core::digest::Digest,
-        (
-            crate::runtime::cell::CellId,
-            Option<crate::traits::term::TyTerm>,
-        ),
-    >,
+    const_cells: BTreeMap<crate::core::digest::Digest, initializers::StoredConstant>,
     /// A constant's value evaluated for the one use at this PC.
     initialized_values: BTreeMap<
         (PcKey, crate::core::digest::Digest),
@@ -1090,7 +1087,7 @@ impl RunMachine {
         Ok(arguments)
     }
     fn finish_selected_argument_call(
-        &self,
+        &mut self,
         db: &mut Database,
         callee: Arc<SourceCallable>,
         mut explicit: Vec<(u32, ArgumentType)>,
@@ -1103,6 +1100,55 @@ impl RunMachine {
             )));
         };
         let sources: Vec<_> = self.sources.iter().collect();
+        let mut owner_application = None;
+        // A provided trait body's implicit `Self` is the actual Type qualifier
+        // selected at this call's source occurrence, even with no value args.
+        // Method receivers and already-bound applications retain their normal
+        // argument/contract inference; only an actual Path callee uses this.
+        if let Some(parameter) = callee.signature().generics.iter().find(|parameter|
+            parameter.kind == crate::syntax::signatures::GenericKind::Type && parameter.name == "Self")
+            .filter(|parameter| !explicit.iter().any(|(ordinal, _)| *ordinal == parameter.ordinal))
+        {
+            let path = self.frame.body.nodes().get(self.frame.pc().node as usize)
+                .filter(|node| node.role == crate::syntax::body_index::NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Call))
+                .and_then(|node| node.operands.first()).copied()
+                .filter(|path| self.frame.body.nodes().get(path.0 as usize).is_some_and(|node|
+                    node.role == crate::syntax::body_index::NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Path)));
+            if let Some(path) = path {
+                let qualifier_key = QueryKey::AssociatedItemQualifier(PcKey { body: self.frame.pc().body.clone(), node: path.0, phase: 0 });
+                let selected = match db.fetch(&SyntaxProvider, qualifier_key.clone()) {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let QueryValue::AssociatedItemQualifier(qualifier) = selected.value.as_ref() else {
+                    return QueryPoll::Ready(Err(call_fault("associated qualifier query variant differs")));
+                };
+                if !selected.cacheable { return QueryPoll::Ready(Err(call_fault("associated qualifier Type is not retained"))); }
+                if let Some(source) = qualifier.source() {
+                    let descriptor = match source.descriptor(&self.frame, &mut self.store) {
+                        Ok(descriptor) => descriptor,
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    };
+                    explicit.push((parameter.ordinal, ArgumentType { source: self.frame.bound_view(source.source(), &self.store), descriptor }));
+                } else if qualifier.pending().is_some() && !qualifier.permits_trait_self_inference() {
+                    return QueryPoll::Ready(Err(call_fault("associated call qualifier requires its actual source Type application")));
+                }
+                // Both a selected Type and a positively selected trait use
+                // this retained query authority through argument effects.
+                // Only the latter may defer Self to ordinary call inference.
+                if qualifier.source().is_some() || qualifier.permits_trait_self_inference() {
+                    let guard = match db.prepare_input_guard(&SyntaxProvider, &qualifier_key, selected.fingerprint) {
+                        QueryPoll::Ready(Ok(guard)) => Arc::new(guard),
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    };
+                    if let Err(error) = guard.require_current(db) { return QueryPoll::Ready(Err(error)); }
+                    owner_application = Some((Arc::clone(&selected.value), guard));
+                }
+
+            }
+        }
         // Generic arguments later code decided for this call, when the
         // selected callee is the declaration they were decided for: the same
         // explicit arguments a written turbofish would supply.
@@ -1177,6 +1223,13 @@ impl RunMachine {
         else {
             return QueryPoll::Ready(Err(call_fault("explicit call context size overflow")));
         };
+        if let Some((_, guard)) = &owner_application {
+            bytes = match bytes.checked_add(guard.metadata_bytes()).and_then(|bytes|
+                bytes.checked_add(4 * std::mem::size_of::<usize>())) {
+                Some(bytes) => bytes,
+                None => return QueryPoll::Ready(Err(crate::runtime::arena::resource())),
+            };
+        }
         bytes = match explicit
             .iter()
             .try_fold(bytes, |bytes, (_, argument)| {
@@ -1236,6 +1289,7 @@ impl RunMachine {
             callee,
             explicit,
             typed,
+            owner_application,
             hints,
             argument_slots: slots,
             result_hint,
@@ -1379,6 +1433,9 @@ impl RunMachine {
             if let Err(error) = typed.require_current(db, &self.frame.body, self.frame.pc()) {
                 return QueryPoll::Ready(Err(error));
             }
+        }
+        if let Some((_, guard)) = &selected.owner_application {
+            if let Err(error) = guard.require_current(db) { return QueryPoll::Ready(Err(error)); }
         }
         let mut references = Vec::new();
         if arguments

@@ -1,0 +1,787 @@
+{
+  "status": "Focused exact candidate compiled; actual8 stock failures,10of12 controls pass; no interpreter gate closure",
+  "head": "b1fe6ef6f8fa43617d18c7b7f50e346b6768c111",
+  "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc",
+  "source_file_count": 3332,
+  "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+  "builds": {
+    "lib": {
+      "exit": 0,
+      "seconds": 30.722,
+      "terminal": "f1c196/0",
+      "warnings": 86
+    },
+    "cli": {
+      "exit": 0,
+      "seconds": 25.201,
+      "terminal": "31fc7f/0",
+      "warnings": 175
+    }
+  },
+  "source_generator_head_frozen_both_builds": true,
+  "binaries": {
+    "test_binary": {
+      "path": "target/debug/deps/lrr-5ae916bc286087fa",
+      "sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+      "after_runtime_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+      "unchanged": true
+    },
+    "cli_binary": {
+      "path": "target/debug/lrr",
+      "sha256": "759af305d684044f93e6877f44d9a3c7820d7282ad784d9339b609e370c9e83a",
+      "after_runtime_sha256": "759af305d684044f93e6877f44d9a3c7820d7282ad784d9339b609e370c9e83a",
+      "unchanged": true
+    }
+  },
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "stock_queue": {
+    "session_id": 21104,
+    "initial_chunk": "8e1cc2",
+    "terminal": "b968c5/0",
+    "wrapper_exit0_is_not_fixture_success": true,
+    "passed": 0,
+    "executed_roots": 8,
+    "new_scoped_upstream_witnesses": 0,
+    "results": [
+      {
+        "path": "tests/ui/traits/default-method/macro.rs",
+        "sha256": "f3e380db2a2ce505338b2769bb888b538a63a9c993037ee8944a44b0ad285181",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 4.515,
+        "runtime_contract_pass": false,
+        "stdout": "stock-0.stdout",
+        "stderr": "stock-0.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      },
+      {
+        "path": "tests/ui/associated-consts/associated-const-type-parameters.rs",
+        "sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 3.898,
+        "runtime_contract_pass": false,
+        "stdout": "stock-1.stdout",
+        "stderr": "stock-1.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      },
+      {
+        "path": "tests/ui/structs-enums/functional-struct-upd.rs",
+        "sha256": "99523cf3db37c83096666946c5cc33bc9e155c6a25d71bc9f4fed35c9a276d50",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 4.061,
+        "runtime_contract_pass": false,
+        "stdout": "stock-2.stdout",
+        "stderr": "stock-2.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      },
+      {
+        "path": "tests/ui/consts/const_in_pattern/custom-eq-branch-pass.rs",
+        "sha256": "83a1e69b197e30fe7802b040e5c39a9fac07f46f8cf91f9fc7d3aad79fa1908e",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 4.323,
+        "runtime_contract_pass": false,
+        "stdout": "stock-3.stdout",
+        "stderr": "stock-3.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      },
+      {
+        "path": "tests/ui/consts/const-struct.rs",
+        "sha256": "ea2ef00a878f74349c68eb5db9f3026befe26b02bac48fbc3eadaf24dc58978b",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 4.177,
+        "runtime_contract_pass": false,
+        "stdout": "stock-4.stdout",
+        "stderr": "stock-4.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      },
+      {
+        "path": "tests/ui/associated-consts/associated-const-resolution-order.rs",
+        "sha256": "bc121a788a5420b67af7464cbe30c82dbcf18a23066eeca4a3c27819e855249a",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 3.407,
+        "runtime_contract_pass": false,
+        "stdout": "stock-5.stdout",
+        "stderr": "stock-5.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      },
+      {
+        "path": "tests/ui/associated-consts/associated-const-use-impl-of-same-trait.rs",
+        "sha256": "7c4a55f0c3e5d0b1e507c3daf2edbbce8c708786ab547059372ca9183e933161",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 3.459,
+        "runtime_contract_pass": false,
+        "stdout": "stock-6.stdout",
+        "stderr": "stock-6.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      },
+      {
+        "path": "tests/ui/consts/static-ref-to-const-array-element.rs",
+        "sha256": "7a33a8a09db04d74bb9cdc3608bcc7c2c629a9735b85140b4f58181cf3288762",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "aux": [],
+        "exit": 2,
+        "seconds": 3.496,
+        "runtime_contract_pass": false,
+        "stdout": "stock-7.stdout",
+        "stderr": "stock-7.stderr",
+        "terminal": {
+          "code": "LRR-E-MACRO-SCOPE",
+          "diagnostic": {
+            "code": "LRR-E-MACRO-SCOPE",
+            "generated_origin": null,
+            "guest_stack": null,
+            "macro_origin": null,
+            "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+            "origin_attachment_failure": null,
+            "rendered_generated_origin": null,
+            "rendered_guest_stack": null,
+            "rendered_macro_origin": null
+          },
+          "message": "invalid macro identifier or edition: \"$crate\" in edition 2024",
+          "phase": "before_observation_or_finish_fault",
+          "status": "fault"
+        },
+        "entry_body": null,
+        "capture_complete": false,
+        "capture_blocker": "executor_not_observed",
+        "capture_facts": null
+      }
+    ]
+  },
+  "controls_queue": {
+    "session_id": 95636,
+    "initial_chunk": "cabcaf",
+    "terminal": "49b000/0",
+    "wrapper_exit0_is_not_fixture_success": true,
+    "passed": 10,
+    "bodies": 12,
+    "selected": 12,
+    "results": [
+      {
+        "selector": "cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins",
+        "exit": 101,
+        "seconds": 4.945,
+        "bodies": 1,
+        "pass": false,
+        "log": "control-0.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "cli::crate_graph::initializer_tests::structural_constant_patterns_keep_owners_and_guard_retry_across_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+        "exit": 0,
+        "seconds": 0.364,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-1.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_item_boundary_waits_for_declaration_jobs_then_finalizes_once_all_editions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+        "exit": 0,
+        "seconds": 0.122,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-2.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "expand::source_discovery::original_inert_tests::item_boundary_tests::actual_pending_boundary_refuses_epoch_and_source_publication_changes_before_completion",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "runtime::drop_facts::tests::published_drop_facts_track_related_and_unrelated_additions",
+        "exit": 0,
+        "seconds": 0.006,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-3.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "runtime::drop_facts::tests::published_drop_facts_track_related_and_unrelated_additions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+        "exit": 0,
+        "seconds": 0.007,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-4.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "cli::crate_graph::initializer_tests::promoted_borrows_byte_strings_and_copy_receivers",
+        "exit": 101,
+        "seconds": 4.82,
+        "bodies": 1,
+        "pass": false,
+        "log": "control-5.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "cli::crate_graph::initializer_tests::promoted_borrows_byte_strings_and_copy_receivers",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+        "exit": 0,
+        "seconds": 0.009,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-6.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+        "exit": 0,
+        "seconds": 0.008,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-7.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects",
+        "exit": 0,
+        "seconds": 0.132,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-8.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_copy_nested_runtime_graph_uses_iterative_guards_and_distinct_owning_objects",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_copy_place_activation_skips_completed_recipe_prefix_and_clears_place_once",
+        "exit": 0,
+        "seconds": 0.009,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-9.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_copy_place_activation_skips_completed_recipe_prefix_and_clears_place_once",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells",
+        "exit": 0,
+        "seconds": 0.007,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-10.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "vm::frame::aggregate_copy_tests::rustc_copy_shared_reference_fields_reuse_leases_without_duplicating_field_cells",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      },
+      {
+        "selector": "db::memo::prepared_inputs::tests::positive_changes_and_wrong_root_fingerprint_cannot_refresh_guard",
+        "exit": 0,
+        "seconds": 0.006,
+        "bodies": 1,
+        "pass": true,
+        "log": "control-11.log",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-5ae916bc286087fa",
+          "db::memo::prepared_inputs::tests::positive_changes_and_wrong_root_fingerprint_cannot_refresh_guard",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "binary_sha256": "636c3b740a2250d920e10ef0185b7092bd870564087c23318247e014fc72c8a4",
+        "source_sha256": "7a15c2b92ea4b245d9f9bb2c9ac50dbbf5417148ac98992e78d5b3ae03201ffc"
+      }
+    ]
+  },
+  "findings": [
+    "All8 original root failures share LRR-E-MACRO-SCOPE invalid macro identifier or edition \"$crate\" in edition2024; entry_body null/capturefalse/factsnull, cannot count partial language traversal or effects.",
+    "Actual lifecycle producer completes once control now passes all4editions; previous2015 assertion failure preserved underV27.",
+    "Structural origin0edition2015 control still left4 expected3, oracle unchanged, nominal exactonce held.",
+    "Promotion control regresses to same$crate fault; downstream promotion/template fixture contract not established.",
+    "PublishedDrop facts and crossstore/movedtemplate authority controls pass;5Copy/currentness controls pluspreparedguard pass."
+  ],
+  "holds": [
+    "Final template only structural owned graphs; no nominal NoDrop authority or complete initial nonlocal impl closure.",
+    "Full Type/Const/Region owner/init packet/cache unsupported, generic initializer gate explicit; no source-only component counts as runtime pass.",
+    "No fresh full-suite sweep or current global passing total. Historical25evernew witnesses acrossdifferentbinaries remain historical.",
+    "Failure/cleanup exactonce/cancellation and allorigin/currentness matrices incomplete.",
+    "V29compile101 rawsource/logs/portable evidence preserved separately."
+  ],
+  "reporting": "Runtime-contract and supplemental control outcomes separate. No full-fixture, diagnostics, tooling, JIT-gate or performance acceptance claimed.",
+  "schema": "lrr/interpreter-focused-validation/v1",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "raw_artifact_sha256_index": {
+    "after-cli.json": "5c1f1e7eaf98abd483c81d1fae6dd5b1c7d14c7359c644adb2b120637293fc1d",
+    "after-lib.json": "14f58ddcf87ef1bfa068447a0db1440429c5387fbb9fbc8f74710ef85ab16de6",
+    "before.json": "cf2d86b895ffbb95aff779b17efa985dc575d2435bd36ae48047705bf366cfe2",
+    "cli-compile-terminal.json": "d1d47b2d976901110310c79b0be96827a6bb6be65aca96cf9dc5f3f14696628b",
+    "cli-compile.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "cli-compile.log": "518a8b48ad74b8b20b60de8154338daad082374dbb72563263e40d779e10c093",
+    "compile-terminal.json": "69edfe74c02fca9573c412a1a45e20962dd747778abb1e06201cc8bcfc52d41b",
+    "compile.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "compile.log": "26f56ed86414447886f0b429fb8fcd0ff58125cdbd2499e3769796949229e509",
+    "control-0.log": "b34408060d4e9df5331268b7e8acdcdb7441f53f280e9e2d7b3d0a0c44329110",
+    "control-1.log": "caec477aaf5ef207d8f9eed1577dba93173c1ab716abafdc373fec9dd2c24117",
+    "control-10.log": "fe45f0cf4a8d0cdddf3a45167472eac1f12025314cf03147e5517f426f41668f",
+    "control-11.log": "9ea353c1c373a918a1b951521b74043d6e21dccec0d41c2dea922c16a115eb34",
+    "control-2.log": "c1e9f912672c1c4e33c5f301f9980cd89294e0b943bd7681b7c20e73fc3cff18",
+    "control-3.log": "2812d1e72d2fd54a1750367de39bc518d91720a93f09058163ad5f64ed4a3a48",
+    "control-4.log": "d64a5220b17d35578a94cf359a5e5e60b0d1abd1bfbd5ae3f33b7b2d70f63df7",
+    "control-5.log": "3891e57c47e2bd6ece390af4130f18b980cc45279f1d80c844f84378022c18e1",
+    "control-6.log": "83ade8a15c15b07f9ab8aa0872c10b03973d8abcf5510123acfed83e0709631f",
+    "control-7.log": "357b44997772b0727bfcb66d68ba0683637d81f0c40d524affc471dede2ae13e",
+    "control-8.log": "5f0ff0b76e2a743981db03543adae756017386b69eebd9035adf9baa5ec74ab7",
+    "control-9.log": "58a907eb20d2499b12d6623f02e9e74399dba0b24b2bb7c791a8eb24390034f6",
+    "controls.json": "766f6ebaf1cce437969c86407afe54f2f79faa9b54c1331c4246780c521f7c63",
+    "final-index-audit.json": "d3291b2589d17a5078ef292347b2e43fb7f6949c9d2cf5acb1bffd617659e2ad",
+    "input-proof.json": "fdce8e30ef70acba51e0b8fff3305af23441f6de5e3cb16d4214578d1f427fb8",
+    "portable-report-skeleton.json": "23938f08ee84c1942e94acf7e3dd743f1b3e623148192cbbaa9178e1a81a1676",
+    "queue-plan.json": "ce50ed446449b0025b52af5421022d870b9d769ee97f2908a5ca48df271e06ce",
+    "report.json": "cc478b4e4b57750bdb672d72a2f86abd7fe80551da4347b7d4ee0c3085a2e3ee",
+    "roots.json": "088ab1afef2e8b3faaddc9be0e2bbc6a07b00360465870e055f57408006ecd75",
+    "runtime-binaries-after.json": "d5299138b1ba0ff3b3a9b7a7c029e13cb7a4909af60a0a3bd7597eb3625dc8d0",
+    "selected-controls.json": "aea3466c69293dbb949152e61667d8d0188d3e5eb9ab5c61347fe52fb2bec486",
+    "selector-proof.json": "80e1255d3acbde295573d4f1b9fdb86b9fc7e4fdda9e47d4030dec3367456710",
+    "source-review-files.json": "52a3e8501d2206d61a57d7aff348755db597443e3c027ceddf4de5685401bbfb",
+    "stock-0.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-0.stdout": "56e900d0ea71af9485f916b00a0ac6a232d5d0d5eab06a56bb8da464bddf17b0",
+    "stock-1.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-1.stdout": "6371f9ee4dbf27625a8f6612eb8879bab2c982772dfacf12bceb2cd1236574da",
+    "stock-2.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-2.stdout": "84627a5acf8569c748fdfd1b28f688d19973de078bb4c3ff1a4241fa6c6c966d",
+    "stock-3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-3.stdout": "567c1e42657ad506e87775b6d955191567b633a40edc0e5571fe472340e0815f",
+    "stock-4.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-4.stdout": "4cab8730940aab9e69e09ce13111a759653710881a7fb953443af503e1089e53",
+    "stock-5.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-5.stdout": "8e9ef5438908edbefdc385ae56a17c21533427ac4675c51edd98ef7fc321f7bd",
+    "stock-6.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-6.stdout": "83f6582ae785972c28db1a0d3af09e5df3f46756242691701bb2e8363221a6a1",
+    "stock-7.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stock-7.stdout": "065cd2d05d8929c2ed999c77e31f728f113f4779b8c89daea5701425892f72c8",
+    "stock-results.json": "84f0224157a7ffbcaffba0de82b8048441a9494186dc38c0be7f1ab880818b88",
+    "test-list.txt": "c951d0bc1fe2635c5e1fe3666290453b15dd608db421a6ba56baa2580b63ca17"
+  },
+  "compiled_index_evidence": {
+    "all29_match": true,
+    "rows": [
+      {
+        "path": "crates/lrr/src/cli/preentry_loader.rs",
+        "compiled_and_current_index_sha256": "9cf5fb557a51a838bb7d55df9b2937f29ee29d5314251ef4748c8d02f6f2c70c"
+      },
+      {
+        "path": "crates/lrr/src/db/key.rs",
+        "compiled_and_current_index_sha256": "079b0445d3415581f64d2cde6aff3dca3855b958aeab690e7c8edcb9e01d6705"
+      },
+      {
+        "path": "crates/lrr/src/db/provider.rs",
+        "compiled_and_current_index_sha256": "62c248d84865451b75331379e83ddd1ad7aee64bd851f8d34cd0db5d89eb2966"
+      },
+      {
+        "path": "crates/lrr/src/db/value.rs",
+        "compiled_and_current_index_sha256": "d0087dbb54c48e84293dedf05124d37b50a667cec0a0b2ddb330eb5b111470b2"
+      },
+      {
+        "path": "crates/lrr/src/engine/run.rs",
+        "compiled_and_current_index_sha256": "8d5ac2259f0bde13516ca40be247c05bdd277a9457539bf3fd9f0e255f6c7c20"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_drop_inventory.rs",
+        "compiled_and_current_index_sha256": "3c65a1d5528b55c5a82b2ab94f11c7eb392a852e46463ff8cee0961f4f545078"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_enum_discriminants.rs",
+        "compiled_and_current_index_sha256": "a4f2057eb173a140f1f7c672dd67ebf86782aac582c3a9db9edfd5febc16f06b"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_initializers.rs",
+        "compiled_and_current_index_sha256": "493d80d3ade988615a5146d516fb987894bc0d50a6e5a2da582bd252d350bf8f"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_pattern_names.rs",
+        "compiled_and_current_index_sha256": "6b64d813cfd09d0167b616dae8f3f142d0a0c9cacfe0f0de871d67ba577df77e"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_trait_calls.rs",
+        "compiled_and_current_index_sha256": "7c1a4c7eddac23132cc6c8d5ab488a29661abdf1f979d02b8a0419341b28a211"
+      },
+      {
+        "path": "crates/lrr/src/engine/run_value_items.rs",
+        "compiled_and_current_index_sha256": "cad35810ca061581dfdb049a1dc28747a4f55390097d9022eb218ce999725e31"
+      },
+      {
+        "path": "crates/lrr/src/expand/source_discovery.rs",
+        "compiled_and_current_index_sha256": "fb1ef28e3d2a91c8e9987140f45ad5421636285a6527fafd9163c4f343cd195c"
+      },
+      {
+        "path": "crates/lrr/src/frontend/associated_constant_applications.rs",
+        "compiled_and_current_index_sha256": "be6035c7c743bad63f2c740c87797dd578d2849de1e0c3c0093c7f93a1c496bf"
+      },
+      {
+        "path": "crates/lrr/src/frontend/associated_equations.rs",
+        "compiled_and_current_index_sha256": "822616c007784fa23c0787021c27713d5af1ed4ff723dc3c435a53a885a1e128"
+      },
+      {
+        "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+        "compiled_and_current_index_sha256": "545ee3493b07005bca6df89b4e4e4de795e123ce851f440958f93a24f058799e"
+      },
+      {
+        "path": "crates/lrr/src/frontend/callables.rs",
+        "compiled_and_current_index_sha256": "c08a46299d67bd86bee1486a93e6ec80f413c74c63375405867db1ac4a8fd09f"
+      },
+      {
+        "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+        "compiled_and_current_index_sha256": "8fe4b83205a82ef7efbb3f3f6bab14b096aa19204ed19349c0757dc22f14f15f"
+      },
+      {
+        "path": "crates/lrr/src/frontend/member_index.rs",
+        "compiled_and_current_index_sha256": "8fb8143d94b1f0a64cff8b6812648189a25536cbda636f4eed1c47039de494d9"
+      },
+      {
+        "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+        "compiled_and_current_index_sha256": "7b28d11908fe2d7186130e593b0324345109fb8b26ec6abda19ab82f9e694111"
+      },
+      {
+        "path": "crates/lrr/src/frontend/source_local_plan.rs",
+        "compiled_and_current_index_sha256": "74d1f18d56fa92af120321739e91a4037abd35b7c385d6f509076df030d716b5"
+      },
+      {
+        "path": "crates/lrr/src/frontend/source_types.rs",
+        "compiled_and_current_index_sha256": "f75496d6302b9bc9d5d89bffa58871078cb1c2eb137b2bc766bed7deefa70beb"
+      },
+      {
+        "path": "crates/lrr/src/runtime/cell.rs",
+        "compiled_and_current_index_sha256": "9b0bdb7cd9c2da8b1986bcb68853e2611a92737299fc7ab9c9d782366c2d197d"
+      },
+      {
+        "path": "crates/lrr/src/runtime/cell_aggregate_copy.rs",
+        "compiled_and_current_index_sha256": "69827f818a86bf2c2776cdd44f185862bc7a270521868d56951697e5d1aef9d8"
+      },
+      {
+        "path": "crates/lrr/src/runtime/cell_promoted.rs",
+        "compiled_and_current_index_sha256": "ef8e361a55a2fa96daa0a13c6a8d180dca575806ce21343b0d86a7efd433c125"
+      },
+      {
+        "path": "crates/lrr/src/runtime/drop_facts.rs",
+        "compiled_and_current_index_sha256": "3e3e245e748608fc66f75bd224b2d74c8ac42c0fcc9a8f11b679f16634d50aa9"
+      },
+      {
+        "path": "crates/lrr/src/runtime/mod.rs",
+        "compiled_and_current_index_sha256": "5faf674852bec25db6f74c41b6bbc25f64be60c84b121bd6768077d820e64c1e"
+      },
+      {
+        "path": "crates/lrr/src/service/expansion.rs",
+        "compiled_and_current_index_sha256": "2d0da7caea05d5fc414e99de99613b6446880e03d8344587b246a712aec361c3"
+      },
+      {
+        "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
+        "compiled_and_current_index_sha256": "97494219ed0d03da057975838186d1a2c7031993abb409c7e77be0dac0c86a9a"
+      },
+      {
+        "path": "crates/lrr/src/vm/frame_item_values.rs",
+        "compiled_and_current_index_sha256": "0b3ca5c7e42522c837a9193a5bbffdf55954c8d13cdde352bc2fbde623a50df7"
+      }
+    ],
+    "root_stage_audit": {
+      "path": "artifacts/validation-resume-2026-10-18/v30-root-index-audit.json",
+      "sha256": "e24bad4eb0f970029939c1015f6cd814f6040ebd364c1ca19ff17ac1a1b2e0c3"
+    },
+    "note": "Compared exact Git index bytes to compiled manifest after runtime; unstaged successors are excluded."
+  },
+  "source_review_evidence": {
+    "accepted_scope": "Intrinsic structural owned graph template source-only; live published Drop currentness only, incomplete initial nominal absence; no nominal template acceptance.",
+    "review_chain": [
+      {
+        "path": "artifacts/validation-resume-2026-10-18/structural-only-template-independent-review-next.json",
+        "sha256": "a88835bcaaa71fb216e9a47e1490a7f67e853682b3e42382042bb1e8048e7119"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/initializer-generic-packet-boundary-independent-review-next.json",
+        "sha256": "c1a9c2537dbba7c99266aaa5f31a601198b62ab8e0364b7955ed080afd8433b8"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/associated-self-source-trait-context-independent-review-next.json",
+        "sha256": "5b9f7f0962a8cacc0e1af135f088ac20c9eeb3aa9bcca52793cf9c3b9647bce8"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/associated-actual-anchor-independent-review-next.json",
+        "sha256": "fd38f3ccc27d107fc5bfd23477d98ad19b17d07882f1324ea421f84ab28d30f8"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/declaration-empty-equation-corrected-independent-review-next.json",
+        "sha256": "cf7e6a346f0a3e5830cc2cc8ef902c06e79435e0913142f5dd0f8428355f6552"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/no-catalog-boundary-single-completion-independent-review-next.json",
+        "sha256": "0e45163092266741bbf2a52c0907621a26ed99d63681624fff3bc3d5b86f021b"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/v30-three-mechanical-deltas-independent-review.json",
+        "sha256": "f4c9d4355340b4240054503081def35d9b5353c32c25e813a4c005c83d0f5412"
+      }
+    ],
+    "held_authority_reviews": [
+      {
+        "path": "artifacts/validation-resume-2026-10-18/template-initial-drop-completeness-independent-review-held.json",
+        "sha256": "43cdba57f5712906ad4e0fa0184ca36b161c420e9e6e0f4b3f8b7907933794a0"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/plain-data-evaluated-template-independent-review-held.json",
+        "sha256": "f0ff78a2385497dc5daefdecc13de37964e37e4b2e6cc9dffd4e1fb7219e57cc"
+      },
+      {
+        "path": "artifacts/validation-resume-2026-10-18/live-drop-template-independent-review-held-mechanical.json",
+        "sha256": "043c855c91837a1058283a0d8f669b857360d1983cf9d223233e0af4ea8753ff"
+      }
+    ],
+    "supersession": "Earlier liveDrop CLEAR reviews establish published-row synchronization only and are superseded by initial-source-completeness HELD. Final structural-only template review removes NoDropProof and declines all owned nominal nodes; three V30 mechanical deltas are reviewed separately. No nominal template/initial absence/fullE007 or promotion acceptance follows."
+  }
+}

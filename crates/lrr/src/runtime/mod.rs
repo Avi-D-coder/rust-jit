@@ -1,5 +1,6 @@
 pub mod arena;
 pub mod cell;
+pub(crate) mod drop_facts;
 pub mod layout;
 pub mod object;
 pub mod place;

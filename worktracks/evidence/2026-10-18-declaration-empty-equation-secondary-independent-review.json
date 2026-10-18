@@ -1,0 +1,82 @@
+{
+  "status": "independent_source_review_clear_bounded_component_runtime_unexecuted",
+  "reviewer": "closure_callable_resume",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/associated_equations.rs",
+      "sha256": "822616c007784fa23c0787021c27713d5af1ed4ff723dc3c435a53a885a1e128"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "2be2864afaaab56e3a80ecbca0ebda9268a753364ff3d23a68894a1e2ee6213b"
+    }
+  ],
+  "reviewed_symbols": [
+    "associated_equations::prepare",
+    "source_types::actual_associated_owner",
+    "actual_bound_owner_complete",
+    "actual_declaration_bounds",
+    "actual_bound_equation_candidates",
+    "actual_bound_equations",
+    "resolve_actual_type",
+    "signatures::capture_generics",
+    "signatures::canonical_lifetime",
+    "ast_adapter::semantic_name",
+    "ast_adapter::tokens"
+  ],
+  "findings": [
+    "Canonical binder kind/name/ordinal proof reuses semantic_name and canonical_lifetime, same authority as capture_generics. Collector parameter association and RHS NameRef filtering use semantic_name too. Own generic order then immediate owner then implicit trait Self matches signature capture.",
+    "Genuine complete owner envelope requires actual Impl/Trait or enclosing local Fn header context. Detached retained fragments and mismatched binder envelope stay pending; nested items do not inherit outer function binders.",
+    "Actual RHS MacroType anywhere stays a demanded candidate even without NameRef nodes; existing actual AST resolver returns unresolved, and actual_bound_equations propagates None to Pending. No empty result from opaque macro token content.",
+    "DeclaredBody input verifies exact published DefinitionBody owner plus normal actual signature/source/context/profile and ParseFile. Only source-proven empty candidate result avoids BodyEnvironment; nonempty still needs real current environment, unchanged normalization/substitution.",
+    "Cold cost correction: ast_adapter::tokens walks descendants_with_tokens before excluded-range filtering; owner-context comparison traverses associated item/body tokens though it does not retain/interpret them. This is one cold source walk per equation memo generation, not zero body enumeration. Owner informed; no release scaling claim."
+  ],
+  "all8": [
+    {
+      "mode": 1,
+      "symbols": "AssociatedEquations::prepare / actual_bound_equations",
+      "result": "No expression/assert evaluator, numeric or call execution; result is immutable Type equations consumed by same SignatureSubstitution."
+    },
+    {
+      "mode": 2,
+      "symbols": "ParseFile/syntax_at/actual_declaration_bounds",
+      "result": "Same actual source AST for original/generated declarations; no output literal or break interpreter."
+    },
+    {
+      "mode": 3,
+      "symbols": "semantic_name/canonical_lifetime / actual_bound_equation_candidates",
+      "result": "Canonical generic identities and ordinary source bounds; no library/context/numeric-name whitelist. Resolved ParamKey filtering remains authority after conservative NameRef test."
+    },
+    {
+      "mode": 4,
+      "symbols": "actual_bound_owner_complete",
+      "result": "Actual scope/header envelope completeness required for both generated and original; missing ownership stays pending. No generated-only exclusion."
+    },
+    {
+      "mode": 5,
+      "symbols": "AssociatedEquations::prepare empty branch",
+      "result": "Header/Type fact preparation only; no executable cold-body lowering or fake environment, no pattern executor. Opaque macros cannot certify empty."
+    },
+    {
+      "mode": 6,
+      "symbols": "AssociatedEquations memo / candidates passed to resolver",
+      "result": "No installed dispatch/planning change. Existing pure memo uses retained parser/direct syntax handles; single candidate vector consumed once per query. Header token traversal cold cost noted above, no performance claim."
+    },
+    {
+      "mode": 7,
+      "symbols": "DeclaredBody source inputs / BodyEnvironment branch",
+      "result": "Proven empty outcome omits irrelevant missing BodyEnvironment dependency; relevant signature/source/owner inputs still captured. Nonempty currentness preserved; no census/global map."
+    },
+    {
+      "mode": 8,
+      "symbols": "syntax_at / retained AST candidates",
+      "result": "No BodyIndex clone or complete-file node search. Direct actual declaration range; shared AST handles. Owner-token walk explicitly noted, not misrepresented as body-independent cost."
+    }
+  ],
+  "holds": [
+    "No Cargo or runtime execution by reviewer; actual V28 String/Vec environment-publication failure retained pending successor validation",
+    "Exact names/lifetimes/opaque macro behavior source-reviewed, not runtime-proven",
+    "Broader transitive trait solver/macros/type applicability remain held; no feature/gate closure",
+    "Owner all8 receipt final prose may change to reflect token traversal; source hashes are fixed"
+  ]
+}

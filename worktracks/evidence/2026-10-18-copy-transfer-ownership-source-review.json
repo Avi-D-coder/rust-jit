@@ -1,0 +1,41 @@
+{
+  "status": "source-only successor, independent review/build/runtime pending",
+  "claim": "LOCAL-044",
+  "tasks": [
+    "T032",
+    "T054"
+  ],
+  "precode": "worktracks/evidence/2026-10-18-copy-transfer-ownership-precode.md",
+  "baseline": "V30 source7a15c2b9 exact staged blob69827f81",
+  "files": {
+    "crates/lrr/src/runtime/cell_aggregate_copy.rs": "44cbdc084746a3b856170d60fe6059d530ddbdd9632e7b50858750c6c5761e3c"
+  },
+  "changed_symbols": [
+    "AggregateCopy::transfer",
+    "CopyWork::Transfer",
+    "AggregateCopy::next",
+    "AggregateCopy::finish_transfer",
+    "AggregateCopy::advance"
+  ],
+  "invariant": "Leaf replica or committed child ticket remains reachable in the same operation continuation until successful parent construction_push. Refusal before transfer retains ticket for guarded retry; successful append clears it only after consumption and prechecked next-index increment.",
+  "actual_route": "Same ordinary Copy/ValuePath/record-rest activation -> same AggregateCopy next/advance -> same common ConstructionId/construction_push. No second copier or template branch.",
+  "all8": {
+    "1": "No expression/assertion evaluator",
+    "2": "Same generated/original syntax lowering and physical opcode continuation unchanged",
+    "3": "No name/macro/type spelling or inference policy",
+    "4": "No generated exclusion or fake source authority",
+    "5": "Pattern and cold source preparation unchanged; single physical transfer owner",
+    "6": "O(1) retained ticket bookkeeping, no source planning",
+    "7": "Existing relevant root/source/template guards rechecked before pending transfer; no namespaces",
+    "8": "No immutable body/index copies or AST searches"
+  },
+  "cost": "One optional TicketId per active physical copy, O(1) per shared transfer; no extra normal successful work phase or changed Rust opcode counters.",
+  "test": "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_leaf_and_committed_child_tickets_for_retry",
+  "test_scope": "LRR-only injected parent guard authority refusal for leaf and committed nested child, restore valid guard then retry exact ticket once, distinct fresh object and unchanged source. Unexecuted. Existing unchanged upstream struct/array roots remain primary regressions.",
+  "holds": [
+    "Full activation cancellation/draining and final frame write refusal cleanup not integrated",
+    "construction_push post-consume error atomicity remains shared primitive assumption/held review; no blanket all-error recovery claim",
+    "V30 stock $crate regression repaired by independent worker; this successor does not claim a stock pass",
+    "No E007/interpreter/JIT/performance gate closure"
+  ]
+}

@@ -189,6 +189,7 @@ pub struct MemberIndex {
     /// Identities of the block-local containers already published (kept on
     /// the world index only), so a body entered again publishes once.
     local_published: std::sync::Mutex<BTreeSet<Digest>>,
+    runtime_drop_facts: std::sync::OnceLock<std::sync::Arc<crate::runtime::drop_facts::DropFacts>>,
     impls: Vec<ImplMembers>,
     by_nominal: BTreeMap<Digest, Vec<usize>>,
     by_builtin: BTreeMap<BuiltinSelf, Vec<usize>>,
@@ -345,13 +346,33 @@ impl MemberIndex {
                 }
             }
         }
+        // Publication performs work proportional to this layer, never a
+        // fresh inventory of the world. Readers retain the same fact handle.
+        let mut added_drop = Some(BTreeSet::new());
+        for members in &layer.impls {
+            if self.implements_drop(members) {
+                match (added_drop.as_mut(), members.self_nominal) {
+                    (Some(types), Some(identity)) => {
+                        types.insert(identity);
+                    }
+                    _ => {
+                        added_drop = None;
+                    }
+                }
+            }
+        }
         let layer = std::sync::Arc::new(layer);
         let mut tail = self;
         loop {
             match tail.next.get() {
                 Some(next) => tail = next,
                 None => match tail.next.set(layer.clone()) {
-                    Ok(()) => return,
+                    Ok(()) => {
+                        if let Some(facts) = self.runtime_drop_facts.get() {
+                            facts.append(added_drop);
+                        }
+                        return;
+                    }
                     Err(_) => continue,
                 },
             }
@@ -1613,6 +1634,21 @@ impl MemberIndex {
                 .filter_map(|members| members.self_nominal)
                 .collect(),
         )
+    }
+    /// Capture once under the publication lock, then share live append-only
+    /// facts with stores. Body publication runs outside active VM execution.
+    pub(crate) fn runtime_drop_inventory(
+        &self,
+    ) -> std::sync::Arc<crate::runtime::drop_facts::DropFacts> {
+        let _published = self
+            .local_published
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        self.runtime_drop_facts
+            .get_or_init(|| {
+                std::sync::Arc::new(crate::runtime::drop_facts::DropFacts::new(self.drop_types()))
+            })
+            .clone()
     }
     /// Nominal declarations with a `Drop` impl. `None` when some trait impl's
     /// self type is unresolved and could be such an impl.

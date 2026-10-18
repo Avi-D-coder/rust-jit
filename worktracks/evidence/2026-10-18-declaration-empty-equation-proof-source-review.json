@@ -1,0 +1,97 @@
+{
+  "scope": "READY after V29 mechanical HasGenericArgs import repair; no successor compile/runtime evidence",
+  "sources": [
+    {
+      "path": "crates/lrr/src/frontend/associated_equations.rs",
+      "sha256": "822616c007784fa23c0787021c27713d5af1ed4ff723dc3c435a53a885a1e128"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "f75496d6302b9bc9d5d89bffa58871078cb1c2eb137b2bc766bed7deefa70beb"
+    }
+  ],
+  "actual_witness": {
+    "path": "tests/ui/traits/default-method/macro.rs",
+    "sha256": "f3e380db2a2ce505338b2769bb888b538a63a9c993037ee8944a44b0ad285181",
+    "owning_edition": 2015,
+    "record": "artifacts/validation-resume-2026-10-18/candidate-v28/stock-0.stdout",
+    "failure": "INTERNAL-SNAPSHOT prepared operation input changed at String::new Vec::new()",
+    "changed_input": "BodyEnvironment(def92f6561ef805853a1b50cb026ad1efac8cccfb8b34fbae3c84225a90ea28de3d,bodyfeb51f1b9a1fea793ae4c5813055829c2cc92c7c984687197632fa8d7600e72c)",
+    "expected_missing": "1cc671930104d41f2e86a825a1705770517814e6f8af0e195fa095bf0c3d2d12",
+    "actual_published": "f2546ba072a00618a88f93f5d553f54516b1b0543e8ea54be6d67e6b89f16092"
+  },
+  "all8": [
+    {
+      "failure_mode": 1,
+      "name": "Separate assertion/expression evaluator",
+      "inspected": "AssociatedEquations::prepare and shared source_types collector/resolver only. Existing SignatureSubstitution and common source/runtime consumers unchanged. No evaluator or assertion hook."
+    },
+    {
+      "failure_mode": 2,
+      "name": "Literal/break-only macro execution",
+      "inspected": "No runtime/lowering/verifier/opcode changes. Actual declaration parser/source context handles original/generated same path."
+    },
+    {
+      "failure_mode": 3,
+      "name": "Context-specific numeric/method selection",
+      "inspected": "No fixture/library/function/TypeId conditions. The zero proof depends on actual source-bound candidate vector and actual requested generic identities. Positive RHS identity remains resolved ParamKey filtering. Reuses existing signature identifier/lifetime canonicalization for actual binder and NameRef relevance, preventing raw/NFC spelling-dependent inference."
+    },
+    {
+      "failure_mode": 4,
+      "name": "Generated rejection",
+      "inspected": "Same actual ParseFile+Fn+profile/context for original/generated. Shared collector includes immediate actual impl/trait where/generic bounds and now direct trait supertrait TypeBounds. No generated exemption or invented owner. Corrected owner-envelope proof requires actual associated or lexical header context and exact source binder sequence; detached source remains typed pending, no original/generated classification shortcut. Opaque actual RHS MacroType stays demanded/unresolved in the same type resolver; it cannot be promoted to an empty-equation proof."
+    },
+    {
+      "failure_mode": 5,
+      "name": "Duplicate patterns/eager cold execution",
+      "inspected": "No executable BodyStructure/body lowering or fake BodyEnvironment publication. Zero direct-equation result reads genuine declaration metadata; nonempty retains real existing callee environment pending/currentness and normalization. SelectedCall caller owner proof unchanged."
+    },
+    {
+      "failure_mode": 6,
+      "name": "Repeated parsing/planning",
+      "inspected": "One existing memo ParseFile fetch and direct syntax_at selection, one candidate extraction per immutable query; same vector consumed once. Old resolver header-bound walk removed, not duplicated. Installed dispatch untouched. Additional source completeness check compares direct relevant owner header tokens and generic AST metadata cold once per equation memo, not per phase. ast_adapter::tokens walks descendants_with_tokens before filtering excluded bodies: this newly repeated owner/header proof can traverse actual associated/lexical body tokens once per equation memo generation, without executable lowering or storing those tokens. Owner-header proof reuse remains a cold cost optimization hold."
+    },
+    {
+      "failure_mode": 7,
+      "name": "World scans/unrelated invalidation",
+      "inspected": "Zero DeclaredBody result no longer reads BodyEnvironment and thus callee first environment publication is irrelevant. Exact Signature/Header/Source/Context/DefinitionBody association/Parse deps retained; relevant source/bound changes still invalidate. Positive actualenv currentness unchanged; no global census."
+    },
+    {
+      "failure_mode": 8,
+      "name": "Immutable body clones/whole-file searches",
+      "inspected": "Retains ordinary AST handles in small candidate Vec; no BodyIndex clone/source-body text parse or complete-file search. Existing syntax_at uses direct exact declaration context."
+    }
+  ],
+  "source_proof": [
+    "FunctionSignature provider captures actual Signature/DefinitionSource/DeclarationContext/ParseFile and parses exact actual declaration, without executable preparation.",
+    "DeclaredBody additionally checks current published DefinitionBody key equals actual owner key before allowing declaration-only empty result.",
+    "Shared actual_declaration_bounds retains immediate associated owner only; nested items do not inherit surrounding function parameters. Direct trait supertype bounds use actual implicit Self Param ordinal, absent subject remains unresolved for semantic resolver.",
+    "Candidate prefilter is existing requested-parameter NameRef relevance over associated RHS; actual semantic ParamKey filtering/projection trait/member bucket/normalization retained. This proves absence only for this existing direct explicit-source equation service, not all transitive Rust solver consequences.",
+    "No stable query key/wire schema changed; changed pending/empty result fingerprint includes existing state and actual captured dependencies. Diagnostic five compiled leaves and lifecycle onebranch remain unchanged.",
+    "Corrected actual_bound_owner_complete checks current function definition/body/context association (provider), actual immediate Impl/Trait owner header tokens against retained HeaderRecipe.context, and actual complete own+associated binder sequence kind/name/ordinal including real trait Self. Local functions use actual enclosing function header only for source context, never inherit its binder. Missing retained owner/context remains pending, not proven empty. Equal generic counts alone cannot certify it.",
+    "The same actual_associated_owner direct ancestor helper serves collector and completeness check. Nonempty partially owned candidate facts retain equations but pending=true; no missing owner is declared complete. Zero incomplete source envelope yields pending before declaring any equations absent.",
+    "Only formatter edits overlapping owned semantic hunks were applied using rustfmt emit-stdout; inherited unrelated source formatting remained unchanged. No Cargo/compiler execution.",
+    "Independent review correction: actual owner binder kind/name/ordinal matching now applies existing semantic_name and canonical_lifetime helpers exactly as capture_generics does; actual_declaration_bounds and RHS NameRef prefilter use semantic_name too, preserving raw identifier/NFC identity. No separate identifier parser.",
+    "Actual RHS containing any ast::MacroType remains a demanded associated argument even when token-tree names lack NameRef AST nodes. Existing shared Type resolver returns unresolved/pending; it can never certify zero equations from opaque type-macro text. No macro execution/hook or fake expansion added.",
+    "Independent cost correction: ast_adapter::tokens traverses excluded subtree tokens before filtering; owner completeness check is O(actual associated/lexical owner syntax token count), not only header size. It runs cold per equation memo generation, not installed dispatch, but repeated owner traversal across distinct binding keys remains a known preparation-cost hold. No measured performance claim.",
+    "V29 source-exact lib compile failed E0599 at source_types.rs1597: AssocTypeArg implements HasGenericArgs but this function lacked the trait import. Narrow repair adds only local use ra_ap_syntax::ast::HasGenericArgs to actual_bound_equations; production behavior and all dependency/authority paths unchanged. Prior exact receipt and compile failure remain attached to V29 source."
+  ],
+  "api_census": [
+    "actual_bound_equation_candidates has sole caller AssociatedEquations::prepare; actual_bound_equations sole caller sameprovider consumes retained candidates.",
+    "actual_declaration_bounds other consumer declaration_nominal_types SourceType trait bound service now also sees actual trait supertype bounds if owner is trait; ordinary nominal Struct/Enum routes unaffected.",
+    "Pinned ra_ap_syntax0.0.356 generated Trait implements HasTypeBounds; source API checked without Cargo."
+  ],
+  "validation": {
+    "compile": "V29 failed E0599 missing HasGenericArgs import (plus separately owned failures); repaired source successor unexecuted",
+    "primary_default_method_wholemain": "unexecuted successor; V28 failure remains",
+    "numbered_named_upstream": "previous wholemain passes only, successor pending",
+    "cold_global_local_pure_goals": "existing controls requested; successor unexecuted",
+    "source_epoch_invalidation": "existing controls requested; successor unexecuted",
+    "independent_review": "Prior corrected semantic all8 clear; one import-only API repair now ready for independent mechanical review"
+  },
+  "holds": [
+    "Nonempty DeclaredBody bound goals still require genuine published environment; no fake declaration-only completed world or broad renewal.",
+    "Transitive implied trait-equation inference, unsupported source type macro bindings and broader Rust solver completion remain held; no full trait compatibility claim.",
+    "No measured performance/feature/milestone/full-fixture/JIT acceptance claimed from source review."
+  ]
+}

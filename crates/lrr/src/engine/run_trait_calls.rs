@@ -1004,6 +1004,7 @@ impl RunMachine {
             callee,
             explicit: Vec::new(),
             typed: None,
+            owner_application: None,
             hints,
             argument_slots: arguments.to_vec(),
             result_hint,

@@ -1,0 +1,233 @@
+{
+  "status": "source_candidate_anchor_successor_uncompiled_independent_review_pending",
+  "tasks": [
+    "T032",
+    "T054",
+    "M018",
+    "M025"
+  ],
+  "precode": "worktracks/04-calls-source-views/2026-10-18-associated-constant-application-carrier.md",
+  "changed": [
+    {
+      "path": "crates/lrr/src/frontend/associated_constant_applications.rs",
+      "sha256": "deae37189a7e3b1c1706ab1ffab04ce4c031c99696390b8eb578c901451f362d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "545ee3493b07005bca6df89b4e4e4de795e123ce851f440958f93a24f058799e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "74d1f18d56fa92af120321739e91a4037abd35b7c385d6f509076df030d716b5"
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "sha256": "7b28d11908fe2d7186130e593b0324345109fb8b26ec6abda19ab82f9e694111"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "8fe4b83205a82ef7efbb3f3f6bab14b096aa19204ed19349c0757dc22f14f15f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "c08a46299d67bd86bee1486a93e6ec80f413c74c63375405867db1ac4a8fd09f"
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "079b0445d3415581f64d2cde6aff3dca3855b958aeab690e7c8edcb9e01d6705"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "d0087dbb54c48e84293dedf05124d37b50a667cec0a0b2ddb330eb5b111470b2"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "62c248d84865451b75331379e83ddd1ad7aee64bd851f8d34cd0db5d89eb2966"
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "sha256": "2d0da7caea05d5fc414e99de99613b6446880e03d8344587b246a712aec361c3"
+    },
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "sha256": "9cf5fb557a51a838bb7d55df9b2937f29ee29d5314251ef4748c8d02f6f2c70c"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "8d5ac2259f0bde13516ca40be247c05bdd277a9457539bf3fd9f0e255f6c7c20"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_trait_calls.rs",
+      "sha256": "7c1a4c7eddac23132cc6c8d5ab488a29661abdf1f979d02b8a0419341b28a211"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_value_items.rs",
+      "sha256": "cad35810ca061581dfdb049a1dc28747a4f55390097d9022eb218ce999725e31"
+    }
+  ],
+  "shared_leaf_scope": {
+    "engine/run.rs": [
+      "SelectedArgumentCall owner_application",
+      "finish_selected_argument_call implicit Self/guard/metadata",
+      "prepare_source_call guard recheck"
+    ],
+    "engine/run_value_items.rs": [
+      "associated_value_path only"
+    ],
+    "engine/run_trait_calls.rs": [
+      "owner_application None mechanical field only"
+    ],
+    "unreviewed_other_owner_edits": "Root may update separate initializer/cache/result blocks in shared engine leaves. These hashes are snapshot-bound, and final delta needs source accounting; no other-owner blocks reviewed by this receipt."
+  },
+  "actual_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-type-parameters.rs",
+    "unchanged_sha256": "272f9a04859235abc0e39c8fb71438bee75d50cb6d073f754edfafede667539f",
+    "sealed_v27": "Self::X unsupported, actual original75..82/1 source call/236 dispatches/457 ops, capture incomplete; artifact candidate-v27/additional-constant-application/stock-0.stdout. No successor execution yet.",
+    "additional_unchanged_anchors": [
+      {
+        "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-resolution-order.rs",
+        "sha256": "bc121a788a5420b67af7464cbe30c82dbcf18a23066eeca4a3c27819e855249a",
+        "status": "source inspected, no successor execution yet"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/tests/ui/associated-consts/associated-const-use-impl-of-same-trait.rs",
+        "sha256": "7c4a55f0c3e5d0b1e507c3daf2edbbce8c708786ab547059372ca9183e933161",
+        "status": "source inspected, no successor execution yet"
+      }
+    ]
+  },
+  "key_and_dependencies": {
+    "tag": 51,
+    "tag_census": "Existing QueryKey/QueryValue stable tags through50; no collision; old tags unchanged. BodyTypeOccurrences new usage/segment tags encoded under v3 domain, old tag identities retained.",
+    "query_route": "AssociatedItemQualifier actual Path PC -> EnteredValue + SourceLocalPlan -> exact actual Path qualifier -> ordinary prepare_named_body_type/Type prefix/declaration service -> actual SourceType or declared ParamKey, no invented Type/parser.",
+    "currentness": "Owning qualifier query and PreparedInputGuard retain actual Type/source lookup closure. Guard retained across argument effects and checked before ordinary call contract/argument seal. SourceLocalPlan retains actual current body/environment/context/cfg/edition/epoch. Source member/provider application memo/guard remains future separate prerequisite.",
+    "cold": "One path-local occurrence preparation and existing relevant Type/member services per memo generation; no executable cold body preparation for Type answer.",
+    "hot": "Select retained query outcome, instantiate actual source parameter/descriptor pair, ordinary explicit argument/GenericEnv/call entry; guard checks no parsing/namespace census.",
+    "retention": "New QueryValue source roots expose actual SourceLocalPlan; AST/plan handles shared. Checked owned metadata counts, no new cap. Pending retains all actual GenericArg occurrences."
+  },
+  "all_eight": [
+    {
+      "mode": 1,
+      "symbols": [
+        "prepare_named_qualifier",
+        "indexed_type_site",
+        "select_argument",
+        "associated_value_path"
+      ],
+      "finding": "Actual Type metadata only; same normal member/initializer execution. No assertion operand/compiler or alternate evaluator."
+    },
+    {
+      "mode": 2,
+      "symbols": [
+        "PreparedBodyTypeOccurrences::prepare",
+        "prepare_occurrence"
+      ],
+      "finding": "Same genuine actual indexed AST children for original/generated Type anchors, no source wrappers/display-text parse/output-only executor."
+    },
+    {
+      "mode": 3,
+      "symbols": [
+        "SourceLocalPlan::type_prefix_with",
+        "parameter_member_traits",
+        "associated_value_for_source",
+        "finish_selected_argument_call"
+      ],
+      "finding": "One shared ordinary named-Type finalizer for plain and actual anchor path children; composite Type uses existing annotation/typearg WrittenType kernel. Genuine explicit trait member context preserved; no spelling/macro/numeric whitelist."
+    },
+    {
+      "mode": 4,
+      "symbols": [
+        "BodyTypeUse::ValueQualifier",
+        "original_survival",
+        "type_prefix_with"
+      ],
+      "finding": "Actual current source/edition/token context/retained occurrence selected through ordinary Type site. Fixes newly introduced anchored source gap rather than routing Pending to legacy guessing. Missing generic/impl source application remains explicit, not origin-specific."
+    },
+    {
+      "mode": 5,
+      "symbols": [
+        "parameter_member_traits",
+        "actual_declaration_bounds",
+        "FunctionSignature"
+      ],
+      "finding": "Only actual Type metadata/query/header dependencies. No source callable executable body preparation, cold arm lowering or new pattern machinery."
+    },
+    {
+      "mode": 6,
+      "symbols": [
+        "QueryKey::AssociatedItemQualifier",
+        "SelectedArgumentCall::owner_application"
+      ],
+      "finding": "Actual qualifier query memo prepares one indexed anchor source/trait selection per generation; retained ExplicitType/member context/guard consumed by normal operation. No per-phase reconstruction/installed parsing; full applied provider memo still held."
+    },
+    {
+      "mode": 7,
+      "symbols": [
+        "prepare_named_body_type",
+        "associated_const_selection"
+      ],
+      "finding": "Reuses existing relevant entered Type/member dependencies and same selector, explicit anchor trait filter. No global namespace census. Inherited applied-member dependency closure remains a named hold."
+    },
+    {
+      "mode": 8,
+      "symbols": [
+        "AssociatedConstPathOccurrence",
+        "QueryValue::source_roots"
+      ],
+      "finding": "Direct BodyIndex::nodes_at_range, checked exact source projection, retained Rowan/Arc handles. No immutable BodyIndex copy or whole-file source node search."
+    }
+  ],
+  "pending": [
+    "Independent exact-source incremental anchor review, then sole-validator combined lib+CLI builds",
+    "Actual primary type-parameters original and unchanged anchored resolution-order/same-trait roots, no source-inspection pass claim",
+    "Parent common initializer owner-packet hold must be integrated before runtime capture; defaults/generic impl/application packet/cache still unsupported",
+    "Full all-context/edition/currentness anchor matrix unexecuted; no completed migration/feature/gate/JIT claim",
+    "Shared parent engine deltas require separate review/source accounting"
+  ],
+  "predecessor_review": {
+    "path": "worktracks/evidence/2026-10-18-associated-self-qualifier-source-trait-context-review.json",
+    "sha256": "cc1de51d32f14b9c692df0834f85b50b0db97bea10934f19558660756447f443",
+    "status": "source_only_trait_context_candidate_independently_reviewed_before_anchor_regression_correction"
+  },
+  "delta": {
+    "member_context": "SourceTraitBound retains genuine AST, optional resolved identity, actual GenericArg vector and explicit completeness/owner tag. AssociatedConstMemberContext borrows retained rows without collection/allocation. Unsupported full applications remain held before identity-only member selection.",
+    "shared_helper_clients": "FunctionSignature + WrittenTypeDeclaration::function_syntax + actual_declaration_bounds + resolve_actual_type + projection_trait. No helper producer changes; source_types.rs worker-owned. projection_trait omits some unsupported source argument kinds: exact AST retained and complete=false prevents using such result as full application.",
+    "trait_inference": "Known trait without supplied qualifier args may continue existing call inference (its declaration parameters remain normal call contract inference). Unresolved concrete/generic qualifier may not. Self explicit source/runtime pair uses existing ExplicitType descriptor and bound_view.",
+    "metadata": "New retained bound row/vector/Type heap costs checked; fixed syntax handles shared; no budget/count cap. AST/source/body/currentness included in owning retained plan. New uncompiled query domain v1 encoding changed only within this candidate, no released prior semantic query."
+  },
+  "review_findings_repaired": [
+    {
+      "finding": "Self::X dropped actual owning trait and searched unrelated/inherent members",
+      "source": "parameter_member_traits retains genuine current Fn signature owner+actual parent trait, actual declared bounds through shared source_types clients; associated_value_for_source consumes borrowed context and uses existing selector filtered by actual trait. Owner preferred, ambiguity among remaining bounds retained; no unproven global fallback for parameter."
+    },
+    {
+      "finding": "Unresolved concrete/generic qualifier incorrectly permitted unrelated Self inference",
+      "source": "PreparedAssociatedItemQualifier positively selected trait is distinct from unresolved Type/application. Only positive trait with no erased actual arguments permits ordinary argument/result Self inference. Pending other applications refuse. Both sourceType and positiveTrait query guards retained and rechecked across argument effects."
+    }
+  ],
+  "read_only_dependency_snapshot": [
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "2be2864afaaab56e3a80ecbca0ebda9268a753364ff3d23a68894a1e2ee6213b",
+      "scope": "existing public APIs/source Type proof clients inspected, not changed here"
+    },
+    {
+      "path": "crates/lrr/src/frontend/explicit_type_arguments.rs",
+      "sha256": "8fe4b83205a82ef7efbb3f3f6bab14b096aa19204ed19349c0757dc22f14f15f",
+      "scope": "existing public APIs/source Type proof clients inspected, not changed here"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "545ee3493b07005bca6df89b4e4e4de795e123ce851f440958f93a24f058799e",
+      "scope": "existing public APIs/source Type proof clients inspected, not changed here"
+    }
+  ],
+  "source_delta": {
+    "owned_changed_leaf": "crates/lrr/src/frontend/associated_constant_applications.rs",
+    "other_leaves": "Other qualifier producer/consumer source remains inherited; shared engine full-leaf hashes can include parent separate Drop/template/cache edits not reviewed here.",
+    "actual_anchor": "Use pinned PathSegmentKind::Type {type_ref,trait_ref}, genuine actual AST children (not TypeAnchor::path_type ambiguous first-child accessor). Exact Syntax node selected by source-relative nodes_at_range/projection; reuse existing ordinary named qualifier Type finalizer and composite select_argument/WrittenType. No legacy/Pending fallback/new parser/new evaluator.",
+    "actual_trait": "Explicit as trait gets same indexed ordinary Type lookup; only positively selected real trait identity enters retained source member context. Missing/malformed/unresolved Type/trait site remains pending; all actual owner GenericArgs preserved and unsupported applications held.",
+    "argument_ownership": "Source carrier still retains every original GenericArg observation. qualifier_has_arguments uses actual AST containment to distinguish owner from member turbofish. Owner args remain pending, member args use existing ordinary call explicit-argument packet/guard route.",
+    "packet_boundary": "Root owns common enter_initializer nonempty genuine signature generic packet hold; no associated-path-only signature query added. Current selected-provider-to-initializer application transport remains held."
+  }
+}

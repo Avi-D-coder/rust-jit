@@ -5,8 +5,9 @@
 //! (`CallResolver::initializer`) and the returned value becomes:
 //! - a static's run-long cell, installed once and read or borrowed in place;
 //! - a constant's value: kept in a run-long cell and copied on each use when
-//!   its value is copied intrinsically (scalars, shared references); otherwise
-//!   handed to the one use that demanded it, so each use is a fresh value.
+//!   intrinsically, or is a source-checked nongeneric plain-data template
+//!   instantiated through the ordinary aggregate work engine; remaining
+//!   generic/heap/Drop graph classes retain per-use initialization debt.
 use super::*;
 use crate::{core::digest::Digest, runtime::cell::TicketId};
 
@@ -16,6 +17,12 @@ pub(crate) struct InitializerDemand {
     pub(crate) identity: Digest,
     pub(crate) is_static: bool,
     pub(crate) pc: PcKey,
+}
+#[derive(Clone)]
+pub(super) struct StoredConstant {
+    pub(super) cell: crate::runtime::cell::CellId,
+    pub(super) view: Option<crate::traits::term::TyTerm>,
+    pub(super) template: Option<crate::runtime::cell::aggregate_copy::VmTemplate>,
 }
 
 impl RunMachine {
@@ -61,6 +68,18 @@ impl RunMachine {
                 "selected constant or static has no executable initializer body".into(),
             )));
         };
+        // A zero-argument declaration-only entry cannot represent an owner
+        // application. A default initializer may never read Self, so waiting
+        // for a missing parameter error inside its body is insufficient: it
+        // could otherwise publish a scalar into the identity-only cache.
+        // The full source application packet is an outstanding common entry
+        // dependency, including for pattern constants, not a static rule.
+        if !callee.signature().generics.is_empty() {
+            return QueryPoll::Ready(Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "initializer owner application requires its source generic argument packet".into(),
+            )));
+        }
         let writable = callee
             .signature()
             .header
@@ -120,6 +139,7 @@ impl RunMachine {
         suspended: SuspendedCall,
         ticket: TicketId,
     ) -> Result<(), Diagnostic> {
+        let nongeneric = suspended.call.callee.signature().generics.is_empty();
         let CallContinuation::Initializer {
             identity,
             is_static,
@@ -150,7 +170,15 @@ impl RunMachine {
                     | crate::runtime::shape::ShapeCategory::Function
                     | crate::runtime::shape::ShapeCategory::Pointer
             );
-        if is_static || copied {
+        // A declaration-only key is sufficient only for an actual nongeneric
+        // item. Generic application packets and their full cache keys remain
+        // prerequisites for caching generic aggregate initializer results.
+        let prepared_template = if !is_static && !copied && nongeneric {
+            self.store.prepare_vm_template(ticket)?
+        } else {
+            None
+        };
+        if is_static || copied || prepared_template.is_some() {
             let cell = self.run_long_cell(ty, writable)?;
             self.store.initialize(cell, ticket)?;
             if is_static {
@@ -159,7 +187,17 @@ impl RunMachine {
                     self.static_views.insert(identity, view);
                 }
             } else {
-                self.const_cells.insert(identity, (cell, source));
+                let template = prepared_template
+                    .map(|prepared| self.store.seal_vm_template(prepared, cell))
+                    .transpose()?;
+                self.const_cells.insert(
+                    identity,
+                    StoredConstant {
+                        cell,
+                        view: source,
+                        template,
+                    },
+                );
             }
         } else {
             self.initialized_values

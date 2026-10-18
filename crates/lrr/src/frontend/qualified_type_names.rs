@@ -226,7 +226,7 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
             BodyTypeSegment::Crate(name) => (name, ImportSegment::Crate),
             BodyTypeSegment::SelfModule(name) => (name, ImportSegment::SelfModule),
             BodyTypeSegment::Super(name) => (name, ImportSegment::Super),
-            BodyTypeSegment::NeedQualifiedType => {
+            BodyTypeSegment::SelfType(_) | BodyTypeSegment::NeedQualifiedType => {
                 return proof.pending(QualifiedTypeDemand::PathAdjustment);
             }
         };

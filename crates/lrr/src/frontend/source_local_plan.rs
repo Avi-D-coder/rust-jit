@@ -613,8 +613,35 @@ impl PreparedSourceLocalPlan {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
+        // `Self` is a reserved Type keyword, not a module spelling or a
+        // fabricated generic declaration. Its implicit binder is captured by
+        // the current genuine trait member signature. Impl Self needs its
+        // actual applied self template and remains pending here.
+        let self_parameter = if matches!(occurrence.segments(), [BodyTypeSegment::SelfType(_)])
+            && !occurrence.absolute()
+            && !matches!(occurrence.origin(), BodyTypeOrigin::NeedGeneratedBoundary | BodyTypeOrigin::NeedRetainedOccurrence)
+        {
+            let selected = match db.fetch(&crate::db::provider::SyntaxProvider,
+                crate::db::key::QueryKey::FunctionSignature(self.context.source().body().def_key)) {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let crate::db::value::QueryValue::FunctionSignature(signature) = selected.value.as_ref() else {
+                return QueryPoll::Ready(Err(error("Self Type signature query variant differs")));
+            };
+            if signature.definition != self.context.source().body().def_key
+                || signature.header != *self.context.source().header()
+                || signature.scope != self.context.source().context().scope {
+                return QueryPoll::Ready(Err(error("Self Type actual owner signature differs")));
+            }
+            signature.scope.owner.and_then(|_| signature.generics.iter().find(|parameter|
+                parameter.kind == crate::syntax::signatures::GenericKind::Type && parameter.name == "Self"))
+                .map(|parameter| crate::traits::term::ParamKey { definition: signature.definition, ordinal: parameter.ordinal })
+        } else { None };
         let mut module_selector = None;
         let answer = (|| -> Result<LocalTypePrefixSelection, Diagnostic> {
+            if let Some(parameter) = self_parameter { return Ok(LocalTypePrefixSelection::Parameter(parameter)); }
             if matches!(
                 occurrence.origin(),
                 BodyTypeOrigin::NeedGeneratedBoundary | BodyTypeOrigin::NeedRetainedOccurrence
@@ -862,6 +889,11 @@ impl std::fmt::Debug for PreparedSourceLocalPlan {
     }
 }
 
+pub(crate) enum NamedTypeOutcome {
+    Ready(crate::frontend::source_types::NamedTypePreparation),
+    Pending { demand: type_declarations::BodyTypeDemand, diagnostic: Diagnostic },
+}
+
 // One finalizer for actual header and body Type occurrences. The prefix owns
 // the source spelling/context; callers cannot provide a primitive name.
 impl LocalTypePrefix {
@@ -880,10 +912,20 @@ impl LocalTypePrefix {
         self.prepare_named_with(db, true)
     }
     fn prepare_named_with(
+        self, db: &mut Database, generic_base: bool,
+    ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {
+        match self.prepare_named_outcome_with(db, generic_base) {
+            QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(value))) => QueryPoll::Ready(Ok(value)),
+            QueryPoll::Ready(Ok(NamedTypeOutcome::Pending { diagnostic, .. })) => QueryPoll::Ready(Err(diagnostic)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    fn prepare_named_outcome_with(
         self,
         db: &mut Database,
         generic_base: bool,
-    ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {
+    ) -> QueryPoll<NamedTypeOutcome> {
         use crate::frontend::{
             current_module_names::ModuleNameCompletion,
             signature_names::SignatureName,
@@ -901,7 +943,7 @@ impl LocalTypePrefix {
         ready!(self.retained_plan().require_current(db));
         let plan = Arc::clone(self.retained_plan());
         if let LocalTypePrefixSelection::Parameter(parameter) = self.selection() {
-            return QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(*parameter)));
+            return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Parameter(*parameter))));
         }
         if matches!(self.selection(), LocalTypePrefixSelection::ModuleTail) {
             if let Some(observation) = ready!(self.module_name(db)) {
@@ -919,27 +961,27 @@ impl LocalTypePrefix {
                     };
                     return match classified {
                         SignatureName::Primitive(primitive) => QueryPoll::Ready(
-                            SourceType::selected_primitive(primitive).map(NamedTypePreparation::Ready),
+                            SourceType::selected_primitive(primitive).map(NamedTypePreparation::Ready).map(NamedTypeOutcome::Ready),
                         ),
                         // The builtin unsized `str`, classified by the same
                         // completed lookup as every builtin Type name.
                         SignatureName::Str => QueryPoll::Ready(
-                            SourceType::selected_str().map(NamedTypePreparation::Ready),
+                            SourceType::selected_str().map(NamedTypePreparation::Ready).map(NamedTypeOutcome::Ready),
                         ),
-                        other => QueryPoll::Ready(Ok(NamedTypePreparation::Name(other))),
+                        other => QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Name(other)))),
                     };
                 }
             }
         }
         match ready!(type_declarations::prepare(db, self)) {
             type_declarations::BodyTypeOutcome::Ready(proof) => {
-                QueryPoll::Ready(Ok(NamedTypePreparation::Ready(proof.source_type().clone())))
+                QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Ready(proof.source_type().clone()))))
             }
             type_declarations::BodyTypeOutcome::Pending(
                 type_declarations::BodyTypeDemand::GenericArguments(identity),
-            ) if generic_base => QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+            ) if generic_base => QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
                 crate::frontend::type_aliases::AliasTarget::Nominal(identity),
-            ))),
+            )))),
             // A module-level alias the body prefix selected: normalized by the
             // same alias service signature Types use, in the alias's own
             // declaration context.
@@ -965,9 +1007,9 @@ impl LocalTypePrefix {
                         && alias.generics.is_empty()
                     {
                         if let Some(term) = &alias.symbolic {
-                            return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                            return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
                                 crate::frontend::type_aliases::AliasTarget::Type(term.clone()),
-                            )));
+                            ))));
                         }
                         // A single builtin Type name (`type N = i32;`), when no
                         // block item or import of this body can shadow it.
@@ -994,28 +1036,27 @@ impl LocalTypePrefix {
                                     NameLookup::Absent,
                                 ) {
                                     Ok(SignatureName::Primitive(primitive)) => {
-                                        return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                                        return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
                                             crate::frontend::type_aliases::AliasTarget::Type(
                                                 crate::traits::term::TyTerm::Primitive(primitive),
                                             ),
-                                        )));
+                                        ))));
                                     }
                                     Ok(SignatureName::Str) => {
-                                        return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(
+                                        return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
                                             crate::frontend::type_aliases::AliasTarget::Str,
-                                        )));
+                                        ))));
                                     }
                                     _ => {}
                                 }
                             }
                         }
                     }
-                    return QueryPoll::Ready(Err(Diagnostic::new(
-                        "LRR-E-TYPE-CONTEXT",
-                        format!(
-                            "Type requires actual source authority: AliasContext({identity:?}); a body-local alias awaits lexical alias normalization"
-                        ),
-                    )));
+                    return QueryPoll::Ready(Ok(NamedTypeOutcome::Pending {
+                        demand: type_declarations::BodyTypeDemand::AliasContext(identity),
+                        diagnostic: Diagnostic::new("LRR-E-TYPE-CONTEXT", format!(
+                            "Type requires actual source authority: AliasContext({identity:?}); a body-local alias awaits lexical alias normalization")),
+                    }));
                 }
                 let Some(environment) = plan.environment() else {
                     return QueryPoll::Ready(Err(error("alias Type environment absent")));
@@ -1034,15 +1075,25 @@ impl LocalTypePrefix {
                     completed.names(),
                     &views,
                     SignatureName::Source(selected),
-                )
+                ).map(NamedTypeOutcome::Ready)
             }
-            type_declarations::BodyTypeOutcome::Pending(demand) => QueryPoll::Ready(Err(
-                Diagnostic::new("LRR-E-TYPE-CONTEXT", format!("Type requires actual source authority: {demand:?}")),
-            )),
+            type_declarations::BodyTypeOutcome::Pending(demand) => QueryPoll::Ready(Ok(NamedTypeOutcome::Pending {
+                demand,
+                diagnostic: Diagnostic::new("LRR-E-TYPE-CONTEXT", format!("Type requires actual source authority: {demand:?}")),
+            })),
         }
     }
 }
 impl PreparedSourceLocalPlan {
+    pub(crate) fn prepare_named_body_type_outcome(
+        self: &Arc<Self>, db: &mut Database, node: crate::ir::pc::NodeId,
+    ) -> QueryPoll<NamedTypeOutcome> {
+        match self.type_prefix(db, node) {
+            QueryPoll::Ready(Ok(prefix)) => prefix.prepare_named_outcome_with(db, false),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
     pub(crate) fn prepare_named_body_type(
         self: &Arc<Self>, db: &mut Database, node: crate::ir::pc::NodeId,
     ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {

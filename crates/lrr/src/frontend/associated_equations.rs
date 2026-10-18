@@ -171,12 +171,11 @@ pub(crate) fn prepare(
     ));
     let (signature, source, context, completed) = match (&key.owner, selected.value.as_ref()) {
         (EquationOwner::DeclaredBody(body), QueryValue::FunctionSignature(signature)) => {
-            let environment = db.input(&InputKey::BodyEnvironment(body.clone()));
-            let Some(InputValue::BodyEnvironment(environment)) = environment.as_deref() else {
-                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
-            };
-            ready!(environment.require_current(db));
-            if environment.body() != body || body.definition != definition {
+            let actual_body = db.input(&InputKey::DefinitionBody(definition));
+            if body.definition != definition
+                || !matches!(actual_body.as_deref(),
+                    Some(InputValue::DefinitionBody(actual)) if actual.key() == *body)
+            {
                 return QueryPoll::Ready(Err(fault("bound equation declaration owner differs")));
             }
             let context = db.input(&InputKey::DeclarationContext(definition));
@@ -188,12 +187,7 @@ pub(crate) fn prepare(
             else {
                 return QueryPoll::Ready(Err(fault("bound equation declaration inputs absent")));
             };
-            (
-                signature.as_ref(),
-                source.clone(),
-                context.clone(),
-                std::sync::Arc::clone(environment.macros().source_environment()),
-            )
+            (signature.as_ref(), source.clone(), context.clone(), None)
         }
         (EquationOwner::SelectedCall(pc), QueryValue::EnteredCall(goal)) => {
             checked!(goal.require_current(db));
@@ -260,7 +254,9 @@ pub(crate) fn prepare(
                 signature,
                 source,
                 context,
-                std::sync::Arc::clone(environment.macros().source_environment()),
+                Some(std::sync::Arc::clone(
+                    environment.macros().source_environment(),
+                )),
             )
         }
         _ => return QueryPoll::Ready(Err(fault("bound equation selected query outcome differs"))),
@@ -280,15 +276,48 @@ pub(crate) fn prepare(
     else {
         return QueryPoll::Ready(Err(fault("bound equation actual function absent")));
     };
-    let sources: Vec<_> = completed.sources().iter().collect();
     let declaration =
         super::source_types::WrittenTypeDeclaration::function_syntax(signature, &owner);
+    let candidates =
+        super::source_types::actual_bound_equation_candidates(&declaration, &owner, &key.needed);
+    let owner_complete = candidates.owner_complete();
+    if candidates.is_empty() {
+        if !owner_complete {
+            return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+        }
+        // This declaration-only result has no executable-body dependency.
+        // Publishing the callee's first reached environment cannot stale it.
+        return QueryPoll::Ready(Ok(PreparedAssociatedEquations {
+            key: key.clone(),
+            signature: selected.fingerprint,
+            equations: Vec::new(),
+            pending: false,
+        }));
+    }
+    let completed = match completed {
+        Some(completed) => completed,
+        None => {
+            let EquationOwner::DeclaredBody(body) = &key.owner else {
+                return QueryPoll::Ready(Err(fault("bound equation environment owner differs")));
+            };
+            let environment = db.input(&InputKey::BodyEnvironment(body.clone()));
+            let Some(InputValue::BodyEnvironment(environment)) = environment.as_deref() else {
+                return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
+            };
+            ready!(environment.require_current(db));
+            if environment.body() != body {
+                return QueryPoll::Ready(Err(fault("bound equation declaration owner differs")));
+            }
+            std::sync::Arc::clone(environment.macros().source_environment())
+        }
+    };
+    let sources: Vec<_> = completed.sources().iter().collect();
     let equations = ready!(super::source_types::actual_bound_equations(
         db,
         completed.names(),
         &sources,
         &declaration,
-        &owner,
+        candidates,
         &key.needed
     ));
     let bindings: BTreeMap<_, _> = key.bindings.iter().cloned().collect();
@@ -296,7 +325,7 @@ pub(crate) fn prepare(
         return QueryPoll::Ready(Ok(pending(key, selected.fingerprint)));
     };
     let mut normalized = Vec::new();
-    let mut unanswered = false;
+    let mut unanswered = !owner_complete;
     if !equations.is_empty() {
         let members = checked!(completed.member_index());
         for (projection, template) in equations {

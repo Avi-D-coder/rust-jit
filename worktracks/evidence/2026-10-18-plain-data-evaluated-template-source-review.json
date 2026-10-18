@@ -1,0 +1,60 @@
+{
+  "status": "root structural-owned-graph template source review; nominal authority withdrawn; independent/compile/runtime pending",
+  "claim": "LOCAL-044",
+  "tasks": [
+    "T032",
+    "T054"
+  ],
+  "baseline": "V28/9b9bdb78711adc79375259d4a0c3de41ac052eda1cae889b5d1dc25bbc374493",
+  "precode": "worktracks/evidence/2026-10-18-plain-data-evaluated-template.md",
+  "files": {
+    "crates/lrr/src/runtime/cell_aggregate_copy.rs": "69827f818a86bf2c2776cdd44f185862bc7a270521868d56951697e5d1aef9d8",
+    "crates/lrr/src/engine/run.rs": "8d5ac2259f0bde13516ca40be247c05bdd277a9457539bf3fd9f0e255f6c7c20",
+    "crates/lrr/src/engine/run_initializers.rs": "493d80d3ade988615a5146d516fb987894bc0d50a6e5a2da582bd252d350bf8f",
+    "crates/lrr/src/engine/run_value_items.rs": "cad35810ca061581dfdb049a1dc28747a4f55390097d9022eb218ce999725e31",
+    "crates/lrr/src/engine/run_pattern_names.rs": "6b64d813cfd09d0167b616dae8f3f142d0a0c9cacfe0f0de871d67ba577df77e",
+    "crates/lrr/src/engine/run_enum_discriminants.rs": "a4f2057eb173a140f1f7c672dd67ebf86782aac582c3a9db9edfd5febc16f06b",
+    "crates/lrr/src/vm/frame_item_values.rs": "0b3ca5c7e42522c837a9193a5bbffdf55954c8d13cdde352bc2fbde623a50df7",
+    "crates/lrr/src/vm/frame_aggregate_copy.rs": "97494219ed0d03da057975838186d1a2c7031993abb409c7e77be0dac0c86a9a",
+    "crates/lrr/src/frontend/member_index.rs": "8fb8143d94b1f0a64cff8b6812648189a25536cbda636f4eed1c47039de494d9",
+    "crates/lrr/src/runtime/drop_facts.rs": "3e3e245e748608fc66f75bd224b2d74c8ac42c0fcc9a8f11b679f16634d50aa9",
+    "crates/lrr/src/runtime/cell.rs": "9b0bdb7cd9c2da8b1986bcb68853e2611a92737299fc7ab9c9d782366c2d197d",
+    "crates/lrr/src/runtime/cell_promoted.rs": "ef8e361a55a2fa96daa0a13c6a8d180dca575806ce21343b0d86a7efd433c125",
+    "crates/lrr/src/runtime/mod.rs": "5faf674852bec25db6f74c41b6bbc25f64be60c84b121bd6768077d820e64c1e",
+    "crates/lrr/src/engine/run_drop_inventory.rs": "3c65a1d5528b55c5a82b2ab94f11c7eb392a852e46463ff8cee0961f4f545078"
+  },
+  "shared_engine_blocks": "run.rs const_cells field only; run_value_items prepare_selected_item_value cache lookup only. Other Self-qualified-call changes in these exact leaf snapshots belong to worker2 separate review.",
+  "actual_route": "Same ordinary source-call VM initializer return checked by admit_initializer_return -> prepare_vm_template actual plain-data graph/leaf proof -> exact return ticket moved into immutable run-long cell -> opaque VmTemplate same cell cache -> Frame ValuePath preflight + existing AggregateCopy continuation -> same common ConstructionId/commit -> shared item promotion helper. Pattern comparator reads same stored cell without a separate cache/evaluator.",
+  "removed_route": "Eligible nongeneric intrinsic structural owned graphs no longer replay initializer; owned nominal graphs remain per-use debt. No source execution evaluator or public Copy rule added.",
+  "authority": "Actual nongeneric callee source signature, ordinary source-checked initializer return, exact spent ticket/object/field ownership, private immutable cell + StoreSession/epoch stamp. New cache admits only actual owned graphs containing no nominal object nodes, all nonaggregate leaves intrinsic-copy admitted and shared references only. No NoDropProof is minted from incomplete published rows. Public Copy unchanged. Nominal/heap/Drop/generic graphs retain per-use debt until common source impl-producer/declaration closure and full application/relocation/cleanup exist. Common initializer packet gate prevents generic identity-only scalar publication.",
+  "all8": {
+    "1": "No language/assertion evaluator; only same ordinary initializer and physical work stack",
+    "2": "Generated and original items join ordinary source/init/ValuePath/Copy opcode route",
+    "3": "No numeric/method/macro/fixture name rule; runtime general plain-data ownership classification only",
+    "4": "No original-only origin condition; generic/heap/Drop class debt explicit independent of origin",
+    "5": "Same Search and guard retry; same constant cell, no pattern cache fork or cold operand preparation",
+    "6": "Template eligibility two cold O(ownedgraph) walks at successful initializer return; installed work does no source planning. Existing physical replica work only; promotion retains existing classifier per-use cost.",
+    "7": "One cold published Drop inventory, O(new impl rows) updates, RwLock set access in existing runtime classifiers. No source recipe/world census in dispatch. New templates do not claim nominal absence from this incomplete inventory.",
+    "8": "No BodyIndex clone/search; opaque small stamp/value handles, same iterative mutable depth stack/guards and actual source view"
+  },
+  "cost": "One immutable root cell per eligible nongeneric item; scalar/reference constants retain old Copy cells. Fresh owned object/field storage per template read; O(graph) same physical walker. Additional template handle stored inline in single constant cache; no arbitrary caps or measured speed claim.",
+  "holds": [
+    "Full Type/Const/Region application/packet/cache identity incomplete; do not extend declaration-only key to generic aggregate signatures",
+    "Heap/Drop/interior/mutable-reference and unsupported leaf graphs retain explicit per-use initialization debt; full E007 feature not closed",
+    "Physical interruption/cancellation/post-childcommit parentappend failure cleanup not proven; eligible class NoDrop only",
+    "Independent source proof, unchanged upstream witnesses and all-origin/edition CallSeal expected3 control + Copy/promotion/epoch regressions unexecuted for this source",
+    "No gate or performance closure",
+    "Nominal template cache explicitly not enabled: unentered non-local impl producers prevent complete NoDrop absence proof. Structural CallSeal expected3 may still fail; preserve oracle and record actual terminal. Existing cleanup/promotion initial inventory completeness remains separate interpreter correctness blocker."
+  ],
+  "drop_facts": "Shared published Drop set updates actual new member impl rows under publication lock; cleanup/needs_drop/promotion see later additions without a fresh namespace census. This corrects stale published facts ONLY: initial source-level Drop absence remains incomplete for non-local impls inside unentered functions. Removed the proposed NoDropProof/atomic revision cache before integration. Runtime template eligibility now declines owned nominal graphs regardless of published absence, so this old completeness defect cannot authorize new template replication.",
+  "controls": [
+    "runtime::drop_facts::tests::published_drop_facts_track_related_and_unrelated_additions",
+    "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication"
+  ],
+  "corrections": [
+    "Independent review found overbroad textual replacement touched user_copy_types owning-read branch; restored exact prior !types.contains test. Only Drop consumers use live DropFacts; no Copy semantic change.",
+    "Independent initial absence witness found after published-row fix; removed new false NoDropProof authority entirely and held all owned nominal graph caching. No runtime or full E007 claim.",
+    "V29 actual compile failure E0382: after retaining non-Copy template handle in AggregateCopy, read copy.template.is_some() for destination kind, not moved local. No runtime evidence for failed build."
+  ],
+  "application_boundary": "One common enter_initializer actual selected callee signature guard before empty-owner-args source call. Nonempty generic signature explicitly unsupported until actual source application packet is transported; no result is published. Prevents generic/default scalar cache aliasing across value and pattern demands without a path-specific fallback. Not acceptance or permitted inapplicability."
+}

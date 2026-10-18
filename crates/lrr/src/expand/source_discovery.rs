@@ -3845,7 +3845,10 @@ impl SourceDiscovery {
                         call.item_input,
                         std::sync::Arc::new(catalog),
                     )?;
-                } else {
+                } else if pending_item_boundary.is_none() {
+                    // A pending no-catalog receipt owns completion after its
+                    // actual declaration jobs finish. Known catalogs above
+                    // still publish immediately.
                     provider.complete_without_macro_bindings(call.item_input)?;
                     if let Some(boundary) = empty_boundary {
                         self.completed_empty_boundaries.insert(identity, boundary);

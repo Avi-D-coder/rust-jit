@@ -26,9 +26,8 @@ impl RunMachine {
                 Arc::new(members)
             }
         };
-        if let Some(types) = members.drop_types() {
-            self.store.install_drop_inventory(types);
-        }
+        self.store
+            .install_drop_inventory(members.runtime_drop_inventory());
         if let Some(types) = members.copy_types() {
             self.store.install_copy_inventory(types);
         }

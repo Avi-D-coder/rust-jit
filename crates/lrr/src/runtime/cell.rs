@@ -258,7 +258,7 @@ pub struct GuestStore {
     /// Nominal declarations with a user `Drop` impl, once the run's complete
     /// impl inventory is known. Absent means every nominal cleanup still
     /// demands its witness.
-    user_drop_types: Option<std::collections::BTreeSet<crate::core::digest::Digest>>,
+    user_drop_types: Option<std::sync::Arc<super::drop_facts::DropFacts>>,
     /// Nominal declarations with a `Copy` impl, once the run's complete impl
     /// inventory is known. A nominal value outside this set is moved by an
     /// owning read; absent means every nominal owning read is still refused.
@@ -318,12 +318,14 @@ impl GuestStore {
         })
     }
     pub(crate) fn drop_inventory_installed(&self) -> bool {
-        self.user_drop_types.is_some()
+        self.user_drop_types
+            .as_ref()
+            .is_some_and(|facts| facts.known())
     }
-    /// Install the run's complete set of nominal types that implement `Drop`.
+    /// Retain the source world's live nominal Drop facts.
     pub(crate) fn install_drop_inventory(
         &mut self,
-        user_drop_types: std::collections::BTreeSet<crate::core::digest::Digest>,
+        user_drop_types: std::sync::Arc<super::drop_facts::DropFacts>,
     ) {
         self.user_drop_types = Some(user_drop_types);
     }
@@ -2503,7 +2505,7 @@ impl GuestStore {
                     if self
                         .user_drop_types
                         .as_ref()
-                        .is_some_and(|types| !types.contains(identity)) =>
+                        .is_some_and(|facts| facts.definitely_no_drop(identity)) =>
                 {
                     Ok(CleanupInventory::Fields)
                 }

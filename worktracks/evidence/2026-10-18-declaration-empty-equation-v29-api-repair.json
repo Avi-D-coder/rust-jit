@@ -1,0 +1,12 @@
+{
+  "kind": "V29 to successor mechanical compile repair",
+  "source": {
+    "path": "crates/lrr/src/frontend/source_types.rs",
+    "sha256": "f75496d6302b9bc9d5d89bffa58871078cb1c2eb137b2bc766bed7deefa70beb"
+  },
+  "old_sha256": "2be2864afaaab56e3a80ecbca0ebda9268a753364ff3d23a68894a1e2ee6213b",
+  "change": "one local HasGenericArgs trait import in actual_bound_equations",
+  "semantics": "unchanged; existing AssocTypeArg generic_arg_list receiver requires existing pinned API trait in scope",
+  "validation": "no Cargo/guest execution by implementation owner; next sole-validator candidate pending",
+  "all8": "Same corrected two-leaf review conclusions remain; imported API trait adds no evaluator, source preparation, namespace work, body cloning or authority."
+}

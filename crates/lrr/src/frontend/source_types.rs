@@ -1213,6 +1213,116 @@ fn projection_trait_key(
     }
 }
 
+fn actual_associated_owner(owner: &ra_ap_syntax::SyntaxNode) -> Option<ra_ap_syntax::SyntaxNode> {
+    use ra_ap_syntax::{AstNode, ast};
+    owner
+        .parent()
+        .and_then(|items| items.parent())
+        .filter(|node| ast::Impl::can_cast(node.kind()) || ast::Trait::can_cast(node.kind()))
+}
+
+/// An empty equation result needs the entire source binder envelope. Retained
+/// fragments without their actual owner remain incomplete, never empty proof.
+fn actual_bound_owner_complete(
+    declaration: &WrittenTypeDeclaration<'_>,
+    owner: &ra_ap_syntax::SyntaxNode,
+) -> bool {
+    use crate::syntax::signatures::GenericKind;
+    use ra_ap_syntax::{
+        AstNode,
+        ast::{self, HasName},
+    };
+    if declaration.function.is_none() || !ast::Fn::can_cast(owner.kind()) {
+        return false;
+    }
+    let associated = actual_associated_owner(owner);
+    match &associated {
+        Some(associated) => {
+            let container = associated
+                .children()
+                .find(|node| matches!(node.kind(), ra_ap_syntax::SyntaxKind::ASSOC_ITEM_LIST));
+            if declaration.scope.owner.is_none()
+                || crate::syntax::ast_adapter::tokens(
+                    associated,
+                    container.as_ref().map(|node| node.text_range()),
+                ) != declaration.header.context
+            {
+                return false;
+            }
+        }
+        None => {
+            let lexical = owner.ancestors().skip(1).find_map(ast::Fn::cast);
+            match lexical {
+                Some(lexical) => {
+                    // A local item does not inherit the outer function's
+                    // binder. Its real enclosing header still must match.
+                    if declaration.scope.owner.is_none()
+                        || crate::syntax::ast_adapter::tokens(
+                            lexical.syntax(),
+                            lexical.body().map(|body| body.syntax().text_range()),
+                        ) != declaration.header.context
+                    {
+                        return false;
+                    }
+                }
+                None if declaration.scope.owner.is_some()
+                    || !declaration.header.context.is_empty() =>
+                {
+                    return false;
+                }
+                None => {}
+            }
+        }
+    }
+    let mut actual = Vec::new();
+    for scope in std::iter::once(owner.clone()).chain(associated.clone()) {
+        if let Some(list) = scope.children().find_map(ast::GenericParamList::cast) {
+            for parameter in list.generic_params() {
+                let (kind, name) = match parameter {
+                    ast::GenericParam::TypeParam(parameter) => (
+                        GenericKind::Type,
+                        parameter.name().map(|name| name.text().to_string()),
+                    ),
+                    ast::GenericParam::LifetimeParam(parameter) => (
+                        GenericKind::Lifetime,
+                        parameter
+                            .lifetime()
+                            .map(|name| name.syntax().text().to_string()),
+                    ),
+                    ast::GenericParam::ConstParam(parameter) => (
+                        GenericKind::Const,
+                        parameter.name().map(|name| name.text().to_string()),
+                    ),
+                };
+                let Some(name) = name.and_then(|name| {
+                    if kind == GenericKind::Lifetime {
+                        crate::syntax::signatures::canonical_lifetime(&name)
+                    } else {
+                        crate::syntax::ast_adapter::semantic_name(&name)
+                    }
+                }) else {
+                    return false;
+                };
+                actual.push((kind, name));
+            }
+        }
+    }
+    if associated
+        .as_ref()
+        .is_some_and(|node| ast::Trait::can_cast(node.kind()))
+    {
+        actual.push((GenericKind::Type, "Self".into()));
+    }
+    actual.len() == declaration.generics.len()
+        && actual.iter().zip(declaration.generics).enumerate().all(
+            |(ordinal, ((kind, name), parameter))| {
+                usize::try_from(parameter.ordinal).ok() == Some(ordinal)
+                    && *kind == parameter.kind
+                    && name == &parameter.name
+            },
+        )
+}
+
 /// Actual bound occurrences from this declaration and its enclosing item owners.
 /// No Type arguments, bodies or unrelated bounds are resolved by enumeration.
 pub(super) fn actual_declaration_bounds(
@@ -1231,16 +1341,28 @@ pub(super) fn actual_declaration_bounds(
     let mut bounds = Vec::new();
     // Signatures inherit only their immediate impl/trait owner's generics.
     // A nested item does not acquire an enclosing function's generic binder.
-    let associated_owner = owner
-        .parent()
-        .and_then(|items| items.parent())
-        .filter(|node| {
-            matches!(
-                node.kind(),
-                ra_ap_syntax::SyntaxKind::IMPL | ra_ap_syntax::SyntaxKind::TRAIT
-            )
-        });
+    let associated_owner = actual_associated_owner(owner);
     for scope in std::iter::once(owner.clone()).chain(associated_owner) {
+        if let Some(trait_owner) = ast::Trait::cast(scope.clone()) {
+            let subject = declaration
+                .generics
+                .iter()
+                .rev()
+                .find(|parameter| parameter.name == "Self")
+                .map(|parameter| {
+                    TyTerm::Param(ParamKey {
+                        definition: declaration.definition,
+                        ordinal: parameter.ordinal,
+                    })
+                });
+            for bound in trait_owner
+                .type_bound_list()
+                .into_iter()
+                .flat_map(|list| list.bounds())
+            {
+                bounds.push((subject.clone(), None, bound));
+            }
+        }
         if let Some(list) = scope.children().find_map(ast::GenericParamList::cast) {
             for parameter in list.generic_params().filter_map(|p| match p {
                 ast::GenericParam::TypeParam(p) => Some(p),
@@ -1249,11 +1371,10 @@ pub(super) fn actual_declaration_bounds(
                 let Some(name) = parameter.name() else {
                     continue;
                 };
-                let Some(selected) = declaration
-                    .generics
-                    .iter()
-                    .rev()
-                    .find(|p| p.name == name.text())
+                let Some(name) = crate::syntax::ast_adapter::semantic_name(name.text()) else {
+                    continue;
+                };
+                let Some(selected) = declaration.generics.iter().rev().find(|p| p.name == name)
                 else {
                     continue;
                 };
@@ -1288,31 +1409,35 @@ pub(super) fn actual_declaration_bounds(
     bounds
 }
 
-/// Source equations from actual declaration bounds. Only RHS occurrences naming
-/// a requested unbound parameter are demanded; unrelated bounds stay cold.
-pub(super) fn actual_bound_equations(
-    db: &mut Database,
-    graph: &NameNamespaces,
-    sources: &[&PreparedSourceView],
+/// Candidate syntax from the same actual declaration-bound collector used by
+/// equation resolution. Empty syntax needs no executable callee environment.
+pub(super) struct ActualBoundEquationCandidate {
+    subject: Option<TyTerm>,
+    written_subject: Option<ra_ap_syntax::ast::Type>,
+    path: ra_ap_syntax::ast::Path,
+    relevant: Vec<ra_ap_syntax::ast::AssocTypeArg>,
+}
+pub(super) struct ActualBoundEquationCandidates {
+    rows: Vec<ActualBoundEquationCandidate>,
+    owner_complete: bool,
+}
+impl ActualBoundEquationCandidates {
+    pub(super) fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+    pub(super) fn owner_complete(&self) -> bool {
+        self.owner_complete
+    }
+}
+pub(super) fn actual_bound_equation_candidates(
     declaration: &WrittenTypeDeclaration<'_>,
     owner: &ra_ap_syntax::SyntaxNode,
     needed: &[u32],
-) -> QueryPoll<Option<Vec<(TyTerm, TyTerm)>>> {
-    use crate::traits::term::{ProjectionKey, TraitRef};
+) -> ActualBoundEquationCandidates {
     use ra_ap_syntax::{
         AstNode,
         ast::{self, HasGenericArgs},
     };
-    macro_rules! some {
-        ($v:expr) => {
-            match $v {
-                QueryPoll::Ready(Ok(Some(v))) => v,
-                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-                QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
-                QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
-            }
-        };
-    }
     let names: Vec<_> = declaration
         .generics
         .iter()
@@ -1320,7 +1445,7 @@ pub(super) fn actual_bound_equations(
         .map(|parameter| parameter.name.as_str())
         .collect();
     let bounds = actual_declaration_bounds(declaration, owner);
-    let mut equations = Vec::new();
+    let mut candidates = Vec::new();
     for (subject, written_subject, bound) in bounds {
         if bound.question_mark_token().is_some() || bound.lifetime().is_some() {
             continue;
@@ -1345,13 +1470,62 @@ pub(super) fn actual_bound_equations(
             })
             .filter(|argument| {
                 argument.ty().is_some_and(|ty| {
+                    // A type macro's token tree may contain the requested
+                    // parameter without any NameRef nodes. Keep the actual
+                    // argument demanded so unresolved expansion stays pending.
                     ty.syntax()
                         .descendants()
-                        .filter_map(ast::NameRef::cast)
-                        .any(|name| names.iter().any(|needed| name.text() == *needed))
+                        .any(|node| ast::MacroType::can_cast(node.kind()))
+                        || ty
+                            .syntax()
+                            .descendants()
+                            .filter_map(ast::NameRef::cast)
+                            .any(|name| {
+                                crate::syntax::ast_adapter::semantic_name(name.text())
+                                    .is_some_and(|name| names.iter().any(|needed| name == *needed))
+                            })
                 })
             })
             .collect();
+        if !relevant.is_empty() {
+            candidates.push(ActualBoundEquationCandidate {
+                subject,
+                written_subject,
+                path,
+                relevant,
+            });
+        }
+    }
+    ActualBoundEquationCandidates {
+        rows: candidates,
+        owner_complete: actual_bound_owner_complete(declaration, owner),
+    }
+}
+
+/// Resolve only the retained actual candidate occurrences. The NameRef test is
+/// conservative; resolved ParamKey identities below determine real relevance.
+pub(super) fn actual_bound_equations(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>,
+    candidates: ActualBoundEquationCandidates,
+    needed: &[u32],
+) -> QueryPoll<Option<Vec<(TyTerm, TyTerm)>>> {
+    use crate::traits::term::{ProjectionKey, TraitRef};
+    use ra_ap_syntax::ast::HasGenericArgs;
+    macro_rules! some {
+        ($v:expr) => {
+            match $v {
+                QueryPoll::Ready(Ok(Some(v))) => v,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+                QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+            }
+        };
+    }
+    let mut equations = Vec::new();
+    for candidate in candidates.rows {
         let needed_keys: Vec<_> = needed
             .iter()
             .map(|ordinal| crate::traits::term::ParamKey {
@@ -1360,7 +1534,7 @@ pub(super) fn actual_bound_equations(
             })
             .collect();
         let mut demanded = Vec::new();
-        for argument in relevant {
+        for argument in candidate.relevant {
             let Some(rhs) = argument.ty() else {
                 continue;
             };
@@ -1372,16 +1546,22 @@ pub(super) fn actual_bound_equations(
         if demanded.is_empty() {
             continue;
         }
-        let subject = match subject {
+        let subject = match candidate.subject {
             Some(subject) => subject,
             None => {
-                let Some(ty) = written_subject else {
+                let Some(ty) = candidate.written_subject else {
                     return QueryPoll::Ready(Ok(None));
                 };
                 some!(resolve_actual_type(db, graph, sources, declaration, &ty))
             }
         };
-        let (trait_key, args) = some!(projection_trait(db, graph, sources, declaration, &path));
+        let (trait_key, args) = some!(projection_trait(
+            db,
+            graph,
+            sources,
+            declaration,
+            &candidate.path
+        ));
         if trait_key == crate::core::digest::Digest([0; 32]) {
             return QueryPoll::Ready(Ok(None));
         }
