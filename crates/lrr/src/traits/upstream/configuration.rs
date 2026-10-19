@@ -116,6 +116,9 @@ impl PreparedSolverConfiguration {
             // Pinned rustc_session/options.rs:2401,2832; current standalone
             // catalogs have no -Z flag input. Cargo/override profiles remain work.
             assumptions_on_binders: false, renormalize_rigid_aliases: false,
+            // Pinned infer/mod.rs:611 and rustc_session/options.rs:2473.
+            // Current standalone profile admits no -Z override input.
+            enable_next_solver_overflow_fcw: true, disable_trait_solver_fast_paths: false,
         };
         prepared::with_provider(&settings, self, run)
     }

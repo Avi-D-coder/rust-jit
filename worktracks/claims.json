@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V350-V352 HELD M020 origin-aware obligation state. Actual current compiler ProvisionalHiddenType/table replaces old spanless OpaqueHiddenType production record/table and updates the same undo payload; real owner register/clone/drain/count/delta/duplicate/reset callbacks compile. No opaque key/definition is fabricated; only source Type/Span record and legitimate fresh empty owner state executed, nonempty source opaque paths held. Actual TypeOutlivesConstraint retains incoming source Span, global/no-op vs non-global registration and existing undo; diagnostic cause variants explicitly project to span, no checker. Exact compiler variable wake predicate retained across all4stores. Originals verify8sharedcrates/174files/2540862bytes,0original edits/5existing build projections. V351 builds and2untouched controls pass; supplemental stale-ID oracle fails on invalid removed handle. Production unchanged in V352; final builds and1/1affected source control pass after correcting oracle to valid ID reuse, exact guards retained for each cohort.140Types/136TraitRefs/48origin-edition worlds and prior20generic worlds/48rows/36consts/24early regions observed. Not a single all-three final-source run. V350mechanical compile failure and V351oracle failure preserved. Full source opaque identity/record traits/binders/facts/InferCtxtLike/generalizer/relations/canonical/delegate/root/member/currentness/VM migration and legacy removal held. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance/diagnostic acceptance.",
+      "scope": "V353-V356 HELD M020 complete upstream inference-client component. Full pinned compiler InferCtxtLike implementation/lower-universe folder and entire generalize.rs now use existing actual Cx/shared SolverRelating and one combined inference owner. Exact identifier/import/type/span/argument-order adaptations registered; no custom solver/relation/generalizer or fake callbacks/facts/opaque IDs. Compiler standalone defaults transported through retained source settings; Cargo overrides and original per-variable diagnostic-origin fidelity remain gaps. V353/V354 mechanical compile failures and V355 host-control compile errors preserved. V356 macOS1.99.0 library+CLI builds and3/3source controls pass with exact source/HEAD/test/CLI guards:140Types/136TraitRefs/48origin-edition worlds, universe lowering across type/const/region, snapshot forwarding/rollback, genuine occurs/unnameable-placeholder failures and reference subtyping via shared relation; prior20generic worlds/48rows/36consts/24early regions and cleanup controls pass. Vendor audit8crates/175files/2573921bytes,0original Rust edits/5existing build projections. Unchanged multidispatch1 edition2015 fails default before observation on missing std import; with existing staged facade flag enters31VMdispatches/1call then fails ambiguous get impls. Neither is a pass. Genuine delegate/canonical instantiation/full relevant source facts/ParamEnv/member/dictionary/currentness/VM join, nonempty source opaques/function binders/nominal variances and obsolete consumer removal remain incomplete. Zero new distinct stock runtime gains or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance/diagnostic closure.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1870,11 +1870,16 @@
         "worktracks/evidence/2026-10-19-v350-v352-upstream-obligation-state.json",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state-controls.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state-final-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state-final-controls.json",
+        "tools/upstream_infer_client.py",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-infer-client.md",
+        "worktracks/evidence/2026-10-19-v353-v356-upstream-infer-client.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-infer-client-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-infer-client-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T21:23:24.617637+00:00",
+      "updated_at": "2026-10-19T21:39:32.308442+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1966,5 +1971,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-19T20:01:08.573867+00:00"
+  "updated_at": "2026-10-19T21:39:32.308442+00:00"
 }

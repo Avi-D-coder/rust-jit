@@ -1,5 +1,5 @@
 //! Source-bound owner for actual upstream variable/term operations.
-//! Full InferCtxtLike/delegate readiness is intentionally not claimed here.
+//! Actual inference-client ownership; full delegate/root readiness is separate.
 use super::{DbInterner, InferenceStorage};
 use crate::traits::upstream::{model::{ErrorToken, GenericParameter, Span, Arg, Args}, identity::DefinitionId};
 use rustc_type_ir::{self as ty, Interner, inherent::*};
@@ -10,6 +10,7 @@ pub(crate) struct InferenceContext<'cx> {
     storage: InferenceStorage<'cx>,
     pub(super) typing_mode: ty::TypingMode<DbInterner<'cx>>,
     pub(super) tainted_by_errors: Cell<Option<ErrorToken>>,
+    pub(super) enable_next_solver_overflow_fcw: Cell<bool>,
     // Same ownership as pinned InferCtxt; upstream does not snapshot this map.
     pub(super) placeholder_assumptions_for_next_solver: RefCell<ty::data_structures::IndexMap<
         ty::UniverseIndex, ty::region_constraint::Assumptions<DbInterner<'cx>>>>,
@@ -17,6 +18,7 @@ pub(crate) struct InferenceContext<'cx> {
 impl<'cx> InferenceContext<'cx> {
     pub(crate) fn new(interner: DbInterner<'cx>, typing_mode: ty::TypingMode<DbInterner<'cx>>) -> Self {
         Self { interner, storage: InferenceStorage::new(), typing_mode, tainted_by_errors: Cell::new(None),
+            enable_next_solver_overflow_fcw: Cell::new(interner.services().enable_next_solver_overflow_fcw()),
             placeholder_assumptions_for_next_solver: RefCell::default() }
     }
     /// Representation join: the actual table already retains parent-first rows.

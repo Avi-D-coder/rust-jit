@@ -243,3 +243,7 @@ mod variables;
 mod solver_region_constraints_tests;
 
 mod obligation_state;
+
+mod client;
+mod client_operations;
+mod generalize;

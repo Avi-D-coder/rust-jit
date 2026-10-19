@@ -140,6 +140,8 @@ pub(super) struct Settings<'cx> {
     pub(super) features: FeatureSet<'cx>,
     pub(super) assumptions_on_binders: bool,
     pub(super) renormalize_rigid_aliases: bool,
+    pub(super) enable_next_solver_overflow_fcw: bool,
+    pub(super) disable_trait_solver_fast_paths: bool,
 }
 
 /// Required actual pinned-client functions. These cannot be loaded from guest
@@ -442,6 +444,8 @@ pub(super) fn with_provider<R>(
     Ok(run(view.context(), provider))
 }
 impl<'cx> PreparedProvider<'cx> {
+    pub(super) fn enable_next_solver_overflow_fcw(self) -> bool { self.settings.enable_next_solver_overflow_fcw }
+    pub(super) fn disable_trait_solver_fast_paths(self) -> bool { self.settings.disable_trait_solver_fast_paths }
     pub(super) fn source_world(self) -> Digest { self.world }
     pub(super) fn source_parameter(self, key: ParamKey, kind: BoundKind) -> Option<SourceParameter> {
         self.settings.construction_generics?.parameter(key, kind)

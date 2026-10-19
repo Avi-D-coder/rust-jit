@@ -13,6 +13,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_actual_leak_checker(cx, span);
     check_obligation_state(cx, actual, span);
     check_variable_resolution(cx, actual, span);
+    check_inference_client(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
     let (a, b, integer, float, constant, first_region, second_region) = {
@@ -635,4 +636,83 @@ fn check_obligation_state<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span)
     assert_eq!(replacement, removed);
     assert!(!context.ty_or_const_infer_var_changed(TyOrConstInferVar::Ty(replacement)));
     assert!(cx.services().ready(cx).is_err(), "data state grants no full facts, source opaques or trait root");
+}
+
+// Source-bound controls for actual shared trait dispatch and compiler generalization.
+// No custom TypeRelation/provider: SolverRelating supplies the real relation.
+fn check_inference_client<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
+    use super::InferenceContext;
+    use crate::traits::upstream::model::{ParamEnv, List};
+    use ty::{InferCtxtLike as Client, inherent::Ty as _};
+    use ty::relate::solver_relating::RelateExt;
+    let context = InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
+    let root = ty::UniverseIndex::ROOT;
+    assert_eq!(Client::cx(&context), cx);
+    assert!(Client::next_trait_solver(&context));
+    assert!(Client::enable_next_solver_overflow_fcw(&context));
+    assert!(!Client::disable_trait_solver_fast_paths(&context));
+    assert!(matches!(Client::typing_mode_raw(&context), ty::TypingMode::PostAnalysis));
+    assert_eq!(Client::universe(&context), root);
+    let target = context.next_ty_vid(span);
+    let snapshot = context.start_snapshot();
+    let young_universe = Client::create_next_universe(&context);
+    let young_ty = context.next_ty_vid(span);
+    let young_const = context.next_const_vid(span);
+    let young_region = context.next_region_vid(span);
+    assert_eq!(Client::universe_of_ty(&context, young_ty), Some(young_universe));
+    assert_eq!(Client::universe_of_const(&context, young_const), Some(young_universe));
+    assert_eq!(Client::universe_of_region(&context, young_region), Some(young_universe));
+    let array = Ty::new_array_with_const_len(cx, Ty::new_var(cx, young_ty), Const::new_var(cx, young_const));
+    let reference = Ty::new_ref(cx, Region::new_var(cx, young_region), array, ty::Mutability::Not);
+    Client::instantiate_ty_var_raw(&context, target, reference);
+    // The actual compiler folder pulls every referenced inference family down.
+    assert_eq!(Client::universe_of_ty(&context, young_ty), Some(root));
+    assert_eq!(Client::universe_of_const(&context, young_const), Some(root));
+    assert_eq!(Client::universe_of_region(&context, young_region), Some(root));
+    assert_eq!(Client::universe_of_ty(&context, target), None);
+    assert!(Client::shallow_resolve_ty_var(&context, target).has_infer());
+    context.rollback_to(snapshot);
+    assert_eq!(Client::universe(&context), root);
+    assert_eq!(Client::universe_of_ty(&context, target), Some(root));
+    // Trait wrappers call the existing combined snapshot owner, rather than
+    // recursing through the same-named trait methods.
+    let before = context.num_ty_vars();
+    Client::probe(&context, || { Client::next_ty_infer(&context); });
+    assert_eq!(context.num_ty_vars(), before);
+    let failed: Result<(), ()> = Client::commit_if_ok(&context, || {
+        Client::instantiate_ty_var_raw(&context, target, actual); Err(())
+    });
+    assert_eq!(failed, Err(()));
+    assert_eq!(Client::universe_of_ty(&context, target), Some(root));
+    Client::commit_if_ok::<_, ()>(&context, || {
+        Client::instantiate_ty_var_raw(&context, target, actual); Ok(())
+    }).unwrap();
+    assert_eq!(Client::shallow_resolve_ty_var(&context, target), actual);
+
+    // Empty caller bounds are explicit for these structural relations. This
+    // does not claim to construct the witness's trait-goal ParamEnv or root.
+    let env = ParamEnv(cx.clauses(List::default()));
+    let variable = context.next_ty_var(span);
+    assert!(context.relate(env, variable, ty::Invariant, actual, span).unwrap().is_empty());
+    assert_eq!(Client::shallow_resolve(&context, variable), actual);
+    let cyclic = context.next_ty_var(span);
+    let pointer = Ty::new_ptr(cx, cyclic, ty::Mutability::Not);
+    assert!(matches!(context.relate(env, cyclic, ty::Invariant, pointer, span), Err(ty::error::TypeError::CyclicTy(_))));
+    assert_eq!(Client::shallow_resolve(&context, cyclic), cyclic);
+    // An unnameable placeholder is a real generalization failure, not a fake
+    // type identity or an excuse to mark a trait goal solved.
+    let older = context.next_ty_var(span);
+    let younger = Client::create_next_universe(&context);
+    let placeholder = Ty::new_placeholder(cx, ty::PlaceholderType::new_anon(younger, ty::BoundVar::from_u32(0)));
+    assert!(context.relate(env, older, ty::Invariant, placeholder, span).is_err());
+    assert_eq!(Client::shallow_resolve(&context, older), older);
+    // Shared subtyping requests a fresh region and records actual outlives data.
+    let subtype = context.next_ty_var(span);
+    let reference = Ty::new_ref(cx, Region::new_static(cx), actual, ty::Mutability::Not);
+    assert!(context.relate(env, subtype, ty::Covariant, reference, span).unwrap().is_empty());
+    assert!(matches!(Client::shallow_resolve(&context, subtype).kind(), ty::Ref(..)));
+    assert!(!context.inner.borrow().region_constraint_storage.as_ref().unwrap().data.constraints.is_empty());
+    let entries = Client::opaque_types_storage_num_entries(&context);
+    assert!(Client::clone_opaque_types_added_since(&context, entries).is_empty());
+    assert!(cx.services().ready(cx).is_err(), "a complete inference client grants no full source facts or solver root");
 }
