@@ -266,7 +266,17 @@ impl RunMachine {
                 let result = self.frame.body.nodes()[plan.node().0 as usize]
                     .value
                     .ok_or_else(|| call_fault("structural constructor result slot absent"))?;
-                let ty = match self.frame.hint(result)? {
+                // A retained written Type carries actual nominal/schema
+                // receipts; converting it to a bare term loses that evidence.
+                // Materialize it through the same path as ordinary annotations.
+                let hint = match self.frame.hint(result)? {
+                    Some(ty) => Some(ty),
+                    None => match stated {
+                        Some(written) => written.materialize(&mut self.store)?,
+                        None => None,
+                    },
+                };
+                let ty = match hint {
                     Some(ty) => ty,
                     None if matches!(plan.kind(), ConstructorKind::Tuple(fields) if fields.is_empty()) => {
                         crate::runtime::shape::TypeId(1)

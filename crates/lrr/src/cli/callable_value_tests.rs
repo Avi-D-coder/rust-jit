@@ -345,7 +345,7 @@ fn completed_with_standard_facade(text: &str, edition: u16) -> crate::engine::ru
             panic!("callee autoderef panicked: {:?}", report.panic)
         }
         Ok(_) => panic!("callee autoderef returned another outcome"),
-        Err(error) => panic!("callee autoderef faulted: {error:?}"),
+        Err(error) => panic!("standard facade edition {edition} faulted: {error:?}\n{text}"),
     }
 }
 
@@ -563,6 +563,35 @@ fn main() {
         for text in [SOURCE, &emitted, &wrapped] {
             let report = completed_with_standard_facade(text, edition);
             assert_eq!(report.output.stdout, "bytes\nbytes\nbytes\nbytes\n");
+        }
+    }
+}
+
+#[test]
+fn nominal_constant_patterns_keep_source_context_and_exact_once_effects_all_origins() {
+    // LRR route/effect control outside the unchanged primary rustc fixture.
+    const SOURCE: &str = r#"
+#[derive(PartialEq, Debug)]
+struct B(i32);
+const OUTER: [B; 0] = [];
+fn scrutinee() -> [B; 0] { println!("scrutinee"); [] }
+fn cold() -> bool { ().unsupported_method_xyz() }
+fn main() {
+    const LOCAL: [B; 0] = [];
+    assert!(match [] { LOCAL => { println!("matched"); true } });
+    assert!(match scrutinee() { OUTER => { println!("matched"); true } });
+    assert!(if let LOCAL = [] { true } else { false });
+    let OUTER = [] else { panic!("unmatched") };
+    while let LOCAL = [] { break; }
+    assert!(if false { cold() } else { true });
+}
+"#;
+    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {SOURCE} }}");
+    for edition in [2015, 2018, 2021, 2024] {
+        for text in [SOURCE, &emitted, &wrapped] {
+            let report = completed_with_standard_facade(text, edition);
+            assert_eq!(report.output.stdout, "matched\nscrutinee\nmatched\n");
         }
     }
 }

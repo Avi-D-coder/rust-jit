@@ -4368,7 +4368,8 @@
         "artifacts/macos-first/t040-component-acceptance-v1.json",
         "artifacts/macos-first/t040-ledger-transition-test-v1/independent-collection-v2.json",
         "artifacts/macos-first/t040-ledger-transition-test-v1/collection-terminal-v2.json",
-        "worktracks/evidence/2026-10-18-interpreter-v148-v150-concat-bytes.json"
+        "worktracks/evidence/2026-10-18-interpreter-v148-v150-concat-bytes.json",
+        "worktracks/evidence/2026-10-18-interpreter-v151-v154-nominal-constant-context.json"
       ],
       "completion_scope": "component",
       "integration_dependencies": [
@@ -4432,7 +4433,7 @@
           "evidence_paths": []
         }
       ],
-      "latest_component_scope": "V150 solo held M011/M007/T040 byte compiler preparation and ordinary empty-array context: one measured new unchanged upstream runtime gain, concat-bytes, completes all4editions (1248VMoperations/49source calls/cleanup). Existing eager operand/record path and pinned compiler hook emit real byte-string syntax; ordinary lexical byte-array Types and shared projection solver supply element context, and structural preflight consumes its retained own-result hint. Both builds,17/17focused bodies and4/5selected unchanged stock runtime contracts pass; the non-Eq nominal empty-array pattern remains failed. Exact vendor reconstruction/5proof checks pass. No refreshed suite total or full architecture/milestone/interpreter/JIT closure."
+      "latest_component_scope": "V154 solo held T040 certified nominal composite constructor context: one measured new unchanged runtime gain, match-empty-array-allowed-without-eq-issue-62336, completes all4editions (17VMoperations/1initializer/cleanup). Existing exact WrittenType materialization preserves selected nominal/schema evidence; no pattern/type/evaluator special case. Both builds and5/5selected stock runtime contracts pass.17distinct focused bodies pass and1enabled generated-origin body fails before VM (emitted derived nominal producer closure); remaining origin worlds unexecuted. Integration and full T040/T051/M018/M010/M014/architecture/interpreter/JIT gates held; no refreshed suite total."
     },
     {
       "id": "T041",
@@ -5760,7 +5761,11 @@
         "worktracks/evidence/2026-10-14-scalar-range-runtime.json"
       ],
       "release_complete": false,
-      "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance."
+      "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
+      "latest_component_scope": "V154 solo held T040 certified nominal composite constructor context: one measured new unchanged runtime gain, match-empty-array-allowed-without-eq-issue-62336, completes all4editions (17VMoperations/1initializer/cleanup). Existing exact WrittenType materialization preserves selected nominal/schema evidence; no pattern/type/evaluator special case. Both builds and5/5selected stock runtime contracts pass.17distinct focused bodies pass and1enabled generated-origin body fails before VM (emitted derived nominal producer closure); remaining origin worlds unexecuted. Integration and full T040/T051/M018/M010/M014/architecture/interpreter/JIT gates held; no refreshed suite total.",
+      "artifacts": [
+        "worktracks/evidence/2026-10-18-interpreter-v151-v154-nominal-constant-context.json"
+      ]
     },
     {
       "id": "T052",
@@ -19981,7 +19986,10 @@
           "scope": "Actual live Type/prelude/alias/query consumers; unconsumed future generated constant/full-role models retained as prototypes. Shared Type/Value proof merge and real qualified consumer Value/module export replay remain required. No task or runtime acceptance."
         }
       ],
-      "latest_component_scope": "V133 solo held M007/M018/T062 common hygienic closure capture repair: raw macro-token capture scan and legacy capture-source matcher removed. Capture discovery and ordinary reads share memoized LexicalValue/source-prefix identities and relevant guards; global declaration completion resumes separately, and nested items remain opaque. Both final builds, 5 focused test bodies (12 route/origin/edition executions plus 4 Value metadata/currentness controls), 3 selected unchanged stock runtime contracts and nested-const cold control pass. V132 broader stock selection was 14/15; issue26322 still fails separately. No measured new distinct stock gain or refreshed suite total; full capture modes, const-generic/async/inline-const/generator joins, invalidation/suspension matrix, milestone/interpreter/JIT gates remain open."
+      "latest_component_scope": "V154 solo held T040 certified nominal composite constructor context: one measured new unchanged runtime gain, match-empty-array-allowed-without-eq-issue-62336, completes all4editions (17VMoperations/1initializer/cleanup). Existing exact WrittenType materialization preserves selected nominal/schema evidence; no pattern/type/evaluator special case. Both builds and5/5selected stock runtime contracts pass.17distinct focused bodies pass and1enabled generated-origin body fails before VM (emitted derived nominal producer closure); remaining origin worlds unexecuted. Integration and full T040/T051/M018/M010/M014/architecture/interpreter/JIT gates held; no refreshed suite total.",
+      "artifacts": [
+        "worktracks/evidence/2026-10-18-interpreter-v151-v154-nominal-constant-context.json"
+      ]
     },
     {
       "id": "M019",

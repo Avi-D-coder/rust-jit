@@ -1855,3 +1855,40 @@ fn decided_generic_arguments_are_stated_parameter_wise() {
         }
     }
 }
+
+#[test]
+fn constant_pattern_header_constrains_empty_array_without_initializer_execution() {
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/rfcs/rfc-1445-restrict-constants-in-patterns/match-empty-array-allowed-without-eq-issue-62336.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, local) = world(ORIGINAL, edition, false);
+        let body = local.context().source().index().body().clone();
+        let graph = ready(db.fetch(&SyntaxProvider, QueryKey::SourceConstraints(body.clone())));
+        let QueryValue::SourceConstraints(graph) = graph.value.as_ref() else { panic!() };
+        let arrays: Vec<_> = graph.facts().iter().enumerate()
+            .filter(|(_, fact)| fact.kind() == FactKind::Array && fact.operands().is_empty())
+            .map(|(node, _)| crate::ir::pc::PcKey { body: body.clone(), node: u32::try_from(node).unwrap(), phase: 0 })
+            .collect();
+        assert_eq!(arrays.len(), 1, "only main's scrutinee, not the const initializer");
+        let start = db.trace.events.len();
+        let first = ready(db.fetch(&SyntaxProvider, QueryKey::BindingConstraints(arrays[0].clone())));
+        let QueryValue::BindingConstraints(answer) = first.value.as_ref() else { panic!() };
+        assert_eq!(answer.state(), BindingConstraintState::ResolvedType, "{edition}: {answer:?}");
+        let Some(crate::ir::written_type::WrittenType::Array(element, 0)) = answer.written() else {
+            panic!("the actual zero-length array Type is absent");
+        };
+        let environment = local.environment().unwrap().macros().source_environment();
+        let nominal = environment.sources().iter()
+            .flat_map(|source| source.outline().declaration_rows())
+            .find(|item| item.def_key.item_kind == ItemKind::Struct && item.def_key.declared_name == "B")
+            .unwrap().def_key.fingerprint();
+        assert!(matches!(element.source(), Some(TyTerm::Nominal(identity, arguments))
+            if identity == nominal && arguments.is_empty()));
+        assert!(db.memo(&QueryKey::TypeSchema(nominal)).is_some(),
+            "the written nominal must retain the actual selected schema dependency");
+        let second = ready(db.fetch(&SyntaxProvider, QueryKey::BindingConstraints(arrays[0].clone())));
+        assert!(Arc::ptr_eq(&first.value, &second.value));
+        assert!(!db.trace.events[start..].iter().any(|event| matches!(event.key, QueryKey::Thunk(_))));
+    }
+}
