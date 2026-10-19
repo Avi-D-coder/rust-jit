@@ -1,0 +1,353 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T21:51:59.858752+00:00",
+  "parent": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held_component_validated",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-upstream-canonical-instantiation.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-canonical-instantiation-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "root_solver_evaluations": 0,
+  "attempts": {
+    "357": {
+      "sessions": {
+        "lib": 11783
+      },
+      "terminal_exits": {
+        "lib": 101
+      },
+      "commands": {
+        "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json"
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:42:30.456517+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "42516fafb68634ebc8b23c18147d66b86fbcbe11760f799b9f2bffa75287734e",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:43:35.473451+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "42516fafb68634ebc8b23c18147d66b86fbcbe11760f799b9f2bffa75287734e",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "compiler_errors": [
+        "error[E0046]: not all trait items implemented, missing: `Result`\n   --> crates/lrr/src/traits/upstream/infer/canonical.rs:324:5\n    |\n324 |     impl<'db> TypeVisitor<DbInterner<'db>> for HighestVarInClauses {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `Result` in implementation\n    |\n    = help: implement the missing item: `type Result = /* Type */;`\n\n",
+        "error[E0308]: mismatched types\n   --> crates/lrr/src/traits/upstream/infer/canonical.rs:68:13\n    |\n 66 |         let var_values = CanonicalVarValues::instantiate(\n    |                          ------------------------------- arguments to this function are incorrect\n 67 |             self.interner,\n 68 |             &canonical.var_kinds,\n    |             ^^^^^^^^^^^^^^^^^^^^ expected `List<'_, CanonicalVarKind<_>>`, found `&List<'_, CanonicalVarKind<_>>`\n    |\n    = note: expected struct `List<'_, CanonicalVarKind<Context<'_, PreparedProvider<'_>>>>`\n            found reference `&List<'db, CanonicalVarKind<Context<'db, PreparedProvider<'db>>>>`\nnote: associated function defined here\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/canonical.rs:313:12\n    |\n313 |     pub fn instantiate(\n    |            ^^^^^^^^^^^\nhelp: consider removing the borrow\n    |\n 68 -             &canonical.var_kinds,\n 68 +             canonical.var_kinds,\n    |\n\n"
+      ],
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 2 previous errors; 45 warnings emitted\n"
+      }
+    },
+    "358": {
+      "sessions": {
+        "lib": 39757
+      },
+      "terminal_exits": {
+        "lib": 101
+      },
+      "commands": {
+        "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json"
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:43:36.918930+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "97ecc535cea3c44c93f2b499c01bc09de29413e272a3337fdf147c058fd86144",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:44:07.835782+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "97ecc535cea3c44c93f2b499c01bc09de29413e272a3337fdf147c058fd86144",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "compiler_errors": [
+        "error[E0599]: no associated function or constant named `INNERMOST` found for struct `rustc_type_ir::DebruijnIndex` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/tests.rs:754:62\n    |\n754 |     let ordinary_bound = Ty::new_bound(cx,ty::DebruijnIndex::INNERMOST,placeholder_ty(0).bound);\n    |                                                              ^^^^^^^^^ associated function or constant not found in `rustc_type_ir::DebruijnIndex`\n\n",
+        "error[E0277]: the trait bound `(Ty<'cx, PreparedProvider<'cx>>, _, _, Ty<'_, _>): TypeFoldable<_>` is not satisfied\n   --> crates/lrr/src/traits/upstream/infer/tests.rs:757:84\n    |\n757 |     let (owner, output, values) = InferenceContext::build_with_canonical(cx, span, &input);\n    |                                   --------------------------------------           ^^^^^^ unsatisfied trait bound\n    |                                   |\n    |                                   required by a bound introduced by this call\n    |\n    = help: the trait `rustc_type_ir::TypeFoldable<upstream::context::Context<'_, PreparedProvider<'_>>>` is not implemented for `(Ty<'cx, PreparedProvider<'cx>>, List<'_, Arg<'cx, _>>, _, Ty<'_, _>)`\nhelp: the following other types implement trait `rustc_type_ir::TypeFoldable<I>`\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/macros.rs:7:13\n    |\n  7 |               impl<I: $crate::Interner> $crate::TypeFoldable<I> for $ty {\n    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `()`\n...\n 44 | / TrivialTypeTraversalImpls! {\n 45 | |     (),\n 46 | |     bool,\n 47 | |     usize,\n...   |\n 64 | | }\n    | |_- in this macro invocation\n    |\n   ::: vendor/rustc-trait-solver/compiler/rustc_type_ir/src/fold.rs:232:1\n    |\n232 |   impl<I: Interner, T: TypeFoldable<I>, U: TypeFoldable<I>> TypeFoldable<I> for (T, U) {\n    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `(T, U)`\n...\n242 | / impl<I: Interner, A: TypeFoldable<I>, B: TypeFoldable<I>, C: TypeFoldable<I>> TypeFoldable<I>\n243 | |     for (A, B, C)\n    | |_________________^ `(A, B, C)`\nnote: required by a bound in `infer::canonical::<impl InferenceContext<'db>>::build_with_canonical`\n   --> crates/lrr/src/traits/upstream/infer/canonical.rs:155:12\n    |\n149 |     pub fn build_with_canonical<T>(\n    |            -------------------- required by a bound in this associated function\n...\n155 |         T: TypeFoldable<DbInterner<'db>>,\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `infer::canonical::<impl InferenceContext<'db>>::build_with_canonical`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886.long-type-6136465518316819085.txt'\n    = note: consider using `--verbose` to print the full type name to the console\n    = note: this error originates in the macro `TrivialTypeTraversalImpls` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n",
+        "error[E0277]: the trait bound `(Ty<'cx, PreparedProvider<'cx>>, _, _, Ty<'_, _>): TypeFoldable<_>` is not satisfied\n   --> crates/lrr/src/traits/upstream/infer/tests.rs:781:26\n    |\n781 |     assert_eq!(canonical.instantiate(cx,&values),output);\n    |                          ^^^^^^^^^^^ unsatisfied trait bound\n    |\n    = help: the trait `rustc_type_ir::TypeFoldable<upstream::context::Context<'_, PreparedProvider<'_>>>` is not implemented for `(Ty<'cx, PreparedProvider<'cx>>, List<'_, Arg<'cx, _>>, _, Ty<'_, _>)`\nhelp: the following other types implement trait `rustc_type_ir::TypeFoldable<I>`\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/macros.rs:7:13\n    |\n  7 |               impl<I: $crate::Interner> $crate::TypeFoldable<I> for $ty {\n    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `()`\n...\n 44 | / TrivialTypeTraversalImpls! {\n 45 | |     (),\n 46 | |     bool,\n 47 | |     usize,\n...   |\n 64 | | }\n    | |_- in this macro invocation\n    |\n   ::: vendor/rustc-trait-solver/compiler/rustc_type_ir/src/fold.rs:232:1\n    |\n232 |   impl<I: Interner, T: TypeFoldable<I>, U: TypeFoldable<I>> TypeFoldable<I> for (T, U) {\n    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `(T, U)`\n...\n242 | / impl<I: Interner, A: TypeFoldable<I>, B: TypeFoldable<I>, C: TypeFoldable<I>> TypeFoldable<I>\n243 | |     for (A, B, C)\n    | |_________________^ `(A, B, C)`\nnote: required by a bound in `CanonicalExt::instantiate`\n   --> crates/lrr/src/traits/upstream/infer/canonical.rs:22:12\n    |\n 20 |     fn instantiate(&self, interner: DbInterner<'db>, var_values: &CanonicalVarValues<'db>) -> V\n    |        ----------- required by a bound in this associated function\n 21 |     where\n 22 |         V: TypeFoldable<DbInterner<'db>>;\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `CanonicalExt::instantiate`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886.long-type-9741740227242686222.txt'\n    = note: consider using `--verbose` to print the full type name to the console\n    = note: this error originates in the macro `TrivialTypeTraversalImpls` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n",
+        "error[E0277]: the trait bound `(Ty<'cx, PreparedProvider<'cx>>, _, _, Ty<'_, _>): TypeFoldable<_>` is not satisfied\n   --> crates/lrr/src/traits/upstream/infer/tests.rs:782:80\n    |\n782 |     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| canonical.instantiate(cx,&ty::CanonicalVarValues::dummy()))).i...\n    |                                                                                ^^^^^^^^^^^ unsatisfied trait bound\n    |\n    = help: the trait `rustc_type_ir::TypeFoldable<upstream::context::Context<'_, PreparedProvider<'_>>>` is not implemented for `(Ty<'cx, PreparedProvider<'cx>>, List<'_, Arg<'cx, _>>, _, Ty<'_, _>)`\nhelp: the following other types implement trait `rustc_type_ir::TypeFoldable<I>`\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/macros.rs:7:13\n    |\n  7 |               impl<I: $crate::Interner> $crate::TypeFoldable<I> for $ty {\n    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `()`\n...\n 44 | / TrivialTypeTraversalImpls! {\n 45 | |     (),\n 46 | |     bool,\n 47 | |     usize,\n...   |\n 64 | | }\n    | |_- in this macro invocation\n    |\n   ::: vendor/rustc-trait-solver/compiler/rustc_type_ir/src/fold.rs:232:1\n    |\n232 |   impl<I: Interner, T: TypeFoldable<I>, U: TypeFoldable<I>> TypeFoldable<I> for (T, U) {\n    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `(T, U)`\n...\n242 | / impl<I: Interner, A: TypeFoldable<I>, B: TypeFoldable<I>, C: TypeFoldable<I>> TypeFoldable<I>\n243 | |     for (A, B, C)\n    | |_________________^ `(A, B, C)`\nnote: required by a bound in `CanonicalExt::instantiate`\n   --> crates/lrr/src/traits/upstream/infer/canonical.rs:22:12\n    |\n 20 |     fn instantiate(&self, interner: DbInterner<'db>, var_values: &CanonicalVarValues<'db>) -> V\n    |        ----------- required by a bound in this associated function\n 21 |     where\n 22 |         V: TypeFoldable<DbInterner<'db>>;\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `CanonicalExt::instantiate`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886.long-type-15814592382397407091.txt'\n    = note: consider using `--verbose` to print the full type name to the console\n    = note: this error originates in the macro `TrivialTypeTraversalImpls` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n",
+        "error[E0277]: the trait bound `(Ty<'cx, PreparedProvider<'cx>>, _, _, Ty<'_, _>): TypeFoldable<_>` is not satisfied\n   --> crates/lrr/src/traits/upstream/infer/tests.rs:786:57\n    |\n786 |     let (_,mapped) = rebased.instantiate_canonical(span,&canonical);\n    |                              ---------------------      ^^^^^^^^^^ unsatisfied trait bound\n    |                              |\n    |                              required by a bound introduced by this call\n    |\n    = help: the trait `rustc_type_ir::TypeFoldable<upstream::context::Context<'_, PreparedProvider<'_>>>` is not implemented for `(Ty<'cx, PreparedProvider<'cx>>, List<'_, Arg<'cx, _>>, _, Ty<'_, _>)`\nhelp: the following other types implement trait `rustc_type_ir::TypeFoldable<I>`\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/macros.rs:7:13\n    |\n  7 |               impl<I: $crate::Interner> $crate::TypeFoldable<I> for $ty {\n    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `()`\n...\n 44 | / TrivialTypeTraversalImpls! {\n 45 | |     (),\n 46 | |     bool,\n 47 | |     usize,\n...   |\n 64 | | }\n    | |_- in this macro invocation\n    |\n   ::: vendor/rustc-trait-solver/compiler/rustc_type_ir/src/fold.rs:232:1\n    |\n232 |   impl<I: Interner, T: TypeFoldable<I>, U: TypeFoldable<I>> TypeFoldable<I> for (T, U) {\n    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `(T, U)`\n...\n242 | / impl<I: Interner, A: TypeFoldable<I>, B: TypeFoldable<I>, C: TypeFoldable<I>> TypeFoldable<I>\n243 | |     for (A, B, C)\n    | |_________________^ `(A, B, C)`\nnote: required by a bound in `infer::canonical::<impl InferenceContext<'db>>::instantiate_canonical`\n   --> crates/lrr/src/traits/upstream/infer/canonical.rs:51:12\n    |\n 45 |     pub fn instantiate_canonical<T>(\n    |            --------------------- required by a bound in this associated function\n...\n 51 |         T: TypeFoldable<DbInterner<'db>>,\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `infer::canonical::<impl InferenceContext<'db>>::instantiate_canonical`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886.long-type-6902846023562322968.txt'\n    = note: consider using `--verbose` to print the full type name to the console\n    = note: this error originates in the macro `TrivialTypeTraversalImpls` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+      ],
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 5 previous errors; 45 warnings emitted\n"
+      }
+    },
+    "359": {
+      "sessions": {
+        "lib": 73714,
+        "cli": 50477,
+        "controls": 47049
+      },
+      "terminal_exits": {
+        "lib": 0,
+        "cli": 0,
+        "controls": 0
+      },
+      "commands": {
+        "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v359 worktracks/05-trait-goal-engine/2026-10-19-upstream-canonical-instantiation-controls.json"
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:44:08.353089+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "3489c08051803b530412cde18aeb95909601df6c1eba690beba3d9a84cfef935",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:45:33.151412+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "3489c08051803b530412cde18aeb95909601df6c1eba690beba3d9a84cfef935",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "7471497b7752f88a4949ca68abed7fe766eb1586e5c7b3b58b7f788d6e89c36e"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "5e0ece66b4ffa9547abad40909868d73c1fdabccdde3fe8acc38df93621838d1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:48:36.865247+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "3489c08051803b530412cde18aeb95909601df6c1eba690beba3d9a84cfef935",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "7471497b7752f88a4949ca68abed7fe766eb1586e5c7b3b58b7f788d6e89c36e"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "5e0ece66b4ffa9547abad40909868d73c1fdabccdde3fe8acc38df93621838d1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "compiler_errors": [],
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 33.60s\n",
+        "cli": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.57s\n"
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 121.086,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 46.427,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.378,
+          "log": "control-2.log"
+        }
+      ],
+      "control_terminal_tails": {
+        "control-0.log": "assertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; actual pinned inference storage/rollback per source head; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:140; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1781 filtered out; finished in 120.66s\n\n",
+        "control-1.log": "actual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin1: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin2: 3rows/2consts/2regions; original main unexecuted\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1781 filtered out; finished in 46.01s\n\n",
+        "control-2.log": "test traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind ... \nthread 'traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind' (18647985) panicked at crates/lrr/src/traits/upstream/storage.rs:162:21:\nexercise cache cleanup while unwinding\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1781 filtered out; finished in 0.00s\n\n"
+      },
+      "acceptance_scope": "3/3original controls pass; ordinary raw index nonreplacement is data-only and not promoted as nested-binder evidence."
+    },
+    "360": {
+      "sessions": {
+        "lib": 6417,
+        "controls": 1545
+      },
+      "cli_terminal": {
+        "chunk": "01af24",
+        "exit": 0,
+        "session": null
+      },
+      "terminal_exits": {
+        "lib": 0,
+        "cli": 0,
+        "controls": 0
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:48:37.575095+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "14b7472ae1ff054ac780307cc817493c167e85db33cac814e0be1e0502f2cb89",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:49:23.923287+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "14b7472ae1ff054ac780307cc817493c167e85db33cac814e0be1e0502f2cb89",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "b7c036ae8bf7b7494d7f47e6f6b99556fc37c46ca852b8069592d7fc4b5d6a48"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "5e0ece66b4ffa9547abad40909868d73c1fdabccdde3fe8acc38df93621838d1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:51:59.650021+00:00",
+          "head": "e6f6983b2bbcaa5a0c44c07abb87ebd43ddf3a28",
+          "file_count": 8591,
+          "source_sha256": "14b7472ae1ff054ac780307cc817493c167e85db33cac814e0be1e0502f2cb89",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "b7c036ae8bf7b7494d7f47e6f6b99556fc37c46ca852b8069592d7fc4b5d6a48"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "5e0ece66b4ffa9547abad40909868d73c1fdabccdde3fe8acc38df93621838d1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.21s\n",
+        "cli": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s\n"
+      },
+      "commands": {
+        "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v360 worktracks/05-trait-goal-engine/2026-10-19-upstream-canonical-instantiation-final-controls.json"
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 122.063,
+          "log": "control-0.log"
+        }
+      ],
+      "control_terminal_tails": {
+        "control-0.log": "assertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; actual pinned inference storage/rollback per source head; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:140; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1781 filtered out; finished in 121.64s\n\n"
+      }
+    }
+  },
+  "v358_to_v359_changed_inputs": [
+    "crates/lrr/src/traits/upstream/infer/tests.rs"
+  ],
+  "vendor_provenance": {
+    "command": "python3.12 tools/bootstrap_trait_solver.py --verify-upstream",
+    "session": 20089,
+    "exit": 0,
+    "output": "{\"commit\": \"ae0fe511b15ab760d7e963b13389d1bc2ab42b18\", \"crates\": 8, \"files\": 177, \"source_bytes\": 2587510, \"rust_source_changes\": 5, \"retained_original_rust_changes\": 0, \"registered_rust_adaptation\": \"stable-region-assumptions-v2-leak-indexes\", \"upstream_git_objects_verified\": true}\n",
+    "projection_command": "python3.12 tools/sync_upstream_inference.py",
+    "projection_output": "Pinned inference storage: exact originals and registered mechanical port; no local undo/commit/unification algorithm or solver delegate.\n"
+  },
+  "runtime_witness": {
+    "evidence": "worktracks/evidence/2026-10-19-v353-v356-upstream-infer-client.json",
+    "fixture": "fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch1.rs",
+    "scope": "prior actual unchanged runtime failure; not rerun because production call/selection paths are unchanged",
+    "default_result": "LRR-E-CATALOG-INCOMPLETE on missing std facade import",
+    "staged_facade_result": "LRR-E-NAME-AMBIGUOUS on get impl selection;31VMdispatches/1sourcecall; incomplete capture",
+    "pass": false
+  },
+  "limitations": [
+    "No concrete SolverDelegate/new-solver root/trait answer or runtime integration",
+    "No complete relevant source facts/ParamEnv/member/dictionary/VM/canonical response bridge",
+    "No original fixture mains executed by source-context controls",
+    "Nonempty source opaque and full function-binder/ADT/variance profiles remain incomplete",
+    "Zero new runtime gain/suite total/M020/interpreter/JIT/Linux/performance/diagnostic closure"
+  ],
+  "v359_to_v360_changed_inputs": [
+    "crates/lrr/src/traits/upstream/infer/tests.rs"
+  ],
+  "final_acceptance_scope": "Actual compiler canonical-input instantiation/client construction/folder/clause-prefix cache component: V360 frozen final builds and1/1affected source-context control pass;2unaffected V359 controls retain their own original passing evidence, production byte-identical. V359 raw ordinary-Bound transport was weaker than nested-binder contract; V360 uses real nested Binder and checks local bound preservation, canonical replacement under binder and no escaping ordinary variables. Not an all-three final-source run, not source function-binder or fixture main acceptance."
+}

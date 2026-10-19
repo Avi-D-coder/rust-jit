@@ -383,6 +383,20 @@
       "upstream_sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939"
     },
     {
+      "path": "compiler/rustc_infer/src/infer/canonical/instantiate.rs",
+      "bytes": 7095,
+      "sha256": "309dfb67695984b4e0a3d09bb95ccc396d680825bdad893fde1848ad691a522e",
+      "upstream": "compiler/rustc_infer/src/infer/canonical/instantiate.rs",
+      "upstream_sha256": "309dfb67695984b4e0a3d09bb95ccc396d680825bdad893fde1848ad691a522e"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/canonical/mod.rs",
+      "bytes": 6494,
+      "sha256": "6d521765f1c5630f1c4eac6478250e523a91d31b80e82455e5d026b1756a7a2d",
+      "upstream": "compiler/rustc_infer/src/infer/canonical/mod.rs",
+      "upstream_sha256": "6d521765f1c5630f1c4eac6478250e523a91d31b80e82455e5d026b1756a7a2d"
+    },
+    {
       "path": "compiler/rustc_infer/src/infer/context.rs",
       "bytes": 17607,
       "sha256": "ce9a4271702995747f262724abbfedeb2dbc353dd6ac24a1e726b742acabb886",
@@ -1276,6 +1290,8 @@
     "compiler/rustc_infer/src/infer/outlives/obligations.rs",
     "compiler/rustc_infer/src/infer/relate/higher_ranked.rs",
     "compiler/rustc_infer/src/infer/relate/generalize.rs",
+    "compiler/rustc_infer/src/infer/canonical/mod.rs",
+    "compiler/rustc_infer/src/infer/canonical/instantiate.rs",
     "compiler/rustc_infer/src/infer/region_constraints/mod.rs",
     "compiler/rustc_data_structures/src/graph/mod.rs",
     "compiler/rustc_data_structures/src/graph/reference.rs",

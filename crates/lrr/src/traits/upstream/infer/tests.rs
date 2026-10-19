@@ -14,6 +14,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_obligation_state(cx, actual, span);
     check_variable_resolution(cx, actual, span);
     check_inference_client(cx, actual, span);
+    check_canonical_instantiation(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
     let (a, b, integer, float, constant, first_region, second_region) = {
@@ -715,4 +716,85 @@ fn check_inference_client<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span)
     let entries = Client::opaque_types_storage_num_entries(&context);
     assert!(Client::clone_opaque_types_added_since(&context, entries).is_empty());
     assert!(cx.services().ready(cx).is_err(), "a complete inference client grants no full source facts or solver root");
+}
+
+// Pure canonical-IR transport through the actual pinned compiler instantiator.
+// Source Type/Span payloads come from unchanged fixtures, never fake SourceFacts.
+fn check_canonical_instantiation<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
+    use super::{InferenceContext, canonical::CanonicalExt};
+    use crate::traits::upstream::model::{Arg, Clause, AllocateList};
+    use ty::{InferCtxtLike as Client, inherent::{Ty as _, GenericArg as _}};
+    let root = ty::UniverseIndex::ROOT; let young = root.next_universe();
+    let var = |n| ty::BoundVar::from_u32(n);
+    let placeholder_ty = |n| ty::PlaceholderType::new_anon(young, var(n));
+    let placeholder_region = |n| ty::PlaceholderRegion::new_anon(young, var(n));
+    let placeholder_const = |n| ty::PlaceholderConst::new(young, ty::BoundConst::new(var(n)));
+    let kinds = cx.mk_canonical_var_kinds(&[
+        ty::CanonicalVarKind::Ty { ui: root, sub_root: var(0) },
+        ty::CanonicalVarKind::Ty { ui: root, sub_root: var(0) },
+        ty::CanonicalVarKind::Int, ty::CanonicalVarKind::Float,
+        ty::CanonicalVarKind::Region(young), ty::CanonicalVarKind::Const(young),
+        ty::CanonicalVarKind::PlaceholderTy(placeholder_ty(6)),
+        ty::CanonicalVarKind::PlaceholderRegion(placeholder_region(7)),
+        ty::CanonicalVarKind::PlaceholderConst(placeholder_const(8)),
+    ]);
+    let bound_ty = |n| cx.ty(ty::Bound(ty::BoundVarIndexKind::Canonical, placeholder_ty(n).bound));
+    let bound_region = |n| cx.intern_region(ty::RegionKind::ReBound(ty::BoundVarIndexKind::Canonical, placeholder_region(n).bound));
+    let bound_const = |n| Const::new(cx, ty::ConstKind::Bound(ty::BoundVarIndexKind::Canonical, ty::BoundConst::new(var(n))));
+    let args = cx.mk_args(&[
+        bound_ty(0).into(),bound_ty(1).into(),bound_ty(2).into(),bound_ty(3).into(),
+        bound_region(4).into(),bound_const(5).into(),bound_ty(6).into(),
+        bound_region(7).into(),bound_const(8).into(),
+    ]);
+    let clauses = cx.clauses(cx.list(vec![
+        Clause::new(cx, ty::Binder::dummy(ty::ClauseKind::TypeOutlives(ty::OutlivesClause(bound_ty(0),bound_region(4))))),
+        Clause::new(cx, ty::Binder::dummy(ty::ClauseKind::WellFormed(bound_const(5).into()))),
+        Clause::new(cx, ty::Binder::dummy(ty::ClauseKind::WellFormed(bound_ty(1).into()))),
+    ]));
+    let ordinary_bound = Ty::new_bound(cx,ty::INNERMOST,placeholder_ty(0).bound);
+    let ordinary_binder = ty::Binder::bind_with_vars(
+        Ty::new_tup(cx,&[ordinary_bound,bound_ty(0)]),
+        cx.mk_bound_variable_kinds_from_iter([ty::BoundVariableKind::Ty(ty::BoundTyKind::Anon)]));
+    let canonical = ty::Canonical { value: (actual,args,(clauses,ordinary_binder)), max_universe: young, var_kinds: kinds };
+    let input = ty::CanonicalQueryInput { canonical, typing_mode: ty::TypingModeEqWrapper(ty::TypingMode::PostAnalysis) };
+    let (owner, output, values) = InferenceContext::build_with_canonical(cx, span, &input);
+    assert_eq!(output.0, actual);assert_eq!(output.1.items(),values.var_values.items());
+    let ty::Tuple(nested) = output.2.1.skip_binder().kind() else { panic!("real nested binder tuple absent") };
+    assert_eq!(nested.items()[0],ordinary_bound,"ordinary bound variable must stay in its binder");
+    assert_eq!(nested.items()[1],values.var_values.items()[0].expect_ty(),"canonical variable must be substituted inside the ordinary binder");
+    assert!(!output.2.1.has_escaping_bound_vars(),"ordinary variable is genuinely bound");
+    assert_eq!(values.len(),9);assert_eq!(Client::universe(&owner),young);
+    assert!(matches!(Client::typing_mode_raw(&owner),ty::TypingMode::PostAnalysis));
+    let ty_vid = |n: usize| match values.var_values.items()[n].expect_ty().kind() {ty::Infer(ty::TyVar(v))=>v,_=>panic!("expected real type inference var")};
+    assert_ne!(Client::root_ty_var(&owner,ty_vid(0)),Client::root_ty_var(&owner,ty_vid(1)));
+    assert_eq!(Client::sub_unification_table_root_var(&owner,ty_vid(0)),Client::sub_unification_table_root_var(&owner,ty_vid(1)));
+    assert_eq!(Client::universe_of_ty(&owner,ty_vid(0)),Some(root));
+    assert!(matches!(values.var_values.items()[2].expect_ty().kind(),ty::Infer(ty::IntVar(_))));
+    assert!(matches!(values.var_values.items()[3].expect_ty().kind(),ty::Infer(ty::FloatVar(_))));
+    assert!(matches!(values.var_values.items()[4].expect_region().kind(),ty::RegionKind::ReVar(_)));
+    assert!(matches!(values.var_values.items()[5].expect_const().kind(),ty::ConstKind::Infer(ty::InferConst::Var(_))));
+    assert_eq!(values.var_values.items()[6].expect_ty(),Ty::new_placeholder(cx,placeholder_ty(6)));
+    assert_eq!(values.var_values.items()[7].expect_region(),Region::new_placeholder(cx,placeholder_region(7)));
+    assert_eq!(values.var_values.items()[8].expect_const(),Const::new_placeholder(cx,placeholder_const(8)));
+    let cache = cx.instantiation_caches();
+    assert_eq!(cache.highest_var_in_clauses_cache.borrow().get(&clauses),Some(&5));
+    let count = cache.clauses_cache.borrow().len();
+    let mut tail = values.var_values.items().to_vec();
+    tail[8]=Arg::Const(Const::new_var(cx,owner.next_const_vid(span)));
+    let other_values = ty::CanonicalVarValues { var_values: cx.mk_args(&tail) };
+    assert_eq!(canonical.instantiate_projected(cx,&other_values,|p|p.2.0),output.2.0);
+    assert_eq!(cache.clauses_cache.borrow().len(),count,"unused suffix must share exact compiler prefix cache");
+    assert_eq!(canonical.instantiate(cx,&values),output);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| canonical.instantiate(cx,&ty::CanonicalVarValues::dummy()))).is_err());
+    // An existing non-root inference context rebases incoming universe zero.
+    let rebased = InferenceContext::new(cx,ty::TypingMode::PostAnalysis);
+    let base = Client::create_next_universe(&rebased);
+    let (_,mapped) = rebased.instantiate_canonical(span,&canonical);
+    assert!(matches!(mapped.var_values.items()[6].expect_ty().kind(),ty::Placeholder(p) if p.universe==base.next_universe()));
+    let mapped_vid = match mapped.var_values.items()[0].expect_ty().kind() {ty::Infer(ty::TyVar(v))=>v,_=>unreachable!()};
+    assert_eq!(Client::universe_of_ty(&rebased,mapped_vid),Some(base));
+    let empty = ty::Canonical { value: actual, max_universe: root, var_kinds: cx.mk_canonical_var_kinds(&[]) };
+    let (same,none) = owner.instantiate_canonical(span,&empty);
+    assert_eq!(same,actual);assert!(none.var_values.items().is_empty());
+    assert!(cx.services().ready(cx).is_err(),"canonical transport cannot grant full source facts or a solver answer");
 }

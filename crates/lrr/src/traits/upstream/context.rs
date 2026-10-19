@@ -18,6 +18,15 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+/// Exact compiler canonical-instantiation cache shapes, owned by this context.
+/// Immutable clauses/argument-prefix keys contain retained context handles only.
+pub(super) struct CanonicalInstantiationCaches<'cx, F: SourceFacts<'cx>> {
+    pub(super) highest_var_in_clauses_cache: RefCell<ty::data_structures::HashMap<Clauses<'cx,F>, usize>>,
+    pub(super) clauses_cache: RefCell<ty::data_structures::HashMap<(Clauses<'cx,F>, &'cx [Arg<'cx,F>]), Clauses<'cx,F>>>,
+}
+impl<'cx, F: SourceFacts<'cx>> Default for CanonicalInstantiationCaches<'cx,F> {
+    fn default() -> Self { Self { highest_var_in_clauses_cache: RefCell::default(), clauses_cache: RefCell::default() } }
+}
 #[derive(Clone, Copy)]
 pub(crate) struct Context<'cx, F: SourceFacts<'cx>> {
     state: &'cx StateRef<'cx, F>,
@@ -46,6 +55,7 @@ pub(crate) struct StateRef<'cx, F: SourceFacts<'cx>> {
     services: F,
     global: &'cx RefCell<ty::search_graph::GlobalCache<Context<'cx, F>>>,
     canonical_env: &'cx ScopedCache<ty::CanonicalParamEnvCache<Context<'cx, F>>>,
+    canonical_instantiation: &'cx CanonicalInstantiationCaches<'cx,F>,
     erased_types: &'cx RefCell<ty::data_structures::HashMap<Ty<'cx, F>, Ty<'cx, F>>>,
     types: &'cx InternPool<'cx, WithCachedTypeInfo<TyKind<Context<'cx, F>>>>,
     args: &'cx InternPool<'cx, Vec<Arg<'cx, F>>>,
@@ -82,6 +92,7 @@ pub(crate) struct State<'cx, F: SourceFacts<'cx>> {
     services: F,
     global: RefCell<ty::search_graph::GlobalCache<Context<'cx, F>>>,
     canonical_env: ScopedCache<ty::CanonicalParamEnvCache<Context<'cx, F>>>,
+    canonical_instantiation: CanonicalInstantiationCaches<'cx,F>,
     erased_types: RefCell<ty::data_structures::HashMap<Ty<'cx, F>, Ty<'cx, F>>>,
     types: InternPool<'cx, WithCachedTypeInfo<TyKind<Context<'cx, F>>>>,
     args: InternPool<'cx, Vec<Arg<'cx, F>>>,
@@ -115,6 +126,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             services,
             global: RefCell::new(Default::default()),
             canonical_env: ScopedCache::empty(),
+            canonical_instantiation: CanonicalInstantiationCaches::default(),
             erased_types: RefCell::new(Default::default()),
             types: InternPool::default(),
             args: InternPool::default(),
@@ -151,6 +163,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             services: self.services,
             global: &self.global,
             canonical_env: &self.canonical_env,
+            canonical_instantiation: &self.canonical_instantiation,
             erased_types: &self.erased_types,
             types: &self.types,
             args: &self.args,
@@ -177,6 +190,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
     }
 }
 impl<'cx, F: SourceFacts<'cx>> Context<'cx, F> {
+    pub(super) fn instantiation_caches(self) -> &'cx CanonicalInstantiationCaches<'cx,F> { self.state.canonical_instantiation }
     pub(crate) fn services(self) -> F {
         self.state.services
     }

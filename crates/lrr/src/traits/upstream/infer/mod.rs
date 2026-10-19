@@ -247,3 +247,5 @@ mod obligation_state;
 mod client;
 mod client_operations;
 mod generalize;
+
+pub(crate) mod canonical;

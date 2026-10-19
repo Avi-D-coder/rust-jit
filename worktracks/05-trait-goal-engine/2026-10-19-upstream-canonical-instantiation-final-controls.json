@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Affected real-source canonical-IR control after strengthening well-scoped nested-binder witness; unchanged production source. Two unaffected V359 controls retain their original evidence.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions"
+  ]
+}

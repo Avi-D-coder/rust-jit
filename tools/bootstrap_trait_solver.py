@@ -56,6 +56,8 @@ SUPPORT_SOURCES = (
     'compiler/rustc_infer/src/infer/outlives/obligations.rs',
     'compiler/rustc_infer/src/infer/relate/higher_ranked.rs',
     'compiler/rustc_infer/src/infer/relate/generalize.rs',
+    'compiler/rustc_infer/src/infer/canonical/mod.rs',
+    'compiler/rustc_infer/src/infer/canonical/instantiate.rs',
     'compiler/rustc_infer/src/infer/region_constraints/mod.rs',
     'compiler/rustc_data_structures/src/graph/mod.rs',
     'compiler/rustc_data_structures/src/graph/reference.rs',
