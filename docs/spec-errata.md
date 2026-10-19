@@ -95,3 +95,5 @@ from the import origin. See [the witness and regression](errata/m007-reexport-vi
 - [E-R5-003: backing adoption, compiler result disposal, scheduling policy and full-suite accounting](errata/revision5-final-contracts.md) — requirements adopted; implementation pending.
 
 - [E-R5-004: runtime-semantics prerequisite; static checking stays external](errata/revision5-runtime-acceptance.md) — supersedes the all-category pre-JIT gate.
+
+- [E-M007-SPACING: retain punctuation spacing through syntax attachment](errata/m007-semicolon-token-spacing.md) — actual issued-root mismatch traced; receipt equality remains mandatory.

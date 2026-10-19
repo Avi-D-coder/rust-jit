@@ -1,0 +1,34 @@
+{
+  "provenance": "Separately labeled compiler-printing oracle; rustc +1.99.0 --edition2021. Native execution is no interpreter evidence. Conditions supplement unchanged upstream main-body origin control.",
+  "compiler_argv": [
+    "rustc",
+    "+1.99.0",
+    "--edition",
+    "2021",
+    "/private/tmp/lrr-v196-nominal-item-print-oracle/main.rs",
+    "-o",
+    "/private/tmp/lrr-v196-nominal-item-print-oracle/oracle"
+  ],
+  "compiler_source": "#![allow(dead_code)]\nfn main() { std::panic::set_hook(Box::new(|_|{}));\nlet error=std::panic::catch_unwind(||assert!({ enum E { A, B(u8), C { x: u32 } } false })).unwrap_err(); let message=error.downcast_ref::<&str>().copied().or_else(||error.downcast_ref::<String>().map(|s|s.as_str())).unwrap(); println!(\"{:?}\",message);\nlet error=std::panic::catch_unwind(||assert!({ struct Record<T: Copy> where T: Clone { pub x: T } false })).unwrap_err(); let message=error.downcast_ref::<&str>().copied().or_else(||error.downcast_ref::<String>().map(|s|s.as_str())).unwrap(); println!(\"{:?}\",message);\nlet error=std::panic::catch_unwind(||assert!({ struct Tuple<'a, T>(&'a T) where T: Copy; false })).unwrap_err(); let message=error.downcast_ref::<&str>().copied().or_else(||error.downcast_ref::<String>().map(|s|s.as_str())).unwrap(); println!(\"{:?}\",message);\nlet error=std::panic::catch_unwind(||assert!({ union Bits { u: u32, f: f32 } false })).unwrap_err(); let message=error.downcast_ref::<&str>().copied().or_else(||error.downcast_ref::<String>().map(|s|s.as_str())).unwrap(); println!(\"{:?}\",message);\n}\n",
+  "compiler_source_sha256": "22ff34da1cfdb7566072d3255bc35392670a21306c1e8c741c90f478f32a6a4d",
+  "compiler_exit": 0,
+  "oracle_exit": 0,
+  "cases": [
+    {
+      "condition": "{ enum E { A, B(u8), C { x: u32 } } false }",
+      "message": "assertion failed: {\n    enum E {\n        A,\n        B(u8),\n        C {\n            x: u32,\n        },\n    }\n    false\n}"
+    },
+    {
+      "condition": "{ struct Record<T: Copy> where T: Clone { pub x: T } false }",
+      "message": "assertion failed: {\n    struct Record<T: Copy> where T: Clone {\n        pub x: T,\n    }\n    false\n}"
+    },
+    {
+      "condition": "{ struct Tuple<'a, T>(&'a T) where T: Copy; false }",
+      "message": "assertion failed: {\n    struct Tuple<'a, T>(&'a T) where T: Copy;\n    false\n}"
+    },
+    {
+      "condition": "{ union Bits { u: u32, f: f32 } false }",
+      "message": "assertion failed: {\n    union Bits {\n        u: u32,\n        f: f32,\n    }\n    false\n}"
+    }
+  ]
+}

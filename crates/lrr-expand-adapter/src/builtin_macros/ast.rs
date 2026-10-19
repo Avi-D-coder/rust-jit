@@ -14,7 +14,10 @@ use crate::{
 use std::collections::HashMap;
 use syntax::{
     AstNode, NodeOrToken, SyntaxKind, SyntaxNode, SyntaxToken, T, TextSize,
-    ast::{self, HasArgList, HasGenericArgs, HasLoopBody, HasName, HasTypeBounds, RangeItem},
+    ast::{
+        self, HasArgList, HasGenericArgs, HasGenericParams, HasLoopBody, HasName, HasTypeBounds,
+        HasVisibility, RangeItem,
+    },
 };
 
 pub(crate) fn unsupported(message: impl Into<String>) -> AdapterError {
@@ -268,6 +271,54 @@ pub(crate) enum Stmt {
     Semi(Expr),
     Empty,
     MacCall(MacCall, bool),
+    Item(Item),
+}
+// Printing-only declaration structure shared by all statement item sites.
+#[derive(Clone, Debug)]
+pub(crate) struct Item {
+    pub(crate) visibility: Visibility,
+    pub(crate) ident: String,
+    pub(crate) generics: Vec<GenericParam>,
+    pub(crate) predicates: Vec<WherePredicate>,
+    pub(crate) kind: ItemKind,
+}
+#[derive(Clone, Debug)]
+pub(crate) enum Visibility {
+    Inherited,
+    Public,
+    Restricted { path: Path, shorthand: bool },
+}
+#[derive(Clone, Debug)]
+pub(crate) struct WherePredicate {
+    pub(crate) params: Vec<GenericParam>,
+    pub(crate) ty: Option<Ty>,
+    pub(crate) lifetime: Option<String>,
+    pub(crate) bounds: Vec<Bound>,
+}
+#[derive(Clone, Debug)]
+pub(crate) enum ItemKind {
+    Enum(Vec<Variant>),
+    Struct(Fields),
+    Union(Fields),
+}
+#[derive(Clone, Debug)]
+pub(crate) struct Variant {
+    pub(crate) visibility: Visibility,
+    pub(crate) ident: String,
+    pub(crate) fields: Fields,
+    pub(crate) discriminant: Option<Expr>,
+}
+#[derive(Clone, Debug)]
+pub(crate) enum Fields {
+    Unit,
+    Tuple(Vec<Field>),
+    Record(Vec<Field>),
+}
+#[derive(Clone, Debug)]
+pub(crate) struct Field {
+    pub(crate) visibility: Visibility,
+    pub(crate) ident: Option<String>,
+    pub(crate) ty: Ty,
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Arm {
@@ -1133,6 +1184,159 @@ impl<'w, 'i> Converter<'w, 'i> {
         })
     }
 
+    // --- declaration statements (rustc_ast_pretty::state::item) ---
+
+    fn item_attrs(&self, node: &SyntaxNode) -> Res<()> {
+        if node
+            .children()
+            .any(|child| child.kind() == SyntaxKind::ATTR)
+        {
+            return Err(unsupported("attributes on a declaration statement"));
+        }
+        Ok(())
+    }
+
+    fn visibility(&self, visibility: Option<ast::Visibility>) -> Res<Visibility> {
+        let Some(visibility) = visibility else {
+            return Ok(Visibility::Inherited);
+        };
+        match visibility.visibility_inner() {
+            None => Ok(Visibility::Public),
+            Some(inner) => Ok(Visibility::Restricted {
+                path: self.path(&inner.path().ok_or_else(|| missing("visibility path"))?)?,
+                shorthand: inner.in_token().is_none(),
+            }),
+        }
+    }
+
+    fn fields(&self, list: Option<ast::FieldList>) -> Res<Fields> {
+        Ok(match list {
+            None => Fields::Unit,
+            Some(ast::FieldList::TupleFieldList(list)) => {
+                let mut fields = Vec::new();
+                for field in list.fields() {
+                    self.item_attrs(field.syntax())?;
+                    if field.mut_restriction().is_some() {
+                        return Err(unsupported("field mutation restriction"));
+                    }
+                    fields.push(Field {
+                        visibility: self.visibility(field.visibility())?,
+                        ident: None,
+                        ty: self.ty(&field.ty().ok_or_else(|| missing("field type"))?)?,
+                    });
+                }
+                Fields::Tuple(fields)
+            }
+            Some(ast::FieldList::RecordFieldList(list)) => {
+                let mut fields = Vec::new();
+                for field in list.fields() {
+                    self.item_attrs(field.syntax())?;
+                    if field.mut_restriction().is_some()
+                        || field.unsafe_token().is_some()
+                        || field.default_val().is_some()
+                    {
+                        return Err(unsupported("restricted or defaulted field"));
+                    }
+                    fields.push(Field {
+                        visibility: self.visibility(field.visibility())?,
+                        ident: Some(
+                            self.name(&field.name().ok_or_else(|| missing("field name"))?)?,
+                        ),
+                        ty: self.ty(&field.ty().ok_or_else(|| missing("field type"))?)?,
+                    });
+                }
+                Fields::Record(fields)
+            }
+        })
+    }
+
+    fn item(&self, item: &ast::Item) -> Res<Item> {
+        self.item_attrs(item.syntax())?;
+        let (visibility, ident, generics, predicates, kind) = match item {
+            ast::Item::Enum(item) => {
+                let mut variants = Vec::new();
+                for variant in item
+                    .variant_list()
+                    .ok_or_else(|| missing("enum variants"))?
+                    .variants()
+                {
+                    self.item_attrs(variant.syntax())?;
+                    variants.push(Variant {
+                        visibility: self.visibility(variant.visibility())?,
+                        ident: self
+                            .name(&variant.name().ok_or_else(|| missing("variant name"))?)?,
+                        fields: self.fields(variant.field_list())?,
+                        discriminant: variant
+                            .const_arg()
+                            .and_then(|arg| arg.expr())
+                            .map(|expr| self.expr(&expr))
+                            .transpose()?,
+                    });
+                }
+                (
+                    item.visibility(),
+                    item.name(),
+                    item.generic_param_list(),
+                    item.where_clause(),
+                    ItemKind::Enum(variants),
+                )
+            }
+            ast::Item::Struct(item) => (
+                item.visibility(),
+                item.name(),
+                item.generic_param_list(),
+                item.where_clause(),
+                ItemKind::Struct(self.fields(item.field_list())?),
+            ),
+            ast::Item::Union(item) => (
+                item.visibility(),
+                item.name(),
+                item.generic_param_list(),
+                item.where_clause(),
+                ItemKind::Union(
+                    self.fields(
+                        item.record_field_list()
+                            .map(ast::FieldList::RecordFieldList),
+                    )?,
+                ),
+            ),
+            _ => return Err(unsupported("non-nominal declaration statement")),
+        };
+        let mut where_predicates = Vec::new();
+        if let Some(predicates) = predicates {
+            for predicate in predicates.predicates() {
+                where_predicates.push(WherePredicate {
+                    params: predicate
+                        .for_binder()
+                        .and_then(|binder| binder.generic_param_list())
+                        .map(|params| self.generic_params(&params))
+                        .transpose()?
+                        .unwrap_or_default(),
+                    ty: predicate.ty().map(|ty| self.ty(&ty)).transpose()?,
+                    lifetime: predicate
+                        .lifetime()
+                        .map(|lifetime| self.lifetime(&lifetime))
+                        .transpose()?,
+                    bounds: predicate
+                        .type_bound_list()
+                        .map(|bounds| self.bounds(&bounds))
+                        .transpose()?
+                        .unwrap_or_default(),
+                });
+            }
+        }
+        Ok(Item {
+            visibility: self.visibility(visibility)?,
+            ident: self.name(&ident.ok_or_else(|| missing("item name"))?)?,
+            generics: generics
+                .map(|params| self.generic_params(&params))
+                .transpose()?
+                .unwrap_or_default(),
+            predicates: where_predicates,
+            kind,
+        })
+    }
+
     // --- blocks ---
 
     pub(crate) fn block(&self, block: &ast::BlockExpr) -> Res<Block> {
@@ -1206,7 +1410,7 @@ impl<'w, 'i> Converter<'w, 'i> {
                 let semi = m.semicolon_token().is_some();
                 Stmt::MacCall(self.mac_call(m)?, semi)
             }
-            ast::Stmt::Item(_) => return Err(unsupported("item statement")),
+            ast::Stmt::Item(item) => Stmt::Item(self.item(item)?),
         })
     }
 

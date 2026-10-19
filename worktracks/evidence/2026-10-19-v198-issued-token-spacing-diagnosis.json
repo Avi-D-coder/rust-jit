@@ -1,0 +1,47 @@
+{
+  "schema": "lrr/v5/source-token-identity-diagnosis/v1",
+  "source_sha256": "de0a00f351aab0475a35b6cb359df0170525b60ebf775a03e0f06d0e3cac6020",
+  "test_binary_sha256": "bed6238456300c837a7a93d91f40c8215caa002dc6bf591ba24838436f997929",
+  "scope": "Temporary cfg(test) trace of actual issued and captured token roots; no acceptance",
+  "issued_roots_identity": "1368746335d5b6acc189a26391d09dbb9f272a03c333a585f994c57a12fe71ae",
+  "captured_roots_identity": "7231e57095f2c56bf0f7a5550310180dfecfb2bdb5716d39d31b50e4fc0eb7af",
+  "sole_difference": {
+    "path": "/0/Group/children/0/Group/children/114/Punct/spacing",
+    "issued": "Alone",
+    "captured": "Joint",
+    "scalar": ";",
+    "following_scalar": ";"
+  },
+  "trace_controls_exit": 1,
+  "receipt_check_bypassed": false,
+  "temporary_trace_removed": true,
+  "input_and_binary_guard": {
+    "schema": "lrr/validation-inputs/v2",
+    "time_utc": "2026-10-19T07:14:18.458066+00:00",
+    "head": "39633bb221e68a174c9f03e571dab6c14b3d00ce",
+    "file_count": 8314,
+    "source_sha256": "de0a00f351aab0475a35b6cb359df0170525b60ebf775a03e0f06d0e3cac6020",
+    "binaries": {
+      "test": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+        "sha256": "bed6238456300c837a7a93d91f40c8215caa002dc6bf591ba24838436f997929"
+      },
+      "cli": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "sha256": "6cefd44abf9ecd23a733b70425ceb86b993298b3ffa3ad8d43e6a4bde8c4a2c4"
+      }
+    },
+    "source_matches_before": true,
+    "head_matches_before": true,
+    "changed_sources": [],
+    "binaries_match_build": true
+  },
+  "reproduction": "Run tracked upstream_pattern_captures_share_the_source_route_across_origins_and_editions control on V197 parent plus documented printing source; existing origin adapter retains consecutive empty statements. Reapply test-only receipt logging only for structural diagnosis; compiler hook and runtime semantics are unchanged.",
+  "next_repair": "docs/errata/m007-semicolon-token-spacing.md",
+  "diagnostic_patch": {
+    "path": "worktracks/evidence/2026-10-19-v198-test-only-receipt-trace.patch",
+    "sha256": "63a57927ba28ece9383508f63e071aed5ea785dfb9a7a022c81df9e766d5b582",
+    "scope": "Archival test-only logging; not installed production or a runtime semantic route",
+    "reproduce": "Use parent39633bb plus the documented nominal printing slice, prior to E-M007-SPACING; apply this patch and run the tracked trace selection with LRR_TRACE_SYNTAX_RECEIPTS=1. Keep all source hashes attached to their original attempt."
+  }
+}

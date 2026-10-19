@@ -1,0 +1,8 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Corrected exact negative diagnostic after completed-source environment refactor; genuine owner identity remains stable after rejection",
+  "controls": [
+    "service::retained_source_preparation_tests::sealed_preparation_cannot_borrow_another_source_owner"
+  ],
+  "runtime_cases": []
+}

@@ -1,0 +1,37 @@
+--- a/crates/lrr/src/expand/source_declarative/syntax_receipt.rs
++++ b/crates/lrr/src/expand/source_declarative/syntax_receipt.rs
+@@ -96,6 +96,10 @@
+         if identity != key.input_tokens {
+             return Err(fault("issued syntax request input differs from its key"));
+         }
++        #[cfg(test)]
++        if std::env::var_os("LRR_TRACE_SYNTAX_RECEIPTS").is_some() {
++            eprintln!("LRR_SYNTAX_ISSUED {}", serde_json::json!({"roots_identity": roots_identity(actual_input.roots())?, "site": site, "roots": actual_input.roots()}));
++        }
+         Ok(Self {
+             key: key.clone(),
+             site,
+@@ -135,6 +139,10 @@
+             }
+         };
+         if roots_identity(roots)? != self.roots {
++            #[cfg(test)]
++            if std::env::var_os("LRR_TRACE_SYNTAX_RECEIPTS").is_some() {
++                eprintln!("LRR_SYNTAX_MISMATCH {}", serde_json::json!({"expected": self.roots, "actual": roots_identity(roots)?, "site": self.site, "roots": roots}));
++            }
+             return Err(fault("source syntax issued call tokens/site differ"));
+         }
+         Ok(())
+--- a/crates/lrr/src/expand/source_declarative/assembly.rs
++++ b/crates/lrr/src/expand/source_declarative/assembly.rs
+@@ -440,6 +440,10 @@
+         let call = Arc::clone(&selected.capture);
+         let (call_start, call_end) = (selected.start, selected.end);
+         if call.site != receipt.site || call.edition != key.call_edition {
++            #[cfg(test)]
++            if std::env::var_os("LRR_TRACE_SYNTAX_RECEIPTS").is_some() {
++                eprintln!("LRR_SYNTAX_SITE_MISMATCH {}", serde_json::json!({"expected_site": receipt.site, "actual_site": call.site, "expected_edition": key.call_edition, "actual_edition": call.edition, "path": call.path.roots()}));
++            }
+             return Err(fault("source syntax issued call tokens/site differ"));
+         }
+         receipt.require_call_roots(&call.input)?;

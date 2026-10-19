@@ -1,0 +1,21 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Temporary test-only receipt trace; not acceptance",
+  "controls": [
+    "cli::callable_value_tests::upstream_pattern_captures_share_the_source_route_across_origins_and_editions"
+  ],
+  "runtime_cases": [
+    "tests/ui/let-else/let-else-bindings.rs",
+    "tests/ui/let-else/let-else-run-pass.rs",
+    "tests/ui/let-else/let-else-non-copy.rs",
+    "tests/ui/let-else/let-else-source-expr-nomove-pass.rs",
+    "tests/ui/closures/simple-capture-and-call.rs",
+    "tests/ui/closures/closure-capture-after-clone.rs",
+    "tests/ui/closures/drop-glue-for-closure-with-captures.rs",
+    "tests/ui/functions-closures/capture-clauses-unboxed-closures.rs",
+    "tests/ui/closures/local-enums-in-closure-2074.rs",
+    "tests/ui/closures/destructure-newtype-closure.rs",
+    "tests/ui/binding/if-let.rs",
+    "tests/ui/binding/match-ref-binding-mut-option.rs"
+  ]
+}

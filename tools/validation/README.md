@@ -1,5 +1,10 @@
 # Reproducible validation and disposable outputs
 
+Use Python3.11 or newer for repository tools that read TOML (`tomllib`).
+macOS's system `python3` may be older: choose a suitable interpreter explicitly
+(for example `python3.12`) and use it consistently for provisioning/audits.
+The pinned vendor audit is `python3.12 tools/bootstrap_vendor.py`, with no flag.
+
 Git owns the inputs: implementation, unchanged licensed fixtures and their
 provenance, selections, validation scripts, toolchain/dependency pins, and concise
 evidence recording exact commands, source/binary hashes, outcomes and limitations.

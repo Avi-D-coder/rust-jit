@@ -1,0 +1,21 @@
+{
+  "provenance": "Separately labeled compiler-printing oracle; rustc +1.99.0 --edition2021. Native execution is no interpreter evidence. Conditions supplement unchanged upstream main-body origin control. Reproduction source and compiler commands: worktracks/evidence/2026-10-19-nominal-item-printing-oracle.json.",
+  "cases": [
+    {
+      "condition": "{ enum E { A, B(u8), C { x: u32 } } false }",
+      "message": "assertion failed: {\n    enum E {\n        A,\n        B(u8),\n        C {\n            x: u32,\n        },\n    }\n    false\n}"
+    },
+    {
+      "condition": "{ struct Record<T: Copy> where T: Clone { pub x: T } false }",
+      "message": "assertion failed: {\n    struct Record<T: Copy> where T: Clone {\n        pub x: T,\n    }\n    false\n}"
+    },
+    {
+      "condition": "{ struct Tuple<'a, T>(&'a T) where T: Copy; false }",
+      "message": "assertion failed: {\n    struct Tuple<'a, T>(&'a T) where T: Copy;\n    false\n}"
+    },
+    {
+      "condition": "{ union Bits { u: u32, f: f32 } false }",
+      "message": "assertion failed: {\n    union Bits {\n        u: u32,\n        f: f32,\n    }\n    false\n}"
+    }
+  ]
+}

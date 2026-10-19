@@ -928,6 +928,7 @@ impl State {
                 self.print_expr_outer_attr_style(expr, false, Fixup::new_stmt());
                 self.p.word(";");
             }
+            Stmt::Item(item) => self.print_item(item),
             Stmt::Empty => {
                 self.p.space_if_not_bol();
                 self.p.word(";");
@@ -938,6 +939,142 @@ impl State {
                 if *semicolon {
                     self.p.word(";");
                 }
+            }
+        }
+    }
+
+    // Printing-only nominal declarations, following rustc's item printer.
+    fn hardbreak_if_not_bol(&mut self) {
+        if !self.p.is_beginning_of_line() {
+            self.p.hardbreak();
+        }
+    }
+    fn item_head(&mut self, keyword: &str) -> (BoxMarker, BoxMarker) {
+        let cb = self.p.cbox(INDENT_UNIT);
+        let ib = self.p.ibox(0);
+        if !keyword.is_empty() {
+            self.p.word_nbsp(keyword.to_owned());
+        }
+        (cb, ib)
+    }
+    fn print_visibility(&mut self, visibility: &Visibility) {
+        match visibility {
+            Visibility::Inherited => {}
+            Visibility::Public => self.p.word_nbsp("pub"),
+            Visibility::Restricted { path, shorthand } => {
+                self.p.word("pub(");
+                if !shorthand {
+                    self.p.word_nbsp("in");
+                }
+                self.print_path(path, false, 0);
+                self.p.word_nbsp(")");
+            }
+        }
+    }
+    fn print_where_predicates(&mut self, predicates: &[WherePredicate]) {
+        if predicates.is_empty() {
+            return;
+        }
+        self.p.space();
+        self.p.word_space("where");
+        for (ordinal, predicate) in predicates.iter().enumerate() {
+            if ordinal != 0 {
+                self.p.word_space(",");
+            }
+            if !predicate.params.is_empty() {
+                self.p.word("for");
+                self.print_generic_params(&predicate.params);
+                self.p.nbsp();
+            }
+            if let Some(ty) = &predicate.ty {
+                self.print_type(ty);
+            }
+            if let Some(lifetime) = &predicate.lifetime {
+                self.print_lifetime(lifetime);
+            }
+            self.p.word(":");
+            if !predicate.bounds.is_empty() {
+                self.p.nbsp();
+                self.print_type_bounds(&predicate.bounds);
+            }
+        }
+    }
+    fn print_fields(
+        &mut self,
+        fields: &Fields,
+        predicates: &[WherePredicate],
+        finalizer: bool,
+        cb: BoxMarker,
+        ib: BoxMarker,
+    ) {
+        match fields {
+            Fields::Unit | Fields::Tuple(_) => {
+                if let Fields::Tuple(fields) = fields {
+                    self.p.popen();
+                    self.commasep(Breaks::Inconsistent, fields, |s, field| {
+                        s.print_visibility(&field.visibility);
+                        s.print_type(&field.ty);
+                    });
+                    self.p.pclose();
+                }
+                self.print_where_predicates(predicates);
+                if finalizer {
+                    self.p.word(";");
+                }
+                self.p.end(ib);
+                self.p.end(cb);
+            }
+            Fields::Record(fields) => {
+                self.print_where_predicates(predicates);
+                self.p.nbsp();
+                self.bopen(ib);
+                for field in fields {
+                    self.hardbreak_if_not_bol();
+                    self.print_visibility(&field.visibility);
+                    self.p.word(field.ident.clone().expect("record field name"));
+                    self.p.word_nbsp(":");
+                    self.print_type(&field.ty);
+                    self.p.word(",");
+                }
+                self.bclose(fields.is_empty(), cb);
+            }
+        }
+    }
+    fn print_item(&mut self, item: &Item) {
+        self.hardbreak_if_not_bol();
+        let (cb, ib) = self.item_head("");
+        self.print_visibility(&item.visibility);
+        self.p.word_nbsp(match &item.kind {
+            ItemKind::Enum(_) => "enum",
+            ItemKind::Struct(_) => "struct",
+            ItemKind::Union(_) => "union",
+        });
+        self.p.word(item.ident.clone());
+        self.print_generic_params(&item.generics);
+        match &item.kind {
+            ItemKind::Enum(variants) => {
+                self.print_where_predicates(&item.predicates);
+                self.p.space();
+                self.bopen(ib);
+                for variant in variants {
+                    self.p.space_if_not_bol();
+                    let variant_ib = self.p.ibox(0);
+                    let (vcb, vib) = self.item_head("");
+                    self.print_visibility(&variant.visibility);
+                    self.p.word(variant.ident.clone());
+                    self.print_fields(&variant.fields, &[], false, vcb, vib);
+                    if let Some(expr) = &variant.discriminant {
+                        self.p.space();
+                        self.p.word_space("=");
+                        self.print_expr(expr, Fixup::default());
+                    }
+                    self.p.word(",");
+                    self.p.end(variant_ib);
+                }
+                self.bclose(variants.is_empty(), cb);
+            }
+            ItemKind::Struct(fields) | ItemKind::Union(fields) => {
+                self.print_fields(fields, &item.predicates, true, cb, ib)
             }
         }
     }

@@ -1014,12 +1014,12 @@ impl TtTreeSink<'_> {
         // FIXME: Emitting whitespace for this is really just a hack, we should get rid of it.
         // Add whitespace between adjoint puncts
         if let Some([tt::Leaf::Punct(curr), tt::Leaf::Punct(next)]) = last_two {
-            // Note: We always assume the semi-colon would be the last token in
-            // other parts of RA such that we don't add whitespace here.
+            // Preserve Alone spacing for every punctuation, including a
+            // semicolon followed by another empty statement in macro input.
             //
             // When `next` is a `Punct` of `'`, that's a part of a lifetime identifier so we don't
             // need to add whitespace either.
-            if curr.spacing == tt::Spacing::Alone && curr.char != ';' && next.char != '\'' {
+            if curr.spacing == tt::Spacing::Alone && next.char != '\'' {
                 self.inner.token(WHITESPACE, " ");
                 self.text_pos += TextSize::of(' ');
                 self.token_map.push(self.text_pos, curr.span);

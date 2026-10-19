@@ -1010,3 +1010,26 @@ fn stringify_matches_every_upstream_stringify_rs_case() {
         );
     }
 }
+
+#[test]
+fn declaration_statement_printing_matches_the_pinned_compiler_oracle() {
+    #[derive(serde::Deserialize)]
+    struct Case {
+        condition: String,
+        message: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Data {
+        cases: Vec<Case>,
+    }
+    let data: Data = serde_json::from_str(include_str!("nominal_item_oracle_cases.json")).unwrap();
+    assert_eq!(data.cases.len(), 4);
+    for case in data.cases {
+        assert_eq!(
+            assertion(&format!("assert!({});", case.condition)),
+            case.message,
+            "{}",
+            case.condition
+        );
+    }
+}

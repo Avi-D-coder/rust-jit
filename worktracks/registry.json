@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T07:03:13.015317+00:00",
+  "updated_at": "2026-10-19T07:23:45.513074+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -191,7 +191,8 @@
       ],
       "component_evidence": [
         "worktracks/evidence/2026-10-18-interpreter-v54-validation.json",
-        "worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json"
+        "worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json",
+        "worktracks/evidence/2026-10-19-v199-v200-shared-origin-identity.json"
       ]
     },
     {
@@ -499,6 +500,9 @@
           "title": "Epoch revalidation and seals",
           "status": "planned"
         }
+      ],
+      "component_evidence": [
+        "worktracks/evidence/2026-10-19-v199-v200-shared-origin-identity.json"
       ]
     },
     {

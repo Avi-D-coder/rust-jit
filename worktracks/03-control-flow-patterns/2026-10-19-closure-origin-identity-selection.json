@@ -1,0 +1,18 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Shared source-input spacing and origin matrix; not complete macro/interpreter acceptance",
+  "controls": [
+    "cli::callable_value_tests::upstream_pattern_captures_share_the_source_route_across_origins_and_editions",
+    "expand::source_declarative::assembly::tests::issued_attachment_receipt_cannot_authorize_other_token_roots_or_sites",
+    "service::retained_source_preparation_tests::sealed_source_preparation_replays_actual_nested_upstream_requests_all_editions",
+    "service::retained_source_preparation_tests::source_preparation_requires_the_real_completed_discovery",
+    "service::retained_source_preparation_tests::sealed_preparation_cannot_borrow_another_source_owner",
+    "cli::reached_pattern_nominal_tests::unchanged_upstream_hygiene_uses_the_full_coordinator",
+    "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared"
+  ],
+  "runtime_cases": [
+    "tests/ui/let-else/let-else-bindings.rs",
+    "tests/ui/macros/assert-eq-macro-success.rs",
+    "tests/ui/macros/assert-ne-macro-success.rs"
+  ]
+}

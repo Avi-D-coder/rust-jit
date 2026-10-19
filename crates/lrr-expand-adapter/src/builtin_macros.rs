@@ -54,7 +54,7 @@
 //!   source token followed by tokens other than its original neighbour is printed
 //!   as `Spacing::Alone` (see `tts.rs`).
 //! - `assert!` message printing reports `Unsupported` for expression attributes,
-//!   item statements, `box` patterns and `builtin #` syntax; the unstable
+//!   non-nominal item statements, `box` patterns and `builtin #` syntax; the unstable
 //!   `generic_assert` expansion is not implemented.
 //! - `cfg!` does not report feature-gated cfg names, check-cfg lints, or
 //!   `version(..)` (unsupported).

@@ -135,3 +135,12 @@ patch_sha256 = "5b05593037ab7ced89766bad606b509eafa61cfc7b18721d8c7130c872f77148
 preimage_sha256 = "9c14d81b1bdb4cfe1cc85b292023faebb239c4ea03fbffa3c1061f15d20f5dbb"
 postimage_sha256 = "57145aeb0e97b9d00b4755c394dccc0d75cf47ca0610602d10a4d3c34d3d292b"
 licenses = ["MIT", "Apache-2.0"]
+
+[[rust_analyzer_macros.patches]]
+id = "E-M007-SPACING"
+path = "crates/syntax-bridge/src/lib.rs"
+patch = "syntax-bridge-punctuation-spacing.patch"
+sha256 = "afbbd51f77cdaeb8847e99365148252db76c652f62f0a2b9256af67c1f7aa844"
+preimage_sha256 = "b7d2d9ad993e2d24ff9f10d52b402fde76ed4b391f3ed85328cd02fb3e4bbf53"
+postimage_sha256 = "66d6dc0e6d8d77d2c4430cf1d8d27c567fd9f284bb8ddfd32aca7368ebe685ba"
+erratum = "docs/errata/m007-semicolon-token-spacing.md"

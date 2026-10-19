@@ -35,6 +35,7 @@ fn source_preparation_requires_the_real_completed_discovery() {
 fn sealed_preparation_cannot_borrow_another_source_owner() {
     let mut f = fixture(2024, true);
     seal(&mut f);
+    let original = f.discovery.prepare_source_syntax(f.prepared.source()).unwrap();
     let mut other = f.prepared.source().clone();
     other.path = crate::source::snapshot::SourcePath::new("other.rs").unwrap();
     let error = match f.discovery.prepare_source_syntax(&other) {
@@ -42,5 +43,7 @@ fn sealed_preparation_cannot_borrow_another_source_owner() {
         Err(error) => error,
     };
     assert_eq!(error.code, "LRR-E-CATALOG-INCOMPLETE");
-    assert!(error.message.contains("captured owner absent"));
+    assert_eq!(error.message, "completed source syntax owner absent or differs", "{error:?}");
+    let after = f.discovery.prepare_source_syntax(f.prepared.source()).unwrap();
+    assert_eq!(after.identity(), original.identity());
 }
