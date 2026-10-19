@@ -108,6 +108,36 @@ fn unchanged_declared_parameter_goals_are_memoized_without_child_code_all_editio
         }
     }
 }
+
+#[test]
+fn contextual_parameter_goals_bind_the_actual_caller_and_reject_local_receipt_substitution() {
+    // LRR source-authority control over actual unchanged upstream headers.
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, plan) = world(SUFFIX, edition, false);
+        let definition = declarations(&plan)[0].1;
+        let body = plan.context().source().index().body().clone();
+        let local_key = QueryKey::DeclaredParameterGoal { definition, ordinal: 0 };
+        let local = ready(db.fetch(&SyntaxProvider, local_key.clone()));
+        let key = QueryKey::ContextParameterGoal { body: body.clone(), definition, ordinal: 0 };
+        let start = db.trace.events.len();
+        let actual = ready(db.fetch(&SyntaxProvider, key.clone()));
+        assert!(actual.value.matches(&key));
+        assert!(!actual.value.matches(&local_key));
+        assert!(!local.value.matches(&key));
+        let mut foreign = body;
+        foreign.exact_body_bytes = Digest::of_bytes(b"foreign caller body");
+        assert!(!actual.value.matches(&QueryKey::ContextParameterGoal {
+            body: foreign, definition, ordinal: 0,
+        }));
+        let again = ready(db.fetch(&SyntaxProvider, key.clone()));
+        assert!(Arc::ptr_eq(&actual.value, &again.value));
+        no_child_code(&db, start);
+        let guard = ready(db.prepare_input_guard(&SyntaxProvider, &key, actual.fingerprint));
+        guard.require_current(&mut db).unwrap();
+        db.publish_inputs(BTreeMap::new()).unwrap();
+        assert!(guard.require_current(&mut db).is_err());
+    }
+}
 #[test]
 fn emitted_and_wrapper_parameter_headers_use_the_same_goal_and_real_epoch() {
     for edition in [2015, 2018, 2021, 2024] {

@@ -305,15 +305,13 @@ pub(crate) struct ReceiverAdjustment {
     pub(crate) unsize: bool,
 }
 /// A trait-path call (`Trait::name(..)`) whose impl its reached self
-/// argument selects: the trait, the function name, the ordinal of the
-/// parameter written as `Self` (or a receiver), and whether that parameter
-/// is a reference to `Self`.
-#[derive(Debug, Clone, Eq, PartialEq)]
+/// argument selects, including Self nested in a declared structural Type.
+#[derive(Debug, Clone)]
 pub(crate) struct DeferredTraitCall {
     pub(crate) trait_key: crate::core::digest::Digest,
     pub(crate) name: String,
     pub(crate) self_ordinal: u32,
-    pub(crate) self_reference: bool,
+    pub(crate) self_type: Option<DeferredTraitSelf>,
     /// The call's written argument slots.
     pub(crate) arguments: Vec<crate::ir::pc::SlotId>,
     /// A method call whose impls differ only by the trait's arguments: the
@@ -326,6 +324,15 @@ pub(crate) struct DeferredTraitCall {
     /// impl's result must unify with (rejects the blanket `From<T> for T`
     /// when the argument is not a `u64`).
     pub(crate) result_self: Option<crate::traits::term::TyTerm>,
+}
+/// Actual immutable declared parameter observation, retained across argument
+/// effects and suspension with its relevant source dependencies.
+#[derive(Debug, Clone)]
+pub(crate) struct DeferredTraitSelf {
+    pub(crate) parameter: crate::traits::term::ParamKey,
+    pub(crate) signature: Arc<crate::db::value::QueryValue>,
+    pub(crate) goal: Arc<crate::db::value::QueryValue>,
+    pub(crate) guard: Arc<crate::db::memo::PreparedInputGuard>,
 }
 pub struct Frame {
     pub(crate) body: Arc<BodyIndex>,

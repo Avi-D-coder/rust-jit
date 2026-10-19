@@ -1,0 +1,19 @@
+# Stable shared-library packaging; original: Cargo.toml.upstream
+[package]
+name = "rustc_next_trait_solver"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.99"
+
+[dependencies]
+derive-where = "1.2.7"
+rustc_index = { path = "../rustc_index", default-features = false }
+rustc_type_ir = { path = "../rustc_type_ir", default-features = false }
+rustc_type_ir_macros = { path = "../rustc_type_ir_macros" }
+thin-vec = "0.2.21"
+tracing = "0.1"
+
+[features]
+default = []
+nightly = []

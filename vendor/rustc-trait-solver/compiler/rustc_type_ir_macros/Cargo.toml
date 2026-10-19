@@ -1,0 +1,21 @@
+# Stable shared-library packaging; original: Cargo.toml.upstream
+[package]
+name = "rustc_type_ir_macros"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.99"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+indexmap = "2.4.0"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2.0.9", features = ["full", "visit-mut"] }
+synstructure = "0.13.0"
+
+[features]
+default = []
+nightly = []

@@ -824,6 +824,17 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::ContextParameterGoal { body, definition, ordinal } => {
+                return match crate::frontend::source_parameter_goals::prepare_context_query(
+                    db, body, *definition, *ordinal,
+                ) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::DeclaredParameterGoal(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::AssociatedEquations(key) => {
                 return match crate::frontend::associated_equations::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::AssociatedEquations(Box::new(value))),

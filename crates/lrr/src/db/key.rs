@@ -165,6 +165,7 @@ pub enum QueryKey {
     EnteredValue(crate::source::manifest::PcKey),
     LexicalValue(crate::source::manifest::PcKey),
     DeclaredParameterGoal { definition: Digest, ordinal: u32 },
+    ContextParameterGoal { body: crate::source::manifest::BodyKey, definition: Digest, ordinal: u32 },
     SourceConstraints(crate::source::manifest::BodyKey),
     QualifiedBodyType(crate::source::manifest::PcKey),
     BoundRecordConstructor(crate::source::manifest::PcKey),
@@ -233,6 +234,7 @@ impl QueryKey {
             | Self::PreparedReturnPlan(_)
             | Self::DeclaredReturnGoal(_)
             | Self::DeclaredParameterGoal { .. }
+            | Self::ContextParameterGoal { .. }
             | Self::EnteredType(_)
             | Self::PreparedTypePlan(_)
             | Self::PreparedBindingPlan(_)
@@ -282,6 +284,7 @@ impl QueryKey {
             Self::EnteredValue(_) => "EnteredValue",
             Self::LexicalValue(_) => "LexicalValue",
             Self::DeclaredParameterGoal { .. } => "DeclaredParameterGoal",
+            Self::ContextParameterGoal { .. } => "ContextParameterGoal",
             Self::SourceConstraints(_) => "SourceConstraints",
             Self::QualifiedBodyType(_) => "QualifiedBodyType",
             Self::BoundRecordConstructor(_) => "BoundRecordConstructor",
@@ -377,6 +380,12 @@ impl StableEncode for QueryKey {
                 ordinal,
             } => {
                 e.u32(38);
+                e.digest(*definition);
+                e.u32(*ordinal);
+            }
+            Self::ContextParameterGoal { body, definition, ordinal } => {
+                e.u32(64);
+                e.record(body);
                 e.digest(*definition);
                 e.u32(*ordinal);
             }

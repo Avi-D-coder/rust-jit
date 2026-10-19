@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T08:48:45.648987+00:00",
+  "updated_at": "2026-10-19T09:08:14.294125+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -269,7 +269,8 @@
         }
       ],
       "component_evidence": [
-        "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json"
+        "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json",
+        "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json"
       ]
     },
     {
@@ -316,11 +317,14 @@
         {
           "id": "WT05-02",
           "title": "Pinned upstream solver bridge and transactions",
-          "status": "planned",
-          "acceptance_scope": "Design only; historical custom solver proposals superseded. Upstream bridge build, integrated semantic/runtime evidence and migration/removal remain unimplemented.",
+          "status": "in_progress",
+          "acceptance_scope": "V220 bootstrap: pinned upstream solver builds and links on macOS1.99.0,122files/1679365bytes with unchanged Rust. Concrete Interner/delegate and genuine runtime invocation remain absent. Separately structural Self call component passes5/5controls and3/4selected stock runtime contracts, one newly passing original; inherited custom unifier/selection remains migration debt. No M020/runtime/JIT closure.",
           "historical_candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
           "historical_acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete",
-          "candidate": "docs/errata/revision5-upstream-trait-solver.md"
+          "candidate": "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-bootstrap.md",
+          "evidence": [
+            "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json"
+          ]
         },
         {
           "id": "WT05-03",
@@ -343,7 +347,8 @@
         }
       ],
       "component_evidence": [
-        "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json"
+        "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json",
+        "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented."
     },

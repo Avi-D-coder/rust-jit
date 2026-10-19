@@ -359,6 +359,7 @@ impl Packet {
                 | QueryKey::EnteredValue(_)
                 | QueryKey::LexicalValue(_)
                 | QueryKey::DeclaredParameterGoal { .. }
+                | QueryKey::ContextParameterGoal { .. }
                 | QueryKey::SourceConstraints(_)
                 | QueryKey::MacroDefinitionModule { .. }
                 | QueryKey::SourceLocalPlan(_)

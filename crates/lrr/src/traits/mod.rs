@@ -1,4 +1,6 @@
-//! Symbolic signature foundations; the tabled goal engine is implemented later.
+//! Symbolic source foundations and the pinned upstream solver bridge.
+//! Concrete source/inference delegate integration remains incomplete.
+pub(crate) mod upstream;
 pub mod term;
 pub mod pointer_terms;
 pub mod unify;

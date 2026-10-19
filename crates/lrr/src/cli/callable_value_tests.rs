@@ -794,3 +794,31 @@ fn upstream_cloned_box_conversion_keeps_generic_context_all_editions_and_origins
         }
     }
 }
+
+#[test]
+fn upstream_trait_self_arguments_share_declared_types_all_editions_and_origins() {
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/methods/method-self-arg-trait.rs"
+    );
+    let (items, tail) = ORIGINAL.split_once("fn main() {").unwrap();
+    let body = tail.trim_end().strip_suffix('}').unwrap();
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }} emit! {{ {ORIGINAL} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }} macro_rules! wrap {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }} wrap! {{ {ORIGINAL} }}"
+    );
+    let standard = format!("{items} fn main(){{assert!({{{body};true}});}}");
+    for edition in [2015, 2018, 2021, 2024] {
+        for text in [ORIGINAL, &emitted, &wrapped, &standard] {
+            let report = completed_with_standard_facade(text, edition);
+            assert!(report.output.stdout.is_empty() && report.output.stderr.is_empty());
+            assert!(report.opcode_counters.operations_started > 0);
+            assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+            assert_eq!(
+                report.opcode_counters.operations_started,
+                report.opcode_counters.operations_completed
+            );
+            assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
+        }
+    }
+}

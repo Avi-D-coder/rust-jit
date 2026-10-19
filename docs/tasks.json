@@ -19973,7 +19973,9 @@
         "worktracks/04-calls-source-views/2026-10-18-receiver-name-origin.md",
         "worktracks/evidence/2026-10-18-interpreter-v102-v108-producer-provenance.json",
         "worktracks/evidence/2026-10-18-interpreter-v129-v133-hygienic-captures.json",
-        "worktracks/evidence/2026-10-18-interpreter-v180-v186-constructor-arguments.json"
+        "worktracks/evidence/2026-10-18-interpreter-v180-v186-constructor-arguments.json",
+        "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
+        "worktracks/04-calls-source-views/2026-10-19-structural-trait-self.md"
       ],
       "title": "SourceView propagation",
       "acceptance_contract": "TR003\u2013TR005, alias/field/return/default-Self variants. Depends: M017.",
@@ -20060,18 +20062,25 @@
     },
     {
       "id": "M020",
-      "status": "not_started",
+      "status": "in_progress",
       "commit_id": null,
       "acceptance_tests": [],
-      "commands": [],
+      "commands": [
+        "python3.12 tools/bootstrap_trait_solver.py --verify-upstream --checkout rustc/rust",
+        "cargo +1.99.0 check --offline --locked -p rustc_next_trait_solver"
+      ],
       "fixture_ids": [],
-      "artifact_paths": [],
+      "artifact_paths": [
+        "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-bootstrap.md"
+      ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
       "release_complete": false,
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
-      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
+      "latest_component_scope": "V220 bootstrap: pinned upstream solver builds and links on macOS1.99.0,122files/1679365bytes with unchanged Rust. Concrete Interner/delegate and genuine runtime invocation remain absent. Separately structural Self call component passes5/5controls and3/4selected stock runtime contracts, one newly passing original; inherited custom unifier/selection remains migration debt. No M020/runtime/JIT closure."
     },
     {
       "id": "M021",

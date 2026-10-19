@@ -291,7 +291,13 @@ impl QueryValue {
             },
         ) = (self, key)
         {
-            return value.matches(*definition, *ordinal);
+            return value.matches_local(*definition, *ordinal);
+        }
+        if let (
+            Self::DeclaredParameterGoal(value),
+            QueryKey::ContextParameterGoal { body, definition, ordinal },
+        ) = (self, key) {
+            return value.matches_context(body, *definition, *ordinal);
         }
         if let (Self::QualifiedBodyType(value), QueryKey::QualifiedBodyType(key)) = (self, key) {
             return value.key() == key && key.phase == 0;

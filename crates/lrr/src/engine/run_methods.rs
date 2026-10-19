@@ -369,7 +369,7 @@ impl RunMachine {
                             return QueryPoll::Ready(Err(call_fault("argument ordinal overflow")));
                         }
                     },
-                    self_reference: false,
+                    self_type: None,
                     arguments: arguments.to_vec(),
                     alternatives: alternatives.functions,
                     result_self: None,

@@ -112,12 +112,24 @@ fn ready(
 /// A local goal's complete memo payload owns facts only, not parser/source roots.
 #[derive(Debug, Clone)]
 pub struct ParameterGoalObservation {
+    context: Option<crate::source::manifest::BodyKey>,
     definition: Digest,
     ordinal: u32,
     signature: Digest,
     goal: ParameterTypeGoal,
 }
 impl ParameterGoalObservation {
+    pub(crate) fn matches_local(&self, definition: Digest, ordinal: u32) -> bool {
+        self.context.is_none() && self.matches(definition, ordinal)
+    }
+    pub(crate) fn matches_context(
+        &self,
+        body: &crate::source::manifest::BodyKey,
+        definition: Digest,
+        ordinal: u32,
+    ) -> bool {
+        self.context.as_ref() == Some(body) && self.matches(definition, ordinal)
+    }
     pub(crate) fn matches(&self, definition: Digest, ordinal: u32) -> bool {
         self.definition == definition
             && self.ordinal == ordinal
@@ -173,8 +185,12 @@ fn goal_heap(goal: &ParameterTypeGoal) -> Option<usize> {
     }
 }
 impl StableEncode for ParameterGoalObservation {
-    const DOMAIN: &'static str = "lrr/v1/local-declared-parameter-goal-observation";
+    const DOMAIN: &'static str = "lrr/v2/declared-parameter-goal-observation";
     fn encode_fields(&self, e: &mut StableEncoder) {
+        match &self.context {
+            Some(body) => { e.u8(1); e.record(body); }
+            None => e.u8(0),
+        }
         e.digest(self.definition);
         e.u32(self.ordinal);
         e.digest(self.signature);
@@ -342,6 +358,7 @@ pub(crate) fn prepare_local_query(
         ))
     };
     let result = ParameterGoalObservation {
+        context: None,
         definition,
         ordinal,
         signature: selected.fingerprint,
@@ -349,9 +366,45 @@ pub(crate) fn prepare_local_query(
     };
     QueryPoll::Ready(Ok(result))
 }
-/// Common consumer. Local declarations use their retained pure memo. Ordinary
-/// module declarations retain the existing SourceType adapter until genuine
-/// declaration-environment receipt transport supports the same query key.
+/// Memoized module/local parameter goal in the actual entered caller's source
+/// environment. This shares `prepare` and its exact namespace dependencies;
+/// it prepares no executable callee body and grants no call authority.
+pub(crate) fn prepare_context_query(
+    db: &mut Database,
+    body: &crate::source::manifest::BodyKey,
+    definition: Digest,
+    ordinal: u32,
+) -> QueryPoll<ParameterGoalObservation> {
+    macro_rules! ready {
+        ($value:expr) => {
+            match $value {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        };
+    }
+    let owner = ready!(db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.clone())));
+    let QueryValue::SourceLocalPlan(plan) = owner.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("parameter goal source plan differs")));
+    };
+    ready!(plan.require_current(db));
+    let Some(environment) = plan.environment() else {
+        return QueryPoll::Ready(Err(fault("parameter goal source environment absent")));
+    };
+    let environment = environment.macros().source_environment();
+    let sources: Vec<_> = environment.sources().iter().collect();
+    let selected = ready!(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)));
+    let goal = ready!(prepare(db, environment.names(), &sources, definition, ordinal as usize));
+    QueryPoll::Ready(Ok(ParameterGoalObservation {
+        context: Some(body.clone()),
+        definition,
+        ordinal,
+        signature: selected.fingerprint,
+        goal,
+    }))
+}
+
 pub(crate) fn prepare(
     db: &mut Database,
     graph: &NameNamespaces,

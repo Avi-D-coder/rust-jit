@@ -1,0 +1,871 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/rust-lang/rust.git",
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "crates": [
+    "rustc_next_trait_solver",
+    "rustc_type_ir",
+    "rustc_type_ir_macros",
+    "rustc_index",
+    "rustc_index_macros",
+    "rustc_abi",
+    "rustc_ast_ir",
+    "rustc_hashes"
+  ],
+  "files": [
+    {
+      "path": "COPYRIGHT",
+      "bytes": 1571,
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "upstream": "COPYRIGHT",
+      "upstream_sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af"
+    },
+    {
+      "path": "Cargo.toml",
+      "bytes": 260,
+      "sha256": "d3384009ef2c73e0852b2968ef06e3e0cb860c3ca71c207d46ef03f3d9513c03"
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "bytes": 9723,
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "upstream": "LICENSE-APACHE",
+      "upstream_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+    },
+    {
+      "path": "LICENSE-MIT",
+      "bytes": 1068,
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "upstream": "LICENSE-MIT",
+      "upstream_sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+    },
+    {
+      "path": "compiler/rustc_abi/Cargo.toml",
+      "bytes": 397,
+      "sha256": "fab8a42bc488a4bd1b59e8e656c1f60a4a992387ca67ddd79abfbe02419da9c6",
+      "upstream": "compiler/rustc_abi/Cargo.toml",
+      "upstream_sha256": "0da762a5efb6709e219373fd27ef698cadf46c5bb9407480eaa9b09e2d77aa80"
+    },
+    {
+      "path": "compiler/rustc_abi/Cargo.toml.upstream",
+      "bytes": 1323,
+      "sha256": "0da762a5efb6709e219373fd27ef698cadf46c5bb9407480eaa9b09e2d77aa80",
+      "upstream": "compiler/rustc_abi/Cargo.toml",
+      "upstream_sha256": "0da762a5efb6709e219373fd27ef698cadf46c5bb9407480eaa9b09e2d77aa80"
+    },
+    {
+      "path": "compiler/rustc_abi/src/callconv.rs",
+      "bytes": 8412,
+      "sha256": "e986a83bb4e0c593c3bf447f2a5e488936c07558621335880399093aed77c741",
+      "upstream": "compiler/rustc_abi/src/callconv.rs",
+      "upstream_sha256": "e986a83bb4e0c593c3bf447f2a5e488936c07558621335880399093aed77c741"
+    },
+    {
+      "path": "compiler/rustc_abi/src/callconv/reg.rs",
+      "bytes": 3280,
+      "sha256": "57c26608b68555d63ec74e4f6bbe2019ecb101406ad054285aa5ec5e25a77688",
+      "upstream": "compiler/rustc_abi/src/callconv/reg.rs",
+      "upstream_sha256": "57c26608b68555d63ec74e4f6bbe2019ecb101406ad054285aa5ec5e25a77688"
+    },
+    {
+      "path": "compiler/rustc_abi/src/canon_abi.rs",
+      "bytes": 6302,
+      "sha256": "6fac1f0452e60789b399cda733e5339d5652f92ac9b38fbe96ef9082e3f60c0f",
+      "upstream": "compiler/rustc_abi/src/canon_abi.rs",
+      "upstream_sha256": "6fac1f0452e60789b399cda733e5339d5652f92ac9b38fbe96ef9082e3f60c0f"
+    },
+    {
+      "path": "compiler/rustc_abi/src/extern_abi.rs",
+      "bytes": 13422,
+      "sha256": "e9264f4771556614e60d0b543e214126f4dec79441f12e917999747888f5271a",
+      "upstream": "compiler/rustc_abi/src/extern_abi.rs",
+      "upstream_sha256": "e9264f4771556614e60d0b543e214126f4dec79441f12e917999747888f5271a"
+    },
+    {
+      "path": "compiler/rustc_abi/src/extern_abi/tests.rs",
+      "bytes": 685,
+      "sha256": "ee022af2b7967aadcdab89dbdd756af026c4a6f5880c65ec6f16ae0ee27e0f02",
+      "upstream": "compiler/rustc_abi/src/extern_abi/tests.rs",
+      "upstream_sha256": "ee022af2b7967aadcdab89dbdd756af026c4a6f5880c65ec6f16ae0ee27e0f02"
+    },
+    {
+      "path": "compiler/rustc_abi/src/layout.rs",
+      "bytes": 66401,
+      "sha256": "8398b5e7b4777b2217c5d24515e4e9841034789e6037cce56535fdeee62df537",
+      "upstream": "compiler/rustc_abi/src/layout.rs",
+      "upstream_sha256": "8398b5e7b4777b2217c5d24515e4e9841034789e6037cce56535fdeee62df537"
+    },
+    {
+      "path": "compiler/rustc_abi/src/layout/coroutine.rs",
+      "bytes": 13944,
+      "sha256": "e16a0f6c467da04660d5f7a63ef7daaace05164fc057c55b1addf9412eb646b0",
+      "upstream": "compiler/rustc_abi/src/layout/coroutine.rs",
+      "upstream_sha256": "e16a0f6c467da04660d5f7a63ef7daaace05164fc057c55b1addf9412eb646b0"
+    },
+    {
+      "path": "compiler/rustc_abi/src/layout/simple.rs",
+      "bytes": 7052,
+      "sha256": "2b31b6751246042c3a29092e6d5d2f0eb44b905aeb899fa1de0f594d24c5a189",
+      "upstream": "compiler/rustc_abi/src/layout/simple.rs",
+      "upstream_sha256": "2b31b6751246042c3a29092e6d5d2f0eb44b905aeb899fa1de0f594d24c5a189"
+    },
+    {
+      "path": "compiler/rustc_abi/src/layout/ty.rs",
+      "bytes": 18609,
+      "sha256": "15fe815fbad13d845f322995b9de0b1fb17e91d363a1d8752250c3dfd03db4d9",
+      "upstream": "compiler/rustc_abi/src/layout/ty.rs",
+      "upstream_sha256": "15fe815fbad13d845f322995b9de0b1fb17e91d363a1d8752250c3dfd03db4d9"
+    },
+    {
+      "path": "compiler/rustc_abi/src/lib.rs",
+      "bytes": 94286,
+      "sha256": "4ff0c0fbb3d7270f3a83f9fa7df2ed51919cfceb6e3283d7e5fdb4f29c5c4606",
+      "upstream": "compiler/rustc_abi/src/lib.rs",
+      "upstream_sha256": "4ff0c0fbb3d7270f3a83f9fa7df2ed51919cfceb6e3283d7e5fdb4f29c5c4606"
+    },
+    {
+      "path": "compiler/rustc_abi/src/tests.rs",
+      "bytes": 6025,
+      "sha256": "8aa0b1e117117b3bbe1268721bb7cc4f56042acf2f17a363d3c4e2afe714db0b",
+      "upstream": "compiler/rustc_abi/src/tests.rs",
+      "upstream_sha256": "8aa0b1e117117b3bbe1268721bb7cc4f56042acf2f17a363d3c4e2afe714db0b"
+    },
+    {
+      "path": "compiler/rustc_abi/src/wrapping_range.rs",
+      "bytes": 9033,
+      "sha256": "32a3be9c253af1e346e10ca76cf1074ec25a9dcda5723b470c6c30a0a12009ba",
+      "upstream": "compiler/rustc_abi/src/wrapping_range.rs",
+      "upstream_sha256": "32a3be9c253af1e346e10ca76cf1074ec25a9dcda5723b470c6c30a0a12009ba"
+    },
+    {
+      "path": "compiler/rustc_ast_ir/Cargo.toml",
+      "bytes": 238,
+      "sha256": "73d49f4cd25306cf9f256e9870943a92f96119822ded09ebd85627b900c66ea6",
+      "upstream": "compiler/rustc_ast_ir/Cargo.toml",
+      "upstream_sha256": "5899f7abe6f2cd0a9f54fb1a019ba8ff6ebb019b178046c678f170880a439295"
+    },
+    {
+      "path": "compiler/rustc_ast_ir/Cargo.toml.upstream",
+      "bytes": 601,
+      "sha256": "5899f7abe6f2cd0a9f54fb1a019ba8ff6ebb019b178046c678f170880a439295",
+      "upstream": "compiler/rustc_ast_ir/Cargo.toml",
+      "upstream_sha256": "5899f7abe6f2cd0a9f54fb1a019ba8ff6ebb019b178046c678f170880a439295"
+    },
+    {
+      "path": "compiler/rustc_ast_ir/src/lib.rs",
+      "bytes": 8524,
+      "sha256": "78e0296201acd1ad1f15870dec3bad3e931a9dd2b8cb16bcfb47a7dcd545e6b6",
+      "upstream": "compiler/rustc_ast_ir/src/lib.rs",
+      "upstream_sha256": "78e0296201acd1ad1f15870dec3bad3e931a9dd2b8cb16bcfb47a7dcd545e6b6"
+    },
+    {
+      "path": "compiler/rustc_ast_ir/src/visit.rs",
+      "bytes": 2806,
+      "sha256": "cff2b03cfe1ea460d64fe953b15d1e72bb258547cb4fd5340948f2d7f9d49ba7",
+      "upstream": "compiler/rustc_ast_ir/src/visit.rs",
+      "upstream_sha256": "cff2b03cfe1ea460d64fe953b15d1e72bb258547cb4fd5340948f2d7f9d49ba7"
+    },
+    {
+      "path": "compiler/rustc_hashes/Cargo.toml",
+      "bytes": 267,
+      "sha256": "b75f0b002bc42744efd9e0836a610190fa06eab644fd361f97d088c51b764ada",
+      "upstream": "compiler/rustc_hashes/Cargo.toml",
+      "upstream_sha256": "08bcaff62f67ba9680009ea889aee456c6e77af67df9004df5875d7e1890d45c"
+    },
+    {
+      "path": "compiler/rustc_hashes/Cargo.toml.upstream",
+      "bytes": 175,
+      "sha256": "08bcaff62f67ba9680009ea889aee456c6e77af67df9004df5875d7e1890d45c",
+      "upstream": "compiler/rustc_hashes/Cargo.toml",
+      "upstream_sha256": "08bcaff62f67ba9680009ea889aee456c6e77af67df9004df5875d7e1890d45c"
+    },
+    {
+      "path": "compiler/rustc_hashes/src/lib.rs",
+      "bytes": 3752,
+      "sha256": "ecb7777ffca8e89ad7056cc864771983a3eb4384049d739fbd5b562ed2d53850",
+      "upstream": "compiler/rustc_hashes/src/lib.rs",
+      "upstream_sha256": "ecb7777ffca8e89ad7056cc864771983a3eb4384049d739fbd5b562ed2d53850"
+    },
+    {
+      "path": "compiler/rustc_index/Cargo.toml",
+      "bytes": 323,
+      "sha256": "68e5259b591b82baf38cc5ff5ba3892bc274c3880c7e1fd50bd115d53102e510",
+      "upstream": "compiler/rustc_index/Cargo.toml",
+      "upstream_sha256": "c75c3e0429a8ae12a507db0f374344a3ec0bc854bda90d7db7e0ab5082932df9"
+    },
+    {
+      "path": "compiler/rustc_index/Cargo.toml.upstream",
+      "bytes": 599,
+      "sha256": "c75c3e0429a8ae12a507db0f374344a3ec0bc854bda90d7db7e0ab5082932df9",
+      "upstream": "compiler/rustc_index/Cargo.toml",
+      "upstream_sha256": "c75c3e0429a8ae12a507db0f374344a3ec0bc854bda90d7db7e0ab5082932df9"
+    },
+    {
+      "path": "compiler/rustc_index/src/bit_set.rs",
+      "bytes": 59669,
+      "sha256": "90f3bf93850c509c54f6285d83a116b9d02184f68407b788da0bf03b3802e5f3",
+      "upstream": "compiler/rustc_index/src/bit_set.rs",
+      "upstream_sha256": "90f3bf93850c509c54f6285d83a116b9d02184f68407b788da0bf03b3802e5f3"
+    },
+    {
+      "path": "compiler/rustc_index/src/bit_set/tests.rs",
+      "bytes": 25886,
+      "sha256": "88aa244a751a710a46cf61394f237be10083d0cfa1131ab1d2923bb1362d24ad",
+      "upstream": "compiler/rustc_index/src/bit_set/tests.rs",
+      "upstream_sha256": "88aa244a751a710a46cf61394f237be10083d0cfa1131ab1d2923bb1362d24ad"
+    },
+    {
+      "path": "compiler/rustc_index/src/idx.rs",
+      "bytes": 3793,
+      "sha256": "7e943e3cf43dcbb2c2cb286e1bb470e59c09ed97243460485d2c260b1e1761ef",
+      "upstream": "compiler/rustc_index/src/idx.rs",
+      "upstream_sha256": "7e943e3cf43dcbb2c2cb286e1bb470e59c09ed97243460485d2c260b1e1761ef"
+    },
+    {
+      "path": "compiler/rustc_index/src/interval.rs",
+      "bytes": 13878,
+      "sha256": "0be2dc21e8a31c79802cf52390b747ee8b5c71b63b2393331c6ff3b544798c5c",
+      "upstream": "compiler/rustc_index/src/interval.rs",
+      "upstream_sha256": "0be2dc21e8a31c79802cf52390b747ee8b5c71b63b2393331c6ff3b544798c5c"
+    },
+    {
+      "path": "compiler/rustc_index/src/interval/tests.rs",
+      "bytes": 5583,
+      "sha256": "fd403c7b56ef405600df7f9a71c306da9e363d16378b169945c9eb3cdb3527dd",
+      "upstream": "compiler/rustc_index/src/interval/tests.rs",
+      "upstream_sha256": "fd403c7b56ef405600df7f9a71c306da9e363d16378b169945c9eb3cdb3527dd"
+    },
+    {
+      "path": "compiler/rustc_index/src/lib.rs",
+      "bytes": 1876,
+      "sha256": "8cf3f76608112e87e6f38d08cb5738b3f952d0c20458a4ab1bf7378966ebe500",
+      "upstream": "compiler/rustc_index/src/lib.rs",
+      "upstream_sha256": "8cf3f76608112e87e6f38d08cb5738b3f952d0c20458a4ab1bf7378966ebe500"
+    },
+    {
+      "path": "compiler/rustc_index/src/slice.rs",
+      "bytes": 8238,
+      "sha256": "3a3396fc2031f78f3ada674dc2a9c7dcb35f35e9c7f7262bf88dde0f210a7c38",
+      "upstream": "compiler/rustc_index/src/slice.rs",
+      "upstream_sha256": "3a3396fc2031f78f3ada674dc2a9c7dcb35f35e9c7f7262bf88dde0f210a7c38"
+    },
+    {
+      "path": "compiler/rustc_index/src/vec.rs",
+      "bytes": 11196,
+      "sha256": "c05e514a32afe051d425a60a94218a31af741ea762a6f0c8a64f89100332402d",
+      "upstream": "compiler/rustc_index/src/vec.rs",
+      "upstream_sha256": "c05e514a32afe051d425a60a94218a31af741ea762a6f0c8a64f89100332402d"
+    },
+    {
+      "path": "compiler/rustc_index/src/vec/tests.rs",
+      "bytes": 1537,
+      "sha256": "e333694195b8d0c8fc92d94226c7ad52394a7d12437e98066a024b9063ce9e5f",
+      "upstream": "compiler/rustc_index/src/vec/tests.rs",
+      "upstream_sha256": "e333694195b8d0c8fc92d94226c7ad52394a7d12437e98066a024b9063ce9e5f"
+    },
+    {
+      "path": "compiler/rustc_index_macros/Cargo.toml",
+      "bytes": 364,
+      "sha256": "3c77a633caa046af390074ca72b9dbf08d5167f5901ed59398b96be9e5a1b719",
+      "upstream": "compiler/rustc_index_macros/Cargo.toml",
+      "upstream_sha256": "03540eee714e13159e40207ebe2232b191557604c17e47a33782887891663c48"
+    },
+    {
+      "path": "compiler/rustc_index_macros/Cargo.toml.upstream",
+      "bytes": 335,
+      "sha256": "03540eee714e13159e40207ebe2232b191557604c17e47a33782887891663c48",
+      "upstream": "compiler/rustc_index_macros/Cargo.toml",
+      "upstream_sha256": "03540eee714e13159e40207ebe2232b191557604c17e47a33782887891663c48"
+    },
+    {
+      "path": "compiler/rustc_index_macros/src/lib.rs",
+      "bytes": 1655,
+      "sha256": "7d7fecae7879cad80cc39b6c1963324a6ca0507484fc6cb1a692db2ed33d3ce4",
+      "upstream": "compiler/rustc_index_macros/src/lib.rs",
+      "upstream_sha256": "7d7fecae7879cad80cc39b6c1963324a6ca0507484fc6cb1a692db2ed33d3ce4"
+    },
+    {
+      "path": "compiler/rustc_index_macros/src/newtype.rs",
+      "bytes": 13300,
+      "sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939",
+      "upstream": "compiler/rustc_index_macros/src/newtype.rs",
+      "upstream_sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/Cargo.toml",
+      "bytes": 508,
+      "sha256": "4f4d29f0df153d08c889210976a49a75aba975027087dc6b5516e8f075ae29e8",
+      "upstream": "compiler/rustc_next_trait_solver/Cargo.toml",
+      "upstream_sha256": "bda2bddb93c67352cb023329f5072c734a7e24192c2297f53b0721c8c2fc6153"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/Cargo.toml.upstream",
+      "bytes": 754,
+      "sha256": "bda2bddb93c67352cb023329f5072c734a7e24192c2297f53b0721c8c2fc6153",
+      "upstream": "compiler/rustc_next_trait_solver/Cargo.toml",
+      "upstream_sha256": "bda2bddb93c67352cb023329f5072c734a7e24192c2297f53b0721c8c2fc6153"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/canonical/canonicalizer.rs",
+      "bytes": 26778,
+      "sha256": "4895a1cfcb3fb2bad1b63fcc2661f101b4f12ef221fd87818ff35423c745261b",
+      "upstream": "compiler/rustc_next_trait_solver/src/canonical/canonicalizer.rs",
+      "upstream_sha256": "4895a1cfcb3fb2bad1b63fcc2661f101b4f12ef221fd87818ff35423c745261b"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/canonical/mod.rs",
+      "bytes": 23778,
+      "sha256": "79834fa59b4ba41c68d6ee73efc0afd3eeee4776cac65ce277cf5e0cbdf4855f",
+      "upstream": "compiler/rustc_next_trait_solver/src/canonical/mod.rs",
+      "upstream_sha256": "79834fa59b4ba41c68d6ee73efc0afd3eeee4776cac65ce277cf5e0cbdf4855f"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/coherence.rs",
+      "bytes": 20224,
+      "sha256": "d0a9f66e283319bcf6f18f776f9699b8f0a7578dbf71998d3ce1541475867227",
+      "upstream": "compiler/rustc_next_trait_solver/src/coherence.rs",
+      "upstream_sha256": "d0a9f66e283319bcf6f18f776f9699b8f0a7578dbf71998d3ce1541475867227"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/delegate.rs",
+      "bytes": 5763,
+      "sha256": "0fe996d7bfab98d17bea80da4e33a80fa019b980ede43149bbed83b5afcfb8ef",
+      "upstream": "compiler/rustc_next_trait_solver/src/delegate.rs",
+      "upstream_sha256": "0fe996d7bfab98d17bea80da4e33a80fa019b980ede43149bbed83b5afcfb8ef"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/lib.rs",
+      "bytes": 607,
+      "sha256": "7ba57ad7d5ccba24ae08ee323cbf6f6d77c33d0b72b091a9bfa5d0eae8d76060",
+      "upstream": "compiler/rustc_next_trait_solver/src/lib.rs",
+      "upstream_sha256": "7ba57ad7d5ccba24ae08ee323cbf6f6d77c33d0b72b091a9bfa5d0eae8d76060"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/normalize.rs",
+      "bytes": 7298,
+      "sha256": "d44f2abd57f0075e03c157eabdb3d822f5349707740baee5e95a1f601958a033",
+      "upstream": "compiler/rustc_next_trait_solver/src/normalize.rs",
+      "upstream_sha256": "d44f2abd57f0075e03c157eabdb3d822f5349707740baee5e95a1f601958a033"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/placeholder.rs",
+      "bytes": 12950,
+      "sha256": "c9a07664ffc3617a0980b50ec0b89d8e9c410443a61d8cfcc175baa028eb437e",
+      "upstream": "compiler/rustc_next_trait_solver/src/placeholder.rs",
+      "upstream_sha256": "c9a07664ffc3617a0980b50ec0b89d8e9c410443a61d8cfcc175baa028eb437e"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/assembly/mod.rs",
+      "bytes": 65975,
+      "sha256": "a2d0e9a35c4e2620359cf4a984c5214d89488dee793e21eba767ebd260764977",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/assembly/mod.rs",
+      "upstream_sha256": "a2d0e9a35c4e2620359cf4a984c5214d89488dee793e21eba767ebd260764977"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/assembly/structural_traits.rs",
+      "bytes": 40999,
+      "sha256": "41682899234190ff8d51ed2bb0fc6670222f600900fbd84a3a57334a72f0a9ef",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/assembly/structural_traits.rs",
+      "upstream_sha256": "41682899234190ff8d51ed2bb0fc6670222f600900fbd84a3a57334a72f0a9ef"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/effect_goals.rs",
+      "bytes": 18454,
+      "sha256": "e3dadb9afa6f90b0be535c5453fd1f504e734f342f2fef230a041d6e9dfb0293",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/effect_goals.rs",
+      "upstream_sha256": "e3dadb9afa6f90b0be535c5453fd1f504e734f342f2fef230a041d6e9dfb0293"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/fast_path.rs",
+      "bytes": 6552,
+      "sha256": "e7d58c33a642f4d09293e6f5bd9f6bcfe915b9ff74c216f8ed979133fcc6f5da",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/fast_path.rs",
+      "upstream_sha256": "e7d58c33a642f4d09293e6f5bd9f6bcfe915b9ff74c216f8ed979133fcc6f5da"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/mod.rs",
+      "bytes": 87225,
+      "sha256": "6e58aae8ab4a971706dc7c8314b052893a4affa3eb5878ea7c2a2a7741acfb5f",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/mod.rs",
+      "upstream_sha256": "6e58aae8ab4a971706dc7c8314b052893a4affa3eb5878ea7c2a2a7741acfb5f"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/probe.rs",
+      "bytes": 6092,
+      "sha256": "0470ce61214960b659d5351487a458edc2add00afed1bda74c958beb5c67b8f5",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/probe.rs",
+      "upstream_sha256": "0470ce61214960b659d5351487a458edc2add00afed1bda74c958beb5c67b8f5"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/solver_region_constraints.rs",
+      "bytes": 9192,
+      "sha256": "fa2d2677c099a1d47abddbdac0035e5c04ea9dcbd05f221fce8ece2ff5f2b037",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/eval_ctxt/solver_region_constraints.rs",
+      "upstream_sha256": "fa2d2677c099a1d47abddbdac0035e5c04ea9dcbd05f221fce8ece2ff5f2b037"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/inspect/build.rs",
+      "bytes": 9536,
+      "sha256": "2509e31ea981e22e13aeb59bb9d1783de828c4200194309d0096f2f658819898",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/inspect/build.rs",
+      "upstream_sha256": "2509e31ea981e22e13aeb59bb9d1783de828c4200194309d0096f2f658819898"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/inspect/mod.rs",
+      "bytes": 89,
+      "sha256": "129c1b13637361ad76e8315d55dbec15fd06bfa2177d2c15ef45b3b57311ed5b",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/inspect/mod.rs",
+      "upstream_sha256": "129c1b13637361ad76e8315d55dbec15fd06bfa2177d2c15ef45b3b57311ed5b"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/mod.rs",
+      "bytes": 20260,
+      "sha256": "90a643d0088fa8d9f575d49d76b7d3880fd625db3ec8592915214d20bcf9b17d",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/mod.rs",
+      "upstream_sha256": "90a643d0088fa8d9f575d49d76b7d3880fd625db3ec8592915214d20bcf9b17d"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/normalizes_to.rs",
+      "bytes": 47919,
+      "sha256": "449ae192803d0bac928e7b1e52465e5063ab692cf94f1d48da2c74454fb8a1e1",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/normalizes_to.rs",
+      "upstream_sha256": "449ae192803d0bac928e7b1e52465e5063ab692cf94f1d48da2c74454fb8a1e1"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/project_goals/anon_const.rs",
+      "bytes": 767,
+      "sha256": "05f7226b4a3dbae8704fc1c635d7d175ca24c6505e5d008c6c98deaa1ff112a6",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/project_goals/anon_const.rs",
+      "upstream_sha256": "05f7226b4a3dbae8704fc1c635d7d175ca24c6505e5d008c6c98deaa1ff112a6"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/project_goals/free_alias.rs",
+      "bytes": 2422,
+      "sha256": "b753b365020a9b5c43dc0490c42a2fa9359c4605428037b01046b1ee3b62d47d",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/project_goals/free_alias.rs",
+      "upstream_sha256": "b753b365020a9b5c43dc0490c42a2fa9359c4605428037b01046b1ee3b62d47d"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/project_goals/inherent.rs",
+      "bytes": 5430,
+      "sha256": "39283aa4ee87e4294c491bb733d841d31c5d3d48138ff31ed874de9354ee77fd",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/project_goals/inherent.rs",
+      "upstream_sha256": "39283aa4ee87e4294c491bb733d841d31c5d3d48138ff31ed874de9354ee77fd"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/project_goals/mod.rs",
+      "bytes": 4165,
+      "sha256": "ee06a7d053cef9700c9a792debb183658955c3816b0fb6a69681456847212d4f",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/project_goals/mod.rs",
+      "upstream_sha256": "ee06a7d053cef9700c9a792debb183658955c3816b0fb6a69681456847212d4f"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/project_goals/opaque_types.rs",
+      "bytes": 10023,
+      "sha256": "afe52ace79f0a1b53f01213cb255a646976b302d5dfa2be003483aa74a41933f",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/project_goals/opaque_types.rs",
+      "upstream_sha256": "afe52ace79f0a1b53f01213cb255a646976b302d5dfa2be003483aa74a41933f"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/search_graph.rs",
+      "bytes": 5368,
+      "sha256": "87ac523a95395e699aeec1ed4fa22cdb6045045df6769d1e166cdabaed5bbe8c",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/search_graph.rs",
+      "upstream_sha256": "87ac523a95395e699aeec1ed4fa22cdb6045045df6769d1e166cdabaed5bbe8c"
+    },
+    {
+      "path": "compiler/rustc_next_trait_solver/src/solve/trait_goals.rs",
+      "bytes": 75898,
+      "sha256": "30b279f3b182ad08a00889b98525219f7db9b7f99ad04170d648b5d317d537f4",
+      "upstream": "compiler/rustc_next_trait_solver/src/solve/trait_goals.rs",
+      "upstream_sha256": "30b279f3b182ad08a00889b98525219f7db9b7f99ad04170d648b5d317d537f4"
+    },
+    {
+      "path": "compiler/rustc_type_ir/Cargo.toml",
+      "bytes": 781,
+      "sha256": "2f40aca20531419f6d7d0872064ae6eb3b6ddb5ca13f3024a78c8bd4add8e422",
+      "upstream": "compiler/rustc_type_ir/Cargo.toml",
+      "upstream_sha256": "fe64aa5f6ff8a241217d34b2c33104b0371417af865e21667e91471f5cb5edc8"
+    },
+    {
+      "path": "compiler/rustc_type_ir/Cargo.toml.upstream",
+      "bytes": 1425,
+      "sha256": "fe64aa5f6ff8a241217d34b2c33104b0371417af865e21667e91471f5cb5edc8",
+      "upstream": "compiler/rustc_type_ir/Cargo.toml",
+      "upstream_sha256": "fe64aa5f6ff8a241217d34b2c33104b0371417af865e21667e91471f5cb5edc8"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/binder.rs",
+      "bytes": 44282,
+      "sha256": "2cf01750b52706774f50cd4bed149fd4612326f237bc7b3cefdc527864822eb3",
+      "upstream": "compiler/rustc_type_ir/src/binder.rs",
+      "upstream_sha256": "2cf01750b52706774f50cd4bed149fd4612326f237bc7b3cefdc527864822eb3"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/canonical.rs",
+      "bytes": 16025,
+      "sha256": "5782458a576711a8e9d230375433818fce27316f5576731bcc299a330bc53d0b",
+      "upstream": "compiler/rustc_type_ir/src/canonical.rs",
+      "upstream_sha256": "5782458a576711a8e9d230375433818fce27316f5576731bcc299a330bc53d0b"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/const_kind.rs",
+      "bytes": 12040,
+      "sha256": "52ae50c5bc4385c7f53fa8abf81b66a0cf0c018ebf938bb322a18bf17f4df5a5",
+      "upstream": "compiler/rustc_type_ir/src/const_kind.rs",
+      "upstream_sha256": "52ae50c5bc4385c7f53fa8abf81b66a0cf0c018ebf938bb322a18bf17f4df5a5"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/delayed_map.rs",
+      "bytes": 2397,
+      "sha256": "af5efc3520dc3b322d770f98c77b968377e767704a4e5271706b161a54cdcf91",
+      "upstream": "compiler/rustc_type_ir/src/data_structures/delayed_map.rs",
+      "upstream_sha256": "af5efc3520dc3b322d770f98c77b968377e767704a4e5271706b161a54cdcf91"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/mod.rs",
+      "bytes": 598,
+      "sha256": "60d0030b0a4f7d4ff7440d0ad608eee0e9212469829e1aab8c5aa613686cd690",
+      "upstream": "compiler/rustc_type_ir/src/data_structures/mod.rs",
+      "upstream_sha256": "60d0030b0a4f7d4ff7440d0ad608eee0e9212469829e1aab8c5aa613686cd690"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/elaborate.rs",
+      "bytes": 16155,
+      "sha256": "c7f6f7cedb01a8aa21942e6121920ac0153defee800d8024176e4fe0a4a0a41d",
+      "upstream": "compiler/rustc_type_ir/src/elaborate.rs",
+      "upstream_sha256": "c7f6f7cedb01a8aa21942e6121920ac0153defee800d8024176e4fe0a4a0a41d"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/error.rs",
+      "bytes": 3765,
+      "sha256": "347e8a48b1c99e048660b3d7cf61a312b7ddc14606eeaf78539a36d5cb053a20",
+      "upstream": "compiler/rustc_type_ir/src/error.rs",
+      "upstream_sha256": "347e8a48b1c99e048660b3d7cf61a312b7ddc14606eeaf78539a36d5cb053a20"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/fast_reject.rs",
+      "bytes": 21587,
+      "sha256": "bc0974832c3b25eba0b1dcef13d5ae9a31f010ef6785a8565db4ffef100990d6",
+      "upstream": "compiler/rustc_type_ir/src/fast_reject.rs",
+      "upstream_sha256": "bc0974832c3b25eba0b1dcef13d5ae9a31f010ef6785a8565db4ffef100990d6"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/flags.rs",
+      "bytes": 22603,
+      "sha256": "bdd39afc6d833f88a6da68586db030cf6a30712fa9578275c31e6f974dde48f3",
+      "upstream": "compiler/rustc_type_ir/src/flags.rs",
+      "upstream_sha256": "bdd39afc6d833f88a6da68586db030cf6a30712fa9578275c31e6f974dde48f3"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/fold.rs",
+      "bytes": 26737,
+      "sha256": "c9423b10e7f0f94a9a97e1175cd02b42bcf375d04b508cd47078d0606d6f9dcb",
+      "upstream": "compiler/rustc_type_ir/src/fold.rs",
+      "upstream_sha256": "c9423b10e7f0f94a9a97e1175cd02b42bcf375d04b508cd47078d0606d6f9dcb"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/generic_arg.rs",
+      "bytes": 590,
+      "sha256": "9c314a785d91eae1a8eb90213c89bf46802d5dcf61e5df64e3815cbbf49150b2",
+      "upstream": "compiler/rustc_type_ir/src/generic_arg.rs",
+      "upstream_sha256": "9c314a785d91eae1a8eb90213c89bf46802d5dcf61e5df64e3815cbbf49150b2"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/generic_visit.rs",
+      "bytes": 7048,
+      "sha256": "5766b88b2da2a94de782423c92fd84de6122179721a7e54eafa42e7c6c980050",
+      "upstream": "compiler/rustc_type_ir/src/generic_visit.rs",
+      "upstream_sha256": "5766b88b2da2a94de782423c92fd84de6122179721a7e54eafa42e7c6c980050"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/infer_ctxt.rs",
+      "bytes": 30818,
+      "sha256": "46e603d106ae51b3d8dc809be5b9c628c1db5cb0e8683569295507ae5a2162f4",
+      "upstream": "compiler/rustc_type_ir/src/infer_ctxt.rs",
+      "upstream_sha256": "46e603d106ae51b3d8dc809be5b9c628c1db5cb0e8683569295507ae5a2162f4"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/inherent.rs",
+      "bytes": 22218,
+      "sha256": "df00384a620ba986ccf974277718f5d3eea75c3d750cef8e94a8497c7393966f",
+      "upstream": "compiler/rustc_type_ir/src/inherent.rs",
+      "upstream_sha256": "df00384a620ba986ccf974277718f5d3eea75c3d750cef8e94a8497c7393966f"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/intern/mod.rs",
+      "bytes": 127,
+      "sha256": "12e81169daa3a2456c9295a3523979216a2198cacfd8095c042cca930eb3af27",
+      "upstream": "compiler/rustc_type_ir/src/intern/mod.rs",
+      "upstream_sha256": "12e81169daa3a2456c9295a3523979216a2198cacfd8095c042cca930eb3af27"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/interner.rs",
+      "bytes": 26564,
+      "sha256": "ecb37fa2929672d63507a6b1d035da679b20015f1525fb3f270fa2d1e7f14b79",
+      "upstream": "compiler/rustc_type_ir/src/interner.rs",
+      "upstream_sha256": "ecb37fa2929672d63507a6b1d035da679b20015f1525fb3f270fa2d1e7f14b79"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/ir_print.rs",
+      "bytes": 4252,
+      "sha256": "a8d4ba63dfa499262d6961e32bb932a68ae019e504841b3810d32f38358c3b13",
+      "upstream": "compiler/rustc_type_ir/src/ir_print.rs",
+      "upstream_sha256": "a8d4ba63dfa499262d6961e32bb932a68ae019e504841b3810d32f38358c3b13"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/lang_items.rs",
+      "bytes": 1296,
+      "sha256": "02883691bd13cc5e276d7fb17890c8cd59dcdcba624d22a3bf4187b07202a16c",
+      "upstream": "compiler/rustc_type_ir/src/lang_items.rs",
+      "upstream_sha256": "02883691bd13cc5e276d7fb17890c8cd59dcdcba624d22a3bf4187b07202a16c"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/lib.rs",
+      "bytes": 17985,
+      "sha256": "6f6fa18f014c086b37b12f4cafc3719434d5ec2360420c1fb3969a833b909d5f",
+      "upstream": "compiler/rustc_type_ir/src/lib.rs",
+      "upstream_sha256": "6f6fa18f014c086b37b12f4cafc3719434d5ec2360420c1fb3969a833b909d5f"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/lift.rs",
+      "bytes": 1144,
+      "sha256": "cf7381fe33d1edf8f9d00ebb42ca7e76c5ae055be8d1a638b5147c9440a0463b",
+      "upstream": "compiler/rustc_type_ir/src/lift.rs",
+      "upstream_sha256": "cf7381fe33d1edf8f9d00ebb42ca7e76c5ae055be8d1a638b5147c9440a0463b"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/macros.rs",
+      "bytes": 2145,
+      "sha256": "eba95915a19d71efdbb115e9f222e1a66819a8507fba73e275c7a8acac149665",
+      "upstream": "compiler/rustc_type_ir/src/macros.rs",
+      "upstream_sha256": "eba95915a19d71efdbb115e9f222e1a66819a8507fba73e275c7a8acac149665"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/opaque_ty.rs",
+      "bytes": 1896,
+      "sha256": "d240866ce9c08548f665ded46bfb0c414d7db11343fce55c504047c87f74fefa",
+      "upstream": "compiler/rustc_type_ir/src/opaque_ty.rs",
+      "upstream_sha256": "d240866ce9c08548f665ded46bfb0c414d7db11343fce55c504047c87f74fefa"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/outlives.rs",
+      "bytes": 11605,
+      "sha256": "d6dfd70b229b97e0fb835874448cba78ee306002040895116a6f72d1ca0bf563",
+      "upstream": "compiler/rustc_type_ir/src/outlives.rs",
+      "upstream_sha256": "d6dfd70b229b97e0fb835874448cba78ee306002040895116a6f72d1ca0bf563"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/pattern.rs",
+      "bytes": 718,
+      "sha256": "bfea8294e368a2bc019456c169bfecb0150eaf12addf4dfc0bac460d852867ae",
+      "upstream": "compiler/rustc_type_ir/src/pattern.rs",
+      "upstream_sha256": "bfea8294e368a2bc019456c169bfecb0150eaf12addf4dfc0bac460d852867ae"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/predicate.rs",
+      "bytes": 27524,
+      "sha256": "57254579576e200f781ecd2bdea332e9ec760bea7548cbe87dfe601b6efdff95",
+      "upstream": "compiler/rustc_type_ir/src/predicate.rs",
+      "upstream_sha256": "57254579576e200f781ecd2bdea332e9ec760bea7548cbe87dfe601b6efdff95"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/predicate_kind.rs",
+      "bytes": 5494,
+      "sha256": "a43dd7bd5855b3ab011e99190cc4900c69f2a93d76715c17401b8cc672dbe9bf",
+      "upstream": "compiler/rustc_type_ir/src/predicate_kind.rs",
+      "upstream_sha256": "a43dd7bd5855b3ab011e99190cc4900c69f2a93d76715c17401b8cc672dbe9bf"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/region_constraint.rs",
+      "bytes": 50463,
+      "sha256": "444abc494b01d457e246f59d8430c72ce088ded95c81cc60e48af5974ee76a91",
+      "upstream": "compiler/rustc_type_ir/src/region_constraint.rs",
+      "upstream_sha256": "444abc494b01d457e246f59d8430c72ce088ded95c81cc60e48af5974ee76a91"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/region_kind.rs",
+      "bytes": 10856,
+      "sha256": "eebe66480a56971d9eb1f9f1e77303e6846df4f51431d98f97df2c2a7fa73443",
+      "upstream": "compiler/rustc_type_ir/src/region_kind.rs",
+      "upstream_sha256": "eebe66480a56971d9eb1f9f1e77303e6846df4f51431d98f97df2c2a7fa73443"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/relate.rs",
+      "bytes": 24067,
+      "sha256": "ff80bae6f6fd1be3abc93385e13e9612633bb2319d681ba992f9c2db94eec24d",
+      "upstream": "compiler/rustc_type_ir/src/relate.rs",
+      "upstream_sha256": "ff80bae6f6fd1be3abc93385e13e9612633bb2319d681ba992f9c2db94eec24d"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/relate/combine.rs",
+      "bytes": 10805,
+      "sha256": "78bbbe0a29688b1d1ade68d83e2f05272b75bdcf1a801861b1eeec833c382d4b",
+      "upstream": "compiler/rustc_type_ir/src/relate/combine.rs",
+      "upstream_sha256": "78bbbe0a29688b1d1ade68d83e2f05272b75bdcf1a801861b1eeec833c382d4b"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/relate/solver_relating.rs",
+      "bytes": 13177,
+      "sha256": "cab1b429658b26b540a74b24dcdc9a36704bb46c88d12d2aff0807e5487c7f46",
+      "upstream": "compiler/rustc_type_ir/src/relate/solver_relating.rs",
+      "upstream_sha256": "cab1b429658b26b540a74b24dcdc9a36704bb46c88d12d2aff0807e5487c7f46"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/search_graph/global_cache.rs",
+      "bytes": 3927,
+      "sha256": "9beb6c0c8653bdcf6e4d69eb0c7c0c17d604c91e2dcfeb3fabed192be80f2bee",
+      "upstream": "compiler/rustc_type_ir/src/search_graph/global_cache.rs",
+      "upstream_sha256": "9beb6c0c8653bdcf6e4d69eb0c7c0c17d604c91e2dcfeb3fabed192be80f2bee"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/search_graph/mod.rs",
+      "bytes": 64456,
+      "sha256": "1485ea11ba9a6037a23fe041b5d6d29db3018792e17cfcfd759104088f2bdcbc",
+      "upstream": "compiler/rustc_type_ir/src/search_graph/mod.rs",
+      "upstream_sha256": "1485ea11ba9a6037a23fe041b5d6d29db3018792e17cfcfd759104088f2bdcbc"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/search_graph/stack.rs",
+      "bytes": 4480,
+      "sha256": "e41e4747b258a831401ab99a6b6855734cf09d5ee8712c450886caece6be8e73",
+      "upstream": "compiler/rustc_type_ir/src/search_graph/stack.rs",
+      "upstream_sha256": "e41e4747b258a831401ab99a6b6855734cf09d5ee8712c450886caece6be8e73"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/serialize.rs",
+      "bytes": 4176,
+      "sha256": "07e8822b0085cf70451933d283108f9c4675160e65ca30af10b3793a273d3d4f",
+      "upstream": "compiler/rustc_type_ir/src/serialize.rs",
+      "upstream_sha256": "07e8822b0085cf70451933d283108f9c4675160e65ca30af10b3793a273d3d4f"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/solve/inspect.rs",
+      "bytes": 5588,
+      "sha256": "1c69968b5af606478c1299cc72009585e3ec030161e45d7dbf1bd81b3af8eabc",
+      "upstream": "compiler/rustc_type_ir/src/solve/inspect.rs",
+      "upstream_sha256": "1c69968b5af606478c1299cc72009585e3ec030161e45d7dbf1bd81b3af8eabc"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/solve/mod.rs",
+      "bytes": 44063,
+      "sha256": "14cb91b4ed092becb808a7277ba915f44b12ea15179a78d34cfaaf114cffca89",
+      "upstream": "compiler/rustc_type_ir/src/solve/mod.rs",
+      "upstream_sha256": "14cb91b4ed092becb808a7277ba915f44b12ea15179a78d34cfaaf114cffca89"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/sty/consts.rs",
+      "bytes": 7776,
+      "sha256": "438d1d1e0d54f5319d9103f494a8c1456c75e4b90e62c6002df0510732587686",
+      "upstream": "compiler/rustc_type_ir/src/sty/consts.rs",
+      "upstream_sha256": "438d1d1e0d54f5319d9103f494a8c1456c75e4b90e62c6002df0510732587686"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/sty/mod.rs",
+      "bytes": 11456,
+      "sha256": "da12e53643d4a943632aa06d61142fc786b8da972b042d1ebe3b4eb7c34e6b00",
+      "upstream": "compiler/rustc_type_ir/src/sty/mod.rs",
+      "upstream_sha256": "da12e53643d4a943632aa06d61142fc786b8da972b042d1ebe3b4eb7c34e6b00"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/term_kind.rs",
+      "bytes": 15595,
+      "sha256": "02f4ea9a1112031d6210fbadfa0cb7eccb0d576cbfbe28b18bf6f217a6a7a60d",
+      "upstream": "compiler/rustc_type_ir/src/term_kind.rs",
+      "upstream_sha256": "02f4ea9a1112031d6210fbadfa0cb7eccb0d576cbfbe28b18bf6f217a6a7a60d"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/ty/alias.rs",
+      "bytes": 2301,
+      "sha256": "5dc060679785594cfcc8c38f45512120c57ad381845c37603f2cd10b86278eba",
+      "upstream": "compiler/rustc_type_ir/src/ty/alias.rs",
+      "upstream_sha256": "5dc060679785594cfcc8c38f45512120c57ad381845c37603f2cd10b86278eba"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/ty/mod.rs",
+      "bytes": 30,
+      "sha256": "868467baf844b3be3b21722b0e6e112b12306e497d79f02e4e62ca3d51c14677",
+      "upstream": "compiler/rustc_type_ir/src/ty/mod.rs",
+      "upstream_sha256": "868467baf844b3be3b21722b0e6e112b12306e497d79f02e4e62ca3d51c14677"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/ty_info.rs",
+      "bytes": 2866,
+      "sha256": "2e413c6f942950af8a1562c0a5ccf1d1851190bad78e5f1fb6860136f4afe12e",
+      "upstream": "compiler/rustc_type_ir/src/ty_info.rs",
+      "upstream_sha256": "2e413c6f942950af8a1562c0a5ccf1d1851190bad78e5f1fb6860136f4afe12e"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/ty_kind.rs",
+      "bytes": 47939,
+      "sha256": "6ca068ac98641176e99ba3357effbb1b79d5274680e597cf80a520b5423911e1",
+      "upstream": "compiler/rustc_type_ir/src/ty_kind.rs",
+      "upstream_sha256": "6ca068ac98641176e99ba3357effbb1b79d5274680e597cf80a520b5423911e1"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/ty_kind/closure.rs",
+      "bytes": 26080,
+      "sha256": "2253a084744fe981aba5f102b8b923bd40c01a3ad9f39470390a942ed2aac09a",
+      "upstream": "compiler/rustc_type_ir/src/ty_kind/closure.rs",
+      "upstream_sha256": "2253a084744fe981aba5f102b8b923bd40c01a3ad9f39470390a942ed2aac09a"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/universe.rs",
+      "bytes": 5203,
+      "sha256": "596bc86b938a02eb7fe553500bebacbaa8f35b7e0fd616d0f1ce888bdb8a2734",
+      "upstream": "compiler/rustc_type_ir/src/universe.rs",
+      "upstream_sha256": "596bc86b938a02eb7fe553500bebacbaa8f35b7e0fd616d0f1ce888bdb8a2734"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/unnormalized.rs",
+      "bytes": 5481,
+      "sha256": "651cfa9a3008ef783ccc04c0f2aedf54411cda3f50d1382e50d2f767cf025aec",
+      "upstream": "compiler/rustc_type_ir/src/unnormalized.rs",
+      "upstream_sha256": "651cfa9a3008ef783ccc04c0f2aedf54411cda3f50d1382e50d2f767cf025aec"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/upcast.rs",
+      "bytes": 588,
+      "sha256": "c07de352991c53eba2ccf8d5e90434e686cb545341db8c632676b8cac293b9db",
+      "upstream": "compiler/rustc_type_ir/src/upcast.rs",
+      "upstream_sha256": "c07de352991c53eba2ccf8d5e90434e686cb545341db8c632676b8cac293b9db"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/visit.rs",
+      "bytes": 23120,
+      "sha256": "929138afa2624543eddb1f2d3c4b2d3a811fc72143a80cc64b35b8f2438c8e0c",
+      "upstream": "compiler/rustc_type_ir/src/visit.rs",
+      "upstream_sha256": "929138afa2624543eddb1f2d3c4b2d3a811fc72143a80cc64b35b8f2438c8e0c"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/walk.rs",
+      "bytes": 6492,
+      "sha256": "603c1d43a2c112f0f9eeb1617eade719b85622d77124a6821c142c1ce3fc2420",
+      "upstream": "compiler/rustc_type_ir/src/walk.rs",
+      "upstream_sha256": "603c1d43a2c112f0f9eeb1617eade719b85622d77124a6821c142c1ce3fc2420"
+    },
+    {
+      "path": "compiler/rustc_type_ir_macros/Cargo.toml",
+      "bytes": 406,
+      "sha256": "586bae8bb0d32ebee73313c844e07229d875880b7d7ae54fa455a5e583284dc6",
+      "upstream": "compiler/rustc_type_ir_macros/Cargo.toml",
+      "upstream_sha256": "de6ab870be12df9e694590683cf373da1933a230c129aea77d7a58e00b1576bc"
+    },
+    {
+      "path": "compiler/rustc_type_ir_macros/Cargo.toml.upstream",
+      "bytes": 326,
+      "sha256": "de6ab870be12df9e694590683cf373da1933a230c129aea77d7a58e00b1576bc",
+      "upstream": "compiler/rustc_type_ir_macros/Cargo.toml",
+      "upstream_sha256": "de6ab870be12df9e694590683cf373da1933a230c129aea77d7a58e00b1576bc"
+    },
+    {
+      "path": "compiler/rustc_type_ir_macros/src/lib.rs",
+      "bytes": 16415,
+      "sha256": "fd929ad293f584e1ca8530b25a83e52bdc708d7ae3c3df56a3f482c915b01c47",
+      "upstream": "compiler/rustc_type_ir_macros/src/lib.rs",
+      "upstream_sha256": "fd929ad293f584e1ca8530b25a83e52bdc708d7ae3c3df56a3f482c915b01c47"
+    }
+  ],
+  "packaging": "stable-shared-v1: unchanged Rust; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
+  "supported_features": "default-features=false; no compiler-only/nightly/randomize features"
+}

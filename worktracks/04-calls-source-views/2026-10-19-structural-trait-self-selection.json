@@ -1,0 +1,16 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Ordinary structured trait Self arguments; upstream solver linked but no concrete delegate/runtime integration claimed",
+  "controls": [
+    "cli::callable_value_tests::upstream_trait_self_arguments_share_declared_types_all_editions_and_origins",
+    "cli::crate_graph::trait_path_call_tests::trait_paths_select_the_impl_of_their_self_type",
+    "cli::crate_graph::trait_path_call_tests::trait_path_arguments_after_self_take_the_selected_impls_hints",
+    "cli::callable_value_tests::upstream_reference_conversion_uses_shared_receiver_probe_all_editions_and_origins"
+  ],
+  "runtime_cases": [
+    "tests/ui/methods/method-self-arg-trait.rs",
+    "tests/ui/methods/method-self-arg.rs",
+    "tests/ui/closures/closure-capture-after-clone.rs",
+    "tests/ui/let-else/let-else-source-expr-nomove-pass.rs"
+  ]
+}

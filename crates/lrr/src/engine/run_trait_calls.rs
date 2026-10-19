@@ -291,7 +291,7 @@ impl RunMachine {
                                             )));
                                         }
                                     },
-                                    self_reference: false,
+                                    self_type: None,
                                     arguments: arguments.to_vec(),
                                     alternatives: functions,
                                     result_self: self_term.filter(|_| returns_self),
@@ -400,7 +400,7 @@ impl RunMachine {
                                 )));
                             }
                         },
-                        self_reference: false,
+                        self_type: None,
                         arguments: arguments.to_vec(),
                         alternatives: candidates,
                         result_self,
@@ -439,40 +439,75 @@ impl RunMachine {
                 format!("trait path `{name}` names no function its trait declares"),
             )));
         };
-        let signature = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration)) {
+        let signature_owner = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration)) {
             QueryPoll::Ready(Ok(value)) => value,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let QueryValue::FunctionSignature(signature) = signature.value.as_ref() else {
+        let QueryValue::FunctionSignature(signature) = signature_owner.value.as_ref() else {
             return QueryPoll::Ready(Err(call_fault("trait declaration signature mismatch")));
         };
-        if let Some((ordinal, reference)) = signature
-            .parameters
-            .iter()
-            .enumerate()
-            .find_map(|(ordinal, parameter)| {
-                self_parameter(&parameter.ty).map(|reference| (ordinal, reference))
-            })
-            && ordinal < arguments.len()
-        {
-            let mut slots = Vec::new();
-            slots.extend_from_slice(arguments);
-            return QueryPoll::Ready(Ok(Some(TraitPathCall::Deferred {
-                declaration,
-                call: DeferredTraitCall {
-                    trait_key,
-                    name: function.to_owned(),
-                    self_ordinal: match u32::try_from(ordinal) {
-                        Ok(ordinal) => ordinal,
-                        Err(_) => return QueryPoll::Ready(Err(call_fault("argument ordinal overflow"))),
+        let self_key = signature.generics.iter().find(|parameter| {
+            parameter.name == "Self"
+                && parameter.kind == crate::syntax::signatures::GenericKind::Type
+        }).map(|parameter| crate::traits::term::ParamKey {
+            definition: declaration,
+            ordinal: parameter.ordinal,
+        });
+        if let Some(self_parameter) = self_key {
+            for ordinal in 0..signature.parameters.len().min(arguments.len()) {
+                let ordinal = match u32::try_from(ordinal) {
+                    Ok(ordinal) => ordinal,
+                    Err(_) => return QueryPoll::Ready(Err(call_fault("argument ordinal overflow"))),
+                };
+                let key = QueryKey::ContextParameterGoal {
+                    body: self.frame.pc().body.clone(),
+                    definition: declaration,
+                    ordinal,
+                };
+                let prepared = match db.fetch(&SyntaxProvider, key.clone()) {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let QueryValue::DeclaredParameterGoal(observed) = prepared.value.as_ref() else {
+                    return QueryPoll::Ready(Err(call_fault("trait parameter goal variant differs")));
+                };
+                if !observed.matches_context(&self.frame.pc().body, declaration, ordinal) {
+                    return QueryPoll::Ready(Err(call_fault("trait parameter goal owner differs")));
+                }
+                let crate::frontend::source_parameter_goals::ParameterTypeGoal::Ready(goal) = observed.goal() else {
+                    continue;
+                };
+                if !crate::frontend::signature_subst::references_parameters(goal.source(), &[self_parameter]) {
+                    continue;
+                }
+                if !prepared.cacheable {
+                    return QueryPoll::Ready(Err(call_fault("trait parameter goal is not retained")));
+                }
+                let guard = match db.prepare_input_guard(&SyntaxProvider, &key, prepared.fingerprint) {
+                    QueryPoll::Ready(Ok(guard)) => Arc::new(guard),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                return QueryPoll::Ready(Ok(Some(TraitPathCall::Deferred {
+                    declaration,
+                    call: DeferredTraitCall {
+                        trait_key,
+                        name: function.to_owned(),
+                        self_ordinal: ordinal,
+                        self_type: Some(crate::vm::frame::DeferredTraitSelf {
+                            parameter: self_parameter,
+                            signature: Arc::clone(&signature_owner.value),
+                            goal: Arc::clone(&prepared.value),
+                            guard,
+                        }),
+                        arguments: arguments.to_vec(),
+                        alternatives: Vec::new(),
+                        result_self: None,
                     },
-                    self_reference: reference,
-                    arguments: slots,
-                    alternatives: Vec::new(),
-                    result_self: None,
-                },
-            })));
+                })));
+            }
         }
         // `-> Self` with no `Self` parameter: the expected result type.
         let result_self = self_parameter(&signature.result) == Some(false);
@@ -583,16 +618,42 @@ impl RunMachine {
                         "trait call self argument requires its reached concrete type".into(),
                     )
                 })?;
-                if !deferred.self_reference {
-                    return Ok(ty);
+                let proof = deferred.self_type.as_ref().ok_or_else(|| {
+                    call_fault("trait Self selection lacks its declared parameter goal")
+                })?;
+                proof.guard.require_current(db)?;
+                let QueryValue::FunctionSignature(signature) = proof.signature.as_ref() else {
+                    return Err(call_fault("trait Self signature variant differs"));
+                };
+                let QueryValue::DeclaredParameterGoal(observed) = proof.goal.as_ref() else {
+                    return Err(call_fault("trait Self parameter goal variant differs"));
+                };
+                if !observed.matches_context(&self.frame.pc().body, signature.definition, deferred.self_ordinal) {
+                    return Err(call_fault("trait Self parameter owner differs"));
                 }
-                match self.store.type_descriptor(ty)?.key.as_ref() {
-                    TypeKey::Ref { target, .. } => Ok(*target),
-                    _ => Err(Diagnostic::new(
-                        "LRR-E-CALL-ARG-TYPE",
-                        "trait call self argument is not the declared reference to `Self`".into(),
-                    )),
-                }
+                let crate::frontend::source_parameter_goals::ParameterTypeGoal::Ready(goal) = observed.goal() else {
+                    return Err(call_fault("trait Self parameter goal is unresolved"));
+                };
+                goal.require(signature.definition, proof.signature.fingerprint(), ordinal)?;
+                let actual = self.store.descriptor_source_term(ty).ok_or_else(|| {
+                    call_fault("trait Self argument has no structural source Type")
+                })?;
+                // Check the entire declared shape before projecting a parameter:
+                // the runtime binder alone does not reject different wrappers.
+                let mut substitution = crate::frontend::signature_subst::SignatureSubstitution::new(
+                    signature, signature.definition,
+                )?;
+                substitution.constrain_equation(
+                    &crate::frontend::signature_subst::erase_regions(goal.source()),
+                    &crate::frontend::signature_subst::erase_regions(&actual),
+                )?;
+                let mut bindings = BTreeMap::new();
+                crate::frontend::call_contracts::bind_runtime_parameters(
+                    goal.source(), ty, &self.store, signature.definition, &mut bindings,
+                )?;
+                bindings.get(&proof.parameter).copied().ok_or_else(|| {
+                    call_fault("declared argument Type does not determine trait Self")
+                })
             })();
             let reached = match reached {
                 Ok(reached) => reached,

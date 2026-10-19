@@ -22,6 +22,8 @@ libloading.workspace = true
 toml_edit.workspace = true
 unicode-normalization.workspace = true
 lrr-expand-adapter = { path = "../lrr-expand-adapter" }
+rustc_next_trait_solver.workspace = true
+rustc_type_ir.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
