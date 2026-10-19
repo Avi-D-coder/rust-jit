@@ -1,10 +1,10 @@
 # WT05 — Trait headers, goals and dispatch
 
-Build the tabled demand-driven trait engine and source-aware dispatch required by ordinary Rust runtime contracts.
+Integrate the pinned next-generation rustc trait solver with LRR's demand-driven source queries, dictionaries and ordinary runtime dispatch. [E-R5-014](../../docs/errata/revision5-upstream-trait-solver.md) supersedes the former custom-solver plan.
 
 ## Current boundary
 
-Owned symbolic terms and transaction foundations exist; full header indexing, goal solving, projections and trait dispatch remain incomplete.
+Owned symbolic terms, partial source headers and custom transaction foundations exist. The required upstream adapter is not implemented; full header indexing, goal solving, projections and trait dispatch remain incomplete. Historical custom canonical/table candidates are held and must not be promoted as the new solver.
 
 This is an ownership/work-planning track, not a new task order or a feature-completion claim. Follow revision 5 Section 57 and the [contribution workflow](../README.md).
 
@@ -22,17 +22,17 @@ Broad path lists are coordination hints, not exclusive reservations. Claim exact
 
 Lower generic/conditional/blanket impls, trait members, supertraits and associated headers without ordinary body inference; compare indexes to complete catalogs and generated additions.
 
-### WT05-02 — Canonical goals and transactions
+### WT05-02 — Pinned upstream solver bridge and transactions
 
-Canonicalize exact TraitRef arguments and isolate candidate substitutions. Failed candidates roll back; NoSolution, Ambiguous, cycles and resource limits remain distinct.
+First build `rustc_next_trait_solver`/`rustc_type_ir` from the exact pinned Rust revision on macOS Rust1.99.0. Bridge actual Types, binders, ParamEnv and source/header facts into upstream interfaces and map canonical responses/selection evidence back to LRR. Reuse upstream inference transactions; failed candidates must not leak bindings. Record dependency/license/build-patch provenance and retire superseded custom semantic consumers after acceptance.
 
-### WT05-03 — Tabled conditional proofs
+### WT05-03 — Upstream conditional selection and search graph
 
-Evaluate only needed predicates, establish ordinary versus approved auto-trait recursion policy, and prohibit assumptions proving themselves after concrete substitution.
+Feed only demanded goals and their required transitive predicates to the shared solver. Reuse its conditional selection, cycle/fixpoint and ambiguity behavior; do not implement another SCC/worklist solver. Connect NeedInput and relevant cache invalidation without repeating completed guest effects. Only actual pinned-rustc limits are permitted; no LRR table/work/byte budgets.
 
 ### WT05-04 — Projection and binder semantics
 
-Normalize associated types/constants, GATs, higher-ranked bounds, region facts and const-generic/opaque contracts with precise indeterminate and cycle outcomes.
+Bridge upstream normalization, GATs, binders/universes and demanded region facts while preserving source identity. Reached associated constant values use the ordinary VM under E-R5-007. Keep unsupported, ambiguous and incomplete outcomes distinct; do not add static borrow checking or a separate projection solver.
 
 ### WT05-05 — Dispatch integration
 
@@ -40,7 +40,7 @@ Connect ordered inherent/trait receiver search, UFCS, defaults, supertraits, ope
 
 ## First assignable slice
 
-Prepare a bounded M019 header-lowering/index slice against the current M017/M018 interface; runtime integration waits for that SourceView dependency.
+Continue required M019 header/catalog prerequisites against M017/M018, then establish M020's pinned upstream build and source/inference bridge. Read [the migration contract](../../docs/errata/revision5-upstream-trait-solver.md) before assigning work. No new custom solver implementation is assignable.
 
 Before implementation, record a named upstream runtime witness (or an LRR-specific correctness witness), the task/invariant, missing dependency contracts and the exact acceptance command plan. Planned slices are not automatically ready to integrate.
 
@@ -48,10 +48,10 @@ Before implementation, record a named upstream runtime witness (or an LRR-specif
 
 TR006–TR018-style catalog/proof/rollback cases and unchanged stock trait runtime fixtures distinguish real selection from same-name/runtime-tag lookup; no unrelated cold body is checked.
 
-Keep upstream originals unchanged, including helpers/directives/revisions/expected files and licenses. Put adapters and LRR assertions outside the upstream directory. Run validation in a separate frozen checkout/target asynchronously; retain commands, source hashes, platform/toolchain, terminal statuses, failures and execution scope. A prepared or partially exercised original is not a full fixture pass.
+Keep upstream originals unchanged, including helpers/directives/revisions/expected files and licenses. Put adapters and LRR assertions outside the upstream directory. Build/test directly in this checkout asynchronously with one Cargo owner, freezing tested inputs while their users run; retain commands, source hashes, platform/toolchain, terminal statuses, failures and execution scope. A prepared or partially exercised original is not a full fixture pass.
 
 Update the claimed item, issue/PR links and evidence in the registry/history. A merged partial slice does not close its whole track or mark a T/H/M card complete.
 
 ## Cross-track coordination
 
-Uses WT04 symbolic SourceViews, WT08 sealed generated declarations and WT10 negative dependencies. WT07 consumes standard traits; no alternate solver framework.
+Uses WT04 symbolic SourceViews, WT08 sealed generated declarations and WT10 negative dependencies. WT07 consumes standard traits. The chosen solver is the pinned upstream next-generation solver; the LRR custom query framework and ordinary VM remain unchanged. No new runtime compatibility or performance evidence follows from this plan revision.

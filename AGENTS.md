@@ -2,6 +2,10 @@
 
 Specification: [LRR revision 5](lrr_rust2024_macros_traits_implementation_spec.md).
 
+## Upstream trait solver (October 19, 2026)
+
+Explicit user direction, [E-R5-014](docs/errata/revision5-upstream-trait-solver.md): reuse the **next-generation rustc trait solver**, `rustc_next_trait_solver` with `rustc_type_ir`, from the exact pinned upstream Rust revision. Implement the source/type/inference/dependency adapter and lazy runtime dictionaries; do not write an independent trait solver, canonicalizer, candidate-transaction engine, projection solver or cycle scheduler where upstream supplies the semantics. M020 first establishes the pinned macOS Rust1.99.0 build and real upstream invocation. Preserve demand-driven preparation and ordinary eager execution; do not introduce whole-body checking, a borrow checker or implicit rustc/cargo-check execution. Existing custom semantic paths and historical uncompiled solver candidates are migration debt, not the new implementation plan. Follow updated Section53 and WT05; keep all runtime and JIT gates unchanged and incomplete until actual acceptance.
+
 ## Simple interpreter scope (October 16, 2026) — overrides conflicting text below and in the spec
 
 Explicit user direction, recorded as [E-R5-006](docs/errata/revision5-no-resource-accounting.md):

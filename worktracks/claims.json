@@ -1059,13 +1059,13 @@
       "owner": "/root/edition_macro_logic",
       "kind": "local_agent",
       "status": "released",
-      "scope": "Frozen M020 canonical goal/candidate transactions source-only handoff; ten Rust controls uncompiled, real M018/M019/normalization integration incomplete; no runtime or solver authority.",
+      "scope": "Frozen M020 canonical goal/candidate transactions source-only handoff; ten Rust controls uncompiled, real M018/M019/normalization integration incomplete; no runtime or solver authority. October19 E-R5-014 supersedes the custom solver implementation plan: retain this proposal as historical source-only evidence; do not promote it. Reuse pinned upstream next-generation solver algorithms through the new adapter contract.",
       "paths": [
         "artifacts/macos-first/sol-canonical-candidate-transactions-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T17:08:45.945444+00:00",
+      "updated_at": "2026-10-19T08:48:45.648987+00:00",
       "review_after": "2026-10-15T16:46:37.734075+00:00"
     },
     {
@@ -1075,13 +1075,13 @@
       "owner": "/root/edition_macro_logic",
       "kind": "local_agent",
       "status": "released",
-      "scope": "Frozen M021 model table/control handoff; fourteen Rust controls uncompiled; actual M018/source-goal/predicate/normalization/query answer producers remain required, no solver/runtime authority.",
+      "scope": "Frozen M021 model table/control handoff; fourteen Rust controls uncompiled; actual M018/source-goal/predicate/normalization/query answer producers remain required, no solver/runtime authority. October19 E-R5-014 supersedes the custom solver implementation plan: retain this proposal as historical source-only evidence; do not promote it. Reuse pinned upstream next-generation solver algorithms through the new adapter contract.",
       "paths": [
         "artifacts/macos-first/sol-conditional-goal-tables-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T17:31:36.332506+00:00",
+      "updated_at": "2026-10-19T08:48:45.648987+00:00",
       "review_after": "2026-10-15T17:08:45.945444+00:00"
     },
     {

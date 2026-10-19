@@ -5792,7 +5792,9 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "release_complete": false
+      "release_complete": false,
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "T053",
@@ -19947,7 +19949,9 @@
         "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
         "worktracks/evidence/2026-10-14-adopted-source-registry.json"
       ],
-      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json."
+      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M018",
@@ -20016,7 +20020,9 @@
       "artifacts": [
         "worktracks/evidence/2026-10-18-interpreter-v151-v154-nominal-constant-context.json",
         "worktracks/evidence/2026-10-18-interpreter-v180-v186-constructor-arguments.json"
-      ]
+      ],
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M019",
@@ -20048,7 +20054,9 @@
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
       "latest_component_scope": "V91 solo held M019 source component: Q60 retains actual selected Trait declaration kind through shared ParseFile/direct syntax_at and original/generated source/epoch dependencies. source_types::projection_trait now requires that receipt for every ordinary bound/projection caller; Sized shares it, removing its separate declaration-row scan. Generated Trait owners join the existing declaration Type/origin service. Both builds and11/11focused controls pass, including13actual declaration worlds (original/emit/wrapper all4editions plus non-trait-bound metadata), cache/source/epoch/no-body and existing26Sized worlds/source lifetime controls. Selected unchanged upstream runtime contracts pass3/4: deferred1, via-bound-in-where and issue17718 with its actual auxiliary; conditional deferred2 still faults LRR-E-NAME-AMBIGUOUS after partial execution and remains a runtime blocker. Source/HEAD/generator frozen; V89 test API compile failure and V90 client-only review correction preserved. Zero new distinct runtime/full-fixture gains verified, no refreshed suite total. M018 SourceView propagation, full trait schemas/catalog/oracle, canonical transactions/tabled fulfillment and runtime selection remain incomplete; no M018/M019/interpreter/JIT gate closes.",
-      "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79"
+      "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M020",
@@ -20058,9 +20066,12 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "title": "Canonical goals and transactions",
-      "acceptance_contract": "TR007/TR008; failed candidate cannot constrain another. Depends: M019.",
-      "release_complete": false
+      "title": "Pinned upstream solver bridge and transactions",
+      "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
+      "release_complete": false,
+      "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M021",
@@ -20070,9 +20081,12 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "title": "Conditional impl selection",
+      "title": "Upstream conditional impl selection",
       "acceptance_contract": "TR009\u2013TR011; unrelated unused bounds remain unforced. Depends: M020.",
-      "release_complete": false
+      "release_complete": false,
+      "implementation_contract": "Files: traits/upstream/, traits/witness.rs, frontend/member.rs. Feed complete relevant candidate headers and demanded predicates to upstream selection; map exact trait arguments, selected impl/member evidence and ambiguity to LRR witnesses. No custom candidate solver.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M022",
@@ -20082,9 +20096,12 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "title": "Tabled recursion and limits",
-      "acceptance_contract": "TR012/TR013 and reduced-budget limits. Depends: M021.",
-      "release_complete": false
+      "title": "Upstream search graph and rustc-limit parity",
+      "acceptance_contract": "TR012/TR013, unchanged upstream recursive/overflow contracts and exact compiler-source/configuration citations for each enforced limit. Depends: M021.",
+      "release_complete": false,
+      "implementation_contract": "Files: traits/upstream/, db/provider.rs and provenance/limit mappings. Reuse upstream recursion/fixpoint/cycle behavior and actual pinned-rustc limits; integrate NeedInput/cancellation without a second worklist or LRR budgets.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M023",
@@ -20094,9 +20111,12 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "title": "Projection and associated constants",
+      "title": "Upstream projections and ordinary associated constants",
       "acceptance_contract": "TR014\u2013TR016; cold associated constant uncomputed. Depends: M022.",
-      "release_complete": false
+      "release_complete": false,
+      "implementation_contract": "Files: traits/upstream/, frontend/associated_types.rs and ordinary initializer integration. Reuse upstream projection/GAT substitution and exact associated identities; reached associated constant values use E-R5-007 ordinary VM initialization, with pure preparation values retaining their separate contract.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M024",
@@ -20106,9 +20126,12 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "title": "Higher-ranked and region facts",
-      "acceptance_contract": "TR017/TR018; for-all and static-only witnesses do not unify accidentally. Depends: M023.",
-      "release_complete": false
+      "title": "Upstream higher-ranked and region adapter",
+      "acceptance_contract": "TR017/TR018; for-all and static-only witnesses do not unify accidentally; unresolved evidence is not a false proof. Depends: M023.",
+      "release_complete": false,
+      "implementation_contract": "Files: traits/upstream/, traits/term.rs and source ParamEnv integration. Preserve upstream binders/universes/leak checks and demanded header-region constraints without adding a static borrow checker or stricter runtime policy.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M025",
@@ -20125,7 +20148,9 @@
       "title": "Source member identification",
       "acceptance_contract": "TR003/TR019/TR020; mutability failure never picks lower-ranked member. Depends: M024.",
       "release_complete": false,
-      "latest_component_scope": "V40 shared exact-row entered/cold metadata publisher compilerchecked;7/7affectedcontrols plus1/1currentordinaryruntime regression. Required-pub cold3scopes/signatures all4ed sourcecomponent only; runtimeTypeprefix/member/calleejoin stillabsent. No status/taskrelease promotion."
+      "latest_component_scope": "V40 shared exact-row entered/cold metadata publisher compilerchecked;7/7affectedcontrols plus1/1currentordinaryruntime regression. Required-pub cold3scopes/signatures all4ed sourcecomponent only; runtimeTypeprefix/member/calleejoin stillabsent. No status/taskrelease promotion.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M026",
@@ -20138,7 +20163,9 @@
       "title": "Lazy dictionary fulfillment and calls",
       "acceptance_contract": "TR021\u2013TR023; selected method contract checked; other missing methods remain cold. Depends: M025.",
       "release_complete": false,
-      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json."
+      "latest_component_scope": "V71/V72 solo held component: nonclosed substituted Types retain their shared declared receiver/argument relation; previously failing W::new();w.set(1) control now passes. V71 builds and8/8focused source controls pass;2/5selected unchanged upstream mains pass. V72 removes the receiver-skipping prefix from common signature unification and admits same-trait receiver-only methods through existing deferred call packets. Both builds,6/6focused controls and3/5selected unchanged upstream mains pass; deferred-resolution1 newly passes directly all4editions versus measured V69/V71. Conditional companion and borrowed empty-iterator numeric fallback remain failed; full catalog/tabled-goal/currentness/origin/cleanup matrices and runtime/JIT gates remain open. No refreshed suite total. Evidence worktracks/evidence/2026-10-18-interpreter-v69-v71-inference-validation.json and worktracks/evidence/2026-10-18-interpreter-v72-validation.json.",
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M027",
@@ -20150,7 +20177,9 @@
       "artifact_paths": [],
       "title": "Selection invalidation",
       "acceptance_contract": "CA001\u2013CA003; changed method body reuses witness but not old body. Depends: M026.",
-      "release_complete": false
+      "release_complete": false,
+      "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
     },
     {
       "id": "M028",

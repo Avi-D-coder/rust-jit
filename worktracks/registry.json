@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T08:29:03.723628+00:00",
+  "updated_at": "2026-10-19T08:48:45.648987+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -315,17 +315,21 @@
         },
         {
           "id": "WT05-02",
-          "title": "Canonical goals and transactions",
-          "status": "claimed",
-          "candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
-          "acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete"
+          "title": "Pinned upstream solver bridge and transactions",
+          "status": "planned",
+          "acceptance_scope": "Design only; historical custom solver proposals superseded. Upstream bridge build, integrated semantic/runtime evidence and migration/removal remain unimplemented.",
+          "historical_candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
+          "historical_acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete",
+          "candidate": "docs/errata/revision5-upstream-trait-solver.md"
         },
         {
           "id": "WT05-03",
-          "title": "Tabled conditional proofs",
-          "status": "claimed",
-          "candidate": "artifacts/macos-first/sol-conditional-goal-tables-v1/",
-          "acceptance_scope": "source-only table preparation; M018/M019/M020 integration and genuine source-goal/approved cycle policy producers incomplete"
+          "title": "Upstream conditional selection and search graph",
+          "status": "planned",
+          "acceptance_scope": "Design only; historical custom solver proposals superseded. Upstream bridge build, integrated semantic/runtime evidence and migration/removal remain unimplemented.",
+          "historical_candidate": "artifacts/macos-first/sol-conditional-goal-tables-v1/",
+          "historical_acceptance_scope": "source-only table preparation; M018/M019/M020 integration and genuine source-goal/approved cycle policy producers incomplete",
+          "candidate": "docs/errata/revision5-upstream-trait-solver.md"
         },
         {
           "id": "WT05-04",
@@ -340,7 +344,8 @@
       ],
       "component_evidence": [
         "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json"
-      ]
+      ],
+      "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented."
     },
     {
       "id": "WT06",
@@ -828,5 +833,11 @@
       "diagnostic": "outstanding",
       "full_fixture": "unassessed"
     }
+  },
+  "current_spec": {
+    "revision": "5.0",
+    "sha256": "0172529469f9cf0abbf61535310ba6a7319c8b76b49ffbf3ab9b26fc369a1674",
+    "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
+    "runtime_acceptance_changed": false
   }
 }

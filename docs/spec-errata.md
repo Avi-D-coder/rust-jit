@@ -1,5 +1,7 @@
 # Specification errata index
 
+- [E-R5-014: reuse the pinned next-generation rustc trait solver](errata/revision5-upstream-trait-solver.md) — user-directed replacement of the custom-solver plan; demand-driven adapter integration and runtime acceptance remain outstanding.
+
 Each entry records its witness, correction and acceptance scope. This index
 does not imply completed task or release acceptance. Patch receipts and frozen
 platform checkpoints provide the corresponding implementation evidence.

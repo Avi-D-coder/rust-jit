@@ -12,6 +12,8 @@
 
 **Interpreter-first runtime-semantics priority (October 13, 2026):** Before guest JIT implementation, require complete interpreter execution of every applicable official rustc runtime contract, including currently unsupported runtime language features, plus applicable interpreter correctness gates. Preserve a complete upstream inventory; compile-time diagnostics, static type/borrow checking and compiler/tooling outputs have separate acceptance reports and do not block guest JIT. LRR does not implement a borrow checker or full static type checker; users run cargo check separately. Report runtime-contract passes, full-fixture passes, failures, unsupported and unexecuted cases distinctly; imported files and component checks are not full stock passes. Section 1.2.1 defines this user-authorized runtime-semantics prerequisite.
 
+**Upstream trait solver amendment (October 19, 2026):** Reuse the pinned **next-generation rustc trait solver**, `rustc_next_trait_solver` with `rustc_type_ir`, through an LRR source/inference adapter. Do not implement an independent trait-solving algorithm. Sections52–53 and M019–M027 retain their observable contracts but now require upstream solving, canonicalization, inference transactions, normalization and cycle handling wherever those facilities are supplied upstream. LRR owns demand scheduling, actual source/header adapters, dependency guards, runtime dictionaries and execution. This is library reuse; it does not invoke rustc to check or compile live guest units, introduce whole-body inference, or add static borrow/privacy/lint checking. The exact pin, migration and acceptance requirements are in [E-R5-014](docs/errata/revision5-upstream-trait-solver.md) and Section53.0. This amendment supersedes conflicting custom-solver instructions below; it changes no interpreter-first or macOS-first gate.
+
 **Edition support amendment (October 13, 2026):** Support all released official Rust editions: 2015, 2018, 2021 and 2024 for selected roots, dependencies and macro origins. This user-authorized amendment supersedes the former 2024-only root restriction. Preserve owning editions throughout parsing, lookup, macro spans, patterns, temporary lifetimes, preparation identities and caches. The pinned parser, host toolchain, query framework and runtime architecture remain unchanged. The compiler's experimental future edition is not a released edition. Acceptance requires edition-paired upstream interpreter cases and effective-edition regressions; admission alone is not full language compatibility.
 
 **Execution route:** Read Sections 1–5, 34–36, 47, 61 and 62 first. Follow the cross-ledger order in Section 57, including the new G2 optimization batch. T tasks build the common engine and optimizing tiers; H tasks build Cargo-native reuse; M tasks implement expansion/resolution and integration. Sections 61–62 are normative implementation contracts, not optional proposals. The independent frontend, custom query DB, Cranelift first tier, LLVM optimizing tier, native preparation adapter and execution contracts below are the selected architecture.
@@ -76,7 +78,7 @@
 50. [Discovery fixed point, nested impls, and generated tests](#section-50)
 51. [Effectful expansion, epochs, immutable records, and trust](#section-51)
 52. [Source-aware type terms, call-local elaboration, and member identity](#section-52)
-53. [Tabled demand-driven trait and projection engine](#section-53)
+53. [Demand-driven integration of the upstream trait solver](#section-53)
 54. [Trait-aware runtime operations and managed object views](#section-54)
 55. [Live, native, macro-export, and compile-time worlds](#section-55)
 56. [Interfaces, query keys, diagnostics, and service contract](#section-56)
@@ -183,7 +185,7 @@ This section records the trade-off evaluation as decisions. It is not a menu.
 | D13 | Native borrow guards with proof-based lease reuse | Preserves native reference validity without a global borrow checker | A lease can span an optimized interval only while its ownership/alias facts remain valid |
 | D14 | Concrete call contracts plus operation guards | Supplies enough information to execute safely without analyzing cold expressions | Some otherwise valid Rust needs annotations |
 | D15 | Rust-compatible source constraints and numeric fallback | Preserve Rust inference while executing concrete primitive arithmetic | Resolve relevant source constraints before defaulting unconstrained integer/float variables |
-| D16 | Preserve symbolic source types; use a tabled goal engine and lazy implementation dictionaries | Correct generic method identity, conditional impls, and associated items without global checking | Some reached operations require header predicates or explicit type annotations |
+| D16 | Preserve symbolic source types; reuse the pinned next-generation rustc trait solver through a demand-driven LRR adapter and lazy implementation dictionaries | Share upstream trait semantics, conditional selection and normalization without global checking | Implement and validate the source/type/inference/dependency bridge; no independent solver or performance assumption |
 | D17 | Closed runtime facade for selected `core`, `alloc`, and `std` APIs | Produces useful tests without interpreting unsafe standard-library internals | Every supported API must be implemented and tested explicitly |
 | D18 | General hygienic macro_rules plus all three stable procedural-macro forms; generated code enters the common frontend | Existing generated declarations and tests are visible to the interpreter | Declaration-sensitive expansion can require cold syntax; proc macros need native tool authority |
 | D19 | No guest closures in this release | Capture inference and closure ownership are independent language projects | Tests must use named functions and explicit data |
@@ -4415,9 +4417,9 @@ Inside a trait default body, Self remains a rigid trait parameter with the trait
 
 Closely reproduce the reference's context-specific lookup rules. Do not apply one rule “trait methods always win” to fix the generic bug: the direct call on a concrete receiver must still select a higher-priority inherent method where Rust does. Store the member choice with the source definition and ParamEnv, then instantiate it rather than performing a runtime method-name search.
 
-### 52.5 Minimal unification and hints
+### 52.5 Shared upstream inference and hints
 
-Unification operates on local terms with an occurs check, bound-variable shifting, and nominal identity. Treat definition Params as rigid in Stage A. Treat only explicit Infer variables as bindable. Follow declared aliases and necessary associated equalities through NormalizeProjection. A const parameter may bind to a known finite const value; unresolved symbolic const expressions remain terms until layout/selection needs a value.
+Bridge LRR source terms to the pinned solver's inference context, preserving its occurs checks, binder shifting, nominal identity and local inference transactions. Treat definition Params as rigid in Stage A. Treat only explicit Infer variables as bindable. Follow declared aliases and necessary associated equalities through upstream normalization. A const parameter may bind to a known finite const value; unresolved symbolic const expressions remain terms until layout/selection needs a value. Existing custom unification consumers are migration debt: migrate their semantic constraints to this common adapter and remove superseded algorithms when the required witnesses pass. Serialization/runtime descriptor projection is LRR glue, not permission for a second semantic unifier.
 
 When binding a generic signature against an actual argument, preserve both a symbolic substitution from source argument views and a concrete substitution from descriptors. A call f::<T>(x) inside a generic caller carries the caller's symbolic T into the callee signature while its RuntimeSubst has the actual type. Do not use the latter to strengthen what methods were available in the caller's definition context.
 
@@ -4439,7 +4441,17 @@ Use the same discipline for implicit borrows in equality/ordering, indexing to a
 
 <a id="section-53"></a>
 
-## 53. Tabled demand-driven trait and projection engine
+## 53. Demand-driven integration of the upstream trait solver
+
+### 53.0 Required implementation and ownership
+
+Use `rustc_next_trait_solver` and `rustc_type_ir` from pinned rust-lang/rust revision `ae0fe511b15ab760d7e963b13389d1bc2ab42b18`, the current upstream source/test pin. A source-equivalent `ra-ap-rustc_*` publication is allowed only with verified revision/content provenance; do not silently choose a newer publication or the legacy solver/Chalk. Record the complete dependency closure, licenses, source hashes, compiler/features and any mechanical build patches in Git; keep reconstructible compiler checkouts, targets and caches out of Git. M020 first verifies a macOS Rust1.99.0 build of the pinned shared crates and adapter boundary. If this exact pin cannot expose a needed interface, record the actual blocker and review a concrete pin/adapter change; do not fall back to a new solver.[^M18]
+
+LRR implements the required upstream `Interner`, inference-context and `SolverDelegate` interfaces, or reuses compatible pinned upstream adapter components, over actual source identities, type/binder terms, ParamEnv facts and sealed relevant impl/header catalogs. The shared crates own their solving/search-graph algorithms. Feed only goals demanded by reached member selection, argument/result inference, projection, layout or cleanup; supplying a header must not prepare or execute its method body. The solver may demand the necessary transitive header predicates. Its adapter must not invoke whole-body rust-analyzer/rustc inference, borrow checking, coherence diagnostics, privacy or lint passes. An unused function bound remains unforced.
+
+Keep one source/member/constraint pipeline for ordinary and macro-generated code. Map upstream canonical responses and selection evidence to LRR's portable goal/witness/dictionary identities; do not persist upstream context pointers or treat a successful constraint answer alone as an executable impl identity. Where selected-impl/associated-member evidence needs an additional upstream interface, use the pinned selection machinery through the same adapter and validate that bridge. Runtime concrete types can fulfill a source-selected trait goal; they cannot select an unrelated inherent method in a generic definition.
+
+Implement immutable preparation and relevant positive/negative dependencies through the existing LRR query framework. Missing source/expansion input returns NeedInput to the coordinator; upstream callbacks perform no IO, macro execution or guest calls. Re-enter only the pure demand after input completion, preserving VM argument/effect continuations. Final selection caching must include failed/ambiguous candidates and catalog membership; never reuse an upstream cache across changed source worlds without validating its dependencies. Section53 describes required adapter outcomes and observable behavior, not an instruction to recreate upstream algorithms.
 
 ### 53.1 Goals, results, and witnesses
 
@@ -4470,15 +4482,13 @@ enum Witness {
 
 NeedInput is outside GoalResult because it is an unfinished query, not a semantic answer. NoSolution means all relevant candidates were examined against a sealed universe and failed. Ambiguous means multiple answers or a relevant unresolved predicate remains. Overflow and IndeterminateRegion are not NoSolution. Store no entry pointer or guest object in a witness.
 
-CanonicalGoalKey contains normalized goal terms, canonical ParamEnv facts, binder universe mapping, live/world/unit identity, catalog membership dependencies, target/edition/semantics version, and solver-rule version. Canonicalization assigns inference-variable ordinals by first occurrence; it does not replace rigid parameters by their runtime values. Preserve trait arguments and associated-item arguments. T: Convert<A> and T: Convert<B> are different goals even if a method name matches.
+CanonicalGoalKey contains normalized goal terms, canonical ParamEnv facts, binder universe mapping, live/world/unit identity, catalog membership dependencies, target/edition/semantics version, the exact upstream solver/dependency revision, and adapter schema version. Canonicalization assigns inference-variable ordinals by first occurrence; it does not replace rigid parameters by their runtime values. Preserve trait arguments and associated-item arguments. T: Convert<A> and T: Convert<B> are different goals even if a method name matches.
 
-### 53.2 Candidate enumeration
+### 53.2 Candidate inputs and isolated upstream evaluation
 
-Require ImplCatalogSeal before enumerating potentially applicable impls. Index by exact trait identity and outer self-type constructor; include blanket generic candidates whose self type is a parameter. For inherent members use the separate inherent index and Stage A rules. The index is an optimization only: a debug oracle enumerates all headers and proves the indexed set is complete in property tests.
+Require ImplCatalogSeal before supplying potentially applicable impls to upstream evaluation. The LRR header adapter indexes exact trait identity and outer self-type constructor, including blanket generic candidates; debug comparison against the complete relevant header catalog checks that the adapter omits no candidate. For inherent members retain Stage A's separate source lookup. The source index is an optimization, never a substitute for upstream matching and fulfillment.
 
-For each candidate, allocate fresh local inference variables for its generic binders, unify its self type and trait arguments with the goal, and normalize only projections needed by that match. A structural mismatch is a definite rejection. On match, create child goals for where predicates, implicit required header bounds, and associated equalities that establish applicability. Do not inspect method bodies or all methods' independent bounds. Check selected method-specific bounds only for that reached member.
-
-Candidate evaluation is transactional: each has its own inference snapshot, constraints, dependency collector, and proof edges. Failed candidate bindings cannot leak into the next candidate. Record every consulted header/predicate/seal, including failed candidates, so adding/removing a premise invalidates prior success. An unrelated candidate that structurally cannot match may contribute only the bucket membership dependency.
+Let the pinned solver instantiate candidate binders, unify self/trait arguments, demand necessary projections/predicates and isolate speculative inference changes. LRR supplies genuine declared headers and ParamEnv facts and records every dependency the adapter consulted, including unsuccessful candidates. A failed or ambiguous candidate must not leak substitutions into another call or candidate. Adding/removing a relevant impl or premise invalidates earlier answers; unrelated structurally inapplicable publication must not cause a full-world namespace comparison on dispatch. Do not inspect method bodies to decide header applicability.
 
 ### 53.3 Parameter assumptions versus concrete fulfillment
 
@@ -4488,19 +4498,17 @@ Do not satisfy `Widget: Describe` using the very generic `T: Describe` assumptio
 
 A where-clause determining an impl's applicability is forced at reached selection even when the selected method does not use it. For `impl<T: Encode> Describe for Wrapper<T>`, choosing Describe for Wrapper<Widget> requires Widget: Encode. An ordinary function's unused `T: Encode` bound is not automatically forced. This distinction prevents “no global checking” from becoming “choose an impl whose condition is false.”
 
-### 53.4 Evaluation scheduler and recursion
+### 53.4 Upstream search graph, recursion and limits
 
-Implement goal tables as an explicit worklist, not recursive host calls with unbounded depth. Table states are New, Evaluating, Suspended, Complete. Each table stores candidate strands, child-table dependencies, canonical answers, and caller continuations. When a new answer arrives, wake dependent strands. Evaluate a strongly connected component until no new answers/constraints are produced, then finalize it according to its cycle kind.
+Reuse the pinned upstream solver's search graph, canonical response combination, provisional caching, fixpoint and inductive/coinductive cycle policies. Do not implement LRR SCC/strand/worklist algorithms to reproduce them or declare success merely because an LRR query key is already active. LRR's query adapter owns source-demand suspension and final dependency publication; recursive trait goals remain internal to the upstream evaluation. A source include/import/alias cycle is not a coinductive trait proof.
 
-Ordinary trait/projection cycles are inductive. A cycle with no base proof does not prove itself. If no candidate outside the cycle yields a consistent answer, return NoSolution or Ambiguous according to residual inference, never Unique merely because a goal is already on the stack. A projection that recurs with ever-growing type structure hits the explicit size/depth budget. Do not cache its overflow as absence.
+Preserve upstream ambiguity/overflow distinctions and deferred constraints. A response without a unique applicable implementation is not permission to choose the first runtime candidate. Exercise unchanged upstream recursive trait, projection, auto-trait and higher-ranked fixtures against the actual integrated adapter; neither custom model tests nor native-only results establish interpreter acceptance.
 
-Structural auto-trait rules use coinduction only in an SCC consisting entirely of the approved auto-trait structural goals, with no conflicting negative fact or escaping projection/ordinary-trait edge. Mark provisional cyclic assumptions; commit them only if every noncyclic premise succeeds. An SCC involving a normal trait uses the inductive rule even if an auto-trait node appears in it. Dedicated positive/negative recursive tests are required before enabling this shortcut.
-
-Limits: 256 active binder/goal depth, 50,000 tables per demand, 200,000 candidate strands, 1,000,000 goal work steps, and 1 MiB canonical term bytes per demand. Poll cancellation every 256 steps. Results include counters and limit name. Test reduced budgets to force all overflow paths.
+E-R5-006 applies: only limits actually enforced by pinned rustc are allowed, with compiler source citations and the same crate configuration. Wire the configured recursion limit and required upstream limits through the adapter; record their exact definitions/call sites from compiler/rustc_next_trait_solver/src/solve/mod.rs, compiler/rustc_next_trait_solver/src/solve/search_graph.rs and compiler/rustc_type_ir/src/search_graph/. Remove the former LRR table/strand/work/byte caps and reduced-budget acceptance. Cancellation is an explicit host request observed at interpreter/preparation boundaries, not a guest fuel or elapsed-time budget. Do not label an interrupted evaluation a semantic NoSolution.
 
 ### 53.5 Answer combination and ambiguity
 
-Combine equivalent canonical answers and identical implementation witnesses reached through different assumption paths. Do not collapse two different impl identities merely because they return the same type. Exactly one applicable witness with fully discharged needed constraints is Unique. More than one distinct applicable witness is Ambiguous. An unresolved candidate that could conflict keeps the whole selection ambiguous until resolved. Never prefer a more specific-looking impl without the explicitly excluded specialization rules.
+Use upstream answer combination and applicability semantics through the pinned adapter. Preserve exact trait/impl/member identities in LRR witnesses rather than collapsing different implementations because their layouts or returned values match. Translate upstream uncertainty and residual constraints without inventing a Unique answer. Any specialization/default behavior exercised by applicable runtime contracts must follow the pinned upstream selection policy; no LRR specificity heuristic or blanket preference is allowed.
 
 The runtime does not validate global coherence or orphan rules. Handwritten invalid overlapping impls may remain untouched; if they affect an actual selection, fail with sorted origins. This is defined relaxed-source behavior, not emulation of rustc's global diagnostics. Native islands continue to receive normal compiler coherence validation.
 
@@ -4508,19 +4516,19 @@ Before invoking a selected trait member, compare the selected impl method's inst
 
 ### 53.6 Associated types and GAT normalization
 
-A projection is identified by trait, concrete/symbolic Self and trait arguments, associated item identity, and that item's generic arguments. First resolve equality facts in ParamEnv where available. Otherwise select a witness for the owning trait. Read only the selected associated definition, substitute impl parameters and item parameters with correct binder shifting, and recursively normalize only as far as the consumer requires.
+A projection is identified by trait, concrete/symbolic Self and trait arguments, associated item identity, and that item's generic arguments. Use upstream normalization and ParamEnv equality facts through the common adapter, retaining the selected owning-trait witness and exact associated-item identity. Read only the needed associated header/value, bridge its declared binders/substitutions faithfully, and normalize only as far as the consumer requires; do not implement an independent projection solver.
 
 An unused field schema may retain a projection thunk. A field access, returned call descriptor, operator output, iterator Item, or dyn associated binding can force it. Resolve GAT where predicates needed for this use; preserve lifetime placeholders rather than mapping all GAT instantiations to one erased key. Stable associated-type defaults in traits are not assumed: source constructs unsupported by the pinned stable compiler fail their reached declaration requirement, not masquerade as a standard default mechanism.[^M13]
 
-Projection equality can add inference bindings within a goal transaction, with occurs/leak checks. Report a cycle with its associated-item path. Do not treat a projection as a fresh arbitrary nominal type to bypass a cycle or missing impl. Associated constants similarly select the owning witness, substitute arguments, and run the pure constant evaluator for that item alone; validate its concrete result contract. A cold associated constant with an error remains uncomputed.
+Projection equality can add inference bindings within a goal transaction, with occurs/leak checks. Report a cycle with its associated-item path. Do not treat a projection as a fresh arbitrary nominal type to bypass a cycle or missing impl. Associated constants similarly select the owning witness and substitute arguments. Under E-R5-007, reached values run once through ordinary VM-backed initializer storage; only explicitly pure preparation-time const requirements use the separate pure evaluator. Validate the concrete result contract. A cold associated constant with an error remains uncomputed.
 
 ### 53.7 Intrinsic and structural rules
 
-Create compat/traits.toml with exact synthetic core/std trait identities, parameters, associated members, and intrinsic rule IDs. Primitive arithmetic/comparison and approved container/function/reference behaviors use these identities. A user trait called Copy or Iterator is not a language trait. Compiler-derived impl headers are ordinary catalog entries; intrinsic bodies do not override their bounds.
+Create compat/traits.toml with exact core/std trait identities, parameters, associated members, and intrinsic rule IDs. Supply actual language-item mappings to the upstream solver; reuse its builtin/structural trait rules instead of recreating their proofs in LRR. LRR-specific runtime representation operations remain explicit source-selected intrinsics, not extra trait-solving rules. Primitive arithmetic/comparison and approved container/function/reference behaviors use these identities. A user trait called Copy or Iterator is not a language trait. Compiler-derived impl headers are ordinary catalog entries; intrinsic bodies do not override their bounds.
 
 Sized is a layout fact over supported descriptors; ?Sized removes an implicit bound rather than asserting NotSized. Unsize/CoerceUnsized/DispatchFromDyn use the supported built-in reference/Box/array/slice/dyn rules and are not exposed as user-defined stable impl mechanisms. Fn/FnMut/FnOnce intrinsic witnesses exist for named function items and supported function pointers, with associated Output and call ownership rules; this does not add closure capture support.
 
-For the supported auto traits Send, Sync, and Unpin, use structural rules over actual fields/type arguments and explicit supported header facts, including approved reference/container behavior. These facts do not grant a guest permission to spawn threads or cross a native ABI. Negative impl syntax/nightly features outside the stable profile remain rejected when needed; internal negative facade facts are explicit synthetic rules. Avoid introducing an unverified blanket “all managed values are Send” rule.
+For the supported auto traits Send, Sync, and Unpin, supply actual fields/type arguments, explicit header facts and language-item identities to upstream structural evaluation, including the required reference/container facts. Do not reproduce auto-trait proof/cycle algorithms in LRR. These facts do not grant a guest permission to spawn threads or cross a native ABI. Negative impl syntax/nightly features outside the stable profile remain rejected when needed; internal negative facade facts are explicit synthetic rules. Avoid introducing an unverified blanket “all managed values are Send” rule.
 
 ### 53.8 Caching and dictionary layout
 
@@ -4659,7 +4667,7 @@ enum InputRequest {
 
 QueryPoll is used by all entry points that transitively need expansion or source capture. A caller cannot unwrap it into a missing-name error. SourceDb providers do not own subprocesses; coordinator services fulfill requests. Demand tokens include revision/epoch/query key/phase; when a provider suspends, discard its incomplete dependency collector, retaining only a trace for diagnostics. Re-entry recomputes pure facts and publishes a memo only after completion. VM phase state is separately retained by the dispatcher.
 
-The trait solver's internal tables are not ordinary query recursion. A provider for a top-level goal owns its tabled worklist and publishes a final answer/dependency set; child goals within an SCC use the solver's tables. Do not let the generic query database's “active key cycle” error prevent legitimate tabled trait evaluation. Conversely, a source include/import/alias cycle is not automatically a coinductive trait proof.
+The upstream trait solver's search graph is not ordinary LRR query recursion. A provider for a demanded goal calls the pinned shared solver through Section53.0's adapter and publishes the mapped answer/dependency set; child goals use the upstream evaluation context/search graph. Do not recreate a tabled evaluator inside the LRR database or let its active-key cycle check replace upstream cycle handling. Source include/import/alias cycles retain their ordinary source diagnostics.
 
 ### 56.2 Required queries and inputs
 
@@ -4834,15 +4842,15 @@ Language-fixture workflow: use the official rustc checkout at `rustc/rust` as th
 
 **M019 — Impl and trait header lowering.** Files: traits/header.rs, traits/index.rs, compat/traits.toml. Lower generic predicates and associated headers without bodies; index blanket candidates. Acceptance: TR006 and indexed-versus-full-catalog property model. Depends: M018.
 
-**M020 — Canonical goals and transactions.** Files: traits/canonical.rs, traits/unify.rs, traits/table.rs. Implement canonicalization, isolated candidate substitutions, explicit result states. Acceptance: TR007/TR008; failed candidate cannot constrain another. Depends: M019.
+**M020 — Pinned upstream solver bridge and transactions.** Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified. Acceptance: TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.
 
-**M021 — Conditional impl selection.** Files: traits/select.rs, traits/table.rs. Evaluate necessary candidate predicates and exact trait arguments; preserve ambiguity. Acceptance: TR009–TR011; unrelated unused bounds remain unforced. Depends: M020.
+**M021 — Upstream conditional impl selection.** Files: traits/upstream/, traits/witness.rs, frontend/member.rs. Feed complete relevant candidate headers and demanded predicates to upstream selection; map exact trait arguments, selected impl/member evidence and ambiguity to LRR witnesses. No custom candidate solver. Acceptance: TR009–TR011; unrelated unused bounds remain unforced. Depends: M020.
 
-**M022 — Tabled recursion and limits.** Files: traits/scc.rs, traits/worklist.rs, traits/limits.rs. Inductive goals, approved auto-trait SCC handling, no false success on cycles. Acceptance: TR012/TR013 and reduced-budget limits. Depends: M021.
+**M022 — Upstream search graph and rustc-limit parity.** Files: traits/upstream/, db/provider.rs and provenance/limit mappings. Reuse upstream recursion/fixpoint/cycle behavior and actual pinned-rustc limits; integrate NeedInput/cancellation without a second worklist or LRR budgets. Acceptance: TR012/TR013, unchanged upstream recursive/overflow contracts and exact compiler-source/configuration citations for each enforced limit. Depends: M021.
 
-**M023 — Projection and associated constants.** Files: traits/normalize.rs, frontend/constants.rs. GAT substitution and associated const evaluation on demand. Acceptance: TR014–TR016; cold associated constant uncomputed. Depends: M022.
+**M023 — Upstream projections and ordinary associated constants.** Files: traits/upstream/, frontend/associated_types.rs and ordinary initializer integration. Reuse upstream projection/GAT substitution and exact associated identities; reached associated constant values use E-R5-007 ordinary VM initialization, with pure preparation values retaining their separate contract. Acceptance: TR014–TR016; cold associated constant uncomputed. Depends: M022.
 
-**M024 — Higher-ranked and region facts.** Files: traits/regions.rs, traits/universe.rs. Implement header-fact closure and placeholder leak checks; indeterminate distinct from no solution. Acceptance: TR017/TR018; for-all and static-only witnesses do not unify accidentally. Depends: M023.
+**M024 — Upstream higher-ranked and region adapter.** Files: traits/upstream/, traits/term.rs and source ParamEnv integration. Preserve upstream binders/universes/leak checks and demanded header-region constraints without adding a static borrow checker or stricter runtime policy. Acceptance: TR017/TR018; for-all and static-only witnesses do not unify accidentally; unresolved evidence is not a false proof. Depends: M023.
 
 **M025 — Source member identification.** Files: frontend/member.rs, frontend/autoderef.rs. Candidate order, generic bound priority, exact item identity, explicit qualified paths. Acceptance: TR003/TR019/TR020; mutability failure never picks lower-ranked member. Depends: M024.
 
@@ -5110,7 +5118,7 @@ A helper/guard failure injected after rhs must not print R twice. The fixture re
 | TR010 | False conditional predicate yields NoSolution; overlapping relaxed impls yield Ambiguous, never first-listed success. |
 | TR011 | Ordinary function has unused impossible bound and passes under relaxed profile with zero forced proof for that predicate; used bound fails. |
 | TR012 | Inductive recursive goal with no base proof does not succeed; a separate finite recursive proof with a base does. |
-| TR013 | Auto-trait recursive SCC follows approved coinduction; mixed ordinary/auto cycle does not inherit automatic success; forced limits are not NoSolution. |
+| TR013 | Integrated upstream auto-trait cycle behavior matches the pinned solver; mixed ordinary/auto cycles do not gain an LRR success shortcut; actual pinned-rustc overflow is not NoSolution. |
 | TR014 | Measure::Output normalizes to i64 only when call/result requires it; irrelevant associated constant uncomputed. |
 | TR015 | Lending GAT source above; use-site region/associated arguments preserved, returned lease remains checked. |
 | TR016 | Projection cycle produces attributed cycle/limit outcome; associated const depends on concrete generic arg and has distinct cache keys. |
@@ -5346,6 +5354,9 @@ The algorithms, cache policy, limits, authority separation, and implementation t
 [^M16]: Rust Reference, [impl Trait](https://doc.rust-lang.org/reference/types/impl-trait.html). Argument/return abstract identities and capture rules; the observed-path hidden-type check is LRR's explicitly relaxed execution policy.
 
 [^M17]: Rust edition guide, [IntoIterator for arrays](https://doc.rust-lang.org/edition-guide/rust-2021/IntoIterator-for-arrays.html), [IntoIterator for boxed slices](https://doc.rust-lang.org/edition-guide/rust-2024/intoiterator-box-slice.html), and [match ergonomics](https://doc.rust-lang.org/edition-guide/rust-2024/match-ergonomics.html). Edition-sensitive behavior remains attached to source/token context rather than runtime type.
+
+[^M18]: Rust compiler development guide, [sharing the trait solver with rust-analyzer](https://rustc-dev-guide.rust-lang.org/solve/sharing-crates-with-rust-analyzer.html); pinned [solver crate](https://github.com/rust-lang/rust/tree/ae0fe511b15ab760d7e963b13389d1bc2ab42b18/compiler/rustc_next_trait_solver), [SolverDelegate](https://github.com/rust-lang/rust/blob/ae0fe511b15ab760d7e963b13389d1bc2ab42b18/compiler/rustc_next_trait_solver/src/delegate.rs), and [Interner](https://github.com/rust-lang/rust/blob/ae0fe511b15ab760d7e963b13389d1bc2ab42b18/compiler/rustc_type_ir/src/interner.rs). These interfaces establish an upstream reuse path; they do not prove LRR's bridge builds, preserves lazy preparation or passes runtime contracts. No relative performance claim is implied. The source pin is normative; moving documentation explains the design only.
+
 
 <a id="section-61"></a>
 
