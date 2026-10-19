@@ -64,6 +64,8 @@ pub(crate) mod operator_calls_frame;
 mod pattern_engine_frame;
 #[path = "frame_pattern.rs"]
 mod pattern_frame;
+#[path = "frame_pattern_publication.rs"]
+mod pattern_publication_frame;
 #[path = "frame_scope_cleanup.rs"]
 mod scope_cleanup_frame;
 #[path = "frame_temporary_scopes.rs"]

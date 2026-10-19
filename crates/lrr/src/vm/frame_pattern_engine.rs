@@ -16,7 +16,7 @@ fn transaction(message: &str) -> Diagnostic {
 /// Owning-read admission of a staged by-value binding. An owning scrutinee
 /// cell that still holds an unresolved numeric literal is an intrinsic Copy
 /// scalar whose type a later use fixes.
-fn owning_read(
+pub(super) fn owning_read(
     store: &GuestStore,
     place: &crate::runtime::place::Place,
 ) -> Result<(CellId, IntrinsicRead), Diagnostic> {
@@ -75,11 +75,10 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_pattern_open(owner, source, store)?;
-        let (root, root_source, owned_temporary, scope) = match self.body.slot_kind(source)? {
+        let (root, root_source, scope) = match self.body.slot_kind(source)? {
             SlotKind::Value => (
                 crate::runtime::place::Place::cell(self.cell(source)?),
                 self.source_view(source)?,
-                true,
                 self.slot(source)?.scope,
             ),
             _ => {
@@ -87,7 +86,7 @@ impl Frame {
                 let root_source = self.place_slot(source)?.source.clone();
                 let scope = self.place_slot(source)?.scope;
                 self.clear_place(source)?;
-                (place, root_source, false, scope)
+                (place, root_source, scope)
             }
         };
         self.open_patterns.open(OpenPattern {
@@ -95,7 +94,6 @@ impl Frame {
             scope,
             root,
             root_source,
-            owned_temporary,
             tree: None,
             solution: 0,
             matched: false,
@@ -353,14 +351,7 @@ impl Frame {
                             ));
                         }
                         IntrinsicRead::Move => {}
-                        IntrinsicRead::CopyAggregate if open.owned_temporary && !guard_view => {}
-                        IntrinsicRead::CopyAggregate => {
-                            return Err(Diagnostic::new(
-                                "LRR-E-UNSUPPORTED",
-                                "by-value binding of a Copy aggregate place requires aggregate copy activation"
-                                    .into(),
-                            ));
-                        }
+                        IntrinsicRead::CopyAggregate => {}
                     }
                 }
                 DefaultBindingMode::Ref | DefaultBindingMode::RefMut => {
@@ -379,54 +370,59 @@ impl Frame {
         }
         Ok(())
     }
-    fn publish_pattern_binding(
+    pub(super) fn publish_pattern_binding(
         &mut self,
         staged: &Staged,
-        owned_temporary: bool,
+        prepared_copy: &mut Option<TicketId>,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
-        let (ticket, source) = match staged.mode {
-            DefaultBindingMode::Move => {
-                let (cell, mode) = owning_read(store, &staged.place)?;
-                let ticket = match mode {
-                    IntrinsicRead::CopyScalar => store.copy_from(cell)?,
-                    IntrinsicRead::Move => store.move_from(cell)?,
-                    IntrinsicRead::CopyAggregate if owned_temporary => store.move_from(cell)?,
-                    IntrinsicRead::CopyAggregate => {
-                        return Err(Diagnostic::new(
-                            "LRR-E-UNSUPPORTED",
-                            "by-value binding of a Copy aggregate place requires aggregate copy activation"
-                                .into(),
-                        ));
-                    }
-                };
-                (ticket, staged.source.clone())
+        let (ticket, source) = if let Some(ticket) = *prepared_copy {
+            if staged.mode != DefaultBindingMode::Move {
+                return Err(transaction("prepared Copy belongs to a non-value binding"));
             }
-            DefaultBindingMode::Ref | DefaultBindingMode::RefMut => {
-                let mutable = staged.mode == DefaultBindingMode::RefMut;
-                let ticket = store
-                    .borrow_ticket(
-                        &staged.place,
-                        if mutable {
-                            Access::Mutable
-                        } else {
-                            Access::Shared
-                        },
-                    )
-                    .map_err(place_fault)?;
-                let range = self.body.nodes()[staged.binding.0 as usize].range;
-                let source = staged.source.clone().map(|pointee| {
-                    crate::traits::term::TyTerm::Ref(
-                        crate::traits::term::RegionTerm::Local {
-                            definition: self.body.body().definition,
-                            start: range.start,
-                            end: range.end,
-                        },
-                        mutable,
-                        Box::new(pointee),
-                    )
-                });
-                (ticket, source)
+            // An earlier @ binding may now own the original root. This ticket
+            // is the independent result of the already admitted source read.
+            (ticket, staged.source.clone())
+        } else {
+            match staged.mode {
+                DefaultBindingMode::Move => {
+                    let (cell, mode) = owning_read(store, &staged.place)?;
+                    let ticket = match mode {
+                        IntrinsicRead::Move => store.move_from(cell)?,
+                        IntrinsicRead::CopyScalar | IntrinsicRead::CopyAggregate => {
+                            return Err(transaction(
+                                "value pattern binding lacks its prepared Copy transfer",
+                            ));
+                        }
+                    };
+                    (ticket, staged.source.clone())
+                }
+                DefaultBindingMode::Ref | DefaultBindingMode::RefMut => {
+                    let mutable = staged.mode == DefaultBindingMode::RefMut;
+                    let ticket = store
+                        .borrow_ticket(
+                            &staged.place,
+                            if mutable {
+                                Access::Mutable
+                            } else {
+                                Access::Shared
+                            },
+                        )
+                        .map_err(place_fault)?;
+                    let range = self.body.nodes()[staged.binding.0 as usize].range;
+                    let source = staged.source.clone().map(|pointee| {
+                        crate::traits::term::TyTerm::Ref(
+                            crate::traits::term::RegionTerm::Local {
+                                definition: self.body.body().definition,
+                                start: range.start,
+                                end: range.end,
+                            },
+                            mutable,
+                            Box::new(pointee),
+                        )
+                    });
+                    (ticket, source)
+                }
             }
         };
         let value = store.peek_ticket(ticket)?;
@@ -445,6 +441,7 @@ impl Frame {
         )?;
         store.validate_initialization_value(cell, value)?;
         store.initialize(cell, ticket)?;
+        *prepared_copy = None;
         self.bindings[staged.binding.0 as usize] = Some(cell);
         self.set_binding_source_view(staged.binding, source)?;
         Ok(())
@@ -467,43 +464,6 @@ impl Frame {
             store.retire_cell(cell)?;
         }
         self.set_binding_source_view(binding, None)
-    }
-    /// Publish the staged bindings. A guard view never moves its source; a
-    /// commit transfers each binding once, in binding order, after admitting
-    /// every transfer so a refusal changes no ownership.
-    pub(crate) fn publish_pattern(
-        &mut self,
-        owner: NodeId,
-        guard_view: bool,
-        store: &mut GuestStore,
-    ) -> Result<(), Diagnostic> {
-        self.preflight_pattern_publication(owner, guard_view, store)?;
-        let open = self.open_patterns.current_mut(owner)?;
-        let owned_temporary = open.owned_temporary;
-        let staged = if guard_view {
-            open.staged
-                .iter()
-                .map(|staged| Staged {
-                    binding: staged.binding,
-                    place: copy_place(&staged.place),
-                    source: staged.source.clone(),
-                    mode: staged.mode,
-                    mutable: staged.mutable,
-                })
-                .collect::<Vec<_>>()
-        } else {
-            open.matched = false;
-            std::mem::take(&mut open.staged)
-        };
-        store.reserve_pattern_bindings(staged.len())?;
-        for binding in &staged {
-            self.publish_pattern_binding(binding, owned_temporary && !guard_view, store)?;
-        }
-        if guard_view {
-            self.open_patterns.current_mut(owner)?.exposed =
-                staged.iter().map(|staged| staged.binding).collect();
-        }
-        Ok(())
     }
     pub(crate) fn conceal_pattern(
         &mut self,

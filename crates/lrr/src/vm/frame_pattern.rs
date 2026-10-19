@@ -45,8 +45,9 @@ impl Frame {
                 result,
                 retry,
             } => self.test_pattern(*owner, tree, *result, *retry, store),
-            PatternOperation::Expose { owner } => self.publish_pattern(*owner, true, store),
-            PatternOperation::Commit { owner } => self.publish_pattern(*owner, false, store),
+            PatternOperation::Expose { .. } | PatternOperation::Commit { .. } => Err(invalid(
+                "pattern publication bypassed its resumable operation",
+            )),
             PatternOperation::Conceal { owner } => self.conceal_pattern(*owner, store),
             PatternOperation::Close { owner } => self.close_pattern(*owner, store),
         }

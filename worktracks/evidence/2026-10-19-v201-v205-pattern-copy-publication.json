@@ -1,0 +1,1414 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T07:45:00.956658+00:00",
+  "parent": "6551f55435c07897d12cbaa0cbc9ac0e4d8e2642",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "scope": "Solo T050/T051 common resumable pattern publication and scalar/aggregate Copy transfer ordering; held partial repair",
+  "precode": "worktracks/03-control-flow-patterns/2026-10-19-pattern-aggregate-copy-publication.md",
+  "v201_v202": {
+    "library_builds_exit": [
+      0,
+      0
+    ],
+    "runtime_executed": false,
+    "source_review_correction": "Initial build-only candidate published incrementally; official at-binding source revealed Copy transfers must precede all non-Copy parent moves. Corrected before runtime validation. Removed obsolete owned_temporary field."
+  },
+  "v203": {
+    "library_build_exit": 0,
+    "cli_build_exit": 0,
+    "controls_wrapper_exit": 0,
+    "controls": [
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_original_tuple_copy_read_preserves_source_and_allocates_distinct_fields",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "vm::frame::aggregate_copy_tests::rustc_original_tuple_copy_read_preserves_source_and_allocates_distinct_fields",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.426,
+        "log": "control-0.log"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.411,
+        "log": "control-1.log"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.446,
+        "log": "control-2.log"
+      },
+      {
+        "selector": "vm::frame::aggregate_copy_tests::rustc_copy_resume_refuses_changed_bound_pc_without_charging_or_publishing",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "vm::frame::aggregate_copy_tests::rustc_copy_resume_refuses_changed_bound_pc_without_charging_or_publishing",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.411,
+        "log": "control-3.log"
+      },
+      {
+        "selector": "engine::run::pattern_tests::every_owner_kind_uses_the_same_transaction_steps",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "engine::run::pattern_tests::every_owner_kind_uses_the_same_transaction_steps",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.418,
+        "log": "control-4.log"
+      },
+      {
+        "selector": "engine::run::pattern_tests::nominal_constructor_patterns_share_the_matcher_across_owner_kinds",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "engine::run::pattern_tests::nominal_constructor_patterns_share_the_matcher_across_owner_kinds",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.443,
+        "log": "control-5.log"
+      },
+      {
+        "selector": "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.185,
+        "log": "control-6.log"
+      },
+      {
+        "selector": "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.22,
+        "log": "control-7.log"
+      },
+      {
+        "selector": "vm::frame::ref_pattern_tests::rustc_initialized_ref_pattern_borrows_original_local_without_reading_or_moving_it",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "vm::frame::ref_pattern_tests::rustc_initialized_ref_pattern_borrows_original_local_without_reading_or_moving_it",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.407,
+        "log": "control-8.log"
+      }
+    ],
+    "runtime_harness_exit": 1,
+    "runtime_report": {
+      "schema": "lrr/v5/selected-upstream-runtime/v1",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "platform": "aarch64-apple-darwin",
+      "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+      "interpreter_binary": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "interpreter_sha256": "b30aababe133b14e5e0147464435d801984b45d8dc18094c107cd4f18c3a9a6f",
+      "source_digester": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "source_digester_sha256": "8846a79ccc76c48048bf6e4be6f33d35f4aa9beb1893782fdd22ae59eac601d3",
+      "native_execution": false,
+      "selected_cases": [
+        {
+          "case": "tests/ui/let-else/let-else-non-copy.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "402cd9a00ae696986a0f54cd6e818f64ec87c4c776dcc933f09968a7e56b1e48",
+          "capture_context": "86e440b180f755bc89f8da2a7edfcadb7310049be57b015af584619c6c07d752",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-non-copy.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "86e440b180f755bc89f8da2a7edfcadb7310049be57b015af584619c6c07d752"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 9435,
+            "elapsed_seconds": 6.831549625,
+            "stdout_bytes": 2128,
+            "stdout_sha256": "668aa8ca92878e2a1b460ee1dbfa2e160eb675a0262bd8d5cddb65d97587cc77",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/pattern/bindings-after-at/bind-by-copy.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [
+            "tests/ui/pattern/bindings-after-at/bind-by-copy.stderr"
+          ],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "outstanding",
+            "expected_files": [
+              "tests/ui/pattern/bindings-after-at/bind-by-copy.stderr"
+            ]
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "77e449a46030a87c8a5ba64fe615fd0bb52fb94637a2ecf4c6b480ada03a27ba",
+          "capture_context": "182963214f2ce11aa09b296d4eb6d11dbd26f54d1136a49a4178aeb671517095",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/pattern/bindings-after-at/bind-by-copy.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "182963214f2ce11aa09b296d4eb6d11dbd26f54d1136a49a4178aeb671517095"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 9492,
+            "elapsed_seconds": 8.431291625,
+            "stdout_bytes": 2129,
+            "stdout_sha256": "8181dc09031dd2e3c63dd179edcd54e5268b45a764c5be9a9ce9ce2ee2d2ef0b",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/pattern/bindings-after-at/bind-by-copy-or-pat.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "2330a3569574f667b760cef7324113c67b3b5ff529513f8c158a9f04e2c525dd",
+          "capture_context": "c0e64c119ee2e4214dfc3c3c411fe3175fd0569f52db74915b2de44c6eeede24",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/pattern/bindings-after-at/bind-by-copy-or-pat.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "c0e64c119ee2e4214dfc3c3c411fe3175fd0569f52db74915b2de44c6eeede24"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 9506,
+            "elapsed_seconds": 3.9784372500000007,
+            "stdout_bytes": 2112,
+            "stdout_sha256": "39477e25693608336fe5e79113df7c1bc330b1fb27ca0cf75d33602ff1b279bc",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/binding/match-with-at-binding-8391.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "aafd2638dd68952d50e7bd6fd5755c5f162643a93a8c6a01b359da8a03aab6dc",
+          "capture_context": "af8b3e7554801d137cd976de17358bbe6a243fab4c44ce5e3fffa7e7cf33acf5",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/binding/match-with-at-binding-8391.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "af8b3e7554801d137cd976de17358bbe6a243fab4c44ce5e3fffa7e7cf33acf5"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 9507,
+            "elapsed_seconds": 3.781740499999998,
+            "stdout_bytes": 2121,
+            "stdout_sha256": "e7aab508cd2d72db5cf06174a29a6f2e5b7025770f0aa733d542ccac676a320f",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/binding/match-implicit-copy-unique.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "9a0fc3a6c8fe633e0736e751a2c875e4881c2a4caa6007e1eba7ce6daba37287",
+          "capture_context": "29c378e4436dcd2d3c6741c1bbb4b33c2c44f5aeb65e020a48760c29a612ec26",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/binding/match-implicit-copy-unique.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "29c378e4436dcd2d3c6741c1bbb4b33c2c44f5aeb65e020a48760c29a612ec26"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 9508,
+            "elapsed_seconds": 4.354693209000001,
+            "stdout_bytes": 2133,
+            "stdout_sha256": "7956d6172c2b2f40b0b092c4a6a8492c613656c08c0ffef63d88ebe37d1f2d6f",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/let-else/let-else-bindings.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "capture_context": "96d8d50b6780d5570a3414cf854e0c049e8b1eb51d580ccee8a0fd2773b85d9c",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-bindings.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "96d8d50b6780d5570a3414cf854e0c049e8b1eb51d580ccee8a0fd2773b85d9c"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 9511,
+            "elapsed_seconds": 5.685797583999996,
+            "stdout_bytes": 2142,
+            "stdout_sha256": "bfa9651c69e67d3c7510ff2141e46b0067f4784d5acbdbfcd0eea0dc881f7f95",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/binding/match-ref-binding-in-guard-3256.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "ec28f2f5d4797817ab6443a55da884dcd5f5f45f7c6042d05f57ae0f1a648d6e",
+          "capture_context": "af9311f4d73f5d0690e43ff7e9b7d141d885404e22d345f7843bfe1778dc60da",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/binding/match-ref-binding-in-guard-3256.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "af9311f4d73f5d0690e43ff7e9b7d141d885404e22d345f7843bfe1778dc60da"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 2,
+            "pid": 9512,
+            "elapsed_seconds": 3.8857551669999992,
+            "stdout_bytes": 4731,
+            "stdout_sha256": "1b70c62c97c4894036e72d9a7d23b2e8f10b8a83dc3115e4f996efe3756a5030",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "code": "LRR-E-FACADE-MISSING",
+            "diagnostic": {
+              "code": "LRR-E-FACADE-MISSING",
+              "generated_origin": null,
+              "guest_stack": {
+                "frames": [
+                  {
+                    "body": {
+                      "body_key": {
+                        "definition": "2fa81ffc6177144eb89e69696e83aa28352d9a00566a4bc352169e59df614c47",
+                        "exact_body_bytes": "5dfbefe02866d12eadfcf035841381d49ef95e3c0e4118f555336602bc7e17a4"
+                      },
+                      "relative_end": 69,
+                      "relative_start": 10
+                    },
+                    "locations": [
+                      {
+                        "range": {
+                          "end": 824,
+                          "start": 765
+                        },
+                        "source": {
+                          "content": [
+                            236,
+                            212,
+                            25,
+                            252,
+                            74,
+                            232,
+                            8,
+                            40,
+                            217,
+                            170,
+                            61,
+                            189,
+                            229,
+                            165,
+                            143,
+                            169,
+                            172,
+                            167,
+                            57,
+                            149,
+                            167,
+                            219,
+                            176,
+                            137,
+                            79,
+                            24,
+                            209,
+                            217,
+                            97,
+                            30,
+                            50,
+                            90
+                          ],
+                          "path": "<lrr-facade>/std/sync.rs",
+                          "unit": [
+                            238,
+                            59,
+                            189,
+                            194,
+                            26,
+                            36,
+                            206,
+                            108,
+                            3,
+                            163,
+                            137,
+                            214,
+                            236,
+                            60,
+                            222,
+                            45,
+                            192,
+                            93,
+                            42,
+                            183,
+                            109,
+                            71,
+                            224,
+                            244,
+                            100,
+                            246,
+                            174,
+                            121,
+                            85,
+                            169,
+                            151,
+                            6
+                          ]
+                        }
+                      }
+                    ],
+                    "pc": "4df595b8b881c0c62c6c93223355112b19bfd0ebacdd9bba675d724b790598d3"
+                  },
+                  {
+                    "body": {
+                      "body_key": {
+                        "definition": "f5c20e8062950c13f624afe947333ab1530ef74e69e9d25dd987610100ede185",
+                        "exact_body_bytes": "663da07d938e4d78994f7701f2e49524ef6f23e523fa889abc55596bf7e6ae8a"
+                      },
+                      "relative_end": 57,
+                      "relative_start": 49
+                    },
+                    "locations": [
+                      {
+                        "range": {
+                          "end": 128,
+                          "start": 127
+                        },
+                        "source": {
+                          "content": [
+                            90,
+                            203,
+                            196,
+                            166,
+                            153,
+                            34,
+                            169,
+                            55,
+                            151,
+                            108,
+                            89,
+                            63,
+                            61,
+                            188,
+                            97,
+                            109,
+                            157,
+                            9,
+                            190,
+                            235,
+                            188,
+                            183,
+                            49,
+                            171,
+                            138,
+                            159,
+                            44,
+                            214,
+                            189,
+                            79,
+                            203,
+                            20
+                          ],
+                          "path": "match-ref-binding-in-guard-3256.rs",
+                          "unit": [
+                            35,
+                            196,
+                            113,
+                            2,
+                            139,
+                            53,
+                            234,
+                            132,
+                            178,
+                            152,
+                            10,
+                            88,
+                            95,
+                            55,
+                            219,
+                            219,
+                            255,
+                            64,
+                            77,
+                            181,
+                            98,
+                            78,
+                            172,
+                            48,
+                            151,
+                            107,
+                            36,
+                            114,
+                            35,
+                            57,
+                            127,
+                            139
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 129,
+                          "start": 128
+                        },
+                        "source": {
+                          "content": [
+                            90,
+                            203,
+                            196,
+                            166,
+                            153,
+                            34,
+                            169,
+                            55,
+                            151,
+                            108,
+                            89,
+                            63,
+                            61,
+                            188,
+                            97,
+                            109,
+                            157,
+                            9,
+                            190,
+                            235,
+                            188,
+                            183,
+                            49,
+                            171,
+                            138,
+                            159,
+                            44,
+                            214,
+                            189,
+                            79,
+                            203,
+                            20
+                          ],
+                          "path": "match-ref-binding-in-guard-3256.rs",
+                          "unit": [
+                            35,
+                            196,
+                            113,
+                            2,
+                            139,
+                            53,
+                            234,
+                            132,
+                            178,
+                            152,
+                            10,
+                            88,
+                            95,
+                            55,
+                            219,
+                            219,
+                            255,
+                            64,
+                            77,
+                            181,
+                            98,
+                            78,
+                            172,
+                            48,
+                            151,
+                            107,
+                            36,
+                            114,
+                            35,
+                            57,
+                            127,
+                            139
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 133,
+                          "start": 129
+                        },
+                        "source": {
+                          "content": [
+                            90,
+                            203,
+                            196,
+                            166,
+                            153,
+                            34,
+                            169,
+                            55,
+                            151,
+                            108,
+                            89,
+                            63,
+                            61,
+                            188,
+                            97,
+                            109,
+                            157,
+                            9,
+                            190,
+                            235,
+                            188,
+                            183,
+                            49,
+                            171,
+                            138,
+                            159,
+                            44,
+                            214,
+                            189,
+                            79,
+                            203,
+                            20
+                          ],
+                          "path": "match-ref-binding-in-guard-3256.rs",
+                          "unit": [
+                            35,
+                            196,
+                            113,
+                            2,
+                            139,
+                            53,
+                            234,
+                            132,
+                            178,
+                            152,
+                            10,
+                            88,
+                            95,
+                            55,
+                            219,
+                            219,
+                            255,
+                            64,
+                            77,
+                            181,
+                            98,
+                            78,
+                            172,
+                            48,
+                            151,
+                            107,
+                            36,
+                            114,
+                            35,
+                            57,
+                            127,
+                            139
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 134,
+                          "start": 133
+                        },
+                        "source": {
+                          "content": [
+                            90,
+                            203,
+                            196,
+                            166,
+                            153,
+                            34,
+                            169,
+                            55,
+                            151,
+                            108,
+                            89,
+                            63,
+                            61,
+                            188,
+                            97,
+                            109,
+                            157,
+                            9,
+                            190,
+                            235,
+                            188,
+                            183,
+                            49,
+                            171,
+                            138,
+                            159,
+                            44,
+                            214,
+                            189,
+                            79,
+                            203,
+                            20
+                          ],
+                          "path": "match-ref-binding-in-guard-3256.rs",
+                          "unit": [
+                            35,
+                            196,
+                            113,
+                            2,
+                            139,
+                            53,
+                            234,
+                            132,
+                            178,
+                            152,
+                            10,
+                            88,
+                            95,
+                            55,
+                            219,
+                            219,
+                            255,
+                            64,
+                            77,
+                            181,
+                            98,
+                            78,
+                            172,
+                            48,
+                            151,
+                            107,
+                            36,
+                            114,
+                            35,
+                            57,
+                            127,
+                            139
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 135,
+                          "start": 134
+                        },
+                        "source": {
+                          "content": [
+                            90,
+                            203,
+                            196,
+                            166,
+                            153,
+                            34,
+                            169,
+                            55,
+                            151,
+                            108,
+                            89,
+                            63,
+                            61,
+                            188,
+                            97,
+                            109,
+                            157,
+                            9,
+                            190,
+                            235,
+                            188,
+                            183,
+                            49,
+                            171,
+                            138,
+                            159,
+                            44,
+                            214,
+                            189,
+                            79,
+                            203,
+                            20
+                          ],
+                          "path": "match-ref-binding-in-guard-3256.rs",
+                          "unit": [
+                            35,
+                            196,
+                            113,
+                            2,
+                            139,
+                            53,
+                            234,
+                            132,
+                            178,
+                            152,
+                            10,
+                            88,
+                            95,
+                            55,
+                            219,
+                            219,
+                            255,
+                            64,
+                            77,
+                            181,
+                            98,
+                            78,
+                            172,
+                            48,
+                            151,
+                            107,
+                            36,
+                            114,
+                            35,
+                            57,
+                            127,
+                            139
+                          ]
+                        }
+                      }
+                    ],
+                    "pc": "9402d447fda4b6dab02d4f077ee8dcacb7c254475d0c3e78b6d58464f218fd25"
+                  }
+                ],
+                "omitted_frames": 0
+              },
+              "macro_origin": null,
+              "message": "library item `std::sync::Mutex::lock` is declared by the LRR facade but not executable yet",
+              "origin_attachment_failure": null,
+              "rendered_generated_origin": null,
+              "rendered_guest_stack": null,
+              "rendered_macro_origin": null
+            },
+            "message": "library item `std::sync::Mutex::lock` is declared by the LRR facade but not executable yet",
+            "phase": "executor",
+            "status": "fault"
+          }
+        },
+        {
+          "case": "tests/ui/array-slice-vec/fixed_length_copy.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "243024aa36422b419a3286ee5128bd747b5e35799099d8d941b81fd3069b5073",
+          "capture_context": "c726938da39af06963464ad2eb027b5263c4261a317a9d22672b36f59dde698d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/fixed_length_copy.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "c726938da39af06963464ad2eb027b5263c4261a317a9d22672b36f59dde698d"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 9515,
+            "elapsed_seconds": 3.8163183340000018,
+            "stdout_bytes": 2112,
+            "stdout_sha256": "ee2b19eaa3d7a7170087932ff469206572c5362c4ebbd8bfe1245772f52df871",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        }
+      ],
+      "complete_inventory": false,
+      "upstream_runtime_acceptance": {
+        "status": "incomplete",
+        "counts": {
+          "runtime_contract_pass": 7,
+          "interpreter_failure": 1
+        }
+      },
+      "diagnostic_compatibility": {
+        "status": "unassessed"
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed"
+      },
+      "full_suite_compatibility": {
+        "status": "incomplete"
+      },
+      "guest_jit_allowed": false,
+      "source_digest_observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 9431,
+        "elapsed_seconds": 0.14946845899999994,
+        "stdout_bytes": 485388,
+        "stdout_sha256": "6ac72db6b016ad6418b252d47fe4e46fda4915d1b1ccd3e7157d464b6c1b66e4",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+      "selected_batch_passed": false
+    },
+    "runtime_failures": [
+      {
+        "case": "tests/ui/binding/match-ref-binding-in-guard-3256.rs",
+        "code": "LRR-E-FACADE-MISSING",
+        "message": "library item `std::sync::Mutex::lock` is declared by the LRR facade but not executable yet"
+      }
+    ],
+    "after_runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T07:35:04.042206+00:00",
+      "head": "6551f55435c07897d12cbaa0cbc9ac0e4d8e2642",
+      "file_count": 8316,
+      "source_sha256": "c17290a0f580123250cc69d64548a38154e98588170c1fca7300a68773e10b00",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "sha256": "f3fc635121d258d4c65e31a854939d6814bd30f7aabb7e9dd370f95e6d6f6e68"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "b30aababe133b14e5e0147464435d801984b45d8dc18094c107cd4f18c3a9a6f"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    }
+  },
+  "v204": {
+    "library_build_exit": 101,
+    "error": "Test adapter used unnecessary str::as_str, unstable on pinned host; no runtime executed",
+    "source_sha256": "98bc7fc2e956f59d58493f0a4557ef01a1615a53adf7d7264069cbb9977d015c"
+  },
+  "v205": {
+    "library_build_exit": 0,
+    "cli_rebuilt": false,
+    "cli_note": "Production unchanged from V203, same CLI bytes. Only callable_value_tests.rs differs.",
+    "controls_wrapper_exit": 1,
+    "controls": [
+      {
+        "selector": "cli::callable_value_tests::upstream_aggregate_pattern_publication_shares_all_editions_and_origins",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::callable_value_tests::upstream_aggregate_pattern_publication_shares_all_editions_and_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 101,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": false,
+        "seconds": 11.223,
+        "log": "control-0.log"
+      }
+    ],
+    "after_runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T07:39:01.370157+00:00",
+      "head": "6551f55435c07897d12cbaa0cbc9ac0e4d8e2642",
+      "file_count": 8316,
+      "source_sha256": "8a9e1a9e1b165a9510f0888ee5547e80d1065e1fa3c864f7d22fe12be3ebff79",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "sha256": "b390992e6a17eec0e60ea92f20b0dc4816bf0823d16468dfeb6c789c7c1b0d40"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "b30aababe133b14e5e0147464435d801984b45d8dc18094c107cd4f18c3a9a6f"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    },
+    "changed_inputs_since_v203": [
+      "crates/lrr/src/cli/callable_value_tests.rs"
+    ],
+    "origin_matrix": {
+      "planned": 16,
+      "passed": [
+        {
+          "edition": 2015,
+          "origin": "original"
+        }
+      ],
+      "failed": [
+        {
+          "edition": 2015,
+          "origin": "user whole-source macro",
+          "code": "LRR-E-NAME-MISSING",
+          "message": "reached direct function identity is absent before argument evaluation",
+          "selected_source": "NonCopy::Thing(Copyable)",
+          "locations": "main.rs742..766 in generated helper let_else; main and helper entered"
+        }
+      ],
+      "unexecuted": 14,
+      "pattern_syntax_standard_adapter": "Actual helper body ranges selected by pinned RA AST; original/user/wrapper/standard programs outside imported originals."
+    }
+  },
+  "measured_gain": {
+    "case": "tests/ui/let-else/let-else-non-copy.rs",
+    "before": "V194 LRR-E-UNSUPPORTED: by-value binding of a Copy aggregate place requires aggregate copy activation",
+    "after": "V203 unchanged whole-main runtime_contract_pass, owning2015, all13capture checks true",
+    "distinct_new_upstream_runtime_gains": 1,
+    "other_passes": "First/repeated observations only; baseline deltas not measured. No refreshed suite total."
+  },
+  "source_review": {
+    "production_fingerprint": "c17290a0f580123250cc69d64548a38154e98588170c1fca7300a68773e10b00",
+    "host_adapter_fingerprint": "8a9e1a9e1b165a9510f0888ee5547e80d1065e1fa3c864f7d22fe12be3ebff79",
+    "source_hashes": {
+      "crates/lrr/src/vm/frame_pattern_publication.rs": "f1b16262629ccfe576f7a2913e9e217e9f757991f1cb1e674abbe1b478b9a79c",
+      "crates/lrr/src/vm/frame_aggregate_copy.rs": "86a1aaeba8fd5162a13725ef92367bb2bd8fd984f3621819500a49ada4421a01",
+      "crates/lrr/src/vm/frame_pattern_engine.rs": "d856a432f97b60609a491e7238bba548b2f8c1d52268ac5c80c8ff10ae166e29",
+      "crates/lrr/src/vm/frame_pattern.rs": "4ea76baad273bdc030e2050f8f4490ab45c81b2eba2906ce8c891b98432b0273",
+      "crates/lrr/src/vm/pattern_match.rs": "fbbd9025f5a9a96809c6a9957f312fd4e65b62a6ac3439aac42a2a65a581775f",
+      "crates/lrr/src/vm/frame.rs": "7904869210ee326d8f9ca6ba7c86a0dac3707c81c0e423f063ba660fd8c5f328",
+      "crates/lrr/src/cli/callable_value_tests.rs": "0be8c1867905e1448e7e874f1c000c340e475eaecbbb92bb59894ae3659de56d"
+    },
+    "eight_failure_modes": [
+      {
+        "mode": 1,
+        "symbols": [
+          "vm::Frame::begin_pattern_publication",
+          "vm::Frame::advance_pattern_publication",
+          "vm::Frame::publish_pattern_binding"
+        ],
+        "finding": "One frame continuation for every ordinary PatternOperation Expose/Commit; no assertion compiler/evaluator. Existing Search owns matches; compiler macro pipeline unchanged."
+      },
+      {
+        "mode": 2,
+        "symbols": [
+          "vm::CopyOperation::Pattern",
+          "vm::step::step",
+          "vm::PatternOperation"
+        ],
+        "finding": "No generated literal/break-only execution route. Current generated-origin control fails before actual constructor argument evaluation due missing enum variant publication; failure held, not bypassed."
+      },
+      {
+        "mode": 3,
+        "symbols": [
+          "vm::pattern_engine_frame::owning_read",
+          "runtime::GuestStore::admit_owning_place_read",
+          "runtime::AggregateCopy::begin/advance"
+        ],
+        "finding": "Copy classification and physical graph replication use the same ordinary read policy/worker. No macro identity, member-name whitelist or numeric special case."
+      },
+      {
+        "mode": 4,
+        "symbols": [
+          "vm::Frame::advance_pattern_publication",
+          "frontend::GeneratedHeaderPlan::publish",
+          "frontend::NameNamespaces::admit_enum_variants"
+        ],
+        "finding": "No original-source-only condition introduced. V205 user-generated whole program exposes absent enum variant namespace membership and ordinary-only constructor owner lookup; explicit next shared prerequisite, remaining14origin worlds unexecuted."
+      },
+      {
+        "mode": 5,
+        "symbols": [
+          "vm::Frame::preflight_pattern_publication",
+          "vm::Frame::advance_pattern_publication",
+          "vm::pattern::matcher::Search"
+        ],
+        "finding": "Selected Staged vector moves once to the continuation. Prepares all Copy scalar/aggregate transfers before moving any parent, then publishes bindings in written order; guard exposure restores selected vector for normal conceal/commit/retry. Old synchronous publish_pattern loop, owned_temporary flag and CopyAggregate-to-Move shortcut removed. No arm/result/guard executable preparation added. Non-Copy guard reference integration and full cancellation/fault atomicity remain held."
+      },
+      {
+        "mode": 6,
+        "symbols": [
+          "vm::OpActivation",
+          "vm::Frame::resume_operation_index",
+          "vm::Frame::advance_pattern_publication"
+        ],
+        "finding": "Installed operation resumes existing PC/index-bound activation; retains solution/tree/cursor/construction/tickets. No source parsing, query or full-plan reconstruction. Copy operation charge/completion remains the existing step dispatcher. New publication-specific forced-resume/currentness matrix remains unexecuted; existing common copier chunk/epoch/PC controls pass."
+      },
+      {
+        "mode": 7,
+        "symbols": [
+          "vm::Frame::advance_pattern_publication",
+          "runtime::GuestStore::admit_owning_place_read"
+        ],
+        "finding": "Only local runtime ownership/type facts checked during publication; no namespace query/map/census added. Runtime Copy classification may traverse Deferred nominal fields repeatedly through existing policy, so large deferred graphs may have quadratic admission cost; not performance acceptance."
+      },
+      {
+        "mode": 8,
+        "symbols": [
+          "vm::Publication::staged/transfers",
+          "vm::Frame::publish_pattern_binding"
+        ],
+        "finding": "Moves mutable Staged vector, no BodyIndex clone or whole-file syntax search. O(binding count) private ticket table and preparation/publication cursor passes, plus common Copy graph work and existing owning-read admission costs. Pattern source views retain existing per-binding cloning. No speed claim."
+      }
+    ],
+    "MA001_MA008": "Separate historical audit findings; no global closure inferred.",
+    "next_priority": "worktracks/08-macros-editions/2026-10-19-generated-enum-variant-publication.md"
+  },
+  "commands": [
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "LRR_EMBEDDED_FACADE=1 python3 tools/validation/run_controls.py artifacts/validation-current-v203 worktracks/03-control-flow-patterns/2026-10-19-pattern-copy-publication-selection.json",
+    "LRR_EMBEDDED_FACADE=1 python3 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/NEW_UNIQUE_DIR [--case each runtime_cases from tracked selection]",
+    "LRR_EMBEDDED_FACADE=1 python3 tools/validation/run_controls.py artifacts/validation-current-v205 worktracks/03-control-flow-patterns/2026-10-19-pattern-copy-origin-selection.json"
+  ],
+  "gates": {
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete",
+    "current_milestone": "unexecuted for held partial repair",
+    "guest_jit_allowed": false
+  }
+}

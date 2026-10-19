@@ -1,0 +1,25 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "T050/T051 shared publication and Copy prerequisite; no full pattern/interpreter gate",
+  "controls": [
+    "vm::frame::aggregate_copy_tests::rustc_original_tuple_copy_read_preserves_source_and_allocates_distinct_fields",
+    "vm::frame::aggregate_copy_tests::rustc_array_copy_chunk_resumes_without_repeating_opcode_charge_or_completed_fields",
+    "vm::frame::aggregate_copy_tests::rustc_array_copy_changed_source_epoch_refuses_resume_without_publishing_partial_result",
+    "vm::frame::aggregate_copy_tests::rustc_copy_resume_refuses_changed_bound_pc_without_charging_or_publishing",
+    "engine::run::pattern_tests::every_owner_kind_uses_the_same_transaction_steps",
+    "engine::run::pattern_tests::nominal_constructor_patterns_share_the_matcher_across_owner_kinds",
+    "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+    "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+    "vm::frame::ref_pattern_tests::rustc_initialized_ref_pattern_borrows_original_local_without_reading_or_moving_it"
+  ],
+  "runtime_cases": [
+    "tests/ui/let-else/let-else-non-copy.rs",
+    "tests/ui/pattern/bindings-after-at/bind-by-copy.rs",
+    "tests/ui/pattern/bindings-after-at/bind-by-copy-or-pat.rs",
+    "tests/ui/binding/match-with-at-binding-8391.rs",
+    "tests/ui/binding/match-implicit-copy-unique.rs",
+    "tests/ui/let-else/let-else-bindings.rs",
+    "tests/ui/binding/match-ref-binding-in-guard-3256.rs",
+    "tests/ui/array-slice-vec/fixed_length_copy.rs"
+  ]
+}

@@ -32,6 +32,7 @@ enum CopyOperation {
         destination: SlotId,
         source_view: Option<crate::traits::term::TyTerm>,
     },
+    Pattern(super::pattern_publication_frame::Publication),
     RecordRest(super::record_update_frame::RestActivation),
     Repeat(super::repeat_frame::RepeatActivation),
 }
@@ -89,6 +90,24 @@ impl Frame {
     ) -> Result<bool, Diagnostic> {
         if self.copy_activation.is_some() {
             return Err(invalid("copy activation already active"));
+        }
+        if let Op::Pattern { operation } = op {
+            let selected = match operation {
+                crate::ir::op::PatternOperation::Expose { owner } => Some((*owner, true)),
+                crate::ir::op::PatternOperation::Commit { owner } => Some((*owner, false)),
+                _ => None,
+            };
+            if let Some((owner, guard_view)) = selected {
+                let work = self.begin_pattern_publication(owner, guard_view, store)?;
+                self.copy_activation = Some(OpActivation {
+                    pc: self.pc.fingerprint(),
+                    operation_index: u32::try_from(index)
+                        .map_err(|_| invalid("pattern publication operation index overflow"))?,
+                    expected: op.clone(),
+                    work: CopyOperation::Pattern(work),
+                });
+                return Ok(true);
+            }
         }
         if let Op::ValuePath { destination, .. } = op
             && let Some((template, source_view, promote)) = self.item_template_read()
@@ -250,6 +269,9 @@ impl Frame {
                     *ticket = None;
                     Ok(true)
                 })(),
+                CopyOperation::Pattern(publication) => {
+                    self.advance_pattern_publication(publication, store)
+                }
                 CopyOperation::RecordRest(rest) => self.advance_record_rest(rest, store),
                 CopyOperation::Repeat(repeat) => self.advance_repeat_copy(repeat, store),
                 CopyOperation::Read {

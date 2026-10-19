@@ -1,0 +1,8 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Supplementary unchanged helper-body and whole-source origin/edition matrix; production unchanged from V203",
+  "controls": [
+    "cli::callable_value_tests::upstream_aggregate_pattern_publication_shares_all_editions_and_origins"
+  ],
+  "runtime_cases": []
+}

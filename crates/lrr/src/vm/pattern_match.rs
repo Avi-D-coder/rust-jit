@@ -150,8 +150,6 @@ pub(crate) struct OpenPattern {
     pub(crate) scope: ScopeId,
     pub(crate) root: Place,
     pub(crate) root_source: Option<TyTerm>,
-    /// The scrutinee is an owning temporary that nothing reads afterwards.
-    pub(crate) owned_temporary: bool,
     pub(crate) tree: Option<Arc<PatternTree>>,
     pub(crate) solution: u64,
     pub(crate) matched: bool,

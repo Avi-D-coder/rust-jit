@@ -661,3 +661,62 @@ fn upstream_pattern_captures_share_the_source_route_across_origins_and_editions(
         }
     }
 }
+
+/// LRR edition/origin adaptation of the unchanged upstream aggregate binding
+/// witness. Standard nesting wraps the actual helper bodies where patterns run,
+/// rather than only wrapping main's calls to still-handwritten functions.
+#[test]
+fn upstream_aggregate_pattern_publication_shares_all_editions_and_origins() {
+    use ra_ap_syntax::{AstNode, ast, ast::HasName};
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-non-copy.rs"
+    );
+    let parsed = ast::SourceFile::parse(ORIGINAL, ra_ap_syntax::Edition::Edition2024);
+    assert!(parsed.errors().is_empty());
+    let mut ranges: Vec<_> = parsed
+        .tree()
+        .syntax()
+        .descendants()
+        .filter_map(ast::Fn::cast)
+        .filter(|function| {
+            function
+                .name()
+                .is_some_and(|name| matches!(name.text(), "let_else" | "if_let"))
+        })
+        .map(|function| function.body().unwrap().syntax().text_range())
+        .collect();
+    assert_eq!(ranges.len(), 2);
+    ranges.sort_by_key(|range| std::cmp::Reverse(range.start()));
+    let mut standard = ORIGINAL.to_owned();
+    for range in ranges {
+        let (start, end) = (
+            u32::from(range.start()) as usize,
+            u32::from(range.end()) as usize,
+        );
+        standard.replace_range(
+            start..end,
+            &format!("{{assert!({{{};true}});}}", &ORIGINAL[start + 1..end - 1]),
+        );
+    }
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {ORIGINAL} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {ORIGINAL} }}"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let mut pattern_steps = None;
+        for text in [ORIGINAL, &emitted, &wrapped, &standard] {
+            let report = completed_with_standard_facade(text, edition);
+            let actual = report.opcode_counters.started_by_opcode[45];
+            assert!(actual > 0);
+            assert_eq!(*pattern_steps.get_or_insert(actual), actual);
+            assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+            assert_eq!(
+                report.opcode_counters.operations_started,
+                report.opcode_counters.operations_completed
+            );
+            assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
+            assert!(report.output.stdout.is_empty() && report.output.stderr.is_empty());
+        }
+    }
+}
