@@ -14,6 +14,7 @@ use rustc_type_ir::{
     Interner,
 };
 
+pub(crate) mod infer;
 mod abstract_consts;
 mod binders;
 mod constant_expression;

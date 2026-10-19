@@ -249,6 +249,14 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
             assert!(actual.self_ty == again.self_ty, "same real context interns identical Types");
             let ImplHeadTypeResult::Resolved { self_type, trait_ref } = plan.head().result() else { return Err(fault("actual head not ready")); };
             check_shape(self_type, actual.self_ty);
+            let source_id = plan.head().syntax().canonical_owner().expect("actual source owner").identity();
+            let id = plan.bindings.definitions[&source_id];
+            let QueryValue::DeclarationGenericTypes(generics) = plan.bindings.generics[&id].as_ref() else { unreachable!() };
+            let (source, _, context, _) = generics.declaration().source_parts().expect("actual retained declaration source");
+            super::infer::tests::check_actual_storage(cx, actual.self_ty, model::Span {
+                origin: source.content, start: context.range.start, end: context.range.end,
+            });
+
             match (trait_ref, actual.trait_arguments) {
                 (None, None) => {},
                 (Some(source), Some(encoded)) => {
@@ -280,7 +288,7 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
             }
             count += 1;
         }
-        eprintln!("actual guarded upstream TraitRefs:{references}; ordinary generic metadata and actual constructor, no ready facts or solver evaluation");
+        eprintln!("actual guarded upstream TraitRefs:{references}; actual pinned inference storage/rollback per source head; ordinary generic metadata and actual constructor, no ready facts or solver evaluation");
         Ok(count)
     })??;
     assert_eq!(db.trace.events.len(), before, "actual IR encoding performs no source queries");

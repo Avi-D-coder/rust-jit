@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Primary actual source/IR matrix plus upstream variable storage and combined snapshots. No actual solver or new runtime acceptance.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions"
+  ]
+}

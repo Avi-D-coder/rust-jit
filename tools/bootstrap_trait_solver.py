@@ -31,6 +31,15 @@ SUPPORT_SOURCES = (
     'compiler/rustc_middle/src/mir/syntax.rs',
     'compiler/rustc_middle/src/ty/erase_regions.rs',
     'compiler/rustc_middle/src/ty/trait_def.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/lib.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/mod.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/type_variable.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/unify_key.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/region_constraints/mod.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/undo_log.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/table.rs',
+    'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/mod.rs',
 )
 
 

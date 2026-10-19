@@ -20256,7 +20256,12 @@
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics.md",
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-controls.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-probe.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-probe.json",
+        "worktracks/evidence/2026-10-19-v334-v337-upstream-inference-storage.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-probe.json"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20264,7 +20269,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V328-V333 HELD M019/M020 typed generic bootstrap. One DeclarationParameters transport serves actual source declarations, signatures and impl heads; duplicated impl/constructor ordering is removed. Pure Q70 resolves declared const Types through ordinary retained syntax/name/Type services. Actual original associated-owner and generated Outline/header joins retain scoped parent declaration IDs; inherited Type lookup preserves parent scope and rebases source parameter leaves. Context-owned typed Generics now serve actual upstream generics_of and Args::identity_for_item; full publication compares exact source IDs, positions, parent count and const Types. Final macOS Rust1.99.0 library/CLI builds and15/15focused controls pass with source/HEAD/both binary guards matching. New source control covers20original/user-macro/wrapper edition worlds,48generic rows/36const rows/24early-region rows, actual usize/bool and pending own-function lifetimes. Existing140head Types/136guarded TraitRefs/48worlds,997membership/32head, local main/12Copy runtime and projection/cold-body/order/cleanup controls pass. V329 compile failure, V33014/15, V3310/1parent-join probe and V332original-only1/1retain their exact sources. No actual complete typed facts, compatible inference/delegate, parameter DefIds, full symbolic const/binder/ADT/ParamEnv/lang-item/currentness closure, ReadyProvider/root solving or runtime migration. Zero new distinct stock runtime gains or refreshed suite total; M019/M020/interpreter/JIT/Linux gates remain open.",
+      "latest_component_scope": "V334-V337 HELD M020 pinned inference storage client. Actual pinned rust-analyzer next_solver Type/const/int/float/region/opaque stores, InferCtxtInner, combined undo log and CombinedSnapshot methods are reused through a deterministic mechanical port over actual LRR Cx/IR. InferenceStorage is a mutable owner, not InferCtxtLike/SolverDelegate or a ready source-fact provider. Nine additional original licensed Git objects retained;8sharedcrates/140files/2002639bytes verified with zero original Rust changes. Only direct dependency edges to already locked ena/indexmap/rustc-hash were added. V337 both macOS Rust1.99.0 builds and4/4focused controls pass; final source/HEAD/test/CLI guards match. Actual140source head Types/136guarded TraitRefs in48original/user-macro/wrapper edition worlds exercise Type binding/root restoration, const/int/float rollback, region vars/edges, real cross-universe region-table failure, nested failure, nested commit+outer rollback, root commit, probe and universe restoration. Generic ordering and scoped owner controls pass. V334 mechanical compile failure, V3353/4invalid numeric NoError-table negative case and V336private placeholder compile failure retain exact evidence. No upstream algorithms were changed to accommodate host mistakes. Known RA stubbed leak-check/empty region-response callbacks were not ported; real compiler-compatible leak/visibility/assumptions-on-binders, relation/canonical/delegate/source-fact integration, real opaque/fold/member/verify/cancellation matrices, currentness/witness/VM integration and legacy removal remain open. No real root evaluation, new distinct stock runtime gain, refreshed suite total, M020/milestone/interpreter/JIT/Linux or performance acceptance.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20302,7 +20307,12 @@
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics.md",
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-controls.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-probe.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-probe.json",
+        "worktracks/evidence/2026-10-19-v334-v337-upstream-inference-storage.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-probe.json"
       ]
     },
     {

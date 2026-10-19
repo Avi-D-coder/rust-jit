@@ -927,6 +927,69 @@
       "sha256": "fd929ad293f584e1ca8530b25a83e52bdc708d7ae3c3df56a3f482c915b01c47",
       "upstream": "compiler/rustc_type_ir_macros/src/lib.rs",
       "upstream_sha256": "fd929ad293f584e1ca8530b25a83e52bdc708d7ae3c3df56a3f482c915b01c47"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/lib.rs",
+      "bytes": 22640,
+      "sha256": "02d3b83996bbbf175a6aede097e451036c75e66bc39fe5982bc7bed1056a4a6b",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/lib.rs",
+      "upstream_sha256": "02d3b83996bbbf175a6aede097e451036c75e66bc39fe5982bc7bed1056a4a6b"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/mod.rs",
+      "bytes": 54562,
+      "sha256": "1880e80e62a6eff52160d948398874c2bd0453d3980d003a816725e0a2395d37",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/mod.rs",
+      "upstream_sha256": "1880e80e62a6eff52160d948398874c2bd0453d3980d003a816725e0a2395d37"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs",
+      "bytes": 937,
+      "sha256": "c64b0d57ec2f4b343f064e4725286a896f6a6df94c132c4b9734d56e7e30f621",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs",
+      "upstream_sha256": "c64b0d57ec2f4b343f064e4725286a896f6a6df94c132c4b9734d56e7e30f621"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/table.rs",
+      "bytes": 5615,
+      "sha256": "15937251caffd2a44f1f93630ff6bc31db2e5a5ca0d3a97f9d3d257044c8d7a3",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/table.rs",
+      "upstream_sha256": "15937251caffd2a44f1f93630ff6bc31db2e5a5ca0d3a97f9d3d257044c8d7a3"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/region_constraints/mod.rs",
+      "bytes": 25027,
+      "sha256": "a49d71d15a9a8db3304b2647f2e00c0bc36c5535e9dc7a4f54ba49a109b4a155",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/region_constraints/mod.rs",
+      "upstream_sha256": "a49d71d15a9a8db3304b2647f2e00c0bc36c5535e9dc7a4f54ba49a109b4a155"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/mod.rs",
+      "bytes": 4086,
+      "sha256": "8ffc82602d8978b8afe0e507f7f585fa8a247b9b7b5696af1624088838ca9f75",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/mod.rs",
+      "upstream_sha256": "8ffc82602d8978b8afe0e507f7f585fa8a247b9b7b5696af1624088838ca9f75"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/undo_log.rs",
+      "bytes": 7253,
+      "sha256": "14af652f6ce6506b615f2a03241b55c1d1413bc5b6263fb5b345c5d09f373cea",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/undo_log.rs",
+      "upstream_sha256": "14af652f6ce6506b615f2a03241b55c1d1413bc5b6263fb5b345c5d09f373cea"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/type_variable.rs",
+      "bytes": 13215,
+      "sha256": "e9c000e183d3ecef94785a7f841b78e85ad97f716f373d4f75c309a84fcd42f1",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/type_variable.rs",
+      "upstream_sha256": "e9c000e183d3ecef94785a7f841b78e85ad97f716f373d4f75c309a84fcd42f1"
+    },
+    {
+      "path": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/unify_key.rs",
+      "bytes": 6321,
+      "sha256": "9c78803d35123de368bfc93b41616f9630b82530b6c931f3ba174c515d7163a8",
+      "upstream": "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/unify_key.rs",
+      "upstream_sha256": "9c78803d35123de368bfc93b41616f9630b82530b6c931f3ba174c515d7163a8"
     }
   ],
   "packaging": "stable-shared-v1: unchanged Rust; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
@@ -940,6 +1003,15 @@
     "compiler/rustc_middle/src/ty/abstract_const.rs",
     "compiler/rustc_middle/src/mir/syntax.rs",
     "compiler/rustc_middle/src/ty/erase_regions.rs",
-    "compiler/rustc_middle/src/ty/trait_def.rs"
+    "compiler/rustc_middle/src/ty/trait_def.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/lib.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/mod.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/type_variable.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/unify_key.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/region_constraints/mod.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/undo_log.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/table.rs",
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/mod.rs"
   ]
 }

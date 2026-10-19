@@ -27,6 +27,9 @@ rustc_type_ir.workspace = true
 typed-arena.workspace = true
 rustc_index.workspace = true
 tracing.workspace = true
+ena.workspace = true
+indexmap.workspace = true
+rustc-hash.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
