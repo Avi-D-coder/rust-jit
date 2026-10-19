@@ -23,6 +23,9 @@ use crate::{
 #[derive(Debug, Clone)]
 pub(crate) struct DeclaredItemName {
     source: GeneratedItemKey,
+    // Direct locations in the canonical retained outline. A variant remains
+    // owned by its enum header; it is never a fabricated generated item.
+    member: Option<(u32, u32)>,
     parse: ParseKey,
     record: Digest,
     epoch: u64,
@@ -93,6 +96,7 @@ impl DeclaredItemName {
         let semantic = super::super::names::owned_name(&name.text, edition)?;
         let mut result = Self {
             source: header.key.clone(),
+            member: None,
             parse: parse.clone(),
             record: items.record().descriptor().fingerprint(),
             epoch: items.epoch(),
@@ -118,6 +122,79 @@ impl DeclaredItemName {
         result.metadata_bytes()?;
         result.fingerprint = StableEncode::fingerprint(&result);
         Ok(result)
+    }
+    /// Capture a variant from the same retained enum outline used to prepare
+    /// its header. The per-member span supplies its own edition and hygiene.
+    pub(super) fn capture_variant(
+        items: &GeneratedItems,
+        parent: &Self,
+        item_index: u32,
+        variant_index: u32,
+        variant: &crate::syntax::outline::VariantOutline,
+        span: &SpanRecord,
+        namespace: Namespace,
+        owner: &ContextRecord,
+    ) -> Result<Self, Diagnostic> {
+        if parent.member.is_some()
+            || parent.definition.namespace != Namespace::Type
+            || parent.source.expansion != items.record().key().fingerprint()
+            || parent.record != items.record().descriptor().fingerprint()
+            || parent.epoch != items.epoch()
+            || owner.parent.is_some()
+            || owner.defining_unit.0 != parent.scope.crate_key.0
+            || variant.name_range.start >= variant.name_range.end
+            || !(namespace == Namespace::Type
+                || (namespace == Namespace::Value && variant.has_value_constructor()))
+        {
+            return Err(error("declared enum member owner differs"));
+        }
+        let origin = items
+            .origins()
+            .partition_point(|o| o.end <= variant.name_range.start);
+        if !items.origins().get(origin).is_some_and(|origin| {
+            origin.start == variant.name_range.start
+                && origin.end == variant.name_range.end
+                && origin.span.0 == span.key().0
+        }) {
+            return Err(error("declared enum member token occurrence differs"));
+        }
+        let facts = items.hygiene_facts();
+        let raw = span.context;
+        let normalized = facts.item(raw)?;
+        let comparison = facts.name_item(raw)?;
+        if comparison != items.item_class(raw)? {
+            return Err(error("declared enum member comparison class differs"));
+        }
+        let edition = match span.edition {
+            Edition::E2015 => 2015,
+            Edition::E2018 => 2018,
+            Edition::E2021 => 2021,
+            Edition::E2024 => 2024,
+        };
+        let name = super::super::names::owned_name(&variant.name, edition)?;
+        let mut result = parent.clone();
+        result.member = Some((item_index, variant_index));
+        result.scope.module_path.push(parent.name.clone());
+        result.definition.namespace = namespace;
+        result.definition.identity =
+            crate::syntax::outline::variant_identity(parent.definition.identity, name.as_str());
+        result.definition.definition_edition = edition;
+        result.name = name.as_str().to_owned();
+        result.range = variant.name_range;
+        result.span = span.key();
+        result.raw = raw;
+        result.comparison = comparison;
+        result.class = if normalized == owner.key() {
+            NameBindingClass::Root
+        } else {
+            NameBindingClass::Item(comparison)
+        };
+        result.metadata_bytes()?;
+        result.fingerprint = StableEncode::fingerprint(&result);
+        Ok(result)
+    }
+    pub(crate) fn enum_owner(&self) -> Option<Digest> {
+        self.member.map(|_| self.source.fingerprint())
     }
     pub(crate) fn definition(&self) -> &NameDefinition {
         &self.definition
@@ -167,10 +244,9 @@ impl DeclaredItemName {
     ) -> Result<(), Diagnostic> {
         let definition = unit
             .definitions
-            .get(&self.definition.identity)
+            .get(&self.source.fingerprint())
             .ok_or_else(|| error("declared name canonical source member absent"))?;
         if unit.key != self.parse
-            || self.source.fingerprint() != self.definition.identity
             || self.source.expansion != unit.items.record().key().fingerprint()
             || self.record != unit.items.record().descriptor().fingerprint()
             || self.epoch != unit.seal.epoch
@@ -179,12 +255,47 @@ impl DeclaredItemName {
             || self.scope.crate_key != unit.scope.crate_key
             || !self.scope.module_path.starts_with(&unit.scope.module_path)
             || definition.crate_key != self.scope.crate_key
-            || definition.module_path != self.scope.module_path
-            || definition.declared_name != self.name
         {
             return Err(error(
                 "declared name actual source/member publication differs",
             ));
+        }
+        if let Some((item, variant)) = self.member {
+            let outline = unit.outline()?;
+            let row = outline
+                .items
+                .get(item as usize)
+                .ok_or_else(|| error("declared enum member canonical owner absent"))?;
+            let member = row
+                .variants
+                .get(variant as usize)
+                .ok_or_else(|| error("declared enum member canonical variant absent"))?;
+            let mut scope = row.scope.clone();
+            scope.module_path.push(definition.declared_name.clone());
+            let name = crate::syntax::ast_adapter::semantic_name(&member.name)
+                .ok_or_else(|| error("declared enum member canonical name differs"))?;
+            if row.def_key != *definition
+                || definition.item_kind != crate::source::manifest::ItemKind::Enum
+                || scope != self.scope
+                || name != self.name
+                || member.name_range != self.range
+                || self.definition.identity
+                    != crate::syntax::outline::variant_identity(self.source.fingerprint(), &name)
+                || !(self.definition.namespace == Namespace::Type
+                    || (self.definition.namespace == Namespace::Value
+                        && member.has_value_constructor()))
+            {
+                return Err(error(
+                    "declared enum member actual source publication differs",
+                ));
+            }
+            return Ok(());
+        }
+        if self.source.fingerprint() != self.definition.identity
+            || definition.module_path != self.scope.module_path
+            || definition.declared_name != self.name
+        {
+            return Err(error("declared item actual source identity differs"));
         }
         if definition.namespace != self.definition.namespace
             && !(self.definition.namespace == Namespace::Value
@@ -218,9 +329,13 @@ impl DeclaredItemName {
     }
 }
 impl StableEncode for DeclaredItemName {
-    const DOMAIN: &'static str = "lrr/v1/declared-item-name-occurrence";
+    const DOMAIN: &'static str = "lrr/v2/declared-item-name-occurrence";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.source);
+        e.option(&self.member, |e, (item, variant)| {
+            e.u32(*item);
+            e.u32(*variant);
+        });
         e.record(&self.parse);
         e.digest(self.record);
         e.u64(self.epoch);

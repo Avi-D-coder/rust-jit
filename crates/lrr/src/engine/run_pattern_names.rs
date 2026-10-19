@@ -290,20 +290,13 @@ impl RunMachine {
         let target = match local {
             Some(target) => target,
             None => match &variant {
-                Some(variant) => match NominalConstructorTarget::variant(&sources, variant) {
+                Some(variant) => match NominalConstructorTarget::variant(db, &sources, variant) {
                     Ok(target) => target,
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 },
-                None => match sources
-                    .iter()
-                    .find_map(|source| source.outline_item(identity))
-                {
-                    Some(item) => NominalConstructorTarget::structure(item),
-                    None => {
-                        return QueryPoll::Ready(Err(unsupported(
-                            "pattern constructor is outside the source catalogue".into(),
-                        )));
-                    }
+                None => match NominalConstructorTarget::structure(db, &sources, identity) {
+                    Ok(target) => target,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
                 },
             },
         };

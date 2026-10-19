@@ -190,17 +190,103 @@ fn unchanged_official_opaque_aliases_share_the_namespace_kernel_without_root_lea
                 module_path: vec![],
                 owner: None,
             };
-            assert!(
-                matches!(
-                    graph
-                        .lookup_in_class(Namespace::Type, &path, &foreign, fact.class(),)
-                        .unwrap(),
-                    NameLookup::Inaccessible(_)
-                ),
-                "same context must not bypass binding visibility"
+            // A foreign caller cannot reuse a root glob in an opaque class.
+            // The actual binding adjustment is required before this lookup
+            // can establish an access result. Keep that precise refusal.
+            let error = graph
+                .lookup_in_class(Namespace::Type, &path, &foreign, fact.class())
+                .unwrap_err();
+            assert_eq!(error.code, "LRR-E-NAME-CONTEXT");
+            assert_eq!(
+                error.message,
+                "actual glob binding name adjustment is required"
             );
         }
         // Completeness still requires the actual owning discovery/query/source
         // authority. These metadata facts do not grant a constructor/Type use.
+    }
+}
+
+#[test]
+fn upstream_enum_members_keep_actual_generated_owner_and_token_occurrences() {
+    const ENUM_SOURCE: &str =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/issue-8851.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        // Both complete official programs are unchanged. Extra modules and
+        // passthrough expansion belong to this source-identity control only.
+        let text = format!(
+            "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }} mod left {{emit! {{{ENUM_SOURCE}}}}} mod right {{emit! {{{ENUM_SOURCE}}}}}"
+        );
+        let (mut db, discovery) = world(&text, edition);
+        let mut units = Vec::new();
+        for record in discovery.sealed_expansions().unwrap() {
+            let items = GeneratedItems::admit(record.key(), Arc::clone(record), 1).unwrap();
+            let key = ParsedFile::from_generated_items(&items).unwrap().key();
+            if let Some(input) = db.input(&InputKey::GeneratedSyntax(key.content)) {
+                if let InputValue::GeneratedSyntax(unit) = input.as_ref() {
+                    units.push(Arc::clone(unit));
+                }
+            }
+        }
+        let (_, graph) = discovery.into_runtime_parts().unwrap();
+        let facts: Vec<_> = graph
+            .declared_item_names()
+            .filter(|fact| fact.enum_owner().is_some())
+            .collect();
+        assert_eq!(facts.len(), 8, "two variants, two namespaces, two owners");
+        let mut owners = std::collections::BTreeSet::new();
+        for fact in facts {
+            let matches: Vec<_> = units
+                .iter()
+                .filter(|unit| fact.require_generated_source(unit).is_ok())
+                .collect();
+            assert_eq!(matches.len(), 1);
+            let unit = matches[0];
+            let owner = fact.enum_owner().unwrap();
+            owners.insert(owner);
+            assert_eq!(
+                fact.definition().identity,
+                crate::syntax::outline::variant_identity(owner, fact.name())
+            );
+            assert_eq!(fact.definition().definition_edition, edition);
+            assert_eq!(fact.class(), NameBindingClass::Root);
+            assert_eq!(fact.fingerprint(), StableEncode::fingerprint(fact.as_ref()));
+            let variant = graph.enum_variant(fact.definition().identity).unwrap();
+            assert_eq!(variant.enumeration, owner);
+            assert_eq!(variant.name, fact.name());
+            assert!(graph.is_enum_scope(fact.scope()));
+            let mut path = fact
+                .scope()
+                .module_path
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            path.push(fact.name());
+            let path = NameNamespaces::path(fact.scope().crate_key, &path, edition).unwrap();
+            let mut caller = fact.scope().clone();
+            caller.module_path.pop();
+            assert_eq!(
+                graph
+                    .lookup(fact.definition().namespace, &path, &caller)
+                    .unwrap(),
+                NameLookup::Defined(fact.definition().clone())
+            );
+            let mut wrong = fact.as_ref().clone();
+            wrong.epoch += 1;
+            assert!(wrong.require_generated_source(unit).is_err());
+            let mut wrong = fact.as_ref().clone();
+            wrong.member.as_mut().unwrap().1 = u32::MAX;
+            assert!(wrong.require_generated_source(unit).is_err());
+            let mut wrong = fact.as_ref().clone();
+            wrong.range.end += 1;
+            assert!(wrong.require_generated_source(unit).is_err());
+            assert!(
+                units
+                    .iter()
+                    .filter(|other| !Arc::ptr_eq(unit, other))
+                    .all(|other| fact.require_generated_source(other).is_err())
+            );
+        }
+        assert_eq!(owners.len(), 2);
     }
 }

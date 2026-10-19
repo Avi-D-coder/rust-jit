@@ -154,6 +154,14 @@ impl NameNamespaces {
             s.visibility(v)?;
         }
         s.tree::<Digest>(self.modules.len())?;
+        s.tree::<(Digest, EnumVariantDefinition)>(self.enum_variants.len())?;
+        for member in self.enum_variants.values() {
+            s.add(member.name.capacity())?;
+        }
+        s.tree::<(Digest, Vec<String>)>(self.enum_scopes.len())?;
+        for (_, path) in &self.enum_scopes {
+            s.strings(path)?;
+        }
         s.tree::<Digest>(self.deferred_imports.len())?;
         s.tree::<Digest>(self.candidate_globs.len())?;
         s.tree::<(NamePath, super::super::module_paths::ModulePath)>(self.module_aliases.len())?;

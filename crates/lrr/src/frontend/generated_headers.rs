@@ -86,6 +86,7 @@ impl GeneratedModuleSource {
 struct GeneratedRoute {
     declaration: Arc<DeclaredItemName>,
     module: bool,
+    enumeration: bool,
 }
 fn contained_scope(scope: &ScopeKey, owner: &ScopeKey) -> bool {
     scope.owner.is_none()
@@ -166,7 +167,7 @@ impl GeneratedHeaderPlan {
         plan.routes.retain(|r| {
             catalog
                 .settled_derive_items()
-                .contains(&r.declaration.definition().identity)
+                .contains(&r.declaration.source().fingerprint())
         });
         plan.blocked.clear();
         plan.impl_frontier = None;
@@ -274,7 +275,8 @@ impl GeneratedHeaderPlan {
         let definitions = outline
             .items
             .iter()
-            .map(|i| (i.def_key.fingerprint(), i))
+            .enumerate()
+            .map(|(index, i)| (i.def_key.fingerprint(), (index, i)))
             .collect::<BTreeMap<_, _>>();
         let attributes = outline
             .items
@@ -490,14 +492,12 @@ impl GeneratedHeaderPlan {
                         "generated module demand metadata overflow",
                     )
                 })?;
-            bytes = bytes
-                .checked_add(request_bytes)
-                .ok_or_else(|| {
-                    fault(
-                        "LRR-E-DISCOVERY-LIMIT",
-                        "generated module demand metadata limit",
-                    )
-                })?;
+            bytes = bytes.checked_add(request_bytes).ok_or_else(|| {
+                fault(
+                    "LRR-E-DISCOVERY-LIMIT",
+                    "generated module demand metadata limit",
+                )
+            })?;
             module_sources.try_reserve(1).map_err(|_| {
                 fault(
                     "LRR-E-DISCOVERY-LIMIT",
@@ -621,7 +621,7 @@ impl GeneratedHeaderPlan {
             }
             for ((namespace, _name), ids) in &members.candidates {
                 for id in ids {
-                    let item = definitions.get(id).ok_or_else(|| {
+                    let (item_index, item) = *definitions.get(id).ok_or_else(|| {
                         fault(
                             "LRR-E-CATALOG-INCOMPLETE",
                             "generated candidate header absent",
@@ -671,11 +671,71 @@ impl GeneratedHeaderPlan {
                         fault("LRR-E-DISCOVERY-LIMIT", "generated route allocation")
                     })?;
                     routes.push(GeneratedRoute {
-                        declaration,
+                        declaration: Arc::clone(&declaration),
+                        enumeration: item.def_key.item_kind == ItemKind::Enum,
                         module: item.def_key.item_kind == ItemKind::Module
                             && header.kind
                                 != crate::expand::generated_items::GeneratedHeaderKind::ExternCrate,
                     });
+                    if item.def_key.item_kind == ItemKind::Enum {
+                        let item_index = u32::try_from(item_index).map_err(|_| {
+                            fault("LRR-E-DISCOVERY-LIMIT", "enum owner index overflow")
+                        })?;
+                        for (index, variant) in item.variants.iter().enumerate() {
+                            let index = u32::try_from(index).map_err(|_| {
+                                fault("LRR-E-DISCOVERY-LIMIT", "enum variant index overflow")
+                            })?;
+                            let origin = items
+                                .origins()
+                                .partition_point(|o| o.end <= variant.name_range.start);
+                            let origin = items.origins().get(origin).ok_or_else(|| {
+                                fault("LRR-E-EXPANSION-INPUT", "generated variant origin absent")
+                            })?;
+                            let span = spans.get(&origin.span.0).copied().ok_or_else(|| {
+                                fault("LRR-E-EXPANSION-INPUT", "generated variant span absent")
+                            })?;
+                            let namespaces: &[crate::source::manifest::Namespace] =
+                                if variant.has_value_constructor() {
+                                    &[
+                                        crate::source::manifest::Namespace::Type,
+                                        crate::source::manifest::Namespace::Value,
+                                    ]
+                                } else {
+                                    &[crate::source::manifest::Namespace::Type]
+                                };
+                            for namespace in namespaces {
+                                let member = Arc::new(DeclaredItemName::capture_variant(
+                                    items,
+                                    &declaration,
+                                    item_index,
+                                    index,
+                                    variant,
+                                    span,
+                                    *namespace,
+                                    owner,
+                                )?);
+                                bytes = bytes
+                                    .checked_add(member.metadata_bytes()?)
+                                    .and_then(|n| {
+                                        n.checked_add(std::mem::size_of::<GeneratedRoute>() + 96)
+                                    })
+                                    .ok_or_else(|| {
+                                        fault(
+                                            "LRR-E-DISCOVERY-LIMIT",
+                                            "enum member metadata overflow",
+                                        )
+                                    })?;
+                                routes.try_reserve(1).map_err(|_| {
+                                    fault("LRR-E-DISCOVERY-LIMIT", "enum member allocation")
+                                })?;
+                                routes.push(GeneratedRoute {
+                                    declaration: member,
+                                    module: false,
+                                    enumeration: false,
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -766,15 +826,12 @@ impl GeneratedHeaderPlan {
         // Import frontiers are installed at their actual lexical module by
         // admit_generated_import, then retired by that module's import resolver.
         // Reserving them again at the fragment root would leave an orphan frontier.
-        self.imports
-            .len()
-            .checked_mul(96)
-            .ok_or_else(|| {
-                fault(
-                    "LRR-E-DISCOVERY-LIMIT",
-                    "generated import frontier metadata limit",
-                )
-            })?;
+        self.imports.len().checked_mul(96).ok_or_else(|| {
+            fault(
+                "LRR-E-DISCOVERY-LIMIT",
+                "generated import frontier metadata limit",
+            )
+        })?;
         let imported = self
             .imports
             .iter()
@@ -788,6 +845,15 @@ impl GeneratedHeaderPlan {
             }
         }
         for route in self.routes {
+            if route.enumeration {
+                graph.declare_enum_scope(
+                    route.declaration.scope(),
+                    route.declaration.name(),
+                    route.declaration.definition().definition_edition,
+                    route.declaration.visibility().clone(),
+                    route.declaration.class(),
+                )?;
+            }
             graph.define_declared_item(route.declaration, route.module)?;
         }
         for import in self.imports {
@@ -796,6 +862,7 @@ impl GeneratedHeaderPlan {
         graph.release_generated_frontier(&self.scope, self.guard);
         Ok(())
     }
+
 }
 
 #[cfg(test)]

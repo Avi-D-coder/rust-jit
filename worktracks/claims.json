@@ -1536,16 +1536,21 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V22 common selected-kind origin matrix passes all four contexts/editions; ancestry setup still Incomplete. Completed-catalogue actual retained prefix/provider projection successor reviewed, unexecuted; no source authority bypass or full architecture closure. V179 held module/policy prerequisite evidence: worktracks/evidence/2026-10-18-interpreter-v166-v179-module-namespaces.json; no integration/runtime/JIT acceptance.",
+      "scope": "V22 common selected-kind origin matrix passes all four contexts/editions; ancestry setup still Incomplete. Completed-catalogue actual retained prefix/provider projection successor reviewed, unexecuted; no source authority bypass or full architecture closure. V179 held module/policy prerequisite evidence: worktracks/evidence/2026-10-18-interpreter-v166-v179-module-namespaces.json; no integration/runtime/JIT acceptance. Solo continuation: actual generated enum member token/source facts and common enum prefix/member publication, held pending scoped evidence. V20812/12controls and16/16stock-derived origin worlds pass; common generated enum source publication remains partial with contextual-prefix/cross-epoch gates held.",
       "paths": [
         "crates/lrr/src/frontend/names.rs",
         "crates/lrr/src/frontend/pattern_names.rs",
         "crates/lrr/src/service/retained_body_tests.rs",
-        "crates/lrr/src/syntax/lexical_hygiene.rs"
+        "crates/lrr/src/syntax/lexical_hygiene.rs",
+        "crates/lrr/src/frontend/declared_item_names.rs",
+        "crates/lrr/src/frontend/contextual_declaration_tests.rs",
+        "crates/lrr/src/syntax/outline.rs",
+        "worktracks/08-macros-editions/2026-10-19-generated-enum-variant-publication.md",
+        "worktracks/08-macros-editions/2026-10-19-generated-enum-publication-selection.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T04:59:19.980369+00:00",
+      "updated_at": "2026-10-19T08:01:06.800777+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00",
       "transferred_paths": [
         "crates/lrr/src/expand/source_discovery.rs"

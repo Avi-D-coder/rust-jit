@@ -206,7 +206,7 @@ impl RunMachine {
                     enumeration: selected.identity,
                     name: member.clone(),
                 };
-                match NominalConstructorTarget::variant(&sources, &variant) {
+                match NominalConstructorTarget::variant(db, &sources, &variant) {
                     Ok(target) => target,
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 }
@@ -214,7 +214,7 @@ impl RunMachine {
             return self.bind_selected_constructor(db, &target).map(Some);
         }
         let target = match (&selected.variant, selected.kind) {
-            (Some(variant), _) => match NominalConstructorTarget::variant(&sources, variant) {
+            (Some(variant), _) => match NominalConstructorTarget::variant(db, &sources, variant) {
                 Ok(target) => target,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             },
@@ -227,12 +227,9 @@ impl RunMachine {
                 }
             }
             (None, Some(ItemKind::Struct)) => {
-                match sources
-                    .iter()
-                    .find_map(|source| source.outline_item(selected.identity))
-                {
-                    Some(item) => NominalConstructorTarget::structure(item),
-                    None => return QueryPoll::Ready(Ok(None)),
+                match NominalConstructorTarget::structure(db, &sources, selected.identity) {
+                    Ok(target) => target,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
                 }
             }
             _ => return QueryPoll::Ready(Ok(None)),

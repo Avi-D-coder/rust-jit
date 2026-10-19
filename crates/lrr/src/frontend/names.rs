@@ -434,29 +434,29 @@ impl NameNamespaces {
         item: &crate::syntax::outline::ItemOutline,
         edition: u16,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
-        let mut path = item
-            .scope
+        let visibility =
+            VisibilityScope::for_declaration(&item.header.visibility, &item.scope, edition)?;
+        let scope = self.declare_enum_scope(
+            &item.scope,
+            &item.def_key.declared_name,
+            edition,
+            visibility.clone(),
+            NameBindingClass::Root,
+        )?;
+        let path = scope
             .module_path
             .iter()
             .map(String::as_str)
             .collect::<Vec<_>>();
-        path.push(&item.def_key.declared_name);
-        let visibility =
-            VisibilityScope::for_declaration(&item.header.visibility, &item.scope, edition)?;
-        self.declare_module(item.scope.crate_key, &path, edition, visibility.clone())?;
-        self.enum_scopes.insert((
-            item.scope.crate_key,
-            path.iter().map(|part| (*part).to_owned()).collect(),
-        ));
         let enumeration = item.def_key.fingerprint();
         for variant in &item.variants {
-            let name = crate::syntax::ast_adapter::semantic_name(&variant.name).ok_or_else(|| {
-                Diagnostic::new(
-                    "LRR-E-SOURCE-LIMIT",
-                    "enum variant name is not a valid identifier".into(),
-                )
-            })?;
+            let name =
+                crate::syntax::ast_adapter::semantic_name(&variant.name).ok_or_else(|| {
+                    Diagnostic::new(
+                        "LRR-E-SOURCE-LIMIT",
+                        "enum variant name is not a valid identifier".into(),
+                    )
+                })?;
             let identity = crate::syntax::outline::variant_identity(enumeration, &name);
             let mut member = path.clone();
             member.push(&variant.name);
@@ -478,16 +478,65 @@ impl NameNamespaces {
                     visibility.clone(),
                 )?;
             }
-            if self
-                .enum_variants
-                .insert(identity, EnumVariantDefinition { enumeration, name })
-                .is_some()
-            {
+            self.record_enum_variant(identity, enumeration, &name)?;
+        }
+        Ok(())
+    }
+    /// The same module-like prefix for any source-owned enum. This is not
+    /// a Module item; the nominal declaration retains its actual identity.
+    pub(crate) fn declare_enum_scope(
+        &mut self,
+        parent: &ScopeKey,
+        name: &str,
+        edition: u16,
+        visibility: VisibilityScope,
+        class: NameBindingClass,
+    ) -> Result<ScopeKey, Diagnostic> {
+        if class != NameBindingClass::Root {
+            return Err(Diagnostic::new(
+                "LRR-E-NAME-CONTEXT",
+                "enum requires its actual contextual module-prefix receipt".into(),
+            ));
+        }
+        let mut scope = parent.clone();
+        scope
+            .module_path
+            .push(owned_name(name, edition)?.as_str().to_owned());
+        let path = scope
+            .module_path
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        self.declare_module(scope.crate_key, &path, edition, visibility)?;
+        self.enum_scopes
+            .insert((scope.crate_key, scope.module_path.clone()));
+        Ok(scope)
+    }
+    fn record_enum_variant(
+        &mut self,
+        identity: Digest,
+        enumeration: Digest,
+        name: &str,
+    ) -> Result<(), Diagnostic> {
+        if identity != crate::syntax::outline::variant_identity(enumeration, name) {
+            return Err(Diagnostic::new(
+                "LRR-E-EXPANSION-CONFLICT",
+                "enum member identity differs".into(),
+            ));
+        }
+        let member = EnumVariantDefinition {
+            enumeration,
+            name: name.to_owned(),
+        };
+        if let Some(old) = self.enum_variants.get(&identity) {
+            if old != &member {
                 return Err(Diagnostic::new(
-                    "LRR-E-SOURCE-LIMIT",
-                    "duplicate enum variant definition identity".into(),
+                    "LRR-E-EXPANSION-CONFLICT",
+                    "enum member owner differs".into(),
                 ));
             }
+        } else {
+            self.enum_variants.insert(identity, member);
         }
         Ok(())
     }
@@ -1268,6 +1317,13 @@ impl NameNamespaces {
                 declaration.definition().clone(),
                 declaration.visibility().clone(),
                 declaration.class(),
+            )?;
+        }
+        if let Some(enumeration) = declaration.enum_owner() {
+            self.record_enum_variant(
+                declaration.definition().identity,
+                enumeration,
+                declaration.name(),
             )?;
         }
         self.declared_names.insert(key, declaration);

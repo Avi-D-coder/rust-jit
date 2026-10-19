@@ -20,7 +20,6 @@ use crate::{
         changes::PreparedSourceView,
         manifest::{DefKey, ItemKind},
     },
-    syntax::outline::ItemOutline,
 };
 use std::sync::Arc;
 
@@ -35,32 +34,34 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-SCHEMA", message.into())
 }
 impl NominalConstructorTarget {
-    pub(crate) fn structure(item: &ItemOutline) -> Self {
-        Self {
-            owner: item.def_key.clone(),
-            identity: item.def_key.fingerprint(),
-            variant: None,
+    pub(crate) fn structure(
+        db: &mut Database,
+        sources: &[&PreparedSourceView],
+        identity: Digest,
+    ) -> Result<Self, Diagnostic> {
+        let owner = super::source_types::nominal_definition(db, sources, identity)?;
+        if owner.item_kind != ItemKind::Struct {
+            return Err(fault(
+                "struct constructor owner declaration is not a struct",
+            ));
         }
+        Ok(Self {
+            owner,
+            identity,
+            variant: None,
+        })
     }
     pub(crate) fn variant(
+        db: &mut Database,
         sources: &[&PreparedSourceView],
         variant: &EnumVariantDefinition,
     ) -> Result<Self, Diagnostic> {
-        let mut owners = sources.iter().flat_map(|source| {
-            source
-                .outline()
-                .items
-                .iter()
-                .filter(|item| item.def_key.fingerprint() == variant.enumeration)
-        });
-        let owner = owners
-            .next()
-            .ok_or_else(|| fault("enum variant owner is outside the source catalogue"))?;
-        if owners.next().is_some() || owner.def_key.item_kind != ItemKind::Enum {
-            return Err(fault("enum variant owner declaration is not unique"));
+        let owner = super::source_types::nominal_definition(db, sources, variant.enumeration)?;
+        if owner.item_kind != ItemKind::Enum {
+            return Err(fault("enum variant owner declaration is not an enum"));
         }
         Ok(Self {
-            owner: owner.def_key.clone(),
+            owner,
             identity: variant.enumeration,
             variant: Some(variant.name.clone()),
         })

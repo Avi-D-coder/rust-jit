@@ -318,6 +318,8 @@ pub enum VariantOutlineShape {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct VariantOutline {
     pub name: String,
+    /// Exact identifier location in the retained parse, including generated syntax.
+    pub name_range: SourceRange,
     pub shape: VariantOutlineShape,
 }
 impl VariantOutline {
@@ -715,6 +717,7 @@ pub(crate) fn enum_variants(
             .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "enum variant allocation failed"))?;
         result.push(VariantOutline {
             name: name.text().to_string(),
+            name_range: range(name.syntax().text_range()),
             shape,
         });
     }

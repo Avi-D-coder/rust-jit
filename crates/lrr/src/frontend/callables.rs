@@ -1387,6 +1387,16 @@ impl<'a> CallResolver<'a> {
                 QueryPoll::Ready(Ok(CallSelection::Source(Box::new(callee))))
             }
             QueryPoll::Ready(Ok(Err(definition))) => {
+                if definition.item_kind == ItemKind::Struct {
+                    return QueryPoll::Ready(
+                        super::nominal_constructors::NominalConstructorTarget::structure(
+                            db,
+                            self.sources,
+                            identity,
+                        )
+                        .map(CallSelection::Constructor),
+                    );
+                }
                 QueryPoll::Ready(Ok(CallSelection::NeedValue(definition)))
             }
             QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
@@ -1634,6 +1644,7 @@ impl<'a> CallResolver<'a> {
             if let Some(variant) = self.graph.enum_variant(selected.identity) {
                 return QueryPoll::Ready(
                     super::nominal_constructors::NominalConstructorTarget::variant(
+                        db,
                         self.sources,
                         variant,
                     )
@@ -1682,9 +1693,10 @@ impl<'a> CallResolver<'a> {
             return QueryPoll::Ready(Ok(CallSelection::NeedOwnerContext(item.scope.clone())));
         }
         if item.def_key.item_kind == ItemKind::Struct {
-            return QueryPoll::Ready(Ok(CallSelection::Constructor(
-                super::nominal_constructors::NominalConstructorTarget::structure(item),
-            )));
+            return QueryPoll::Ready(
+                super::nominal_constructors::NominalConstructorTarget::structure(db, self.sources, selected.identity)
+                    .map(CallSelection::Constructor),
+            );
         }
         if item.def_key.item_kind != ItemKind::Function {
             return QueryPoll::Ready(Ok(CallSelection::NeedValue(item.def_key.clone())));

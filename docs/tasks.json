@@ -5707,7 +5707,8 @@
         "worktracks/evidence/2026-10-14-byte-scalar-components.json",
         "worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json",
         "worktracks/evidence/2026-10-19-v199-v200-shared-origin-identity.json",
-        "worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json"
+        "worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json",
+        "worktracks/evidence/2026-10-19-v206-v208-generated-enum-publication.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
@@ -5730,7 +5731,7 @@
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
         "guest_jit_authorized": false
       },
-      "latest_component_scope": "V203/V205 solo held T050/T051 common publication:9/9focused controls and7/8selected unchanged stock runtime contracts pass. let-else-non-copy newly passes versus V194. Prepares all Copy transfers before parent moves; shared resumable publication replaces synchronous loop and removes CopyAggregate-to-Move temporary shortcut. Whole-source generated enum variant lookup fails user-macro2015 after original passes;14origin worlds unexecuted. Mutex::lock remains unsupported. Production same between V203 and V205; host adapter compile failure V204 retained. No full pattern/milestone/interpreter/JIT closure or refreshed suite total. Evidence worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json."
+      "latest_component_scope": "V208 solo held common nominal publication:12/12focused controls,16/16unchanged Copy-pattern origin/edition worlds and9/10selected stock runtime contracts pass. Root-class generated enum members retain actual parent/source/token occurrences; ordinary/generated constructor owner selection shares canonical source service and indexed source views. Mutex::lock, nonRoot contextual prefixes, full cache/currentness/cleanup/milestone/interpreter gates remain incomplete. No new distinct stock gain or refreshed suite total. Evidence worktracks/evidence/2026-10-19-v206-v208-generated-enum-publication.json."
     },
     {
       "id": "T051",
@@ -5767,11 +5768,12 @@
         "worktracks/evidence/2026-10-18-interpreter-v155-v165-generated-derives.json",
         "worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json",
         "worktracks/evidence/2026-10-19-v199-v200-shared-origin-identity.json",
-        "worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json"
+        "worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json",
+        "worktracks/evidence/2026-10-19-v206-v208-generated-enum-publication.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
-      "latest_component_scope": "V203/V205 solo held T050/T051 common publication:9/9focused controls and7/8selected unchanged stock runtime contracts pass. let-else-non-copy newly passes versus V194. Prepares all Copy transfers before parent moves; shared resumable publication replaces synchronous loop and removes CopyAggregate-to-Move temporary shortcut. Whole-source generated enum variant lookup fails user-macro2015 after original passes;14origin worlds unexecuted. Mutex::lock remains unsupported. Production same between V203 and V205; host adapter compile failure V204 retained. No full pattern/milestone/interpreter/JIT closure or refreshed suite total. Evidence worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json.",
+      "latest_component_scope": "V208 solo held common nominal publication:12/12focused controls,16/16unchanged Copy-pattern origin/edition worlds and9/10selected stock runtime contracts pass. Root-class generated enum members retain actual parent/source/token occurrences; ordinary/generated constructor owner selection shares canonical source service and indexed source views. Mutex::lock, nonRoot contextual prefixes, full cache/currentness/cleanup/milestone/interpreter gates remain incomplete. No new distinct stock gain or refreshed suite total. Evidence worktracks/evidence/2026-10-19-v206-v208-generated-enum-publication.json.",
       "artifacts": [
         "worktracks/evidence/2026-10-18-interpreter-v151-v154-nominal-constant-context.json"
       ]

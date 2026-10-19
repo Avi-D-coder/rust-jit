@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T07:45:00.956658+00:00",
+  "updated_at": "2026-10-19T08:01:06.800777+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -193,7 +193,8 @@
         "worktracks/evidence/2026-10-18-interpreter-v54-validation.json",
         "worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json",
         "worktracks/evidence/2026-10-19-v199-v200-shared-origin-identity.json",
-        "worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json"
+        "worktracks/evidence/2026-10-19-v201-v205-pattern-copy-publication.json",
+        "worktracks/evidence/2026-10-19-v206-v208-generated-enum-publication.json"
       ]
     },
     {
@@ -503,7 +504,8 @@
         }
       ],
       "component_evidence": [
-        "worktracks/evidence/2026-10-19-v199-v200-shared-origin-identity.json"
+        "worktracks/evidence/2026-10-19-v199-v200-shared-origin-identity.json",
+        "worktracks/evidence/2026-10-19-v206-v208-generated-enum-publication.json"
       ]
     },
     {

@@ -1988,12 +1988,7 @@ pub(super) fn nominal_definition(
     identity: crate::core::digest::Digest,
 ) -> Result<DefKey, Diagnostic> {
     for source in sources {
-        if let Some(item) = source
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.fingerprint() == identity)
-        {
+        if let Some(item) = source.outline_item(identity) {
             if !matches!(db.input(&InputKey::DefinitionSource(identity)).as_deref(),Some(InputValue::DefinitionSource(parse)) if parse==&source.selection().outline.parse)
             {
                 return Err(fault(

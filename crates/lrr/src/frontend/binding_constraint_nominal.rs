@@ -494,23 +494,33 @@ impl<'a> Component<'a> {
         let sources: Vec<_> = environment.sources().iter().collect();
         let graph = environment.names();
         let target = if let Some(variant) = graph.enum_variant(identity) {
-            match NominalConstructorTarget::variant(&sources, variant) {
+            match NominalConstructorTarget::variant(db, &sources, variant) {
                 Ok(target) => target,
                 Err(error) if super::not_closed(&error) => return QueryPoll::Ready(Ok(None)),
                 Err(error) => return QueryPoll::Ready(Err(error)),
             }
         } else {
-            match sources
-                .iter()
-                .flat_map(|source| source.outline().items.iter())
-                .find(|item| {
-                    crate::core::digest::StableEncode::fingerprint(&item.def_key) == identity
-                        && item.def_key.item_kind == ItemKind::Struct
-                }) {
-                Some(item) => NominalConstructorTarget::structure(item),
+            match crate::frontend::callables::selected_item_kind(
+                db,
+                sources.iter().copied(),
+                identity,
+            ) {
+                Some(ItemKind::Struct)
+                    if db
+                        .input(&InputKey::LocalDeclarationOwner(identity))
+                        .is_none() =>
+                {
+                    match NominalConstructorTarget::structure(db, &sources, identity) {
+                        Ok(target) => target,
+                        Err(error) if super::not_closed(&error) => {
+                            return QueryPoll::Ready(Ok(None));
+                        }
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                }
                 // A struct declared in the executing body is no module
                 // outline item: its published local declaration owns it.
-                None if db
+                _ if db
                     .input(&InputKey::LocalDeclarationOwner(identity))
                     .is_some()
                     && matches!(
@@ -524,7 +534,7 @@ impl<'a> Component<'a> {
                         None => return QueryPoll::Ready(Ok(None)),
                     }
                 }
-                None => return QueryPoll::Ready(Ok(None)),
+                _ => return QueryPoll::Ready(Ok(None)),
             }
         };
         self.bind_target(db, graph, &sources, &target)
@@ -574,7 +584,7 @@ impl<'a> Component<'a> {
                 enumeration,
                 name: member.to_owned(),
             };
-            match NominalConstructorTarget::variant(&sources, &variant) {
+            match NominalConstructorTarget::variant(db, &sources, &variant) {
                 Ok(target) => target,
                 Err(error) if super::not_closed(&error) => return QueryPoll::Ready(Ok(None)),
                 Err(error) => return QueryPoll::Ready(Err(error)),
