@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T08:01:06.800777+00:00",
+  "updated_at": "2026-10-19T08:29:03.723628+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -90,6 +90,9 @@
           "title": "Inventory completeness and reduction",
           "status": "planned"
         }
+      ],
+      "component_evidence": [
+        "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json"
       ]
     },
     {
@@ -264,6 +267,9 @@
           "title": "Async execution dependencies",
           "status": "planned"
         }
+      ],
+      "component_evidence": [
+        "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json"
       ]
     },
     {
@@ -331,6 +337,9 @@
           "title": "Dispatch integration",
           "status": "planned"
         }
+      ],
+      "component_evidence": [
+        "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json"
       ]
     },
     {

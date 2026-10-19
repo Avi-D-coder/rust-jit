@@ -720,3 +720,48 @@ fn upstream_aggregate_pattern_publication_shares_all_editions_and_origins() {
         }
     }
 }
+
+#[test]
+fn upstream_reference_conversion_uses_shared_receiver_probe_all_editions_and_origins() {
+    use ra_ap_syntax::{AstNode, ast, ast::HasName};
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-source-expr-nomove-pass.rs"
+    );
+    let tree = ast::SourceFile::parse(ORIGINAL, ra_ap_syntax::Edition::Edition2024);
+    assert!(tree.errors().is_empty());
+    let main = tree
+        .tree()
+        .syntax()
+        .descendants()
+        .filter_map(ast::Fn::cast)
+        .find(|function| function.name().is_some_and(|name| name.text() == "main"))
+        .unwrap();
+    let range = main.body().unwrap().syntax().text_range();
+    let (start, end) = (
+        u32::from(range.start()) as usize,
+        u32::from(range.end()) as usize,
+    );
+    let mut standard = ORIGINAL.to_owned();
+    standard.replace_range(
+        start..end,
+        &format!("{{assert!({{{};true}});}}", &ORIGINAL[start + 1..end - 1]),
+    );
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }} emit! {{ {ORIGINAL} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }} macro_rules! wrap {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }} wrap! {{ {ORIGINAL} }}"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        for source in [ORIGINAL, &emitted, &wrapped, &standard] {
+            let report = completed_with_standard_facade(source, edition);
+            assert_eq!(report.output.stdout, "inner: foo\nother: None\n");
+            assert!(report.output.stderr.is_empty());
+            assert_eq!(
+                report.opcode_counters.operations_started,
+                report.opcode_counters.operations_completed
+            );
+            assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+            assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
+        }
+    }
+}

@@ -237,6 +237,31 @@ def integer(value):
     return type(value) is int and 0 <= value < 2**64
 
 
+def closed_guest_streams(streams, output):
+    """Accept only closed managed bytes exactly matching the terminal report.
+
+    Ordinary run-pass has no stdout oracle without check-run-results. Keep its
+    actual output observable; do not demand silence or ignore malformed capture.
+    Runtime file assertions and unhandled effects still require their adapters.
+    """
+    if (not isinstance(streams, dict) or set(streams) != {"status", "stdout", "stderr"}
+            or not isinstance(output, dict) or set(output) != {"stdout", "stderr"}):
+        return False
+    for channel in ("stdout", "stderr"):
+        raw, text = streams[channel], output[channel]
+        if (not isinstance(raw, list) or not isinstance(text, str)
+                or any(type(byte) is not int or not 0 <= byte <= 255 for byte in raw)):
+            return False
+        try:
+            if bytes(raw) != text.encode("utf-8"):
+                return False
+        except UnicodeError:
+            return False
+    expected = ("closed_managed_output_observed" if streams["stdout"] or streams["stderr"]
+                else "closed_no_external_effects_observed")
+    return streams["status"] == expected
+
+
 def classify(observation, packet, selected, context, files, digests):
     """Only a complete live capture can supply a selected runtime-contract pass."""
     if observation.get("launch_error"):
@@ -281,8 +306,7 @@ def classify(observation, packet, selected, context, files, digests):
             and terminal["status"] == "completed" and terminal["value"] == {"kind": "unit"},
             "complete_capture": capture["complete"] is True and capture["blocker"] is None
             and capture["scope"] == "dispatcher_external_effects_only_not_memory_trace",
-            "closed_guest_streams": streams == {
-                "status": "closed_no_external_effects_observed", "stdout": [], "stderr": []},
+            "closed_guest_streams": closed_guest_streams(streams, terminal.get("output", {"stdout": "", "stderr": ""})),
             "actual_dispatch": integer(facts["vm_dispatches"])
             and facts["vm_dispatches"] > 0
             and integer(facts["vm_outcomes"])
@@ -319,7 +343,8 @@ def classify(observation, packet, selected, context, files, digests):
     except (KeyError, TypeError, ValueError, OSError) as error:
         return {"status": "incomplete_evidence", "reason": str(error)}
     return {"status": "runtime_contract_pass" if all(checks.values()) else "incomplete_evidence",
-            "checks": checks}
+            "checks": checks, "guest_output": terminal.get("output", {"stdout": "", "stderr": ""}),
+            "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results"}
 
 
 def main():

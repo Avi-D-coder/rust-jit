@@ -832,6 +832,20 @@ impl<'a> Component<'a> {
             Ok(members) => members,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
+        let reference_sources: Vec<_> = environment.sources().iter().collect();
+        if let Some(selected) = ready!(crate::frontend::reference_methods::probe(
+            db,
+            &members,
+            environment.names(),
+            &reference_sources,
+            &receiver,
+            name
+        )) {
+            return QueryPoll::Ready(Ok(match selected.alternatives.functions.as_slice() {
+                [function] => Some(*function),
+                _ => None,
+            }));
+        }
         // No candidate on the static receiver Type itself (an autoderef or
         // unindexed trait method) leaves the selection open, as do several
         // candidates (impls of one trait that differ by the trait's

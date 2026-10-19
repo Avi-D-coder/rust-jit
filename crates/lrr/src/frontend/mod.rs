@@ -19,6 +19,7 @@ pub mod macro_names;
 pub mod macro_origins;
 pub mod macro_scopes;
 pub mod member_index;
+pub(crate) mod reference_methods;
 mod module_aliases;
 mod module_paths;
 pub mod original_attributes;

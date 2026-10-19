@@ -1,0 +1,22 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Shared reference receiver candidate order across source constraints and reached calls; upstream conversion/method witnesses",
+  "controls": [
+    "cli::crate_graph::vec_string_tests::string_construction_formatting_and_comparison",
+    "cli::crate_graph::vec_string_tests::vec_iterators_slices_and_deref_coercion",
+    "cli::crate_graph::vec_string_tests::mutable_reference_arguments_of_generic_parameters_are_reborrowed",
+    "cli::crate_graph::generic_boundary_tests::generic_callers_pass_their_instantiation_to_generic_callees",
+    "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold",
+    "cli::callable_value_tests::upstream_reference_conversion_uses_shared_receiver_probe_all_editions_and_origins"
+  ],
+  "runtime_cases": [
+    "tests/ui/let-else/let-else-source-expr-nomove-pass.rs",
+    "tests/ui/closures/closure-capture-after-clone.rs",
+    "tests/ui/autoref-autoderef/auto-ref.rs",
+    "tests/ui/autoref-autoderef/autoderef-method-priority.rs",
+    "tests/ui/autoref-autoderef/autoderef-vec-to-slice-by-value.rs",
+    "tests/ui/methods/method-self-arg.rs",
+    "tests/ui/methods/method-self-arg-trait.rs",
+    "tests/ui/methods/inherent-methods-same-name.rs"
+  ]
+}

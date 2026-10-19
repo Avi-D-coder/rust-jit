@@ -1104,8 +1104,7 @@ impl MemberIndex {
     pub fn same_trait_of(&self, functions: &[Digest]) -> Option<Digest> {
         let trait_of = |function: &Digest| {
             self.layers()
-                .flat_map(|layer| layer.impls.iter())
-                .find(|members| members.functions.values().any(|f| f == function))
+                .find_map(|layer| layer.function_owner.get(function).and_then(|index| layer.impls.get(*index)))
                 .and_then(|members| members.trait_definition)
         };
         let first = trait_of(functions.first()?)?;
@@ -1234,6 +1233,41 @@ impl MemberIndex {
     ) -> Result<MethodAlternatives, Diagnostic> {
         self.method_alternatives_of(self_type, None, method)
     }
+    /// Candidates before receiver-form filtering. A method at another receiver
+    /// form cannot hide one at the form currently being probed.
+    fn own_receiver_functions(
+        &self,
+        self_type: Result<Digest, BuiltinSelf>,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        name: &str,
+    ) -> (Vec<Digest>, Vec<(Option<Digest>, Digest)>) {
+        match self_type {
+            Ok(identity) => (
+                self.inherent(identity, name),
+                self.trait_functions(identity, name)
+                    .into_iter()
+                    .map(|(members, f)| (members.trait_definition, f))
+                    .collect(),
+            ),
+            Err(builtin) => (
+                self.builtin_inherent_of(builtin, pointee, name),
+                self.builtin_trait_impl_functions_of(builtin, pointee, name),
+            ),
+        }
+    }
+    pub(crate) fn receiver_functions(
+        &self,
+        self_type: Result<Digest, BuiltinSelf>,
+        pointee: Option<Result<Digest, BuiltinSelf>>,
+        name: &str,
+    ) -> (Vec<Digest>, Vec<Digest>) {
+        let (inherent, traits) = self.own_receiver_functions(self_type, pointee, name);
+        let mut traits: Vec<_> = traits.into_iter().map(|(_, f)| f).collect();
+        traits.extend(self.blanket_functions(self_type, name));
+        traits.sort();
+        traits.dedup();
+        (inherent, traits)
+    }
     /// `method_alternatives` for a reference self type, selecting among the
     /// reference impls by the referent they name.
     pub(crate) fn method_alternatives_of(
@@ -1243,19 +1277,7 @@ impl MemberIndex {
         method: &str,
     ) -> Result<MethodAlternatives, Diagnostic> {
         let candidates = |self_type| {
-            let (inherent, traits) = match self_type {
-                Ok(nominal) => (
-                    self.inherent(nominal, method),
-                    self.trait_functions(nominal, method)
-                        .into_iter()
-                        .map(|(members, function)| (members.trait_definition, function))
-                        .collect::<Vec<_>>(),
-                ),
-                Err(builtin) => (
-                    self.builtin_inherent_of(builtin, pointee, method),
-                    self.builtin_trait_impl_functions_of(builtin, pointee, method),
-                ),
-            };
+            let (inherent, traits) = self.own_receiver_functions(self_type, pointee, method);
             // Blanket impls (`impl<T: Bound> Trait for T`) apply when no impl
             // of the receiver's own type provides the method.
             if inherent.is_empty() && traits.is_empty() {

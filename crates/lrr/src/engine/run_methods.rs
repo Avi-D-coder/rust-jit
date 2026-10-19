@@ -37,101 +37,143 @@ impl RunMachine {
         // reach it, for an explicit `self: Rc<Self>` / `self: &Rc<Self>`
         // receiver type that names one of them.
         let mut step_types: Vec<(crate::runtime::shape::TypeId, usize)> = Vec::new();
-        let self_type = loop {
+        let reference_sources: Vec<_> = self.sources.iter().collect();
+        let reference_choice = match (
+            self.members.as_ref(),
+            self.store.descriptor_source_term(ty),
+            self.graph.as_ref(),
+        ) {
+            (Some(members), Some(term), Some(graph)) => {
+                match crate::frontend::reference_methods::probe(
+                    db,
+                    members,
+                    graph,
+                    &reference_sources,
+                    &term,
+                    method,
+                ) {
+                    QueryPoll::Ready(Ok(choice)) => choice,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
+            _ => None,
+        };
+        let self_type = if let Some(choice) = &reference_choice {
+            for _ in 0..choice.depth {
+                step_types.push((ty, steps.len()));
+                let key = match self.store.type_descriptor(ty) {
+                    Ok(descriptor) => descriptor.key.clone(),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                let TypeKey::Ref { target, mutable } = key.as_ref() else {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "selected reference receiver depth differs",
+                    )));
+                };
+                steps.push(ReceiverStep::Deref);
+                references.push(Some(*mutable));
+                ty = *target;
+            }
             step_types.push((ty, steps.len()));
-            let key = match self.store.type_descriptor(ty) {
-                Ok(descriptor) => descriptor.key.clone(),
-                Err(error) => return QueryPoll::Ready(Err(error)),
-            };
-            match key.as_ref() {
-                TypeKey::Ref { target, mutable } => {
-                    steps.push(ReceiverStep::Deref);
-                    references.push(Some(*mutable));
-                    ty = *target;
-                    // rustc's probe tries each step's own methods before the
-                    // next deref: a reference to a reference (`&&A`) has the
-                    // methods of core's `&A` impls (`Self = &A`) at this step.
-                    if let Ok(descriptor) = self.store.type_descriptor(ty)
-                        && let TypeKey::Ref { mutable: inner, .. } = descriptor.key.as_ref()
-                        && self.members.as_ref().is_some_and(|members| {
-                            !members
-                                .builtin_trait_functions(BuiltinSelf::Reference(*inner), method)
-                                .is_empty()
-                        })
-                    {
-                        break Err(BuiltinSelf::Reference(*inner));
-                    }
-                }
-                // rustc's probe steps through a box by its builtin deref when
-                // `Box<T>` itself has no method of this name.
-                TypeKey::Nominal { identity, args, .. }
-                    if self.store.owned_box() == Some(*identity)
-                        && args.len() == 1
-                        && self.members.as_ref().is_some_and(|members| {
-                            members
-                                .select_method(Ok(*identity), method)
-                                .is_err_and(|error| error.code == "LRR-E-NAME-MISSING")
-                        }) =>
-                {
-                    steps.push(ReceiverStep::Deref);
-                    references.push(None);
-                    ty = args[0];
-                }
-                TypeKey::Nominal { identity, .. } => {
-                    // This step's own methods first; a type with none steps
-                    // through its `Deref` impl (rustc's overloaded autoderef).
-                    let missing = self.members.as_ref().is_some_and(|members| {
-                        members
-                            .method_alternatives(Ok(*identity), method)
-                            .is_err_and(|error| error.code == "LRR-E-NAME-MISSING")
-                    });
-                    if !missing {
-                        break Ok(*identity);
-                    }
-                    match self.overloaded_deref_probe(db, ty, method) {
-                        QueryPoll::Ready(Ok(Some((chain, bucket, by_reference)))) => {
-                            references.extend(chain.iter().map(|_| None));
-                            steps.extend(chain);
-                            autoref = by_reference;
-                            break bucket;
+            choice.self_type
+        } else {
+            loop {
+                step_types.push((ty, steps.len()));
+                let key = match self.store.type_descriptor(ty) {
+                    Ok(descriptor) => descriptor.key.clone(),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                match key.as_ref() {
+                    TypeKey::Ref { target, mutable } => {
+                        steps.push(ReceiverStep::Deref);
+                        references.push(Some(*mutable));
+                        ty = *target;
+                        // rustc's probe tries each step's own methods before the
+                        // next deref: a reference to a reference (`&&A`) has the
+                        // methods of core's `&A` impls (`Self = &A`) at this step.
+                        if let Ok(descriptor) = self.store.type_descriptor(ty)
+                            && let TypeKey::Ref { mutable: inner, .. } = descriptor.key.as_ref()
+                            && self.members.as_ref().is_some_and(|members| {
+                                !members
+                                    .builtin_trait_functions(BuiltinSelf::Reference(*inner), method)
+                                    .is_empty()
+                            })
+                        {
+                            break Err(BuiltinSelf::Reference(*inner));
                         }
-                        QueryPoll::Ready(Ok(None)) => break Ok(*identity),
-                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                     }
-                }
-                TypeKey::Primitive(_) if ty.0 == 16 => break Err(BuiltinSelf::Str),
-                TypeKey::Primitive(_) => match self.store.descriptor_source_term(ty) {
-                    Some(crate::traits::term::TyTerm::Primitive(primitive)) => {
-                        break Err(BuiltinSelf::Primitive(primitive));
+                    // rustc's probe steps through a box by its builtin deref when
+                    // `Box<T>` itself has no method of this name.
+                    TypeKey::Nominal { identity, args, .. }
+                        if self.store.owned_box() == Some(*identity)
+                            && args.len() == 1
+                            && self.members.as_ref().is_some_and(|members| {
+                                members
+                                    .select_method(Ok(*identity), method)
+                                    .is_err_and(|error| error.code == "LRR-E-NAME-MISSING")
+                            }) =>
+                    {
+                        steps.push(ReceiverStep::Deref);
+                        references.push(None);
+                        ty = args[0];
                     }
+                    TypeKey::Nominal { identity, .. } => {
+                        // This step's own methods first; a type with none steps
+                        // through its `Deref` impl (rustc's overloaded autoderef).
+                        let missing = self.members.as_ref().is_some_and(|members| {
+                            members
+                                .method_alternatives(Ok(*identity), method)
+                                .is_err_and(|error| error.code == "LRR-E-NAME-MISSING")
+                        });
+                        if !missing {
+                            break Ok(*identity);
+                        }
+                        match self.overloaded_deref_probe(db, ty, method) {
+                            QueryPoll::Ready(Ok(Some((chain, bucket, by_reference)))) => {
+                                references.extend(chain.iter().map(|_| None));
+                                steps.extend(chain);
+                                autoref = by_reference;
+                                break bucket;
+                            }
+                            QueryPoll::Ready(Ok(None)) => break Ok(*identity),
+                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                        }
+                    }
+                    TypeKey::Primitive(_) if ty.0 == 16 => break Err(BuiltinSelf::Str),
+                    TypeKey::Primitive(_) => match self.store.descriptor_source_term(ty) {
+                        Some(crate::traits::term::TyTerm::Primitive(primitive)) => {
+                            break Err(BuiltinSelf::Primitive(primitive));
+                        }
+                        _ => {
+                            return QueryPoll::Ready(Err(call_fault(&format!(
+                                "method `{method}` receiver primitive is not selectable"
+                            ))));
+                        }
+                    },
+                    TypeKey::Slice { .. } => break Err(BuiltinSelf::Slice),
+                    TypeKey::Array { .. } => break Err(BuiltinSelf::Array),
+                    // Raw and fn pointers select impls under their reserved
+                    // identities (E-R5-008).
+                    TypeKey::RawPtr { mutable: true, .. } => {
+                        break Ok(crate::traits::pointer_terms::mut_pointer_identity());
+                    }
+                    TypeKey::RawPtr { mutable: false, .. } => {
+                        break Ok(crate::traits::pointer_terms::const_pointer_identity());
+                    }
+                    TypeKey::Function { .. } => {
+                        break Ok(crate::traits::pointer_terms::fn_pointer_identity());
+                    }
+                    TypeKey::Tuple(fields) => match u32::try_from(fields.len()) {
+                        Ok(arity) => break Err(BuiltinSelf::Tuple(arity)),
+                        Err(_) => return QueryPoll::Ready(Err(call_fault("tuple arity overflow"))),
+                    },
                     _ => {
                         return QueryPoll::Ready(Err(call_fault(&format!(
-                            "method `{method}` receiver primitive is not selectable"
+                            "method `{method}` on this receiver type awaits trait-object/closure methods"
                         ))));
                     }
-                },
-                TypeKey::Slice { .. } => break Err(BuiltinSelf::Slice),
-                TypeKey::Array { .. } => break Err(BuiltinSelf::Array),
-                // Raw and fn pointers select impls under their reserved
-                // identities (E-R5-008).
-                TypeKey::RawPtr { mutable: true, .. } => {
-                    break Ok(crate::traits::pointer_terms::mut_pointer_identity());
-                }
-                TypeKey::RawPtr { mutable: false, .. } => {
-                    break Ok(crate::traits::pointer_terms::const_pointer_identity());
-                }
-                TypeKey::Function { .. } => {
-                    break Ok(crate::traits::pointer_terms::fn_pointer_identity());
-                }
-                TypeKey::Tuple(fields) => match u32::try_from(fields.len()) {
-                    Ok(arity) => break Err(BuiltinSelf::Tuple(arity)),
-                    Err(_) => return QueryPoll::Ready(Err(call_fault("tuple arity overflow"))),
-                },
-                _ => {
-                    return QueryPoll::Ready(Err(call_fault(&format!(
-                        "method `{method}` on this receiver type awaits trait-object/closure methods"
-                    ))));
                 }
             }
         };
@@ -144,15 +186,21 @@ impl RunMachine {
         // The probe also tries `Self = &U` at the step of the reference it
         // peeled last: a method of an impl for `&'a U` (autoref'd `&&U`, or a
         // by-value `self`) when `U` itself has none.
-        let mut self_is_reference = false;
-        let selected = match autoref {
-            Some(mutable) => {
-                let pointee = self_type;
-                self_type = Err(BuiltinSelf::Reference(mutable));
-                self_is_reference = true;
-                members.method_alternatives_of(self_type, Some(pointee), method)
+        let mut self_is_reference = reference_choice
+            .as_ref()
+            .is_some_and(|choice| choice.reference_self);
+        let selected = if let Some(choice) = &reference_choice {
+            Ok(choice.alternatives.clone())
+        } else {
+            match autoref {
+                Some(mutable) => {
+                    let pointee = self_type;
+                    self_type = Err(BuiltinSelf::Reference(mutable));
+                    self_is_reference = true;
+                    members.method_alternatives_of(self_type, Some(pointee), method)
+                }
+                None => members.method_alternatives(self_type, method),
             }
-            None => members.method_alternatives(self_type, method),
         };
         let alternatives = match selected {
             Ok(alternatives) => alternatives,
@@ -186,11 +234,9 @@ impl RunMachine {
         // method has no other arguments (`select_deferred_trait_call`).
         let deferred = match (alternatives.functions.as_slice(), alternatives.same_trait) {
             ([_], _) => None,
-            (_, Some(trait_key)) if syntax.is_empty() => {
-                members
-                    .trait_declaration(trait_key, method)
-                    .map(|declaration| (trait_key, declaration))
-            }
+            (_, Some(trait_key)) if syntax.is_empty() => members
+                .trait_declaration(trait_key, method)
+                .map(|declaration| (trait_key, declaration)),
             _ => None,
         };
         let function = match (alternatives.functions.as_slice(), &deferred) {
@@ -236,18 +282,26 @@ impl RunMachine {
                 format!("`{method}` is an associated function, not a method"),
             )));
         };
-        let mut mode = match receiver.ty.first().map(|token| token.text.as_str()) {
-            Some("&") if receiver.ty.iter().any(|token| token.text == "mut") => {
-                ReceiverMode::Mutable
+        let receiver_form = crate::frontend::reference_methods::receiver_form(&receiver.ty);
+        let mut mode = match receiver_form {
+            crate::frontend::reference_methods::Form::Shared => ReceiverMode::Shared,
+            crate::frontend::reference_methods::Form::Mutable => ReceiverMode::Mutable,
+            crate::frontend::reference_methods::Form::Value => ReceiverMode::Value,
+            crate::frontend::reference_methods::Form::Explicit => {
+                match receiver.ty.first().map(|token| token.text.as_str()) {
+                    Some("&") if receiver.ty.iter().any(|token| token.text == "mut") => {
+                        ReceiverMode::Mutable
+                    }
+                    Some("&") => ReceiverMode::Shared,
+                    _ => ReceiverMode::Value,
+                }
             }
-            Some("&") => ReceiverMode::Shared,
-            _ => ReceiverMode::Value,
         };
         // An explicit receiver type other than `Self`, `&Self`, `&mut Self`
         // (`self: Rc<Self>`, `self: &Rc<Self>`): rustc's probe matches it
         // against the type of one autoderef step, by value or autoref'd.
         let receiver_tokens = receiver.ty.clone();
-        if !is_self_receiver(&receiver_tokens) {
+        if receiver_form == crate::frontend::reference_methods::Form::Explicit {
             match self.arbitrary_receiver(db, &callee, &receiver_tokens, &step_types) {
                 QueryPoll::Ready(Ok(Some((taken, adjusted)))) => {
                     steps.truncate(taken);
@@ -266,7 +320,11 @@ impl RunMachine {
         if let Some(mutable) = autoref
             && mode == ReceiverMode::Value
         {
-            mode = if mutable { ReceiverMode::Mutable } else { ReceiverMode::Shared };
+            mode = if mutable {
+                ReceiverMode::Mutable
+            } else {
+                ReceiverMode::Shared
+            };
         }
         // `&self` through a shared reference passes that reference itself
         // (a copy), rather than dereferencing and reborrowing it.
@@ -293,7 +351,11 @@ impl RunMachine {
         }
         self.frame.method_receivers.insert(
             self.frame.call_identity(site),
-            ReceiverAdjustment { steps, mode, unsize },
+            ReceiverAdjustment {
+                steps,
+                mode,
+                unsize,
+            },
         );
         if let Some((trait_key, declaration)) = deferred {
             return QueryPoll::Ready(Ok(MethodCall::Deferred {
@@ -317,23 +379,7 @@ impl RunMachine {
         self.prepare_selected_argument_call(db, callee, syntax, arguments)
             .map(MethodCall::Selected)
     }
-}
 
-/// Whether a method's declared receiver type is `Self`, `&Self` or
-/// `&mut Self` (with an optional lifetime): the forms whose adjustment is
-/// decided by the impl bucket alone.
-fn is_self_receiver(tokens: &[crate::syntax::ast_adapter::TokenRecipe]) -> bool {
-    let mut rest = tokens;
-    if rest.first().is_some_and(|token| token.text == "&") {
-        rest = &rest[1..];
-        if rest.first().is_some_and(|token| token.text.starts_with('\'')) {
-            rest = &rest[1..];
-        }
-        if rest.first().is_some_and(|token| token.text == "mut") {
-            rest = &rest[1..];
-        }
-    }
-    matches!(rest, [token] if token.text == "Self")
 }
 
 /// The self-type bucket of a closed source type, as the impl index keys it.
