@@ -1547,6 +1547,13 @@ impl NominalFieldType {
     pub(crate) fn primitive(&self) -> Option<crate::ir::op::PrimitiveType> {
         self.concrete()?.primitive()
     }
+    pub(crate) fn symbolic_source(&self, arguments: &[TyTerm]) -> Option<TyTerm> {
+        match self {
+            Self::Concrete(source) => Some(source.source().clone()),
+            Self::Parameter(index) => arguments.get(*index as usize).cloned(),
+            Self::Compound(written) => written.source_with(&|index| arguments.get(index as usize).cloned()),
+        }
+    }
     /// Whether one of the declaration's type parameters occurs in this field.
     pub(crate) fn generic(&self) -> bool {
         match self {

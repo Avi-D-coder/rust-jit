@@ -1,0 +1,32 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "T050/T051 closure pattern source-access prerequisite, not full closure/interpreter acceptance",
+  "controls": [
+    "cli::callable_value_tests::upstream_pattern_captures_share_the_source_route_across_origins_and_editions",
+    "cli::callable_value_tests::closures_capture_by_shared_unique_and_value_capture",
+    "cli::callable_value_tests::closures_cross_the_ordinary_call_boundary_into_generic_callees",
+    "cli::callable_value_tests::macro_emitted_and_handwritten_closures_share_one_route",
+    "cli::crate_graph::generic_boundary_tests::closures_move_their_by_value_captures_out_when_called_once",
+    "cli::crate_graph::fn_param_pattern_tests::bindings_reach_closures_shadowing_loops_early_returns_and_recursion",
+    "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+    "cli::reached_pattern_nominal_tests::generated_condition_uses_definition_site_binding_despite_caller_shadowing",
+    "engine::run::pattern_tests::every_owner_kind_uses_the_same_transaction_steps",
+    "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+    "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+    "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source"
+  ],
+  "runtime_cases": [
+    "tests/ui/let-else/let-else-bindings.rs",
+    "tests/ui/let-else/let-else-run-pass.rs",
+    "tests/ui/let-else/let-else-non-copy.rs",
+    "tests/ui/let-else/let-else-source-expr-nomove-pass.rs",
+    "tests/ui/closures/simple-capture-and-call.rs",
+    "tests/ui/closures/closure-capture-after-clone.rs",
+    "tests/ui/closures/drop-glue-for-closure-with-captures.rs",
+    "tests/ui/functions-closures/capture-clauses-unboxed-closures.rs",
+    "tests/ui/closures/local-enums-in-closure-2074.rs",
+    "tests/ui/closures/destructure-newtype-closure.rs",
+    "tests/ui/binding/if-let.rs",
+    "tests/ui/binding/match-ref-binding-mut-option.rs"
+  ]
+}

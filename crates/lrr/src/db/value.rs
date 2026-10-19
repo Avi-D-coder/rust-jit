@@ -153,6 +153,7 @@ pub enum QueryValue {
     FunctionSignature(Box<crate::syntax::signatures::FunctionSignature>),
     ReferenceHeader(Arc<crate::syntax::closed_reference_signatures::ReferenceHeaderPlan>),
     PatternPlan(Arc<crate::syntax::pattern_plan::PatternSourcePlan>),
+    PatternAccess(Arc<crate::frontend::pattern_access::PreparedPatternAccess>),
     TypeAlias(Box<crate::syntax::type_aliases::TypeAliasRecipe>),
     TypeSchema(Box<crate::frontend::types::NominalSchema>),
     ConstructorPlan(Box<crate::syntax::constructors::ConstructorPlan>),
@@ -338,6 +339,9 @@ impl QueryValue {
         }
         if let (Self::ReferenceHeader(value), QueryKey::ReferenceHeader(key)) = (self, key) {
             return value.definition() == *key;
+        }
+        if let (Self::PatternAccess(value), QueryKey::PatternAccess(key)) = (self, key) {
+            return value.key() == key.as_ref();
         }
         if let (Self::PatternPlan(value), QueryKey::PatternPlan(key)) = (self, key) {
             return value.owner() == key && key.phase == 0;
@@ -530,6 +534,7 @@ impl QueryValue {
                 e.u32(31);
                 e.record(v.as_ref());
             }
+            Self::PatternAccess(v) => { e.u32(63); e.record(v.as_ref()); }
             Self::PatternPlan(v) => {
                 e.u32(32);
                 e.digest(v.fingerprint());
@@ -617,6 +622,7 @@ impl QueryValue {
             Self::ReferenceHeader(v) => v
                 .metadata_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),
+            Self::PatternAccess(_) => 0, // E006: no retained-admission resource accounting.
             Self::PatternPlan(v) => v
                 .metadata_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),

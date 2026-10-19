@@ -68,6 +68,7 @@ pub(super) fn thunk(
     };
     let mut captures = Vec::new();
     let mut guards = Vec::new();
+    let mut pattern_uses = Vec::new();
     // Walk this retained subtree once at creation preparation. Nested closure
     // uses contribute outer free bindings. Like BodyIndex, nested items own
     // independent bodies; neither their initializer nor function body captures
@@ -165,13 +166,42 @@ pub(super) fn thunk(
             Some(LocalValueAccess::Parameter(ordinal)) => CaptureSource::Parameter(ordinal),
             None => continue,
         };
-        let mode = crate::syntax::capture_mode(path.syntax(), closure.move_token().is_some());
+        let mode = match ready!(QueryPoll::Ready(crate::syntax::capture_use(
+            body,
+            index,
+            &closure,
+            path.syntax()
+        ))) {
+            crate::syntax::SourceCaptureUse::Mode(mode) => mode,
+            crate::syntax::SourceCaptureUse::Pattern { owner, projections } => {
+                let query = QueryKey::PatternPlan(PcKey {
+                    body: pc.body.clone(),
+                    node: owner.0,
+                    phase: 0,
+                });
+                let fetched = ready!(db.fetch(&SyntaxProvider, query.clone()));
+                let QueryValue::PatternPlan(plan) = fetched.value.as_ref() else {
+                    return QueryPoll::Ready(Err(fault("capture pattern plan differs".into())));
+                };
+                guards.push(ready!(db.prepare_input_guard(
+                    &SyntaxProvider,
+                    &query,
+                    fetched.fingerprint
+                )));
+                pattern_uses.push(crate::ir::op::CapturePatternUse {
+                    source,
+                    plan: Arc::clone(plan),
+                    projections,
+                });
+                crate::ir::op::CaptureMode::Shared
+            }
+        };
         crate::syntax::merge_capture(&mut captures, source, mode);
     }
     let refs: Vec<&PreparedInputGuard> = guards.iter().collect();
     let guard = ready!(QueryPoll::Ready(PreparedInputGuard::join(&refs)));
     let recipe = ready!(QueryPoll::Ready(
-        parsed.initial_thunk_with_closure_captures(body, index, pc, &captures)
+        parsed.initial_thunk_with_closure_captures(body, index, pc, &captures, &pattern_uses)
     ));
     QueryPoll::Ready(
         recipe

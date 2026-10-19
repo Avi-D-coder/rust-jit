@@ -1001,6 +1001,13 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::PatternAccess(key) => {
+                return match crate::frontend::pattern_access::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::PatternAccess(std::sync::Arc::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::PatternPlan(owner) => {
                 return super::source_plan_provider::pattern_plan(self, db, owner);
             }

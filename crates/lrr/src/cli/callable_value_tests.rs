@@ -349,7 +349,6 @@ fn completed_with_standard_facade(text: &str, edition: u16) -> crate::engine::ru
     }
 }
 
-
 #[test]
 fn upstream_generic_closure_factory_keeps_distinct_applications_after_return_all_origins() {
     // Disclosed LRR identity/lifetime adaptation: keep the actual upstream
@@ -360,7 +359,8 @@ fn upstream_generic_closure_factory_keeps_distinct_applications_after_return_all
     );
     assert_eq!(original.matches("fn main() {").count(), 1);
     let mut adapted = original.replace("fn main() {", "fn original_main() {");
-    adapted.push_str(r#"
+    adapted.push_str(
+        r#"
 fn main() {
     let a = generic(0_i8);
     let b = generic(0_u64);
@@ -373,10 +373,10 @@ fn main() {
     assert!(a == again);
     assert!(a != b);
 }
-"#);
-    let emitted = format!(
-        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{\n{adapted}\n}}"
+"#,
     );
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{\n{adapted}\n}}");
     let wrapped = format!(
         "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\n\
          macro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\n\
@@ -385,8 +385,11 @@ fn main() {
     for edition in [2015, 2018, 2021, 2024] {
         for source in [&adapted, &emitted, &wrapped] {
             let report = completed_with_standard_facade(source, edition);
-            assert_eq!(closures_made(&report), 4,
-                "all factory values use ordinary MakeClosure in edition {edition}");
+            assert_eq!(
+                closures_made(&report),
+                4,
+                "all factory values use ordinary MakeClosure in edition {edition}"
+            );
         }
     }
 }
@@ -434,13 +437,19 @@ fn main() {
     assert_eq!(item, 1);
 }
 "#;
-    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
-    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {SOURCE} }}");
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {SOURCE} }}"
+    );
     for edition in [2015, 2018, 2021, 2024] {
         for source in [SOURCE, &emitted, &wrapped] {
             let report = completed(source, edition);
-            assert_eq!(closures_made(&report), 4,
-                "ordinary MakeClosure count in edition {edition}");
+            assert_eq!(
+                closures_made(&report),
+                4,
+                "ordinary MakeClosure count in edition {edition}"
+            );
         }
     }
 }
@@ -448,9 +457,8 @@ fn main() {
 #[test]
 fn upstream_nested_builtin_positions_use_actual_expansion_causes_all_editions() {
     // Entire unchanged upstream original, including its exact byte positions.
-    let original = include_str!(
-        "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/issue-26322.rs"
-    );
+    let original =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/issue-26322.rs");
     for edition in [2015, 2018, 2021, 2024] {
         let report = completed_with_standard_facade(original, edition);
         assert_eq!(closures_made(&report), 2);
@@ -490,7 +498,8 @@ fn included_source_uses_one_pipeline_and_preserves_boundaries_and_exact_once_eff
     // standard assertion expansion. Only reached VM execution prints.
     let fragment = source("{\n    println!(\"included\");\n    line!()\n}\n");
     let literal = format!("{:?}", fragment.0.to_str().unwrap());
-    let program = format!(r#"
+    let program = format!(
+        r#"
 macro_rules! emit {{ () => {{ include!({literal}) }} }}
 macro_rules! wrapper {{ () => {{ emit!() }} }}
 mod nested {{ pub fn value() -> u32 {{ wrapper!() }} }}
@@ -503,10 +512,14 @@ fn main() {{
     assert_eq!(wrapper!(), 3_u32);
     assert_eq!(nested::value(), 3_u32);
 }}
-"#);
+"#
+    );
     for edition in [2015, 2018, 2021, 2024] {
         let report = completed(&program, edition);
-        assert_eq!(report.output.stdout, "included\nincluded\nincluded\nincluded\n");
+        assert_eq!(
+            report.output.stdout,
+            "included\nincluded\nincluded\nincluded\n"
+        );
     }
 }
 
@@ -528,12 +541,18 @@ fn main() {
     assert!(if false { cold() } else { true });
 }
 "#;
-    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
-    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! outer {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nouter! {{ {SOURCE} }}");
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! outer {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nouter! {{ {SOURCE} }}"
+    );
     for edition in [2015, 2018, 2021, 2024] {
         for text in [SOURCE, &emitted, &wrapped] {
             let report = completed(text, edition);
-            assert_eq!(report.output.stdout, "scrutinee\nscrutinee\nscrutinee\nscrutinee\n");
+            assert_eq!(
+                report.output.stdout,
+                "scrutinee\nscrutinee\nscrutinee\nscrutinee\n"
+            );
         }
     }
 }
@@ -557,8 +576,11 @@ fn main() {
     assert!(if false { cold() } else { true });
 }
 "##;
-    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
-    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! outer {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nouter! {{ {SOURCE} }}");
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! outer {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nouter! {{ {SOURCE} }}"
+    );
     for edition in [2015, 2018, 2021, 2024] {
         for text in [SOURCE, &emitted, &wrapped] {
             let report = completed_with_standard_facade(text, edition);
@@ -586,12 +608,56 @@ fn main() {
     assert!(if false { cold() } else { true });
 }
 "#;
-    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
-    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {SOURCE} }}");
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {SOURCE} }}"
+    );
     for edition in [2015, 2018, 2021, 2024] {
         for text in [SOURCE, &emitted, &wrapped] {
             let report = completed_with_standard_facade(text, edition);
             assert_eq!(report.output.stdout, "matched\nscrutinee\nmatched\n");
+        }
+    }
+}
+
+/// The upstream program remains unchanged in its licensed fixture directory.
+/// Wrapping its actual main body is an LRR origin/edition route control, not
+/// another upstream pass or a substitute for the directive-aware harness.
+#[test]
+fn upstream_pattern_captures_share_the_source_route_across_origins_and_editions() {
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-bindings.rs"
+    );
+    let (items, tail) = ORIGINAL.split_once("pub fn main() {").unwrap();
+    let body = tail.trim_end().strip_suffix('}').unwrap();
+    for edition in [2015, 2018, 2021, 2024] {
+        for (origin, source) in [
+            ("original", ORIGINAL.to_owned()),
+            (
+                "user",
+                format!("{items} macro_rules! emit {{()=>{{{{{body}}}}}}} fn main(){{emit!();}}"),
+            ),
+            (
+                "wrapper",
+                format!(
+                    "{items} macro_rules! emit {{()=>{{{{{body}}}}}}} macro_rules! wrapper {{()=>{{emit!()}}}} fn main(){{wrapper!();}}"
+                ),
+            ),
+            (
+                "standard",
+                format!("{items} fn main(){{assert!({{{body};true}});}}"),
+            ),
+        ] {
+            let report = completed(&source, edition);
+            assert_eq!(closures_made(&report), 4, "{origin}, edition {edition}");
+            assert!(report.opcode_counters.started_by_opcode[45] > 0);
+            assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+            assert_eq!(
+                report.opcode_counters.operations_started,
+                report.opcode_counters.operations_completed
+            );
+            assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
         }
     }
 }

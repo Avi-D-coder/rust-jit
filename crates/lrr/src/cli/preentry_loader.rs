@@ -362,6 +362,7 @@ impl Packet {
                 | QueryKey::SourceConstraints(_)
                 | QueryKey::MacroDefinitionModule { .. }
                 | QueryKey::SourceLocalPlan(_)
+                | QueryKey::PatternAccess(_)
                 | QueryKey::PatternPlan(_)
                 | QueryKey::Thunk(_)
                 | QueryKey::CurrentExpansionInput(_)

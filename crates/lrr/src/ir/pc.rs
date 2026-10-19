@@ -1,7 +1,8 @@
 //! Symbolic PCs only. No installed code, guest frame, or interpreter state.
 use crate::core::diagnostic::Diagnostic;
 pub use crate::source::manifest::PcKey;
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct NodeId(pub u32);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SlotId(pub u32);

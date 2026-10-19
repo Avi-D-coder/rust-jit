@@ -39,6 +39,114 @@ pub(crate) enum PatternSelection {
     },
 }
 
+/// The same source selection for an indexed lexical pattern and a module
+/// pattern. No value/initializer is evaluated, including during capture typing.
+pub(crate) fn select_source_pattern_name(
+    resolver: &CallResolver<'_>,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    db: &mut Database,
+    at: &crate::ir::pc::PcKey,
+    name: &PatternName,
+) -> QueryPoll<(PatternName, PatternSelection)> {
+    use crate::{
+        db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue},
+        frontend::source_value_goals::CanonicalValueKind,
+    };
+    let Some(node) = name.lexical else {
+        return select_pattern_name(resolver, graph, sources, db, at.body.definition, name);
+    };
+    let key = crate::ir::pc::PcKey {
+        body: at.body.clone(),
+        node: node.0,
+        phase: 0,
+    };
+    let fetched = match db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key)) {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::EnteredValue(goal) = fetched.value.as_ref() else {
+        return QueryPoll::Ready(Err(unsupported(
+            "pattern Value query variant differs".into(),
+        )));
+    };
+    if goal.is_qualified_path() && goal.rooted().is_none() {
+        return select_pattern_name(resolver, graph, sources, db, at.body.definition, name);
+    }
+    if let Some(demand) = goal.pending() {
+        return QueryPoll::Ready(Err(unsupported(format!(
+            "pattern source selection remains pending: {demand:?}"
+        ))));
+    }
+    let Some(declaration) = goal.declaration() else {
+        if goal.local_binding().is_some()
+            || (goal.facade().is_some() && name.form == NameForm::Identifier)
+        {
+            return QueryPoll::Ready(Ok((name.clone(), PatternSelection::Binding)));
+        }
+        return QueryPoll::Ready(Err(unsupported(
+            "pattern selects no source declaration".into(),
+        )));
+    };
+    let kind = match goal.declaration_kind(db) {
+        QueryPoll::Ready(Ok(CanonicalValueKind::Ready(kind))) => kind,
+        QueryPoll::Ready(Ok(_)) => {
+            return QueryPoll::Ready(Err(unsupported(
+                "pattern declaration kind remains pending".into(),
+            )));
+        }
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    if let Some(member) = goal.rooted() {
+        if kind != ItemKind::Enum {
+            return QueryPoll::Ready(Err(unsupported(
+                "rooted pattern member requires enum/associated-item selection".into(),
+            )));
+        }
+        let schema = match db.fetch(
+            &SyntaxProvider,
+            QueryKey::TypeSchema(declaration.identity()),
+        ) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+            return QueryPoll::Ready(Err(unsupported(
+                "pattern enum schema variant differs".into(),
+            )));
+        };
+        if let Err(error) = schema.variant(Some(member)) {
+            return QueryPoll::Ready(Err(error));
+        }
+        return QueryPoll::Ready(Ok((
+            name.clone(),
+            PatternSelection::Constructor {
+                identity: declaration.identity(),
+                variant: Some(EnumVariantDefinition {
+                    enumeration: declaration.identity(),
+                    name: member.to_owned(),
+                }),
+            },
+        )));
+    }
+    if let Some(variant) = declaration.variant() {
+        return QueryPoll::Ready(Ok((
+            name.clone(),
+            PatternSelection::Constructor {
+                identity: declaration.identity(),
+                variant: Some(variant.clone()),
+            },
+        )));
+    }
+    QueryPoll::Ready(
+        pattern_declaration(graph, name, declaration.identity(), Some(kind))
+            .map(|selected| (name.clone(), selected)),
+    )
+}
+
 fn unsupported(message: String) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message)
 }
@@ -165,4 +273,57 @@ pub(crate) fn select_pattern_name(
         pattern_declaration(graph, &name, definition.identity, item_kind)
             .map(|selection| (name, selection)),
     )
+}
+
+/// Shared source field-name -> declaration-ordinal selection.
+pub(crate) fn field_ordinals(
+    db: &mut Database,
+    definition: Digest,
+    variant_name: Option<&str>,
+    form: &NameForm,
+    shape: super::types::FieldShape,
+) -> QueryPoll<Box<[u32]>> {
+    let ordinals: Box<[u32]> = match form {
+        NameForm::Record(written) => {
+            let schema = match db.fetch(
+                &crate::db::provider::SyntaxProvider,
+                crate::db::key::QueryKey::TypeSchema(definition),
+            ) {
+                QueryPoll::Ready(Ok(schema)) => schema,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let crate::db::value::QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+                return QueryPoll::Ready(Err(unsupported("record pattern schema differs".into())));
+            };
+            let recipe = match schema.variant(variant_name) {
+                Ok(recipe) => recipe,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let mut ordinals = Vec::with_capacity(written.len());
+            for field in written.iter() {
+                // Named fields by name; tuple fields by their written index.
+                let position = recipe
+                    .fields
+                    .iter()
+                    .position(|declared| declared.name.as_deref() == Some(field.as_str()));
+                let position = position.or_else(|| {
+                    (shape == super::types::FieldShape::Tuple)
+                        .then(|| field.parse::<usize>().ok())
+                        .flatten()
+                        .filter(|index| *index < recipe.fields.len())
+                });
+                let Some(position) = position else {
+                    return QueryPoll::Ready(Err(Diagnostic::new(
+                        "LRR-E-PATTERN-TYPE",
+                        format!("record pattern field `{field}` is not declared"),
+                    )));
+                };
+                ordinals.push(u32::try_from(position).unwrap_or(u32::MAX));
+            }
+            ordinals.into()
+        }
+        _ => Box::new([]),
+    };
+    QueryPoll::Ready(Ok(ordinals))
 }

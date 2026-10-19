@@ -685,11 +685,7 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             frame.preflight_constructor_finish(*guard, *destination, store)
         }
         Op::ValuePath { destination, .. } => frame.preflight_value_path(*destination, store),
-        Op::MakeClosure {
-            captures,
-            destination,
-            ..
-        } => frame.preflight_make_closure(captures, *destination, store),
+        Op::MakeClosure {captures, pattern_uses, destination, ..} => frame.preflight_make_closure(captures, *destination, store, !pattern_uses.is_empty()),
         Op::Declaration => frame.preflight_item(),
         Op::DeclareLocal { binding, hint, .. } => {
             frame_hint(frame, hint, true, store)?;
@@ -1263,11 +1259,7 @@ fn execute(
             frame.finish_constructor(*guard, *destination, store)
         }
         Op::ValuePath { destination, .. } => frame.write_value_path(*destination, store),
-        Op::MakeClosure {
-            captures,
-            destination,
-            ..
-        } => frame.make_closure(captures, *destination, store),
+        Op::MakeClosure {captures, pattern_uses, destination, ..} => frame.make_closure(captures, *destination, store, !pattern_uses.is_empty()),
         Op::Panic { .. } => Err(invalid(
             "explicit panic bypassed its guest outcome boundary",
         )),

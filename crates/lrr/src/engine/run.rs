@@ -98,6 +98,8 @@ mod owner_arguments;
 mod panic_tests;
 #[path = "run_pattern_names.rs"]
 mod pattern_names;
+#[path = "run_pattern_access.rs"]
+mod pattern_access;
 #[cfg(test)]
 #[path = "run_pattern_tests.rs"]
 mod pattern_tests;
@@ -3007,6 +3009,11 @@ impl RunMachine {
                     return RunPoll::Fault(error);
                 }
                 QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
+            }
+            match self.prepare_closure_pattern_access(db,id) {
+                QueryPoll::Ready(Ok(()))=>{},
+                QueryPoll::Ready(Err(error))=>{self.terminal=true;return RunPoll::Fault(error);},
+                QueryPoll::NeedInput(input)=>return RunPoll::NeedInput(input),
             }
             if let Err(error) = self.register_closures(db, id) {
                 self.terminal = true;

@@ -189,6 +189,7 @@ pub enum QueryKey {
     FunctionSignature(Digest),
     ReferenceHeader(Digest),
     PatternPlan(crate::source::manifest::PcKey),
+    PatternAccess(Box<crate::frontend::pattern_access::PatternAccessKey>),
     TypeAlias(Digest),
     TypeSchema(Digest),
     ConstructorPlan(crate::source::manifest::PcKey),
@@ -248,6 +249,7 @@ impl QueryKey {
             | Self::TypeAlias(_)
             | Self::FunctionSignature(_)
             | Self::ReferenceHeader(_)
+            | Self::PatternAccess(_)
             | Self::PatternPlan(_)
             | Self::Signature(_)
             | Self::BodyStructure(_)
@@ -298,6 +300,7 @@ impl QueryKey {
             Self::FunctionSignature(_) => "FunctionSignature",
             Self::ReferenceHeader(_) => "ReferenceHeader",
             Self::PatternPlan(_) => "PatternPlan",
+            Self::PatternAccess(_) => "PatternAccess",
             Self::TypeAlias(_) => "TypeAlias",
             Self::TypeSchema(_) => "TypeSchema",
             Self::ConstructorPlan(_) => "ConstructorPlan",
@@ -458,6 +461,7 @@ impl StableEncode for QueryKey {
                 e.u32(31);
                 e.digest(*k);
             }
+            Self::PatternAccess(k) => { e.u32(63); e.record(k.as_ref()); }
             Self::PatternPlan(k) => {
                 e.u32(32);
                 e.record(k);

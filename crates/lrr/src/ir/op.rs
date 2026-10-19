@@ -316,6 +316,29 @@ pub struct ClosureCapture {
     pub source: CaptureSource,
     pub mode: CaptureMode,
 }
+/// Type-only projection of a captured root used as a pattern scrutinee.
+/// An index expression contributes its element Type, never an index value.
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+pub enum CaptureProjection {
+    Deref,
+    Element,
+    Field { site: NodeId, ordinal: Option<u32> },
+}
+/// Actual source pattern ownership retained by a closure creation recipe.
+#[derive(Debug, Clone)]
+pub struct CapturePatternUse {
+    pub(crate) source: CaptureSource,
+    pub(crate) plan: std::sync::Arc<crate::syntax::pattern_plan::PatternSourcePlan>,
+    pub(crate) projections: Vec<CaptureProjection>,
+}
+impl PartialEq for CapturePatternUse {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source && self.projections == other.projections
+            && self.plan.owner() == other.plan.owner()
+            && self.plan.fingerprint() == other.plan.fingerprint()
+    }
+}
+impl Eq for CapturePatternUse {}
 /// One written closure parameter (an identifier pattern): whether its
 /// binding is `mut` and its written primitive annotation, which types the
 /// call's argument like a declared parameter type.
@@ -676,6 +699,7 @@ pub enum Op {
         /// The actual indexed body expression, retained for its call result context.
         body: NodeId,
         captures: Box<[ClosureCapture]>,
+        pattern_uses: Box<[CapturePatternUse]>,
         parameters: Box<[ClosureParameter]>,
         destination: SlotId,
     },

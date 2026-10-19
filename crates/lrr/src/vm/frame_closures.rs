@@ -27,6 +27,7 @@ use crate::{
     },
     source::manifest::BodyKey,
 };
+use std::sync::Arc;
 
 /// The identity of a closure expression: its owning body and node.
 pub(crate) fn closure_identity(body: &BodyKey, node: NodeId) -> Digest {
@@ -54,8 +55,10 @@ impl Frame {
     /// Same actual source/application key for target registration and VM value creation.
     pub(crate) fn closure_identity(&self, node: NodeId) -> Digest {
         let source = closure_identity(self.body.body(), node);
-        let Some(application) = self.generic_context()
-            .and_then(|context| context.application_identity()) else {
+        let Some(application) = self
+            .generic_context()
+            .and_then(|context| context.application_identity())
+        else {
             return source;
         };
         let mut encoder = StableEncoder::new("lrr/v1/worker-closure-application");
@@ -63,16 +66,142 @@ impl Frame {
         encoder.digest(application);
         encoder.finish()
     }
+    fn capture_mode(
+        &self,
+        capture: &ClosureCapture,
+        ordinal: usize,
+        count: usize,
+        prepared: bool,
+    ) -> Result<CaptureMode, Diagnostic> {
+        if !prepared {
+            return Ok(capture.mode);
+        }
+        match &self.prepared_capture_modes {
+            Some((pc, modes)) if pc == &self.pc && modes.len() == count => Ok(modes[ordinal]),
+            _ => Err(invalid(
+                "closure pattern capture lacks prepared modes for this PC",
+            )),
+        }
+    }
+    pub(crate) fn set_capture_modes(&mut self, modes: Arc<[CaptureMode]>) {
+        self.prepared_capture_modes = Some((self.pc.clone(), modes));
+    }
+    pub(crate) fn ordinary_capture_mode(
+        &self,
+        capture: &ClosureCapture,
+        store: &GuestStore,
+    ) -> Result<CaptureMode, Diagnostic> {
+        let (_, stored) = self.stored_capture(capture, store, capture.mode)?;
+        Ok(match stored {
+            Stored::Value => CaptureMode::Value,
+            Stored::Borrow(Access::Mutable) => CaptureMode::Mutable,
+            Stored::Borrow(_) => CaptureMode::Shared,
+        })
+    }
+    pub(crate) fn capture_source_type(
+        &self,
+        source: CaptureSource,
+        store: &GuestStore,
+    ) -> Result<(TypeId, crate::traits::term::TyTerm), Diagnostic> {
+        let (cell, written) = match source {
+            CaptureSource::Binding(binding) => {
+                (self.binding(binding)?, self.make_place_source(binding))
+            }
+            CaptureSource::Parameter(ordinal) => (
+                self.parameter(ordinal)?,
+                self.parameter_sources.get(ordinal as usize),
+            ),
+        };
+        let value = store.admit_move(cell)?;
+        let ty = store
+            .effective_type(value)?
+            .ok_or_else(|| invalid("pattern capture root Type remains open"))?;
+        let source = written
+            .map(|source| self.bound_view(source, store))
+            .or_else(|| store.descriptor_source_term(ty))
+            .ok_or_else(|| invalid("pattern capture root source Type absent"))?;
+        Ok((ty, source))
+    }
+    pub(crate) fn pattern_access_mode(
+        &self,
+        root: TypeId,
+        access: &crate::frontend::pattern_access::PreparedPatternAccess,
+        store: &mut GuestStore,
+    ) -> Result<CaptureMode, Diagnostic> {
+        use crate::frontend::pattern_access::TypeStep;
+        use crate::vm::pattern::DefaultBindingMode;
+        let mut result = CaptureMode::Shared;
+        for binding in &access.bindings {
+            let mut ty = root;
+            for step in &binding.steps {
+                ty = match step {
+                    TypeStep::Deref => match store.type_descriptor(ty)?.key.as_ref() {
+                        TypeKey::Ref { target, .. } => *target,
+                        _ => return Err(invalid("capture access reference Type differs")),
+                    },
+                    TypeStep::Field(field) => match store.type_descriptor(ty)?.key.as_ref() {
+                        TypeKey::Tuple(fields) => *fields
+                            .get(*field as usize)
+                            .ok_or_else(|| invalid("capture tuple field absent"))?,
+                        _ => return Err(invalid("capture tuple Type differs")),
+                    },
+                    TypeStep::Element => match store.type_descriptor(ty)?.key.as_ref() {
+                        TypeKey::Array { element, .. } | TypeKey::Slice { element } => *element,
+                        _ => return Err(invalid("capture element Type differs")),
+                    },
+                    TypeStep::Nominal { variant, field } => {
+                        let args = match store.type_descriptor(ty)?.key.as_ref() {
+                            TypeKey::Nominal {
+                                identity,
+                                schema,
+                                args,
+                                ..
+                            } if *identity == variant.identity() && *schema == variant.schema() => {
+                                args.to_vec()
+                            }
+                            _ => {
+                                return Err(invalid(
+                                    "capture nominal access source/schema differs",
+                                ));
+                            }
+                        };
+                        variant
+                            .fields()
+                            .get(*field as usize)
+                            .ok_or_else(|| invalid("capture nominal field absent"))?
+                            .materialize(store, &args)?
+                    }
+                };
+            }
+            let mode = match binding.mode {
+                DefaultBindingMode::Ref => CaptureMode::Shared,
+                DefaultBindingMode::RefMut => CaptureMode::Mutable,
+                DefaultBindingMode::Move => match store.intrinsic_type_read_mode(ty)? {
+                    Some(IntrinsicRead::Move) => CaptureMode::Value,
+                    Some(_) => CaptureMode::Shared,
+                    None => {
+                        return Err(Diagnostic::new(
+                            "LRR-E-TYPE-CONTEXT",
+                            "pattern capture binding needs its source Copy proof".into(),
+                        ));
+                    }
+                },
+            };
+            result = join_capture_mode(result, mode);
+        }
+        Ok(result)
+    }
     fn stored_capture(
         &self,
         capture: &ClosureCapture,
         store: &GuestStore,
+        mode: CaptureMode,
     ) -> Result<(CellId, Stored), Diagnostic> {
         let cell = match capture.source {
             CaptureSource::Binding(binding) => self.binding(binding)?,
             CaptureSource::Parameter(ordinal) => self.parameter(ordinal)?,
         };
-        let stored = match capture.mode {
+        let stored = match mode {
             CaptureMode::Shared => Stored::Borrow(Access::Shared),
             CaptureMode::Mutable => Stored::Borrow(Access::Mutable),
             CaptureMode::Value => Stored::Value,
@@ -91,13 +220,15 @@ impl Frame {
         captures: &[ClosureCapture],
         destination: SlotId,
         store: &GuestStore,
+        prepared_modes: bool,
     ) -> Result<(), Diagnostic> {
         self.preflight_temporary_slot(destination)?;
         if !self.active_scopes.contains(&self.slot(destination)?.scope) {
             return Err(invalid("closure result scope inactive"));
         }
-        for capture in captures {
-            let (cell, stored) = self.stored_capture(capture, store)?;
+        for (ordinal, capture) in captures.iter().enumerate() {
+            let mode = self.capture_mode(capture, ordinal, captures.len(), prepared_modes)?;
+            let (cell, stored) = self.stored_capture(capture, store, mode)?;
             if let Stored::Borrow(access) = stored {
                 store
                     .admit_place_borrow(&Place::cell(cell), access)
@@ -111,21 +242,22 @@ impl Frame {
         captures: &[ClosureCapture],
         destination: SlotId,
         store: &mut GuestStore,
+        prepared_modes: bool,
     ) -> Result<(), Diagnostic> {
-        self.preflight_make_closure(captures, destination, store)?;
+        self.preflight_make_closure(captures, destination, store, prepared_modes)?;
         let identity = self.closure_identity(NodeId(self.pc.node));
         let mut tickets: Vec<TicketId> = Vec::with_capacity(captures.len());
         let mut types = Vec::with_capacity(captures.len());
         let mut borrowed = Vec::with_capacity(captures.len());
-        for capture in captures {
-            let (cell, stored) = self.stored_capture(capture, store)?;
+        for (ordinal, capture) in captures.iter().enumerate() {
+            let mode = self.capture_mode(capture, ordinal, captures.len(), prepared_modes)?;
+            let (cell, stored) = self.stored_capture(capture, store, mode)?;
             let ticket = match stored {
                 Stored::Borrow(access) => store
                     .borrow_ticket(&Place::cell(cell), access)
                     .map_err(place_fault)?,
                 Stored::Value => {
-                    let ticket = if store.admit_owning_read(cell)? == IntrinsicRead::CopyAggregate
-                    {
+                    let ticket = if store.admit_owning_read(cell)? == IntrinsicRead::CopyAggregate {
                         store.copy_aggregate_value(cell)?
                     } else {
                         store.read_owning(cell)?
@@ -245,7 +377,11 @@ impl Frame {
         if !matches!(value.kind, 11 | 12) || store.effective_type(value)?.is_some() {
             return Ok(());
         }
-        let fallback = if value.kind == 11 { TypeId(6) } else { TypeId(15) };
+        let fallback = if value.kind == 11 {
+            TypeId(6)
+        } else {
+            TypeId(15)
+        };
         let ticket = store.move_from(cell)?;
         let concrete = store.materialize_ticket(ticket, fallback)?;
         store.discard(ticket)?;
@@ -260,13 +396,28 @@ impl Frame {
     pub(crate) fn root_scope(&self) -> crate::syntax::body_index::ScopeId {
         match self.active_scopes.first() {
             Some(scope)
-                if self.body.scopes().get(scope.0 as usize).is_some_and(|descriptor| {
-                    descriptor.kind == crate::syntax::body_index::ScopeKind::Closure
-                }) =>
+                if self
+                    .body
+                    .scopes()
+                    .get(scope.0 as usize)
+                    .is_some_and(|descriptor| {
+                        descriptor.kind == crate::syntax::body_index::ScopeKind::Closure
+                    }) =>
             {
                 *scope
             }
             _ => crate::syntax::body_index::ScopeId(0),
         }
+    }
+}
+
+/// These modes have already resolved conditional consuming uses by Type.
+pub(crate) fn join_capture_mode(a: CaptureMode, b: CaptureMode) -> CaptureMode {
+    if a == CaptureMode::Value || b == CaptureMode::Value {
+        CaptureMode::Value
+    } else if a == CaptureMode::Mutable || b == CaptureMode::Mutable {
+        CaptureMode::Mutable
+    } else {
+        CaptureMode::Shared
     }
 }

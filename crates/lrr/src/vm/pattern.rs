@@ -61,9 +61,6 @@ impl StableEncode for PatternContext {
         encoder.record(&self.mode);
     }
 }
-fn edition_pattern(message: &str) -> Diagnostic {
-    Diagnostic::new("LRR-E-EDITION-PATTERN", message.into())
-}
 impl PatternContext {
     pub fn new(edition: u16) -> Result<Self, Diagnostic> {
         if !matches!(edition, 2015 | 2018 | 2021 | 2024) {
@@ -99,29 +96,25 @@ impl PatternContext {
             ..self
         }
     }
-    /// Check the reached explicit reference pattern before consuming its layer.
+    /// Consume the written reference layer. Static edition restrictions on
+    /// where this is permitted belong to rustc/cargo check (E-R5-006).
     pub fn explicit_reference(self) -> Result<Self, Diagnostic> {
-        if self.edition == 2024 && self.mode != DefaultBindingMode::Move {
-            return Err(edition_pattern(
-                "explicit reference pattern requires move binding mode in edition2024",
-            ));
-        }
         Ok(Self {
             mode: DefaultBindingMode::Move,
             ..self
         })
     }
+    pub(crate) fn modifier(by_reference: bool, mutable: bool) -> BindingModifier {
+        match (by_reference, mutable) {
+            (false, false) => BindingModifier::Plain,
+            (false, true) => BindingModifier::Mut,
+            (true, false) => BindingModifier::Ref,
+            (true, true) => BindingModifier::RefMut,
+        }
+    }
     /// Binding-mode selection is non-consuming. The later pattern engine must
     /// complete its non-consuming test before committing moves or leases.
     pub fn binding_mode(self, modifier: BindingModifier) -> Result<DefaultBindingMode, Diagnostic> {
-        if self.edition == 2024
-            && self.mode != DefaultBindingMode::Move
-            && modifier != BindingModifier::Plain
-        {
-            return Err(edition_pattern(
-                "explicit binding modifier requires move binding mode in edition2024",
-            ));
-        }
         Ok(match modifier {
             BindingModifier::Plain => self.mode,
             BindingModifier::Mut => DefaultBindingMode::Move,

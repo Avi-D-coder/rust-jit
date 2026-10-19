@@ -5704,7 +5704,8 @@
         "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json",
         "worktracks/evidence/2026-10-14-scalar-range-runtime.json",
         "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
-        "worktracks/evidence/2026-10-14-byte-scalar-components.json"
+        "worktracks/evidence/2026-10-14-byte-scalar-components.json",
+        "worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
@@ -5727,7 +5728,7 @@
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
         "guest_jit_authorized": false
       },
-      "latest_component_scope": "V67/V68 solo held component: shared iteration Item projection uses Component::project_term/nominal_field, deleting a partial duplicate switch; block/control result value/place share their existing enclosing continuation scope in Frame::new. V67:6/6selected unchanged upstream mains and8/9focused controls, with full hygiene all4editions via coordinator. V68:4/4selected unchanged upstream mains and6/6focused controls; macro-2/macro-stmt also directly pass all4editions. Three newly passing originals versus recorded V63/V64 baselines, not a refreshed suite total. W::new();w.set(1) inference control remains failed/enabled and unexecuted V68; broad matrices/current milestone/full interpreter/JIT gates open. Evidence worktracks/evidence/2026-10-18-interpreter-v67-validation.json and worktracks/evidence/2026-10-18-interpreter-v68-validation.json."
+      "latest_component_scope": "V192/V194 solo held T050/T051 pattern-access/capture component: unchanged let-else-bindings newly passes runtime contract in2015 versus measured V189 use-after-move. Both V194 builds pass;11/12focused controls and9/12selected upstream runtime contracts pass. Full-body origin control fails at compiler item-statement message printer in2015 after original/user/wrapper variants; later editions unexecuted. Deferred Copy capture, field precision, Copy aggregate pattern publication, source conversions/generic calls and full matrix/milestone/interpreter/JIT gates remain held. No refreshed suite total. Evidence worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json."
     },
     {
       "id": "T051",
@@ -5761,11 +5762,12 @@
         "artifacts/macos-first/root-vec-facet-integration-v1/independent-component-collection-v1.json",
         "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json",
         "worktracks/evidence/2026-10-14-scalar-range-runtime.json",
-        "worktracks/evidence/2026-10-18-interpreter-v155-v165-generated-derives.json"
+        "worktracks/evidence/2026-10-18-interpreter-v155-v165-generated-derives.json",
+        "worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
-      "latest_component_scope": "V165 solo held generated compiler derive preparation and selected constant declared-result join: actual compiler exports share generated helper/order/append and pinned builtin input/receipt semantics with the original-source path. Both builds pass;21focused bodies pass and1broader derived-enum body fails at __self_0 in2021 (baseline attribution unverified). Nominal-constant and unchanged-copy origin controls each pass all12worlds;6/6selected unchanged upstream runtime contracts pass, with eq-allows-match-on-ty-in-macro all4editions/25VMoperations/1initializer/cleanup. Zero newly measured distinct gains; no refreshed suite total. Broad derive/currentness/prepare-once/milestone/architecture/interpreter/JIT gates remain held.",
+      "latest_component_scope": "V192/V194 solo held T050/T051 pattern-access/capture component: unchanged let-else-bindings newly passes runtime contract in2015 versus measured V189 use-after-move. Both V194 builds pass;11/12focused controls and9/12selected upstream runtime contracts pass. Full-body origin control fails at compiler item-statement message printer in2015 after original/user/wrapper variants; later editions unexecuted. Deferred Copy capture, field precision, Copy aggregate pattern publication, source conversions/generic calls and full matrix/milestone/interpreter/JIT gates remain held. No refreshed suite total. Evidence worktracks/evidence/2026-10-19-v192-v194-closure-pattern-captures.json.",
       "artifacts": [
         "worktracks/evidence/2026-10-18-interpreter-v151-v154-nominal-constant-context.json"
       ]

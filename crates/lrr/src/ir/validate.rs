@@ -1048,6 +1048,7 @@ fn verify_inner(
                 body: closure_body,
                 captures,
                 parameters,
+                pattern_uses,
                 destination,
             } => {
                 use crate::syntax::body_index::{ExpressionKind, NodeRole};
@@ -1074,6 +1075,14 @@ fn verify_inner(
                         }))
                     {
                         return Err(invalid("closure capture is not a distinct binding"));
+                    }
+                }
+                for usage in pattern_uses.iter() {
+                    if !seen.contains(&usage.source) || usage.plan.owner().body != draft.key.body
+                        || usage.plan.index().semantic_identity() != body.semantic_identity()
+                        || usage.plan.scrutinee().is_none()
+                        || body.nodes().get(usage.plan.owner().node as usize).is_none_or(|owner| !(node.range.start <= owner.range.start && node.range.end >= owner.range.end)) {
+                        return Err(invalid("closure pattern access source/owner differs"));
                     }
                 }
                 charge(

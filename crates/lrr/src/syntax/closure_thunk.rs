@@ -34,9 +34,11 @@ pub(super) fn enclosing_closure(syntax: &SyntaxNode) -> Option<ast::ClosureExpr>
             return None;
         }
         if let Some(closure) = ast::ClosureExpr::cast(ancestor)
-            && closure
-                .body()
-                .is_some_and(|body| body.syntax().text_range().contains_range(syntax.text_range()))
+            && closure.body().is_some_and(|body| {
+                body.syntax()
+                    .text_range()
+                    .contains_range(syntax.text_range())
+            })
         {
             return Some(closure);
         }
@@ -77,13 +79,40 @@ pub(super) fn closure_parameter(
     Ok(None)
 }
 
-/// How a use of a captured variable at `path` uses it.
-fn capture_use(path: &SyntaxNode) -> CaptureMode {
-    // Climb the place expression the path roots (fields, indexes, parens).
+/// One ordinary place-use context, selected from retained source syntax.
+pub(crate) enum SourceCaptureUse {
+    Mode(CaptureMode),
+    Pattern {
+        owner: NodeId,
+        projections: Vec<crate::ir::op::CaptureProjection>,
+    },
+}
+pub(crate) fn capture_use(
+    body: &BodyHandle,
+    index: &BodyIndex,
+    creating: &ast::ClosureExpr,
+    path: &SyntaxNode,
+) -> Result<SourceCaptureUse, Diagnostic> {
+    if creating.move_token().is_some() {
+        return Ok(SourceCaptureUse::Mode(CaptureMode::Value));
+    }
+    // A nested move closure must receive its own value from this closure.
+    for ancestor in path.ancestors() {
+        if ancestor == *creating.syntax() {
+            break;
+        }
+        if let Some(inner) = ast::ClosureExpr::cast(ancestor)
+            && inner.move_token().is_some()
+        {
+            return Ok(SourceCaptureUse::Mode(CaptureMode::Consumed));
+        }
+    }
     let mut current = path.clone();
+    let mut projections = Vec::new();
+    let mut dereferenced = false;
     loop {
         let Some(parent) = current.parent() else {
-            return CaptureMode::Consumed;
+            return Ok(SourceCaptureUse::Mode(CaptureMode::Consumed));
         };
         if ast::ParenExpr::can_cast(parent.kind()) {
             current = parent;
@@ -92,61 +121,80 @@ fn capture_use(path: &SyntaxNode) -> CaptureMode {
         if let Some(field) = ast::FieldExpr::cast(parent.clone())
             && field.expr().is_some_and(|base| base.syntax() == &current)
         {
+            projections.push(crate::ir::op::CaptureProjection::Field {
+                site: id_for(index, body, field.syntax())?,
+                ordinal: field
+                    .name_ref()
+                    .and_then(|name| name.text().parse::<u32>().ok()),
+            });
             current = parent;
             continue;
         }
-        if let Some(index) = ast::IndexExpr::cast(parent.clone())
-            && index.base().is_some_and(|base| base.syntax() == &current)
+        if let Some(element) = ast::IndexExpr::cast(parent.clone())
+            && element.base().is_some_and(|base| base.syntax() == &current)
         {
+            projections.push(crate::ir::op::CaptureProjection::Element);
             current = parent;
             continue;
         }
-        if let Some(reference) = ast::RefExpr::cast(parent.clone()) {
-            return if reference.mut_token().is_some() {
-                CaptureMode::Mutable
-            } else {
-                CaptureMode::Shared
-            };
-        }
-        if let Some(binary) = ast::BinExpr::cast(parent.clone())
-            && let Some(operator) = binary.op_token()
-        {
-            let left = binary.lhs().is_some_and(|left| left.syntax() == &current);
-            return match operator.text() {
-                "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "|=" | "^="
-                    if left =>
-                {
-                    CaptureMode::Mutable
-                }
-                // Comparison operators borrow their operands.
-                "==" | "!=" | "<" | "<=" | ">" | ">=" => CaptureMode::Shared,
-                _ => CaptureMode::Consumed,
-            };
-        }
-        // A method receiver is autoref'd (or read by value through it); a
-        // called closure or function value is borrowed by its call.
-        if let Some(call) = ast::MethodCallExpr::cast(parent.clone())
-            && call.receiver().is_some_and(|receiver| receiver.syntax() == &current)
-        {
-            return CaptureMode::Shared;
-        }
-        if let Some(call) = ast::CallExpr::cast(parent.clone())
-            && call.expr().is_some_and(|callee| callee.syntax() == &current)
-        {
-            return CaptureMode::Shared;
-        }
-        // A deref reads the reference to reach its referent.
         if let Some(prefix) = ast::PrefixExpr::cast(parent.clone())
             && prefix.op_token().is_some_and(|token| token.text() == "*")
         {
-            return CaptureMode::Shared;
+            projections.push(crate::ir::op::CaptureProjection::Deref);
+            dereferenced = true;
+            current = parent;
+            continue;
         }
-        // `format_args!` borrows each argument.
-        if ast::FormatArgsArg::can_cast(parent.kind()) {
-            return CaptureMode::Shared;
+        let pattern_owner = if let Some(owner) = ast::LetStmt::cast(parent.clone()) {
+            owner
+                .initializer()
+                .is_some_and(|value| value.syntax() == &current)
+        } else if let Some(owner) = ast::LetExpr::cast(parent.clone()) {
+            owner.expr().is_some_and(|value| value.syntax() == &current)
+        } else if let Some(owner) = ast::MatchExpr::cast(parent.clone()) {
+            owner.expr().is_some_and(|value| value.syntax() == &current)
+        } else {
+            false
+        };
+        if pattern_owner {
+            return Ok(SourceCaptureUse::Pattern {
+                owner: id_for(index, body, &parent)?,
+                projections,
+            });
         }
-        // Any other use reads (copies or moves) the value or projected part.
-        return CaptureMode::Consumed;
+        let mode = if dereferenced {
+            // Preserve the ordinary non-pattern dereference capture route.
+            CaptureMode::Shared
+        } else if let Some(reference) = ast::RefExpr::cast(parent.clone()) {
+            if reference.mut_token().is_some() {
+                CaptureMode::Mutable
+            } else {
+                CaptureMode::Shared
+            }
+        } else if let Some(binary) = ast::BinExpr::cast(parent.clone()) {
+            let left = binary.lhs().is_some_and(|left| left.syntax() == &current);
+            match binary
+                .op_token()
+                .map(|token| token.text().to_owned())
+                .as_deref()
+            {
+                Some(
+                    "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "|=" | "^=",
+                ) if left => CaptureMode::Mutable,
+                Some("==" | "!=" | "<" | "<=" | ">" | ">=") => CaptureMode::Shared,
+                _ => CaptureMode::Consumed,
+            }
+        } else if ast::MethodCallExpr::cast(parent.clone())
+            .is_some_and(|call| call.receiver().is_some_and(|r| r.syntax() == &current))
+            || ast::CallExpr::cast(parent.clone())
+                .is_some_and(|call| call.expr().is_some_and(|r| r.syntax() == &current))
+            || ast::FormatArgsArg::can_cast(parent.kind())
+        {
+            CaptureMode::Shared
+        } else {
+            CaptureMode::Consumed
+        };
+        return Ok(SourceCaptureUse::Mode(mode));
     }
 }
 
@@ -172,12 +220,11 @@ fn merge(found: &mut Vec<ClosureCapture>, source: CaptureSource, mode: CaptureMo
     }
 }
 
-/// Capture-use classification over actual ordinary indexed expressions. The
-/// caller supplies identities selected by the shared hygienic lexical query.
-pub(crate) fn capture_mode(path: &SyntaxNode, by_value: bool) -> CaptureMode {
-    if by_value { CaptureMode::Value } else { capture_use(path) }
-}
-pub(crate) fn merge_capture(found: &mut Vec<ClosureCapture>, source: CaptureSource, mode: CaptureMode) {
+pub(crate) fn merge_capture(
+    found: &mut Vec<ClosureCapture>,
+    source: CaptureSource,
+    mode: CaptureMode,
+) {
     merge(found, source, mode);
 }
 
@@ -229,7 +276,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
-        captures: Option<&[ClosureCapture]>,
+        captures: Option<(&[ClosureCapture], &[crate::ir::op::CapturePatternUse])>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -257,8 +304,10 @@ impl ParsedFile {
                     Ok(parameters) => parameters,
                     Err(reason) => return unsupported(reason),
                 };
-                let Some(captures) = captures else {
-                    return unsupported("closure captures require admitted hygienic source selection");
+                let Some((captures, pattern_uses)) = captures else {
+                    return unsupported(
+                        "closure captures require admitted hygienic source selection",
+                    );
                 };
                 let captures = captures.to_vec().into_boxed_slice();
                 draft(
@@ -267,6 +316,7 @@ impl ParsedFile {
                     vec![Op::MakeClosure {
                         body: body_id,
                         captures,
+                        pattern_uses: pattern_uses.to_vec().into_boxed_slice(),
                         parameters,
                         destination: node.value.ok_or_else(|| error("closure value absent"))?,
                     }],
@@ -286,8 +336,8 @@ impl ParsedFile {
                                 "closure parameter pattern awaits parameter pattern integration",
                             );
                         };
-                        let hint = super::hint(parameter.ty())
-                            .unwrap_or(crate::ir::op::HintRecipe::None);
+                        let hint =
+                            super::hint(parameter.ty()).unwrap_or(crate::ir::op::HintRecipe::None);
                         let staging = *node
                             .runtime_scalar_slots
                             .get(ordinal)

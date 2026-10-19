@@ -1,3 +1,4 @@
+pub(crate) mod pattern_access;
 pub(crate) mod trait_declarations;
 pub(crate) mod language_items;
 pub(crate) mod array_repeats;

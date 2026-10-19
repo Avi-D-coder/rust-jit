@@ -134,6 +134,10 @@ impl WrittenType {
     /// The source Type under the instantiating type arguments; a parameter's
     /// argument is a closed runtime descriptor's source term.
     pub(crate) fn source_in(&self, store: Option<&GuestStore>, args: &[TypeId]) -> Option<TyTerm> {
+        self.source_with(&|index| store?.descriptor_source_term(*args.get(index as usize)?))
+    }
+    /// The same declared Type substitution for pure source consumers.
+    pub(crate) fn source_with(&self, parameter: &impl Fn(u32) -> Option<TyTerm>) -> Option<TyTerm> {
         Some(match self {
             Self::Primitive(primitive) => TyTerm::Primitive(*primitive),
             Self::Nominal(source) => source.source().clone(),
@@ -143,11 +147,11 @@ impl WrittenType {
             Self::Tuple(members) => TyTerm::Tuple(
                 members
                     .iter()
-                    .map(|member| member.source_in(store, args))
+                    .map(|member| member.source_with(parameter))
                     .collect::<Option<Vec<_>>>()?,
             ),
             Self::Array(element, len) => TyTerm::Array(
-                Box::new(element.source_in(store, args)?),
+                Box::new(element.source_with(parameter)?),
                 ConstTerm::Value(u64::from(*len)),
             ),
             Self::Generic {
@@ -159,13 +163,13 @@ impl WrittenType {
                 written
                     .iter()
                     .map(|arg| {
-                        arg.source_in(store, args)
+                        arg.source_with(parameter)
                             .map(crate::traits::term::GenericArg::Type)
                     })
                     .collect::<Option<Vec<_>>>()?,
             ),
             Self::Str => TyTerm::Str,
-            Self::Slice(element) => TyTerm::Slice(Box::new(element.source_in(store, args)?)),
+            Self::Slice(element) => TyTerm::Slice(Box::new(element.source_with(parameter)?)),
             Self::Ref {
                 region,
                 mutable,
@@ -173,20 +177,20 @@ impl WrittenType {
             } => TyTerm::Ref(
                 region.clone(),
                 *mutable,
-                Box::new(target.source_in(store, args)?),
+                Box::new(target.source_with(parameter)?),
             ),
             Self::Infer => return None,
             Self::Dyn(schema) => TyTerm::Dyn(*schema),
-            Self::Parameter(index) => store?.descriptor_source_term(*args.get(*index as usize)?)?,
+            Self::Parameter(index) => parameter(*index)?,
             Self::Ptr { mutable, target } => {
-                crate::traits::pointer_terms::raw_pointer(*mutable, target.source_in(store, args)?)
+                crate::traits::pointer_terms::raw_pointer(*mutable, target.source_with(parameter)?)
             }
             Self::FnPtr { params, result } => crate::traits::pointer_terms::fn_pointer(
                 params
                     .iter()
-                    .map(|param| param.source_in(store, args))
+                    .map(|param| param.source_with(parameter))
                     .collect::<Option<Vec<_>>>()?,
-                result.source_in(store, args)?,
+                result.source_with(parameter)?,
             ),
         })
     }

@@ -154,6 +154,16 @@ pub struct PatternSourcePlan {
     bytes: usize,
 }
 impl PatternSourcePlan {
+    /// Capturing a place used as a scrutinee needs these same retained trees,
+    /// never executable preparation of a guard, arm result or else block.
+    pub(crate) fn scrutinee(&self) -> Option<NodeId> {
+        match &self.prepared {
+            Prepared::Match(plan) => Some(plan.scrutinee),
+            Prepared::Let(plan) => Some(plan.initializer),
+            Prepared::Condition(plan) => Some(plan.scrutinee),
+            _ => None,
+        }
+    }
     pub(crate) fn owner(&self) -> &PcKey {
         &self.owner
     }
@@ -169,17 +179,24 @@ impl PatternSourcePlan {
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
     }
-    /// Retained trees, once per written root, for memo ownership accounting.
-    pub(crate) fn trees(&self) -> impl Iterator<Item = &Arc<PatternTree>> {
-        let roots: Vec<&Root> = match &self.prepared {
+    fn roots(&self) -> Vec<&Root> {
+        match &self.prepared {
             Prepared::Match(plan) => plan.arms.iter().map(|arm| &arm.pattern).collect(),
             Prepared::Let(plan) => vec![&plan.pattern],
             Prepared::Condition(plan) => vec![&plan.pattern],
             Prepared::For(plan) => vec![&plan.pattern],
             Prepared::Closure(plan) => plan.pattern_roots(),
             Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
-        };
-        roots.into_iter().filter_map(|root| root.tree.as_ref().ok())
+        }
+    }
+    /// Retained products for ownership observation; refused roots own no tree.
+    pub(crate) fn trees(&self) -> impl Iterator<Item = &Arc<PatternTree>> {
+        self.roots().into_iter().filter_map(|root| root.tree.as_ref().ok())
+    }
+    /// Semantic consumers must retain a refused root rather than treating it
+    /// as an empty, inspection-only pattern.
+    pub(crate) fn binding_trees(&self) -> impl Iterator<Item = Result<&Arc<PatternTree>, &Diagnostic>> {
+        self.roots().into_iter().map(|root| root.tree.as_ref())
     }
 
     /// Indexed ownership only. An expression inside a match result does not
@@ -1033,7 +1050,10 @@ impl ParsedFile {
         } else {
             owner.clone()
         };
-        if PatternSourcePlan::owner_for(index, &probe)?.as_ref() != Some(owner) {
+        let syntax = self.entered_node_syntax(body,index,NodeId(owner.node))?
+            .ok_or_else(|| error("pattern owner syntax attachment absent"))?;
+        if PatternSourcePlan::owner_for(index, &probe)?.as_ref() != Some(owner)
+            && !ast::LetStmt::can_cast(syntax.kind()) {
             return Err(error("pattern plan key is not its exact owning entry"));
         }
         // Preserve the ordinary entry admission when this match expression is
@@ -1047,9 +1067,6 @@ impl ParsedFile {
         {
             self.require_boolean_match_guard(body, index, NodeId(owner.node))?;
         }
-        let syntax = self
-            .entered_node_syntax(body, index, NodeId(owner.node))?
-            .ok_or_else(|| error("pattern owner syntax attachment absent"))?;
         let (enabled, attributes) = statement_cfg(&syntax, index.cfg())?;
         if !enabled {
             return Ok(Prepared::Disabled(Box::new(

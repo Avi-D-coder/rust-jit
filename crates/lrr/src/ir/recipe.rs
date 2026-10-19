@@ -659,6 +659,7 @@ impl StableEncode for Recipe {
                 body,
                 captures,
                 parameters,
+                pattern_uses,
                 destination,
             } => {
                 e.u32(u32::from(super::op::MAKE_CLOSURE_OPCODE));
@@ -680,6 +681,14 @@ impl StableEncode for Recipe {
                         super::op::CaptureMode::Value => 2,
                         super::op::CaptureMode::Consumed => 3,
                     });
+                });
+                e.sequence(pattern_uses, |e, usage| {
+                    match usage.source {
+                        super::op::CaptureSource::Binding(binding) => {e.u8(0);e.u32(binding.0);},
+                        super::op::CaptureSource::Parameter(ordinal) => {e.u8(1);e.u32(ordinal);},
+                    }
+                    e.record(usage.plan.owner()); e.digest(usage.plan.fingerprint());
+                    e.sequence(&usage.projections, crate::frontend::pattern_access::encode_projection);
                 });
                 e.sequence(parameters, |e, parameter| {
                     e.bool(parameter.mutable);

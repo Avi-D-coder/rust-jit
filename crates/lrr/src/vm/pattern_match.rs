@@ -3,7 +3,7 @@
 //! emitted by macros) runs this one non-consuming search over the retained
 //! `PatternTree`. Testing reads guest addresses only; ownership changes happen
 //! later, in `Frame::commit_pattern`, after the whole pattern has matched.
-use super::{BindingModifier, DefaultBindingMode, PatternContext, PatternDemand, ReferenceKind};
+use super::{DefaultBindingMode, PatternContext, PatternDemand, ReferenceKind};
 use crate::{
     core::diagnostic::Diagnostic,
     ir::pc::NodeId,
@@ -41,6 +41,67 @@ pub(crate) fn copy_place(place: &Place) -> Place {
         root: place.root,
         projections: place.projections.clone(),
     }
+}
+
+pub(crate) fn tuple_fields<'a>(items: &'a [PatternNode], rest: Option<u32>, arity: usize) -> Result<Vec<(u32, &'a PatternNode)>, Diagnostic> {
+                let fixed = items.len();
+                let before = match rest {
+                    Some(rest) if fixed <= arity => rest as usize,
+                    None if fixed == arity => fixed,
+                    _ => {
+                        return Err(mismatch(
+                            "tuple-struct pattern arity differs from its constructor",
+                        )
+                        .into());
+                    }
+                };
+                let mut fields = Vec::with_capacity(fixed);
+                for (ordinal, item) in items.iter().enumerate() {
+                    let field = if ordinal < before {
+                        ordinal
+                    } else {
+                        arity - (fixed - ordinal)
+                    };
+                    fields.push((
+                        u32::try_from(field).map_err(|_| mismatch("field overflow"))?,
+                        item,
+                    ));
+                }
+                Ok(fields)
+}
+
+/// Declaration-ordinal mapping shared by runtime matching and type-only
+/// binding access preparation. It never examines a guest value.
+pub(crate) fn constructor_fields<'a>(
+    form: &'a ConstructorForm,
+    shape: crate::frontend::types::FieldShape,
+    arity: usize,
+    ordinals: &[u32],
+) -> Result<Vec<(u32, &'a PatternNode)>, Diagnostic> {
+        let fields = match form {
+            ConstructorForm::Path => {
+                if shape != crate::frontend::types::FieldShape::Unit {
+                    return Err(mismatch("path pattern names a tuple or record constructor").into());
+                }
+                Vec::new()
+            }
+            ConstructorForm::Tuple { items, rest } => {
+                if shape != crate::frontend::types::FieldShape::Tuple {
+                    return Err(mismatch(
+                        "tuple-struct pattern names a unit or record constructor",
+                    )
+                    .into());
+                }
+                tuple_fields(items, *rest, arity)?
+            }
+            ConstructorForm::Record { fields, .. } => {
+                if ordinals.len() != fields.len() {
+                    return Err(transaction("record pattern field resolution differs").into());
+                }
+                ordinals.iter().copied().zip(fields.iter()).collect()
+            }
+        };
+    Ok(fields)
 }
 
 /// The ordinary namespace resolution of one pattern name slot, prepared by
@@ -670,52 +731,7 @@ impl<'s> Search<'s> {
                 );
             }
         };
-        let fields = match form {
-            ConstructorForm::Path => {
-                if shape != crate::frontend::types::FieldShape::Unit {
-                    return Err(mismatch("path pattern names a tuple or record constructor").into());
-                }
-                Vec::new()
-            }
-            ConstructorForm::Tuple { items, rest } => {
-                if shape != crate::frontend::types::FieldShape::Tuple {
-                    return Err(mismatch(
-                        "tuple-struct pattern names a unit or record constructor",
-                    )
-                    .into());
-                }
-                let fixed = items.len();
-                let before = match rest {
-                    Some(rest) if fixed <= arity => *rest as usize,
-                    None if fixed == arity => fixed,
-                    _ => {
-                        return Err(mismatch(
-                            "tuple-struct pattern arity differs from its constructor",
-                        )
-                        .into());
-                    }
-                };
-                let mut fields = Vec::with_capacity(fixed);
-                for (ordinal, item) in items.iter().enumerate() {
-                    let field = if ordinal < before {
-                        ordinal
-                    } else {
-                        arity - (fixed - ordinal)
-                    };
-                    fields.push((
-                        u32::try_from(field).map_err(|_| mismatch("field overflow"))?,
-                        item,
-                    ));
-                }
-                fields
-            }
-            ConstructorForm::Record { fields, .. } => {
-                if ordinals.len() != fields.len() {
-                    return Err(transaction("record pattern field resolution differs").into());
-                }
-                ordinals.iter().copied().zip(fields.iter()).collect()
-            }
-        };
+        let fields = constructor_fields(form, shape, arity, ordinals)?;
         match target {
             PatternTarget::Constructor { variant, .. } => {
                 self.constructor(goal, variant, &fields, next)
@@ -774,12 +790,7 @@ impl<'s> Search<'s> {
                     "actual pattern binding requires resolved alternative, mode and hygiene facts",
                 ))?;
                 let context = goal.context.with_edition(*edition)?;
-                let modifier = match (*by_reference, *mutable) {
-                    (false, false) => BindingModifier::Plain,
-                    (false, true) => BindingModifier::Mut,
-                    (true, false) => BindingModifier::Ref,
-                    (true, true) => BindingModifier::RefMut,
-                };
+                let modifier = PatternContext::modifier(*by_reference, *mutable);
                 let mode = context.binding_mode(modifier)?;
                 self.staged.push(Staged {
                     binding,

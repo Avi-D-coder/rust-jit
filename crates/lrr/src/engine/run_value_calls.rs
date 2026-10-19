@@ -149,6 +149,8 @@ pub(super) struct ClosureEntry {
 }
 #[derive(Default)]
 pub(super) struct ClosureFacts {
+    pub(super) accesses: BTreeMap<crate::frontend::pattern_access::PatternAccessKey,
+        (Arc<QueryValue>,Arc<crate::db::memo::PreparedInputGuard>)>,
     targets: BTreeMap<crate::core::digest::Digest, Arc<ClosureTarget>>,
     selected: BTreeMap<crate::vm::call::CallIdentity, SelectedClosure>,
     /// Each closure body's actual creating source declaration, retained once.

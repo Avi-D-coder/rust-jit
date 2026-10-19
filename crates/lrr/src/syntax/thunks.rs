@@ -62,7 +62,7 @@ struct EnteredAdmissions<'a> {
     call: Option<&'a crate::frontend::entered_call_goals::EnteredCallGoal>,
     let_annotation: Option<&'a let_annotations::LetAnnotation>,
     value_goal: Option<&'a crate::frontend::source_value_goals::EnteredValueGoal>,
-    closure_captures: Option<&'a [crate::ir::op::ClosureCapture]>,
+    closure_captures: Option<(&'a [crate::ir::op::ClosureCapture], &'a [crate::ir::op::CapturePatternUse])>,
 }
 
 fn error(message: &str) -> Diagnostic {
@@ -2199,9 +2199,10 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         captures: &[crate::ir::op::ClosureCapture],
+        pattern_uses: &[crate::ir::op::CapturePatternUse],
     ) -> Result<VerifiedRecipe, Diagnostic> {
         self.initial_thunk_admission(body, index, key, EnteredAdmissions {
-            closure_captures: Some(captures), ..Default::default()
+            closure_captures: Some((captures, pattern_uses)), ..Default::default()
         })
     }
     pub(crate) fn initial_thunk_with_value_goal(

@@ -1,0 +1,2950 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "time_utc": "2026-10-19T07:03:13.015317+00:00",
+  "parent": "e65373f266a80023048135fa466209128b9fca96",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "scope": "Solo T050/T051 common PatternPlan binding access metadata and closure capture modes; held partial repair",
+  "v191": {
+    "library_build_exit": 101,
+    "source_sha256": "37d499b718f6544008a9612e4fe9363ceaf2b5bc3fd74037443710be2b8b43d8",
+    "errors": "7 diagnostics from Arc import, NodeId serde and two exhaustive query sites; no runtime executed"
+  },
+  "v192": {
+    "library_build_success_json": true,
+    "cli_build_exit": 0,
+    "runtime_harness_exit": 0,
+    "runtime_report": {
+      "schema": "lrr/v5/selected-upstream-runtime/v1",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "platform": "aarch64-apple-darwin",
+      "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+      "interpreter_binary": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "interpreter_sha256": "f450033c1f0f7891a73ed58fb8fe54e719469437866afe07f19eb2faa16951ef",
+      "source_digester": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "source_digester_sha256": "8846a79ccc76c48048bf6e4be6f33d35f4aa9beb1893782fdd22ae59eac601d3",
+      "native_execution": false,
+      "selected_cases": [
+        {
+          "case": "tests/ui/let-else/let-else-bindings.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "capture_context": "b31fdb041d3f4289997b33ba44d17fbc3b672afcdb9cc7620f7039089c7524d9",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-bindings.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "b31fdb041d3f4289997b33ba44d17fbc3b672afcdb9cc7620f7039089c7524d9"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 2060,
+            "elapsed_seconds": 6.633221041,
+            "stdout_bytes": 2142,
+            "stdout_sha256": "7b0d76d016a87cab2343ded34c296de0bbd2a7fd8baa6e5af8105013dff94567",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        }
+      ],
+      "complete_inventory": false,
+      "upstream_runtime_acceptance": {
+        "status": "incomplete",
+        "counts": {
+          "runtime_contract_pass": 1
+        }
+      },
+      "diagnostic_compatibility": {
+        "status": "unassessed"
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed"
+      },
+      "full_suite_compatibility": {
+        "status": "incomplete"
+      },
+      "guest_jit_allowed": false,
+      "source_digest_observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 2059,
+        "elapsed_seconds": 0.13655933399999998,
+        "stdout_bytes": 485388,
+        "stdout_sha256": "6ac72db6b016ad6418b252d47fe4e46fda4915d1b1ccd3e7157d464b6c1b66e4",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+      "selected_batch_passed": true
+    },
+    "after_runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T06:56:06.110035+00:00",
+      "head": "e65373f266a80023048135fa466209128b9fca96",
+      "file_count": 8313,
+      "source_sha256": "3276bd1bf8271a0d4660273e0afd03a05ad0461c4d6b926d8d73653ddae6bb4e",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "sha256": "b75a59b3cc0610896c77e73cefdb5eecfcee7bb9b9439e74cab5b2838497a779"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "f450033c1f0f7891a73ed58fb8fe54e719469437866afe07f19eb2faa16951ef"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    }
+  },
+  "v193": {
+    "library_build_exit": 0,
+    "source_sha256": "e1aeaa24e9c247aca28d2de26da9f2bfee122bbbcbf9121d5d5189e5a3daa301",
+    "runtime_executed": false,
+    "cli_note": "after-build receipt records old V192 CLI, no runtime claim for this intermediate source"
+  },
+  "v194": {
+    "library_build_exit": 0,
+    "cli_build_exit": 0,
+    "controls_wrapper_exit": 1,
+    "runtime_harness_exit": 1,
+    "after_runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T07:02:11.111459+00:00",
+      "head": "e65373f266a80023048135fa466209128b9fca96",
+      "file_count": 8313,
+      "source_sha256": "cbc4fc537d62d9d400a3f45b5db2afd301264c933aebd23b5aed3fe13ec29946",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "sha256": "f40a3a269bf124d0b2adfe8b019e068f1e3f309fa70e867a3b3ee2987f934ca3"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "a4f67f6ba40c9903744a772dc8d50d1a75e04e52ef26c3ce2eff4f6805984c02"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    },
+    "controls": [
+      {
+        "selector": "cli::callable_value_tests::upstream_pattern_captures_share_the_source_route_across_origins_and_editions",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::callable_value_tests::upstream_pattern_captures_share_the_source_route_across_origins_and_editions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 101,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": false,
+        "seconds": 18.992,
+        "log": "control-0.log"
+      },
+      {
+        "selector": "cli::callable_value_tests::closures_capture_by_shared_unique_and_value_capture",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::callable_value_tests::closures_capture_by_shared_unique_and_value_capture",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 9.182,
+        "log": "control-1.log"
+      },
+      {
+        "selector": "cli::callable_value_tests::closures_cross_the_ordinary_call_boundary_into_generic_callees",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::callable_value_tests::closures_cross_the_ordinary_call_boundary_into_generic_callees",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 9.734,
+        "log": "control-2.log"
+      },
+      {
+        "selector": "cli::callable_value_tests::macro_emitted_and_handwritten_closures_share_one_route",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::callable_value_tests::macro_emitted_and_handwritten_closures_share_one_route",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 16.28,
+        "log": "control-3.log"
+      },
+      {
+        "selector": "cli::crate_graph::generic_boundary_tests::closures_move_their_by_value_captures_out_when_called_once",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::crate_graph::generic_boundary_tests::closures_move_their_by_value_captures_out_when_called_once",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 20.982,
+        "log": "control-4.log"
+      },
+      {
+        "selector": "cli::crate_graph::fn_param_pattern_tests::bindings_reach_closures_shadowing_loops_early_returns_and_recursion",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::crate_graph::fn_param_pattern_tests::bindings_reach_closures_shadowing_loops_early_returns_and_recursion",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 39.004,
+        "log": "control-5.log"
+      },
+      {
+        "selector": "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 5.079,
+        "log": "control-6.log"
+      },
+      {
+        "selector": "cli::reached_pattern_nominal_tests::generated_condition_uses_definition_site_binding_despite_caller_shadowing",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::reached_pattern_nominal_tests::generated_condition_uses_definition_site_binding_despite_caller_shadowing",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 16.515,
+        "log": "control-7.log"
+      },
+      {
+        "selector": "engine::run::pattern_tests::every_owner_kind_uses_the_same_transaction_steps",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "engine::run::pattern_tests::every_owner_kind_uses_the_same_transaction_steps",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.406,
+        "log": "control-8.log"
+      },
+      {
+        "selector": "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "service::common_pattern_route_tests::reached_scalar_patterns_share_ordinary_runtime_routes_across_actual_macro_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.874,
+        "log": "control-9.log"
+      },
+      {
+        "selector": "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.19,
+        "log": "control-10.log"
+      },
+      {
+        "selector": "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "service::common_pattern_route_tests::false_guards_retry_selected_alternatives_without_replaying_the_source",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.157,
+        "log": "control-11.log"
+      }
+    ],
+    "runtime_report": {
+      "schema": "lrr/v5/selected-upstream-runtime/v1",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "platform": "aarch64-apple-darwin",
+      "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+      "interpreter_binary": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "interpreter_sha256": "a4f67f6ba40c9903744a772dc8d50d1a75e04e52ef26c3ce2eff4f6805984c02",
+      "source_digester": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "source_digester_sha256": "8846a79ccc76c48048bf6e4be6f33d35f4aa9beb1893782fdd22ae59eac601d3",
+      "native_execution": false,
+      "selected_cases": [
+        {
+          "case": "tests/ui/let-else/let-else-bindings.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "capture_context": "530ac0f95575be82bc8fef9da11ee7f13b075962a75a2976a099552c2cfc6508",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-bindings.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "530ac0f95575be82bc8fef9da11ee7f13b075962a75a2976a099552c2cfc6508"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 2764,
+            "elapsed_seconds": 6.758628958,
+            "stdout_bytes": 2142,
+            "stdout_sha256": "af6a2846f5446d607e92e0ae252acda400c1b66e36c3d7013b7e79ae9aa5b0e4",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/let-else/let-else-run-pass.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "ab2025a71c063a92df836294158719ae1f654e2f678fa4193c07af7a6e1a9e27",
+          "capture_context": "9164315eced0e9a0b4fc2ca1fb5fb41420d10ecb29eb1da0e2b6161b2a114d62",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-run-pass.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "9164315eced0e9a0b4fc2ca1fb5fb41420d10ecb29eb1da0e2b6161b2a114d62"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 2765,
+            "elapsed_seconds": 4.564988458,
+            "stdout_bytes": 2116,
+            "stdout_sha256": "2bfe1a8539763adc997f65648a05521687e460ef44f07fc25ccb6b8dbd15da99",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/let-else/let-else-non-copy.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "402cd9a00ae696986a0f54cd6e818f64ec87c4c776dcc933f09968a7e56b1e48",
+          "capture_context": "bee43d7edc3284b060809ac463080f4a6c422ce6e9cb121933fb159feaee9e8d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-non-copy.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "bee43d7edc3284b060809ac463080f4a6c422ce6e9cb121933fb159feaee9e8d"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 2,
+            "pid": 2778,
+            "elapsed_seconds": 5.373603791000001,
+            "stdout_bytes": 5494,
+            "stdout_sha256": "837d955d315cdec1a52460f2ff187709505ba55c21b757cbd7123f3e04940afb",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "code": "LRR-E-UNSUPPORTED",
+            "diagnostic": {
+              "code": "LRR-E-UNSUPPORTED",
+              "generated_origin": null,
+              "guest_stack": {
+                "frames": [
+                  {
+                    "body": {
+                      "body_key": {
+                        "definition": "ce06202241133d6c4ccc6f293b377fa47e30a220581a0178a72480eb9a2cbaab",
+                        "exact_body_bytes": "05699ede88a8619ae75402370ce7516a77bd7c50eb6b3ec0883ed6cb37d937a0"
+                      },
+                      "relative_end": 215,
+                      "relative_start": 190
+                    },
+                    "locations": [
+                      {
+                        "range": {
+                          "end": 757,
+                          "start": 750
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 758,
+                          "start": 757
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 764,
+                          "start": 759
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 765,
+                          "start": 764
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 774,
+                          "start": 765
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 775,
+                          "start": 774
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      }
+                    ],
+                    "pc": "359a248529dbe3239741f8123cbd2247831130f33dbda699fba1d2b5ce459884"
+                  },
+                  {
+                    "body": {
+                      "body_key": {
+                        "definition": "170b4341b9ce223697a77ace1850ae9c7a1c31d8b7cd1cee839fe01317cdd62e",
+                        "exact_body_bytes": "1c2f843c1e33161ea46b1e8ea864810679f914b909d6b93ba6793439e9065918"
+                      },
+                      "relative_end": 11,
+                      "relative_start": 1
+                    },
+                    "locations": [
+                      {
+                        "range": {
+                          "end": 1053,
+                          "start": 1045
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 1054,
+                          "start": 1053
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 1055,
+                          "start": 1054
+                        },
+                        "source": {
+                          "content": [
+                            214,
+                            18,
+                            84,
+                            226,
+                            88,
+                            147,
+                            122,
+                            43,
+                            12,
+                            72,
+                            49,
+                            224,
+                            131,
+                            237,
+                            247,
+                            27,
+                            235,
+                            106,
+                            12,
+                            72,
+                            68,
+                            106,
+                            83,
+                            180,
+                            94,
+                            57,
+                            74,
+                            236,
+                            114,
+                            117,
+                            108,
+                            98
+                          ],
+                          "path": "let-else-non-copy.rs",
+                          "unit": [
+                            233,
+                            228,
+                            93,
+                            222,
+                            23,
+                            8,
+                            48,
+                            66,
+                            11,
+                            21,
+                            178,
+                            215,
+                            133,
+                            47,
+                            196,
+                            45,
+                            241,
+                            228,
+                            60,
+                            9,
+                            113,
+                            43,
+                            38,
+                            21,
+                            44,
+                            148,
+                            5,
+                            223,
+                            33,
+                            54,
+                            183,
+                            94
+                          ]
+                        }
+                      }
+                    ],
+                    "pc": "3d6ea5e658eaf4c2027b635240ca330f2205db3a17d15528417097aece27426e"
+                  }
+                ],
+                "omitted_frames": 0
+              },
+              "macro_origin": null,
+              "message": "by-value binding of a Copy aggregate place requires aggregate copy activation",
+              "origin_attachment_failure": null,
+              "rendered_generated_origin": null,
+              "rendered_guest_stack": null,
+              "rendered_macro_origin": null
+            },
+            "message": "by-value binding of a Copy aggregate place requires aggregate copy activation",
+            "phase": "executor",
+            "status": "fault"
+          }
+        },
+        {
+          "case": "tests/ui/let-else/let-else-source-expr-nomove-pass.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "cc40fd50f5e8799b22a33500cfd966acf3fe961362a91c6a112cddf01e1a760c",
+          "capture_context": "075af251bb1bf2c7c88739addbac6fde1ed4260a3b1a20a04fd0776e3f2fd64d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-source-expr-nomove-pass.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "075af251bb1bf2c7c88739addbac6fde1ed4260a3b1a20a04fd0776e3f2fd64d"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 2,
+            "pid": 2787,
+            "elapsed_seconds": 3.8520534580000003,
+            "stdout_bytes": 4046,
+            "stdout_sha256": "432505e88cef8eaacd230b7bda304f04a770b682c27b1bb7b7716a3e39cbaeff",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "code": "LRR-E-UNSUPPORTED",
+            "diagnostic": {
+              "code": "LRR-E-UNSUPPORTED",
+              "generated_origin": null,
+              "guest_stack": {
+                "frames": [
+                  {
+                    "body": {
+                      "body_key": {
+                        "definition": "49488b3c8dd2204f5050bad72912bf79734dc6a51280b34a998a1f5ecf6cf1cc",
+                        "exact_body_bytes": "7534318889af0fd3937157b8e6428cddc6371a00f1c985a2d459ae290866553e"
+                      },
+                      "relative_end": 35,
+                      "relative_start": 23
+                    },
+                    "locations": [
+                      {
+                        "range": {
+                          "end": 261,
+                          "start": 256
+                        },
+                        "source": {
+                          "content": [
+                            69,
+                            113,
+                            84,
+                            166,
+                            194,
+                            150,
+                            60,
+                            221,
+                            223,
+                            80,
+                            153,
+                            227,
+                            2,
+                            216,
+                            98,
+                            233,
+                            98,
+                            121,
+                            247,
+                            74,
+                            177,
+                            164,
+                            251,
+                            65,
+                            103,
+                            207,
+                            9,
+                            185,
+                            142,
+                            201,
+                            49,
+                            182
+                          ],
+                          "path": "let-else-source-expr-nomove-pass.rs",
+                          "unit": [
+                            115,
+                            74,
+                            171,
+                            178,
+                            11,
+                            74,
+                            36,
+                            228,
+                            147,
+                            39,
+                            175,
+                            132,
+                            188,
+                            39,
+                            7,
+                            109,
+                            249,
+                            86,
+                            23,
+                            179,
+                            59,
+                            210,
+                            158,
+                            28,
+                            22,
+                            25,
+                            227,
+                            153,
+                            121,
+                            47,
+                            235,
+                            80
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 262,
+                          "start": 261
+                        },
+                        "source": {
+                          "content": [
+                            69,
+                            113,
+                            84,
+                            166,
+                            194,
+                            150,
+                            60,
+                            221,
+                            223,
+                            80,
+                            153,
+                            227,
+                            2,
+                            216,
+                            98,
+                            233,
+                            98,
+                            121,
+                            247,
+                            74,
+                            177,
+                            164,
+                            251,
+                            65,
+                            103,
+                            207,
+                            9,
+                            185,
+                            142,
+                            201,
+                            49,
+                            182
+                          ],
+                          "path": "let-else-source-expr-nomove-pass.rs",
+                          "unit": [
+                            115,
+                            74,
+                            171,
+                            178,
+                            11,
+                            74,
+                            36,
+                            228,
+                            147,
+                            39,
+                            175,
+                            132,
+                            188,
+                            39,
+                            7,
+                            109,
+                            249,
+                            86,
+                            23,
+                            179,
+                            59,
+                            210,
+                            158,
+                            28,
+                            22,
+                            25,
+                            227,
+                            153,
+                            121,
+                            47,
+                            235,
+                            80
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 266,
+                          "start": 262
+                        },
+                        "source": {
+                          "content": [
+                            69,
+                            113,
+                            84,
+                            166,
+                            194,
+                            150,
+                            60,
+                            221,
+                            223,
+                            80,
+                            153,
+                            227,
+                            2,
+                            216,
+                            98,
+                            233,
+                            98,
+                            121,
+                            247,
+                            74,
+                            177,
+                            164,
+                            251,
+                            65,
+                            103,
+                            207,
+                            9,
+                            185,
+                            142,
+                            201,
+                            49,
+                            182
+                          ],
+                          "path": "let-else-source-expr-nomove-pass.rs",
+                          "unit": [
+                            115,
+                            74,
+                            171,
+                            178,
+                            11,
+                            74,
+                            36,
+                            228,
+                            147,
+                            39,
+                            175,
+                            132,
+                            188,
+                            39,
+                            7,
+                            109,
+                            249,
+                            86,
+                            23,
+                            179,
+                            59,
+                            210,
+                            158,
+                            28,
+                            22,
+                            25,
+                            227,
+                            153,
+                            121,
+                            47,
+                            235,
+                            80
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 267,
+                          "start": 266
+                        },
+                        "source": {
+                          "content": [
+                            69,
+                            113,
+                            84,
+                            166,
+                            194,
+                            150,
+                            60,
+                            221,
+                            223,
+                            80,
+                            153,
+                            227,
+                            2,
+                            216,
+                            98,
+                            233,
+                            98,
+                            121,
+                            247,
+                            74,
+                            177,
+                            164,
+                            251,
+                            65,
+                            103,
+                            207,
+                            9,
+                            185,
+                            142,
+                            201,
+                            49,
+                            182
+                          ],
+                          "path": "let-else-source-expr-nomove-pass.rs",
+                          "unit": [
+                            115,
+                            74,
+                            171,
+                            178,
+                            11,
+                            74,
+                            36,
+                            228,
+                            147,
+                            39,
+                            175,
+                            132,
+                            188,
+                            39,
+                            7,
+                            109,
+                            249,
+                            86,
+                            23,
+                            179,
+                            59,
+                            210,
+                            158,
+                            28,
+                            22,
+                            25,
+                            227,
+                            153,
+                            121,
+                            47,
+                            235,
+                            80
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 268,
+                          "start": 267
+                        },
+                        "source": {
+                          "content": [
+                            69,
+                            113,
+                            84,
+                            166,
+                            194,
+                            150,
+                            60,
+                            221,
+                            223,
+                            80,
+                            153,
+                            227,
+                            2,
+                            216,
+                            98,
+                            233,
+                            98,
+                            121,
+                            247,
+                            74,
+                            177,
+                            164,
+                            251,
+                            65,
+                            103,
+                            207,
+                            9,
+                            185,
+                            142,
+                            201,
+                            49,
+                            182
+                          ],
+                          "path": "let-else-source-expr-nomove-pass.rs",
+                          "unit": [
+                            115,
+                            74,
+                            171,
+                            178,
+                            11,
+                            74,
+                            36,
+                            228,
+                            147,
+                            39,
+                            175,
+                            132,
+                            188,
+                            39,
+                            7,
+                            109,
+                            249,
+                            86,
+                            23,
+                            179,
+                            59,
+                            210,
+                            158,
+                            28,
+                            22,
+                            25,
+                            227,
+                            153,
+                            121,
+                            47,
+                            235,
+                            80
+                          ]
+                        }
+                      }
+                    ],
+                    "pc": "4688ed119e53190f2692f5970bf5a54748a2602bbe523f7d94561feee4167a9e"
+                  }
+                ],
+                "omitted_frames": 0
+              },
+              "macro_origin": null,
+              "message": "unsized buffer reference requires its buffer operation/source contract",
+              "origin_attachment_failure": null,
+              "rendered_generated_origin": null,
+              "rendered_guest_stack": null,
+              "rendered_macro_origin": null
+            },
+            "message": "unsized buffer reference requires its buffer operation/source contract",
+            "phase": "executor",
+            "status": "fault"
+          }
+        },
+        {
+          "case": "tests/ui/closures/simple-capture-and-call.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "ac297de1651e2d893673005f4135d9c58d950879a3ff903a7cd709d0228de2b1",
+          "capture_context": "7c404cfafb9b5f556106109dce6a4bdf322c23c7601c43a14c6ac5a4c805a661",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/closures/simple-capture-and-call.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "7c404cfafb9b5f556106109dce6a4bdf322c23c7601c43a14c6ac5a4c805a661"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 2795,
+            "elapsed_seconds": 3.7011482079999993,
+            "stdout_bytes": 2110,
+            "stdout_sha256": "e1381705b5c5f0a3640e73ec75deac4c813e994f19184f1ab2fe605fa4d97ac8",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/closures/closure-capture-after-clone.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "828a35b8dadae020fd3f956a30e40a124188a29ca113131f92187eddcfb0943f",
+          "capture_context": "6248c74cd6203bf50b4225ee5f97923811b90fed5edb636cd2409b64823051b3",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/closures/closure-capture-after-clone.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "6248c74cd6203bf50b4225ee5f97923811b90fed5edb636cd2409b64823051b3"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 2,
+            "pid": 2839,
+            "elapsed_seconds": 3.815890915999997,
+            "stdout_bytes": 4661,
+            "stdout_sha256": "95d8f2cdbb20c7bb247c8fe9d6171a454a9238974e6ab277e871266cea193fe6",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "code": "LRR-E-TYPE-CONTEXT",
+            "diagnostic": {
+              "code": "LRR-E-TYPE-CONTEXT",
+              "generated_origin": null,
+              "guest_stack": {
+                "frames": [
+                  {
+                    "body": {
+                      "body_key": {
+                        "definition": "04f6bb4f74fbdd3b5b1611398687e11b8ffbfa3d53211171a81745de085ac4e7",
+                        "exact_body_bytes": "6082b038f2ef73281a18b16bbb9488b4291c77f2dd2a4d0e6e965b4a4712ac0c"
+                      },
+                      "relative_end": 23,
+                      "relative_start": 10
+                    },
+                    "locations": [
+                      {
+                        "range": {
+                          "end": 610,
+                          "start": 597
+                        },
+                        "source": {
+                          "content": [
+                            123,
+                            157,
+                            220,
+                            254,
+                            152,
+                            62,
+                            60,
+                            22,
+                            35,
+                            222,
+                            4,
+                            98,
+                            131,
+                            171,
+                            58,
+                            231,
+                            122,
+                            253,
+                            72,
+                            229,
+                            108,
+                            111,
+                            127,
+                            111,
+                            104,
+                            127,
+                            75,
+                            73,
+                            142,
+                            54,
+                            5,
+                            250
+                          ],
+                          "path": "<lrr-facade>/core/convert.rs",
+                          "unit": [
+                            115,
+                            165,
+                            24,
+                            240,
+                            54,
+                            69,
+                            194,
+                            47,
+                            198,
+                            146,
+                            255,
+                            7,
+                            244,
+                            94,
+                            169,
+                            92,
+                            202,
+                            206,
+                            243,
+                            164,
+                            180,
+                            177,
+                            248,
+                            143,
+                            154,
+                            20,
+                            18,
+                            98,
+                            14,
+                            85,
+                            176,
+                            43
+                          ]
+                        }
+                      }
+                    ],
+                    "pc": "8dffa92f2c966846a1c6160ea9cfc4d31c87ef3aac832d7e7463305475a83cbd"
+                  },
+                  {
+                    "body": {
+                      "body_key": {
+                        "definition": "71ab72c49aa06f1ab0bb98054d862470440eda639fe6e9846586f8f630f1729b",
+                        "exact_body_bytes": "d91654bb359630c5ba52096a30a7468045283f2a30ed1a527871a53c8a0b0112"
+                      },
+                      "relative_end": 61,
+                      "relative_start": 52
+                    },
+                    "locations": [
+                      {
+                        "range": {
+                          "end": 705,
+                          "start": 703
+                        },
+                        "source": {
+                          "content": [
+                            185,
+                            215,
+                            146,
+                            113,
+                            253,
+                            15,
+                            127,
+                            145,
+                            238,
+                            31,
+                            57,
+                            223,
+                            198,
+                            136,
+                            158,
+                            188,
+                            54,
+                            9,
+                            102,
+                            111,
+                            56,
+                            156,
+                            57,
+                            84,
+                            68,
+                            209,
+                            92,
+                            252,
+                            121,
+                            60,
+                            243,
+                            184
+                          ],
+                          "path": "closure-capture-after-clone.rs",
+                          "unit": [
+                            119,
+                            232,
+                            144,
+                            72,
+                            158,
+                            173,
+                            112,
+                            241,
+                            78,
+                            43,
+                            202,
+                            9,
+                            68,
+                            232,
+                            174,
+                            91,
+                            190,
+                            111,
+                            96,
+                            139,
+                            186,
+                            133,
+                            69,
+                            242,
+                            46,
+                            46,
+                            4,
+                            69,
+                            148,
+                            214,
+                            188,
+                            211
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 706,
+                          "start": 705
+                        },
+                        "source": {
+                          "content": [
+                            185,
+                            215,
+                            146,
+                            113,
+                            253,
+                            15,
+                            127,
+                            145,
+                            238,
+                            31,
+                            57,
+                            223,
+                            198,
+                            136,
+                            158,
+                            188,
+                            54,
+                            9,
+                            102,
+                            111,
+                            56,
+                            156,
+                            57,
+                            84,
+                            68,
+                            209,
+                            92,
+                            252,
+                            121,
+                            60,
+                            243,
+                            184
+                          ],
+                          "path": "closure-capture-after-clone.rs",
+                          "unit": [
+                            119,
+                            232,
+                            144,
+                            72,
+                            158,
+                            173,
+                            112,
+                            241,
+                            78,
+                            43,
+                            202,
+                            9,
+                            68,
+                            232,
+                            174,
+                            91,
+                            190,
+                            111,
+                            96,
+                            139,
+                            186,
+                            133,
+                            69,
+                            242,
+                            46,
+                            46,
+                            4,
+                            69,
+                            148,
+                            214,
+                            188,
+                            211
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 710,
+                          "start": 706
+                        },
+                        "source": {
+                          "content": [
+                            185,
+                            215,
+                            146,
+                            113,
+                            253,
+                            15,
+                            127,
+                            145,
+                            238,
+                            31,
+                            57,
+                            223,
+                            198,
+                            136,
+                            158,
+                            188,
+                            54,
+                            9,
+                            102,
+                            111,
+                            56,
+                            156,
+                            57,
+                            84,
+                            68,
+                            209,
+                            92,
+                            252,
+                            121,
+                            60,
+                            243,
+                            184
+                          ],
+                          "path": "closure-capture-after-clone.rs",
+                          "unit": [
+                            119,
+                            232,
+                            144,
+                            72,
+                            158,
+                            173,
+                            112,
+                            241,
+                            78,
+                            43,
+                            202,
+                            9,
+                            68,
+                            232,
+                            174,
+                            91,
+                            190,
+                            111,
+                            96,
+                            139,
+                            186,
+                            133,
+                            69,
+                            242,
+                            46,
+                            46,
+                            4,
+                            69,
+                            148,
+                            214,
+                            188,
+                            211
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 711,
+                          "start": 710
+                        },
+                        "source": {
+                          "content": [
+                            185,
+                            215,
+                            146,
+                            113,
+                            253,
+                            15,
+                            127,
+                            145,
+                            238,
+                            31,
+                            57,
+                            223,
+                            198,
+                            136,
+                            158,
+                            188,
+                            54,
+                            9,
+                            102,
+                            111,
+                            56,
+                            156,
+                            57,
+                            84,
+                            68,
+                            209,
+                            92,
+                            252,
+                            121,
+                            60,
+                            243,
+                            184
+                          ],
+                          "path": "closure-capture-after-clone.rs",
+                          "unit": [
+                            119,
+                            232,
+                            144,
+                            72,
+                            158,
+                            173,
+                            112,
+                            241,
+                            78,
+                            43,
+                            202,
+                            9,
+                            68,
+                            232,
+                            174,
+                            91,
+                            190,
+                            111,
+                            96,
+                            139,
+                            186,
+                            133,
+                            69,
+                            242,
+                            46,
+                            46,
+                            4,
+                            69,
+                            148,
+                            214,
+                            188,
+                            211
+                          ]
+                        }
+                      },
+                      {
+                        "range": {
+                          "end": 712,
+                          "start": 711
+                        },
+                        "source": {
+                          "content": [
+                            185,
+                            215,
+                            146,
+                            113,
+                            253,
+                            15,
+                            127,
+                            145,
+                            238,
+                            31,
+                            57,
+                            223,
+                            198,
+                            136,
+                            158,
+                            188,
+                            54,
+                            9,
+                            102,
+                            111,
+                            56,
+                            156,
+                            57,
+                            84,
+                            68,
+                            209,
+                            92,
+                            252,
+                            121,
+                            60,
+                            243,
+                            184
+                          ],
+                          "path": "closure-capture-after-clone.rs",
+                          "unit": [
+                            119,
+                            232,
+                            144,
+                            72,
+                            158,
+                            173,
+                            112,
+                            241,
+                            78,
+                            43,
+                            202,
+                            9,
+                            68,
+                            232,
+                            174,
+                            91,
+                            190,
+                            111,
+                            96,
+                            139,
+                            186,
+                            133,
+                            69,
+                            242,
+                            46,
+                            46,
+                            4,
+                            69,
+                            148,
+                            214,
+                            188,
+                            211
+                          ]
+                        }
+                      }
+                    ],
+                    "pc": "96ed74965b299b437b09a96f332128eed4040ffdb0cb77267b2b6615af5a1e35"
+                  }
+                ],
+                "omitted_frames": 0
+              },
+              "macro_origin": null,
+              "message": "generic parameter `U` has no reached binding for its path call",
+              "origin_attachment_failure": null,
+              "rendered_generated_origin": null,
+              "rendered_guest_stack": null,
+              "rendered_macro_origin": null
+            },
+            "message": "generic parameter `U` has no reached binding for its path call",
+            "phase": "executor",
+            "status": "fault"
+          }
+        },
+        {
+          "case": "tests/ui/closures/drop-glue-for-closure-with-captures.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "af9f7d8b4a501a2371c84280cc261d3a84376eafe8fa254016fb70ee54bccef9",
+          "capture_context": "ac2b74aa9f7f0f7c6c130acd277e1fc8ec59dc3fc5c6f243ba7c70003a27be26",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/closures/drop-glue-for-closure-with-captures.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "ac2b74aa9f7f0f7c6c130acd277e1fc8ec59dc3fc5c6f243ba7c70003a27be26"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 2841,
+            "elapsed_seconds": 3.7958185840000027,
+            "stdout_bytes": 2137,
+            "stdout_sha256": "fc3bb2a112ca78b3f615c04664a456525621c69ab2e9a76ed8ea1fb40085b8cf",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/functions-closures/capture-clauses-unboxed-closures.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "165a9d827cf843293c9f36782db43b3c55404224a5982e689fd77e0ebe6a675f",
+          "capture_context": "4ce58c1c91629e621d7b56e929ac1fc344d6a2a29c4341e611f1d75de3353c1c",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/functions-closures/capture-clauses-unboxed-closures.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "4ce58c1c91629e621d7b56e929ac1fc344d6a2a29c4341e611f1d75de3353c1c"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 2867,
+            "elapsed_seconds": 4.356456457999997,
+            "stdout_bytes": 2163,
+            "stdout_sha256": "7064bbe3111697549cf73b0c942ddef0daf5c6c9541b92e66088bd4ca7ee41a3",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/closures/local-enums-in-closure-2074.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "3b3e5ab781d251ebb6dcb4239a1e5190c97d0857511e72ab4c5b4c71cb145195",
+          "capture_context": "6dab7d7af558e534e1242eae7c6c87e9c7d3960b988c52268357e49c50cf324e",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/closures/local-enums-in-closure-2074.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "6dab7d7af558e534e1242eae7c6c87e9c7d3960b988c52268357e49c50cf324e"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 3446,
+            "elapsed_seconds": 3.8228505000000013,
+            "stdout_bytes": 2120,
+            "stdout_sha256": "cd6b9c1583113fbc120ee44975e8a3d4886f1576fd82d07c81de1f1b9d186108",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/closures/destructure-newtype-closure.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "f1829bd6d1bfbaa5cf9634039fdb5006a726abb58dd140f98eb5f6d541cfcb93",
+          "capture_context": "5494e16261a122e52202e1810fe1ee335d9b608cb4e4cc1d8cbe3f46eb364764",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/closures/destructure-newtype-closure.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "5494e16261a122e52202e1810fe1ee335d9b608cb4e4cc1d8cbe3f46eb364764"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 3456,
+            "elapsed_seconds": 3.7821929589999996,
+            "stdout_bytes": 2118,
+            "stdout_sha256": "b7b63a4fa59959d593b05db78921f0e2446d733012a464f3b05ff4a2097c1739",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/binding/if-let.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
+          "capture_context": "e578d45b32169fef1d7bf263c08ee897a652a94754f36f9b58f70aa2eeac3d0c",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/binding/if-let.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "e578d45b32169fef1d7bf263c08ee897a652a94754f36f9b58f70aa2eeac3d0c"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 3517,
+            "elapsed_seconds": 5.8093666660000025,
+            "stdout_bytes": 2123,
+            "stdout_sha256": "6c4b7a649528edad44236d4e2d05a21b4d0ae08f9303f39149b5d8404790b5da",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        },
+        {
+          "case": "tests/ui/binding/match-ref-binding-mut-option.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "directives": [
+            "//@ run-pass"
+          ],
+          "expected_files": [],
+          "reference_rules": [],
+          "diagnostic_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "extern_flags": [],
+          "blockers": [],
+          "source_sha256": "f1544e3395c9e53b0cfbf5b52c977fcce2642598699281c068cc995c206a558a",
+          "capture_context": "dc97614752c6d8e9886e2fd30289c59e6e839e151bf2e82285a9ac679fb25a8d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/binding/match-ref-binding-mut-option.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "dc97614752c6d8e9886e2fd30289c59e6e839e151bf2e82285a9ac679fb25a8d"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 3518,
+            "elapsed_seconds": 4.233833582999999,
+            "stdout_bytes": 2132,
+            "stdout_sha256": "3bcb233266e36139eb5f9b5ec1aacf9c6db07cc2d30ae093a2cb687a6eacbc94",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          }
+        }
+      ],
+      "complete_inventory": false,
+      "upstream_runtime_acceptance": {
+        "status": "incomplete",
+        "counts": {
+          "runtime_contract_pass": 9,
+          "interpreter_failure": 3
+        }
+      },
+      "diagnostic_compatibility": {
+        "status": "unassessed"
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed"
+      },
+      "full_suite_compatibility": {
+        "status": "incomplete"
+      },
+      "guest_jit_allowed": false,
+      "source_digest_observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 2761,
+        "elapsed_seconds": 0.14979149999999997,
+        "stdout_bytes": 485388,
+        "stdout_sha256": "6ac72db6b016ad6418b252d47fe4e46fda4915d1b1ccd3e7157d464b6c1b66e4",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+      "selected_batch_passed": false
+    },
+    "failure_diagnostics": [
+      {
+        "case": "tests/ui/let-else/let-else-non-copy.rs",
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "by-value binding of a Copy aggregate place requires aggregate copy activation"
+      },
+      {
+        "case": "tests/ui/let-else/let-else-source-expr-nomove-pass.rs",
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "unsized buffer reference requires its buffer operation/source contract"
+      },
+      {
+        "case": "tests/ui/closures/closure-capture-after-clone.rs",
+        "code": "LRR-E-TYPE-CONTEXT",
+        "message": "generic parameter `U` has no reached binding for its path call"
+      }
+    ],
+    "origin_failure": {
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "assert! message printing: item statement",
+      "edition": 2015,
+      "completed_prior_variants": [
+        "original",
+        "user",
+        "wrapper"
+      ],
+      "standard_variant": "failed before VM",
+      "later_editions": "unexecuted in stopped control"
+    }
+  },
+  "source_review": {
+    "fingerprint": "cbc4fc537d62d9d400a3f45b5db2afd301264c933aebd23b5aed3fe13ec29946",
+    "changed_source_hashes": {
+      "crates/lrr/src/cli/callable_value_tests.rs": "f2660fd30008bad80696077dea873781dcd4bc25da9097b431f81e529679292e",
+      "crates/lrr/src/cli/preentry_loader.rs": "8724755876b20416adf70779cf005a0e7d88c2ca3d40b8a54f43b8f00bfbeff1",
+      "crates/lrr/src/db/closure_capture_thunk.rs": "8db2ee5ef3c4974e9c03296e4b1e157c34b3bda5629c34d559a765d3efcaea2c",
+      "crates/lrr/src/db/key.rs": "84ffb16e45374773eb213c85bd188ba90e6caf2a4f85463ccef48ead549311a7",
+      "crates/lrr/src/db/provider.rs": "e2eb9c0328a3c92356e3660913b8d5fe0115721bc8e63bc86cb2b5e5ed47a259",
+      "crates/lrr/src/db/value.rs": "2a1ebf0602e88b4fae781b79204ddb4cef7c797a0d4730a8c1c6e0d0184df1d6",
+      "crates/lrr/src/engine/run.rs": "45c6ef7907282b8a28f30f13c59fea7b0c97b3e171219c1a31f1bd14aeecac76",
+      "crates/lrr/src/engine/run_pattern_access.rs": "16de13b90f6a4bfc60b8e5adc646265b97e1cf0373ac773434f11debdeaafa0a",
+      "crates/lrr/src/engine/run_pattern_names.rs": "8b9af865231f5ce42c1a0bec9ec947fd4ae50417734f2d7db4b889a4be42f684",
+      "crates/lrr/src/engine/run_value_calls.rs": "0f5f5deac9a49de1f46031fd88a1e71bd93b87754a1d11471bb73a8ec7cf518c",
+      "crates/lrr/src/frontend/mod.rs": "a3f1b65dc07d51f2319849ed1e5b2f0b784e6f02acf59db3af91ff0a1ea935d9",
+      "crates/lrr/src/frontend/pattern_access.rs": "2b5cfe8e9722071e350a76a1fac27dd459a9078da40c4d3f3d38dcaa4dbdd158",
+      "crates/lrr/src/frontend/pattern_names.rs": "ffdbbc6263cc453f527be9f0fc83ee12a3b2fc13aaeeed1b4d2fa42a9bd07a0d",
+      "crates/lrr/src/frontend/types.rs": "6ebc38514fcd0ee5d17943043744effe72a8ccf8cae17dff783b4deb6e1666d0",
+      "crates/lrr/src/ir/op.rs": "e28b12004b142dc875c4d2372d49b6403d123ddf2f4e6257617120679be18ea3",
+      "crates/lrr/src/ir/pc.rs": "c5b1b33010e589fba91fb84d77810e174eff251ab251fee05ccf4feb64a75fa6",
+      "crates/lrr/src/ir/recipe.rs": "f963f1bf3e5f12ffa4be56a6ba253294c896cb47429fa666a6b7fd770c02684d",
+      "crates/lrr/src/ir/validate.rs": "2f1a03d7cf60f95b54fcc749855caf5410e1b7fdab53554a948d3f60e7225834",
+      "crates/lrr/src/ir/written_type.rs": "2d406399f321778b2e8f1e99fe2a1427804753b31a9da9ee4f5c0f8942e4711c",
+      "crates/lrr/src/runtime/cell.rs": "0b4f528c2162c805ceaac421f663747505fce6404dd09d4febdc249449027b2a",
+      "crates/lrr/src/service/expansion.rs": "2cc9ca4d1f299ac77a3b3681a9ce3558b7b898f511cc602ff34afd10e8bf843a",
+      "crates/lrr/src/syntax/closure_thunk.rs": "d0bdd5aaa8469b0f3472d73956582e3db173e1d89bb340203df05fbb25fbc4d3",
+      "crates/lrr/src/syntax/mod.rs": "340f44b1f0dcffc870cc8915f564b787c6c68684792e54c65684dc3080156fa7",
+      "crates/lrr/src/syntax/pattern_plan.rs": "4d2eb8d09b5065a2cf0a573b6baf4305a57593a3933ea5199ca492d1f98c168e",
+      "crates/lrr/src/syntax/thunks.rs": "a9f198af37b88924d9a87d1b2e798d92d9925fee8d7450e3a2faeee558ad4d91",
+      "crates/lrr/src/vm/frame.rs": "a2ee8406ed704f976eb83d369e01a00e43a708dd1144f52dfafa499a158a5893",
+      "crates/lrr/src/vm/frame_closures.rs": "21d6a3e81973953184f470b3dbba769aae42321f7066f57e7c733882277a848f",
+      "crates/lrr/src/vm/pattern.rs": "293d640b6564dedae90defaa17543b2ba79bb0adbd7befe291e219fe08aa0019",
+      "crates/lrr/src/vm/pattern_match.rs": "37f5ae6e2f72e022e3d67a144fcfb816424e38e7de1611e0f2fe5dde0ee9babf",
+      "crates/lrr/src/vm/step.rs": "8060131b27816fd94a7e4e6d5df4883b5552745cd3bf0ef936446e15517507ee"
+    },
+    "failure_modes": [
+      {
+        "mode": 1,
+        "symbols": [
+          "db::closure_capture_thunk::thunk",
+          "syntax::closure_thunk::capture_use",
+          "frontend::pattern_access::prepare",
+          "vm::Frame::make_closure"
+        ],
+        "finding": "No assertion expression compiler/evaluator added. Captured paths retain common lexical selection, PatternPlan and typed metadata; MakeClosure consumes prepared modes only. Standard-origin control fails in existing printing-only compiler adapter; held."
+      },
+      {
+        "mode": 2,
+        "symbols": [
+          "syntax::PatternSourcePlan",
+          "frontend::pattern_access::Walker::walk",
+          "engine::RunMachine::prepare_closure_pattern_access"
+        ],
+        "finding": "Original/generated ordinary BodyIndex plans shared by Arc. No generated literal/break executor. Four closures constructed in the original witness; output-form feature matrix remains incomplete."
+      },
+      {
+        "mode": 3,
+        "symbols": [
+          "frontend::pattern_names::select_source_pattern_name",
+          "frontend::NominalMemberKey",
+          "runtime::GuestStore::intrinsic_type_read_mode"
+        ],
+        "finding": "No assertion identity/numeric/method spelling choice. Source constructor/member identities and actual type Copy facts decide access. Source Copy goals for Deferred nominal/structural types remain unsupported. Existing method-receiver Shared capture remains related debt."
+      },
+      {
+        "mode": 4,
+        "symbols": [
+          "db::closure_capture_thunk::thunk",
+          "syntax::PatternSourcePlan::binding_trees",
+          "frontend::pattern_names::select_source_pattern_name"
+        ],
+        "finding": "No original-source-only guard introduced. Actual expanded syntax required; unexpanded MacroCall refusal remains inherited. Runtime query uses lexical owning source identity. New whole-body standard-origin adapter fails before execution at unsupported item printer; later editions unexecuted."
+      },
+      {
+        "mode": 5,
+        "symbols": [
+          "frontend::pattern_access::Walker::walk",
+          "vm::pattern::matcher::Search",
+          "vm::pattern::matcher::constructor_fields",
+          "vm::PatternContext::modifier",
+          "vm::Frame::publish_pattern_binding"
+        ],
+        "finding": "New walker computes type-only capture binding accesses, never a match result/discriminant/constant value and never executes/lower arms. Runtime Search and transaction commit stay single. Shared constructor field mapping and modifier selection extracted. PatternAccess must conservatively see potential captures but leaves arm/guard/else executable preparation cold. Required origin control incomplete; existing cold-branch and false-guard controls pass."
+      },
+      {
+        "mode": 6,
+        "symbols": [
+          "db::QueryKey::PatternAccess",
+          "engine::RunMachine::prepare_closure_pattern_access",
+          "vm::Frame::pattern_access_mode",
+          "vm::Frame::make_closure"
+        ],
+        "finding": "Pure keyed query retains source owner/root Type/projections and relevant input guard. Source/member resolver constructed once per query, not per name. Runtime binds retained type paths; installed MakeClosure has no source parsing. Repeated pure-query work for distinct root Types remains cold; no speed claim."
+      },
+      {
+        "mode": 7,
+        "symbols": [
+          "engine::ClosureFacts::accesses",
+          "engine::RunMachine::prepare_closure_pattern_access",
+          "frontend::pattern_access::prepare"
+        ],
+        "finding": "Relevant input guards checked from retained query cache. Constant-size closure PC gate avoids recipe scan on nonclosure dispatch. Cold CallResolver::new validates source views and member_index constructs source member metadata once per query; no new full namespace map/census in VM entry or per-op guard. Relevant/unrelated invalidation matrix unexecuted."
+      },
+      {
+        "mode": 8,
+        "symbols": [
+          "ir::CapturePatternUse",
+          "syntax::PatternSourcePlan",
+          "frontend::pattern_access::PreparedPatternAccess",
+          "vm::Frame::prepared_capture_modes"
+        ],
+        "finding": "Shallow Arc plan/variant handles; no BodyIndex deep copy. Exact syntax locations use entered_node_syntax. New metadata path vectors clone with projection depth. Existing binding-plan roots iterator allocates O(number of patterns) during pure preparation; runtime type walking proportional to selected binding paths. No measured performance acceptance."
+      }
+    ],
+    "audit_findings": "MA001-MA008 are separate historical findings; this bounded review does not close them globally."
+  },
+  "commands": [
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "LRR_EMBEDDED_FACADE=1 python3 tools/validation/run_controls.py artifacts/validation-current-v194 worktracks/03-control-flow-patterns/2026-10-18-closure-pattern-capture-selection.json",
+    "LRR_EMBEDDED_FACADE=1 python3 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/NEW_UNIQUE_DIR [--case for each runtime_cases entry in tracked selection]"
+  ],
+  "measured_gain": {
+    "case": "tests/ui/let-else/let-else-bindings.rs",
+    "before": "V189 runtime failure LRR-E-USE-AFTER-MOVE at660dispatches/36source calls",
+    "after": "V192 and V194 directive-aware runtime_contract_pass, edition2015",
+    "distinct_new_stock_runtime_gains": 1,
+    "suite_total_refreshed": false
+  },
+  "gates": {
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete",
+    "full_milestone": "unexecuted for this held partial repair",
+    "guest_jit_allowed": false
+  },
+  "remaining": [
+    "compiler statement-item printing prerequisite",
+    "Deferred Copy capture proof",
+    "disjoint field capture and owning receiver signature capture",
+    "broader cancellation/currentness/epoch/cleanup matrix",
+    "three recorded stock runtime failures",
+    "full interpreter acceptance"
+  ]
+}

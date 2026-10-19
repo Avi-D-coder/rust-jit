@@ -3469,6 +3469,25 @@ impl GuestStore {
         }
         Ok(())
     }
+    /// Type-only part of the same owning-read policy, for prepared binding
+    /// accesses that need not refer to an active enum variant or guest cell.
+    /// Deferred Copy needs the existing source/field proof; it is not guessed.
+    pub(crate) fn intrinsic_type_read_mode(&self, ty: TypeId) -> Result<Option<IntrinsicRead>, Diagnostic> {
+        use super::shape::CopyStatus;
+        let descriptor=self.types.descriptor(ty)?;
+        Ok(match descriptor.key.as_ref() {
+            TypeKey::Primitive(_) if ty != TypeId(16) => Some(IntrinsicRead::CopyScalar),
+            TypeKey::Ref{mutable,..} => Some(if *mutable {IntrinsicRead::Move}else{IntrinsicRead::CopyScalar}),
+            TypeKey::RawPtr{..}|TypeKey::Function{..} => Some(IntrinsicRead::CopyScalar),
+            TypeKey::Tuple(_)|TypeKey::Array{..}|TypeKey::Callable{..} => match descriptor.copy {
+                CopyStatus::Copy=>Some(IntrinsicRead::CopyAggregate),
+                CopyStatus::NotCopy=>Some(IntrinsicRead::Move),CopyStatus::Deferred=>None,
+            },
+            TypeKey::Facade{..} if self.types.is_string(ty) => Some(IntrinsicRead::Move),
+            TypeKey::Nominal{identity,..} if self.user_copy_types.as_ref().is_some_and(|types|!types.contains(identity)) => Some(IntrinsicRead::Move),
+            _=>None,
+        })
+    }
     fn intrinsic_read_mode(&self, id: CellId) -> Result<IntrinsicRead, Diagnostic> {
         self.admit_read_location(id)?;
         let value = self.admit_move(id)?;
@@ -3476,6 +3495,12 @@ impl GuestStore {
         // until existing checked materialization binds their numeric context.
         if matches!(value.kind, 11 | 12) {
             return Ok(IntrinsicRead::CopyScalar);
+        }
+        if let Some(mode)=self.intrinsic_type_read_mode(TypeId(value.type_id))? {
+            if mode==IntrinsicRead::CopyScalar && matches!(self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),TypeKey::Primitive(_)) {
+                self.admit_copy(id)?;
+            }
+            return Ok(mode);
         }
         let descriptor = self.types.descriptor(TypeId(value.type_id))?;
         match descriptor.key.as_ref() {
