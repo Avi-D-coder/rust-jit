@@ -1,0 +1,729 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-19T00:12:11.438192+00:00",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "scope": "Held M007/M018 common module capture and ordinary const-closure parser prerequisite; no namespace or full-fixture acceptance",
+  "baseline": "b3b8acf4744ad863c2a1d791b2582bfb08d6dc31",
+  "architecture_review": "worktracks/04-calls-source-views/2026-10-18-library-definition-namespace.md",
+  "cohorts": [
+    {
+      "version": 117,
+      "source_sha256": "ab14332d406e1643554b39035888d254c23836b8207c4f467a3de9308358547c",
+      "head": "b3b8acf4744ad863c2a1d791b2582bfb08d6dc31",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "terminals": {
+        "lib": "11445/4b5c89"
+      },
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v117",
+      "builds_exit": 101
+    },
+    {
+      "version": 118,
+      "source_sha256": "2d4dd515a3c7621098898fb68ef7a211fa18b673155cd9f6738771ddeed11eab",
+      "head": "b3b8acf4744ad863c2a1d791b2582bfb08d6dc31",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "terminals": {
+        "lib": "78683/077eca",
+        "cli": "74370/5c8466",
+        "controls": "4947/382997",
+        "stock": "88835/6c2fed"
+      },
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v118",
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "test_binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "89a6e783abbac52265901b5c6a8c2c8625b79c64c6c9aa55f5048c2af96b3a1f"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "a23d6cb444c25194fda6b0f47d24228034e96ab0b70d037294ae80f85a36c086"
+      },
+      "controls": [
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 58.018,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "source::loader::additional_tests::path_override_uses_file_parent_and_inline_override_directory",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.01,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "source::loader::tests::module_rs_ambiguity_is_error",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.007,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "source::loader::tests::snapshot_identity_excludes_parent_and_maps_utf8_lines",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.007,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::crate_graph::tests::extern_crate_call_executes_dependency_function_with_its_edition",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.216,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::crate_graph::tests::prelude_extern_and_dependency_module_tree_resolve_in_2018",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.131,
+          "log": "control-5.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2015,
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 4.746,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/modules/mod_dir_path.rs",
+          "edition": 2015,
+          "sha256": "07accb61dceb0190f28ea8ed31a0e0d365b9d19dd1665b0fa32fc06c8034a9c9",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 1.977,
+          "capture_complete": false,
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-MACRO-SCOPE",
+            "message": "generated call enclosing source scope absent"
+          },
+          "facts": null
+        },
+        {
+          "path": "tests/ui/modules/mod_file_with_path_attr.rs",
+          "edition": 2015,
+          "sha256": "72913e13c2c2f7e2d357f3de4bc596378df4063fb1ae6bbbf114025e02b108c5",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 0.006,
+          "capture_complete": false,
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-SOURCE-MISSING",
+            "message": "module source mod_file_aux.rs is missing"
+          },
+          "facts": null
+        }
+      ]
+    },
+    {
+      "version": 119,
+      "source_sha256": "3d8c44d988da921595207df5be3425045cd5a63aa6bf1cb20299de077d6b45ae",
+      "head": "b3b8acf4744ad863c2a1d791b2582bfb08d6dc31",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "terminals": {
+        "lib": "22200/1e68c9",
+        "cli": "78887/f206d8",
+        "controls": "94134/f50a07",
+        "stock": "76382/cdedca"
+      },
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v119",
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "test_binary": {
+        "path": "target/debug/deps/lrr-5ae916bc286087fa",
+        "sha256": "6b1bf339835a72ceaa918030712518e9d061c057afac5d689c307df5fe3a311a"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "66da2697f91ad617d38254e0ad90bdaac4cc7ab0614d6dc7d8534da6ee9debbb"
+      },
+      "controls": [
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 56.621,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "source::loader::additional_tests::path_override_uses_file_parent_and_inline_override_directory",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.008,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "source::loader::tests::module_rs_ambiguity_is_error",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.008,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "source::loader::tests::snapshot_identity_excludes_parent_and_maps_utf8_lines",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.007,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::crate_graph::tests::extern_crate_call_executes_dependency_function_with_its_edition",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.212,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::crate_graph::tests::prelude_extern_and_dependency_module_tree_resolve_in_2018",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.129,
+          "log": "control-5.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2015,
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 4.775,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/modules/mod_dir_path.rs",
+          "edition": 2015,
+          "sha256": "07accb61dceb0190f28ea8ed31a0e0d365b9d19dd1665b0fa32fc06c8034a9c9",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 1.976,
+          "capture_complete": false,
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-MACRO-SCOPE",
+            "message": "generated call enclosing source scope absent"
+          },
+          "facts": null
+        },
+        {
+          "path": "tests/ui/modules/mod_file_with_path_attr.rs",
+          "edition": 2015,
+          "sha256": "72913e13c2c2f7e2d357f3de4bc596378df4063fb1ae6bbbf114025e02b108c5",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 4.007,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 51,
+            "vm_outcomes": 51
+          }
+        }
+      ]
+    },
+    {
+      "version": 120,
+      "source_sha256": "c09c81b8ef9d22e6c57b396f8b70e170f5916f7d728dae1e9b1f9b8104baa1bb",
+      "head": "b3b8acf4744ad863c2a1d791b2582bfb08d6dc31",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "terminals": {
+        "lib": "35957/fc99d5",
+        "cli": "64069/f8c329",
+        "adapter_zero_tests": "24162/80e8b6",
+        "adapter_exact_one_body": "691d26",
+        "controls": "27767/2e7aa5",
+        "stock": "34754/a538df"
+      },
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v120",
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "test_binary": {
+        "path": "target/debug/deps/lrr-3b8db33db37431d2",
+        "sha256": "b68d37481724a25b6fb60497080101c156fec679db4a29b6df1499649aaea18d"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "13c50f67771e1815a405ea794e20fee05033c7bd22610fcbf69187caed8cf9a1"
+      },
+      "controls": [
+        {
+          "selector": "syntax::parse::const_closure_parse_tests::unchanged_const_closures_use_ordinary_expression_syntax_all_editions",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.009,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "syntax::parse::const_closure_parse_tests::const_closure_disambiguation_preserves_pinned_item_and_block_grammar",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.007,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 60.238,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "source::loader::additional_tests::path_override_uses_file_parent_and_inline_override_directory",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.011,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::crate_graph::tests::prelude_extern_and_dependency_module_tree_resolve_in_2018",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.137,
+          "log": "control-4.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2015,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 5.878,
+          "capture_complete": false,
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-OWNERSHIP",
+            "message": "guest ownership, cell state, or storage contract mismatch"
+          },
+          "facts": {
+            "classified_operation_candidates": 10,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 0,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 10,
+            "vm_outcomes": 9
+          }
+        },
+        {
+          "path": "tests/ui/no_std/no-core-with-explicit-std-core.rs",
+          "edition": 2015,
+          "sha256": "27ca388163c344879d651e6ab41e6f55207512e3164c3cf951ac3fd506f9795f",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.727,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 37,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 24
+          }
+        },
+        {
+          "path": "tests/ui/modules/mod_file_with_path_attr.rs",
+          "edition": 2015,
+          "sha256": "72913e13c2c2f7e2d357f3de4bc596378df4063fb1ae6bbbf114025e02b108c5",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.947,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 51,
+            "vm_outcomes": 51
+          }
+        }
+      ]
+    },
+    {
+      "version": 121,
+      "source_sha256": "4a789536a92042659d0ca8e0a27cd835f254ccc364bcd7a8da8e40a76e149934",
+      "head": "b3b8acf4744ad863c2a1d791b2582bfb08d6dc31",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "test_binary": {
+        "path": "target/debug/deps/lrr-3b8db33db37431d2",
+        "sha256": "47e9f57562ae14cc3cfb1b6943dc64bc839bdbcd415f2c27ff64b547c93ea8ed"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "86e4e1aff391d62ef617e034acaa85d23b786dcbfbdef06222b24e91da81362b"
+      },
+      "terminals": {
+        "lib": "66397/e623d2",
+        "cli": "87568/ac3eed",
+        "controls_invalid_selector": "34171/556a1e",
+        "controls_corrected": "94205/defe63",
+        "stock": "69432/2dfb10",
+        "editions": "60836/4eac00"
+      },
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v121",
+      "controls": [
+        {
+          "selector": "cli::crate_graph::pointer_tests::function_pointers_coerce_compare_and_call",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 20.51,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::macro_emitted_and_handwritten_closures_share_one_route",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.429,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closures_capture_by_shared_unique_and_value_capture",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.303,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closure_bodies_stay_cold_until_called_and_panics_unwind_their_frames",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.405,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::moved_capture_drops_with_its_closure",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.313,
+          "log": "control-4.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2015,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 6.012,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 56,
+            "vm_outcomes": 56
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+          "edition": 2015,
+          "sha256": "8fac06d7043accb2dad4950e9147853e8697463337a8ab4c8057ce53871de193",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 4.127,
+          "capture_complete": false,
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "numeric literal requires reached concrete context"
+          },
+          "facts": {
+            "classified_operation_candidates": 24,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 20,
+            "vm_outcomes": 19
+          }
+        },
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2018,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.778060667,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 56,
+            "vm_outcomes": 56
+          }
+        },
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2021,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.8421405,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 56,
+            "vm_outcomes": 56
+          }
+        },
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2024,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.868856333,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 56,
+            "vm_outcomes": 56
+          }
+        }
+      ]
+    }
+  ],
+  "holds": [
+    "Actual library metadata configuration fails conflicting module alias provenance after V120 ordinary parse succeeds. No sealed library definition Value namespace.",
+    "Broader closure-to-fn-coercion.rs remains runtime failure: numeric literal requires reached concrete context at return42. It is not a fixture pass.",
+    "mod_file_with_path_attr succeeds after importing original missing companion; harness repair, no language-fix attribution.",
+    "Complete macro-context/currentness/cleanup matrix and interpreter runtime/correctness/JIT gates remain open."
+  ],
+  "runtime_gain": {
+    "distinct_originals": 1,
+    "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+    "baseline": "V120 fails LRR-E-OWNERSHIP after one initializer frame",
+    "result": "V121 complete interpreter capture in 2015/2018/2021/2024; each has one initializer frame, one source-call boundary, cleanup observed and 56 matched VM dispatch/outcomes",
+    "full_fixture_acceptance": false,
+    "suite_total_refreshed": false
+  }
+}

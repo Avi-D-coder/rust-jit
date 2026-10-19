@@ -13776,6 +13776,12 @@
       "bytes": 167
     },
     {
+      "path": "tests/ui/modules/mod_file_aux.rs",
+      "git_blob": "d0995acf305c3a14fba61b8ba6cbc8f7240e76b2",
+      "sha256": "aac4a03551431eb21fa2bd06a5b26b5e21cf70d174d634758692fd4193387820",
+      "bytes": 168
+    },
+    {
       "path": "tests/ui/modules/mod_file_with_path_attr.rs",
       "git_blob": "4a7e96fa40547db4bc2ef0a435c5c0af964d7cb8",
       "sha256": "72913e13c2c2f7e2d357f3de4bc596378df4063fb1ae6bbbf114025e02b108c5",
@@ -18850,6 +18856,12 @@
       "git_blob": "1c24112883708205f3dd5013e9d52f8cb140bcf3",
       "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
       "bytes": 209
+    },
+    {
+      "path": "tests/ui/traits/const-traits/const-closure-parse-not-item.rs",
+      "git_blob": "ce20b05a8133c6244bf9360f8aa4b6a4a29810e8",
+      "sha256": "36910384bc945e8fc9089f60503229b88b88800b5109d35bac87f53ed1fb67ff",
+      "bytes": 138
     },
     {
       "path": "tests/ui/traits/const-traits/specialization/const-default-const-specialized.rs",
@@ -40934,6 +40946,14 @@
       "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/traits/const-traits/const-closure-parse-not-item.rs",
+      "directives": [
+        "//@check-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

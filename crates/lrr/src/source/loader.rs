@@ -77,11 +77,20 @@ impl SourceLoader {
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
-        let name = root_file
-            .file_name()
+        let name = root_file.file_name()
             .ok_or_else(|| fault("LRR-E-SOURCE-PATH", "selected root needs a filename"))?;
+        Self::in_source_tree(parent, SourcePath::new(Path::new(name))?, profile)
+    }
+    /// Capture one selected compilation root within an explicitly selected
+    /// source tree. Module paths retain the same ordinary candidate rules.
+    pub(crate) fn in_source_tree(
+        directory: &Path,
+        selected: SourcePath,
+        profile: crate::core::profile::ProfileIdentity,
+    ) -> Result<Self, Diagnostic> {
+        profile.validate_source()?;
         let root_path =
-            std::fs::canonicalize(parent).map_err(|e| fault("LRR-E-SOURCE-IO", e.to_string()))?;
+            std::fs::canonicalize(directory).map_err(|e| fault("LRR-E-SOURCE-IO", e.to_string()))?;
         let root_identity = root_path
             .to_str()
             .ok_or_else(|| fault("LRR-E-SOURCE-PATH", "source root must be UTF-8"))?
@@ -91,7 +100,7 @@ impl SourceLoader {
         Ok(Self {
             root,
             root_identity,
-            selected: SourcePath::new(Path::new(name))?,
+            selected,
             approved_includes: BTreeSet::new(),
             profile,
         })
@@ -145,7 +154,8 @@ impl SourceLoader {
         let cfg = CfgSet::guest_default();
         let mut files = BTreeMap::new();
         let mut stamps = BTreeMap::new();
-        let mut queue = VecDeque::from([(self.selected.clone(), Some(PathBuf::new()))]);
+        let directory = Path::new(self.selected.as_str()).parent().unwrap_or(Path::new("")).to_owned();
+        let mut queue = VecDeque::from([(self.selected.clone(), Some(directory))]);
         queue.extend(
             self.approved_includes
                 .iter()

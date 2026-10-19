@@ -65,6 +65,27 @@ impl Frame {
         };
         store.raw_pointer_type(*mutable, pointee)
     }
+    /// Admit a callable constructor at its eventual storage type. Function
+    /// items and non-capturing closures share the ordinary pointer coercion
+    /// performed by `write` after construction; captured closures keep their
+    /// actual aggregate storage contract.
+    pub(crate) fn prepare_callable_write(
+        &mut self,
+        destination: SlotId,
+        ty: TypeId,
+        store: &mut GuestStore,
+    ) -> Result<CellId, Diagnostic> {
+        let expected = if matches!(store.type_descriptor(ty)?.key.as_ref(),
+            TypeKey::Callable { captures, .. } if captures.is_empty()) {
+            self.function_pointer_expectation(destination, store)?.unwrap_or(ty)
+        } else {
+            ty
+        };
+        let cell = self.prepare_write(destination, store)?;
+        store.validate_constructor_destination(cell, expected)?;
+        Ok(cell)
+    }
+
     /// The fn-pointer descriptor `destination` expects, if any: a function
     /// item written there meets the expectation by pointer coercion.
     pub(crate) fn function_pointer_expectation(

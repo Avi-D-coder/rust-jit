@@ -584,10 +584,11 @@ impl ParsedFile {
                 }
             }
         });
-        if !self.errors.is_empty() {
+        if let Some(error) = self.errors.first() {
             return Err(Diagnostic::new(
                 "LRR-E-SOURCE-PARSE",
-                "declaration skeleton contains syntax errors".into(),
+                format!("{}:{}..{}: declaration skeleton contains syntax errors: {}",
+                    path.as_str(), error.range.start, error.range.end, error.message),
             ));
         }
         let ceiling = DeclarationScanLimits::default();

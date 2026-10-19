@@ -151,8 +151,7 @@ impl Frame {
             captures: types.clone().into_boxed_slice(),
             borrowed: borrowed.into_boxed_slice(),
         })?;
-        let cell = self.prepare_write(destination, store)?;
-        store.validate_constructor_destination(cell, ty)?;
+        self.prepare_callable_write(destination, ty, store)?;
         let guard = store.begin_construction(&types)?;
         for (field, ticket) in tickets.into_iter().enumerate() {
             store.construction_push(
@@ -162,8 +161,7 @@ impl Frame {
             )?;
         }
         let ticket = store.commit_construction(guard, ty)?;
-        store.initialize(cell, ticket)?;
-        self.set_source_view(destination, None)
+        self.write(destination, ticket, store)
     }
     /// Start a closure call frame: bind each captured binding to the cell
     /// its capture reaches through the closure value at `closure`; a

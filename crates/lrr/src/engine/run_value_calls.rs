@@ -145,8 +145,8 @@ pub(super) struct ClosureEntry {
 pub(super) struct ClosureFacts {
     targets: BTreeMap<crate::core::digest::Digest, Arc<ClosureTarget>>,
     selected: BTreeMap<crate::vm::call::CallIdentity, SelectedClosure>,
-    /// Each closure body's owning function, selected once.
-    owners: BTreeMap<crate::source::manifest::BodyKey, Box<SourceCallable>>,
+    /// Each closure body's actual creating source declaration, retained once.
+    owners: BTreeMap<crate::source::manifest::BodyKey, Arc<SourceCallable>>,
 }
 impl ClosureFacts {
     pub(super) fn selected(&self, identity: &crate::vm::call::CallIdentity) -> bool {
@@ -194,6 +194,15 @@ impl RunMachine {
             else {
                 continue;
             };
+            // The entered call already owns the actual source declaration,
+            // including const/static initializers and nested closure frames.
+            // Retain that proof instead of later guessing a function owner.
+            if let Some(entered) = self.calls.last()
+                && entered.call.body.body() == self.frame.body.body()
+            {
+                self.closures.owners.entry(self.frame.body.body().clone())
+                    .or_insert_with(|| Arc::clone(&entered.call.callee));
+            }
             let node = NodeId(self.frame.pc().node);
             let identity =
                 crate::vm::frame::closures_frame::closure_identity(self.frame.body.body(), node);
@@ -227,11 +236,12 @@ impl RunMachine {
             ));
         }
         let (closure, ty) = self.frame.value_callee(site, &self.store)?;
-        if !matches!(
-            self.store.type_descriptor(ty)?.key.as_ref(),
-            TypeKey::Callable { .. }
-        ) {
-            return Err(call_fault("closure callee type differs"));
+        match self.store.type_descriptor(ty)?.key.as_ref() {
+            TypeKey::Callable { .. } => {}
+            // A reified non-capturing closure has no aggregate captures to
+            // bind; its registered code address selected this same target.
+            TypeKey::Function { .. } if target.captures.is_empty() => {}
+            _ => return Err(call_fault("closure callee type differs")),
         }
         let identity = self.frame.call_identity(site);
         self.closures
@@ -346,6 +356,7 @@ impl RunMachine {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
+        let owner: Arc<SourceCallable> = Arc::from(owner);
         self.closures
             .owners
             .insert(target.body.body().clone(), owner.clone());
@@ -358,7 +369,7 @@ impl RunMachine {
         site: u32,
         target: Arc<ClosureTarget>,
         closure: crate::runtime::place::Place,
-        owner: Box<SourceCallable>,
+        owner: Arc<SourceCallable>,
         cells: Vec<crate::runtime::cell::CellId>,
         types: Vec<crate::runtime::shape::TypeId>,
     ) -> QueryPoll<()> {
@@ -401,7 +412,7 @@ impl RunMachine {
         };
         self.prepared_call = Some(PreparedSourceCall {
             context: None,
-            callee: Arc::from(owner),
+            callee: owner,
             contracts,
             body: Arc::clone(&target.body),
             body_lease: Some(lease),

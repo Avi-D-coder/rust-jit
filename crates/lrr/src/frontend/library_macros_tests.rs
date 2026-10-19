@@ -130,21 +130,32 @@ fn actual_library_definition_value_namespace_requires_source_module_closure() {
     let declaration = owner.module_source().outline().items.iter().find(|item| {
         item.def_key.fingerprint() == definition.identity
     }).unwrap();
-    // The guest facade and the real library source must not share a publication
-    // database. This uses exactly the catalog's actual source inputs instead.
+    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rustc/rust/library");
+    let snapshot = crate::source::loader::SourceLoader::in_source_tree(
+        &tree, SourcePath::new("core/src/lib.rs").unwrap(),
+        owner.module_source().selection().outline.parse.profile.clone(),
+    ).unwrap().capture().expect("actual cfg-selected core module capture");
+    let mut units = Vec::new();
+    let mut selections = Vec::new();
+    crate::source::module_tree::capture_inputs(
+        snapshot.files(), &snapshot.project().root_source, definition.defining_unit,
+        &owner.module_source().selection().outline.parse.profile,
+        owner.module_source().captured_macro_cfg().unwrap(), &mut units, &mut selections,
+    ).unwrap();
+    let inputs = PreparedSourceInputs::refresh(None, units, BTreeMap::new()).unwrap();
+    let sources = selections.iter().map(|selection| {
+        let SourceSelectionOutcome::Selected(source) = inputs.select(selection).unwrap() else { panic!() };
+        let policy = source.macro_prelude_policy().unwrap();
+        assert!(policy.no_core && !policy.standard, "actual core modules inherit their root");
+        source
+    }).collect();
+    // This metadata preparation owns a separate publication, never guest facade
+    // definitions or a second runtime interpreter.
     let mut metadata = Database::default();
-    library._prepared.publish(&mut metadata).unwrap();
+    inputs.publish(&mut metadata).unwrap();
     metadata.begin_expansion_epoch(1).unwrap();
     let discovery = SourceDiscovery::new(
-        library.providers().iter().filter(|provider| {
-            provider.module_source().selection().outline.crate_key == definition.defining_unit
-        }).map(|provider| {
-            let policy = provider.module_source().macro_prelude_policy().unwrap();
-            assert!(policy.no_core && !policy.standard, "actual core modules inherit their root");
-            assert!(policy.disabled.contains(&vec![]));
-            provider.module_source().share()
-        }).collect(),
-        declaration.scope.clone(), Namespace::Value,
+        sources, declaration.scope.clone(), Namespace::Value,
         Digest::of_bytes(b"actual library definition source namespace"), 1,
     ).unwrap();
     let _discovery = discovery.with_declarative_compiler(

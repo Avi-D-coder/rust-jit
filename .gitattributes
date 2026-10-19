@@ -9,3 +9,6 @@
 *.patch -text whitespace=-blank-at-eol,-blank-at-eof
 **/fixtures/upstream/rustc-checkout/** -text -whitespace
 vendor/** -text
+
+# Original pinned parser lexer fixtures intentionally contain whitespace errors.
+vendor/ra-ap-parser/test_data/** -whitespace

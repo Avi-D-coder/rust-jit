@@ -78,6 +78,24 @@ pub fn bootstrap_probe() -> Result<BootstrapProbe, AdapterError> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn unchanged_const_closure_tail_uses_pinned_ordinary_expression_parser() {
+        use syntax::{AstNode, ast};
+        let original = include_str!(
+            "../../../fixtures/upstream/rustc-checkout/tests/ui/traits/const-traits/const-closure-parse-not-item.rs"
+        );
+        for edition in [syntax::Edition::Edition2015, syntax::Edition::Edition2018,
+                        syntax::Edition::Edition2021, syntax::Edition::Edition2024] {
+            let parsed = syntax::SourceFile::parse(original, edition);
+            assert!(parsed.errors().is_empty(), "{edition:?}: {:?}", parsed.errors());
+            let closures = parsed.tree().syntax().descendants()
+                .filter_map(ast::ClosureExpr::cast).collect::<Vec<_>>();
+            assert_eq!(closures.len(), 1);
+            assert!(closures[0].const_token().is_some());
+            assert!(closures[0].move_token().is_some());
+        }
+    }
+
+    #[test]
     fn pinned_macro_components_parse_rules_in_all_supported_editions() {
         let probe = super::bootstrap_probe().unwrap();
         assert_eq!(probe.source_commit, super::UPSTREAM_COMMIT);

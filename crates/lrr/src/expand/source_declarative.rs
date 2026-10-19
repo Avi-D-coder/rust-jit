@@ -578,7 +578,7 @@ pub fn engine_version() -> Digest {
     e.digest(Digest(
         lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0,
     ));
-    e.u32(6); // Candidate attribute scheduling remains distinct from final selection.
+    e.u32(7); // Ordinary const-closure item/expression disambiguation in the pinned parser.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {

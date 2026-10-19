@@ -113,3 +113,25 @@ sha256 = "c07b181fec87fb383b6f5de7f825ad9ebd91bbcccdb20e912404c85d2d43023c"
 preimage_sha256 = "43bba08f6d31c949cae2ecacb3a995fa20fffa377772090647eb450c3c87911a"
 postimage_sha256 = "2c635a76ad79c4d5c6388f334f42c7772fe532759ca6ef21f8533841703b604d"
 erratum = "docs/errata/m013-procedural-stdout.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M007-CONST-CLOSURE"
+path = "crates/parser/src/grammar/items.rs"
+patch = "macro-parser-const-closure-items.patch"
+sha256 = "aa2dfcdd29de2b289373d1b1ff34d627baf98fbfea6e9f5534d0beca2379e22a"
+preimage_sha256 = "9c14d81b1bdb4cfe1cc85b292023faebb239c4ea03fbffa3c1061f15d20f5dbb"
+postimage_sha256 = "57145aeb0e97b9d00b4755c394dccc0d75cf47ca0610602d10a4d3c34d3d292b"
+erratum = "docs/errata/m007-const-closure-grammar.md"
+
+[ra_ap_parser]
+version = "0.0.356"
+commit = "bcf0514497034e1156f3cc2bb72b99cc9634a949"
+source = "https://static.crates.io/crates/ra_ap_parser/ra_ap_parser-0.0.356.crate"
+archive = "ra_ap_parser-0.0.356.crate"
+sha256 = "665a0ff94e8be7170aeb3ecf23e1a9ffb5b418daf2c6999646efd8bc9ac13271"
+path = "src/grammar/items.rs"
+patch = "parser-const-closure-items.patch"
+patch_sha256 = "5b05593037ab7ced89766bad606b509eafa61cfc7b18721d8c7130c872f77148"
+preimage_sha256 = "9c14d81b1bdb4cfe1cc85b292023faebb239c4ea03fbffa3c1061f15d20f5dbb"
+postimage_sha256 = "57145aeb0e97b9d00b4755c394dccc0d75cf47ca0610602d10a4d3c34d3d292b"
+licenses = ["MIT", "Apache-2.0"]

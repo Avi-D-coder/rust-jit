@@ -90,7 +90,7 @@ pub struct ParseKey {
     pub profile: ProfileIdentity,
 }
 impl StableEncode for ParseKey {
-    const DOMAIN: &'static str = "lrr/v2/parse-file";
+    const DOMAIN: &'static str = "lrr/v3/parse-file";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.content);
         e.record(&self.profile);
@@ -775,3 +775,7 @@ impl ParsedFile {
         Ok(false)
     }
 }
+
+#[cfg(test)]
+#[path = "const_closure_parse_tests.rs"]
+mod const_closure_parse_tests;

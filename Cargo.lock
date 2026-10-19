@@ -1192,8 +1192,6 @@ checksum = "a49e66405855c4b24d7f5868d6a898ab7d807e9d00a7c2637631b55a3f062e3a"
 [[package]]
 name = "ra_ap_parser"
 version = "0.0.356"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "665a0ff94e8be7170aeb3ecf23e1a9ffb5b418daf2c6999646efd8bc9ac13271"
 dependencies = [
  "drop_bomb",
  "ra-ap-rustc_lexer",

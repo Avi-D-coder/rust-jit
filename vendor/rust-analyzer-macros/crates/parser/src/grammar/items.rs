@@ -138,6 +138,14 @@ pub(super) fn opt_item(p: &mut Parser<'_>, m: Marker, is_in_extern: bool) -> Res
         has_mods = true;
     }
 
+    // A qualified closure at statement/tail position is still an expression.
+    // Let the ordinary closure grammar consume its qualifiers and parameters.
+    if p.at(T![const])
+        && matches!(p.nth(1), T![|] | T![move] | T![static] | T![async] | T![gen])
+    {
+        return Err(m);
+    }
+
     // modifiers
     if p.at(T![const]) && p.nth(1) != T!['{'] {
         p.eat(T![const]);

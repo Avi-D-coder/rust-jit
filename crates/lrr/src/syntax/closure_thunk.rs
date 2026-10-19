@@ -341,11 +341,10 @@ impl ParsedFile {
         };
         let closure = ast::ClosureExpr::cast(syntax).expect("checked closure");
         if closure.async_token().is_some()
-            || closure.const_token().is_some()
             || closure.static_token().is_some()
             || closure.for_binder().is_some()
         {
-            return unsupported("async, const, static and higher-ranked closures await integration");
+            return unsupported("async, static and higher-ranked closures await integration");
         }
         let Some(closure_scope) = node.closure_scope else {
             return Err(error("closure scope absent"));
