@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T06:04:15.485286+00:00",
+  "updated_at": "2026-10-19T06:23:07.362243+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -753,9 +753,9 @@
     "baseline_git_head": "548d9d1b190d9d7e03e5067cd3c71fa0e9d24ea4",
     "working_tree": "solo_held_source_checkpoint_after_collected_async_validation",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
-    "manifest_sha256": "70d6a9a720b89ed863a272a97a61c6799664e82cc23a12f0e91ccecb6b30ba8c",
-    "imported_cases": 2808,
-    "imported_files": 3480,
+    "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+    "imported_cases": 2809,
+    "imported_files": 3484,
     "claims_are_not_acceptance": true,
     "validation": "V186 solo held common explicit constructor arguments: shared retained indexed syntax/Type selection feeds source nominal constraints, record preparation and call entry; duplicate admitted AST walks removed. Empty generic brackets and no-initializer wildcard declarations follow ordinary Type/statement semantics. Both builds and11/11focused bodies pass;3/5selected unchanged upstream runtime contracts pass. Empty-generic-brackets-equiv newly completes all4editions (34dispatches,3sourcecalls,cleanup) versus recorded raw-v16 failure. One distinct new runtime gain; tracked resumption gains36, no refreshed suite total. Clone-basic advances24->37dispatches but remains __self_0 failure; let-else moved-location failure remains. Architecture/task/milestone/interpreter/JIT gates held.",
     "historical_runtime_contract_passes": 1429,
@@ -795,6 +795,21 @@
       "code_source_sha256": "c3c8284fe2523e9411ac43517537ebd07135aeb89cef3deac1ce419819b7e21f",
       "status": "incomplete",
       "blocker": "Actual library namespace discovery reaches unstable_feature_bound; receipt/query integration and runtime gates remain open."
+    },
+    "held_static_feature_metadata": {
+      "evidence": "worktracks/evidence/2026-10-18-v189-v190-static-features-runtime-contracts.json",
+      "status": "component_validated_incomplete",
+      "metadata_controls_passed": 5,
+      "source_preparation_controls_passed": 6,
+      "core_namespace_probe": "intentionally_interrupted_unaccepted",
+      "new_distinct_runtime_gains": 0
+    },
+    "mixed_contract_runtime_evidence": {
+      "evidence": "worktracks/evidence/2026-10-18-v189-v190-static-features-runtime-contracts.json",
+      "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+      "runtime": "runtime_contract_pass",
+      "diagnostic": "outstanding",
+      "full_fixture": "unassessed"
     }
   }
 }

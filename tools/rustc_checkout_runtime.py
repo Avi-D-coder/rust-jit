@@ -147,10 +147,29 @@ def contract(case, data, files):
     stem = str(PurePosixPath(case["path"]).with_suffix(""))
     expected = [name for name in files if name.startswith(stem + ".")
                 and name != case["path"]]
-    if expected:
-        blockers.append("expected-output/fixed files need their asserted-contract adapter")
+    # Pinned compiletest compares TestOutput::Compile before execution and
+    # TestOutput::Run only with check_run_results (runtest/ui.rs:59,150;
+    # runtest.rs:2418; common.rs:1291). Compiler diagnostics and rustfix do not
+    # block the separate interpreter runtime prerequisite in spec 1.2.1.
+    run_expected = [name for name in expected
+                    if name.endswith((".run.stdout", ".run.stderr"))]
+    compiler_expected = [name for name in expected if name not in run_expected
+                         and name.endswith((".stdout", ".stderr"))]
+    tooling_expected = [name for name in expected if name.endswith(".fixed")]
+    classified = set(run_expected + compiler_expected + tooling_expected)
+    if set(expected) - classified:
+        blockers.append("unclassified expected files need their asserted-contract adapter")
     return {"mode": "run-pass", "edition": edition, "directives": directives,
             "expected_files": expected, "reference_rules": reference_rules,
+            "diagnostic_compatibility": {"status": "outstanding" if compiler_expected else "unassessed",
+                                         "expected_files": compiler_expected},
+            "compiler_tooling_compatibility": {"status": "outstanding" if tooling_expected else "unassessed",
+                                               "expected_files": tooling_expected},
+            "runtime_expected_files": run_expected,
+            # check-run-results remains an unhandled directive above. Files
+            # without that directive are not asserted by pinned compiletest.
+            "runtime_expected_files_asserted": any(
+                re.fullmatch(r"//@\s*check-run-results", line) for line in directives),
             "extern_flags": externs, "blockers": blockers}
 
 

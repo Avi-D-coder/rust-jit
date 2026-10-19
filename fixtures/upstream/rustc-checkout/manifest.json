@@ -24,6 +24,12 @@
       "bytes": 1068
     },
     {
+      "path": "compiler/rustc_attr_parsing/src/attributes/allow_unstable.rs",
+      "git_blob": "4a6e57b12233a66cabf2ac9e30dfcc2e56926416",
+      "sha256": "f1772e765655ee130f7dc485aec68aad2b0d3e3961f7d68acced9c45153e654c",
+      "bytes": 3968
+    },
+    {
       "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/do_not_recommend.rs",
       "git_blob": "f816c4ae03681c1f0858e50f6ea6d64e0f1e2ed6",
       "sha256": "adea67e3bece1c8b7a5c79beaf6f60afbe222df4e4395e6426ee2c463a1fea9e",
@@ -20686,6 +20692,24 @@
       "git_blob": "03aa1a538eadfde1464e21a4ef9a5049621fe1fe",
       "sha256": "c44547fbc646f22b176d3dd70d955abc7c5dbf1bcff600f26b952b44d5fbd596",
       "bytes": 1920
+    },
+    {
+      "path": "tests/ui/unstable-feature-bound/auxiliary/unstable_impl_codegen_aux1.rs",
+      "git_blob": "8c0d14a1bab6784bd0d77a70f08185aed31c7008",
+      "sha256": "5f002412e9f08dfdf11578da1bd3f62a9ab7392983d94040503affb5324c2d48",
+      "bytes": 432
+    },
+    {
+      "path": "tests/ui/unstable-feature-bound/auxiliary/unstable_impl_codegen_aux2.rs",
+      "git_blob": "1b0e2b2eec3166fee221bff4456623ffcf4eab8a",
+      "sha256": "073f14a2f850b026de15c51d8b411b3649cee49c968ed2c696c9d16881d0f92c",
+      "bytes": 285
+    },
+    {
+      "path": "tests/ui/unstable-feature-bound/unstable_impl_codegen.rs",
+      "git_blob": "285a64d2250af9bcf3bf5f6202305e5d08b9a00f",
+      "sha256": "deb664819213f3601a42c67866b6eebaa4f503c7a2d1552fb235f60d4ff6688e",
+      "bytes": 275
     },
     {
       "path": "tests/ui/use/use-after-move-based-on-type.rs",
@@ -43258,6 +43282,15 @@
     {
       "path": "tests/ui/unsized/unsized3-rpass.rs",
       "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/unstable-feature-bound/unstable_impl_codegen.rs",
+      "directives": [
+        "//@ aux-build:unstable_impl_codegen_aux2.rs",
         "//@ run-pass"
       ],
       "lrr_acceptance": "pending",

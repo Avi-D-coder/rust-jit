@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "classification": "Complete pinned feature-allowance parser module. Static stability/feature diagnostics are outside the runtime gate; source annotations and impl membership remain intact.",
+  "files": [
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/allow_unstable.rs",
+      "sha256": "f1772e765655ee130f7dc485aec68aad2b0d3e3961f7d68acced9c45153e654c",
+      "bytes": 3968
+    }
+  ]
+}

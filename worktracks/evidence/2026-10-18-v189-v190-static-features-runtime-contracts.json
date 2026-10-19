@@ -1,0 +1,1432 @@
+{
+  "schema": "lrr/interpreter-static-feature-and-runtime-contract/v1",
+  "at": "2026-10-19T06:23:07.362243+00:00",
+  "parent": "85b713c19a59f86717340ee7ab0e524b9875219f",
+  "scope": "Source-proven compiler feature metadata and asserted-contract harness classification; all task/architecture/interpreter/JIT gates remain incomplete.",
+  "v189": {
+    "inputs": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T06:19:09.703212+00:00",
+      "head": "85b713c19a59f86717340ee7ab0e524b9875219f",
+      "file_count": 8311,
+      "source_sha256": "9df45aac378d08fb34cd876563fc62ba50658b41a3c4712de71418e16304fcdc",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "sha256": "2aa71fefd76ce7d6cfe6ebf9a48023181660f13193bc35e92a439b19d270ffcb"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "8a988d1b1e52d52f7e9aef5b4375f4c0ad0728369fb5863297c39a037b024a3c"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    },
+    "builds": {
+      "lib_and_adapter_no_run_exit": 0,
+      "cli_exit": 0,
+      "digester_exit": 0
+    },
+    "adapter_controls": {
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr_expand_adapter-8e8890f628d230fa",
+        "builtin_attributes::inventory_tests",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "seconds": 0.626673833,
+      "binary_sha256": "3054ea8e01445f092cc446de4a05b8130b2a39761f87e150f66b32f4f8ea4eb4",
+      "log": "\nrunning 5 tests\ntest builtin_attributes::inventory_tests::complete_pinned_compiler_inventory_matches_actual_static_array ... ok\ntest builtin_attributes::inventory_tests::diagnostic_aliases_match_complete_pinned_parser_registry ... ok\ntest builtin_attributes::inventory_tests::execution_inert_attributes_are_pinned_compiler_names ... ok\ntest builtin_attributes::inventory_tests::preparation_never_turns_a_semantic_handler_into_an_inert_descriptor ... ok\ntest builtin_attributes::inventory_tests::static_feature_aliases_match_complete_pinned_parser_category ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 66 filtered out; finished in 0.02s\n\n",
+      "scope": "Pinned compiler metadata provenance/admission controls only; not guest execution."
+    },
+    "source_preparation_controls": [
+      {
+        "selector": "cli::proc_macros::tests::all_procedural_forms_expand_once_through_the_ordinary_pipeline",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::proc_macros::tests::all_procedural_forms_expand_once_through_the_ordinary_pipeline",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 6.573,
+        "log": "control-0.log"
+      },
+      {
+        "selector": "cli::proc_macros::tests::noprelude_procedural_crate_is_reached_through_extern_crate",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::proc_macros::tests::noprelude_procedural_crate_is_reached_through_extern_crate",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 5.043,
+        "log": "control-1.log"
+      },
+      {
+        "selector": "cli::proc_macros::tests::procedural_macro_panic_is_a_macro_fault_not_a_guest_panic",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::proc_macros::tests::procedural_macro_panic_is_a_macro_fault_not_a_guest_panic",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 3.285,
+        "log": "control-2.log"
+      },
+      {
+        "selector": "cli::tests::rustc_include_discovery_failure_keeps_admitted_parent_capture_and_primary_fault",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::tests::rustc_include_discovery_failure_keeps_admitted_parent_capture_and_primary_fault",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 2.012,
+        "log": "control-3.log"
+      },
+      {
+        "selector": "cli::tests::rustc_include_single_expression_failure_retains_original_invocation",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::tests::rustc_include_single_expression_failure_retains_original_invocation",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.011,
+        "log": "control-4.log"
+      },
+      {
+        "selector": "cli::tests::rustc_included_function_fault_preserves_validated_include_ancestry",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+          "cli::tests::rustc_included_function_fault_preserves_validated_include_ancestry",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.304,
+        "log": "control-5.log"
+      }
+    ],
+    "runtime": {
+      "rows": [
+        {
+          "case": "tests/ui/unstable-feature-bound/unstable_impl_codegen.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "source_sha256": "deb664819213f3601a42c67866b6eebaa4f503c7a2d1552fb235f60d4ff6688e",
+          "directives": [
+            "//@ aux-build:unstable_impl_codegen_aux2.rs",
+            "//@ run-pass"
+          ],
+          "blockers": [],
+          "expected_files": [],
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "--extern",
+              "noprelude:unstable_impl_codegen_aux2=/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/unstable-feature-bound/auxiliary/unstable_impl_codegen_aux2.rs",
+              "--extern-edition",
+              "unstable_impl_codegen_aux2=2015",
+              "--extern",
+              "noprelude:unstable_impl_codegen_aux1=/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/unstable-feature-bound/auxiliary/unstable_impl_codegen_aux1.rs",
+              "--extern-edition",
+              "unstable_impl_codegen_aux1=2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/unstable-feature-bound/unstable_impl_codegen.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "e9b3251cae172860990670632483f6dbcf99cba928aade3d328df7754f84c310"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 2,
+            "pid": 85752,
+            "elapsed_seconds": 19.609351416,
+            "stdout_bytes": 5439,
+            "stdout_sha256": "126a00ae211f3aa150bede207db73009169fc8a4e5a7aafab789299e001bd627",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-CATALOG-INCOMPLETE",
+            "message": "reached user macro requires source expansion integration"
+          },
+          "facts": {
+            "classified_operation_candidates": 20,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 14,
+            "vm_outcomes": 14
+          }
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "source_sha256": "5f23a5a4347aafc1f9911e220a2acaf37e622713bbda64e94344406e5699d52c",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "blockers": [],
+          "expected_files": [],
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          },
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/macros/concat-rpass.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "7f7c4e5b127c8c59a1f16804fe532c0daf3655922093b7dcf8bc56129d9d14c6"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 86053,
+            "elapsed_seconds": 11.114715749999998,
+            "stdout_bytes": 2154,
+            "stdout_sha256": "163a605a394cb578cfdb648aa6c276169d2a3428667eeb8a4ca4966c8230f7a5",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 3869,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 182,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 2634,
+            "vm_outcomes": 2634
+          },
+          "actual_capture_packet": {
+            "schema": "lrr/v5/standalone-runtime-capture/v1",
+            "transport_stdout_role": "protocol_json_not_guest_stdout",
+            "host_preparation_streams": "outside_guest_capture_no_macro_host_or_build_output_promotion",
+            "request_context": "7f7c4e5b127c8c59a1f16804fe532c0daf3655922093b7dcf8bc56129d9d14c6",
+            "process_id": 86053,
+            "snapshot": {
+              "identity": "0c6c3af0fb63c81fb9fffc1ab2c390ffad04ea06b131d25099aab438a14c6bee",
+              "owning_edition": 2015,
+              "root_source": "concat-rpass.rs",
+              "root_crate": "62fb71a2da72924856f96a372a2d6995d2bd75813c49b66900edd158c30c9537",
+              "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+              "files": [
+                {
+                  "path": "concat-rpass.rs",
+                  "content": "33c84bf97644f596a7c5f29234d5bddc20fb56042320f28d441dbf1dc5644889",
+                  "bytes": 508
+                }
+              ]
+            },
+            "entry_body": {
+              "definition": "8a73c69017a6c7742b93f18fe19bb6c47987e92a5d048732bc4fefdf08a1a523",
+              "exact_body_bytes": "1ea4e5dd27cc74a367b361aaea6798b8115759838de35f32d67214d41c3b9332"
+            },
+            "terminal": {
+              "installed_lrir_bytes": 6105483,
+              "installed_recipes": 458,
+              "live_edition": 2015,
+              "opcode_counters": {
+                "backedge_polls": 32,
+                "backedges_completed": 32,
+                "cleanup_elements_completed": 971,
+                "exits_completed": 2470,
+                "fuel_used": 6902,
+                "operations_completed": 3461,
+                "operations_started": 3461,
+                "panic_scopes_cleaned": 0,
+                "return_scopes_cleaned": 89,
+                "started_by_opcode": [
+                  67,
+                  75,
+                  283,
+                  84,
+                  467,
+                  378,
+                  0,
+                  26,
+                  74,
+                  183,
+                  74,
+                  5,
+                  0,
+                  173,
+                  0,
+                  0,
+                  32,
+                  43,
+                  32,
+                  182,
+                  72,
+                  88,
+                  162,
+                  297,
+                  0,
+                  0,
+                  0,
+                  18,
+                  34,
+                  18,
+                  98,
+                  50,
+                  42,
+                  26,
+                  0,
+                  0,
+                  0,
+                  62,
+                  10,
+                  0,
+                  32,
+                  0,
+                  0,
+                  0,
+                  105,
+                  20,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  6,
+                  0,
+                  2,
+                  55,
+                  0,
+                  0,
+                  84,
+                  0,
+                  2,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "schema": "lrr/v2/development-run",
+              "semantics_profile": "lrr-2024-v2",
+              "status": "completed",
+              "value": {
+                "kind": "unit"
+              }
+            },
+            "capture": {
+              "complete": true,
+              "scope": "dispatcher_external_effects_only_not_memory_trace",
+              "facts": {
+                "classified_operation_candidates": 3869,
+                "cleanup_observed": true,
+                "closed_no_external_effects": true,
+                "effect_recipe_dispatch_attempts": 0,
+                "initializer_frames_entered": 0,
+                "observed_fault": false,
+                "observed_suspension": false,
+                "source_call_boundaries": 182,
+                "terminal": {
+                  "kind": "completed",
+                  "unit": true
+                },
+                "typed_fault_exit_candidates": 0,
+                "unsupported_operation_candidates": 0,
+                "vm_dispatches": 2634,
+                "vm_outcomes": 2634
+              },
+              "guest": {
+                "status": "closed_no_external_effects_observed",
+                "stdout": [],
+                "stderr": []
+              },
+              "blocker": null
+            }
+          }
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "source_sha256": "bed22bc81882a65870e29bca115f2d0b5f365a47970c20d511690ec26a741739",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "blockers": [],
+          "expected_files": [],
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          },
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/macros/concat-bytes.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "2727bc14295fe27def92581e8c00530a5455e6c8bb564700500a6b6d2e5270e0"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 86087,
+            "elapsed_seconds": 9.985597083999998,
+            "stdout_bytes": 2141,
+            "stdout_sha256": "fd3ada041172c6e981219f5f33c8226bec454acb2dad104fbc307c0702e26740",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 1884,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 49,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1248,
+            "vm_outcomes": 1248
+          },
+          "actual_capture_packet": {
+            "schema": "lrr/v5/standalone-runtime-capture/v1",
+            "transport_stdout_role": "protocol_json_not_guest_stdout",
+            "host_preparation_streams": "outside_guest_capture_no_macro_host_or_build_output_promotion",
+            "request_context": "2727bc14295fe27def92581e8c00530a5455e6c8bb564700500a6b6d2e5270e0",
+            "process_id": 86087,
+            "snapshot": {
+              "identity": "582f47d66e23d404a38ef274f9d05c7190ded5a3a66b8a01e794338396b28673",
+              "owning_edition": 2015,
+              "root_source": "concat-bytes.rs",
+              "root_crate": "8c585669119d272979803d3c89a27c651df22c642c31892a06fe1370437b2017",
+              "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+              "files": [
+                {
+                  "path": "concat-bytes.rs",
+                  "content": "ffcb6957b8a337a5929bc8eaaf86d20759572f714178dbbc386868f4b2a012c5",
+                  "bytes": 392
+                }
+              ]
+            },
+            "entry_body": {
+              "definition": "1523a11b857e6305e0fe5aa16225ba358e51a4e6991362cb8699d801552e8607",
+              "exact_body_bytes": "9ae2e97e56746ec5b160a656e078a2b70394258d3a050b9340a92a24b8ba5a24"
+            },
+            "terminal": {
+              "installed_lrir_bytes": 2983899,
+              "installed_recipes": 209,
+              "live_edition": 2015,
+              "opcode_counters": {
+                "backedge_polls": 20,
+                "backedges_completed": 20,
+                "cleanup_elements_completed": 417,
+                "exits_completed": 1197,
+                "fuel_used": 3372,
+                "operations_completed": 1758,
+                "operations_started": 1758,
+                "panic_scopes_cleaned": 0,
+                "return_scopes_cleaned": 30,
+                "started_by_opcode": [
+                  31,
+                  47,
+                  192,
+                  45,
+                  258,
+                  228,
+                  0,
+                  3,
+                  60,
+                  89,
+                  66,
+                  3,
+                  0,
+                  140,
+                  0,
+                  0,
+                  20,
+                  46,
+                  20,
+                  49,
+                  29,
+                  23,
+                  49,
+                  52,
+                  0,
+                  0,
+                  0,
+                  4,
+                  6,
+                  4,
+                  29,
+                  7,
+                  12,
+                  6,
+                  0,
+                  0,
+                  40,
+                  0,
+                  1,
+                  0,
+                  20,
+                  0,
+                  0,
+                  0,
+                  69,
+                  12,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  23,
+                  0,
+                  0,
+                  69,
+                  0,
+                  6,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "schema": "lrr/v2/development-run",
+              "semantics_profile": "lrr-2024-v2",
+              "status": "completed",
+              "value": {
+                "kind": "unit"
+              }
+            },
+            "capture": {
+              "complete": true,
+              "scope": "dispatcher_external_effects_only_not_memory_trace",
+              "facts": {
+                "classified_operation_candidates": 1884,
+                "cleanup_observed": true,
+                "closed_no_external_effects": true,
+                "effect_recipe_dispatch_attempts": 0,
+                "initializer_frames_entered": 0,
+                "observed_fault": false,
+                "observed_suspension": false,
+                "source_call_boundaries": 49,
+                "terminal": {
+                  "kind": "completed",
+                  "unit": true
+                },
+                "typed_fault_exit_candidates": 0,
+                "unsupported_operation_candidates": 0,
+                "vm_dispatches": 1248,
+                "vm_outcomes": 1248
+              },
+              "guest": {
+                "status": "closed_no_external_effects_observed",
+                "stdout": [],
+                "stderr": []
+              },
+              "blocker": null
+            }
+          }
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "status": "unsupported_harness",
+          "edition": 2015,
+          "source_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "blockers": [
+            "expected-output/fixed files need their asserted-contract adapter"
+          ],
+          "expected_files": [
+            "tests/ui/generics/empty-generic-brackets-equiv.stderr"
+          ]
+        },
+        {
+          "case": "tests/ui/derives/clone-copy/derive-clone-basic.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "source_sha256": "bdbb0e130683592880aceb704537f0fcd3f25b0173caf8fe0db7c6e368022a86",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "blockers": [],
+          "expected_files": [],
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/derives/clone-copy/derive-clone-basic.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "c734953a9ccf4a163b34a62d8d559a03adfa153427f9b106dbc4f32892f7e64c"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 2,
+            "pid": 86095,
+            "elapsed_seconds": 16.937406707999997,
+            "stdout_bytes": 9343,
+            "stdout_sha256": "b64607d982a925921e332091abc0f447470a3ca9f65ea91bff4eba9e0661e769",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-NAME-MISSING",
+            "message": "reached direct function identity is absent before argument evaluation (value path `__self_0`)"
+          },
+          "facts": {
+            "classified_operation_candidates": 54,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 37,
+            "vm_outcomes": 37
+          }
+        },
+        {
+          "case": "tests/ui/let-else/let-else-bindings.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "source_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "blockers": [],
+          "expected_files": [],
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/let-else/let-else-bindings.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "fa2addcc07a6c8ab0b190efc2e2787fd174fd80f6f391c804fa070d41b7e548d"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 2,
+            "pid": 86103,
+            "elapsed_seconds": 6.281577750000004,
+            "stdout_bytes": 9046,
+            "stdout_sha256": "a080f0d01087deb42b35408442d8c50999be50ced696e86b1414deafc2127e02",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-USE-AFTER-MOVE",
+            "message": "owning read uses a moved guest location"
+          },
+          "facts": {
+            "classified_operation_candidates": 1046,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 36,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 660,
+            "vm_outcomes": 659
+          }
+        }
+      ],
+      "counts": {
+        "interpreter_failure": 3,
+        "runtime_contract_pass": 2,
+        "unsupported_harness": 1
+      },
+      "selected_batch_passed": false,
+      "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+      "native_execution": false,
+      "diagnostic_compatibility": {
+        "status": "unassessed"
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed"
+      },
+      "full_suite_compatibility": {
+        "status": "incomplete"
+      },
+      "guest_jit_allowed": false
+    },
+    "core_probe": {
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-3b8db33db37431d2",
+        "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": -2,
+      "seconds": 483.487178292,
+      "binary_sha256": "2aa71fefd76ce7d6cfe6ebf9a48023181660f13193bc35e92a439b19d270ffcb",
+      "log": "\nrunning 1 test\ntest frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure has been running for over 60 seconds\n",
+      "wrapper_exit": 254,
+      "status": "intentionally_interrupted_unaccepted",
+      "reason": "Source review confirmed discovery schedules producers in every captured module; exploratory whole-core run was intentionally stopped to continue bounded interpreter repairs. It was live and computing, not an observation timeout or a semantic pass.",
+      "namespace_receipt_proven": false
+    }
+  },
+  "v190": {
+    "inputs": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T06:21:19.099097+00:00",
+      "head": "85b713c19a59f86717340ee7ab0e524b9875219f",
+      "file_count": 8311,
+      "source_sha256": "38edbefe761e11986d64b75a1bef5e88e5e5c90fbcc42ef30984e3b55ce823ea",
+      "binaries": {
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "8a988d1b1e52d52f7e9aef5b4375f4c0ad0728369fb5863297c39a037b024a3c"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    },
+    "cli_build_exit": 0,
+    "binary_unchanged_from_v189": true,
+    "runtime": {
+      "rows": [
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "source_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "blockers": [],
+          "expected_files": [
+            "tests/ui/generics/empty-generic-brackets-equiv.stderr"
+          ],
+          "diagnostic_compatibility": {
+            "status": "outstanding",
+            "expected_files": [
+              "tests/ui/generics/empty-generic-brackets-equiv.stderr"
+            ]
+          },
+          "compiler_tooling_compatibility": {
+            "status": "unassessed",
+            "expected_files": []
+          },
+          "runtime_expected_files": [],
+          "runtime_expected_files_asserted": false,
+          "checks": {
+            "clean_process_exit": true,
+            "protocol_not_guest_output": true,
+            "separate_host_preparation": true,
+            "owning_edition": true,
+            "completed_main": true,
+            "complete_capture": true,
+            "closed_guest_streams": true,
+            "actual_dispatch": true,
+            "terminal_and_cleanup": true,
+            "no_unobserved_boundaries": true,
+            "root_path": true,
+            "entry_identity": true,
+            "captured_originals": true
+          },
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/empty-generic-brackets-equiv.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "b61d827f3cb8d2871af20b5d5eb871ffcded389997e5d5d97e373dc002c88767"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 87116,
+            "elapsed_seconds": 5.178249458,
+            "stdout_bytes": 2123,
+            "stdout_sha256": "f08c41df6aaa814b81c019a8a27b8a722a4c20c0210114db70e6942a7c2b73ac",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 45,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 34,
+            "vm_outcomes": 34
+          },
+          "actual_capture_packet": {
+            "schema": "lrr/v5/standalone-runtime-capture/v1",
+            "transport_stdout_role": "protocol_json_not_guest_stdout",
+            "host_preparation_streams": "outside_guest_capture_no_macro_host_or_build_output_promotion",
+            "request_context": "b61d827f3cb8d2871af20b5d5eb871ffcded389997e5d5d97e373dc002c88767",
+            "process_id": 87116,
+            "snapshot": {
+              "identity": "4a5563dd80ca98a9a8790f0c92572c621dfd684f645705bc434258333d27ad86",
+              "owning_edition": 2015,
+              "root_source": "empty-generic-brackets-equiv.rs",
+              "root_crate": "a1e15a689b830216b1b82c9faa86e879a6185e27b83b0131b8a2d4b326bf892d",
+              "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+              "files": [
+                {
+                  "path": "empty-generic-brackets-equiv.rs",
+                  "content": "f29db53b5ab46f0d0dea823f694348b1ca32d0e729da0ae0990819b3e5da9f96",
+                  "bytes": 599
+                }
+              ]
+            },
+            "entry_body": {
+              "definition": "fdf9ee1bbd4fee7aa4cbadb904785a130269dd8196c19ad0d2f78312525fc37b",
+              "exact_body_bytes": "fffd016bc13a3c915f4ad7c009378b2d47b2a5542b8f67430e4c1077ccc36a2e"
+            },
+            "terminal": {
+              "installed_lrir_bytes": 1442271,
+              "installed_recipes": 32,
+              "live_edition": 2015,
+              "opcode_counters": {
+                "backedge_polls": 0,
+                "backedges_completed": 0,
+                "cleanup_elements_completed": 8,
+                "exits_completed": 34,
+                "fuel_used": 87,
+                "operations_completed": 45,
+                "operations_started": 45,
+                "panic_scopes_cleaned": 0,
+                "return_scopes_cleaned": 4,
+                "started_by_opcode": [
+                  0,
+                  4,
+                  7,
+                  0,
+                  12,
+                  8,
+                  0,
+                  0,
+                  0,
+                  7,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  3,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  4,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "schema": "lrr/v2/development-run",
+              "semantics_profile": "lrr-2024-v2",
+              "status": "completed",
+              "value": {
+                "kind": "unit"
+              }
+            },
+            "capture": {
+              "complete": true,
+              "scope": "dispatcher_external_effects_only_not_memory_trace",
+              "facts": {
+                "classified_operation_candidates": 45,
+                "cleanup_observed": true,
+                "closed_no_external_effects": true,
+                "effect_recipe_dispatch_attempts": 0,
+                "initializer_frames_entered": 0,
+                "observed_fault": false,
+                "observed_suspension": false,
+                "source_call_boundaries": 3,
+                "terminal": {
+                  "kind": "completed",
+                  "unit": true
+                },
+                "typed_fault_exit_candidates": 0,
+                "unsupported_operation_candidates": 0,
+                "vm_dispatches": 34,
+                "vm_outcomes": 34
+              },
+              "guest": {
+                "status": "closed_no_external_effects_observed",
+                "stdout": [],
+                "stderr": []
+              },
+              "blocker": null
+            }
+          }
+        }
+      ],
+      "counts": {
+        "runtime_contract_pass": 1
+      },
+      "selected_batch_passed": true,
+      "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+      "native_execution": false,
+      "diagnostic_compatibility": {
+        "status": "unassessed"
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed"
+      },
+      "full_suite_compatibility": {
+        "status": "incomplete"
+      },
+      "guest_jit_allowed": false
+    },
+    "capture_controls": {
+      "schema": "lrr/v5/runtime-capture-controls/v1",
+      "controls": [
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "wrong_protocol",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "wrong_request",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "wrong_process",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "wrong_edition",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "missing_sources",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "wrong_source_digest",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "incomplete_capture",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "missing_stream_observation",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "zero_dispatch",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "missing_cleanup",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "integer_is_not_unit_bool",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "unobserved_effect",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "interpreter_fault",
+          "status": "interpreter_failure"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "unexpected_panic",
+          "status": "unexpected_guest_panic"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "timed_out",
+          "status": "execution_timeout"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "output_limited",
+          "status": "capture_size_limit"
+        },
+        {
+          "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "control": "exit_code",
+          "status": "incomplete_evidence"
+        }
+      ],
+      "passed": true,
+      "upstream_fixture_passes_added": 0
+    },
+    "prior_capture_controls": {
+      "schema": "lrr/v5/runtime-capture-controls/v1",
+      "controls": [
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "wrong_protocol",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "wrong_request",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "wrong_process",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "wrong_edition",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "missing_sources",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "wrong_source_digest",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "incomplete_capture",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "missing_stream_observation",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "zero_dispatch",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "missing_cleanup",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "integer_is_not_unit_bool",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "unobserved_effect",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "interpreter_fault",
+          "status": "interpreter_failure"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "unexpected_panic",
+          "status": "unexpected_guest_panic"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "timed_out",
+          "status": "execution_timeout"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "output_limited",
+          "status": "capture_size_limit"
+        },
+        {
+          "case": "tests/ui/macros/concat-rpass.rs",
+          "control": "exit_code",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "wrong_protocol",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "wrong_request",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "wrong_process",
+          "status": "capture_identity_mismatch"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "wrong_edition",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "missing_sources",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "wrong_source_digest",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "incomplete_capture",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "missing_stream_observation",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "zero_dispatch",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "missing_cleanup",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "integer_is_not_unit_bool",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "unobserved_effect",
+          "status": "incomplete_evidence"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "interpreter_fault",
+          "status": "interpreter_failure"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "unexpected_panic",
+          "status": "unexpected_guest_panic"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "timed_out",
+          "status": "execution_timeout"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "output_limited",
+          "status": "capture_size_limit"
+        },
+        {
+          "case": "tests/ui/macros/concat-bytes.rs",
+          "control": "exit_code",
+          "status": "incomplete_evidence"
+        }
+      ],
+      "passed": true,
+      "upstream_fixture_passes_added": 0
+    }
+  },
+  "reconstruction": "V190 source inputs are this checkpoint. V189 uses the same source inputs except tools/rustc_checkout_runtime.py at parent85b713c19a59f86717340ee7ab0e524b9875219f (before the separate compiler-sidecar contract classification). All worktrack/docs changes are outside the recorded source-input set. Exact commands and passing packets are retained here; raw failed packet details can be regenerated.",
+  "acceptance_accounting": {
+    "new_distinct_language_runtime_gains": 0,
+    "first_maintained_harness_acceptance_for_prior_observation": [
+      "tests/ui/generics/empty-generic-brackets-equiv.rs"
+    ],
+    "v189_runtime_contract_passes": 2,
+    "v189_interpreter_failures": 3,
+    "v189_harness_blockers": 1,
+    "v190_runtime_contract_passes": 1,
+    "v190_full_fixture_passes_claimed": 0,
+    "refreshed_suite_total": null,
+    "guest_jit_allowed": false
+  },
+  "source_review": {
+    "v189_input_sha256": "9df45aac378d08fb34cd876563fc62ba50658b41a3c4712de71418e16304fcdc",
+    "v190_input_sha256": "38edbefe761e11986d64b75a1bef5e88e5e5c90fbcc42ef30984e3b55ce823ea",
+    "recurring_failure_modes": [
+      {
+        "mode": 1,
+        "symbols": [
+          "builtin_attributes::compiler_attribute_requirement",
+          "inert_descriptor_for_phase"
+        ],
+        "conclusion": "Only shared compiler metadata classification changed. No expression/assertion evaluator added; ordinary/generated annotations join the existing source facet."
+      },
+      {
+        "mode": 2,
+        "symbols": [
+          "CompilerAttributePreparation::capture/require_final",
+          "source_declarative::engine_version"
+        ],
+        "conclusion": "Generated tokens still pass actual source admission and ordinary frontend/VM; no literal/break executor or opaque runtime route."
+      },
+      {
+        "mode": 3,
+        "symbols": [
+          "CompilerAttributeRequirement::StaticFeatureMetadata",
+          "compiler_inventory::STATIC_FEATURE_NAMES"
+        ],
+        "conclusion": "No method/numeric rule changed. Category is the whole pinned feature-allowance parser module, not a macro or fixture spelling whitelist. Trait candidate membership remains unchanged."
+      },
+      {
+        "mode": 4,
+        "symbols": [
+          "preparation_inert_descriptor",
+          "inert_descriptor_for_phase"
+        ],
+        "conclusion": "Same metadata available in original/generated preparation and final selection. No new generated-source refusal. Other real semantic-handler refusals retained."
+      },
+      {
+        "mode": 5,
+        "symbols": [
+          "db::closure_capture_thunk::thunk",
+          "syntax::closure_thunk::capture_use"
+        ],
+        "conclusion": "Pattern machinery unchanged. Independent source review explains the enabled let-else failure as premature consuming closure capture. No fix/acceptance claimed; common-pattern demand repair is next."
+      },
+      {
+        "mode": 6,
+        "symbols": [
+          "sync_compiler_inert_inventory::static_feature_metadata",
+          "compiler_attribute_requirement"
+        ],
+        "conclusion": "Pinned metadata extraction is maintenance-only; runtime facet lookup reads immutable arrays. No repeated source parsing/planning added. Whole-core discovery expansion remains expensive and incomplete, not a performance acceptance."
+      },
+      {
+        "mode": 7,
+        "symbols": [
+          "compiler_inert_inventory_identity",
+          "source_declarative::engine_version"
+        ],
+        "conclusion": "New static source identity enters existing engine dependency/version. No dispatch namespace census or global invalidation mechanism added; descriptor setup is cold."
+      },
+      {
+        "mode": 8,
+        "symbols": [
+          "builtin_attributes.rs",
+          "compiler_inert_inventory.rs"
+        ],
+        "conclusion": "No BodyIndex or immutable parser representation changes/copies; actual pinned AST parsing occurs in provenance controls only."
+      }
+    ],
+    "separate_audit_findings": "MA001-MA008 not closed by this work; all required origin/edition/currentness/cleanup matrices and current milestone remain open.",
+    "harness_review": "contract alone separates pinned compiler diagnostic/tooling sidecars from run expectations; classify/observe guards unchanged. Actual warning sidecar remains licensed, hash-checked and outstanding. All17 existing refusal controls pass on its actual successful packet."
+  },
+  "next": "worktracks/03-control-flow-patterns/2026-10-18-closure-pattern-capture-demand.md"
+}

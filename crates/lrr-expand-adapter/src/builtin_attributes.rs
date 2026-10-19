@@ -12,10 +12,11 @@ mod compiler_inventory;
 pub fn compiler_inert_inventory_identity() -> Key {
     let mut hash = blake3::Hasher::new();
     for field in [
-        "lrr/pinned-compiler-inert-inventory/v2",
+        "lrr/pinned-compiler-inert-inventory/v3",
         compiler_inventory::COMPILER_COMMIT,
         compiler_inventory::SOURCE_SHA256,
         compiler_inventory::DIAGNOSTIC_SOURCE_IDENTITY,
+        compiler_inventory::STATIC_FEATURE_SOURCE_IDENTITY,
         "Rust-1.99.0",
     ] {
         hash.update(&(field.len() as u64).to_le_bytes());
@@ -90,6 +91,10 @@ pub struct InertAttributeDescriptor {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CompilerAttributeRequirement {
     DiagnosticMetadata,
+    /// Feature/stability allowance metadata from the pinned compiler parser.
+    /// Keep the annotation and impl membership; static gating does not execute
+    /// or transform the guest body and is outside the interpreter's checks.
+    StaticFeatureMetadata,
     /// rustc lowers the annotated code to control flow observably identical to
     /// the unannotated code, so execution needs no handler.
     ExecutionInert,
@@ -114,6 +119,11 @@ pub fn compiler_attribute_requirement(
             .is_ok()
         {
             CompilerAttributeRequirement::DiagnosticMetadata
+        } else if compiler_inventory::STATIC_FEATURE_NAMES
+            .binary_search(&name)
+            .is_ok()
+        {
+            CompilerAttributeRequirement::StaticFeatureMetadata
         } else if EXECUTION_INERT_NAMES.binary_search(&name).is_ok() {
             CompilerAttributeRequirement::ExecutionInert
         } else {
@@ -153,8 +163,8 @@ fn inert_descriptor_for_phase(
         .find(|attribute| attribute.name == name);
     // The pinned adapter inventory predates some compiler annotations. The
     // Complete name metadata cannot discharge semantic annotation handling.
-    // Only the separately pinned diagnostic parser category can supplement
-    // existing adapter admission without a new runtime semantic handler.
+    // Only separately pinned diagnostic/feature-allowance parser metadata and
+    // proven execution-inert transformations supplement adapter admission.
     let (name, compiler) = match upstream {
         Some(attribute) => (attribute.name, false),
         None => match compiler_inventory::NAMES.binary_search(&name) {
@@ -163,6 +173,7 @@ fn inert_descriptor_for_phase(
                     compiler_attribute_requirement(name)?,
                     Some(
                         CompilerAttributeRequirement::DiagnosticMetadata
+                            | CompilerAttributeRequirement::StaticFeatureMetadata
                             | CompilerAttributeRequirement::ExecutionInert
                     )
                 ) {
@@ -220,7 +231,11 @@ mod inventory_tests {
 
     #[test]
     fn execution_inert_attributes_are_pinned_compiler_names() {
-        assert!(EXECUTION_INERT_NAMES.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(
+            EXECUTION_INERT_NAMES
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+        );
         for name in EXECUTION_INERT_NAMES {
             assert!(compiler_inventory::NAMES.binary_search(name).is_ok());
             assert_eq!(
@@ -228,6 +243,73 @@ mod inventory_tests {
                 Some(CompilerAttributeRequirement::ExecutionInert)
             );
             assert_eq!(inert_descriptor(name).unwrap().unwrap().name(), *name);
+        }
+    }
+    #[test]
+    fn static_feature_aliases_match_complete_pinned_parser_category() {
+        let mut actual = BTreeSet::new();
+        for (path, source) in compiler_inventory::STATIC_FEATURE_SOURCES {
+            let parsed = syntax::SourceFile::parse(source, syntax::Edition::Edition2024);
+            assert!(parsed.errors().is_empty(), "{path}");
+            for declaration in parsed
+                .tree()
+                .syntax()
+                .descendants()
+                .filter_map(ast::Const::cast)
+                .filter(|item| item.name().is_some_and(|name| name.text() == "PATH"))
+            {
+                let Some(ast::Expr::RefExpr(reference)) = declaration.body() else {
+                    panic!("compiler PATH is not a reference in {path}")
+                };
+                let Some(ast::Expr::ArrayExpr(array)) = reference.expr() else {
+                    panic!("compiler PATH is not a symbol array in {path}")
+                };
+                let expressions: Vec<_> = array.exprs().collect();
+                assert_eq!(expressions.len(), 1, "{path}");
+                let ast::Expr::PathExpr(expression) = &expressions[0] else {
+                    panic!("compiler PATH is not a symbol in {path}")
+                };
+                let symbol = expression.path().unwrap();
+                let qualifier = symbol.qualifier().unwrap();
+                assert!(qualifier.qualifier().is_none());
+                assert_eq!(
+                    qualifier.segment().unwrap().name_ref().unwrap().text(),
+                    "sym"
+                );
+                assert!(
+                    actual.insert(
+                        symbol
+                            .segment()
+                            .unwrap()
+                            .name_ref()
+                            .unwrap()
+                            .text()
+                            .to_string()
+                    )
+                );
+            }
+        }
+        assert!(!actual.is_empty());
+        assert_eq!(
+            actual,
+            compiler_inventory::STATIC_FEATURE_NAMES
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect()
+        );
+        assert!(
+            compiler_inventory::STATIC_FEATURE_NAMES
+                .windows(2)
+                .all(|names| names[0] < names[1])
+        );
+        for name in actual {
+            assert_eq!(
+                compiler_attribute_requirement(&name).unwrap(),
+                Some(CompilerAttributeRequirement::StaticFeatureMetadata)
+            );
+            let selected = inert_descriptor(&name).unwrap();
+            assert!(selected.is_some());
+            assert_eq!(preparation_inert_descriptor(&name).unwrap(), selected);
         }
     }
     #[test]
@@ -340,6 +422,7 @@ mod inventory_tests {
                 compiler_attribute_requirement(name).unwrap(),
                 Some(
                     CompilerAttributeRequirement::DiagnosticMetadata
+                        | CompilerAttributeRequirement::StaticFeatureMetadata
                         | CompilerAttributeRequirement::ExecutionInert
                 )
             ) {

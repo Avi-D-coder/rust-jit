@@ -224,3 +224,16 @@ pub(super) const DIAGNOSTIC_SOURCES: &[(&str, &str)] = &[
     ("compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unmatched_args.rs", include_str!("../../../fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unmatched_args.rs")),
     ("compiler/rustc_attr_parsing/src/attributes/diagnostic/opaque.rs", include_str!("../../../fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/opaque.rs")),
 ];
+pub(super) const STATIC_FEATURE_SOURCE_IDENTITY: &str =
+    "2fcafb6349a8b89dc9a64eb5324eda0baf1b55d6f968b06595e9bc7a6d588697";
+#[rustfmt::skip]
+pub(super) const STATIC_FEATURE_NAMES: &[&str] = &[
+    "allow_internal_unstable",
+    "rustc_allow_const_fn_unstable",
+    "unstable_feature_bound",
+];
+#[cfg(test)]
+#[rustfmt::skip]
+pub(super) const STATIC_FEATURE_SOURCES: &[(&str, &str)] = &[
+    ("compiler/rustc_attr_parsing/src/attributes/allow_unstable.rs", include_str!("../../../fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/allow_unstable.rs")),
+];
