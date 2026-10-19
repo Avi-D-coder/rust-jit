@@ -47,6 +47,9 @@ use source_occurrences::SourceOccurrences;
 #[path = "assembly_seed.rs"]
 mod seed;
 pub(crate) use seed::{LazySourceAssemblySeed, SourceAssemblySeed};
+#[path = "assembly_local_declarations.rs"]
+mod local_declarations;
+pub(crate) use local_declarations::InitialLocalDeclaration;
 
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-EXPANSION-INPUT", message.into())

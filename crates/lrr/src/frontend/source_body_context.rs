@@ -1064,6 +1064,9 @@ pub(crate) struct PreparedBodyContext {
     macro_definitions: Box<[BodyMacroDefinition]>,
     exclusive_bytes: usize,
 }
+#[path = "declaration_name_completions.rs"]
+mod declaration_names;
+pub(crate) use declaration_names::{PreparedDeclarationNameCompletions, EnteredDeclarationAdmission};
 impl PreparedBodyContext {
     pub(crate) fn source(&self) -> &Arc<AdmittedBodyContext> {
         &self.source

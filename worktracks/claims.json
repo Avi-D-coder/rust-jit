@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V297-V300 HELD M019/M020 completed-original-annotation Type-name join: coordinator authenticates actual completed fragments against exact adopted occurrences, descriptors, parent scan/group and source proof. Surviving generated names use existing GeneratedHeaderPlan/DeclaredItemName capture and the same DeclarationNameTables/LocalTypeNames candidate/comparison engine; pending imports and unknown effects remain explicit. Completed projections share immutable root/cfg-bound Arcs. Actual named-output/replacement/import/descendant matrices remain unexecuted. Final macOS Rust1.99.0 library/CLI builds and2/2targeted controls pass across all four editions, including newly ready original annotated PartialEq self-Type head without body preparation and existing Foo/Drop input/cache/currentness. V299 broader4/5controls passed and complete head control improved20/32 ->24/32; eight actual generated local self-Type heads remain pending. That broader result is bound to V299 source, not rerun on final scope-filter/empty-merge delta. Final unchanged Drop main/assertion runtime4/4editions passes. V299 unchanged coherence-impl-in-fn runtime fails4/4before executor observation at local_containers::resolve_header_target pending selection; parent runtime baseline unmeasured. Zero newly measured distinct stock gains or refreshed suite total. Genuine generated occurrence/insertion-origin and ordinary entered local-header demand joins, source-facts/inference/delegate/upstream invocation and all interpreter/JIT gates remain incomplete.",
+      "scope": "V301-V307 HELD M019/M020 entered annotation completion: actual completed original groups now join structurally retained local declarations, the common lexical tables and ordinary declaration metadata/lowering/VM. Immutable prepared contexts and initial declaration projections are retained, not rebuilt per phase. Exact OpaqueItem admissions use ordinary Op::Declaration; generated publication is reused only with identical actual units and boundary outcomes. Final V307 macOS Rust1.99.0 library/CLI builds succeed; all5 targeted controls pass, including unchanged local annotated impl main in all4 editions, actual header/node/source/epoch/generation refusals, plan reuse and physical context retirement. Direct CLI runs complete unchanged coherence-impl-in-fn and zero-size-type-destructors all4 editions (4 and141 operations):8/8 runtime worlds, two roots. One newly verified distinct stock runtime gain relative to recorded V299 failure, no refreshed suite total. V306 broader12/16 controls remains attached to its own fingerprint: full selected heads24/32 with eight generated self Types pending; two structural-occurrence controls fail during request setup, no measured parent attribution. V306 root-retirement failure led to a physical ownership-edge correction, not resource accounting or a raised budget; final old retirement and new Weak-release controls pass. Generated origin/insertion joins, complete source facts/inference/delegate, actual upstream next-solver invocation and interpreter/JIT gates remain incomplete.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1786,11 +1786,25 @@
         "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-name-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-name-controls.json",
         "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json",
-        "crates/lrr/src/expand/completed_declaration_names.rs"
+        "crates/lrr/src/expand/completed_declaration_names.rs",
+        "crates/lrr/src/db/entered_declaration_thunk.rs",
+        "crates/lrr/src/expand/source_declarative/assembly_local_declarations.rs",
+        "crates/lrr/src/frontend/declaration_name_completions.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-completion.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-final-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-guards.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-probe.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md",
+        "crates/lrr/src/cli/type_preparation_tests.rs",
+        "crates/lrr/src/db/body_environment_inputs.rs",
+        "crates/lrr/src/db/body_environment_provider.rs",
+        "crates/lrr/src/expand/source_discovery/completed_source_syntax.rs",
+        "worktracks/evidence/2026-10-19-v301-v307-entered-annotation-completion.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T16:24:52.211598+00:00",
+      "updated_at": "2026-10-19T17:06:35.984449+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1800,7 +1814,8 @@
             "crates/lrr/src/frontend/mod.rs",
             "crates/lrr/src/frontend/source_types.rs",
             "crates/lrr/src/frontend/impl_index.rs",
-            "crates/lrr/src/expand/source_derives.rs"
+            "crates/lrr/src/expand/source_derives.rs",
+            "crates/lrr/src/frontend/source_local_plan.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -1811,7 +1826,11 @@
             "crates/lrr/src/db/memo.rs",
             "crates/lrr/src/expand/source_discovery.rs",
             "crates/lrr/src/syntax/mod.rs",
-            "crates/lrr/src/frontend/source_locals.rs"
+            "crates/lrr/src/frontend/source_locals.rs",
+            "crates/lrr/src/db/mod.rs",
+            "crates/lrr/src/db/product_retention.rs",
+            "crates/lrr/src/db/provider.rs",
+            "crates/lrr/src/syntax/thunks.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -1819,7 +1838,10 @@
           "claim": "LOCAL-046",
           "owner": "/root",
           "paths": [
-            "crates/lrr/src/cli/preentry_loader_tests.rs"
+            "crates/lrr/src/cli/preentry_loader_tests.rs",
+            "crates/lrr/src/expand/source_declarative/assembly.rs",
+            "crates/lrr/src/expand/source_declarative/assembly_seed.rs",
+            "crates/lrr/src/frontend/source_body_context.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -1842,9 +1864,17 @@
             "crates/lrr/src/db/local_declaration_inputs.rs"
           ],
           "scope": "Same implementing owner retains existing reservation for the common original-annotation publication prerequisite; no parallel owner or transfer."
+        },
+        {
+          "claim": "LOCAL-036",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/expand/source_discovery/completed_source_environment.rs"
+          ],
+          "scope": "Same solo owner uses existing reservation for the entered annotation completion and ordinary context ownership joins; no concurrent transfer."
         }
       ]
     }
   ],
-  "updated_at": "2026-10-19T16:24:52.211598+00:00"
+  "updated_at": "2026-10-19T17:06:35.984449+00:00"
 }

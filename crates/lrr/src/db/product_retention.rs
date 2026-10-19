@@ -272,11 +272,7 @@ pub(super) fn count_owner(
             ),
             SourceArtifactRef::LocalPlan(plan) => {
                 for context in plan.context_roots() {
-                    let id = Arc::as_ptr(context) as usize;
-                    *inner.entry(id).or_insert(0) += 1;
-                    if allocations.insert(id) {
-                        count_admitted_source(context.source(), inner, allocations);
-                    }
+                    count_prepared_context(context, inner, allocations);
                 }
                 if let Some(environment) = plan.environment() {
                     count_owner(
@@ -288,6 +284,9 @@ pub(super) fn count_owner(
             }
             SourceArtifactRef::BodyEnvironment(environment) => {
                 count_admitted_source(environment.source(), inner, allocations);
+                // This is a real immutable context owner, not an external pin.
+                // Omitting the edge makes retirement keep its own wrappers alive.
+                count_prepared_context(environment.prepared(), inner, allocations);
                 // Each selected macro receipt owns exactly one completed root;
                 // multiple BodyEnvironment handles do not clone that handle.
                 let macros = environment.macros();
@@ -319,6 +318,15 @@ pub(super) fn count_owner(
             _ => {}
         }
     }
+}
+
+fn count_prepared_context(
+    context: &Arc<crate::frontend::source_body_context::PreparedBodyContext>,
+    inner: &mut BTreeMap<usize, usize>, allocations: &mut BTreeSet<usize>,
+) {
+    let allocation = Arc::as_ptr(context) as usize;
+    *inner.entry(allocation).or_insert(0) += 1;
+    if allocations.insert(allocation) { count_admitted_source(context.source(), inner, allocations); }
 }
 
 /// The parent Arc is physically owned once by this admitted source allocation,
@@ -356,7 +364,7 @@ pub(super) fn has_external_owners(
                 )
         }),
         SourceArtifactRef::BodyEnvironment(environment) => {
-            external(
+            external(Arc::as_ptr(environment.prepared()) as usize, Arc::strong_count(environment.prepared())) || external(
                 Arc::as_ptr(environment.source()) as usize,
                 Arc::strong_count(environment.source()),
             ) || external(

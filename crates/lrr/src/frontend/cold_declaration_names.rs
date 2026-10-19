@@ -45,7 +45,7 @@ impl ColdDeclarationNames {
         parent: &DeclarationMacroIndex,
         seal: &crate::db::seals::Seal,
         publication: u64,
-        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
+        completions: &BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>,
     ) -> Result<Arc<Self>, Diagnostic> {
         let context = parent.original_name_context(scope.source())?;
         let completion = Self::completion_identity(scope, completions)?;
@@ -67,19 +67,7 @@ impl ColdDeclarationNames {
         let mut generated_names = Vec::new();
         for row in &scope.facts().items {
             let Some(receipt) = completions.get(&row.item.def_key.fingerprint()) else { continue };
-            for effect in receipt.name_effects().into_iter().flatten() {
-                for declaration in &effect.names {
-                    if declaration.scope() == &row.item.scope {
-                        tables.extend_declared(row.scope, declaration)?;
-                        generated_names.push(Arc::clone(declaration));
-                    }
-                    // Descendant names remain in their own admitted scope;
-                    // they are neither bindings nor producers in this rib.
-                }
-                for (owner, producer) in &effect.pending {
-                    if owner == &row.item.scope { tables.defer_names(row.scope, *producer); }
-                }
-            }
+            generated_names.extend(tables.extend_annotation_names(row.scope, &row.item.scope, receipt)?);
         }
         let names = names.with_declared(&generated_names)?;
         let mut scopes = BTreeMap::new();
@@ -122,7 +110,7 @@ impl ColdDeclarationNames {
     }
     fn completion_identity(
         scope: &CapturedDeclarationScope<'_>,
-        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
+        completions: &BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>,
     ) -> Result<Digest, Diagnostic> {
         let mut e = StableEncoder::new("lrr/v1/cold-local-name-completions");
         for row in &scope.facts().items {
@@ -139,7 +127,7 @@ impl ColdDeclarationNames {
         scope: &CapturedDeclarationScope<'_>,
         parent: &DeclarationMacroIndex,
         seal: &crate::db::seals::Seal,
-        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
+        completions: &BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>,
     ) -> Result<bool, Diagnostic> {
         let context = parent.original_name_context(scope.source())?;
         let completion = Self::completion_identity(scope, completions)?;

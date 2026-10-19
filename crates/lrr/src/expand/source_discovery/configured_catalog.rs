@@ -263,6 +263,32 @@ impl SourceDiscovery {
 }
 
 impl SourceDiscovery {
+    /// One actual original completion source for cold and entered declaration names.
+    pub(in crate::expand::source_discovery) fn completed_original_annotation_names(&self) -> Result<
+        std::collections::BTreeMap<Digest, std::sync::Arc<std::collections::BTreeMap<Digest,
+            std::sync::Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>>>, Diagnostic> {
+        let mut fragments = std::collections::BTreeMap::new();
+        for fragment in self.nested_completed.values() {
+            let occurrence = fragment.index().output().record().key().invocation;
+            if fragments.insert(occurrence, fragment.clone()).is_some() {
+                return Err(fault("completed declaration occurrence repeats"));
+            }
+        }
+        let mut completed = std::collections::BTreeMap::<Digest, std::collections::BTreeMap<_, _>>::new();
+        for state in self.original_groups.values() {
+            let Some(proof) = &state.proof else { continue };
+            let source = &self.sources[state.ordinal];
+            let parent = self.nested_sources.get(&state.ordinal)
+                .ok_or_else(|| fault("completed annotation declaration parent absent"))?;
+            let receipt = parent.completed_original_annotation(source, &state.group, proof)?
+                .with_name_effects(parent, source, &fragments)?;
+            let source_key = QueryKey::Outline(source.selection().outline.clone()).fingerprint();
+            if completed.entry(source_key).or_default().insert(receipt.item(), std::sync::Arc::new(receipt)).is_some() {
+                return Err(fault("original annotation declaration completion repeats"));
+            }
+        }
+        Ok(completed.into_iter().map(|(source, entries)| (source, std::sync::Arc::new(entries))).collect())
+    }
     /// Source metadata only, through the ordinary cold declaration publisher.
     /// The actual retained plan is shared with entry; no executable body or
     /// lexical/module binding is created by this coordinator step.
@@ -276,32 +302,19 @@ impl SourceDiscovery {
                 AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
             },
         };
-        let mut completed_outputs = std::collections::BTreeMap::new();
-        for fragment in self.nested_completed.values() {
-            let occurrence = fragment.index().output().record().key().invocation;
-            if completed_outputs.insert(occurrence, fragment.clone()).is_some() {
-                return Err(fault("completed declaration occurrence repeats"));
-            }
-        }
+        let completed = self.completed_original_annotation_names()?;
         for (ordinal, source) in self.sources.iter().enumerate()
             .filter(|(ordinal, _)| !self.macro_export_sources.contains_key(ordinal)) {
             let AssociatedDeclarationsPreparation::Original(prepared) =
                 PreparedOriginalAssociatedDeclarations::prepare(source)? else { continue };
-            let mut completions = std::collections::BTreeMap::new();
-            for state in self.original_groups.values().filter(|state| state.ordinal == ordinal) {
-                let Some(proof) = &state.proof else { continue };
-                let parent = self.nested_sources.get(&ordinal)
-                    .ok_or_else(|| fault("completed annotation declaration parent absent"))?;
-                let receipt = parent.completed_original_annotation(source, &state.group, proof)?
-                    .with_name_effects(parent, source, &completed_outputs)?;
-                if completions.insert(receipt.item(), receipt).is_some() {
-                    return Err(fault("original annotation declaration completion repeats"));
-                }
-            }
+            let source_key = QueryKey::Outline(source.selection().outline.clone()).fingerprint();
+            let completions = completed.get(&source_key).map(|entries| &**entries);
+            let empty = std::collections::BTreeMap::new();
+            let completions = completions.unwrap_or(&empty);
             // One actual plan per owning body. Its original named items and
             // associated declarations share the same metadata kernel as entry.
             for scope in prepared.declaration_scopes() {
-                match db.publish_captured_declarations(&scope, &completions) {
+                match db.publish_captured_declarations(&scope, completions) {
                     QueryPoll::Ready(Ok(_)) => {}
                     QueryPoll::Ready(Err(error)) => return Err(error),
                     QueryPoll::NeedInput(_) => return Err(fault("cold catalog declaration input remains pending")),
@@ -309,7 +322,7 @@ impl SourceDiscovery {
                 let parent = self.nested_sources.get(&ordinal)
                     .ok_or_else(|| fault("cold declaration namespace parent absent"))?;
                 let seal = self.seal.as_ref().ok_or_else(|| fault("cold declaration namespace seal absent"))?;
-                db.publish_cold_declaration_names(&scope, parent, seal, &completions)?;
+                db.publish_cold_declaration_names(&scope, parent, seal, completions)?;
             }
         }
         Ok(())

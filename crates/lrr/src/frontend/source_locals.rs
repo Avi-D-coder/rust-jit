@@ -247,6 +247,7 @@ impl EnteredMacroIndex<'_> {
             publications,
             None,
             None,
+            None,
         )
     }
     pub(crate) fn local_index_with_pattern_index(
@@ -257,7 +258,7 @@ impl EnteredMacroIndex<'_> {
         expansions: &[(Key, MacroDefinition)],
         index: &crate::syntax::body_index::BodyIndex,
     ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
-        self.local_index_with_pattern_names(expected, handle, resolutions, expansions, index, None)
+        self.local_index_with_pattern_names(expected, handle, resolutions, expansions, index, None, None)
     }
     fn local_index_with_pattern_names(
         &self,
@@ -267,6 +268,7 @@ impl EnteredMacroIndex<'_> {
         expansions: &[(Key, MacroDefinition)],
         index: &crate::syntax::body_index::BodyIndex,
         names: Option<&owned_plan::LocalTypeNames>,
+        annotations: Option<&crate::frontend::source_body_context::PreparedDeclarationNameCompletions>,
     ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
         let admitted = self.body_context.as_ref().is_some_and(|context| {
             context.source().body() == handle
@@ -296,6 +298,7 @@ impl EnteredMacroIndex<'_> {
             &[],
             Some(&equivalence),
             names,
+            annotations,
         )
     }
     fn local_index_inner(
@@ -307,6 +310,7 @@ impl EnteredMacroIndex<'_> {
         publications: &[SourceLocalPublication],
         equivalence: Option<&BTreeMap<Digest, Digest>>,
         declaration_names: Option<&owned_plan::LocalTypeNames>,
+        annotations: Option<&crate::frontend::source_body_context::PreparedDeclarationNameCompletions>,
     ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
         if expected.canonical()? != *self.parent.source() || *body != self.body {
             return Err(error("local index source/body revision mismatch"));
@@ -534,7 +538,7 @@ impl EnteredMacroIndex<'_> {
             }
         }
         for e in &self.facts.events {
-            if matches!(e.kind, BodyMacroEventKind::Producer { identity, .. } if self.no_item_retired(identity))
+            if matches!(e.kind, BodyMacroEventKind::Producer { identity, .. } if (self.no_item_retired(identity) || annotations.is_some_and(|names| names.retires(identity))))
             {
                 continue;
             }
@@ -642,9 +646,16 @@ impl EnteredMacroIndex<'_> {
             .as_ref()
             .map(|n| &n.facts)
             .unwrap_or(&self.facts);
-        let declarations = DeclarationNameTables::prepare(
-            namespace, edition, declaration_names, |identity| self.no_item_retired(identity),
+        let mut declarations = DeclarationNameTables::prepare(
+            namespace, edition, declaration_names, |identity| (self.no_item_retired(identity) || annotations.is_some_and(|names| names.retires(identity))),
         )?;
+        if let Some(annotations) = annotations {
+            for row in &namespace.items {
+                if let Some(entry) = annotations.entry(row.item.def_key.fingerprint()) {
+                    declarations.extend_annotation_names(row.scope, &entry.source_scope, &entry.completion)?;
+                }
+            }
+        }
         self.facts
             .bindings
             .len()

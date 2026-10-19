@@ -25,6 +25,8 @@ pub struct CompletedSourceEnvironment {
     body_macros: BTreeMap<Digest, (u32, super::body_macro_environment::CompletedBodyMacroFacts)>,
     macro_admission_bytes: usize,
     source_syntax: BTreeMap<Digest, Arc<super::source_syntax::CompletedSourceSyntax>>,
+    annotation_names: BTreeMap<Digest, Arc<BTreeMap<Digest,
+        Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>>>,
     seal_dependency: DependencyStamp,
     bytes: usize,
     names_bytes: usize,
@@ -46,6 +48,19 @@ impl std::fmt::Debug for CompletedSourceEnvironment {
     }
 }
 impl CompletedSourceEnvironment {
+    pub(crate) fn declaration_name_completions(&self,
+        context: &Arc<crate::frontend::source_body_context::PreparedBodyContext>,
+    ) -> Result<Arc<crate::frontend::source_body_context::PreparedDeclarationNameCompletions>, Diagnostic> {
+        use crate::frontend::source_body_context::PreparedDeclarationNameCompletions;
+        let Some(source) = context.source().original_source() else {
+            return Ok(PreparedDeclarationNameCompletions::empty(context));
+        };
+        let key = QueryKey::Outline(source.selection().outline.clone()).fingerprint();
+        let empty = BTreeMap::new();
+        let completions = self.annotation_names.get(&key).map(|entries| &**entries).unwrap_or(&empty);
+        PreparedDeclarationNameCompletions::prepare(Arc::clone(context), completions, |completion|
+            self.source_syntax(source.selection())?.original_local_declaration(completion))
+    }
     /// The impl member index of this immutable environment (type-relative
     /// associated paths and method probing), built at most once.
     pub(crate) fn member_index(
@@ -90,11 +105,6 @@ impl CompletedSourceEnvironment {
             Result<Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>, Diagnostic>,
         >,
     ) -> Result<(), Diagnostic> {
-        if self.members.get().is_some() && !units.is_empty() {
-            return Err(fault(
-                "completed member index was demanded before generated publication",
-            ));
-        }
         if let Some(current) = self.generated.get() {
             if current.units.len() != units.len()
                 || current
@@ -102,15 +112,34 @@ impl CompletedSourceEnvironment {
                     .iter()
                     .zip(&units)
                     .any(|(old, new)| !old.same_unit(new))
+                || current.boundaries.len() != boundaries.len()
+                || current.boundaries.iter().any(|(key, old)| match (old, boundaries.get(key)) {
+                    (Ok(old), Some(Ok(new))) => old.fingerprint() != new.fingerprint(),
+                    (Err(old), Some(Err(new))) => old.code != new.code || old.message != new.message,
+                    _ => true,
+                })
             {
                 return Err(fault("completed generated source publication changed"));
             }
             return Ok(());
         }
+        if self.members.get().is_some() && !units.is_empty() {
+            return Err(fault(
+                "completed member index was demanded before generated publication",
+            ));
+        }
         self.generated
             .set(CompletedGeneratedSources { units, boundaries })
             .map_err(|_| fault("completed generated sources published concurrently"))?;
         Ok(())
+    }
+    #[cfg(test)]
+    pub(crate) fn generated_publication_for_control(&self) -> (
+        Vec<Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>>,
+        BTreeMap<Digest, Result<Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>, Diagnostic>>,
+    ) {
+        let current = self.generated.get().expect("control uses an actually published generation");
+        (current.units.clone(), current.boundaries.clone())
     }
     /// The insertion context was prepared by the actual discovery while its
     /// provider arenas were still present. Entry only borrows that result;
@@ -512,6 +541,7 @@ impl SourceDiscovery {
         });
         let language_item_identity = language_items.finish();
         let source_syntax = self.prepare_completed_source_syntax(seal)?;
+        let annotation_names = self.completed_original_annotation_names()?;
         let syntax_bytes = source_syntax.values().try_fold(0usize, |bytes, plan| {
             bytes
                 .checked_add(plan.metadata_bytes())
@@ -541,6 +571,7 @@ impl SourceDiscovery {
             body_macros,
             macro_admission_bytes,
             source_syntax,
+            annotation_names,
             seal_dependency,
             bytes,
             names_bytes,

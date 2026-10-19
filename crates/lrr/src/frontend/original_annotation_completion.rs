@@ -22,6 +22,16 @@ pub(crate) struct CompletedOriginalAnnotation {
     names: Option<Vec<Arc<crate::expand::declaration_fragment::CompletedDeclarationNameEffects>>>,
 }
 impl CompletedOriginalAnnotation {
+    pub(crate) fn declared_names_at<'a>(&'a self, scope: &'a ScopeKey)
+        -> impl Iterator<Item = Arc<crate::frontend::generated_headers::declared_names::DeclaredItemName>> + 'a {
+        self.name_effects().into_iter().flatten().flat_map(|effect| effect.names.iter())
+            .filter(move |declaration| declaration.scope() == scope).cloned()
+    }
+    pub(crate) fn original_target<'a>(&self, source: &'a PreparedSourceView)
+        -> Result<crate::source::original_items::OriginalItemTarget<'a>, Diagnostic> {
+        self.require_source(source)?;
+        source.original_annotation_producer(self.group.call().item_input)?.ok_or_else(fault)
+    }
     pub(crate) fn with_name_effects(
         mut self,
         parent: &DeclarationMacroIndex,

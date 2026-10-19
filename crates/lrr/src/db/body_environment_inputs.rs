@@ -14,6 +14,8 @@ pub struct BodyEnvironmentInput {
     body: BodyKey,
     semantic_identity: Digest,
     identity: Digest,
+    prepared: Arc<crate::frontend::source_body_context::PreparedBodyContext>,
+    declarations: Arc<crate::frontend::source_body_context::PreparedDeclarationNameCompletions>,
 }
 impl std::fmt::Debug for BodyEnvironmentInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,6 +38,8 @@ impl BodyEnvironmentInput {
     pub(crate) fn exclusive_metadata_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
     }
+    pub(crate) fn prepared(&self) -> &Arc<crate::frontend::source_body_context::PreparedBodyContext> { &self.prepared }
+    pub(crate) fn declarations(&self) -> &Arc<crate::frontend::source_body_context::PreparedDeclarationNameCompletions> { &self.declarations }
     pub(crate) fn source(&self) -> &Arc<AdmittedBodyContext> {
         &self.source
     }
@@ -159,11 +163,13 @@ impl Database {
         // preparation or TypeSchema demands. Opaque attribute owners remain
         // pending in the same prefix index and acquire no declaration rows.
         for row in plan.context().facts().declarations() {
-            if row.attribute_input.is_some() {
-                continue;
-            }
             let definition = row.item.def_key.fingerprint();
-            match ready!(self.publish_local_declaration(plan.context(), definition)) {
+            let publication = if row.attribute_input.is_some() {
+                let names = plan.declaration_name_completions();
+                if names.entry(definition).is_none() { continue; }
+                self.publish_local_declaration_with_names_checked(plan.context(), definition, names)
+            } else { self.publish_local_declaration(plan.context(), definition) };
+            match ready!(publication) {
                 super::local_declaration_inputs::LocalDeclarationPublication::Published(actual)
                     if actual == definition => {}
                 _ => {
@@ -245,7 +251,7 @@ impl Database {
             QueryPoll::Ready(Ok(())) => {}
             other => return other,
         }
-        QueryPoll::Ready((|| {
+        let reusable = (|| -> Result<bool, Diagnostic> {
             let owner = source.module_source().ok_or_else(|| {
                 fault(
                     "LRR-E-BODY-ENVIRONMENT",
@@ -253,12 +259,12 @@ impl Database {
                 )
             })?;
             macros.index().require_publication(owner)?;
-            let body = source.index().body().clone();
+
             let mut semantic = StableEncoder::new("lrr/v1/owning-body-source-environment");
             semantic.digest(source.identity());
             semantic.digest(macros.identity());
             let semantic_identity = semantic.finish();
-            let key = InputKey::BodyEnvironment(body.clone());
+            let key = InputKey::BodyEnvironment(source.index().body().clone());
             let previous = match self.inputs.get(&key).map(|row| row.value.as_ref()) {
                 Some(InputValue::BodyEnvironment(old))
                     if old.semantic_identity() == semantic_identity
@@ -273,9 +279,31 @@ impl Database {
                 // Reuse only a still-current opaque lease. Fresh genuine
                 // receipts above are required even when semantic stamps match.
                 if previous.source().has_current_inputs(self)? {
-                    return Ok(());
+                    return Ok(true);
                 }
             }
+            Ok(false)
+        })();
+        match reusable {
+            Ok(true) => return QueryPoll::Ready(Ok(())),
+            Ok(false) => {},
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        }
+        let prepared = match Arc::clone(&source).prepare(self) {
+            QueryPoll::Ready(Ok(context)) => context,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let declarations = match macros.source_environment().declaration_name_completions(&prepared) {
+            Ok(names) => names,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        QueryPoll::Ready((|| {
+            let body = source.index().body().clone();
+            let mut semantic = StableEncoder::new("lrr/v1/owning-body-source-environment");
+            semantic.digest(source.identity()); semantic.digest(macros.identity());
+            let semantic_identity = semantic.finish();
+            let key = InputKey::BodyEnvironment(body.clone());
             let revision = self.revision.checked_add(1).ok_or_else(|| {
                 fault("LRR-E-ID-EXHAUSTED", "body environment revision exhausted")
             })?;
@@ -292,6 +320,8 @@ impl Database {
                 body: body.clone(),
                 semantic_identity,
                 identity: envelope.finish(),
+                prepared,
+                declarations,
             });
             let value = InputValue::BodyEnvironment(Arc::clone(&input));
             let fingerprint = value.fingerprint();
@@ -430,11 +460,13 @@ impl Database {
             )));
         }
         for row in plan.context().facts().declarations() {
-            if row.attribute_input.is_some() {
-                continue;
-            }
             let definition = row.item.def_key.fingerprint();
-            match ready!(self.publish_local_declaration_checked(plan.context(), definition)) {
+            let publication = if row.attribute_input.is_some() {
+                let names = plan.declaration_name_completions();
+                if names.entry(definition).is_none() { continue; }
+                self.publish_local_declaration_with_names_checked(plan.context(), definition, names)
+            } else { self.publish_local_declaration_checked(plan.context(), definition) };
+            match ready!(publication) {
                 super::local_declaration_inputs::LocalDeclarationPublication::Published(actual)
                     if actual == definition => {}
                 _ => {

@@ -30,6 +30,11 @@ pub(crate) struct CompletedSourceSyntax {
     bytes: usize,
 }
 impl CompletedSourceSyntax {
+    pub(crate) fn original_local_declaration(&self,
+        completion: &crate::frontend::impl_index::CompletedOriginalAnnotation,
+    ) -> Result<Arc<crate::expand::source_declarative::assembly::InitialLocalDeclaration>, Diagnostic> {
+        self.seed.get()?.original_local_declaration(completion)
+    }
     pub(super) fn capture(
         seed: Arc<SourceAssemblySeed>,
         replies: BTreeMap<(Digest, Digest), SyntaxReply>,

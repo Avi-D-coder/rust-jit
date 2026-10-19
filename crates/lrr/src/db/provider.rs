@@ -1268,6 +1268,12 @@ impl Provider for SyntaxProvider {
                         Err(error) => QueryValue::Error(error),
                     }
                 } else {
+                    match super::entered_declaration_thunk::thunk(db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => return QueryPoll::Ready(Ok(provided)),
+                        QueryPoll::Ready(Ok(None)) => {},
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
                     match super::pattern_plan_provider::thunk(self, db, parsed, handle, index, pc) {
                         QueryPoll::Ready(Ok(Some(provided))) => {
                             return QueryPoll::Ready(Ok(provided));

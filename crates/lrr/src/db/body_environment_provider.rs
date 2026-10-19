@@ -29,12 +29,9 @@ pub(super) fn source_local_plan(db: &mut Database, body: &BodyKey) -> QueryPoll<
         QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
         QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
     }
-    let context = match Arc::clone(environment.source()).prepare(db) {
-        QueryPoll::Ready(Ok(v)) => v,
-        QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
-        QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
-    };
-    let plan = match PreparedSourceLocalPlan::prepare(db, environment.macros().index(), context) {
+    let context = Arc::clone(environment.prepared());
+    let plan = match PreparedSourceLocalPlan::prepare_with_declaration_names(db, environment.macros().index(), context,
+        Arc::clone(environment.declarations())) {
         QueryPoll::Ready(Ok(v)) => v,
         QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
         QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),

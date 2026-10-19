@@ -1,0 +1,8 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Unchanged local-derive runtime plus LRR structural ownership, ordinary declaration lowering and publication/currentness controls, all editions.",
+  "controls": [
+    "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+    "cli::type_preparation::tests::unchanged_local_annotation_receipts_bind_actual_headers_nodes_and_generations_all_editions"
+  ]
+}

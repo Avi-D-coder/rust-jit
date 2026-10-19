@@ -19,6 +19,21 @@ pub(crate) enum LocalDeclarationPublication {
     NeedsProducer(Digest),
 }
 
+#[derive(Clone, Copy)]
+enum DeclarationAnnotationCompletion<'a> {
+    Original(&'a crate::frontend::impl_index::CompletedOriginalAnnotation),
+    Entered(&'a crate::frontend::source_body_context::PreparedDeclarationNameCompletions),
+}
+impl DeclarationAnnotationCompletion<'_> {
+    fn require_local_declaration(self, parsed: &ParsedFile, body: &BodyHandle, scope: &ScopeKey,
+        row: &crate::syntax::body_items::BodyItem) -> Result<(), Diagnostic> {
+        match self {
+            Self::Original(receipt) => receipt.require_local_declaration(parsed, body, scope, row),
+            Self::Entered(receipt) => receipt.require_local_declaration(parsed, body, scope, row),
+        }
+    }
+}
+
 impl Database {
     /// Cold coordinator preparation. `definition` selects only among the real
     /// immutable entered facts; it supplies no declaration, name or schema.
@@ -62,6 +77,23 @@ impl Database {
             definition,
             None,
         )
+    }
+    /// Same metadata kernel after this admitted body's structural annotation join.
+    pub(super) fn publish_local_declaration_with_names_checked(
+        &mut self, context: &PreparedBodyContext, definition: Digest,
+        names: &crate::frontend::source_body_context::PreparedDeclarationNameCompletions,
+    ) -> QueryPoll<LocalDeclarationPublication> {
+        if let Err(error) = self.require_coordinator().and_then(|()| names.require_context(context)) {
+            return QueryPoll::Ready(Err(error));
+        }
+        match context.require_current(self) {
+            QueryPoll::Ready(Ok(())) => {},
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        let source = context.source();
+        self.publish_declaration_metadata(source.parsed(), source.body(), source.scope(),
+            context.facts().declaration_facts(), definition, Some(DeclarationAnnotationCompletion::Entered(names)))
     }
     /// The same exact-row publication kernel for a retained cold declaration
     /// scope. Its owner proof supplies no executable BodyIndex or bindings.
@@ -112,7 +144,7 @@ impl Database {
             scope.scope(),
             scope.facts(),
             definition,
-            completion,
+            completion.map(DeclarationAnnotationCompletion::Original),
         )
     }
     /// Bulk cold publication validates the owning scope once, then visits its
@@ -121,7 +153,7 @@ impl Database {
     pub(crate) fn publish_captured_declarations(
         &mut self,
         scope: &crate::frontend::associated_declarations::CapturedDeclarationScope<'_>,
-        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
+        completions: &BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>,
     ) -> QueryPoll<Vec<LocalDeclarationPublication>> {
         QueryPoll::Ready((|| {
             self.require_coordinator()?;
@@ -151,7 +183,7 @@ impl Database {
                     scope.scope(),
                     row,
                     member,
-                    completion,
+                    completion.map(|receipt| DeclarationAnnotationCompletion::Original(&**receipt)),
                 )?);
             }
             Ok(results)
@@ -164,7 +196,7 @@ impl Database {
         scope: &ScopeKey,
         facts: &DeclarationFacts,
         definition: Digest,
-        completion: Option<&crate::frontend::impl_index::CompletedOriginalAnnotation>,
+        completion: Option<DeclarationAnnotationCompletion<'_>>,
     ) -> QueryPoll<LocalDeclarationPublication> {
         QueryPoll::Ready((|| {
             let invalid = |message| fault("LRR-E-EXPANSION-INPUT", message);
@@ -190,7 +222,7 @@ impl Database {
         scope: &ScopeKey,
         row: &crate::syntax::body_items::BodyItem,
         member: bool,
-        completion: Option<&crate::frontend::impl_index::CompletedOriginalAnnotation>,
+        completion: Option<DeclarationAnnotationCompletion<'_>>,
     ) -> Result<LocalDeclarationPublication, Diagnostic> {
         let invalid = |message| fault("LRR-E-EXPANSION-INPUT", message);
         let definition = row.item.def_key.fingerprint();

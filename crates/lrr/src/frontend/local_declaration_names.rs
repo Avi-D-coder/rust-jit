@@ -17,6 +17,19 @@ pub struct DeclarationNameTables {
     pub(super) glob_imports: BTreeMap<u32, Vec<usize>>,
 }
 impl DeclarationNameTables {
+    pub(super) fn extend_annotation_names(
+        &mut self, ordinal: u32, scope: &crate::syntax::outline::ScopeKey,
+        completion: &crate::frontend::impl_index::CompletedOriginalAnnotation,
+    ) -> Result<Vec<Arc<crate::frontend::generated_headers::declared_names::DeclaredItemName>>, Diagnostic> {
+        let names = completion.declared_names_at(scope).collect::<Vec<_>>();
+        for declaration in &names { self.extend_declared(ordinal, declaration)?; }
+        for effect in completion.name_effects().into_iter().flatten() {
+            for (owner, producer) in &effect.pending {
+                if owner == scope { self.defer_names(ordinal, *producer); }
+            }
+        }
+        Ok(names)
+    }
     pub(super) fn prepare(
         namespace: &DeclarationFacts,
         edition: u16,

@@ -13,7 +13,7 @@ impl Database {
         scope: &CapturedDeclarationScope<'_>,
         parent: &DeclarationMacroIndex,
         seal: &Seal,
-        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
+        completions: &BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>,
     ) -> Result<(), Diagnostic> {
         self.require_coordinator()?;
         if self.run_active || !matches!(seal.key().domain, SealDomain::ImplCatalog { .. }) {

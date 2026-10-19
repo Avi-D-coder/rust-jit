@@ -177,3 +177,107 @@ fn unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_ed
     }
     assert_eq!(std::fs::read(&original).unwrap(), ORIGINAL);
 }
+
+#[test]
+fn unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions() {
+    let original = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    let bytes = include_bytes!("../../../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    assert_eq!(std::fs::read(&original).unwrap(), bytes);
+    for edition in [2015, 2018, 2021, 2024] {
+        let report = match super::super::standalone_edition(&original, None, edition) {
+            Ok(super::super::StandaloneOutcome::Completed(report)) => report,
+            Ok(_) => panic!("unchanged annotated impl main did not complete: edition={edition}"),
+            Err(error) => panic!("unchanged annotated impl main failed: edition={edition}, {error:?}"),
+        };
+        assert_eq!(report.status, "completed");
+        assert!(matches!(report.value, crate::engine::run::ValueSummary::Unit));
+        assert_eq!(report.opcode_counters.operations_started, report.opcode_counters.operations_completed);
+        eprintln!("unchanged annotated local impl main edition{edition}: complete through ordinary interpreter");
+    }
+    assert_eq!(std::fs::read(&original).unwrap(), bytes);
+}
+
+#[test]
+fn unchanged_local_annotation_receipts_bind_actual_headers_nodes_and_generations_all_editions() {
+    use crate::{frontend::callables::CallSelection, ir::{op::Op, pc::{NodeId, Phase}}};
+    let original = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, context_weak) = {
+        let (inputs, view, sources, mut snapshot) =
+            super::super::capture_standalone_edition(&original, false, edition).unwrap();
+        let (compiler, inputs, view, sources) = PreparedCompileInputs::prepare(
+            &original, inputs, view, sources).unwrap();
+        let mut db = Database::default();
+        db.trace.detailed = true;
+        inputs.publish(&mut db).unwrap(); db.begin_expansion_epoch(1).unwrap();
+        prepare(&compiler, &mut db, &view, &sources, &mut snapshot, None).unwrap();
+        let mut discovery = SourceDiscovery::new_deferred_imports(sources,
+            view.outline().root_scope.clone(), Namespace::Value, view.selection().outline.crate_key, 1).unwrap()
+            .with_declarative_compiler(compiler.environment_identity(),
+                crate::expand::source_declarative::engine_version(), compiler.catalog.clone()).unwrap();
+        compiler.discover_diagnostic(&mut discovery, &mut db, &mut snapshot).unwrap();
+        discovery.publish(&mut db).unwrap();
+        let CallSelection::Source(main) = ready(discovery.entry_function(&mut db, "main")) else { panic!() };
+        let main = crate::cli::retained_entry::prepare(&mut db, &discovery, &view, "main", main).unwrap();
+        let body_key = main.body().unwrap().key();
+        let plan = ready(db.prepare_source_local_plan(&discovery, &[&view], &body_key));
+        let context = plan.context(); let source = context.source();
+        assert!(Arc::ptr_eq(plan.environment().unwrap().prepared(), context));
+        let row = context.facts().items.iter().find(|row| row.attribute_input.is_some()).unwrap();
+        let names = plan.declaration_name_completions();
+        names.require_local_declaration(source.parsed(), source.body(), source.scope(), row).unwrap();
+        let mut wrong = row.clone(); wrong.item.header.tokens.clear();
+        assert!(names.require_local_declaration(source.parsed(), source.body(), source.scope(), &wrong).is_err());
+        let mut scope = source.scope().clone(); scope.owner = Some(crate::core::digest::Digest([0;32]));
+        assert!(names.require_local_declaration(source.parsed(), source.body(), &scope, row).is_err());
+        let mut body = source.body().clone(); body.def_key = crate::core::digest::Digest([0;32]);
+        assert!(names.require_local_declaration(source.parsed(), &body, source.scope(), row).is_err());
+        let index = source.index();
+        let node = index.nodes().iter().find(|node|
+            node.role == crate::syntax::body_index::NodeRole::OpaqueItem
+                && source.body().range.start + node.range.start == row.item.declaration_span.start
+                && source.body().range.start + node.range.end == row.item.declaration_span.end).unwrap();
+        let pc = index.pc(node.id, Phase::Entry).unwrap();
+        let admission = names.admit_node(context, index, &pc).unwrap().unwrap();
+        admission.require(source.parsed(), source.body(), index, &pc).unwrap();
+        admission.require_published(&mut db).unwrap();
+        let other = index.pc(NodeId(0), Phase::Entry).unwrap();
+        assert!(admission.require(source.parsed(), source.body(), index, &other).is_err());
+        let original_parser = view.retained_declaration_parser().unwrap();
+        assert!(admission.require(&original_parser, source.body(), index, &pc).is_err());
+        let start = db.trace.events.len();
+        let recipe = ready(db.fetch(&SyntaxProvider, QueryKey::Thunk(pc.clone())));
+        let QueryValue::Thunk(recipe) = recipe.value.as_ref() else { panic!() };
+        assert!(matches!(recipe.recipe().operations.as_ref(), [Op::Declaration]));
+        assert!(db.trace.events[start..].iter().all(|event| match &event.key {
+            QueryKey::BodyStructure(body) => body == &body_key,
+            QueryKey::Thunk(pc) => pc.body == body_key,
+            _ => true,
+        }));
+        let environment = ready(discovery.completed_source_environment(&mut db));
+        let members = environment.member_index().unwrap();
+        let (units, boundaries) = environment.generated_publication_for_control();
+        assert_eq!(units.len(), 2);
+        environment.admit_generated_units(units.clone(), boundaries.clone()).unwrap();
+        let mut changed = boundaries.clone(); changed.pop_first();
+        assert!(environment.admit_generated_units(units.clone(), changed).is_err());
+        assert!(environment.admit_generated_units(Vec::new(), boundaries.clone()).is_err());
+        environment.admit_generated_units(units, boundaries).unwrap();
+        assert!(Arc::ptr_eq(&members, &environment.member_index().unwrap()));
+        discovery.publish(&mut db).unwrap();
+        let again = ready(db.prepare_source_local_plan(&discovery, &[&view], &body_key));
+        assert!(Arc::ptr_eq(&plan, &again));
+        db.begin_expansion_epoch(2).unwrap();
+        assert!(!matches!(db.fetch(&SyntaxProvider, QueryKey::Thunk(pc)), QueryPoll::Ready(Ok(_))),
+            "a cached declaration recipe cannot outlive its actual epoch");
+        eprintln!("entered annotated declaration edition{edition}: ordinary Op::Declaration; exact header/node/parser/epoch and generation refusals; immutable context/plan reuse");
+        (db, Arc::downgrade(context))
+        };
+        db.publish_inputs(Default::default()).unwrap();
+        db.evict_between_runs(crate::engine::telemetry::CacheBudgets::default()).unwrap();
+        assert!(context_weak.upgrade().is_none(), "revoked annotation contexts must retire without a source-plan ownership cycle");
+
+    }
+}

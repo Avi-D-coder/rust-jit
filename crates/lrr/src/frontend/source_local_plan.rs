@@ -314,6 +314,7 @@ pub struct PreparedSourceLocalPlan {
     source_identity: Digest,
     exclusive_bytes: usize,
     environment: Option<Arc<crate::db::BodyEnvironmentInput>>,
+    declaration_names: Arc<crate::frontend::source_body_context::PreparedDeclarationNameCompletions>,
 }
 /// Actual immutable roots. Reading them never permits rebinding a plan to a
 /// different environment; the lookup adapter below always borrows its own owner.
@@ -359,6 +360,9 @@ impl SourceLocalPlanRoots<'_> {
     }
 }
 impl PreparedSourceLocalPlan {
+    pub(crate) fn declaration_name_completions(&self) -> &Arc<crate::frontend::source_body_context::PreparedDeclarationNameCompletions> {
+        &self.declaration_names
+    }
     pub(in crate::frontend) fn enter_prepared_local_body(
         &self,
         context: Arc<PreparedBodyContext>,
@@ -440,6 +444,16 @@ impl PreparedSourceLocalPlan {
         parent: &PublishedMacroIndex,
         context: Arc<PreparedBodyContext>,
     ) -> QueryPoll<Arc<Self>> {
+        let annotations = crate::frontend::source_body_context::PreparedDeclarationNameCompletions::empty(&context);
+        Self::prepare_with_declaration_names(db, parent, context, annotations)
+    }
+    pub(crate) fn prepare_with_declaration_names(
+        db: &mut Database,
+        parent: &PublishedMacroIndex,
+        context: Arc<PreparedBodyContext>,
+        annotations: Arc<crate::frontend::source_body_context::PreparedDeclarationNameCompletions>,
+    ) -> QueryPoll<Arc<Self>> {
+        if let Err(error) = annotations.require_context(&context) { return QueryPoll::Ready(Err(error)); }
         match context.require_current(db) {
             QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -450,23 +464,26 @@ impl PreparedSourceLocalPlan {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        QueryPoll::Ready(Self::build(parent, context, lexical_module).map(Arc::new))
+        QueryPoll::Ready(Self::build(parent, context, lexical_module, annotations).map(Arc::new))
     }
     fn build(
         parent: &PublishedMacroIndex,
         context: Arc<PreparedBodyContext>,
         lexical_module: LexicalTypeModule,
+        annotations: Arc<crate::frontend::source_body_context::PreparedDeclarationNameCompletions>,
     ) -> Result<Self, Diagnostic> {
         let entered = parent.enter_prepared_body(Arc::clone(&context))?;
         let (expansions, missing_expansions) = expansion_definitions(&entered, &context)?;
         let (root, hygiene) = entered.local_hygiene();
-        let type_names = LocalTypeNames::prepare(&context, root, &hygiene)?;
+        let type_names = LocalTypeNames::prepare(&context, root, &hygiene)?
+            .with_declared(&annotations.declared_names())?;
         let field_types = field_types::DeclarationFieldTypes::prepare(&context, root, &hygiene)?;
         let pattern_occurrences =
             PreparedPatternBindingOccurrences::capture(Arc::clone(&context), usize::MAX)?;
         let module_bytes = lexical_module.extra_bytes();
         let mut identity = StableEncoder::new("lrr/v5/owned-local-source-environment");
         identity.digest(context.source().identity());
+        identity.digest(annotations.identity());
         identity.digest(type_names.fingerprint());
         identity.digest(field_types.fingerprint());
         identity.digest(pattern_occurrences.identity());
@@ -490,6 +507,7 @@ impl PreparedSourceLocalPlan {
             &expansions,
             context.source().index(),
             Some(&type_names),
+            Some(&annotations),
         )?;
         let tables = Arc::clone(&locals.tables);
         identity.digest(tables.binding_source_identity());
@@ -533,6 +551,7 @@ impl PreparedSourceLocalPlan {
             source_identity: identity.finish(),
             exclusive_bytes,
             environment: None,
+            declaration_names: annotations,
         })
     }
     fn select_type_prefix(

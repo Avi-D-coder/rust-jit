@@ -15,6 +15,8 @@ pub(crate) struct SourceAssemblySeed {
     retained_bytes: usize,
     bytes: usize,
     identity: Digest,
+    normalized: std::sync::OnceLock<(Arc<crate::syntax::parse::ParsedFile>, Arc<crate::syntax::outline::Outline>)>,
+    local_declarations: std::sync::Mutex<BTreeMap<Digest, Arc<InitialLocalDeclaration>>>,
 }
 impl SourceAssemblySeed {
     pub(crate) fn prepare(
@@ -95,7 +97,30 @@ impl SourceAssemblySeed {
             retained_bytes,
             bytes,
             identity: identity.finish(),
+            normalized: std::sync::OnceLock::new(),
+            local_declarations: std::sync::Mutex::new(BTreeMap::new()),
         }))
+    }
+    pub(crate) fn original_local_declaration(
+        &self, completion: &crate::frontend::impl_index::CompletedOriginalAnnotation,
+    ) -> Result<Arc<InitialLocalDeclaration>, Diagnostic> {
+        completion.require_source(&self.source)?;
+        let mut entries = self.local_declarations.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(entry) = entries.get(&completion.item()) { return Ok(Arc::clone(entry)); }
+        if self.normalized.get().is_none() {
+            let snapshot = self.tree.fork().map_err(adapter)?.snapshot().map_err(adapter)?;
+            let mut parsed = crate::syntax::parse::ParsedFile::from_syntax_snapshot(
+                snapshot, self.source.selection().outline.parse.profile.clone())?;
+            parsed.generated_origin = None;
+            let outline = parsed.outline(self.source.outline().root_scope.crate_key,
+                self.source.selection().outline.module_path.clone(), self.source.captured_macro_cfg()?)?;
+            let _ = self.normalized.set((Arc::new(parsed), Arc::new(outline)));
+        }
+        let (initial, outline) = self.normalized.get().ok_or_else(|| fault("initial normalized source absent"))?;
+        let entry = Arc::new(local_declarations::capture(&self.source, initial, outline,
+            Digest(self.tree.identity().0), completion)?);
+        entries.insert(completion.item(), Arc::clone(&entry));
+        Ok(entry)
     }
     pub(crate) fn source(&self) -> &SourceSelection {
         self.source.selection()

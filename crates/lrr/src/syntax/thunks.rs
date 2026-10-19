@@ -53,6 +53,7 @@ mod value_paths;
 
 #[derive(Default, Clone, Copy)]
 struct EnteredAdmissions<'a> {
+    declaration: Option<&'a crate::frontend::source_body_context::EnteredDeclarationAdmission>,
     numeric_admission:
         Option<&'a crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission>,
     type_name: Option<&'a crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
@@ -2193,6 +2194,15 @@ impl ParsedFile {
     ) -> Result<VerifiedRecipe, Diagnostic> {
         self.initial_thunk_admission(body, index, key, EnteredAdmissions::default())
     }
+    pub(crate) fn initial_thunk_with_declaration(
+        &self, body: &BodyHandle, index: &BodyIndex, key: &PcKey,
+        declaration: &crate::frontend::source_body_context::EnteredDeclarationAdmission,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        declaration.require(self, body, index, key)?;
+        self.initial_thunk_admission(body, index, key, EnteredAdmissions {
+            declaration: Some(declaration), ..Default::default()
+        })
+    }
     pub(crate) fn initial_thunk_with_closure_captures(
         &self,
         body: &BodyHandle,
@@ -2487,6 +2497,7 @@ impl ParsedFile {
         admissions: EnteredAdmissions<'_>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let EnteredAdmissions {
+            declaration,
             numeric_admission,
             type_name,
             source_constraints,
@@ -2571,7 +2582,7 @@ impl ParsedFile {
             }
             return unsupported("disabled operand requires cfg expression-list integration");
         }
-        if other_attributes {
+        if other_attributes && declaration.is_none() {
             return unsupported(
                 "entered statement/expression attributes require macro integration",
             );

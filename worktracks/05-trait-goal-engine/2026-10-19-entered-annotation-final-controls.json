@@ -1,0 +1,11 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Final immutable context ownership correction: unchanged whole main, actual receipt/epoch/generation/weak-retirement controls, ordinary body retirement and local calls, Copy origins. Prior broader16-control and32-head evidence stays bound to V306.",
+  "controls": [
+    "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+    "cli::type_preparation::tests::unchanged_local_annotation_receipts_bind_actual_headers_nodes_and_generations_all_editions",
+    "db::memo::body_environment_inputs::tests::owning_environment_publication_is_atomic_and_retired_inner_roots_stay_charged",
+    "engine::run::source_preparation::tests::unchanged_suffix_main_executes_local_calls_and_reuses_one_current_child_plan_all_editions",
+    "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions"
+  ]
+}

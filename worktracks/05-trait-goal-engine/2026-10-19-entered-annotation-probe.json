@@ -1,0 +1,5 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Whole unchanged upstream local annotation/impl main through ordinary standalone entry, all official editions. Failure remains a runtime gap.",
+  "controls": ["cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions"]
+}
