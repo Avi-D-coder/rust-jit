@@ -53,6 +53,7 @@ type ProofResult<'cx> = (
 
 /// Captured only by reading the actual definition-keyed preparation inputs.
 /// This is a source attachment, not name selection or catalog completeness.
+#[derive(Debug)]
 pub(super) struct DefinitionReceipt {
     definition: Digest,
     source: Arc<InputValue>,
@@ -63,6 +64,17 @@ pub(super) struct DefinitionReceipt {
     trait_declaration: bool,
 }
 impl DefinitionReceipt {
+    pub(super) fn definition_id(&self, world: Digest, local_unit: Digest) -> DefinitionId {
+        let InputValue::DeclarationContext(context) = self.context.as_ref() else { unreachable!("captured source context") };
+        DefinitionId::new(world, self.definition, context.scope.crate_key == local_unit)
+    }
+    pub(super) fn is_nominal(&self) -> Result<bool, Diagnostic> {
+        let InputValue::DeclarationContext(context) = self.context.as_ref() else { unreachable!("captured source context") };
+        let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("captured source parse") };
+        parsed.syntax_at(context.range, |node| ast::Struct::can_cast(node.kind())
+            || ast::Enum::can_cast(node.kind()) || ast::Union::can_cast(node.kind())).map(|node| node.is_some())
+    }
+    pub(super) fn is_trait(&self) -> bool { self.trait_declaration }
     pub(super) fn observe(db: &mut Database, definition: Digest) -> QueryPoll<Option<Self>> {
         let source = db.input(&InputKey::DefinitionSource(definition));
         let header = db.input(&InputKey::DefinitionHeader(definition));
@@ -116,7 +128,7 @@ impl DefinitionReceipt {
 /// Recursion-limit source: pinned compiler/rustc_interface/src/limits.rs:33–41
 /// (default128 and crate override); the producer must honor that configuration.
 pub(super) struct Settings<'cx> {
-    pub(super) catalog: Arc<DiscoveryInput>,
+    pub(super) catalog: &'cx DiscoveryInput,
     pub(super) recursion_limit: usize,
     pub(super) features: FeatureSet<'cx>,
     pub(super) assumptions_on_binders: bool,
@@ -386,7 +398,7 @@ impl Hash for PreparedProvider<'_> {
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-UPSTREAM-SOLVER-INPUT", message.into())
 }
-fn catalog_world(catalog: &DiscoveryInput) -> Result<Digest, Diagnostic> {
+pub(super) fn catalog_world(catalog: &DiscoveryInput) -> Result<Digest, Diagnostic> {
     if !matches!(catalog.seal.domain(), SealDomain::ImplCatalog { .. }) {
         return Err(fault(
             "upstream solving requires actual ImplCatalog completion, not a scope/test seal",
@@ -414,6 +426,7 @@ pub(super) fn with_provider<R>(
     Ok(run(view.context(), provider))
 }
 impl<'cx> PreparedProvider<'cx> {
+    pub(super) fn source_world(self) -> Digest { self.world }
     /// A typed reader handle is not a ready solver context. Its actual complete
     /// source producer must publish every demanded record before entry.
     pub(super) fn new(

@@ -2679,3 +2679,112 @@ fn unchanged_single_trait_translation_requires_its_actual_bucket_not_unrelated_i
         eprintln!("actual Foo candidate publication edition{edition}:1/{}source declarations required in the demanded typed bucket; missing/foreign identity and wrong world refused; no typed solver context or guest execution", publication.declaration_inventory.headers().len());
     }
 }
+
+#[test]
+fn unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions() {
+    use crate::db::key::QueryKey;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let mut encoded = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for case in ["tests/ui/traits/safety-ok.rs", "tests/ui/methods/method-self-arg-trait.rs",
+            "tests/ui/coherence/coherence-impl-in-fn.rs", "tests/ui/methods/method-two-trait-defer-resolution-2.rs"] {
+            let original = root.join(case);
+            let text = std::fs::read_to_string(&original).unwrap();
+            let mut paths = vec![original];
+            if case.ends_with("method-two-trait-defer-resolution-2.rs") {
+                paths.push(temporary_source(&format!("shared-types-user-{edition}"),
+                    &format!("macro_rules! emit_types {{($($t:tt)*)=>{{$($t)*}}}} emit_types!{{{text}}}")));
+                paths.push(temporary_source(&format!("shared-types-wrap-{edition}"),
+                    &format!("macro_rules! emit_types {{($($t:tt)*)=>{{$($t)*}}}} macro_rules! wrap_types {{($($t:tt)*)=>{{emit_types!{{$($t)*}}}}}} wrap_types!{{{text}}}")));
+            }
+            for (origin, path) in paths.iter().enumerate() {
+            let (mut db, seal, scope) = configured_impl_catalog_world(path, edition).unwrap();
+            db.trace.detailed = true; let start = db.trace.events.len();
+            let count = crate::traits::upstream::source_terms::check_actual_encodings(&mut db, &seal, scope.crate_key)
+                .unwrap_or_else(|error| panic!("actual shared source encoding {case},edition{edition}: {error:?}"));
+            assert!(count > 0); encoded += count;
+            assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+                QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+            eprintln!("actual shared IR {case},edition{edition},origin{origin}: {count}source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution");
+            }
+        }
+    }
+    eprintln!("actual shared source heads encoded:{encoded}; no typed source-fact publication or upstream solving");
+}
+
+#[test]
+fn unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions() {
+    use crate::{db::{key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+        traits::upstream::configuration::SolverConfigurationKey};
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    for edition in [2015, 2018, 2021, 2024] {
+        for (case, limit, feature) in [
+            ("tests/ui/traits/safety-ok.rs",128,false),
+            ("tests/ui/traits/method-on-deeply-nested-struct-perf.rs",1024,false),
+            ("tests/ui/const-generics/ensure_is_evaluatable.rs",128,true),
+        ] {
+            let path = root.join(case);
+            let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(&path, false, edition,
+                &super::crate_graph::ExternCrates::default(), crate::source::embedded_crates::standard_facade_crates(
+                    &crate::core::profile::ProfileIdentity { edition, ..crate::core::profile::ProfileIdentity::current() }), None).unwrap();
+            let (_, inputs, source, _) = super::compile_inputs::PreparedCompileInputs::prepare(&path, inputs, source, sources).unwrap();
+            let mut db = crate::db::memo::Database::default(); inputs.publish(&mut db).unwrap(); db.trace.detailed = true;
+            let key = SolverConfigurationKey::from_source(source.selection());
+            let first = match db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(key.clone()))) {
+                QueryPoll::Ready(Ok(value)) => value.value, other => panic!("actual source settings: {other:?}"),
+            };
+            let QueryValue::SolverConfiguration(config) = first.as_ref() else { panic!() };
+            assert_eq!(config.recursion_limit(), limit); assert_eq!(config.features().contains("generic_const_exprs"), feature);
+            let second = match db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(key.clone()))) {
+                QueryPoll::Ready(Ok(value)) => value.value, _ => panic!(),
+            };
+            assert!(std::sync::Arc::ptr_eq(&first, &second));
+            let mut wrong = key.clone(); wrong.source.parse.content = Digest([0;32]);
+            assert!(matches!(db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(wrong))), QueryPoll::Ready(Err(_))));
+            let mut wrong = key; wrong.source.cfg = Digest([0;32]);
+            assert!(matches!(db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(wrong))), QueryPoll::Ready(Err(_))));
+            assert!(db.trace.events.iter().all(|event| !matches!(event.key,
+                QueryKey::ImplHeadTypes(_) | QueryKey::ImplPredicates(_) | QueryKey::BodyStructure(_)
+                    | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+            eprintln!("actual root settings {case},edition{edition}:limit{limit},generic_const_exprs{feature}; source-only");
+        }
+    }
+}
+
+#[test]
+fn unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir() {
+    use crate::db::key::QueryKey;
+    let original = include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/lint/fn-ptr-comparisons-some.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        // Original remains unchanged; the appended own trait tests representation
+        // admission, not compiletest diagnostics or original main execution.
+        let path = temporary_source(&format!("erased-function-alias-{edition}"),
+            &format!("{original}\ntrait LrrAliasSignatureWitness {{}} impl LrrAliasSignatureWitness for FnPtr {{}}\n"));
+        let (mut db, seal, scope) = configured_impl_catalog_world(&path, edition).unwrap();
+        db.trace.detailed = true; let start = db.trace.events.len();
+        crate::traits::upstream::source_terms::check_erased_function_pending(&mut db, &seal, scope.crate_key).unwrap();
+        assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+            QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+    }
+}
+
+#[test]
+fn root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation() {
+    use crate::{db::{key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+        traits::upstream::configuration::SolverConfigurationKey};
+    let original = include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/traits/safety-ok.rs");
+    let path = temporary_source("solver-cfg-attributes", &format!("#![cfg_attr(all(), feature(generic_const_exprs))]\n#![cfg_attr(any(), feature(gca_const_items))]\n#![cfg_attr(all(), recursion_limit = r#\"256\"#)]\n#![feature(lrr_unrecognized_source_feature)]\n{original}"));
+    let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(&path, false, 2024,
+        &super::crate_graph::ExternCrates::default(), crate::source::embedded_crates::standard_facade_crates(
+            &crate::core::profile::ProfileIdentity::current()), None).unwrap();
+    let (_, inputs, source, _) = super::compile_inputs::PreparedCompileInputs::prepare(&path, inputs, source, sources).unwrap();
+    let mut db = crate::db::memo::Database::default(); inputs.publish(&mut db).unwrap();
+    let prepared = match db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(SolverConfigurationKey::from_source(source.selection())))) {
+        QueryPoll::Ready(Ok(value)) => value.value, other => panic!("actual cfg_attr settings: {other:?}"),
+    };
+    let QueryValue::SolverConfiguration(prepared) = prepared.as_ref() else { panic!() };
+    assert_eq!(prepared.recursion_limit(), 256);
+    assert!(prepared.features().contains("generic_const_exprs"));
+    assert!(!prepared.features().contains("gca_const_items"));
+    assert!(prepared.features().contains("lrr_unrecognized_source_feature"));
+}

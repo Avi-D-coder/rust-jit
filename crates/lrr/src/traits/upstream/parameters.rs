@@ -16,6 +16,24 @@ pub(crate) struct SourceParameter {
     index: u32,
 }
 impl SourceParameter {
+    /// Impl parameters are all early, own parameters; unlike function lifetimes
+    /// there is no late-bound input/output classification. Actual header only.
+    pub(super) fn from_impl(syntax: &crate::traits::header_syntax::ImplHeaderSyntax,
+        key: ParamKey, kind: BoundKind) -> Result<Self, Diagnostic> {
+        if syntax.canonical_owner().map(|owner| owner.identity()) != Some(key.definition) {
+            return Err(fault("parameter belongs to another actual impl"));
+        }
+        let parameter = syntax.generics().get(key.ordinal as usize)
+            .filter(|parameter| parameter.ordinal == key.ordinal)
+            .ok_or_else(|| fault("parameter absent from actual impl header"))?;
+        let actual = match parameter.kind {
+            GenericKind::Type => BoundKind::Type,
+            GenericKind::Lifetime => BoundKind::Region,
+            GenericKind::Const => BoundKind::Const,
+        };
+        if actual != kind { return Err(fault("impl parameter namespace differs")); }
+        Ok(Self { source: key, kind, index: key.ordinal })
+    }
     pub(crate) fn source(self) -> ParamKey {
         self.source
     }

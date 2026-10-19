@@ -55,6 +55,7 @@ pub(crate) struct ImplCatalogCompletion {
     payload: Digest,
 }
 impl ImplCatalogCompletion {
+    pub(crate) fn root(&self) -> &SourceSelection { &self.plan.root }
     pub(crate) fn require_publication(&self, input: &DiscoveryInput) -> Result<(), Diagnostic> {
         if input.seal.key() != self.plan.key
             || input.seal.fingerprint() != self.parent

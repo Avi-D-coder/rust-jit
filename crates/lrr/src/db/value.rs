@@ -108,6 +108,8 @@ pub enum QueryValue {
     ImplHeaderSyntax(Box<crate::traits::header_syntax::ImplHeaderSyntax>),
     ImplHeadTypes(Box<crate::frontend::impl_head_types::PreparedImplHeadTypes>),
     ImplTraitIdentity(Box<crate::frontend::impl_trait_identity::PreparedImplTraitIdentity>),
+    SolverConfiguration(Box<crate::traits::upstream::configuration::PreparedSolverConfiguration>),
+    ImplSourceTypes(Box<crate::traits::upstream::source_terms::PreparedImplSourceTypes>),
     ImplTraitCatalog(Box<crate::traits::trait_catalog::PreparedImplTraitCatalog>),
     ImplPredicates(Box<crate::frontend::impl_predicates::PreparedImplPredicates>),
     PreparedBodySyntax(Arc<super::memo::source_syntax_inputs::PreparedBodySyntax>),
@@ -237,6 +239,8 @@ impl QueryValue {
         if let (Self::ImplHeaderSyntax(value), QueryKey::ImplHeaderSyntax(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::ImplHeadTypes(value), QueryKey::ImplHeadTypes(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::ImplTraitIdentity(value), QueryKey::ImplTraitIdentity(key)) = (self, key) { return value.key() == key.as_ref(); }
+        if let (Self::SolverConfiguration(value), QueryKey::SolverConfiguration(key)) = (self, key) { return value.matches_key(key); }
+        if let (Self::ImplSourceTypes(value), QueryKey::ImplSourceTypes(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::ImplTraitCatalog(value), QueryKey::ImplTraitCatalog(key)) = (self, key) { return value.key() == key; }
         if let (Self::ImplPredicates(value), QueryKey::ImplPredicates(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::TraitDeclaration(value), QueryKey::TraitDeclaration(key)) = (self, key) { return value.definition() == *key; }
@@ -453,6 +457,8 @@ impl QueryValue {
             Self::ImplHeaderSyntax(value) => { e.u32(57); e.record(value.as_ref()); }
             Self::ImplHeadTypes(value) => { e.u32(58); e.record(value.as_ref()); }
             Self::ImplTraitIdentity(value) => { e.u32(65); e.record(value.as_ref()); }
+            Self::SolverConfiguration(value) => { e.u32(67); e.record(value.as_ref()); }
+            Self::ImplSourceTypes(value) => { e.u32(68); e.record(value.as_ref()); }
             Self::ImplTraitCatalog(value) => { e.u32(66); e.record(value.as_ref()); }
             Self::ImplPredicates(value) => { e.u32(59); e.record(value.as_ref()); }
             Self::TraitDeclaration(value) => { e.u32(60); e.record(value.as_ref()); }
@@ -643,7 +649,7 @@ impl QueryValue {
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
             // E006: no new retained-admission memory accounting.
             Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::InitializerOwnerTemplate(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
             Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),

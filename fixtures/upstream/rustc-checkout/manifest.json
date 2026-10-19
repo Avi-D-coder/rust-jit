@@ -12132,6 +12132,18 @@
       "bytes": 224
     },
     {
+      "path": "tests/ui/lint/fn-ptr-comparisons-some.rs",
+      "git_blob": "c6ddd759baa37614cdffb619baa0b5b24ec87a91",
+      "sha256": "a2e8da2742edb331a42dd860a60b273717abc3dd6f4d95df9a236697cf70cf42",
+      "bytes": 447
+    },
+    {
+      "path": "tests/ui/lint/fn-ptr-comparisons-some.stderr",
+      "git_blob": "8674ce5e4a886cf4b74b539c77855ae813cc9db1",
+      "sha256": "b640ee286c054196eb3b143ccd1084ae745a7fed8e719d405f90c1891d4b7805",
+      "bytes": 1357
+    },
+    {
       "path": "tests/ui/lint/improper-ctypes/allow-phantomdata-in-ffi.rs",
       "git_blob": "a90159d2b5894d7770c8875de6a0232743973117",
       "sha256": "29e0a8a51b8868274c51ccb53ecb3baf8e8051ea0ecc4dd44829bfea69ae3855",
@@ -33006,6 +33018,14 @@
       "path": "tests/ui/lint/dead-code/with-impl.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/fn-ptr-comparisons-some.rs",
+      "directives": [
+        "//@ check-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

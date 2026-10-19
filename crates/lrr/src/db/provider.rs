@@ -358,6 +358,20 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::SolverConfiguration(key) => {
+                return match crate::traits::upstream::configuration::PreparedSolverConfiguration::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SolverConfiguration(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::ImplSourceTypes(key) => {
+                return match crate::traits::upstream::source_terms::PreparedImplSourceTypes::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplSourceTypes(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::ImplTraitCatalog(key) => {
                 return match crate::traits::trait_catalog::PreparedImplTraitCatalog::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplTraitCatalog(Box::new(value))),

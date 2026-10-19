@@ -1,0 +1,621 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T18:06:01.277086+00:00",
+  "parent": "35b509c7e0a732127218a33be8e343a6b23d126a",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held",
+  "scope": "V317-V323 HELD M020 actual source settings and shared-IR Type construction. New pure SolverConfiguration/ImplSourceTypes queries use actual root attributes/cfg, canonical trait/nominal source receipts and impl parameter ownership. Scoped Context builds real Types and Args without source queries, catalog copies, guessed IDs, dummy callbacks or bypassing upstream generic-layout guards. Final macOS Rust1.99.0 library/CLI builds and8/8focused controls pass:68actual impl heads in24ordinary/user-macro/wrapper source worlds across all4editions;12root settings worlds; common cfg_attr/unknown-feature behavior; unsafe extern alias metadata gap remains explicit all4editions;997raw trait memberships;32head source equivalence; unchanged local main and12Copy origin/edition worlds. Review removed a guessed safe-Rust function constructor: full source ABI/safety/alias metadata remains a FunctionMetadata hold. V322 earlier44head/2control success retains its source; failed compile cohorts and unavailable shell terminals are preserved honestly. Actual typed DefinitionFacts/ParamEnv/ADT/lang-item/transitive closure, compatible inference/delegate, ReadyProvider, actual upstream root evaluation and runtime migration remain unimplemented. Zero new distinct stock runtime gains or refreshed suite total; complete M019/M020/interpreter/JIT and Linux gates remain open.",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "attempts": {
+    "317": {
+      "scope": "Build fails on SourceSelection query-key derives and pinned AST metadata variant. No runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:43:11.970897+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8492,
+          "source_sha256": "51470398b76ddc1f007e06a443e945bda119e7cfe9da0fbe4a6205e0c2a632ac",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:44:21.895319+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8492,
+          "source_sha256": "51470398b76ddc1f007e06a443e945bda119e7cfe9da0fbe4a6205e0c2a632ac",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 16196,
+          "shell_exit": 101,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": false
+          },
+          "messages_sha256": "4668d8807ffe528f8495133992b90b6e7a3283cb4fc60894192052bb7c5d7b5b",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 4 previous errors; 32 warnings emitted\n",
+          "errors": [
+            "error[E0277]: the trait bound `changes::SourceSelection: std::cmp::Ord` is not satisfied\n    --> crates/lrr/src/db/key.rs:182:25\n     |\n 147 | #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]\n     |                                       --- in this derive macro expansion\n...\n 182 |     SolverConfiguration(Box<crate::source::changes::SourceSelection>),\n     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::cmp::Ord` is not implemented for `changes::SourceSelection`\n     |\nhelp: the trait `std::cmp::Ord` is conditionally implemented for `Box<T, A>`\n    --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/alloc/src/boxed.rs:2200:1\n     |\n2200 | impl<T: ?Sized + Ord, A: Allocator> Ord for Box<T, A> {\n     | ^^^^^^^^^^^^^^^^^---^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n     |                  |\n     |                  unsatisfied requirement introduced here: `changes::SourceSelection: std::cmp::Ord`\n     = note: required for `Box<changes::SourceSelection>` to implement `std::cmp::Ord`\nhelp: consider annotating `changes::SourceSelection` with `#[derive(Ord)]`\n    -->  crates/lrr/src/source/changes.rs:129:1\n     |\n 129 + #[derive(Ord)]\n 130 | pub struct SourceSelection {\n     |\n\n",
+            "error[E0277]: the trait bound `changes::SourceSelection: serde::Serialize` is not satisfied\n   --> crates/lrr/src/db/key.rs:147:56\n    |\n147 | #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]\n    |                                                        ^^^^^^^^^ unsatisfied trait bound\n...\n182 |     SolverConfiguration(Box<crate::source::changes::SourceSelection>),\n    |                         --- required by a bound introduced by this call\n    |\nhelp: the trait `Serialize` is not implemented for `changes::SourceSelection`\n   --> crates/lrr/src/source/changes.rs:129:1\n    |\n129 | pub struct SourceSelection {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `changes::SourceSelection` type\n    = note: for types from other crates check whether the crate offers a `serde` feature flag\n    = help: the following other types implement trait `Serialize`:\n              &'a T\n              &'a mut T\n              ()\n              (T,)\n              (T0, T1)\n              (T0, T1, T2)\n              (T0, T1, T2, T3)\n              (T0, T1, T2, T3, T4)\n            and 361 others\n    = note: required for `Box<changes::SourceSelection>` to implement `Serialize`\nnote: required by a bound in `serialize_newtype_variant`\n   --> /Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.229/src/ser/mod.rs:958:21\n    |\n950 |     fn serialize_newtype_variant<T>(\n    |        ------------------------- required by a bound in this associated function\n...\n958 |         T: ?Sized + Serialize;\n    |                     ^^^^^^^^^ required by this bound in `Serializer::serialize_newtype_variant`\n    = note: this error originates in the derive macro `Serialize` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n",
+            "error[E0277]: the trait bound `changes::SourceSelection: serde::Deserialize<'de>` is not satisfied\n    --> crates/lrr/src/db/key.rs:182:25\n     |\n 182 |     SolverConfiguration(Box<crate::source::changes::SourceSelection>),\n     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound\n     |\nhelp: the trait `Deserialize<'_>` is not implemented for `changes::SourceSelection`\n    --> crates/lrr/src/source/changes.rs:129:1\n     |\n 129 | pub struct SourceSelection {\n     | ^^^^^^^^^^^^^^^^^^^^^^^^^^\n     = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `changes::SourceSelection` type\n     = note: for types from other crates check whether the crate offers a `serde` feature flag\n     = help: the following other types implement trait `Deserialize<'de>`:\n               &'a [u8]\n               &'a camino::Utf8Path\n               &'a std::path::Path\n               &'a str\n               ()\n               (T,)\n               (T0, T1)\n               (T0, T1, T2)\n             and 331 others\n     = note: required for `Box<changes::SourceSelection>` to implement `Deserialize<'_>`\nnote: required by a bound in `newtype_variant`\n    --> /Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.229/src/de/mod.rs:2182:12\n     |\n2180 |     fn newtype_variant<T>(self) -> Result<T, Self::Error>\n     |        --------------- required by a bound in this associated function\n2181 |     where\n2182 |         T: Deserialize<'de>,\n     |            ^^^^^^^^^^^^^^^^ required by this bound in `VariantAccess::newtype_variant`\n     = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672.long-type-13107711146235880346.txt'\n     = note: consider using `--verbose` to print the full type name to the console\n\n",
+            "error[E0599]: no variant, associated function, or constant named `NameValueMeta` found for enum `Meta` in the current scope\n  --> crates/lrr/src/syntax/solver_configuration.rs:33:48\n   |\n33 |                 (\"recursion_limit\", ast::Meta::NameValueMeta(meta)) if recursion_limit.is_none() => {\n   |                                                ^^^^^^^^^^^^^ variant, associated function, or constant not found in `Meta`\n   |\nhelp: there is a variant with a similar name\n   |\n33 -                 (\"recursion_limit\", ast::Meta::NameValueMeta(meta)) if recursion_limit.is_none() => {\n33 +                 (\"recursion_limit\", ast::Meta::KeyValueMeta(meta)) if recursion_limit.is_none() => {\n   |\n\n"
+          ]
+        }
+      }
+    },
+    "318": {
+      "scope": "Library builds after actual key wrapper and pinned AST correction. No runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:44:35.042083+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8492,
+          "source_sha256": "cf4f3c8f84d5430968fa3550425a861946132985fe2ebe48e83244a67017d0a7",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:48:50.676067+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8492,
+          "source_sha256": "cf4f3c8f84d5430968fa3550425a861946132985fe2ebe48e83244a67017d0a7",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "2064381480aff3a64fa1c44b465d0ff989e334023a801320761743f7d58f116b"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 39693,
+          "shell_exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "cdddbe68ae5265d811be8f01a08c179a3723f78d326a084a69cdfa922a1187bb",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.42s\n",
+          "errors": []
+        }
+      }
+    },
+    "319": {
+      "scope": "Build fails on genuine Box catalog ownership, upstream guarded TraitRef constructor and mechanical shared-IR API mismatches. No runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:48:51.277878+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "c1be2e47c7192aac88238bce60f70480784d57bf22032fdef824257c2ee60a16",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:50:12.220534+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "c1be2e47c7192aac88238bce60f70480784d57bf22032fdef824257c2ee60a16",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 30421,
+          "shell_exit": 101,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": false
+          },
+          "messages_sha256": "422cf0070a70321cb92a35ceb69995e80818106adcb276d527d4103649279c37",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 6 previous errors; 32 warnings emitted\n",
+          "errors": [
+            "error[E0308]: mismatched types\n    --> crates/lrr/src/traits/upstream/configuration.rs:89:73\n     |\n  89 |                 Some(InputValue::DiscoverySeal(current)) if Arc::ptr_eq(current, &catalog)) {\n     |                                                             ----------- ^^^^^^^ expected `&Arc<DiscoveryInput>`, found `&Box<DiscoveryInput>`\n     |                                                             |\n     |                                                             arguments to this function are incorrect\n     |\n     = note: expected reference `&std::sync::Arc<seals::DiscoveryInput>`\n                found reference `&Box<seals::DiscoveryInput>`\nnote: associated function defined here\n    --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/alloc/src/sync.rs:2172:12\n     |\n2172 |     pub fn ptr_eq(this: &Self, other: &Self) -> bool {\n     |            ^^^^^^\n\n",
+            "error[E0308]: mismatched types\n   --> crates/lrr/src/traits/upstream/source_terms.rs:52:75\n    |\n 52 |         let mut plan = Self { key: key.clone(), head, catalog: Arc::clone(catalog),\n    |                                                                ---------- ^^^^^^^ expected `&Arc<DiscoveryInput>`, found `&Box<DiscoveryInput>`\n    |                                                                |\n    |                                                                arguments to this function are incorrect\n    |\n    = note: expected reference `&std::sync::Arc<seals::DiscoveryInput>`\n               found reference `&Box<seals::DiscoveryInput>`\nnote: method defined here\n   --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/clone.rs:236:8\n    |\n236 |     fn clone(&self) -> Self;\n    |        ^^^^^\n\n",
+            "error: cannot construct `rustc_type_ir::TraitRef<_>` with struct literal syntax due to private fields\n  --> crates/lrr/src/traits/upstream/source_terms.rs:97:16\n   |\n97 |             Ok(ty::TraitRef { def_id: definition, args: cx.list(args) })\n   |                ^^^^^^^^^^^^\n   |\n   = note: ...and other private field `_use_trait_ref_new_instead` that was not provided\nhelp: you might have meant to use an associated function to build this type\n   |\n97 -             Ok(ty::TraitRef { def_id: definition, args: cx.list(args) })\n97 +             Ok(ty::TraitRef::new_from_args(_, _, _))\n   |\n97 -             Ok(ty::TraitRef { def_id: definition, args: cx.list(args) })\n97 +             Ok(ty::TraitRef::new(_, _, _))\n   |\n97 -             Ok(ty::TraitRef { def_id: definition, args: cx.list(args) })\n97 +             Ok(ty::TraitRef::from_assoc(_, _, _))\n   |\n97 -             Ok(ty::TraitRef { def_id: definition, args: cx.list(args) })\n97 +             Ok(ty::TraitRef::identity(_, _))\n   |\n\n",
+            "error[E0063]: missing field `_tcx` in initializer of `rustc_type_ir::BoundConst<_>`\n   --> crates/lrr/src/traits/upstream/source_terms.rs:144:93\n    |\n144 | ...   ConstKind::Bound(BoundVarIndexKind::Bound(DebruijnIndex::from_u32(*depth)), BoundConst { var: BoundVar::from_u32(*index) }) },\n    |                                                                                   ^^^^^^^^^^ missing `_tcx`\n\n",
+            "error[E0599]: no variant, associated function, or constant named `from_bool` found for enum `rustc_type_ir::Mutability` in the current scope\n   --> crates/lrr/src/traits/upstream/source_terms.rs:151:89\n    |\n151 |             return Ok(self.cx.ty(TyKind::RawPtr(self.ty(pointee, binders)?, Mutability::from_bool(mutable))));\n    |                                                                                         ^^^^^^^^^ variant, associated function, or constant not found in `rustc_type_ir::Mutability`\n\n",
+            "error[E0599]: no variant, associated function, or constant named `from_bool` found for enum `rustc_type_ir::Mutability` in the current scope\n   --> crates/lrr/src/traits/upstream/source_terms.rs:171:127\n    |\n171 | ...rs)?, Mutability::from_bool(*mutable)),\n    |                      ^^^^^^^^^ variant, associated function, or constant not found in `rustc_type_ir::Mutability`\n\n"
+          ]
+        }
+      }
+    },
+    "320": {
+      "scope": "Library Cargo reports successful build. Original shell handle could not be recovered; do not infer a shell exit. No runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:50:55.144806+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "6a6f8d81da4fbc5df04d57d0c8172282ff33c3f9afcdb0c3c1f98d1308579dce",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:54:06.005012+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "6a6f8d81da4fbc5df04d57d0c8172282ff33c3f9afcdb0c3c1f98d1308579dce",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "529f7c6bb2da9232807f3bbcf14b952e32db770663d729ee432bb16009edaae4"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 33398,
+          "shell_exit": null,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "e63230e6477f7e3aba2c6c7a7db0dc1815c9f6755283e15339f5b9d5c25e4190",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 34.86s\n",
+          "errors": [],
+          "shell_receipt_note": "Original shell terminal unavailable after context recovery; actual Cargo JSON/log terminal retained. No invented shell exit."
+        }
+      }
+    },
+    "321": {
+      "scope": "Test build fails on Database import and invariant scoped-IR helper lifetimes. No runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:54:06.546548+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "5c84320e7a6b78630292559acd5609726923e3826995bc022a1bb8276f932af1",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:54:50.506906+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "5c84320e7a6b78630292559acd5609726923e3826995bc022a1bb8276f932af1",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 26830,
+          "shell_exit": 101,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": false
+          },
+          "messages_sha256": "5e8eebf102d097786cfdd2210edb027b8f677d07efdd3d58733fb36cf92220e1",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 6 previous errors; 32 warnings emitted\n",
+          "errors": [
+            "error[E0433]: cannot find type `Database` in this scope\n    --> crates/lrr/src/cli/preentry_loader_tests.rs:2720:26\n     |\n2720 |             let mut db = Database::default(); inputs.publish(&mut db).unwrap(); db.trace.detailed = true;\n     |                          ^^^^^^^^ use of undeclared type `Database`\n     |\nhelp: consider importing this struct\n     |\n   2 + use crate::db::memo::Database;\n     |\n\n",
+            "error[E0623]: lifetime mismatch\n   --> crates/lrr/src/traits/upstream/source_terms.rs:282:1\n    |\n282 | fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^--------------------------------------^\n    | |                                               |\n    | |                                               these two types are declared with different lifetimes...\n    | ...but data from `encoded` flows into `encoded` here\n    |\n    = note: each elided lifetime in input position becomes a distinct lifetime\nhelp: consider introducing a named lifetime parameter\n    |\n282 - fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n282 + fn check_shape<'a>(source: &TyTerm, encoded: Ty<'a, prepared::PreparedProvider<'a>>) {\n    |\n\n",
+            "error[E0623]: lifetime mismatch\n   --> crates/lrr/src/traits/upstream/source_terms.rs:282:1\n    |\n282 | fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^--------------------------------------^\n    | |                                        |\n    | |                                        these two types are declared with different lifetimes...\n    | ...but data from `encoded` flows into `encoded` here\n    |\n    = note: each elided lifetime in input position becomes a distinct lifetime\nhelp: consider introducing a named lifetime parameter\n    |\n282 - fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n282 + fn check_shape<'a>(source: &TyTerm, encoded: Ty<'a, prepared::PreparedProvider<'a>>) {\n    |\n\n",
+            "error[E0623]: lifetime mismatch\n   --> crates/lrr/src/traits/upstream/source_terms.rs:282:42\n    |\n282 | fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n    |                                          ^^^^^^^------------------------------^\n    |                                          |      |\n    |                                          |      these two types are declared with different lifetimes...\n    |                                          ...but data from `encoded` flows into `encoded` here\n    |\n    = note: each elided lifetime in input position becomes a distinct lifetime\nhelp: consider introducing a named lifetime parameter\n    |\n282 - fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n282 + fn check_shape<'a>(source: &TyTerm, encoded: Ty<'a, prepared::PreparedProvider<'a>>) {\n    |\n\n",
+            "error: lifetime may not live long enough\n   --> crates/lrr/src/traits/upstream/source_terms.rs:282:1\n    |\n282 | fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    | |                               |\n    | |                               has type `model::Ty<'1, PreparedProvider<'_>>`\n    | |                               has type `model::Ty<'_, PreparedProvider<'2>>`\n    | requires that `'1` must outlive `'2`\n    |\nhelp: consider introducing a named lifetime parameter\n    |\n282 - fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n282 + fn check_shape<'a>(source: &TyTerm, encoded: Ty<'a, prepared::PreparedProvider<'a>>) {\n    |\n\n",
+            "error: lifetime may not live long enough\n   --> crates/lrr/src/traits/upstream/source_terms.rs:282:1\n    |\n282 | fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    | |                               |\n    | |                               has type `model::Ty<'_, PreparedProvider<'2>>`\n    | |                               has type `model::Ty<'1, PreparedProvider<'_>>`\n    | requires that `'2` must outlive `'1`\n    |\nhelp: consider introducing a named lifetime parameter\n    |\n282 - fn check_shape(source: &TyTerm, encoded: Ty<'_, prepared::PreparedProvider<'_>>) {\n282 + fn check_shape<'a>(source: &TyTerm, encoded: Ty<'a, prepared::PreparedProvider<'a>>) {\n    |\n\n"
+          ]
+        }
+      }
+    },
+    "322": {
+      "scope": "Library builds, two exact controls pass: source settings in12worlds and44actual head encodings in16worlds. Earlier function constructor was later found unsound and removed; these controls never exercised it.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:54:51.032149+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "69b160e58c213ece4ebade9a7b770f05f7b730c495c3fd4335d1fd70d6b301f5",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:55:44.048039+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "69b160e58c213ece4ebade9a7b770f05f7b730c495c3fd4335d1fd70d6b301f5",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "ea4a6203c1d2348aa158d335ccd651318e76d7756b44abed2325d5eea20b0b62"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:58:21.204927+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8493,
+          "source_sha256": "69b160e58c213ece4ebade9a7b770f05f7b730c495c3fd4335d1fd70d6b301f5",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "ea4a6203c1d2348aa158d335ccd651318e76d7756b44abed2325d5eea20b0b62"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 22254,
+          "shell_exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "e95456ac67d58220aaba010e043ed759e88ccb72cbe1e6cb62a7c64f8875ecd7",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.23s\n",
+          "errors": []
+        }
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 6.127,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 40.699,
+          "log": "control-1.log"
+        }
+      ],
+      "control_logs": {
+        "control-0.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions ... actual root settings tests/ui/traits/safety-ok.rs,edition2015:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2015:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2015:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2018:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2018:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2018:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2021:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2021:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2021:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2024:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2024:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2024:limit128,generic_const_exprstrue; source-only\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1755 filtered out; finished in 5.68s\n\n",
+        "control-1.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions ... actual shared IR tests/ui/traits/safety-ok.rs,edition2015: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2015: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2015: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2015: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/traits/safety-ok.rs,edition2018: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2018: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2018: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2018: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/traits/safety-ok.rs,edition2021: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2021: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2021: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2021: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/traits/safety-ok.rs,edition2024: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2024: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2024: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2024: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:44; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1755 filtered out; finished in 40.28s\n\n"
+      },
+      "control_terminal": {
+        "session": 62432,
+        "exit": 0
+      }
+    },
+    "323": {
+      "scope": "Final held source/configuration and actual shared-IR component. No true upstream root-goal evaluation or newly passing distinct stock runtime case.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:00:20.228246+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8495,
+          "source_sha256": "d4af496333e5fc7acbe55765147263953c009f530229af14280560a947e3b7f4",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:02:22.621309+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8495,
+          "source_sha256": "d4af496333e5fc7acbe55765147263953c009f530229af14280560a947e3b7f4",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "65dbf0da6517ee51bc916cb1a7ca466d9395514c251451151db4e940754087ee"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:06:01.037966+00:00",
+          "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+          "file_count": 8495,
+          "source_sha256": "d4af496333e5fc7acbe55765147263953c009f530229af14280560a947e3b7f4",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "65dbf0da6517ee51bc916cb1a7ca466d9395514c251451151db4e940754087ee"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": null,
+          "shell_exit": null,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "de022eff23bbfbca58a35da744be541822e1d1688f99329c0fe50e65a1952468",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.06s\n",
+          "errors": [],
+          "shell_receipt_note": "Original shell terminal unavailable after context recovery; actual Cargo JSON/log terminal retained. No invented shell exit."
+        },
+        "cli": {
+          "session": 16514,
+          "shell_exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.67s\n",
+          "messages_sha256": "5ab0c6d6f2180e8ea7ce9d93c00c6d7ff7c06117f83456158797f970dd481e7e",
+          "inputs": {
+            "schema": "lrr/validation-inputs/v2",
+            "time_utc": "2026-10-19T18:04:46.395403+00:00",
+            "head": "35b509c7e0a732127218a33be8e343a6b23d126a",
+            "file_count": 8495,
+            "source_sha256": "d4af496333e5fc7acbe55765147263953c009f530229af14280560a947e3b7f4",
+            "source_matches_before": true,
+            "head_matches_before": true,
+            "binaries": {
+              "cli": {
+                "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "sha256": "babc426961a73cb5559c24f8b0b739762f664093900dbc9060edfbad0a5367e6"
+              }
+            },
+            "scope": "CLI built on the same frozen source; not executed as a CLI runtime acceptance run"
+          }
+        }
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 5.698,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 62.157,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 10.231,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.974,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 3.493,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 31.546,
+          "log": "control-5.log"
+        },
+        {
+          "selector": "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.904,
+          "log": "control-6.log"
+        },
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 67.897,
+          "log": "control-7.log"
+        }
+      ],
+      "control_logs": {
+        "control-0.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions ... actual root settings tests/ui/traits/safety-ok.rs,edition2015:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2015:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2015:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2018:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2018:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2018:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2021:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2021:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2021:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2024:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2024:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2024:limit128,generic_const_exprstrue; source-only\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 5.26s\n\n",
+        "control-1.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions ... actual shared IR tests/ui/traits/safety-ok.rs,edition2015,origin0: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2015,origin0: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2015,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2015,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2015,origin1: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2015,origin2: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/traits/safety-ok.rs,edition2018,origin0: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2018,origin0: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2018,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2018,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2018,origin1: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2018,origin2: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/traits/safety-ok.rs,edition2021,origin0: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2021,origin0: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2021,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2021,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2021,origin1: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2021,origin2: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/traits/safety-ok.rs,edition2024,origin0: 1source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-self-arg-trait.rs,edition2024,origin0: 4source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2024,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2024,origin0: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2024,origin1: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2024,origin2: 3source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:68; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 61.74s\n\n",
+        "control-2.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 9.73s\n\n",
+        "control-3.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 0.56s\n\n",
+        "control-4.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types ... complete raw catalog:997; pending trait memberships:0; no typed impl preparation\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 3.08s\n\n",
+        "control-5.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation ... actual impl head tests/ui/traits/safety-ok.rs edition2015 Digest(aedc0491b815ff7fd54a9a8dce804a5f1e24f68e29feb21ce609666cee52fcc0): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(25bf87ba6fd98877bcd5de90794e66e3c83a550ba630d5d4435381cea8d081af), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(910d60c9d6b6f06a00c2afdd5bb560ffd8f619baa3a4be53acdadb980d18f4b9): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(41f9bcc8ead045479106be6f24172865c01c617cd672aca8218bedbbdbecd2d1), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(c6bf06045b0a05fe25ef9fb51023a9f50eedac16e64c3132c3dc28733bb1b4fc): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(60e416ea0b916330197fc137be5d5c4077e0afc174e8536ea7ccceb4815fddef), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2018 Digest(44637c632ec24d5b4a28aa03681d864ffc275e524b153e6a4dbc0e9ebc290d76): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(d82ffa1d5b8cb0e0fed278cfa4e3cd3f0c30d611464a7dd11fa39114d6dd3a02), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(e73f751ac445fa42ebdfc06316649b397258b276112b3818df4a17a30879110a), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(39fb2661ffdb427c3b9d27101aa7e73e2fb73bb714b99c3097f4532356f70bb1): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(b930ecb553939baf6214ea1ebdde0257f49f81d48adc0e64e26f0cccdef541c6), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(77a852109046e37f624c0938bdf16d3fa600663d90481e8911db3542a6b7327a): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(45189a2b53773bf272e568a794f6af16c9c973910f173c7be79c81c7abf31d19), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(e73f751ac445fa42ebdfc06316649b397258b276112b3818df4a17a30879110a), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(4d92e154b322b126ae6fc4b47f435b3f7f322949a4183aa52c48a15bd6f04261), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(b930ecb553939baf6214ea1ebdde0257f49f81d48adc0e64e26f0cccdef541c6), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2021 Digest(b49e8d0bf0d0f7f2aad25ac76ef37918282e5211ea77965b8c28abc02bc69cd5): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(0b73a4e26b5d482915cf31d0a203a540b4c90f59b36c2c48c987279f96d380b7), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(438e9abe8548e2ffa1b6710d5912ec4ef085dbe91f33ce1ddaac5c042d2115a4): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(49401090e8b6c4c3e8f3f95cce8740b214073537ac0aa81a42ccd549a331da95): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(b64484eff11d3334b50208f6ee4ee5bc57b9a5d52f13de3eccae31d3d09ed0a3), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2c81936fa649440b87fb6de1ee0a513a0325e3a8949b51aee3b9ef0fe67965e9), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(da62cd5520c48b49ccbd69d7d63a86cae69ef68846a23fadd909cd43ff5e37d7), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual catalog head Types: 32/32; pending=[]; no solver or guest execution\nactual generated declaration Type occurrence controls: 16; no guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 31.13s\n\n",
+        "control-6.log": "\nrunning 1 test\ntest cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions ... unchanged annotated local impl main edition2015: complete through ordinary interpreter\nunchanged annotated local impl main edition2018: complete through ordinary interpreter\nunchanged annotated local impl main edition2021: complete through ordinary interpreter\nunchanged annotated local impl main edition2024: complete through ordinary interpreter\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 0.53s\n\n",
+        "control-7.log": "\nrunning 1 test\ntest cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 67.44s\n\n"
+      },
+      "control_terminal": {
+        "session": 84136,
+        "exit": 0
+      }
+    }
+  },
+  "imported_witness": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "manifest_sha256": "809303b031263033d6dcefbdfbe79fb5f6b733414e17ef135746918e2b2beaba",
+    "license": "MIT OR Apache-2.0",
+    "cases": [
+      {
+        "path": "tests/ui/lint/fn-ptr-comparisons-some.rs",
+        "directives": [
+          "//@ check-pass"
+        ],
+        "lrr_acceptance": "pending",
+        "native_acceptance": "unexecuted"
+      }
+    ],
+    "files": [
+      {
+        "path": "tests/ui/lint/fn-ptr-comparisons-some.rs",
+        "git_blob": "c6ddd759baa37614cdffb619baa0b5b24ec87a91",
+        "sha256": "a2e8da2742edb331a42dd860a60b273717abc3dd6f4d95df9a236697cf70cf42",
+        "bytes": 447
+      },
+      {
+        "path": "tests/ui/lint/fn-ptr-comparisons-some.stderr",
+        "git_blob": "8674ce5e4a886cf4b74b539c77855ae813cc9db1",
+        "sha256": "b640ee286c054196eb3b143ccd1084ae745a7fed8e719d405f90c1891d4b7805",
+        "bytes": 1357
+      }
+    ],
+    "scope": "Original source plus expected warnings imported unchanged. Actual alias header used only in an external adaptation; no original main execution, compiletest diagnostics or full-fixture pass."
+  },
+  "commands": [
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "python3.12 tools/import_rustc_tests.py tests/ui/lint/fn-ptr-comparisons-some.rs",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v323 before",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v323 after-build --cargo-messages artifacts/validation-current-v323/lib-build.jsonl",
+    "python3.12 tools/validation/run_controls.py artifacts/validation-current-v323 worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types-probe.json",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v323 after-runtime",
+    "python3.12 worktracks/check.py",
+    "python3.12 tools/spec_consistency_audit.py",
+    "git diff --check"
+  ],
+  "not_established": [
+    "ReadyProvider or fully published source-backed typed facts",
+    "Actual upstream trait goal evaluation, inference/delegate, full transitive source closure or source-bound selected-member execution",
+    "Function ABI/safety/alias provenance, arbitrary dyn/opaque/projection/local region or typed const encoding",
+    "Broad primitive/container/reference/array/binder branch acceptance; only selected fixture kinds structurally compared",
+    "Cargo/rustflags solver flag profiles, mixed edition/parent/attribute full matrices",
+    "New distinct stock runtime gains, refreshed suite total, original new witness main/diagnostics/full-fixture pass",
+    "M019/M020, interpreter correctness/runtime prerequisites, guest JIT, Linux, speed/scaling or security release acceptance"
+  ],
+  "document_checks": {
+    "scope": "document/source hygiene only, not runtime acceptance",
+    "session": 67384,
+    "exit": 0,
+    "worktracks_terminal": "Plan integrity: 12 tracks, 60 items, 49 claims; no runtime acceptance claimed.\n",
+    "spec_terminal": "{\n  \"scope\": \"document consistency only\",\n  \"passed\": true,\n  \"errors\": []\n}\n",
+    "git_diff_check_exit": 0
+  }
+}

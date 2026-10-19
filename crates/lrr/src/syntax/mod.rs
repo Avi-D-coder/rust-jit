@@ -103,3 +103,5 @@ pub(crate) mod source_constraints;
 pub(crate) use scalar_pattern_binding::BindingPreludePolicies;
 
 pub(crate) use thunks::closure_thunk::{capture_use, SourceCaptureUse, merge_capture};
+
+pub(crate) mod solver_configuration;

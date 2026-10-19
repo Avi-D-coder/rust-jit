@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V312-V316 HELD M019/M020 demanded trait source candidates. New ordinary memoized ImplTraitIdentity extracts the shared projection/bound Type-namespace/trait-declaration prefix before self Types, generic arguments and predicates; ImplHeadTypes and membership share canonical metadata observation. ImplTraitCatalog retains complete active raw/canonical memberships, including pending outcomes, and cannot certify absence from pending/scope/foreign worlds. PreparedFacts now requires this actual same-catalog proof; PreparedProvider::publish removes the whole-catalog typed cardinality and duplicate all-source attachment scan, retains one-to-one demanded metadata/source identity, and validates exact demanded buckets through the source-ID require_translation method. No custom solver or macro/runtime evaluator. Final V316 macOS Rust1.99.0 library/CLI builds and8/8controls pass: complete997-header membership with zero pending and no full impl Type/predicate/body demands; one actual Foo candidate out of995source declarations in all4editions, missing/changed/foreign-world source-ID refusals; unresolved-no-absence; borrowed/generic identities2/2all4editions;32-head identity/full-head equivalence; generated input/epoch regressions; unchanged local main; existing12Copy origin/edition worlds. V3131/1andV3146/6 retain their source; V312 routing and V315 test Seal API compile failures preserved. The source-ID subset control does not instantiate typed PreparedFacts, ReadyProvider, inference or upstream root evaluation. Typed term/binder/ParamEnv/predicate/layout/lang-item translation, transitive closure and actual interpreter solver invocation remain missing. Zero new distinct stock runtime gains or refreshed suite total. Complete M019/M020, arbitrary generated/mixed/import/parent matrices, interpreter and guest JIT remain held.",
+      "scope": "V317-V323 HELD M020 actual source settings and shared-IR Type construction. New pure SolverConfiguration/ImplSourceTypes queries use actual root attributes/cfg, canonical trait/nominal source receipts and impl parameter ownership. Scoped Context builds real Types and Args without source queries, catalog copies, guessed IDs, dummy callbacks or bypassing upstream generic-layout guards. Final macOS Rust1.99.0 library/CLI builds and8/8focused controls pass:68actual impl heads in24ordinary/user-macro/wrapper source worlds across all4editions;12root settings worlds; common cfg_attr/unknown-feature behavior; unsafe extern alias metadata gap remains explicit all4editions;997raw trait memberships;32head source equivalence; unchanged local main and12Copy origin/edition worlds. Review removed a guessed safe-Rust function constructor: full source ABI/safety/alias metadata remains a FunctionMetadata hold. V322 earlier44head/2control success retains its source; failed compile cohorts and unavailable shell terminals are preserved honestly. Actual typed DefinitionFacts/ParamEnv/ADT/lang-item/transitive closure, compatible inference/delegate, ReadyProvider, actual upstream root evaluation and runtime migration remain unimplemented. Zero new distinct stock runtime gains or refreshed suite total; complete M019/M020/interpreter/JIT and Linux gates remain open.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1815,11 +1815,16 @@
         "worktracks/05-trait-goal-engine/2026-10-19-demanded-trait-probe.json",
         "worktracks/05-trait-goal-engine/2026-10-19-demanded-trait-review.md",
         "worktracks/evidence/2026-10-19-v312-v316-demanded-trait-candidates.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-demanded-trait-final-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-demanded-trait-final-controls.json",
+        "worktracks/evidence/2026-10-19-v317-v323-upstream-source-types.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types-probe.json",
+        "crates/lrr/src/syntax/solver_configuration.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T17:36:13.771330+00:00",
+      "updated_at": "2026-10-19T18:06:25.762036+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1897,5 +1902,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-19T17:36:13.771330+00:00"
+  "updated_at": "2026-10-19T18:06:25.762036+00:00"
 }
