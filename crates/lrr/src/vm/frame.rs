@@ -405,7 +405,9 @@ pub struct Frame {
     pub(crate) call_cells: Vec<CellId>,
     pub(crate) call_types: Vec<TypeId>,
     pub(crate) call_arguments: Option<super::call::ArgumentPacket>,
-    context: Option<super::context::GenericEnv>,
+    context: Option<Arc<super::context::GenericEnv>>,
+    /// Creating definition's generic bindings, separate from closure parameters/results.
+    lexical_context: Option<Arc<super::context::GenericEnv>>,
     parameters: Vec<Option<CellId>>,
     parameters_initialized: bool,
     parameter_sources: Vec<crate::traits::term::TyTerm>,
@@ -660,6 +662,7 @@ impl Frame {
             call_types: vec![],
             call_arguments: None,
             context: None,
+            lexical_context: None,
             parameters: Vec::new(),
             parameters_initialized: false,
             parameter_sources: Vec::new(),
@@ -1072,7 +1075,7 @@ impl Frame {
         &self, declared: &crate::traits::term::TyTerm,
     ) -> Option<crate::traits::term::TyTerm> {
         let crate::traits::term::TyTerm::Param(key) = declared else { return None; };
-        self.context.as_ref()?.symbolic_binding(*key)
+        self.generic_context()?.symbolic_binding(*key)
             .filter(|bound| crate::frontend::call_contracts::closed_term(bound)).cloned()
     }
     pub(crate) fn parameter_place(
@@ -1472,13 +1475,35 @@ impl Frame {
         if self.counters.operations_started != 0
             || !self.active_scopes.is_empty()
             || self.context.is_some()
+            || self.lexical_context.is_some()
             || context.definition().definition != self.body.body().definition
         {
             return Err(invalid(
                 "definition environment requires its fresh accepted frame",
             ));
         }
-        self.context = Some(context);
+        self.context = Some(Arc::new(context));
+        Ok(())
+    }
+    pub(crate) fn shared_generic_context(&self) -> Option<Arc<super::context::GenericEnv>> {
+        self.context.as_ref().or(self.lexical_context.as_ref()).map(Arc::clone)
+    }
+    fn generic_context(&self) -> Option<&super::context::GenericEnv> {
+        self.context.as_deref().or(self.lexical_context.as_deref())
+    }
+    pub(crate) fn install_closure_context(
+        &mut self,
+        context: Arc<super::context::GenericEnv>,
+    ) -> Result<(), Diagnostic> {
+        if self.counters.operations_started != 0
+            || !self.active_scopes.is_empty()
+            || self.context.is_some()
+            || self.lexical_context.is_some()
+            || context.definition().definition != self.body.body().definition
+        {
+            return Err(invalid("closure lexical environment requires its fresh owning body"));
+        }
+        self.lexical_context = Some(context);
         Ok(())
     }
     /// Whether a source view may be retained as a parameter's identity.
@@ -2047,8 +2072,7 @@ impl Frame {
         let definition = self.body.body().definition;
         match term {
             TyTerm::Param(key) if key.definition == definition => self
-                .context
-                .as_ref()
+                .generic_context()
                 .and_then(|context| {
                     context
                         .symbolic_binding(*key)
@@ -2090,10 +2114,7 @@ impl Frame {
         if key.definition != self.body.body().definition {
             return Err(invalid("hint parameter belongs to another definition"));
         }
-        Ok(self
-            .context
-            .as_ref()
-            .and_then(|context| context.runtime_binding(key)))
+        Ok(self.generic_context().and_then(|context| context.runtime_binding(key)))
     }
     // E-R5-006: ignored, remove at callers
     pub fn set_fuel_limit(&mut self, _limit: u64) -> Result<(), Diagnostic> {
@@ -4154,8 +4175,7 @@ impl Frame {
             matches!(source, crate::traits::term::TyTerm::Param(key)
                 if key.definition != self.body.body().definition
                     || self
-                        .context
-                        .as_ref()
+                        .generic_context()
                         .and_then(|context| context.runtime_binding(key))
                         .is_none())
         }) {

@@ -51,6 +51,18 @@ enum Stored {
 }
 
 impl Frame {
+    /// Same actual source/application key for target registration and VM value creation.
+    pub(crate) fn closure_identity(&self, node: NodeId) -> Digest {
+        let source = closure_identity(self.body.body(), node);
+        let Some(application) = self.generic_context()
+            .and_then(|context| context.application_identity()) else {
+            return source;
+        };
+        let mut encoder = StableEncoder::new("lrr/v1/worker-closure-application");
+        encoder.digest(source);
+        encoder.digest(application);
+        encoder.finish()
+    }
     fn stored_capture(
         &self,
         capture: &ClosureCapture,
@@ -101,7 +113,7 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_make_closure(captures, destination, store)?;
-        let identity = closure_identity(self.body.body(), NodeId(self.pc.node));
+        let identity = self.closure_identity(NodeId(self.pc.node));
         let mut tickets: Vec<TicketId> = Vec::with_capacity(captures.len());
         let mut types = Vec::with_capacity(captures.len());
         let mut borrowed = Vec::with_capacity(captures.len());

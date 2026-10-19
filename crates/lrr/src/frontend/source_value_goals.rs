@@ -266,7 +266,9 @@ impl EnteredValueGoal {
                 range(parameter.syntax().text_range()) == recipe.pattern_range
             })
         {
-            return Ok(Some(LocalValueAccess::Parameter(0)));
+            return Ok(Some(LocalValueAccess::Parameter(
+                index.frame_parameter_ordinal(NodeId(key.node), 0)?,
+            )));
         }
         for (ordinal, parameter) in parameters.params().enumerate() {
             if parameter
@@ -277,7 +279,9 @@ impl EnteredValueGoal {
                     .checked_add(usize::from(parameters.self_param().is_some()))
                     .and_then(|n| u32::try_from(n).ok())
                     .ok_or_else(|| error("selected parameter ordinal overflow"))?;
-                return Ok(Some(LocalValueAccess::Parameter(ordinal)));
+                return Ok(Some(LocalValueAccess::Parameter(
+                    index.frame_parameter_ordinal(NodeId(key.node), ordinal)?,
+                )));
             }
         }
         Err(error("selected parameter actual declaration range differs"))

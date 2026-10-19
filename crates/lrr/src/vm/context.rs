@@ -2,7 +2,7 @@
 use crate::{
     core::{
         diagnostic::Diagnostic,
-        digest::{Digest, StableEncode},
+        digest::{Digest, StableEncode, StableEncoder},
     },
     frontend::{
         call_contracts::{
@@ -20,6 +20,8 @@ use std::collections::BTreeMap;
 pub struct GenericEnv {
     definition: Box<FunctionSignature>,
     signature_key: Digest,
+    /// Worker-local value/code identity; runtime descriptor IDs are not portable keys.
+    application: Option<Digest>,
     symbolic: Box<[(ParamKey, TyTerm)]>,
     runtime: Box<[(ParamKey, TypeId)]>,
     bytes: usize,
@@ -321,11 +323,29 @@ impl GenericEnv {
         contracts: &PreparedCallContracts,
     ) -> Result<Self, Diagnostic> {
         let bytes = Self::checked_bytes(signature, contracts)?;
+        let symbolic = own_table(&contracts.source_substitution)?;
+        let runtime = own_table(&contracts.runtime_substitution)?;
+        let application = if symbolic.is_empty() && runtime.is_empty() {
+            None
+        } else {
+            let mut encoder = StableEncoder::new("lrr/v1/worker-generic-application");
+            encoder.digest(signature.fingerprint());
+            encoder.sequence(&symbolic, |e, (key, source)| {
+                e.record(key);
+                e.record(source);
+            });
+            encoder.sequence(&runtime, |e, (key, descriptor)| {
+                e.record(key);
+                e.u32(descriptor.0);
+            });
+            Some(encoder.finish())
+        };
         Ok(Self {
             definition: Box::new(signature.clone()),
             signature_key: signature.fingerprint(),
-            symbolic: own_table(&contracts.source_substitution)?,
-            runtime: own_table(&contracts.runtime_substitution)?,
+            application,
+            symbolic,
+            runtime,
             bytes,
             normalized_return: contracts.normalized_deferred_return.clone(),
             closed_references: contracts.closed_references.clone(),
@@ -387,6 +407,27 @@ impl GenericEnv {
     }
     pub fn signature_key(&self) -> Digest {
         self.signature_key
+    }
+    pub(crate) fn application_identity(&self) -> Option<Digest> {
+        self.application
+    }
+    /// An inherited lexical environment remains tied to its actual creating
+    /// declaration and the existing source-selected proof dependencies.
+    pub(crate) fn require_current(
+        &self,
+        db: &mut crate::db::memo::Database,
+        owner: &SourceCallable,
+    ) -> Result<(), Diagnostic> {
+        if self.signature_key != owner.signature().fingerprint() {
+            return Err(invalid("lexical generic environment declaration changed"));
+        }
+        if let Some(proof) = &self.normalized_return {
+            proof.require_current(db, owner)?;
+        }
+        if let Some(proof) = &self.closed_references {
+            proof.require_current(db, owner)?;
+        }
+        Ok(())
     }
     pub fn symbolic_binding(&self, key: ParamKey) -> Option<&TyTerm> {
         self.symbolic

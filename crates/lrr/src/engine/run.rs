@@ -1955,6 +1955,9 @@ impl RunMachine {
         callee.install_parameter_sources(call.contracts.source_parameters.clone())?;
         callee.initialize_parameters(args, &contracts, &mut self.store)?;
         if let Some(closure) = &call.closure {
+            if let Some(context) = &closure.context {
+                callee.install_closure_context(Arc::clone(context))?;
+            }
             if let Some(result) = call.contracts.result_descriptor {
                 callee.declared_hint(closure.result, Some(result))?;
                 callee.set_source_view(closure.result, call.contracts.source_result.clone())?;

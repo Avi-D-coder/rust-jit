@@ -124,6 +124,8 @@ impl RunMachine {
 /// created: the body index its body belongs to, its node, captures and
 /// parameters. A closure value's `TypeKey::Callable` identity names it.
 pub(super) struct ClosureTarget {
+    identity: crate::core::digest::Digest,
+    context: Option<Arc<crate::vm::context::GenericEnv>>,
     body: Arc<BodyIndex>,
     node: NodeId,
     result: SlotId,
@@ -140,6 +142,7 @@ struct SelectedClosure {
 pub(super) struct ClosureEntry {
     pub(super) entry: PcKey,
     pub(super) result: SlotId,
+    pub(super) context: Option<Arc<crate::vm::context::GenericEnv>>,
     pub(super) captures: Box<[crate::ir::op::ClosureCapture]>,
     pub(super) closure: crate::runtime::place::Place,
     pub(super) mutable: Box<[bool]>,
@@ -208,13 +211,15 @@ impl RunMachine {
                     .or_insert_with(|| Arc::clone(&entered.call.callee));
             }
             let node = NodeId(self.frame.pc().node);
-            let identity =
-                crate::vm::frame::closures_frame::closure_identity(self.frame.body.body(), node);
+            let identity = self.frame.closure_identity(node);
+            let context = self.frame.shared_generic_context();
             let result = self.frame.body.nodes().get(closure_body.0 as usize)
                 .and_then(|node| node.value)
                 .ok_or_else(|| call_fault("verified closure body result absent"))?;
             self.closures.targets.entry(identity).or_insert_with(|| {
                 Arc::new(ClosureTarget {
+                    identity,
+                    context,
                     body: Arc::clone(&self.frame.body),
                     node,
                     result,
@@ -300,10 +305,7 @@ impl RunMachine {
                 None => hints.push((*slot, None, None)),
             }
         }
-        let callee = crate::vm::frame::closures_frame::closure_identity(
-            selected.target.body.body(),
-            selected.target.node,
-        );
+        let callee = selected.target.identity;
         self.frame.call_start = Some(crate::vm::call::CallStartFacts {
             ordinary: crate::frontend::callables::OrdinaryCallWitness::facade(
                 self.frame.body.body().clone(),
@@ -413,6 +415,11 @@ impl RunMachine {
         if let Err(error) = owner.revalidate(db) {
             return QueryPoll::Ready(Err(error));
         }
+        if let Some(context) = &target.context
+            && let Err(error) = context.require_current(db, &owner)
+        {
+            return QueryPoll::Ready(Err(error));
+        }
         let lease = match db.pin_guest_body(target.body.body()) {
             QueryPoll::Ready(Ok(lease)) => lease,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -457,6 +464,7 @@ impl RunMachine {
             closure: Some(Box::new(ClosureEntry {
                 entry,
                 result: target.result,
+                context: target.context.as_ref().map(Arc::clone),
                 captures: target.captures.clone(),
                 closure,
                 mutable: target.parameters.iter().map(|p| p.mutable).collect(),

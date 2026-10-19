@@ -44,7 +44,7 @@ impl Frame {
         target: TypeId,
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
-        Self::structural_source_target(source, target, store, self.context.as_ref())
+        Self::structural_source_target(source, target, store, self.generic_context())
     }
     fn structural_source_target(
         source: &TyTerm,

@@ -348,3 +348,45 @@ fn completed_with_standard_facade(text: &str, edition: u16) -> crate::engine::ru
         Err(error) => panic!("callee autoderef faulted: {error:?}"),
     }
 }
+
+
+#[test]
+fn upstream_generic_closure_factory_keeps_distinct_applications_after_return_all_origins() {
+    // Disclosed LRR identity/lifetime adaptation: keep the actual upstream
+    // factory unchanged, replace only the entry, and leave its original main cold.
+    // The unchanged whole original is executed separately by the stock runner.
+    let original = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/functions-closures/closure-to-fn-coercion.rs"
+    );
+    assert_eq!(original.matches("fn main() {").count(), 1);
+    let mut adapted = original.replace("fn main() {", "fn original_main() {");
+    adapted.push_str(r#"
+fn main() {
+    let a = generic(0_i8);
+    let b = generic(0_u64);
+    let again = generic(0_i8);
+    assert_eq!(b(), 8);
+    assert_eq!(a(), 1);
+    assert_eq!(again(), 1);
+    assert_eq!(generic(0_u16)(), 2);
+    assert_eq!(b(), 8);
+    assert!(a == again);
+    assert!(a != b);
+}
+"#);
+    let emitted = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{\n{adapted}\n}}"
+    );
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\n\
+         macro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\n\
+         wrapper! {{\n{adapted}\n}}"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        for source in [&adapted, &emitted, &wrapped] {
+            let report = completed_with_standard_facade(source, edition);
+            assert_eq!(closures_made(&report), 4,
+                "all factory values use ordinary MakeClosure in edition {edition}");
+        }
+    }
+}

@@ -53,7 +53,7 @@ impl Frame {
         if count == 0 {
             return Ok(Vec::new());
         }
-        let context = self.context.as_ref().ok_or_else(missing)?;
+        let context = self.generic_context().ok_or_else(missing)?;
         let signature = context.definition();
         let mut arguments = Vec::with_capacity(count);
         for parameter in signature

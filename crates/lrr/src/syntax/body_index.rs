@@ -256,6 +256,36 @@ impl BodyIndex {
     pub(crate) fn cfg(&self) -> &crate::source::snapshot::CfgSet {
         &self.cfg
     }
+    /// A selected parameter belongs to this indexed function. Each enclosing
+    /// closure frame places its arguments before captures of the creating
+    /// frame's parameters. Follow only the actual retained lexical ancestry.
+    pub(crate) fn frame_parameter_ordinal(
+        &self,
+        at: NodeId,
+        mut ordinal: u32,
+    ) -> Result<u32, Diagnostic> {
+        let mut scope = Some(self.nodes.get(at.0 as usize)
+            .ok_or_else(|| fault("parameter use node absent"))?.scope);
+        while let Some(id) = scope {
+            let current = self.scopes.get(id.0 as usize)
+                .filter(|scope| scope.id == id)
+                .ok_or_else(|| fault("parameter use lexical scope absent"))?;
+            if current.kind == ScopeKind::Closure {
+                let closure = self.nodes.get(current.node.0 as usize)
+                    .filter(|node| node.closure_scope == Some(id))
+                    .ok_or_else(|| fault("parameter use closure owner differs"))?;
+                let arity = u32::try_from(closure.runtime_scalar_slots.len())
+                    .map_err(|_| fault("closure parameter arity overflow"))?;
+                ordinal = ordinal.checked_add(arity)
+                    .ok_or_else(|| fault("captured parameter ordinal overflow"))?;
+            }
+            if current.parent.is_some_and(|parent| parent.0 >= id.0) {
+                return Err(fault("parameter use scope ancestry is not ordered"));
+            }
+            scope = current.parent;
+        }
+        Ok(ordinal)
+    }
     pub fn nodes(&self) -> &[StructuralNode] {
         &self.nodes
     }

@@ -109,6 +109,15 @@ impl GuestStore {
                 let member = self.admit_move(*field)?;
                 match member.kind {
                     8 => pending.push(member),
+                    9 if matches!(
+                        self.types.descriptor(TypeId(member.type_id))?.key.as_ref(),
+                        TypeKey::Function { .. }
+                    ) => {
+                        // Code addresses have no allocation edge into this
+                        // graph. Replicas use the same intrinsic Copy leaf
+                        // operation as every other function-pointer value.
+                        self.admit_copy(*field)?;
+                    }
                     9 => {
                         let reference = self.references.get(RefId::from_bits(member.payload))?;
                         if reference.access == Access::Mutable || reference.raw {

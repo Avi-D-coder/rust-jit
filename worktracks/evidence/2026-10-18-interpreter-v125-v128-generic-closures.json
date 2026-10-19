@@ -1,0 +1,610 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-19T01:52:35.476198+00:00",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "scope": "Held M018/T062 generic closure application/context and selected parameter frame mapping; E007 function-pointer constant template leaf repair",
+  "baseline": "9b1c4edf64542478185654ab00b3777833d88c2a",
+  "architecture_review": "worktracks/04-calls-source-views/2026-10-18-library-definition-namespace.md",
+  "cohorts": [
+    {
+      "version": 125,
+      "source_sha256": "f90c13489399f464aaedcf75b12debed0092fa4e37ed8609ef3af85a08804de1",
+      "head": "9b1c4edf64542478185654ab00b3777833d88c2a",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v125",
+      "terminals": {
+        "lib": "1545/a5036f",
+        "cli": "69604/e91a6f",
+        "controls": "59086/9edd4a",
+        "stock": "13702/f3c68d"
+      },
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "test_binary": {
+        "path": "target/debug/deps/lrr-3b8db33db37431d2",
+        "sha256": "14320afb643bea3df0e64590bf0b30095a7b4eb3831157c6a076928b2a9ec07a"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "9699ee0301130e3de905c5529a98d7f9543a0eb96bf3daf8830c06c46844cb5a"
+      },
+      "controls": [
+        {
+          "selector": "runtime::cell::aggregate_copy::template_authority_tests::evaluated_template_seals_reject_foreign_store_and_changed_owner_before_replication",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.009,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "runtime::cell::aggregate_copy::template_authority_tests::private_template_refuses_reparented_internal_reference_without_consuming_the_graph",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.007,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "runtime::cell::aggregate_copy::template_authority_tests::private_template_preserves_external_shared_lease_in_a_fresh_owning_graph",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.006,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "runtime::cell::aggregate_copy::template_authority_tests::refused_copy_parent_retains_committed_child_ticket_for_retry",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.006,
+          "log": "control-3.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2015,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.787,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 56,
+            "vm_outcomes": 56
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+          "edition": 2015,
+          "sha256": "8fac06d7043accb2dad4950e9147853e8697463337a8ab4c8057ce53871de193",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 4.878,
+          "capture_complete": false,
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "explicit caller parameter has no reached runtime binding"
+          },
+          "facts": {
+            "classified_operation_candidates": 2590,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 11,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1284,
+            "vm_outcomes": 1284
+          }
+        }
+      ]
+    },
+    {
+      "version": 126,
+      "source_sha256": "4a66205f91dcb71c68366890060665fc945b29adb06b564664259f4496c11f70",
+      "head": "9b1c4edf64542478185654ab00b3777833d88c2a",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v126",
+      "terminals": {
+        "lib": "27639/5ad18d"
+      },
+      "builds_exit": 101,
+      "failure": "E0308: structural source target API still expected Option<&GenericEnv>; no CLI/runtime execution"
+    },
+    {
+      "version": 127,
+      "source_sha256": "85e32026f7dc23183c49f6fe4a58aa804f4553717cc2818e1601ef25628def75",
+      "head": "9b1c4edf64542478185654ab00b3777833d88c2a",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v127",
+      "terminals": {
+        "lib": "87998/2458da",
+        "cli": "5771/ba3ce2",
+        "controls": "54024/a14cce",
+        "stock": "10520/614194",
+        "diagnostic_probe": "7442/258580"
+      },
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "test_binary": {
+        "path": "target/debug/deps/lrr-3b8db33db37431d2",
+        "sha256": "da968d8c21d2d565aa3e1f0474b560855c3071de773dcdc90625871cbda94e08"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "81d85209c084502e9539d243ce28045b6a14ebf8beeb9cce2011a682e2911add"
+      },
+      "controls": [
+        {
+          "selector": "cli::callable_value_tests::upstream_generic_closure_factory_keeps_distinct_applications_after_return_all_origins",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 0.332,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closures_cross_the_ordinary_call_boundary_into_generic_callees",
+          "exit": 101,
+          "pass": false,
+          "bodies": 1,
+          "seconds": 0.164,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::macro_emitted_and_handwritten_closures_share_one_route",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.43,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closures_capture_by_shared_unique_and_value_capture",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.302,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closure_bodies_stay_cold_until_called_and_panics_unwind_their_frames",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.399,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::moved_capture_drops_with_its_closure",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.296,
+          "log": "control-5.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2015,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.931,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 56,
+            "vm_outcomes": 56
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+          "edition": 2015,
+          "sha256": "8fac06d7043accb2dad4950e9147853e8697463337a8ab4c8057ce53871de193",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.034,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 2829,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 13,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1399,
+            "vm_outcomes": 1399
+          }
+        }
+      ]
+    },
+    {
+      "version": 128,
+      "source_sha256": "9dae2304dc92f225089a26e44ac7368682b2543c71292f32965d1b8212edd6d2",
+      "head": "9b1c4edf64542478185654ab00b3777833d88c2a",
+      "generator_sha256": "91c6dbb25b828dfbfde1a3a8ad0e0a81cf441fcbced7926aade985b822f298e4",
+      "local_receipts": "artifacts/validation-resume-2026-10-18/v128",
+      "terminals": {
+        "lib": "3167/94a2b0",
+        "cli": "13714/224688",
+        "controls": "77134/e0c0df",
+        "stock": "48999/66bffa",
+        "editions": "77481/40d6a8"
+      },
+      "builds_exit": 0,
+      "source_head_generator_unchanged": true,
+      "test_binary": {
+        "path": "target/debug/deps/lrr-3b8db33db37431d2",
+        "sha256": "373b06ba5e909bba632f4aae4d97c126daab7f9b4162cd71c65265e92672edb5"
+      },
+      "cli_binary": {
+        "path": "target/debug/lrr",
+        "sha256": "a9ee4e06089c9818b3282ad311bb6fc0da8444ebc9a7751bf2dbf65642fc9c7a"
+      },
+      "controls": [
+        {
+          "selector": "cli::callable_value_tests::upstream_generic_closure_factory_keeps_distinct_applications_after_return_all_origins",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 68.715,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closures_cross_the_ordinary_call_boundary_into_generic_callees",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.323,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::macro_emitted_and_handwritten_closures_share_one_route",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.412,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closures_capture_by_shared_unique_and_value_capture",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.296,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::closure_bodies_stay_cold_until_called_and_panics_unwind_their_frames",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.386,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::moved_capture_drops_with_its_closure",
+          "exit": 0,
+          "pass": true,
+          "bodies": 1,
+          "seconds": 0.286,
+          "log": "control-5.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/traits/const-traits/const-closure-fn-ptr-const-item.rs",
+          "edition": 2015,
+          "sha256": "654e36fb261aae351400f3d9652f1af7898ec4326bac3c5ca38108efb037dedb",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 6.022,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 71,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 56,
+            "vm_outcomes": 56
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+          "edition": 2015,
+          "sha256": "8fac06d7043accb2dad4950e9147853e8697463337a8ab4c8057ce53871de193",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.192,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 2829,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 13,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1399,
+            "vm_outcomes": 1399
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-returning-closure.rs",
+          "edition": 2015,
+          "sha256": "29bd5cfc510cf628b564105233452c7dedfb909cd2227fcde47951626e091e98",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.848,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 120,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 82,
+            "vm_outcomes": 82
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/return-from-closure.rs",
+          "edition": 2015,
+          "sha256": "5a430dfb5a6d1142f6ff1503e43dd5ac7a2598ab332f1d7c7ca2e48846c18f7c",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 4.267,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 270,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 180,
+            "vm_outcomes": 180
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+          "edition": 2018,
+          "sha256": "8fac06d7043accb2dad4950e9147853e8697463337a8ab4c8057ce53871de193",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 4.962116,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 2829,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 13,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1399,
+            "vm_outcomes": 1399
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+          "edition": 2021,
+          "sha256": "8fac06d7043accb2dad4950e9147853e8697463337a8ab4c8057ce53871de193",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.050527499999999,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 2829,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 13,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1399,
+            "vm_outcomes": 1399
+          }
+        },
+        {
+          "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+          "edition": 2024,
+          "sha256": "8fac06d7043accb2dad4950e9147853e8697463337a8ab4c8057ce53871de193",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.045942084,
+          "capture_complete": true,
+          "terminal": {
+            "status": "completed",
+            "code": null,
+            "message": null
+          },
+          "facts": {
+            "classified_operation_candidates": 2829,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 2,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 13,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1399,
+            "vm_outcomes": 1399
+          }
+        }
+      ]
+    }
+  ],
+  "measured_gain": {
+    "distinct_originals": 1,
+    "path": "tests/ui/functions-closures/closure-to-fn-coercion.rs",
+    "before": "V124/V125 reaches generic factory closure then fails missing creating runtime binding",
+    "after": "V128 unchanged whole original completes in2015/2018/2021/2024, two initializer frames,13source boundaries,1399matched VM dispatch/outcomes and cleanup each",
+    "full_fixture_acceptance": false,
+    "suite_total_refreshed": false
+  },
+  "additional_stock_baseline_delta": "closure-returning-closure.rs and return-from-closure.rs pass under V128; no prior failure measured, not counted as new gains",
+  "holds": [
+    "Complete generic/const/lifetime application and source substitution chain coverage, negative-owner/epoch/suspension/cross-world matrix and full interpreter runtime/correctness gates remain open.",
+    "Legacy unsealed parameter_from and macro-token closure capture approximations remain held, not promoted as architecture acceptance.",
+    "Actual library module alias provenance remains failed from V120; no namespace completion inferred.",
+    "Diagnostic/compiler-tooling/full-fixture compatibility remains separate; guest JIT stays gated."
+  ],
+  "controls_scope": "V1286/6host bodies pass; new disclosed identity/lifetime adaptation covers3source origins x4editions, repeated/reversed i8/u64/u16applications after creating frames return, code-identity distinction/reuse and4ordinary MakeClosure operations per execution. This is not12unchanged originals."
+}
