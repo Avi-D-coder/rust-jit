@@ -42,10 +42,58 @@ pub enum ImplHeadTypeResult {
 }
 #[derive(Debug)]
 pub(super) struct ImplDeclarationContext {
+    source: Arc<InputValue>,
     header: Arc<InputValue>,
     context: Arc<InputValue>,
 }
 impl ImplDeclarationContext {
+    pub(super) fn observe(db: &mut Database,
+        syntax: &crate::traits::header_syntax::ImplHeaderSyntax,
+        raw: crate::traits::header::SourceImplHeader<'_>,
+    ) -> QueryPoll<Option<Self>> {
+        let Some(owner) = syntax.canonical_owner() else { return QueryPoll::Ready(Ok(None)); };
+        let definition = owner.identity();
+        let source_input = db.input(&InputKey::DefinitionSource(definition));
+        let header_input = db.input(&InputKey::DefinitionHeader(definition));
+        let context_input = db.input(&InputKey::DeclarationContext(definition));
+        let (Some(source_input), Some(header_input), Some(context_input)) =
+            (source_input, header_input, context_input)
+        else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let (
+            InputValue::DefinitionSource(source),
+            InputValue::DefinitionHeader(header),
+            InputValue::DeclarationContext(context),
+        ) = (
+            source_input.as_ref(),
+            header_input.as_ref(),
+            context_input.as_ref(),
+        )
+        else {
+            return QueryPoll::Ready(Err(fault("impl Type declaration input variants differ")));
+        };
+        if header.profile != syntax.source().profile
+            || context.range != raw.requirements().range
+            || context.scope.crate_key != syntax.scope().crate_key
+            || context.scope.module_path != syntax.scope().module_path
+            || header.tokens != raw.requirements().header
+            || matches!(owner, CanonicalImplOwner::Original(_)) && source != syntax.source()
+        {
+            return QueryPoll::Ready(Err(fault(
+                "impl Type actual declaration attachment differs",
+            )));
+        }
+        QueryPoll::Ready(Ok(Some(Self { source: source_input, header: header_input, context: context_input })))
+    }
+    pub(super) fn matches_metadata(&self, parse: &crate::syntax::parse::ParseKey,
+        recipe: &crate::syntax::outline::HeaderRecipe,
+        declaration: &crate::syntax::outline::DeclarationContext,
+    ) -> bool {
+        matches!(self.source.as_ref(), InputValue::DefinitionSource(source) if source == parse)
+            && matches!(self.header.as_ref(), InputValue::DefinitionHeader(header) if header == recipe)
+            && matches!(self.context.as_ref(), InputValue::DeclarationContext(context) if context == declaration)
+    }
     pub(super) fn owner(
         &self,
         definition: crate::core::digest::Digest,
@@ -137,40 +185,14 @@ impl PreparedImplHeadTypes {
         let Some(environment) = inventory.inventory_root().environment() else {
             pending!(SourceEnvironment)
         };
-        let source = db.input(&InputKey::DefinitionSource(definition));
-        let header_input = db.input(&InputKey::DefinitionHeader(definition));
-        let context_input = db.input(&InputKey::DeclarationContext(definition));
-        let (Some(source), Some(header_input), Some(context_input)) =
-            (source, header_input, context_input)
-        else {
+        let Some(declaration_context) = ready!(ImplDeclarationContext::observe(db, syntax, raw)) else {
             pending!(DeclarationMetadata)
         };
-        let (
-            InputValue::DefinitionSource(source),
-            InputValue::DefinitionHeader(header),
-            InputValue::DeclarationContext(context),
-        ) = (
-            source.as_ref(),
-            header_input.as_ref(),
-            context_input.as_ref(),
-        )
-        else {
-            return QueryPoll::Ready(Err(fault("impl Type declaration input variants differ")));
-        };
-        if header.profile != syntax.source().profile
-            || context.range != raw.requirements().range
-            || context.scope.crate_key != syntax.scope().crate_key
-            || context.scope.module_path != syntax.scope().module_path
-            || header.tokens != raw.requirements().header
-            || matches!(owner, CanonicalImplOwner::Original(_)) && source != syntax.source()
-        {
-            return QueryPoll::Ready(Err(fault(
-                "impl Type actual declaration attachment differs",
-            )));
-        }
+        let owner = declaration_context.owner(definition);
+        let context_range = declaration_context.range();
         let node = match syntax
             .parsed()
-            .syntax_at(context.range, |node| ast::Impl::can_cast(node.kind()))
+            .syntax_at(context_range, |node| ast::Impl::can_cast(node.kind()))
         {
             Ok(Some(node)) => node,
             Ok(None) => return QueryPoll::Ready(Err(fault("impl Type retained syntax absent"))),
@@ -193,11 +215,6 @@ impl PreparedImplHeadTypes {
             }
         }
         let sources: Vec<_> = environment.sources().iter().collect();
-        let owner = super::type_name_namespace::SourceTypeOwner {
-            definition,
-            scope: &context.scope,
-            header,
-        };
         let declaration = super::source_types::WrittenTypeDeclaration::implementation(
             owner,
             syntax.generics(),
@@ -254,10 +271,7 @@ impl PreparedImplHeadTypes {
         QueryPoll::Ready(Ok(Self {
             key: key.clone(),
             syntax: syntax_owner.clone(),
-            declaration: Some(ImplDeclarationContext {
-                header: header_input.clone(),
-                context: context_input.clone(),
-            }),
+            declaration: Some(declaration_context),
             result: ImplHeadTypeResult::Resolved {
                 self_type,
                 trait_ref,

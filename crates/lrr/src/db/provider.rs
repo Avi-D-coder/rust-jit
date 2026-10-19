@@ -351,6 +351,20 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::ImplTraitIdentity(key) => {
+                return match crate::frontend::impl_trait_identity::PreparedImplTraitIdentity::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplTraitIdentity(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::ImplTraitCatalog(key) => {
+                return match crate::traits::trait_catalog::PreparedImplTraitCatalog::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplTraitCatalog(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::ImplPredicates(key) => {
                 return match crate::frontend::impl_predicates::PreparedImplPredicates::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::ImplPredicates(Box::new(value))),

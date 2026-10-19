@@ -13,3 +13,5 @@ pub mod index;
 pub mod header_syntax;
 
 pub mod predicate;
+
+pub(crate) mod trait_catalog;

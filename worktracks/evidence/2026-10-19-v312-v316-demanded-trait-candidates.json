@@ -1,0 +1,657 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T17:36:13.771330+00:00",
+  "parent": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held",
+  "scope": "V312-V316 HELD M019/M020 demanded trait source candidates. New ordinary memoized ImplTraitIdentity extracts the shared projection/bound Type-namespace/trait-declaration prefix before self Types, generic arguments and predicates; ImplHeadTypes and membership share canonical metadata observation. ImplTraitCatalog retains complete active raw/canonical memberships, including pending outcomes, and cannot certify absence from pending/scope/foreign worlds. PreparedFacts now requires this actual same-catalog proof; PreparedProvider::publish removes the whole-catalog typed cardinality and duplicate all-source attachment scan, retains one-to-one demanded metadata/source identity, and validates exact demanded buckets through the source-ID require_translation method. No custom solver or macro/runtime evaluator. Final V316 macOS Rust1.99.0 library/CLI builds and8/8controls pass: complete997-header membership with zero pending and no full impl Type/predicate/body demands; one actual Foo candidate out of995source declarations in all4editions, missing/changed/foreign-world source-ID refusals; unresolved-no-absence; borrowed/generic identities2/2all4editions;32-head identity/full-head equivalence; generated input/epoch regressions; unchanged local main; existing12Copy origin/edition worlds. V3131/1andV3146/6 retain their source; V312 routing and V315 test Seal API compile failures preserved. The source-ID subset control does not instantiate typed PreparedFacts, ReadyProvider, inference or upstream root evaluation. Typed term/binder/ParamEnv/predicate/layout/lang-item translation, transitive closure and actual interpreter solver invocation remain missing. Zero new distinct stock runtime gains or refreshed suite total. Complete M019/M020, arbitrary generated/mixed/import/parent matrices, interpreter and guest JIT remain held.",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-demanded-trait-candidates.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-demanded-trait-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "attempts": {
+    "312": {
+      "scope": "Compile failure on two missing exhaustive QueryKey routing matches; no runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:25:13.405063+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "d98c45752581e6b773b61b83be79f249ef135f641e3d40f149f3042129d6ca18",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:26:02.132469+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "d98c45752581e6b773b61b83be79f249ef135f641e3d40f149f3042129d6ca18",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 85727,
+          "exit": 101,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": false
+          },
+          "messages_sha256": "d593e21c51c51de76c85456f62449e84518b96be8b1293d5b0c6f944e22349f1",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 2 previous errors; 32 warnings emitted\n",
+          "errors": [
+            "error[E0004]: non-exhaustive patterns: `&db::key::QueryKey::ImplTraitIdentity(_)` and `&db::key::QueryKey::ImplTraitCatalog(_)` not covered\n   --> crates/lrr/src/cli/preentry_loader.rs:332:19\n    |\n332 |             match &event.key {\n    |                   ^^^^^^^^^^ patterns `&db::key::QueryKey::ImplTraitIdentity(_)` and `&db::key::QueryKey::ImplTraitCatalog(_)` not covered\n    |\nnote: `db::key::QueryKey` defined here\n   --> crates/lrr/src/db/key.rs:148:10\n    |\n148 | pub enum QueryKey {\n    |          ^^^^^^^^\n...\n181 |     ImplTraitIdentity(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),\n    |     ----------------- not covered\n182 |     ImplTraitCatalog(super::seals::SealKey),\n    |     ---------------- not covered\n    = note: the matched value is of type `&db::key::QueryKey`\nhelp: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern, a match arm with multiple or-patterns as shown, or multiple match arms\n    |\n384 ~                 },\n385 +                 &db::key::QueryKey::ImplTraitIdentity(_) | &db::key::QueryKey::ImplTraitCatalog(_) => todo!()\n    |\n\n",
+            "error[E0004]: non-exhaustive patterns: `&db::key::QueryKey::ImplTraitIdentity(_)` and `&db::key::QueryKey::ImplTraitCatalog(_)` not covered\n   --> crates/lrr/src/service/expansion.rs:155:11\n    |\n155 |     match query {\n    |           ^^^^^ patterns `&db::key::QueryKey::ImplTraitIdentity(_)` and `&db::key::QueryKey::ImplTraitCatalog(_)` not covered\n    |\nnote: `db::key::QueryKey` defined here\n   --> crates/lrr/src/db/key.rs:148:10\n    |\n148 | pub enum QueryKey {\n    |          ^^^^^^^^\n...\n181 |     ImplTraitIdentity(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),\n    |     ----------------- not covered\n182 |     ImplTraitCatalog(super::seals::SealKey),\n    |     ---------------- not covered\n    = note: the matched value is of type `&db::key::QueryKey`\nhelp: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern, a match arm with multiple or-patterns as shown, or multiple match arms\n    |\n217 ~         QueryKey::Constant(k) => bytes = add(bytes, k.heap_bytes()?)?,\n218 ~         &db::key::QueryKey::ImplTraitIdentity(_) | &db::key::QueryKey::ImplTraitCatalog(_) => todo!(),\n    |\n\n"
+          ]
+        }
+      }
+    },
+    "313": {
+      "scope": "Library build and1/1existing32-head equivalence control pass. New identity requests observe no full Type/predicate/executable demands. No CLI build/direct runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:26:50.421719+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "65cf65ef2d01d63f8611baffcf7a47216edd0aea75757bfe034cdf4c304c4760",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:27:35.241057+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "65cf65ef2d01d63f8611baffcf7a47216edd0aea75757bfe034cdf4c304c4760",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "3eacdd7d8423cdc6b6ee2d048c0c38424057972161a55d9d673576b6d8fb58d1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:28:39.804068+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "65cf65ef2d01d63f8611baffcf7a47216edd0aea75757bfe034cdf4c304c4760",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "3eacdd7d8423cdc6b6ee2d048c0c38424057972161a55d9d673576b6d8fb58d1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 62959,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "adc37fdff2cf185a54420c78092398b154c26ebd9f2180e7bef28a8b334cdfdf",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 34.69s\n",
+          "errors": []
+        }
+      },
+      "controls": {
+        "session": 66732,
+        "exit": 0,
+        "passed": 1,
+        "total": 1,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 29.953,
+            "log": "control-0.log",
+            "terminal_tail": "e-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2c81936fa649440b87fb6de1ee0a513a0325e3a8949b51aee3b9ef0fe67965e9), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(da62cd5520c48b49ccbd69d7d63a86cae69ef68846a23fadd909cd43ff5e37d7), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual catalog head Types: 32/32; pending=[]; no solver or guest execution\nactual generated declaration Type occurrence controls: 16; no guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1749 filtered out; finished in 29.58s\n\n",
+            "terminal_sha256": "2642efc0b8d415604f812ff22de6c0b9cbf74d14fe20350a13dccf0eed4c0716"
+          }
+        ]
+      }
+    },
+    "314": {
+      "scope": "Library builds and6/6controls pass, including actual complete997-member catalog, unknown no-absence, borrowed/generic identities,32-head equivalence and existing local runtime/currentness. Before source-ID validation factoring.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:28:40.342555+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "227922bf3e8c39922fcb19305443f9d8fae291efde6acae1e12775a3ea098efa",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:29:08.048840+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "227922bf3e8c39922fcb19305443f9d8fae291efde6acae1e12775a3ea098efa",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "a5bc2d276ce51cd99488c0e0dfbc3c0f5ae3215e172f57dead580e05f2cabe22"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:30:53.774456+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "227922bf3e8c39922fcb19305443f9d8fae291efde6acae1e12775a3ea098efa",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "a5bc2d276ce51cd99488c0e0dfbc3c0f5ae3215e172f57dead580e05f2cabe22"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 42095,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "1a193d177fc70554ab68e071e041081abeb4d32872a17f9032fe9ad9f1575b06",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.34s\n",
+          "errors": []
+        }
+      },
+      "controls": {
+        "session": 40969,
+        "exit": 0,
+        "passed": 6,
+        "total": 6,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 3.154,
+            "log": "control-0.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types ... complete raw catalog:997; pending trait memberships:0; no typed impl preparation\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1752 filtered out; finished in 2.74s\n\n",
+            "terminal_sha256": "56d861ad98da191df33bf7c7bee4a3229d96bc474d110dd49cc3d467538d68e1"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unresolved_trait_membership_cannot_certify_an_empty_candidate_bucket",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unresolved_trait_membership_cannot_certify_an_empty_candidate_bucket",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 2.773,
+            "log": "control-1.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unresolved_trait_membership_cannot_certify_an_empty_candidate_bucket ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1752 filtered out; finished in 2.40s\n\n",
+            "terminal_sha256": "6550e9cc05980bbdde22ac8a6a1e8ad3bac072bf61f5b158dcf04cf04f5cd208"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_reference_impl_trait_identity_does_not_prepare_self_or_trait_arguments_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_reference_impl_trait_identity_does_not_prepare_self_or_trait_arguments_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 10.212,
+            "log": "control-2.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_reference_impl_trait_identity_does_not_prepare_self_or_trait_arguments_all_editions ... unchanged reference/generic impl identities edition2015:2/2; no self/argument/predicate/body preparation\nunchanged reference/generic impl identities edition2018:2/2; no self/argument/predicate/body preparation\nunchanged reference/generic impl identities edition2021:2/2; no self/argument/predicate/body preparation\nunchanged reference/generic impl identities edition2024:2/2; no self/argument/predicate/body preparation\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1752 filtered out; finished in 9.76s\n\n",
+            "terminal_sha256": "3d86463c13126edfa22590a145b8cebc04ca7a58ec3eba7cb18f29ea4ae44448"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 32.622,
+            "log": "control-3.log",
+            "terminal_tail": "e-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2c81936fa649440b87fb6de1ee0a513a0325e3a8949b51aee3b9ef0fe67965e9), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(da62cd5520c48b49ccbd69d7d63a86cae69ef68846a23fadd909cd43ff5e37d7), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual catalog head Types: 32/32; pending=[]; no solver or guest execution\nactual generated declaration Type occurrence controls: 16; no guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1752 filtered out; finished in 32.16s\n\n",
+            "terminal_sha256": "2ed75b63929a1ed69289b164b74dd021e047021fd0abf5d3f09b4a8f434bf959"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 11.966,
+            "log": "control-4.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions ... generated local heads edition2015: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\ngenerated local heads edition2018: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\ngenerated local heads edition2021: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\ngenerated local heads edition2024: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1752 filtered out; finished in 11.56s\n\n",
+            "terminal_sha256": "b7c9a69d369854ff68b928a97d9c1c8b559463bc72b03360fde327128a246b7f"
+          },
+          {
+            "selector": "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.932,
+            "log": "control-5.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions ... unchanged annotated local impl main edition2015: complete through ordinary interpreter\nunchanged annotated local impl main edition2018: complete through ordinary interpreter\nunchanged annotated local impl main edition2021: complete through ordinary interpreter\nunchanged annotated local impl main edition2024: complete through ordinary interpreter\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1752 filtered out; finished in 0.56s\n\n",
+            "terminal_sha256": "9df7a907ca9385a0c075adc54751bea04abc10c507c7b1d4d5db28104d59e81b"
+          }
+        ]
+      }
+    },
+    "315": {
+      "scope": "Only the new test fails compilation: attempted mutation of a private Seal key through a method. No runtime. Production source-ID validator added but not exercised.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:30:54.313006+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "cd521c57212cc42c944a1cb23c76d3df6d5268abf714697ef7120b8c87fd449f",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:31:19.656267+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "cd521c57212cc42c944a1cb23c76d3df6d5268abf714697ef7120b8c87fd449f",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 37586,
+          "exit": 101,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": false
+          },
+          "messages_sha256": "832d8ebd54225c4066e46988ac2a81b18679dec2fa1857f1b12ca2509c2ffda3",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 1 previous error; 31 warnings emitted\n",
+          "errors": [
+            "error[E0615]: attempted to take value of method `key` on type `seals::Seal`\n    --> crates/lrr/src/cli/preentry_loader_tests.rs:2670:66\n     |\n2670 |         let mut wrong = publication.as_ref().clone(); wrong.seal.key.epoch += 1;\n     |                                                                  ^^^ method, not a field\n     |\n     = help: methods are immutable and cannot be assigned to\n\n"
+          ]
+        }
+      }
+    },
+    "316": {
+      "scope": "Final real foreign publication control; both builds and8/8controls pass with source/HEAD/both binary guards unchanged. Source-ID subset publication is tested, not a typed upstream context or solver invocation. No direct CLI execution; existing stock main/Copy regressions execute in host controls.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:31:20.136867+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "c8dda2072f8f2d03c6f4ef4cce444b55efbc0f097540dbdfc677b9f4615879b6",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:32:44.291821+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "c8dda2072f8f2d03c6f4ef4cce444b55efbc0f097540dbdfc677b9f4615879b6",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "a2dc8bd5e0b5defa9f6443ebbb900921f34d52d77a7715fd4dfdd384899a19be"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "f136096fbf489ff184750c695e9dcce094ac82cd299af724b4a40cbe3235585b"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T17:35:22.058311+00:00",
+          "head": "fe104a8ad466384ace6468f1a23fa7c1d94ce435",
+          "file_count": 8490,
+          "source_sha256": "c8dda2072f8f2d03c6f4ef4cce444b55efbc0f097540dbdfc677b9f4615879b6",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "a2dc8bd5e0b5defa9f6443ebbb900921f34d52d77a7715fd4dfdd384899a19be"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "f136096fbf489ff184750c695e9dcce094ac82cd299af724b4a40cbe3235585b"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 27921,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "d0682c01489e3b3b6799d4e20dd2364065de5fb85d6681a689082cbcbe6b0169",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.48s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 89194,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "4f8d8d502a1b340da46b1aaaf4bd17c5de15eb0eca94e17f77082cfde557eb82",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 34.54s\n",
+          "errors": []
+        }
+      },
+      "controls": {
+        "session": 81675,
+        "exit": 0,
+        "passed": 8,
+        "total": 8,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_single_trait_translation_requires_its_actual_bucket_not_unrelated_impl_types_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_single_trait_translation_requires_its_actual_bucket_not_unrelated_impl_types_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 12.84,
+            "log": "control-0.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_single_trait_translation_requires_its_actual_bucket_not_unrelated_impl_types_all_editions ... actual Foo candidate publication edition2015:1/995source declarations required in the demanded typed bucket; missing/foreign identity and wrong world refused; no typed solver context or guest execution\nactual Foo candidate publication edition2018:1/995source declarations required in the demanded typed bucket; missing/foreign identity and wrong world refused; no typed solver context or guest execution\nactual Foo candidate publication edition2021:1/995source declarations required in the demanded typed bucket; missing/foreign identity and wrong world refused; no typed solver context or guest execution\nactual Foo candidate publication edition2024:1/995source declarations required in the demanded typed bucket; missing/foreign identity and wrong world refused; no typed solver context or guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 12.38s\n\n",
+            "terminal_sha256": "ce3ef6d60c205641286b3f029fc4eeaed1bce91c43752aa8f8b34694f079b8e0"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 3.403,
+            "log": "control-1.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types ... complete raw catalog:997; pending trait memberships:0; no typed impl preparation\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 2.99s\n\n",
+            "terminal_sha256": "e7d01b91ab4b4ae693b6b17028839cf5c12df7d0ff8074d244e6fdfac7db90f2"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unresolved_trait_membership_cannot_certify_an_empty_candidate_bucket",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unresolved_trait_membership_cannot_certify_an_empty_candidate_bucket",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 3.029,
+            "log": "control-2.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unresolved_trait_membership_cannot_certify_an_empty_candidate_bucket ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 2.61s\n\n",
+            "terminal_sha256": "32b576a66b633a2603c2852de366256b955c31991bd4d90199e2eb5706b86028"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_reference_impl_trait_identity_does_not_prepare_self_or_trait_arguments_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_reference_impl_trait_identity_does_not_prepare_self_or_trait_arguments_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 10.426,
+            "log": "control-3.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_reference_impl_trait_identity_does_not_prepare_self_or_trait_arguments_all_editions ... unchanged reference/generic impl identities edition2015:2/2; no self/argument/predicate/body preparation\nunchanged reference/generic impl identities edition2018:2/2; no self/argument/predicate/body preparation\nunchanged reference/generic impl identities edition2021:2/2; no self/argument/predicate/body preparation\nunchanged reference/generic impl identities edition2024:2/2; no self/argument/predicate/body preparation\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 10.05s\n\n",
+            "terminal_sha256": "239478f163a19043c5c1d9c5727aec57badfc1dfcd5956c4049e4798e004ccaa"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 30.03,
+            "log": "control-4.log",
+            "terminal_tail": "e-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2c81936fa649440b87fb6de1ee0a513a0325e3a8949b51aee3b9ef0fe67965e9), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(da62cd5520c48b49ccbd69d7d63a86cae69ef68846a23fadd909cd43ff5e37d7), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual catalog head Types: 32/32; pending=[]; no solver or guest execution\nactual generated declaration Type occurrence controls: 16; no guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 29.66s\n\n",
+            "terminal_sha256": "28488ce67e3bacb78633badd12cb75b4b2d2ef898874a4f59004607f1ab70022"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 11.112,
+            "log": "control-5.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions ... generated local heads edition2015: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\ngenerated local heads edition2018: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\ngenerated local heads edition2021: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\ngenerated local heads edition2024: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 10.74s\n\n",
+            "terminal_sha256": "09447c447805d47d263c94e222daac68aeb313c3212ea1c0925c193c9956d926"
+          },
+          {
+            "selector": "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.901,
+            "log": "control-6.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions ... unchanged annotated local impl main edition2015: complete through ordinary interpreter\nunchanged annotated local impl main edition2018: complete through ordinary interpreter\nunchanged annotated local impl main edition2021: complete through ordinary interpreter\nunchanged annotated local impl main edition2024: complete through ordinary interpreter\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 0.53s\n\n",
+            "terminal_sha256": "77360f82c41e90e3e71f388bf4bbb7b9f7ba78cd576397c22cecf5b37585cdb7"
+          },
+          {
+            "selector": "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 66.057,
+            "log": "control-7.log",
+            "terminal_tail": "\nrunning 1 test\ntest cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1753 filtered out; finished in 65.65s\n\n",
+            "terminal_sha256": "9a8180f62cf9a06a577dc24540c3b5205d50eb4caf7d4ffde88b4e570528c1cd"
+          }
+        ]
+      }
+    }
+  },
+  "source_contracts": {
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+    "witnesses": [
+      {
+        "path": "tests/ui/traits/safety-ok.rs",
+        "sha256": "a3be42a53118893e31d5b29c824d0843b639f0f164f24b321483c8cea3360e1a",
+        "matches_pinned_original": true
+      },
+      {
+        "path": "tests/ui/methods/method-self-arg-trait.rs",
+        "sha256": "51b379109a3aaf3ebd0523202a3784a441b3ce88e8d4b735f2da48f210b761f0",
+        "matches_pinned_original": true
+      },
+      {
+        "path": "tests/ui/coherence/coherence-impl-in-fn.rs",
+        "sha256": "7560f0f60706b7b9600f8599e52b57a125c56212153e21ea1555abce8631f172",
+        "matches_pinned_original": true
+      },
+      {
+        "path": "tests/ui/traits/assignability-trait.rs",
+        "sha256": "7d69751d3a2fd42eeea0e55bc83900a3ae72e2d172353829026e306e4ad4d3fb",
+        "matches_pinned_original": true
+      }
+    ],
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "global_coherence_catalog": {
+      "raw_headers": 997,
+      "pending_memberships": 0,
+      "full_impl_type_predicate_body_queries": 0,
+      "scope": "2024 global source world, not guest execution"
+    },
+    "demanded_foo_source_id_guard": {
+      "raw_headers_per_edition": 995,
+      "required_candidates": 1,
+      "editions_passed": 4,
+      "scope": "Production source-ID validator only; no instantiated typed solver context"
+    },
+    "borrowed_generic_impl_identities": {
+      "ready_per_edition": 2,
+      "editions_passed": 4,
+      "scope": "Header identity only; main and method bodies unexecuted"
+    },
+    "full_head_matrix": {
+      "ready": 32,
+      "total": 32,
+      "generated_occurrence_controls": 16
+    },
+    "unknown_control": "Temporary architectural negative appends an unresolved impl header outside imported originals; actual raw discovery may complete, but membership stays pending and cannot establish any candidate bucket."
+  },
+  "commands": {
+    "builds": [
+      "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+      "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json"
+    ],
+    "controls": "python3.12 tools/validation/run_controls.py <fresh-run-directory> worktracks/05-trait-goal-engine/2026-10-19-demanded-trait-final-controls.json",
+    "guards": "tools/validation/source_manifest.py before/after-build/after-runtime; actual Cargo test/CLI artifacts bound to source and HEAD. No source mutation during async users. Local raw artifacts are disposable; tracked source/selections and exact selector argv reproduce the scope."
+  },
+  "not_established": [
+    "Typed PreparedFacts publication or ReadyProvider construction with genuine facts",
+    "Inference/ParamEnv/transitive dependency closure",
+    "Actual upstream root-goal invocation from interpreter",
+    "New distinct stock runtime pass or refreshed suite total",
+    "Complete origin/alias/import/projection/conditional/region matrix",
+    "Full fixture, diagnostic or tooling compatibility",
+    "M019/M020, interpreter, guest JIT or Linux acceptance"
+  ]
+}

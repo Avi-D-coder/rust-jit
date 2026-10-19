@@ -1176,6 +1176,45 @@ pub(super) fn projection_trait(
     )>,
 > {
     use ra_ap_syntax::ast;
+    let trait_key = match projection_trait_identity(db, graph, sources, signature, path) {
+        QueryPoll::Ready(Ok(Some(key))) => key,
+        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let mut arguments = Vec::new();
+    if let Some(list) = path
+        .segment()
+        .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
+    {
+        for argument in list.generic_args() {
+            match argument {
+                ast::GenericArg::LifetimeArg(_) | ast::GenericArg::AssocTypeArg(_) => {}
+                ast::GenericArg::TypeArg(argument) => {
+                    let Some(ty) = argument.ty() else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    match resolve_actual_type(db, graph, sources, signature, &ty) {
+                        QueryPoll::Ready(Ok(Some(term))) => {
+                            arguments.push(crate::traits::term::GenericArg::Type(term))
+                        }
+                        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                }
+                _ => return QueryPoll::Ready(Ok(None)),
+            }
+        }
+    }
+    QueryPoll::Ready(Ok(Some((trait_key, arguments))))
+}
+/// Resolve only the actual trait declaration identity. Generic arguments,
+/// self Types and predicates remain demands of the selected semantic consumer.
+pub(super) fn projection_trait_identity(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    signature: &WrittenTypeDeclaration<'_>, path: &ra_ap_syntax::ast::Path,
+) -> QueryPoll<Option<crate::core::digest::Digest>> {
     // A single declaration-context trait name uses the same source Type
     // namespace query as an ordinary Type leaf, retaining its bucket deps.
     let trait_key = if path.qualifier().is_none()
@@ -1203,32 +1242,7 @@ pub(super) fn projection_trait(
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     }
-    let mut arguments = Vec::new();
-    if let Some(list) = path
-        .segment()
-        .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
-    {
-        for argument in list.generic_args() {
-            match argument {
-                ast::GenericArg::LifetimeArg(_) | ast::GenericArg::AssocTypeArg(_) => {}
-                ast::GenericArg::TypeArg(argument) => {
-                    let Some(ty) = argument.ty() else {
-                        return QueryPoll::Ready(Ok(None));
-                    };
-                    match resolve_actual_type(db, graph, sources, signature, &ty) {
-                        QueryPoll::Ready(Ok(Some(term))) => {
-                            arguments.push(crate::traits::term::GenericArg::Type(term))
-                        }
-                        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                    }
-                }
-                _ => return QueryPoll::Ready(Ok(None)),
-            }
-        }
-    }
-    QueryPoll::Ready(Ok(Some((trait_key, arguments))))
+    QueryPoll::Ready(Ok(Some(trait_key)))
 }
 fn projection_trait_key(
     db: &mut Database,

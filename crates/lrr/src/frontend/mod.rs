@@ -125,6 +125,7 @@ pub(crate) mod explicit_type_arguments;
 pub mod nominal_member_goals;
 
 pub(crate) mod impl_head_types;
+pub(crate) mod impl_trait_identity;
 
 pub(crate) mod source_predicates;
 pub(crate) mod impl_predicates;

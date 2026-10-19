@@ -2124,6 +2124,23 @@ fn unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_prep
                 let key = QueryKey::ImplHeadTypes(Box::new(ImplHeaderSyntaxKey {
                     inventory: seal.clone(), implementation: raw.identity,
                 }));
+                let identity_key = QueryKey::ImplTraitIdentity(Box::new(ImplHeaderSyntaxKey {
+                    inventory: seal.clone(), implementation: raw.identity,
+                }));
+                let identity_start = db.trace.events.len();
+                let identity = match db.fetch(&SyntaxProvider, identity_key.clone()) {
+                    QueryPoll::Ready(Ok(value)) => value.value,
+                    other => panic!("actual trait identity demand: {other:?}"),
+                };
+                let repeat = match db.fetch(&SyntaxProvider, identity_key) {
+                    QueryPoll::Ready(Ok(value)) => value.value,
+                    other => panic!("actual repeated trait identity demand: {other:?}"),
+                };
+                assert!(std::sync::Arc::ptr_eq(&identity, &repeat));
+                let QueryValue::ImplTraitIdentity(identity) = identity.as_ref() else { panic!() };
+                assert!(db.trace.events[identity_start..].iter().all(|event| !matches!(event.key,
+                    QueryKey::ImplHeadTypes(_) | QueryKey::ImplPredicates(_) | QueryKey::BodyStructure(_)
+                        | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
                 let first = match db.fetch(&SyntaxProvider, key.clone()) {
                     QueryPoll::Ready(Ok(value)) => value.value,
                     other => {
@@ -2139,6 +2156,10 @@ fn unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_prep
                 let QueryValue::ImplHeadTypes(head) = first.as_ref() else { panic!() };
                 match head.result() {
                     ImplHeadTypeResult::Resolved { self_type, trait_ref } => {
+                        assert_eq!(identity.result(), match trait_ref {
+                            Some(reference) => crate::frontend::impl_trait_identity::ImplTraitIdentityResult::Trait(reference.trait_key),
+                            None => crate::frontend::impl_trait_identity::ImplTraitIdentityResult::Inherent,
+                        }, "actual trait membership matches full head; edition{edition}, {case}");
                         if let Some(trait_ref) = trait_ref {
                             assert_eq!(trait_ref.self_ty, *self_type);
                         }
@@ -2529,5 +2550,132 @@ fn unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all
         assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
             QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
         eprintln!("generated local heads edition{edition}: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution");
+    }
+}
+
+#[test]
+fn unchanged_reference_impl_trait_identity_does_not_prepare_self_or_trait_arguments_all_editions() {
+    use crate::{db::{key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+        frontend::impl_trait_identity::ImplTraitIdentityResult,
+        traits::header_syntax::ImplHeaderSyntaxKey};
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/traits/assignability-trait.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, seal, root) = configured_impl_catalog_world(&path, edition).unwrap();
+        let headers = match db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal.clone())) {
+            QueryPoll::Ready(Ok(value)) => value.value, other => panic!("actual reference impl inventory: {other:?}"),
+        };
+        let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { panic!() };
+        db.trace.detailed = true; let start = db.trace.events.len(); let mut demanded = 0;
+        for raw in headers.inventory_root().headers().iter().filter(|raw| raw.scope.crate_key == root.crate_key) {
+            let identity = match db.fetch(&SyntaxProvider, QueryKey::ImplTraitIdentity(Box::new(ImplHeaderSyntaxKey {
+                inventory: seal.clone(), implementation: raw.identity,
+            }))) { QueryPoll::Ready(Ok(value)) => value.value, other => panic!("reference identity demand: {other:?}") };
+            let QueryValue::ImplTraitIdentity(identity) = identity.as_ref() else { panic!() };
+            assert!(matches!(identity.result(), ImplTraitIdentityResult::Trait(_)));
+            demanded += 1;
+        }
+        assert_eq!(demanded, 2, "both unchanged impls, including borrowed slice; edition{edition}");
+        assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+            QueryKey::ImplHeadTypes(_) | QueryKey::ImplPredicates(_) | QueryKey::TypeSchema(_)
+                | QueryKey::TypeAlias(_) | QueryKey::BodyStructure(_) | QueryKey::Thunk(_)
+                | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_) | QueryKey::Constant(_))));
+        eprintln!("unchanged reference/generic impl identities edition{edition}:2/2; no self/argument/predicate/body preparation");
+    }
+}
+
+#[test]
+fn unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types() {
+    use crate::db::{dependency::{InputKey, InputValue}, key::QueryKey, poll::QueryPoll,
+        provider::SyntaxProvider, value::QueryValue};
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    let (mut db, seal, _) = configured_impl_catalog_world(&path, 2024).unwrap();
+    db.trace.detailed = true; let start = db.trace.events.len();
+    let key = QueryKey::ImplTraitCatalog(seal.clone());
+    let catalog = match db.fetch(&SyntaxProvider, key.clone()) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => panic!("actual global trait membership: {error:?}"),
+        QueryPoll::NeedInput(input) => panic!("actual global trait membership input: {input:?}"),
+    };
+    let QueryValue::ImplTraitCatalog(prepared) = catalog.as_ref() else { panic!() };
+    let publication = db.input(&InputKey::DiscoverySeal(seal)).unwrap();
+    let InputValue::DiscoverySeal(publication) = publication.as_ref() else { panic!() };
+    eprintln!("complete raw catalog:{}; pending trait memberships:{}; no typed impl preparation", publication.declaration_inventory.headers().len(), prepared.pending().len());
+    assert!(prepared.pending().is_empty(), "actual whole-source memberships remain pending: {:?}", prepared.pending());
+    assert!(prepared.matches_catalog(publication));
+    let again = match db.fetch(&SyntaxProvider, key) { QueryPoll::Ready(Ok(value)) => value.value, _ => panic!() };
+    assert!(std::sync::Arc::ptr_eq(&catalog, &again));
+    assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+        QueryKey::ImplHeadTypes(_) | QueryKey::ImplPredicates(_) | QueryKey::BodyStructure(_)
+            | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+    db.begin_expansion_epoch(2).unwrap();
+    assert!(matches!(db.fetch(&SyntaxProvider, QueryKey::ImplTraitCatalog(prepared.key().clone())), QueryPoll::Ready(Err(_))));
+}
+
+#[test]
+fn unresolved_trait_membership_cannot_certify_an_empty_candidate_bucket() {
+    use crate::db::{dependency::{InputKey, InputValue}, key::QueryKey, poll::QueryPoll,
+        provider::SyntaxProvider, value::QueryValue};
+    let original = include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/traits/safety-ok.rs");
+    let path = temporary_source("pending-trait-membership", &format!("{original}\nimpl LrrUnresolvedTrait for i32 {{}}\n"));
+    let (mut db, seal, _) = configured_impl_catalog_world(&path, 2024).unwrap();
+    let catalog = match db.fetch(&SyntaxProvider, QueryKey::ImplTraitCatalog(seal.clone())) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => panic!("actual pending trait membership: {error:?}"),
+        QueryPoll::NeedInput(input) => panic!("actual pending membership input: {input:?}"),
+    };
+    let QueryValue::ImplTraitCatalog(catalog) = catalog.as_ref() else { panic!() };
+    let publication = db.input(&InputKey::DiscoverySeal(seal)).unwrap();
+    let InputValue::DiscoverySeal(publication) = publication.as_ref() else { panic!() };
+    assert!(!catalog.pending().is_empty());
+    assert!(catalog.candidates(Digest([0; 32])).is_none(), "unknown membership never proves absence");
+    assert!(!catalog.matches_catalog(publication));
+}
+
+#[test]
+fn unchanged_single_trait_translation_requires_its_actual_bucket_not_unrelated_impl_types_all_editions() {
+    use crate::{db::{dependency::{InputKey, InputValue}, key::QueryKey, poll::QueryPoll,
+        provider::SyntaxProvider, value::QueryValue}, frontend::impl_trait_identity::ImplTraitIdentityResult};
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/traits/safety-ok.rs");
+    let foreign_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    let (mut foreign_db, foreign_seal, _) = configured_impl_catalog_world(&foreign_path, 2024).unwrap();
+    let foreign = foreign_db.input(&InputKey::DiscoverySeal(foreign_seal)).unwrap();
+    let InputValue::DiscoverySeal(foreign) = foreign.as_ref() else { panic!() };
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, seal, root) = configured_impl_catalog_world(&path, edition).unwrap();
+        db.trace.detailed = true; let start = db.trace.events.len();
+        let headers = match db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal.clone())) {
+            QueryPoll::Ready(Ok(value)) => value.value, other => panic!("actual trait source headers: {other:?}"),
+        };
+        let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { panic!() };
+        let catalog = match db.fetch(&SyntaxProvider, QueryKey::ImplTraitCatalog(seal.clone())) {
+            QueryPoll::Ready(Ok(value)) => value.value, other => panic!("actual single trait catalog: {other:?}"),
+        };
+        let QueryValue::ImplTraitCatalog(catalog) = catalog.as_ref() else { panic!() };
+        let publication = db.input(&InputKey::DiscoverySeal(seal.clone())).unwrap();
+        let InputValue::DiscoverySeal(publication) = publication.as_ref() else { panic!() };
+        assert!(catalog.pending().is_empty());
+        let raw = headers.inventory_root().headers().iter().find(|raw| raw.scope.crate_key == root.crate_key).unwrap();
+        let classified = catalog.classification(raw.identity).unwrap();
+        let ImplTraitIdentityResult::Trait(trait_id) = classified.result() else { panic!() };
+        let candidates = catalog.candidates(trait_id).unwrap();
+        assert_eq!(candidates.len(), 1, "unchanged local Foo trait has one actual impl");
+        assert!(publication.declaration_inventory.headers().len() > candidates.len());
+        let mut translated = candidates.iter().copied().collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(catalog.require_translation(publication, trait_id, &translated).unwrap(), candidates);
+        let canonical = translated.insert(raw.identity, Digest([0; 32])).unwrap();
+        assert!(catalog.require_translation(publication, trait_id, &translated).is_err());
+        translated.clear();
+        assert!(catalog.require_translation(publication, trait_id, &translated).is_err());
+        translated.insert(raw.identity, canonical);
+        assert_eq!(catalog.require_translation(publication, trait_id, &translated).unwrap(), candidates);
+        assert!(catalog.require_translation(foreign, trait_id, &translated).is_err());
+        assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+            QueryKey::ImplHeadTypes(_) | QueryKey::ImplPredicates(_) | QueryKey::BodyStructure(_)
+                | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+        eprintln!("actual Foo candidate publication edition{edition}:1/{}source declarations required in the demanded typed bucket; missing/foreign identity and wrong world refused; no typed solver context or guest execution", publication.declaration_inventory.headers().len());
     }
 }

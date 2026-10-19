@@ -60,6 +60,7 @@ pub(super) struct DefinitionReceipt {
     context: Arc<InputValue>,
     parsed: Arc<QueryValue>,
     implementation: Option<bool>,
+    trait_declaration: bool,
 }
 impl DefinitionReceipt {
     pub(super) fn observe(db: &mut Database, definition: Digest) -> QueryPoll<Option<Self>> {
@@ -94,6 +95,10 @@ impl DefinitionReceipt {
                 Ok(None) => None,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
+        let trait_declaration = match tree.syntax_at(declaration.range, |node| ast::Trait::can_cast(node.kind())) {
+            Ok(node) => node.is_some(),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
         QueryPoll::Ready(Ok(Some(Self {
             definition,
             source,
@@ -101,6 +106,7 @@ impl DefinitionReceipt {
             context,
             parsed,
             implementation,
+            trait_declaration,
         })))
     }
 }
@@ -250,10 +256,11 @@ impl LangItems {
 }
 pub(super) struct PreparedFacts<'cx> {
     context: Cx<'cx>,
+    source_membership: Arc<QueryValue>,
     pub(super) definitions: BTreeMap<DefinitionId, DefinitionFacts<'cx>>,
     pub(super) traits: BTreeMap<DefinitionId, TraitFacts<'cx>>,
     pub(super) implementations: BTreeMap<DefinitionId, ImplFacts<'cx>>,
-    /// Every actual retained impl header, including inherent declarations.
+    /// Demand-prepared impls, each joined to its actual raw/canonical header.
     pub(super) impl_declarations: BTreeMap<Digest, DefinitionId>,
     pub(super) adts: BTreeMap<DefinitionId, AdtFacts<'cx>>,
     pub(super) parameters: BTreeMap<(ParamKey, BoundKind), DefinitionId>,
@@ -287,6 +294,7 @@ impl<'cx> PreparedFacts<'cx> {
     /// derived later with the actual pinned classifier, never caller-supplied.
     pub(super) fn new(
         context: Cx<'cx>,
+        source_membership: Arc<QueryValue>,
         definitions: BTreeMap<DefinitionId, DefinitionFacts<'cx>>,
         traits: BTreeMap<DefinitionId, TraitFacts<'cx>>,
         implementations: BTreeMap<DefinitionId, ImplFacts<'cx>>,
@@ -300,6 +308,7 @@ impl<'cx> PreparedFacts<'cx> {
     ) -> Self {
         Self {
             context,
+            source_membership,
             definitions,
             traits,
             implementations,
@@ -435,71 +444,45 @@ impl<'cx> PreparedProvider<'cx> {
                 return Err(fault("prepared source declaration identity differs"));
             }
         }
-        let inventory = &self.settings.catalog.declaration_inventory;
-        if facts.impl_declarations.len() != inventory.headers().len()
-            || facts.implementations.len() != facts.impl_declarations.len()
-        {
-            return Err(fault(
-                "translated impl set differs from the actual complete catalog",
-            ));
+        let QueryValue::ImplTraitCatalog(source_membership) = facts.source_membership.as_ref() else {
+            return Err(fault("typed facts lack the actual source membership catalog"));
+        };
+        if !source_membership.matches_catalog(&self.settings.catalog) {
+            return Err(fault("source membership catalog is incomplete or belongs to another world"));
         }
-        let mut locations = BTreeMap::new();
-        for source in inventory.scan_handles() {
-            for header in source.impls() {
-                let Ok(ordinal) = inventory
-                    .headers()
-                    .binary_search_by_key(&header.identity, |h| h.identity)
-                else {
-                    continue;
-                };
-                if !crate::traits::header::same_requirements(&inventory.headers()[ordinal], header)
-                {
-                    return Err(fault(
-                        "actual active impl attachment differs from its retained source",
-                    ));
-                }
-                if locations.insert(header.identity, source.parse()).is_some() {
-                    return Err(fault("duplicate actual impl source attachment"));
-                }
-            }
+        let inventory = &self.settings.catalog.declaration_inventory;
+        if facts.implementations.len() != facts.impl_declarations.len() {
+            return Err(fault("demanded impl source/typed metadata sets differ"));
         }
         let mut declarations = BTreeSet::new();
-        for header in inventory.headers() {
-            let Some(id) = facts.impl_declarations.get(&header.identity) else {
-                return Err(fault("actual catalog impl is omitted from translation"));
+        for (raw, id) in &facts.impl_declarations {
+            let Ok(ordinal) = inventory.headers().binary_search_by_key(raw, |header| header.identity) else {
+                return Err(fault("translated impl is absent from the actual complete catalog"));
             };
+            let header = &inventory.headers()[ordinal];
             if !declarations.insert(*id) {
-                return Err(fault(
-                    "distinct impl declarations share a translated identity",
-                ));
+                return Err(fault("distinct impl declarations share a translated identity"));
             }
             let Some(definition) = facts.definitions.get(id) else {
-                return Err(fault("actual impl lacks its prepared definition"));
+                return Err(fault("demanded impl lacks its prepared definition"));
             };
             let Some(implementation) = facts.implementations.get(id) else {
-                return Err(fault("actual impl lacks its prepared metadata"));
+                return Err(fault("demanded impl lacks its prepared metadata"));
             };
-            let (
-                InputValue::DefinitionSource(parse),
-                InputValue::DefinitionHeader(recipe),
-                InputValue::DeclarationContext(context),
-            ) = (
-                definition.receipt.source.as_ref(),
-                definition.receipt.header.as_ref(),
-                definition.receipt.context.as_ref(),
-            )
-            else {
-                return Err(fault("actual impl source receipt differs"));
+            let (InputValue::DefinitionHeader(recipe), InputValue::DeclarationContext(context)) = (
+                definition.receipt.header.as_ref(), definition.receipt.context.as_ref(),
+            ) else { return Err(fault("actual impl source receipt differs")); };
+            let InputValue::DefinitionSource(parse) = definition.receipt.source.as_ref() else {
+                return Err(fault("demanded impl source variant differs"));
             };
-            if locations.get(&header.identity).copied() != Some(parse)
-                || recipe.tokens != header.header
-                || context.range != header.range
-                || context.scope != header.scope
-                || definition.receipt.implementation != Some(implementation.trait_ref.is_some())
-            {
-                return Err(fault(
-                    "translated impl does not match its actual retained source",
-                ));
+            let Some(classified) = source_membership.classification(*raw) else {
+                return Err(fault("demanded impl actual classification absent"));
+            };
+            if classified.syntax().canonical_owner().map(|owner| owner.identity()) != Some(id.source())
+                || !classified.matches_metadata(parse, recipe, context)
+                || recipe.tokens != header.header || context.range != header.range || context.scope != header.scope
+                || definition.receipt.implementation != Some(implementation.trait_ref.is_some()) {
+                return Err(fault("translated impl does not match its actual retained source"));
             }
         }
         for id in facts
@@ -518,7 +501,32 @@ impl<'cx> PreparedProvider<'cx> {
                 ));
             }
         }
+        let translated_sources = facts.impl_declarations.iter().map(|(raw, id)| (*raw, id.source())).collect();
         for (id, row) in &facts.traits {
+            let source = source_membership;
+            if !facts.definitions[id].receipt.trait_declaration {
+                return Err(fault("trait membership is incomplete, foreign, or not a trait"));
+            }
+            let candidates = source.require_translation(&self.settings.catalog, id.source(), &translated_sources)?;
+            let mut actual = Vec::new();
+            for (raw, canonical) in candidates {
+                let candidate = *facts.impl_declarations.get(raw)
+                    .ok_or_else(|| fault("demanded typed trait bucket omits an actual source impl"))?;
+                if candidate.source() != *canonical { return Err(fault("trait candidate canonical identity differs")); }
+                let receipt = &facts.definitions[&candidate].receipt;
+                let (InputValue::DefinitionSource(parse), InputValue::DefinitionHeader(header),
+                    InputValue::DeclarationContext(context)) =
+                    (receipt.source.as_ref(), receipt.header.as_ref(), receipt.context.as_ref())
+                    else { return Err(fault("trait candidate receipt variants differ")); };
+                if !source.classification(*raw).is_some_and(|identity| identity.matches_metadata(parse, header, context)) {
+                    return Err(fault("typed candidate differs from its actual classified source"));
+                }
+                actual.push(candidate);
+            }
+            actual.sort_unstable();
+            if actual != row.implementations {
+                return Err(fault("typed trait bucket differs from its complete source candidates"));
+            }
             if row.implementations.windows(2).any(|p| p[0] >= p[1]) {
                 return Err(fault(
                     "prepared candidate identities are not unique and ordered",
