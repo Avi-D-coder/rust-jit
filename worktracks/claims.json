@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V282/V283 HELD M019/M020 original annotation metadata prerequisite: actual completed DeclarationMacroIndex group/output custody issues an opaque completion receipt; canonical cold local enum/impl/member rows share the existing metadata publisher with entered rows. Bulk scope validation and direct row iteration avoid repeated all-row selection searches. V282 test-only missing StableEncode import compile failure retained. Final macOS Rust1.99.0 library/CLI builds pass; 13/14 selected controls pass. New unchanged local enum metadata control passes all four editions (four canonical rows each), no executable body preparation. Actual component control passes pending/unadopted group, wrong body/scope/item and no-receipt refusals plus positive idempotent publication across all four editions. Real catalog remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Complete head Type control remains enabled and fails at 20/32, twelve local SelfType pending. Source/HEAD/binaries unchanged. Zero new distinct stock runtime gains, no refreshed suite total or genuine upstream solver execution. Cold lexical Type prefix, complete source facts/inference/delegate/member integration, M019/M020 and interpreter/JIT gates remain incomplete.",
+      "scope": "V284-V288 HELD shared declaration table/import/prefix prerequisite: ordinary SourceLocalIndex now delegates to one DeclarationNameIndex over retained DeclarationNameTables; the five import algorithms and lexical item tail moved out of the entered wrapper. Runtime bindings, source/occurrence/currentness and generic-owner checks remain with their existing owners. LocalTypeNames item capture/finalization is shared; no raw-root cold client retained. V284/V285 build-only stages pass; final V286 library/CLI builds pass and 23/25 selected controls pass. Complete head control remains failed at 20/32; wider import case fails module source/namespace/owner classification. Exact parent-source V287 separately reproduces that same wider import failure, proving it predates this extraction. Source, HEAD and binary guards match. Unchanged rustc blind-item-mixed-use-item completes through the production CLI in all four editions, 37/37 operations and five return scopes cleaned each; existing Copy regression passes 12 origin/edition worlds and record regression all four editions. Zero newly measured distinct stock runtime gains or refreshed suite total. V288 restores the byte-identical tested source and rebuilds the test binary; CLI stays byte-identical to V286. V288 build-only, no repeated broad controls and no attribution of V286 outcomes to its different test binary. Cold declaration hygiene/preparation-input/producer/name/currentness join remains required; no upstream solver invocation, M019/M020/interpreter/JIT closure.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1763,11 +1763,18 @@
         "worktracks/05-trait-goal-engine/2026-10-19-cold-original-annotation-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-cold-original-annotation-controls.json",
         "crates/lrr/src/frontend/original_annotation_completion.rs",
-        "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json"
+        "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-shared-declaration-prefix.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-shared-declaration-prefix-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-shared-declaration-prefix-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-shared-prefix-parent-import-control.json",
+        "worktracks/evidence/2026-10-19-v284-v288-shared-declaration-prefix.json",
+        "crates/lrr/src/frontend/local_type_names.rs",
+        "crates/lrr/src/frontend/local_declaration_names.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T15:07:06.665550+00:00",
+      "updated_at": "2026-10-19T15:26:19.678521+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1787,7 +1794,8 @@
           "paths": [
             "crates/lrr/src/db/memo.rs",
             "crates/lrr/src/expand/source_discovery.rs",
-            "crates/lrr/src/syntax/mod.rs"
+            "crates/lrr/src/syntax/mod.rs",
+            "crates/lrr/src/frontend/source_locals.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -1820,5 +1828,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-19T15:07:06.665550+00:00"
+  "updated_at": "2026-10-19T15:26:19.678521+00:00"
 }

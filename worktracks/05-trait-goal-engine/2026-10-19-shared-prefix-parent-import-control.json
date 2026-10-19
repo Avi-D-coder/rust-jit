@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Exact in-checkout parent-source attribution of the wider import failure; no candidate acceptance or fixture skip.",
+  "controls": [
+    "cli::crate_graph::local_item_tests::block_level_imports_of_enums_modules_and_renamed_functions"
+  ]
+}

@@ -67,7 +67,6 @@ impl LocalTypeNames {
             })
         };
         let mut items = BTreeMap::new();
-        let mut item_bytes = 0usize;
         // The block items of every enclosing body are names of this body too
         // (a nested `fn` or an impl member sees its parents' items). Each
         // one's declaration occurrence is read from its own plan, which
@@ -82,71 +81,26 @@ impl LocalTypeNames {
         let own_hygiene = Arc::new(hygiene.clone());
         sources.insert(0, (context, root, own_hygiene));
         for (context, root, hygiene) in &sources {
-        let source = context.source();
-        let parsed = source.parsed();
-        let capture = |name: ast::Name| -> Result<DeclarationName, Diagnostic> {
-            let actual = range(name.syntax().text_range());
-            let edition = parsed.token_edition(actual)?;
-            let raw = source.identifier_context_or_original(actual, *root)?;
-            Ok(DeclarationName {
-                name: MacroName::parse(name.text(), edition)?,
-                context: hygiene.name_item(raw)?,
-                raw,
-                edition,
-                range: actual,
-            })
-        };
-        for row in &context.facts().items {
-            if row.item.def_key.declared_name.is_empty()
-                || row
-                    .namespaces
-                    .iter()
-                    .all(|namespace| *namespace == crate::source::manifest::Namespace::Macro)
-            {
-                continue;
-            }
-            let syntax = parsed
-                .syntax_at(row.item.declaration_span, |node| {
-                    ast::Item::can_cast(node.kind())
-                })?
-                .ok_or_else(|| error("local declaration exact syntax absent"))?;
-            let excluded = row
-                .item
-                .body
-                .as_ref()
-                .map(|body| body.block_range())
-                .or(row.container_range)
-                .map(|span| TextRange::new(span.start.into(), span.end.into()));
-            if tokens(&syntax, excluded) != row.item.header.tokens {
-                return Err(error("local declaration header/source differs"));
-            }
-            // `extern crate ... as ...` uses its actual alias declaration token.
-            // Unsupported declaration spelling stays missing evidence, not a root.
-            let name = if let Some(external) = ast::ExternCrate::cast(syntax.clone()) {
-                external.rename().and_then(|rename| rename.name())
-            } else {
-                syntax.children().find_map(ast::Name::cast)
+            let source = context.source();
+            let parsed = source.parsed();
+            let capture = |name: ast::Name| -> Result<DeclarationName, Diagnostic> {
+                let actual = range(name.syntax().text_range());
+                let edition = parsed.token_edition(actual)?;
+                let raw = source.identifier_context_or_original(actual, *root)?;
+                Ok(DeclarationName {
+                    name: MacroName::parse(name.text(), edition)?,
+                    context: hygiene.name_item(raw)?,
+                    raw,
+                    edition,
+                    range: actual,
+                })
             };
-            let Some(name) = name else {
-                continue;
-            };
-            if semantic_name(name.text()).as_deref()
-                != Some(row.item.def_key.declared_name.as_str())
-            {
-                return Err(error("local declaration name/source differs"));
-            }
-            let actual = capture(name)?;
-            item_bytes = item_bytes
-                .checked_add(16 * std::mem::size_of::<(Digest, DeclarationName)>() + 256)
-                .and_then(|n| n.checked_add(actual.name.as_str().len().checked_mul(2)?))
-                .ok_or_else(crate::runtime::arena::resource)?;
-            if items
-                .insert(row.item.def_key.fingerprint(), actual)
-                .is_some()
-            {
-                return Err(error("local declaration occurrence identity repeats"));
-            }
-        }
+            Self::capture_items(
+                parsed,
+                context.facts().declaration_facts(),
+                &capture,
+                &mut items,
+            )?;
         }
         // An enum variant is the declaration of its anonymous discriminant
         // constant (E-R5-013); its body is the `= expr` argument.
@@ -299,6 +253,69 @@ impl LocalTypeNames {
                 }
             }
         }
+        Self::finish(source.identity(), items, generics, need_owner)
+    }
+    fn capture_items(
+        parsed: &crate::syntax::parse::ParsedFile,
+        facts: &crate::syntax::entered_macros::DeclarationFacts,
+        capture: &impl Fn(ast::Name) -> Result<DeclarationName, Diagnostic>,
+        items: &mut BTreeMap<Digest, DeclarationName>,
+    ) -> Result<(), Diagnostic> {
+        for row in &facts.items {
+            if row.item.def_key.declared_name.is_empty()
+                || row
+                    .namespaces
+                    .iter()
+                    .all(|namespace| *namespace == crate::source::manifest::Namespace::Macro)
+            {
+                continue;
+            }
+            let syntax = parsed
+                .syntax_at(row.item.declaration_span, |node| {
+                    ast::Item::can_cast(node.kind())
+                })?
+                .ok_or_else(|| error("local declaration exact syntax absent"))?;
+            let excluded = row
+                .item
+                .body
+                .as_ref()
+                .map(|body| body.block_range())
+                .or(row.container_range)
+                .map(|span| TextRange::new(span.start.into(), span.end.into()));
+            if tokens(&syntax, excluded) != row.item.header.tokens {
+                return Err(error("local declaration header/source differs"));
+            }
+            // `extern crate ... as ...` uses its actual alias declaration token.
+            // Unsupported declaration spelling stays missing evidence, not a root.
+            let name = if let Some(external) = ast::ExternCrate::cast(syntax.clone()) {
+                external.rename().and_then(|rename| rename.name())
+            } else {
+                syntax.children().find_map(ast::Name::cast)
+            };
+            let Some(name) = name else {
+                continue;
+            };
+            if semantic_name(name.text()).as_deref()
+                != Some(row.item.def_key.declared_name.as_str())
+            {
+                return Err(error("local declaration name/source differs"));
+            }
+            let actual = capture(name)?;
+            if items
+                .insert(row.item.def_key.fingerprint(), actual)
+                .is_some()
+            {
+                return Err(error("local declaration occurrence identity repeats"));
+            }
+        }
+        Ok(())
+    }
+    fn finish(
+        owner: Digest,
+        items: BTreeMap<Digest, DeclarationName>,
+        generics: Vec<GenericName>,
+        need_owner: bool,
+    ) -> Result<Self, Diagnostic> {
         let mut bytes = items
             .len()
             .checked_mul(16 * std::mem::size_of::<(Digest, DeclarationName)>() + 256)
@@ -325,7 +342,7 @@ impl LocalTypeNames {
                 .ok_or_else(crate::runtime::arena::resource)?;
         }
         let mut fingerprint = StableEncoder::new("lrr/v1/local-type-declaration-occurrences");
-        fingerprint.digest(source.identity());
+        fingerprint.digest(owner);
         fingerprint.u64(items.len() as u64);
         let encode = |e: &mut StableEncoder, name: &DeclarationName| {
             e.string(name.name.as_str());
@@ -347,7 +364,7 @@ impl LocalTypeNames {
         }
         fingerprint.bool(need_owner);
         Ok(Self {
-            owner: source.identity(),
+            owner,
             items,
             generics,
             need_owner,
