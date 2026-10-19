@@ -8780,6 +8780,9 @@ impl SourceDiscovery {
         if seal.key() != self.key {
             return Err(fault("discovery certificate context differs"));
         }
+        if self.impl_catalog_plan.is_some() {
+            self.publish_cold_catalog_declarations(db)?;
+        }
         if let Some((_, _, providers)) = &self.declarative {
             super::source_declarative::SourceDeclarative::revalidate_captured_role_parents(
                 providers,
@@ -8937,7 +8940,9 @@ impl SourceDiscovery {
                 .generated_owners
                 .get(&record.key().fingerprint())
                 .ok_or_else(|| fault("generated query owner metadata absent"))?;
-            let (unit, mut rows) = super::generated_syntax::GeneratedSyntaxInput::prepare(
+            let admission = self.item_root_declarations.get(&record.key().fingerprint())
+                .and_then(|job| self.item_declaration_inputs.get(job));
+            let (unit, mut rows) = super::generated_syntax::GeneratedSyntaxInput::prepare_with_declarations(
                 record.clone(),
                 owner.clone(),
                 self.sources[*ordinal].captured_macro_cfg()?.clone(),
@@ -8963,6 +8968,7 @@ impl SourceDiscovery {
                 self.included_views
                     .get(&record.key().fingerprint())
                     .cloned(),
+                admission.map(std::sync::Arc::as_ref),
             )?;
             generated_units.push(std::sync::Arc::clone(&unit));
             rows.insert(

@@ -262,6 +262,43 @@ impl SourceDiscovery {
     }
 }
 
+impl SourceDiscovery {
+    /// Source metadata only, through the ordinary cold declaration publisher.
+    /// The actual retained plan is shared with entry; no executable body or
+    /// lexical/module binding is created by this coordinator step.
+    pub(in crate::expand::source_discovery) fn publish_cold_catalog_declarations(
+        &self,
+        db: &mut crate::db::memo::Database,
+    ) -> Result<(), Diagnostic> {
+        use crate::{
+            db::{memo::LocalDeclarationPublication, poll::QueryPoll},
+            frontend::associated_declarations::{
+                AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
+            },
+        };
+        for (_, source) in self.sources.iter().enumerate()
+            .filter(|(ordinal, _)| !self.macro_export_sources.contains_key(ordinal)) {
+            let AssociatedDeclarationsPreparation::Original(prepared) =
+                PreparedOriginalAssociatedDeclarations::prepare(source)? else { continue };
+            for raw in prepared.scan().impls() {
+                let Some(scope) = prepared.declaration_scope(raw.identity) else { continue };
+                let Some(item) = prepared.owner(raw.identity).and_then(|owner| owner.canonical) else { continue };
+                let definition = item.def_key.fingerprint();
+                match db.publish_captured_declaration(&scope, definition) {
+                    QueryPoll::Ready(Ok(LocalDeclarationPublication::Published(actual))) if actual == definition => {}
+                    // The source fact consumer still sees missing metadata;
+                    // producer ownership cannot be bypassed by this publisher.
+                    QueryPoll::Ready(Ok(LocalDeclarationPublication::NeedsProducer(_))) => {}
+                    QueryPoll::Ready(Ok(_)) => return Err(fault("cold catalog declaration identity differs")),
+                    QueryPoll::Ready(Err(error)) => return Err(error),
+                    QueryPoll::NeedInput(_) => return Err(fault("cold catalog declaration input remains pending")),
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 impl SourceDiscovery {
     /// Pure selection replay against the actual configured source/compiler

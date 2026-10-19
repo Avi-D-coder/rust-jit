@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound. Solo root; existing shared frontend/declaration interfaces retain their root-owned reservations.",
+      "scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1743,13 +1743,65 @@
         "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator.md",
         "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-controls.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-probe.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-probe.json",
+        "crates/lrr/src/db/sealed_name_provider.rs",
+        "crates/lrr/src/expand/generated_syntax.rs",
+        "crates/lrr/src/expand/source_discovery/type_scope_receipts.rs",
+        "crates/lrr/src/frontend/type_name_namespace.rs",
+        "crates/lrr/src/frontend/source_type_paths.rs",
+        "crates/lrr/src/syntax/declaration_type_names.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-probe.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-final-controls.json",
+        "worktracks/evidence/2026-10-19-v269-v271-catalog-head-types-failed.json",
+        "worktracks/evidence/2026-10-19-v272-v275-catalog-type-facets-held.json",
+        "worktracks/evidence/2026-10-19-v276-v280-type-occurrences-source-identity.json",
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T14:09:52.847907+00:00",
-      "review_after": "2026-10-20T08:52:46.617857+00:00"
+      "updated_at": "2026-10-19T14:54:01.049771+00:00",
+      "review_after": "2026-10-20T08:52:46.617857+00:00",
+      "shared_interfaces": [
+        {
+          "claim": "LOCAL-037",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/frontend/mod.rs",
+            "crates/lrr/src/frontend/source_types.rs"
+          ],
+          "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+        },
+        {
+          "claim": "LOCAL-044",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/db/memo.rs",
+            "crates/lrr/src/expand/source_discovery.rs",
+            "crates/lrr/src/syntax/mod.rs"
+          ],
+          "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+        },
+        {
+          "claim": "LOCAL-046",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/cli/preentry_loader_tests.rs"
+          ],
+          "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+        },
+        {
+          "claim": "LOCAL-047",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/frontend/generated_result_namespace.rs"
+          ],
+          "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+        }
+      ]
     }
   ],
-  "updated_at": "2026-10-19T10:09:40.871138+00:00"
+  "updated_at": "2026-10-19T14:54:01.049771+00:00"
 }

@@ -1,0 +1,594 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "parent": "0eb7a147a157ef7d3e9bebfce701775484648603",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "integration_status": "held",
+  "new_distinct_stock_runtime_gains": 0,
+  "scope": "V276 builds pass,4/5source controls pass; source head query remains12/32but advances generated module heads to the actual $crate identifier failure and correctly preserves local owners. V277 common source Type path root bridge builds and prepares20/32heads;12local heads remain SelfType pending, no solver or guest execution. V278/V279 test-only API compile failures retained. V280 bad admitted-parser reuse changes the real query ParseKey and regresses generated lookup/runtime controls; both builds pass but only8/13controls pass. The source head control aborts on missing GeneratedSyntax input and does not establish20/32for that fingerprint. The following source explicitly reverts the parser substitution, preserving the genuine item-query key and scope receipt. No new stock runtime gain, feature/task completion or benchmark claimed.",
+  "attempts": {
+    "276": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:31:06.397528+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8478,
+          "source_sha256": "0b2845735f7375de558cbfb5dc075c6363bd7091549cc6930630ed1d2527f29c",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:32:38.637888+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8478,
+          "source_sha256": "0b2845735f7375de558cbfb5dc075c6363bd7091549cc6930630ed1d2527f29c",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "54aa73b7bee4506c5c2ca6bf771d6685396cd91f7cf9808021921a7180b39a41"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "3ef258cf1d88909fa3eac49948d47de1e803fb54b2ad2431db27994b07d2ca76"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:35:28.569861+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8478,
+          "source_sha256": "0b2845735f7375de558cbfb5dc075c6363bd7091549cc6930630ed1d2527f29c",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "54aa73b7bee4506c5c2ca6bf771d6685396cd91f7cf9808021921a7180b39a41"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "3ef258cf1d88909fa3eac49948d47de1e803fb54b2ad2431db27994b07d2ca76"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 87406,
+          "exit": 0,
+          "messages_sha256": "f55574f5da5e70971105da04aa7e5feae00e78a04a27e0c6479878204c0fcab4",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.40s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 75439,
+          "exit": 0,
+          "messages_sha256": "0985fb2000e1d1b30694eeb5f209d74680e1403e7d9bc317fc00ae19efd8660f",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.57s\n",
+          "errors": []
+        }
+      },
+      "control_session": 98701,
+      "control_exit": 1,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 29.229,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 29.199,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 1.177,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 2.526,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 9.656,
+          "log": "control-4.log"
+        }
+      ],
+      "failed_terminals": {
+        "control-0.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation ... actual impl head tests/ui/traits/safety-ok.rs edition2015 Digest(aedc0491b815ff7fd54a9a8dce804a5f1e24f68e29feb21ce609666cee52fcc0): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(25bf87ba6fd98877bcd5de90794e66e3c83a550ba630d5d4435381cea8d081af), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(910d60c9d6b6f06a00c2afdd5bb560ffd8f619baa3a4be53acdadb980d18f4b9): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(41f9bcc8ead045479106be6f24172865c01c617cd672aca8218bedbbdbecd2d1), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(c6bf06045b0a05fe25ef9fb51023a9f50eedac16e64c3132c3dc28733bb1b4fc): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=None; no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2018 Digest(44637c632ec24d5b4a28aa03681d864ffc275e524b153e6a4dbc0e9ebc290d76): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(d82ffa1d5b8cb0e0fed278cfa4e3cd3f0c30d611464a7dd11fa39114d6dd3a02), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(39fb2661ffdb427c3b9d27101aa7e73e2fb73bb714b99c3097f4532356f70bb1): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(77a852109046e37f624c0938bdf16d3fa600663d90481e8911db3542a6b7327a): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(45189a2b53773bf272e568a794f6af16c9c973910f173c7be79c81c7abf31d19), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2021 Digest(b49e8d0bf0d0f7f2aad25ac76ef37918282e5211ea77965b8c28abc02bc69cd5): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(0b73a4e26b5d482915cf31d0a203a540b4c90f59b36c2c48c987279f96d380b7), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(438e9abe8548e2ffa1b6710d5912ec4ef085dbe91f33ce1ddaac5c042d2115a4): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(49401090e8b6c4c3e8f3f95cce8740b214073537ac0aa81a42ccd549a331da95): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(b64484eff11d3334b50208f6ee4ee5bc57b9a5d52f13de3eccae31d3d09ed0a3), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual catalog head Types: 12/32; pending=[\"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2015\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2015\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Pending(SelfType)\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2018\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2018\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Pending(SelfType)\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2021\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2021\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Pending(SelfType)\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2024\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2024\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Pending(SelfType)\"]; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation' (17714802) panicked at crates/lrr/src/cli/preentry_loader_tests.rs:1981:5:\nactual source head Types remain unprepared: [\"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2015\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2015\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Pending(SelfType)\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2018\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2018\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Pending(SelfType)\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2021\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2021\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Pending(SelfType)\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2024\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Ready(Err(Diagnostic { code: \\\"LRR-E-MACRO-SCOPE\\\", message: \\\"invalid macro identifier or edition: \\\\\\\"$crate\\\\\\\" in edition 2024\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Pending(SelfType)\"]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 28.82s\n\n"
+      }
+    },
+    "277": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:36:32.029028+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "baa4ac6660498bf84eb7897737ee2058b591b3ddd45b15d09faa731a9b565e08",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:37:33.418807+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "baa4ac6660498bf84eb7897737ee2058b591b3ddd45b15d09faa731a9b565e08",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "f276a72d0dd838f44d39422d36ef7b3ab7df2c7edf06780a61927b7871cd35ac"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "081cebe3e0de7d20d76e148a09709f94c990b0b56944fd9de52132e9eab91621"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:38:23.526428+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "baa4ac6660498bf84eb7897737ee2058b591b3ddd45b15d09faa731a9b565e08",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "f276a72d0dd838f44d39422d36ef7b3ab7df2c7edf06780a61927b7871cd35ac"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "081cebe3e0de7d20d76e148a09709f94c990b0b56944fd9de52132e9eab91621"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 89308,
+          "exit": 0,
+          "messages_sha256": "84bfab1a22bba12c2c93e8ecc80d053f9edfa77e3b4478424d229c347756a071",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.19s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 65857,
+          "exit": 0,
+          "messages_sha256": "7904c8f6d66c70459a7d8fdfca600e51c44c541c2c05e626e3980c7fcf620d16",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.20s\n",
+          "errors": []
+        }
+      },
+      "control_session": 28586,
+      "control_exit": 1,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 29.258,
+          "log": "control-0.log"
+        }
+      ],
+      "failed_terminals": {
+        "control-0.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation ... actual impl head tests/ui/traits/safety-ok.rs edition2015 Digest(aedc0491b815ff7fd54a9a8dce804a5f1e24f68e29feb21ce609666cee52fcc0): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(25bf87ba6fd98877bcd5de90794e66e3c83a550ba630d5d4435381cea8d081af), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(910d60c9d6b6f06a00c2afdd5bb560ffd8f619baa3a4be53acdadb980d18f4b9): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(41f9bcc8ead045479106be6f24172865c01c617cd672aca8218bedbbdbecd2d1), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(c6bf06045b0a05fe25ef9fb51023a9f50eedac16e64c3132c3dc28733bb1b4fc): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2018 Digest(44637c632ec24d5b4a28aa03681d864ffc275e524b153e6a4dbc0e9ebc290d76): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(d82ffa1d5b8cb0e0fed278cfa4e3cd3f0c30d611464a7dd11fa39114d6dd3a02), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(e73f751ac445fa42ebdfc06316649b397258b276112b3818df4a17a30879110a), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(39fb2661ffdb427c3b9d27101aa7e73e2fb73bb714b99c3097f4532356f70bb1): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(b930ecb553939baf6214ea1ebdde0257f49f81d48adc0e64e26f0cccdef541c6), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(77a852109046e37f624c0938bdf16d3fa600663d90481e8911db3542a6b7327a): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(45189a2b53773bf272e568a794f6af16c9c973910f173c7be79c81c7abf31d19), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2021 Digest(b49e8d0bf0d0f7f2aad25ac76ef37918282e5211ea77965b8c28abc02bc69cd5): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(0b73a4e26b5d482915cf31d0a203a540b4c90f59b36c2c48c987279f96d380b7), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(438e9abe8548e2ffa1b6710d5912ec4ef085dbe91f33ce1ddaac5c042d2115a4): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(49401090e8b6c4c3e8f3f95cce8740b214073537ac0aa81a42ccd549a331da95): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(b64484eff11d3334b50208f6ee4ee5bc57b9a5d52f13de3eccae31d3d09ed0a3), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual catalog head Types: 20/32; pending=[\"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Pending(SelfType)\"]; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation' (17719744) panicked at crates/lrr/src/cli/preentry_loader_tests.rs:1981:5:\nactual source head Types remain unprepared: [\"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Pending(SelfType)\"]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 28.85s\n\n"
+      }
+    },
+    "278": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:39:25.541827+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "d6ddcf9689f9b3d7a6faab6eba1397f9a847eb5fa7819c9a9734073ff9f32626",
+          "binaries": {}
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 85263,
+          "exit": 101,
+          "messages_sha256": "560278f49204e1ae04ec5c1e5cbb8f3dd714f7bce429da761e970fed9bba3dfd",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 1 previous error; 29 warnings emitted\n",
+          "errors": [
+            "error[E0308]: mismatched types\n    --> crates/lrr/src/cli/preentry_loader_tests.rs:1962:29\n     |\n1961 |                         assert!(crate::expand::generated_syntax::GeneratedSyntaxInput::prepare(\n     |                                 -------------------------------------------------------------- arguments to this function are incorrect\n1962 |                             unit.items.record().clone(), unit.scope.clone(), unit.cfg.clone(),\n     |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Arc<ExpansionRecord>`, found `ExpansionRecord`\n     |\n     = note: expected struct `std::sync::Arc<ExpansionRecord>`\n                found struct `ExpansionRecord`\nnote: associated function defined here\n    --> crates/lrr/src/expand/generated_syntax.rs:35:19\n     |\n  35 |     pub(crate) fn prepare(\n     |                   ^^^^^^^\n  36 |         record: Arc<super::record::ExpansionRecord>,\n     |         -------------------------------------------\nhelp: call `Into::into` on this expression to convert `record::ExpansionRecord` into `std::sync::Arc<record::ExpansionRecord>`\n     |\n1962 |                             unit.items.record().clone().into(), unit.scope.clone(), unit.cfg.clone(),\n     |                                                        +++++++\n\n"
+          ]
+        }
+      }
+    },
+    "279": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:39:59.359912+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "902135947933da1d701ace9ef8a7fa265761d58fb11220e9d407378d73eff7ec",
+          "binaries": {}
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 74527,
+          "exit": 101,
+          "messages_sha256": "42ae79412066aa400da2125cac58b7413d03782335cef2a7087f9f123f9a044c",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 2 previous errors; 29 warnings emitted\n",
+          "errors": [
+            "error[E0599]: no method named `fingerprint` found for reference `&expand::identity::ExpansionKey` in the current scope\n    --> crates/lrr/src/cli/preentry_loader_tests.rs:1961:100\n     |\n1961 |                         let record = db.input(&InputKey::ExpansionRecord(unit.items.record().key().fingerprint())).unwrap();\n     |                                                                                                    ^^^^^^^^^^^ method not found in `&expand::identity::ExpansionKey`\n     |\n     = help: items from traits can only be used if the trait is in scope\nhelp: trait `StableEncode` which provides `fingerprint` is implemented but not in scope; perhaps you want to import it\n     |\n   2 + use crate::core::digest::StableEncode;\n     |\n\n",
+            "error[E0308]: mismatched types\n    --> crates/lrr/src/cli/preentry_loader_tests.rs:1964:29\n     |\n1963 |                         assert!(crate::expand::generated_syntax::GeneratedSyntaxInput::prepare(\n     |                                 -------------------------------------------------------------- arguments to this function are incorrect\n1964 |                             record.clone(), unit.scope.clone(), unit.cfg.clone(),\n     |                             ^^^^^^^^^^^^^^ expected `Arc<ExpansionRecord>`, found `ExpansionRecord`\n     |\n     = note: expected struct `std::sync::Arc<ExpansionRecord>`\n                found struct `ExpansionRecord`\nnote: associated function defined here\n    --> crates/lrr/src/expand/generated_syntax.rs:35:19\n     |\n  35 |     pub(crate) fn prepare(\n     |                   ^^^^^^^\n  36 |         record: Arc<super::record::ExpansionRecord>,\n     |         -------------------------------------------\nhelp: call `Into::into` on this expression to convert `record::ExpansionRecord` into `std::sync::Arc<record::ExpansionRecord>`\n     |\n1964 |                             record.clone().into(), unit.scope.clone(), unit.cfg.clone(),\n     |                                           +++++++\n\n"
+          ]
+        }
+      }
+    },
+    "280": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:40:35.715865+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "85f8c982aaa0ea17d8795267f5d3da01d2b2250b6a18a51a826dde0d6455c452",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:42:36.639053+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "85f8c982aaa0ea17d8795267f5d3da01d2b2250b6a18a51a826dde0d6455c452",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "48216c3d6bc7ac6ee0f1206b6ab50f0d0f836b9d0e7763debeb1e7834eb5d670"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "71555cc699b3f78f954fd3fe3e01040c75ca024abb91faa95d9f6b88fd0183cd"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:44:15.263891+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8479,
+          "source_sha256": "85f8c982aaa0ea17d8795267f5d3da01d2b2250b6a18a51a826dde0d6455c452",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "48216c3d6bc7ac6ee0f1206b6ab50f0d0f836b9d0e7763debeb1e7834eb5d670"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "71555cc699b3f78f954fd3fe3e01040c75ca024abb91faa95d9f6b88fd0183cd"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 48514,
+          "exit": 0,
+          "messages_sha256": "9b2c2df5bd0102c45a723170f18cec23e1f3caf2f0f05d98972ea1f6c7f65116",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.18s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 26300,
+          "exit": 0,
+          "messages_sha256": "0c849e9ac1066ec3f057b4f9a211ec66a5d0bb34c7f57640b5cc4932653b2173",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.03s\n",
+          "errors": []
+        }
+      },
+      "control_session": 84613,
+      "control_exit": 1,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 5.194,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 29.266,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 1.171,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 2.525,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 9.699,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_type_declaration_lookup_requires_the_actual_memo_header_and_scope",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_type_declaration_lookup_requires_the_actual_memo_header_and_scope",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 0.449,
+          "log": "control-5.log"
+        },
+        {
+          "selector": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 0.448,
+          "log": "control-6.log"
+        },
+        {
+          "selector": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_foreign_template_checks_the_actual_definer_type_scope",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_foreign_template_checks_the_actual_definer_type_scope",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 0.448,
+          "log": "control-7.log"
+        },
+        {
+          "selector": "db::memo::local_declaration_inputs::tests::unchanged_cold_impl_scopes_publish_headers_without_entering_enclosing_functions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "db::memo::local_declaration_inputs::tests::unchanged_cold_impl_scopes_publish_headers_without_entering_enclosing_functions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.668,
+          "log": "control-8.log"
+        },
+        {
+          "selector": "db::memo::local_declaration_inputs::tests::cold_declaration_publication_rejects_changed_parent_before_any_child_input",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "db::memo::local_declaration_inputs::tests::cold_declaration_publication_rejects_changed_parent_before_any_child_input",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.44,
+          "log": "control-9.log"
+        },
+        {
+          "selector": "db::memo::local_declaration_inputs::tests::local_attribute_producer_does_not_publish_unexpanded_header",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "db::memo::local_declaration_inputs::tests::local_attribute_producer_does_not_publish_unexpanded_header",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.362,
+          "log": "control-10.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 9.768,
+          "log": "control-11.log"
+        },
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 5.402,
+          "log": "control-12.log"
+        }
+      ],
+      "failed_terminals": {
+        "control-0.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation ... actual impl head tests/ui/traits/safety-ok.rs edition2015 Digest(aedc0491b815ff7fd54a9a8dce804a5f1e24f68e29feb21ce609666cee52fcc0): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(25bf87ba6fd98877bcd5de90794e66e3c83a550ba630d5d4435381cea8d081af), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(910d60c9d6b6f06a00c2afdd5bb560ffd8f619baa3a4be53acdadb980d18f4b9): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(41f9bcc8ead045479106be6f24172865c01c617cd672aca8218bedbbdbecd2d1), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(c6bf06045b0a05fe25ef9fb51023a9f50eedac16e64c3132c3dc28733bb1b4fc): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=None; no guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation' (17732378) panicked at crates/lrr/src/cli/preentry_loader_tests.rs:1951:82:\ncalled `Option::unwrap()` on a `None` value\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 4.83s\n\n",
+        "control-5.log": "\nrunning 1 test\ntest frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_type_declaration_lookup_requires_the_actual_memo_header_and_scope ... \nthread 'frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_type_declaration_lookup_requires_the_actual_memo_header_and_scope' (17733172) panicked at crates/lrr/src/frontend/generated_result_namespace.rs:958:14:\ncalled `Option::unwrap()` on a `None` value\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_type_declaration_lookup_requires_the_actual_memo_header_and_scope\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 0.09s\n\n",
+        "control-6.log": "\nrunning 1 test\ntest frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals ... \nthread 'frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals' (17733227) panicked at crates/lrr/src/frontend/generated_result_namespace.rs:958:14:\ncalled `Option::unwrap()` on a `None` value\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 0.09s\n\n",
+        "control-7.log": "\nrunning 1 test\ntest frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_foreign_template_checks_the_actual_definer_type_scope ... \nthread 'frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_foreign_template_checks_the_actual_definer_type_scope' (17733284) panicked at crates/lrr/src/frontend/generated_result_cross_source_tests.rs:148:10:\ncalled `Option::unwrap()` on a `None` value\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_foreign_template_checks_the_actual_definer_type_scope\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 0.09s\n\n",
+        "control-12.log": "\nrunning 1 test\ntest cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions ... \nthread 'cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions' (17733667) panicked at crates/lrr/src/cli/builtin_derive_tests.rs:74:27:\n2015 LRR-E-STALE-HANDLE: reference location lease is stale\n//@ run-pass\n\nfn f(arg: &mut A) {\n    arg.a = 100;\n}\n\n#[derive(Copy, Clone)]\nstruct A { a: isize }\n\npub fn main() {\n    let mut x = A {a: 10};\n    f(&mut x);\n    assert_eq!(x.a, 100);\n    x.a = 20;\n    let mut y = x;\n    f(&mut y);\n    assert_eq!(x.a, 20);\n}\n\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 5.00s\n\n"
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ pub mod modules;
 pub mod origin;
 pub mod outline;
 pub mod parse;
+pub(crate) mod declaration_type_names;
 pub mod spans;
 
 pub mod cfg_input;

@@ -293,9 +293,9 @@ impl DiscoveryInput {
             return Err(fail("primary scope differs from its seal domain"));
         }
         if (!self.type_scopes.is_empty() || !self.value_scopes.is_empty())
-            && !matches!(self.seal.domain(), SealDomain::Scope { .. })
+            && !matches!(self.seal.domain(), SealDomain::Scope { .. } | SealDomain::ImplCatalog { .. })
         {
-            return Err(fail("contained type scopes outside a scope seal"));
+            return Err(fail("contained type scopes outside a completed namespace/catalog publication"));
         }
         if !self.value_scopes.is_empty()
             && !matches!(self.seal.domain(), SealDomain::Scope { namespace: Namespace::Value, .. })

@@ -106,6 +106,7 @@ pub(crate) mod type_name_namespace;
 
 pub(crate) mod source_parameter_goals;
 pub(crate) mod source_types;
+mod source_type_paths;
 
 pub mod current_module_names;
 

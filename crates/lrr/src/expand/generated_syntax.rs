@@ -25,9 +25,8 @@ pub struct GeneratedSyntaxInput {
     pub(crate) producer_origin: Option<Arc<crate::syntax::origin::MacroOrigin>>,
     pub(crate) included_source: Option<Arc<crate::source::include_view::IncludedSourceView>>,
     pub(crate) definitions: BTreeMap<Digest, crate::source::manifest::DefKey>,
-    // The unit's own outline, parsed once from its immutable items on first
-    // demand (generated impl self types, member indexing).
-    outline: std::sync::OnceLock<Arc<crate::syntax::outline::Outline>>,
+    // Prepared once with the actual admitted root and shared by consumers.
+    outline: Arc<crate::syntax::outline::Outline>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -41,6 +40,32 @@ impl GeneratedSyntaxInput {
         producer_origin: Option<Arc<crate::syntax::origin::MacroOrigin>>,
         included_source: Option<Arc<crate::source::include_view::IncludedSourceView>>,
     ) -> Result<(Arc<Self>, BTreeMap<InputKey, InputValue>), Diagnostic> {
+        Self::prepare_using(record, scope, cfg, seal, producer_origin, included_source, None)
+    }
+    pub(crate) fn prepare_with_declarations(
+        record: Arc<super::record::ExpansionRecord>, scope: ScopeKey, cfg: CfgSet, seal: SealKey,
+        producer_origin: Option<Arc<crate::syntax::origin::MacroOrigin>>,
+        included_source: Option<Arc<crate::source::include_view::IncludedSourceView>>,
+        declarations: Option<&super::generated_declarations::GeneratedDeclarations>,
+    ) -> Result<(Arc<Self>, BTreeMap<InputKey, InputValue>), Diagnostic> {
+        Self::prepare_using(record, scope, cfg, seal, producer_origin, included_source, declarations)
+    }
+    fn prepare_using(
+        record: Arc<super::record::ExpansionRecord>, scope: ScopeKey, cfg: CfgSet, seal: SealKey,
+        producer_origin: Option<Arc<crate::syntax::origin::MacroOrigin>>,
+        included_source: Option<Arc<crate::source::include_view::IncludedSourceView>>,
+        declarations: Option<&super::generated_declarations::GeneratedDeclarations>,
+    ) -> Result<(Arc<Self>, BTreeMap<InputKey, InputValue>), Diagnostic> {
+        if let Some(declarations) = declarations {
+            if declarations.record().descriptor().fingerprint() != record.descriptor().fingerprint()
+                || declarations.scan().scope() != &scope || declarations.scan().cfg() != cfg.fingerprint()
+                || declarations.epoch() != seal.epoch {
+                return Err(fault("generated query insertion receipt differs"));
+            }
+        } else if scope.owner.is_some() {
+            return Err(fault("generated query local scope requires its admitted declaration receipt"));
+        }
+        let admitted = declarations.is_some();
         if producer_origin.as_ref().is_some_and(|origin| {
             origin.invocation_identity != record.key().invocation
         }) {
@@ -60,9 +85,16 @@ impl GeneratedSyntaxInput {
             record.clone(),
             seal.epoch,
         )?);
+        // Item-query syntax has its own real ParseKey. The declaration scan's
+        // retained parser uses another grammar identity and cannot substitute
+        // for this unit even when its displayed token text is identical.
         let parsed = ParsedFile::from_generated_items(&items)?;
         let key = parsed.key();
-        let outline = parsed.outline(scope.crate_key, scope.module_path.clone(), &cfg)?;
+        let outline = if admitted {
+            parsed.outline_item_fragment(&scope, &cfg)?
+        } else {
+            parsed.outline(scope.crate_key, scope.module_path.clone(), &cfg)?
+        };
         let headers = items
             .items()
             .iter()
@@ -93,7 +125,7 @@ impl GeneratedSyntaxInput {
         let mut definitions = BTreeMap::new();
         for item in &outline.items {
             if item.scope.crate_key != scope.crate_key
-                || !item.scope.owner.is_none_or(|owner| {
+                || !(item.scope == scope && admitted || item.scope.owner.is_none_or(|owner| {
                     owners.get(&owner).is_some_and(|parents| {
                         parents.iter().any(|parent| {
                             parent.scope.crate_key == item.scope.crate_key
@@ -102,7 +134,7 @@ impl GeneratedSyntaxInput {
                                 && item.declaration_span.end <= parent.declaration_span.end
                         })
                     })
-                })
+                }))
                 || !item.scope.module_path.starts_with(&scope.module_path)
             {
                 return Err(fault("generated query declaration escapes captured owner"));
@@ -145,23 +177,14 @@ impl GeneratedSyntaxInput {
                 definitions,
                 producer_origin,
                 included_source,
-                outline: std::sync::OnceLock::from(Arc::new(outline)),
+                outline: Arc::new(outline),
             }),
             declarations,
         ))
     }
     /// The unit's outline (already computed at preparation).
     pub(crate) fn outline(&self) -> Result<Arc<crate::syntax::outline::Outline>, Diagnostic> {
-        if let Some(outline) = self.outline.get() {
-            return Ok(Arc::clone(outline));
-        }
-        let parsed = ParsedFile::from_generated_items(&self.items)?;
-        let outline = Arc::new(parsed.outline(
-            self.scope.crate_key,
-            self.scope.module_path.clone(),
-            &self.cfg,
-        )?);
-        Ok(Arc::clone(self.outline.get_or_init(|| outline)))
+        Ok(Arc::clone(&self.outline))
     }
     pub(crate) fn same_unit(&self, other: &Self) -> bool {
         self.key == other.key

@@ -337,9 +337,14 @@ impl SourceDiscovery {
     ) -> Result<Vec<TypeScopeReceipt>, Diagnostic> {
         let _span = crate::core::timing::Span::enter(|| "discovery type_scope_receipts".into());
         let seal = self.seal.as_ref().ok_or_else(unavailable)?;
-        // Contained Type facets nest only in a scope publication; an impl or
-        // test catalogue seal carries none (consumers demand the facet).
-        if !matches!(seal.domain(), crate::db::seals::SealDomain::Scope { .. }) {
+        // A configured impl catalog closes this same graph and can retain its
+        // actual Type facets. Its private source-world completion is required
+        // at publication; the parent remains an ImplCatalog, never a Type seal.
+        let supported = matches!(seal.domain(), crate::db::seals::SealDomain::Scope { .. })
+            || namespace == Namespace::Type
+                && matches!(seal.domain(), crate::db::seals::SealDomain::ImplCatalog { .. })
+                && self.impl_catalog_plan.is_some();
+        if !supported {
             return Ok(Vec::new());
         }
         // A Value fixed point is not a Type fixed point. Retain no positive

@@ -458,6 +458,17 @@ impl<'a> WrittenTypeDeclaration<'a> {
             name,
         )
     }
+    fn resolve_name_at(
+        &self, db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+        name: &ra_ap_syntax::ast::NameRef,
+    ) -> QueryPoll<SignatureName> {
+        if self.function.is_some() { return self.resolve_name(db, graph, sources, name.text()); }
+        super::type_name_namespace::resolve_declaration_name_at(db,
+            super::type_name_namespace::SourceTypeOwner {
+                definition: self.definition, scope: self.scope, header: self.header,
+            }, self.generics, sources, name,
+        )
+    }
 }
 /// Symbolic consumers must not promote runtime-erased representations into
 /// exact trait identities. This is a preparation demand, never runtime refusal.
@@ -778,8 +789,7 @@ pub(super) fn resolve_actual_type(
                 let Some(name_ref) = segment.name_ref() else {
                     return QueryPoll::Ready(Ok(None));
                 };
-                let name = name_ref.text().to_string();
-                let selected = match signature.resolve_name(db, graph, sources, &name) {
+                let selected = match signature.resolve_name_at(db, graph, sources, &name_ref) {
                     QueryPoll::Ready(Ok(selected)) => selected,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -826,23 +836,14 @@ pub(super) fn resolve_actual_type(
         path: &ra_ap_syntax::ast::Path,
     ) -> QueryPoll<Option<TyTerm>> {
         use ra_ap_syntax::ast;
-        let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
-            return QueryPoll::Ready(Ok(None));
-        };
-        let scope = crate::syntax::outline::ScopeKey {
-            owner: None,
-            ..(*signature.scope).clone()
-        };
-        let found = match graph.lookup_source_path(
-            Namespace::Type,
-            &segments,
-            absolute,
-            &scope,
-            signature.header.profile.edition,
+        let found = match super::source_type_paths::lookup(db, graph,
+            super::type_name_namespace::SourceTypeOwner { definition: signature.definition,
+                scope: signature.scope, header: signature.header }, path,
         ) {
-            Ok(crate::frontend::names::NameLookup::Defined(found)) => found,
-            Ok(_) => return QueryPoll::Ready(Ok(None)),
-            Err(error) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::Ready(Ok(Some(crate::frontend::names::NameLookup::Defined(found)))) => found,
+            QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         let mut arguments = Vec::new();
         if let Some(list) = path
@@ -1106,10 +1107,11 @@ pub(super) fn resolve_actual_type(
         }
         let mut selected = None;
         for path in paths {
-            let trait_key = match projection_trait_key(graph, signature, &path) {
-                Ok(Some(key)) => key,
-                Ok(None) => continue,
-                Err(error) => return QueryPoll::Ready(Err(error)),
+            let trait_key = match projection_trait_key(db, graph, signature, &path) {
+                QueryPoll::Ready(Ok(Some(key))) => key,
+                QueryPoll::Ready(Ok(None)) => continue,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
             let context = db.input(&InputKey::DeclarationContext(trait_key));
             let Some(InputValue::DeclarationContext(context)) = context.as_deref() else {
@@ -1179,17 +1181,18 @@ pub(super) fn projection_trait(
     let trait_key = if path.qualifier().is_none()
         && let Some(name) = path.segment().and_then(|segment| segment.name_ref())
     {
-        match signature.resolve_name(db, graph, sources, name.text()) {
+        match signature.resolve_name_at(db, graph, sources, &name) {
             QueryPoll::Ready(Ok(SignatureName::Source(selected))) => selected.identity,
             QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
     } else {
-        match projection_trait_key(graph, signature, path) {
-            Ok(Some(key)) => key,
-            Ok(None) => return QueryPoll::Ready(Ok(None)),
-            Err(error) => return QueryPoll::Ready(Err(error)),
+        match projection_trait_key(db, graph, signature, path) {
+            QueryPoll::Ready(Ok(Some(key))) => key,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
     };
     // A Type-namespace definition alone is not a trait declaration. All
@@ -1228,29 +1231,19 @@ pub(super) fn projection_trait(
     QueryPoll::Ready(Ok(Some((trait_key, arguments))))
 }
 fn projection_trait_key(
+    db: &mut Database,
     graph: &NameNamespaces,
     signature: &WrittenTypeDeclaration<'_>,
     path: &ra_ap_syntax::ast::Path,
-) -> Result<Option<crate::core::digest::Digest>, Diagnostic> {
-    let Some((segments, absolute)) = super::member_index::path_segments(path.clone()) else {
-        return Ok(None);
-    };
-    let scope = crate::syntax::outline::ScopeKey {
-        owner: None,
-        ..(*signature.scope).clone()
-    };
-    match graph.lookup_source_path(
-        Namespace::Type,
-        &segments,
-        absolute,
-        &scope,
-        signature.header.profile.edition,
+) -> QueryPoll<Option<crate::core::digest::Digest>> {
+    match super::source_type_paths::lookup(db, graph,
+        super::type_name_namespace::SourceTypeOwner { definition: signature.definition,
+            scope: signature.scope, header: signature.header }, path,
     ) {
-        Ok(crate::frontend::names::NameLookup::Defined(definition)) => {
-            Ok(Some(definition.identity))
-        }
-        Ok(_) => Ok(None),
-        Err(error) => Err(error),
+        QueryPoll::Ready(Ok(Some(crate::frontend::names::NameLookup::Defined(definition)))) => QueryPoll::Ready(Ok(Some(definition.identity))),
+        QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
     }
 }
 

@@ -1828,6 +1828,12 @@ fn unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_hea
             };
             assert!(publication.scope.is_none());
             assert!(publication.impl_catalog.is_some());
+            assert!(!publication.type_scopes.is_empty(), "actual completed module Type facets are retained");
+            assert!(publication.value_scopes.is_empty(), "an impl catalog does not assert a Value fixed point");
+            let mut missing_facet = publication.as_ref().clone();
+            missing_facet.type_scopes.clear();
+            assert!(missing_facet.require_scope_certificate_layout().is_err(),
+                "catalog completion binds the actual contained namespace facts");
             publication.require_scope_certificate_layout().unwrap();
             assert_eq!(
                 crate::traits::upstream::check_completed_source_catalog(publication).unwrap(),
@@ -1907,6 +1913,116 @@ fn unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_hea
         failed.is_empty(),
         "global source catalog obligations remain: {failed:?}"
     );
+}
+
+#[test]
+fn unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation() {
+    use ra_ap_syntax::{AstNode, ast};
+    use crate::{
+        db::{dependency::{InputKey, InputValue}, key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+        frontend::impl_head_types::ImplHeadTypeResult,
+        traits::header_syntax::ImplHeaderSyntaxKey,
+    };
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout");
+    let mut pending = Vec::new();
+    let mut resolved = 0;
+    let mut demanded = 0;
+    let mut occurrences = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for case in [
+            "tests/ui/traits/safety-ok.rs",
+            "tests/ui/methods/method-self-arg-trait.rs",
+            "tests/ui/coherence/coherence-impl-in-fn.rs",
+        ] {
+            let (mut db, seal, scope) = configured_impl_catalog_world(&root.join(case), edition).unwrap();
+            let inventory = match db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal.clone())) {
+                QueryPoll::Ready(Ok(value)) => value.value,
+                other => panic!("actual global inventory is not ready: {other:?}"),
+            };
+            let QueryValue::PreparedScopeImplHeaders(headers) = inventory.as_ref() else { panic!() };
+            db.trace.detailed = true;
+            let start = db.trace.events.len();
+            for raw in headers.inventory_root().headers().iter()
+                .filter(|header| header.scope.crate_key == scope.crate_key) {
+                demanded += 1;
+                let owner = headers.canonical_owner(raw.identity).unwrap().identity();
+                if headers.header(raw.identity).unwrap().source().generated_origin().is_some() {
+                    let context = db.input(&InputKey::DeclarationContext(owner)).unwrap();
+                    let InputValue::DeclarationContext(context) = context.as_ref() else { panic!() };
+                    assert_eq!(context.scope, raw.scope, "query input retains the admitted generated insertion owner");
+                    let source = db.input(&InputKey::DefinitionSource(owner)).unwrap();
+                    let InputValue::DefinitionSource(parse) = source.as_ref() else { panic!() };
+                    let input = db.input(&InputKey::GeneratedSyntax(parse.content)).unwrap();
+                    let InputValue::GeneratedSyntax(unit) = input.as_ref() else { panic!() };
+                    let first = unit.outline().unwrap();
+                    assert!(std::sync::Arc::ptr_eq(&first, &unit.outline().unwrap()));
+                    if unit.scope.owner.is_some() {
+                        assert!(crate::expand::generated_syntax::GeneratedSyntaxInput::prepare(
+                            unit.items.record_root().clone(), unit.scope.clone(), unit.cfg.clone(),
+                            unit.seal.clone(), None, None,
+                        ).is_err(), "a raw local scope cannot mint query-input ownership");
+                    }
+                }
+                let key = QueryKey::ImplHeadTypes(Box::new(ImplHeaderSyntaxKey {
+                    inventory: seal.clone(), implementation: raw.identity,
+                }));
+                let first = match db.fetch(&SyntaxProvider, key.clone()) {
+                    QueryPoll::Ready(Ok(value)) => value.value,
+                    other => {
+                        pending.push(format!("{case} edition{edition} {:?}: {other:?}", raw.identity));
+                        continue;
+                    }
+                };
+                let second = match db.fetch(&SyntaxProvider, key) {
+                    QueryPoll::Ready(Ok(value)) => value.value,
+                    other => panic!("repeat actual head demand: {other:?}"),
+                };
+                assert!(std::sync::Arc::ptr_eq(&first, &second));
+                let QueryValue::ImplHeadTypes(head) = first.as_ref() else { panic!() };
+                match head.result() {
+                    ImplHeadTypeResult::Resolved { self_type, trait_ref } => {
+                        if let Some(trait_ref) = trait_ref {
+                            assert_eq!(trait_ref.self_ty, *self_type);
+                        }
+                        if head.syntax().generated_origin().is_some() {
+                            let header = db.input(&InputKey::DefinitionHeader(owner)).unwrap();
+                            let context = db.input(&InputKey::DeclarationContext(owner)).unwrap();
+                            let (InputValue::DefinitionHeader(header), InputValue::DeclarationContext(context)) =
+                                (header.as_ref(), context.as_ref()) else { panic!() };
+                            let parsed = head.syntax().parsed();
+                            let ty = parsed.syntax_at(head.syntax().self_type(), |node| ast::Type::can_cast(node.kind())).unwrap().unwrap();
+                            let name = ty.descendants().find_map(ast::NameRef::cast).unwrap();
+                            let proof = parsed.declaration_type_name(owner, header, context, &name).unwrap();
+                            proof.require(&parsed.key(), owner, header, context, name.text()).unwrap();
+                            let mut foreign = context.clone();
+                            foreign.scope.crate_key = Digest([0; 32]);
+                            assert!(proof.require(&parsed.key(), owner, header, &foreign, name.text()).is_err());
+                            assert!(proof.require(&parsed.key(), Digest([0; 32]), header, context, name.text()).is_err());
+                            let mut changed = header.clone();
+                            changed.tokens.clear();
+                            assert!(proof.require(&parsed.key(), owner, &changed, context, name.text()).is_err());
+                            let mut changed = parsed.key();
+                            changed.content = Digest([0; 32]);
+                            assert!(proof.require(&changed, owner, header, context, name.text()).is_err());
+                            occurrences += 1;
+                        }
+                        resolved += 1;
+                        eprintln!("actual impl head {case} edition{edition} {:?}: {self_type:?}; trait={trait_ref:?}; no guest execution", raw.identity);
+                    }
+                    other => pending.push(format!("{case} edition{edition} {:?}: {other:?}", raw.identity)),
+                }
+            }
+            assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+                QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_)
+                    | QueryKey::FunctionSignature(_))));
+        }
+    }
+    eprintln!("actual catalog head Types: {resolved}/{demanded}; pending={pending:?}; no solver or guest execution");
+    eprintln!("actual generated declaration Type occurrence controls: {occurrences}; no guest execution");
+    assert!(demanded > 0);
+    assert!(occurrences > 0);
+    assert!(pending.is_empty(), "actual source head Types remain unprepared: {pending:?}");
 }
 
 #[test]

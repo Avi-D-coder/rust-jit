@@ -354,6 +354,55 @@ pub(crate) fn lookup_type_declaration(
     parse: &ParseKey,
     written_name: &str,
 ) -> QueryPoll<super::super::names::NameLookup> {
+    lookup_type_declaration_using(db, declaration, parse, written_name, None)
+}
+pub(crate) fn lookup_type_declaration_at(
+    db: &mut Database,
+    declaration: super::super::type_name_namespace::SourceTypeOwner<'_>,
+    parse: &ParseKey,
+    name: &ra_ap_syntax::ast::NameRef,
+) -> QueryPoll<super::super::names::NameLookup> {
+    let captured = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(parse.clone())) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let crate::db::value::QueryValue::ParseFile(parsed) = captured.as_ref() else {
+        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence parse differs")));
+    };
+    let Some(context) = db.input(&InputKey::DeclarationContext(declaration.definition)) else {
+        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence declaration is absent")));
+    };
+    let InputValue::DeclarationContext(context) = context.as_ref() else {
+        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence declaration differs")));
+    };
+    let occurrence = match parsed.declaration_type_name(declaration.definition, declaration.header, context, name) {
+        Ok(value) => value,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    if let Err(error) = occurrence.require(parse, declaration.definition, declaration.header, context, name.text()) {
+        return QueryPoll::Ready(Err(error));
+    }
+    if context.scope != *declaration.scope {
+        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence owner differs")));
+    }
+    let selected = match GeneratedRows::current(db, declaration.definition, parse) {
+        Ok(Some(rows)) => rows.unit_range(occurrence.range()),
+        Ok(None) => None,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let Some(selected) = selected else {
+        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence unit coordinates absent")));
+    };
+    lookup_type_declaration_using(db, declaration, parse, name.text(), Some(selected))
+}
+fn lookup_type_declaration_using(
+    db: &mut Database,
+    declaration: super::super::type_name_namespace::SourceTypeOwner<'_>,
+    parse: &ParseKey,
+    written_name: &str,
+    selected_range: Option<crate::syntax::spans::SourceRange>,
+) -> QueryPoll<super::super::names::NameLookup> {
     let Some(input) = db.input(&InputKey::GeneratedSyntax(parse.content)) else {
         return QueryPoll::Ready(Err(fault(
             "LRR-E-CALL-CONTEXT",
@@ -405,7 +454,7 @@ pub(crate) fn lookup_type_declaration(
         {
             return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl canonical header proof differs")));
         }
-        return QueryPoll::Ready(lookup_declaration_inner(db, declaration, parse, written_name, None));
+        return QueryPoll::Ready(lookup_declaration_inner(db, declaration, parse, written_name, selected_range));
     }
     let key = match definition.item_kind {
         ItemKind::Struct | ItemKind::Enum => QueryKey::TypeSchema(declaration.definition),
@@ -450,7 +499,7 @@ pub(crate) fn lookup_type_declaration(
         declaration,
         parse,
         written_name,
-        None,
+        selected_range,
     ))
 }
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T14:09:52.847907+00:00",
+  "updated_at": "2026-10-19T14:54:01.049771+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -319,9 +319,10 @@
             "worktracks/evidence/2026-10-19-v257-v258-local-derive-selection.json",
             "worktracks/evidence/2026-10-19-v259-v261-original-annotation-groups.json",
             "worktracks/evidence/2026-10-19-v262-original-annotation-group-identity.json",
-            "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json"
+            "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
+            "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
           ],
-          "latest_component_scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound."
+          "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete."
         },
         {
           "id": "WT05-02",
@@ -339,9 +340,10 @@
             "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
             "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
             "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json",
-            "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json"
+            "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
+            "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
           ],
-          "latest_component_scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound."
+          "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete."
         },
         {
           "id": "WT05-03",
@@ -376,10 +378,14 @@
         "worktracks/evidence/2026-10-19-v257-v258-local-derive-selection.json",
         "worktracks/evidence/2026-10-19-v259-v261-original-annotation-groups.json",
         "worktracks/evidence/2026-10-19-v262-original-annotation-group-identity.json",
-        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json"
+        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
+        "worktracks/evidence/2026-10-19-v269-v271-catalog-head-types-failed.json",
+        "worktracks/evidence/2026-10-19-v272-v275-catalog-type-facets-held.json",
+        "worktracks/evidence/2026-10-19-v276-v280-type-occurrences-source-identity.json",
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented.",
-      "latest_component_scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound."
+      "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete."
     },
     {
       "id": "WT06",

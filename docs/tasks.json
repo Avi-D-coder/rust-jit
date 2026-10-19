@@ -20074,12 +20074,21 @@
         "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-controls.json",
         "worktracks/evidence/2026-10-19-v259-v261-original-annotation-groups.json",
         "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-final-controls.json",
-        "worktracks/evidence/2026-10-19-v262-original-annotation-group-identity.json"
+        "worktracks/evidence/2026-10-19-v262-original-annotation-group-identity.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-probe.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-final-controls.json",
+        "worktracks/evidence/2026-10-19-v269-v271-catalog-head-types-failed.json",
+        "worktracks/evidence/2026-10-19-v272-v275-catalog-type-facets-held.json",
+        "worktracks/evidence/2026-10-19-v276-v280-type-occurrences-source-identity.json",
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound.",
+      "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
@@ -20087,7 +20096,8 @@
         "worktracks/evidence/2026-10-19-v232-v233-source-trait-headers.json"
       ],
       "evidence": [
-        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json"
+        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
       ]
     },
     {
@@ -20126,7 +20136,16 @@
         "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-controls.json",
         "worktracks/evidence/2026-10-19-v259-v261-original-annotation-groups.json",
         "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-final-controls.json",
-        "worktracks/evidence/2026-10-19-v262-original-annotation-group-identity.json"
+        "worktracks/evidence/2026-10-19-v262-original-annotation-group-identity.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-probe.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types-final-controls.json",
+        "worktracks/evidence/2026-10-19-v269-v271-catalog-head-types-failed.json",
+        "worktracks/evidence/2026-10-19-v272-v275-catalog-type-facets-held.json",
+        "worktracks/evidence/2026-10-19-v276-v280-type-occurrences-source-identity.json",
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20134,7 +20153,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound.",
+      "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20144,7 +20163,8 @@
         "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json"
       ],
       "evidence": [
-        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json"
+        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
       ]
     },
     {

@@ -54,6 +54,7 @@ pub(crate) use retained_call_transition::RetainedCallBodyTransition;
 pub(crate) mod body_environment_inputs;
 #[path = "local_declaration_inputs.rs"]
 mod local_declaration_inputs;
+pub(crate) use local_declaration_inputs::LocalDeclarationPublication;
 #[path = "retained_syntax_inputs.rs"]
 mod retained_syntax_inputs;
 #[path = "source_syntax_inputs.rs"]

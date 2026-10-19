@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Demand actual root-unit impl head Types from unchanged runtime fixtures, through real global catalog and shared source queries; no solver or VM execution",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation"
+  ]
+}

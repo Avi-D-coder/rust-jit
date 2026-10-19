@@ -148,6 +148,42 @@ pub(crate) fn resolve_declaration_name(
     }
 }
 
+/// Exact source occurrence through the same declaration/namespace service.
+/// Source parameters remain local facts; generated names retain their own
+/// parser-proven Type token instead of borrowing the entire header's origins.
+pub(crate) fn resolve_declaration_name_at(
+    db: &mut Database, declaration: SourceTypeOwner<'_>,
+    generics: &[crate::syntax::signatures::DefinitionParameter],
+    sources: &[&PreparedSourceView], name: &ra_ap_syntax::ast::NameRef,
+) -> QueryPoll<super::signature_names::SignatureName> {
+    use super::signature_names::{declaration_type_name_local, declaration_type_name_with_lookup};
+    match declaration_type_name_local(declaration.definition, declaration.scope,
+        declaration.header.profile.edition, generics, name.text()) {
+        Ok(Some(local)) => return QueryPoll::Ready(Ok(local)),
+        Ok(None) => {},
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    }
+    let Some(source) = db.input(&InputKey::DefinitionSource(declaration.definition)) else {
+        return resolve_declaration_name(db, declaration, generics, sources, name.text());
+    };
+    let InputValue::DefinitionSource(parse) = source.as_ref() else {
+        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence source differs")));
+    };
+    if db.published_input(&InputKey::GeneratedSyntax(parse.content)).is_none() {
+        return resolve_declaration_name(db, declaration, generics, sources, name.text());
+    }
+    match super::call_contracts::generated_result_namespace::lookup_type_declaration_at(
+        db, declaration, parse, name,
+    ) {
+        QueryPoll::Ready(Ok(lookup)) => QueryPoll::Ready(declaration_type_name_with_lookup(
+            declaration.definition, declaration.scope, declaration.header.profile.edition,
+            generics, name.text(), lookup,
+        )),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
+}
+
 /// Obtain the actual completed lookup from this declaration's current Type
 /// authority. Classification happens only after this source/namespace join.
 pub(crate) fn lookup_name(

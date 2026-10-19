@@ -1,0 +1,249 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "parent": "0eb7a147a157ef7d3e9bebfce701775484648603",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "integration_status": "held",
+  "scope": "V272 library fails on helper visibility across the actual nested module; V273 corrects that mechanical scope and validates real contained Type facets plus cold local impl metadata publication. Both builds pass,4/5focused controls pass, source catalog12/12worlds stays passing, actual head demand improves from0/32to12/32. All generated and cold local heads remain blockers. V274 new parser-owned Type occurrence route library-build-only passes; V275 admitted query-root source fix fails library build on two mechanical field/variable spellings. No V274/V275 runtime or controls ran. No new distinct stock runtime gain or actual upstream solver execution.",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-source-catalog-head-types.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "attempts": {
+    "272": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:21:37.361427+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8477,
+          "source_sha256": "f411a78d3ac319d3869c3226492cc96b2db7e1c445d6531016ed69cccec4ddcf",
+          "binaries": {}
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 27900,
+          "exit": 101,
+          "messages_sha256": "f5e8654f14c27f41c40afe7e677d223aac092a499ba9a0815eb1f5ad500d51a0",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 1 previous error; 29 warnings emitted\n",
+          "errors": [
+            "error[E0624]: method `publish_cold_catalog_declarations` is private\n    --> crates/lrr/src/expand/source_discovery.rs:8784:18\n     |\n8784 |               self.publish_cold_catalog_declarations(db)?;\n     |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ private method\n     |\n    ::: crates/lrr/src/expand/source_discovery/configured_catalog.rs:269:5\n     |\n 269 | /     pub(super) fn publish_cold_catalog_declarations(\n 270 | |         &self,\n 271 | |         db: &mut crate::db::memo::Database,\n 272 | |     ) -> Result<(), Diagnostic> {\n     | |_______________________________- private method defined here\n\n"
+          ]
+        }
+      }
+    },
+    "273": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:22:27.836992+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8477,
+          "source_sha256": "2e7bd95703a20e8cfd009f4cce558cec762f4255045587e2b53eefc762cac2d1",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:23:54.899195+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8477,
+          "source_sha256": "2e7bd95703a20e8cfd009f4cce558cec762f4255045587e2b53eefc762cac2d1",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "11e2dd42423edb673c66f4cae042fa83a6baf48b1dc8a51ac3f9389c1e96e103"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "9cc8eb1dbb7b612518fdbc34fcb03859a452665b86a89b95f18a77f850577c96"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:25:53.584097+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8477,
+          "source_sha256": "2e7bd95703a20e8cfd009f4cce558cec762f4255045587e2b53eefc762cac2d1",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "11e2dd42423edb673c66f4cae042fa83a6baf48b1dc8a51ac3f9389c1e96e103"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "9cc8eb1dbb7b612518fdbc34fcb03859a452665b86a89b95f18a77f850577c96"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 94467,
+          "exit": 0,
+          "messages_sha256": "ca28bf32c2dc2d1637c472efd5246b0a31a02d9e4755e34f5ee78b511d01d9a6",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.65s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 88055,
+          "exit": 0,
+          "messages_sha256": "2f43cf4be5d7dc2bd656a73d3327c9263e54ee0eff712aec621af43a364ff942",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.31s\n",
+          "errors": []
+        }
+      },
+      "control_session": 71491,
+      "control_exit": 1,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 29.721,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 30.336,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 1.223,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 2.602,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 6.689,
+          "log": "control-4.log"
+        }
+      ],
+      "head_types_terminal": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation ... actual impl head tests/ui/traits/safety-ok.rs edition2015 Digest(aedc0491b815ff7fd54a9a8dce804a5f1e24f68e29feb21ce609666cee52fcc0): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(25bf87ba6fd98877bcd5de90794e66e3c83a550ba630d5d4435381cea8d081af), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(910d60c9d6b6f06a00c2afdd5bb560ffd8f619baa3a4be53acdadb980d18f4b9): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(41f9bcc8ead045479106be6f24172865c01c617cd672aca8218bedbbdbecd2d1), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(c6bf06045b0a05fe25ef9fb51023a9f50eedac16e64c3132c3dc28733bb1b4fc): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=None; no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2018 Digest(44637c632ec24d5b4a28aa03681d864ffc275e524b153e6a4dbc0e9ebc290d76): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(d82ffa1d5b8cb0e0fed278cfa4e3cd3f0c30d611464a7dd11fa39114d6dd3a02), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(39fb2661ffdb427c3b9d27101aa7e73e2fb73bb714b99c3097f4532356f70bb1): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(77a852109046e37f624c0938bdf16d3fa600663d90481e8911db3542a6b7327a): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(45189a2b53773bf272e568a794f6af16c9c973910f173c7be79c81c7abf31d19), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2021 Digest(b49e8d0bf0d0f7f2aad25ac76ef37918282e5211ea77965b8c28abc02bc69cd5): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(0b73a4e26b5d482915cf31d0a203a540b4c90f59b36c2c48c987279f96d380b7), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(438e9abe8548e2ffa1b6710d5912ec4ef085dbe91f33ce1ddaac5c042d2115a4): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(49401090e8b6c4c3e8f3f95cce8740b214073537ac0aa81a42ccd549a331da95): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(b64484eff11d3334b50208f6ee4ee5bc57b9a5d52f13de3eccae31d3d09ed0a3), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual catalog head Types: 12/32; pending=[\"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\"]; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation' (17701131) panicked at crates/lrr/src/cli/preentry_loader_tests.rs:1981:5:\nactual source head Types remain unprepared: [\"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Pending(SelfType)\", \"tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Ready(Err(Diagnostic { code: \\\"LRR-E-CALL-CONTEXT\\\", message: \\\"primitive result requires its exact current generated Type namespace\\\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }))\"]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1744 filtered out; finished in 29.31s\n\n",
+      "catalog_terminal": [
+        "test cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries ... global source catalog tests/ui/traits/safety-ok.rs, edition2015: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2015: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2015: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source catalog tests/ui/traits/safety-ok.rs, edition2018: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2018: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2018: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source catalog tests/ui/traits/safety-ok.rs, edition2021: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2021: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2021: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source catalog tests/ui/traits/safety-ok.rs, edition2024: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2024: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2024: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source matrix: 12/12 source worlds; failed=[]; no guest runtime acceptance"
+      ]
+    },
+    "274": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:28:24.943744+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8478,
+          "source_sha256": "526bf75edce0126e086f95d3e7038b821452ecae5e8073fc83adf45a59dca993",
+          "binaries": {}
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 34588,
+          "exit": 0,
+          "messages_sha256": "985dfe9c49b7a7709f5f0bf935ae9dd11d485b87e47d6a70ac8a2e8b575bd879",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.88s\n",
+          "errors": []
+        }
+      }
+    },
+    "275": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:30:11.681508+00:00",
+          "head": "0eb7a147a157ef7d3e9bebfce701775484648603",
+          "file_count": 8478,
+          "source_sha256": "1bd8e97fc47262fb3fb89bf1920e44a3dec15b518c63b47a14f4356e84ceb409",
+          "binaries": {}
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 40158,
+          "exit": 101,
+          "messages_sha256": "88b79f250e51757a8877d6eac8845a49e66afc23361f155521b01ac9b1f6d8e8",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 2 previous errors; 29 warnings emitted\n",
+          "errors": [
+            "error[E0609]: no field `root_item_declarations` on type `&source_discovery::SourceDiscovery`\n    --> crates/lrr/src/expand/source_discovery.rs:8943:34\n     |\n8943 |             let admission = self.root_item_declarations.get(&record.key().fingerprint())\n     |                                  ^^^^^^^^^^^^^^^^^^^^^^ unknown field\n     |\nhelp: a field with a similar name exists\n     |\n8943 -             let admission = self.root_item_declarations.get(&record.key().fingerprint())\n8943 +             let admission = self.item_root_declarations.get(&record.key().fingerprint())\n     |\n\n",
+            "error[E0599]: no method named `is_some` found for struct `std::collections::BTreeMap<K, V, A>` in the current scope\n   --> crates/lrr/src/expand/generated_syntax.rs:124:58\n    |\n124 |                 || !(item.scope == scope && declarations.is_some() || item.scope.owner.is_none_or(|owner| {\n    |                                                          ^^^^^^^ method not found in `std::collections::BTreeMap<_, _>`\n\n"
+          ]
+        }
+      }
+    }
+  }
+}
