@@ -20273,14 +20273,18 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V338-V341 HELD M020 actual source-bound inference context. InferenceContext retains real Cx/caller TypingMode and the single upstream storage owner. Registered selected variable creation/span/binder operations reuse the compatible pinned RA client; canonical-root shallow/deep resolution uses the current compiler, including exact root probes and the existing shared BoundVarReplacer. Actual GenericArgs::for_item/fill_single is reused over the retained flat parent-first table; duplicate identity/error constructor loops are removed and fresh construction shares the same route. Original8sharedcrates/144files/2130891bytes and registered ports verify with zero original Rust changes. Final macOS Rust1.99.0 builds and5/5focused controls pass with source/HEAD/both binary guards.20actual generic declaration worlds/48rows/36const rows/24early-region rows exercise fresh namespace/index/span/uniqueness and rollback;140actual impl Type heads/136guarded TraitRefs in48original/user-macro/wrapper edition worlds exercise canonical roots, type-to-numeric chains, deep tuple/array resolution with regions preserved, real error taint, mixed/no-bound host binder controls and existing snapshots/order/cleanup. Anonymous binders are supplemental host IR, not source binder or stock higher-ranked runtime passes. V338mechanical compile failure and V339/V340build-only cohorts retain exact evidence. Full InferCtxtLike, generic relations/generalizer, forall/placeholder/visible-region/leak behavior, canonical responses, real delegate/full source facts/parameter IDs/witness/currentness/runtime migration and legacy removal remain incomplete. No actual root evaluation, new distinct stock runtime gain, refreshed suite total, M020/milestone/interpreter/JIT/Linux/performance acceptance.",
+      "latest_component_scope": "V342-V343 HELD M020 placeholder-assumptions prerequisite. Actual stable panic reproduced in source context, then replaced with exact pinned compiler TransitiveRelation/Frozen via registered mechanical imports/module binding. All originals retained; audit and byte-identical fresh import verify8sharedcrates/152files/2238379bytes,0retained-original Rust changes,4compiled-file projections. Hash-updated arbitrary Rust projection edit is rejected. Compiler insert/get/has assumptions accessors now share actual InferenceContext map ownership. Both macOS1.99.0 builds,18unchanged upstream compiler helper tests and5/5source-context controls pass with exact source/HEAD/binary guards.140actual Type heads/136TraitRefs/48original/user-macro/wrapper edition worlds exercise actual empty/nonempty/directional/transitive/inverse/cloned assumptions and universe presence/isolation.20generic worlds/48rows/36consts/24early regions and existing source/order/cleanup controls pass. Host data only; no source HRTB/complete region transaction claim. Full facts/InferCtxtLike/delegate/region/forall/generalizer/canonical/root/member/currentness/runtime migration and legacy removal remain incomplete. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance acceptance.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-solver-provider.md",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-controls.json",
-        "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json"
+        "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json",
+        "worktracks/evidence/2026-10-19-v342-v343-upstream-region-assumptions.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions-controls.json"
       ],
       "evidence": [
         "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
@@ -20320,7 +20324,11 @@
         "worktracks/evidence/2026-10-19-v338-v341-upstream-inference-context.json",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context.md",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-review.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-controls.json",
+        "worktracks/evidence/2026-10-19-v342-v343-upstream-region-assumptions.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions-controls.json"
       ]
     },
     {

@@ -1,0 +1,11 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual shared placeholder-assumptions data helper on unchanged-fixture source contexts; no root solving or runtime pass.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_retains_const_regions_and_pending_function_binders",
+    "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind"
+  ]
+}

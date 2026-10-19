@@ -67,13 +67,15 @@ def expected():
         'shallow_resolve_const', 'shallow_resolve_term', 'root_var', 'sub_unify_ty_vids_raw',
         'sub_unification_table_root_var', 'root_float_var', 'root_const_var', 'shallow_resolve_const_var',
         'shallow_resolve_ty_var', 'shallow_resolve_int_var', 'shallow_resolve_float_var',
-        'deeply_resolve_ignoring_regions', 'try_resolve_const_var')
+        'deeply_resolve_ignoring_regions', 'try_resolve_const_var',
+        'insert_placeholder_assumptions', 'get_placeholder_assumptions', 'has_placeholder_assumptions')
     imports = '''use super::{InferenceContext, DbInterner, Ty, Const, Region, Span, PreparedProvider};
 use super::{type_variable, type_variable::TypeVariableValue, unify_key::ConstVariableValue, resolve};
 use rustc_type_ir::inherent::{Ty as _, GenericArg as _};
 use crate::traits::upstream::{model::{Term, Clauses, ErrorToken as ErrorGuaranteed}, binders::BoundVarReplacerDelegate};
 use rustc_type_ir::{self as ty, Interner, TypeFoldable, TypeVisitableExt, TyVid, ConstVid, IntVid, FloatVid, RegionVid, UniverseIndex, IntVarValue, FloatVarValue, InferConst, TermKind, BoundVariableKind, BoundTy, BoundRegion, BoundConst, inherent::*};
 use tracing::debug;
+use std::range::RangeInclusive;
 type GenericArg<'db> = crate::traits::upstream::model::Arg<'db, PreparedProvider<'db>>;
 type Binder<'db, T> = rustc_type_ir::Binder<DbInterner<'db>, T>;
 '''

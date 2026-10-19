@@ -19,3 +19,13 @@ mod impl_ {
 
 pub use delayed_map::{DelayedMap, DelayedSet};
 pub use impl_::*;
+
+// Stable build of the exact pinned rustc_data_structures helper.
+#[cfg(not(feature = "nightly"))]
+mod frozen;
+#[cfg(not(feature = "nightly"))]
+pub use frozen::Frozen;
+#[cfg(not(feature = "nightly"))]
+mod transitive_relation;
+#[cfg(not(feature = "nightly"))]
+pub use transitive_relation::{TransitiveRelation, TransitiveRelationBuilder};

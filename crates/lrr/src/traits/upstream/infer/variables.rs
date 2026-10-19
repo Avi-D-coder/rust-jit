@@ -14,6 +14,7 @@ use rustc_type_ir::{
     FloatVid, InferConst, IntVarValue, IntVid, Interner, RegionVid, TermKind, TyVid, TypeFoldable,
     TypeVisitableExt, UniverseIndex, inherent::*,
 };
+use std::range::RangeInclusive;
 use tracing::debug;
 type GenericArg<'db> = crate::traits::upstream::model::Arg<'db, PreparedProvider<'db>>;
 type Binder<'db, T> = rustc_type_ir::Binder<DbInterner<'db>, T>;
@@ -403,5 +404,44 @@ impl<'db> InferenceContext<'db> {
             ConstVariableValue::Known { value } => Ok(value),
             ConstVariableValue::Unknown { span: _, universe } => Err(universe),
         }
+    }
+    pub fn insert_placeholder_assumptions(
+        &self,
+        u: ty::UniverseIndex,
+        assumptions: rustc_type_ir::region_constraint::Assumptions<DbInterner<'db>>,
+    ) {
+        assert!(
+            !assumptions.type_outlives.has_escaping_bound_vars(),
+            "assumptions has escaping bound vars, which is indicative of a bug in how assumptions are handled: {:?}",
+            assumptions.type_outlives
+        );
+        assert!(
+            assumptions
+                .region_outlives
+                .base_edges()
+                .all(|r| !r.has_escaping_bound_vars()),
+            "assumptions has escaping bound vars, which is indicative of a bug in how assumptions are handled: {:?}",
+            assumptions.region_outlives
+        );
+        self.placeholder_assumptions_for_next_solver
+            .borrow_mut()
+            .insert(u, assumptions);
+    }
+    pub fn get_placeholder_assumptions(
+        &self,
+        u: ty::UniverseIndex,
+    ) -> rustc_type_ir::region_constraint::Assumptions<DbInterner<'db>> {
+        self.placeholder_assumptions_for_next_solver
+            .borrow()
+            .get(&u)
+            .unwrap()
+            .clone()
+    }
+    pub fn has_placeholder_assumptions(&self, range: RangeInclusive<ty::UniverseIndex>) -> bool {
+        let assumptions = self.placeholder_assumptions_for_next_solver.borrow();
+        // Walk around that `Step` trait is nightly only.
+        (range.start.index()..=range.last.index())
+            .map(ty::UniverseIndex::from_usize)
+            .all(|u| assumptions.get(&u).is_some())
     }
 }

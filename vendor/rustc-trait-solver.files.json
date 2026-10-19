@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "repository": "https://github.com/rust-lang/rust.git",
   "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
   "crates": [
@@ -164,6 +164,27 @@
       "sha256": "cff2b03cfe1ea460d64fe953b15d1e72bb258547cb4fd5340948f2d7f9d49ba7",
       "upstream": "compiler/rustc_ast_ir/src/visit.rs",
       "upstream_sha256": "cff2b03cfe1ea460d64fe953b15d1e72bb258547cb4fd5340948f2d7f9d49ba7"
+    },
+    {
+      "path": "compiler/rustc_data_structures/src/frozen.rs",
+      "bytes": 1835,
+      "sha256": "09a4a7d611ad449efbdb89bf30da347050c363bbbcf198fc80784df19c65e3c1",
+      "upstream": "compiler/rustc_data_structures/src/frozen.rs",
+      "upstream_sha256": "09a4a7d611ad449efbdb89bf30da347050c363bbbcf198fc80784df19c65e3c1"
+    },
+    {
+      "path": "compiler/rustc_data_structures/src/transitive_relation.rs",
+      "bytes": 15240,
+      "sha256": "f549d6c82b78d3e9fe2e838040dc8941fef6e70f0fa2ba09a23cb8e63803ff4f",
+      "upstream": "compiler/rustc_data_structures/src/transitive_relation.rs",
+      "upstream_sha256": "f549d6c82b78d3e9fe2e838040dc8941fef6e70f0fa2ba09a23cb8e63803ff4f"
+    },
+    {
+      "path": "compiler/rustc_data_structures/src/transitive_relation/tests.rs",
+      "bytes": 11465,
+      "sha256": "a0b9f92d4c889a033a915cbd6d83b5b8a6e87555a3bcd19a43db032c49dabc74",
+      "upstream": "compiler/rustc_data_structures/src/transitive_relation/tests.rs",
+      "upstream_sha256": "a0b9f92d4c889a033a915cbd6d83b5b8a6e87555a3bcd19a43db032c49dabc74"
     },
     {
       "path": "compiler/rustc_hashes/Cargo.toml",
@@ -614,11 +635,43 @@
       "upstream_sha256": "af5efc3520dc3b322d770f98c77b968377e767704a4e5271706b161a54cdcf91"
     },
     {
+      "path": "compiler/rustc_type_ir/src/data_structures/frozen.rs",
+      "bytes": 1836,
+      "sha256": "a9925463dedcd8c08e18bec8079ca3102c9c02f67bd886175d7bb032577016e0",
+      "upstream": "compiler/rustc_data_structures/src/frozen.rs",
+      "upstream_sha256": "09a4a7d611ad449efbdb89bf30da347050c363bbbcf198fc80784df19c65e3c1",
+      "mechanical_adapter": "stable-region-assumptions-v1"
+    },
+    {
       "path": "compiler/rustc_type_ir/src/data_structures/mod.rs",
+      "bytes": 936,
+      "sha256": "85ca21e6cb89348ecaf52f402e8af7928b6afc5e5c5f042c5af6864d8abbc729",
+      "upstream": "compiler/rustc_type_ir/src/data_structures/mod.rs",
+      "upstream_sha256": "60d0030b0a4f7d4ff7440d0ad608eee0e9212469829e1aab8c5aa613686cd690",
+      "mechanical_adapter": "stable-region-assumptions-v1"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/mod.rs.upstream",
       "bytes": 598,
       "sha256": "60d0030b0a4f7d4ff7440d0ad608eee0e9212469829e1aab8c5aa613686cd690",
       "upstream": "compiler/rustc_type_ir/src/data_structures/mod.rs",
       "upstream_sha256": "60d0030b0a4f7d4ff7440d0ad608eee0e9212469829e1aab8c5aa613686cd690"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/transitive_relation.rs",
+      "bytes": 15285,
+      "sha256": "b80099aafe22b504ad123ad62bf6b67a942f73dee5f07549d0fe518c7c4c792e",
+      "upstream": "compiler/rustc_data_structures/src/transitive_relation.rs",
+      "upstream_sha256": "f549d6c82b78d3e9fe2e838040dc8941fef6e70f0fa2ba09a23cb8e63803ff4f",
+      "mechanical_adapter": "stable-region-assumptions-v1"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/transitive_relation/tests.rs",
+      "bytes": 11465,
+      "sha256": "a0b9f92d4c889a033a915cbd6d83b5b8a6e87555a3bcd19a43db032c49dabc74",
+      "upstream": "compiler/rustc_data_structures/src/transitive_relation/tests.rs",
+      "upstream_sha256": "a0b9f92d4c889a033a915cbd6d83b5b8a6e87555a3bcd19a43db032c49dabc74",
+      "mechanical_adapter": "stable-region-assumptions-v1"
     },
     {
       "path": "compiler/rustc_type_ir/src/elaborate.rs",
@@ -769,6 +822,14 @@
     },
     {
       "path": "compiler/rustc_type_ir/src/region_constraint.rs",
+      "bytes": 49426,
+      "sha256": "8666a58d6d8795131f2eb38028161b77e491a2fbddccc45652d5d3c76d8954c1",
+      "upstream": "compiler/rustc_type_ir/src/region_constraint.rs",
+      "upstream_sha256": "444abc494b01d457e246f59d8430c72ce088ded95c81cc60e48af5974ee76a91",
+      "mechanical_adapter": "stable-region-assumptions-v1"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/region_constraint.rs.upstream",
       "bytes": 50463,
       "sha256": "444abc494b01d457e246f59d8430c72ce088ded95c81cc60e48af5974ee76a91",
       "upstream": "compiler/rustc_type_ir/src/region_constraint.rs",
@@ -1020,8 +1081,6 @@
       "upstream_sha256": "9c78803d35123de368bfc93b41616f9630b82530b6c931f3ba174c515d7163a8"
     }
   ],
-  "packaging": "stable-shared-v1: unchanged Rust; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
-  "supported_features": "default-features=false; no compiler-only/nightly/randomize features",
   "support_sources": [
     "compiler/rustc_middle/src/ty/structural_impls.rs",
     "compiler/rustc_middle/src/ty/fold.rs",
@@ -1044,6 +1103,12 @@
     "compiler/rustc_infer/src/infer/mod.rs",
     "compiler/rustc_infer/src/infer/type_variable.rs",
     "compiler/rustc_infer/src/infer/resolve.rs",
-    "compiler/rustc_middle/src/ty/generic_args.rs"
-  ]
+    "compiler/rustc_middle/src/ty/generic_args.rs",
+    "compiler/rustc_data_structures/src/frozen.rs",
+    "compiler/rustc_data_structures/src/transitive_relation.rs",
+    "compiler/rustc_data_structures/src/transitive_relation/tests.rs"
+  ],
+  "packaging": "stable-shared-v2: retain all originals; registered stable-region-assumptions-v1 compiler-helper projections; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
+  "rust_adaptation": "stable-region-assumptions-v1",
+  "supported_features": "default-features=false; no compiler-only/nightly/randomize features"
 }

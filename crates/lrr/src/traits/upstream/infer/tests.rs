@@ -7,6 +7,7 @@ use rustc_type_ir::{self as ty, Interner, inherent::IntoKind};
 
 pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
     assert!(!span.is_dummy(), "actual retained declaration range supplies inference origin");
+    check_placeholder_assumptions(cx, actual, span);
     check_variable_resolution(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
@@ -208,4 +209,54 @@ pub(crate) fn check_actual_fresh_arguments<'cx>(cx: DbInterner<'cx>, id: crate::
     assert_eq!(context.num_ty_vars(), 0); assert_eq!(context.num_region_vars(), 0);
     assert_eq!(context.inner.borrow_mut().const_unification_table().len(), 0);
     assert!(cx.services().ready(cx).is_err());
+}
+
+/// Supplemental host IR controls. The source Type/Cx/span are the real fixture
+/// inputs; these relation graphs are not a stock higher-ranked runtime program.
+pub(crate) fn check_placeholder_assumptions<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
+    use ty::region_constraint::{Assumptions, TransitiveRelationBuilder,
+        regions_outlived_by, regions_outliving};
+    let context = super::InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
+    let root = context.universe();
+    let empty = Assumptions::<DbInterner<'cx>>::empty();
+    assert!(empty.type_outlives.is_empty());
+    assert_eq!(empty.region_outlives.base_edges().count(), 0);
+    assert_eq!(empty.inverse_region_outlives.base_edges().count(), 0);
+    let first_universe = context.create_next_universe();
+    let regions = [0, 1, 2].map(|index| cx.intern_region(ty::RegionKind::RePlaceholder(
+        ty::PlaceholderRegion::new_anon(first_universe, ty::BoundVar::from_u32(index)))));
+    let [first, second, third] = regions;
+    let mut builder = TransitiveRelationBuilder::default();
+    builder.add(first, second); builder.add(second, third);
+    let original = Assumptions::new_unelaborated(
+        vec![ty::Binder::dummy(ty::OutlivesClause(actual, first))], builder.freeze());
+    context.insert_placeholder_assumptions(first_universe, original.clone());
+    let assumptions = context.get_placeholder_assumptions(first_universe);
+    assert_eq!(assumptions.type_outlives, original.type_outlives);
+    assert_eq!(assumptions.region_outlives.base_edges().count(), 2);
+    assert!(assumptions.region_outlives.contains(first, third));
+    assert!(!assumptions.region_outlives.contains(third, first));
+    assert!(assumptions.inverse_region_outlives.contains(third, first));
+    assert!(!assumptions.inverse_region_outlives.contains(first, third));
+    let outlived = regions_outlived_by(first, &assumptions).collect::<Vec<_>>();
+    assert_eq!(outlived.len(), 3);
+    assert!(regions.iter().all(|r| outlived.contains(r)));
+    let outliving = regions_outliving(third, &assumptions, cx).collect::<Vec<_>>();
+    assert_eq!(outliving.len(), 4);
+    assert!(regions.iter().all(|r| outliving.contains(r)));
+    assert!(outliving.contains(&Region::new_static(cx)));
+    assert!(!context.has_placeholder_assumptions(std::range::RangeInclusive { start: root, last: first_universe }));
+    assert!(context.has_placeholder_assumptions(std::range::RangeInclusive { start: first_universe, last: first_universe }));
+    let second_universe = context.create_next_universe();
+    assert!(!context.has_placeholder_assumptions(std::range::RangeInclusive { start: first_universe, last: second_universe }));
+    context.insert_placeholder_assumptions(second_universe, empty);
+    assert!(context.has_placeholder_assumptions(std::range::RangeInclusive { start: first_universe, last: second_universe }));
+    // Replacing one universe's assumptions must not mutate another or clones.
+    context.insert_placeholder_assumptions(first_universe, Assumptions::empty());
+    assert!(context.get_placeholder_assumptions(first_universe).type_outlives.is_empty());
+    assert!(assumptions.region_outlives.contains(first, third));
+    assert_eq!(original.type_outlives.len(), 1);
+    assert!(context.get_placeholder_assumptions(second_universe).region_outlives.base_edges().next().is_none());
+    assert!(!span.is_dummy());
+    assert!(cx.services().ready(cx).is_err(), "assumptions grant no source facts/root readiness");
 }

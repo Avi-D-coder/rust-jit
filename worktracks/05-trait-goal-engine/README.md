@@ -4,6 +4,8 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
+Latest held M020 component: V343 removes the stable assumptions relation panic by reusing the pinned compiler helper. Both builds,18unchanged helper tests and5source-context controls pass with exact guards. Actual map/data access is available; full inference/delegate/root and runtime migration remain open. Zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v342-v343-upstream-region-assumptions.json).
+
 The pinned upstream next-generation solver builds and links; its generic Interner/type family, pinned client ports and concrete immutable source-fact reader compile. It is not yet invoked by interpreter goals. The real source-fact producer, compatible inference/delegate and runtime dispatch migration remain incomplete.
 
 Current source subset: the configured catalog/membership and actual Type/generic metadata now support real guarded upstream TraitRef construction. V327 builds and12/12controls pass:140actual heads/136TraitRefs across48original/user-macro/wrapper edition worlds, including distinct trait arguments and user Self/[Self] defaults. A genuine V326 guard failure led to common source-default completion; no constructor check is bypassed. Existing selected runtime regressions pass, with zero new distinct stock gain. Actual complete typed facts, inference/delegate, transitive currentness/closure and ReadyProvider/root evaluation remain unimplemented. [Latest evidence](../evidence/2026-10-19-v324-v327-source-generic-construction.json).
