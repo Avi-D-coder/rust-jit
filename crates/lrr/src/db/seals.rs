@@ -148,6 +148,7 @@ impl StableEncode for CertifiedScope {
 }
 #[derive(Debug, Clone)]
 pub struct DiscoveryInput {
+    pub(crate) impl_catalog: Option<crate::expand::source_discovery::impl_catalog::ImplCatalogCompletion>,
     pub(crate) type_scopes: Vec<crate::expand::source_discovery::TypeScopeReceipt>,
     /// Value facets of the other module scopes a Value fixed point completed,
     /// ordered like `type_scopes`; contained in this seal, never another seal.
@@ -278,6 +279,12 @@ impl DiscoveryInput {
                 format!("discovery scope facet parent/order differs: {detail}"),
             )
         };
+        match (&self.seal.domain(), &self.impl_catalog) {
+            (SealDomain::ImplCatalog { .. }, Some(completion)) => completion.require_publication(self)?,
+            (SealDomain::ImplCatalog { .. }, None) => return Err(fail("ImplCatalog has no actual source-world completion")),
+            (_, Some(_)) => return Err(fail("ImplCatalog completion attached to another domain")),
+            (_, None) => {},
+        }
         if let Some(scope) = &self.scope
             && (!matches!(self.seal.domain(), SealDomain::Scope { id, namespace }
                 if *id == scope.scope.fingerprint() && *namespace == scope.namespace)
@@ -561,9 +568,15 @@ impl DiscoveryInput {
         Ok(bytes)
     }
 }
-impl StableEncode for DiscoveryInput {
-    const DOMAIN: &'static str = "lrr/v4/discovery-input/type-scope-receipts-v1";
-    fn encode_fields(&self, e: &mut StableEncoder) {
+impl DiscoveryInput {
+    /// Entire existing publication payload, excluding only the new completion
+    /// receipt itself. Used only at cold source-catalog admission/reader setup.
+    pub(crate) fn catalog_payload_fingerprint(&self) -> Digest {
+        let mut e = StableEncoder::new(<Self as StableEncode>::DOMAIN);
+        self.encode_catalog_payload(&mut e);
+        e.finish()
+    }
+    fn encode_catalog_payload(&self, e: &mut StableEncoder) {
         e.record(&self.seal);
         e.sequence(&self.type_scopes, |e, proof| e.record(proof));
         e.sequence(&self.value_scopes, |e, proof| e.record(proof));
@@ -620,6 +633,18 @@ impl StableEncode for DiscoveryInput {
             },
         );
         e.option(&self.scope, |e, s| e.record(s));
+    }
+}
+impl StableEncode for DiscoveryInput {
+    const DOMAIN: &'static str = "lrr/v4/discovery-input/type-scope-receipts-v1";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        self.encode_catalog_payload(e);
+        // Preserve exact existing Scope/TestCatalog encodings. Only the new
+        // genuine source-catalog publication carries this typed extension.
+        if let Some(completion) = &self.impl_catalog {
+            e.string("impl-catalog-completion-v1");
+            e.record(completion);
+        }
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq)]

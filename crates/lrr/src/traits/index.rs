@@ -1,5 +1,6 @@
-//! Checked active source headers from an actual scope inventory. A scope inventory
-//! is not global impl completeness and cannot answer Drop/NoDrop or applicability.
+//! Checked active source headers from an actual scope or global source inventory.
+//! Scope-only inventories are not global completeness; neither kind proves a
+//! typed applicable impl or Drop/NoDrop result.
 use super::header::{CanonicalImplOwner, SourceImplHeader, same_requirements};
 use crate::{
     core::{
@@ -45,8 +46,8 @@ fn resource() -> Diagnostic {
 impl PreparedScopeImplHeaders {
     /// Cold preparation through the existing pure query and its actual dependencies.
     pub fn prepare(db: &mut Database, key: &SealKey) -> QueryPoll<Self> {
-        if !matches!(&key.domain, SealDomain::Scope { .. }) {
-            return QueryPoll::Ready(Err(error("source headers require a scope inventory")));
+        if !matches!(&key.domain, SealDomain::Scope { .. } | SealDomain::ImplCatalog { .. }) {
+            return QueryPoll::Ready(Err(error("source headers require a scope or genuine impl catalog")));
         }
         match db.fetch(
             &SyntaxProvider,

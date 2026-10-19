@@ -383,6 +383,8 @@ fn catalog_world(catalog: &DiscoveryInput) -> Result<Digest, Diagnostic> {
             "upstream solving requires actual ImplCatalog completion, not a scope/test seal",
         ));
     }
+    let completion = catalog.impl_catalog.as_ref().ok_or_else(|| fault("upstream solving requires actual configured source-catalog completion"))?;
+    completion.require_publication(catalog)?;
     Ok(catalog.seal.fingerprint())
 }
 
@@ -1268,4 +1270,9 @@ pub(crate) fn check_scope_receipts(db: &mut Database, seal: crate::db::seals::Se
             | QueryKey::FunctionSignature(_)
     )));
     observed
+}
+
+#[cfg(test)]
+pub(crate) fn check_completed_source_catalog(input: &DiscoveryInput) -> Result<Digest, Diagnostic> {
+    catalog_world(input)
 }

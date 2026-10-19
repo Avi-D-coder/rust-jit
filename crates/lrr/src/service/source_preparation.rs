@@ -52,6 +52,9 @@ pub(crate) struct PreparedCompileInputs {
     authorities: IncludeAuthorities,
     capture: SourceCapture,
     generation: Digest,
+    catalog_root: crate::source::changes::SourceSelection,
+    catalog_publication: std::sync::Weak<crate::source::changes::PreparedSourceState>,
+    catalog_sources: Arc<[(Digest, Digest)]>,
     module_layouts: BTreeMap<Digest, PathBuf>,
     pub catalog: Arc<CompileInputCatalog>,
 }
@@ -286,6 +289,9 @@ impl PreparedCompileInputs {
                 authorities,
                 capture,
                 generation,
+                catalog_root: root_view.selection().clone(),
+                catalog_publication: root_view.retained_state_weak(),
+                catalog_sources: selections.into(),
                 module_layouts,
                 catalog,
             },
@@ -296,6 +302,67 @@ impl PreparedCompileInputs {
     }
     pub fn environment_identity(&self) -> Digest {
         self.environment.fingerprint()
+    }
+    /// Actual standalone preparation provenance, not a caller-selected world.
+    /// Explicitly prepared compilation units can be needed by a macro-produced
+    /// extern item even before they appear in the ordinary name-alias closure.
+    pub(crate) fn impl_catalog_sources(
+        &self,
+        live: &crate::expand::source_discovery::impl_catalog::PreparedLiveImplCatalogSources,
+        facade: &crate::expand::source_discovery::impl_catalog::CapturedTraitFacadeSources,
+    ) -> Result<Vec<PreparedSourceView>, Diagnostic> {
+        let fail = || {
+            fault(
+                "LRR-E-IMPL-CATALOG-WORLD",
+                "catalog world differs from actual standalone source preparation",
+            )
+        };
+        let root = live
+            .sources()
+            .iter()
+            .find(|source| source.selection() == live.selected_root())
+            .ok_or_else(fail)?;
+        if root.selection() != &self.catalog_root
+            || !self.catalog_publication.ptr_eq(&root.retained_state_weak())
+            || self.environment.unit() != root.selection().outline.crate_key
+            || facade.owning_profile() != &root.selection().outline.parse.profile
+            || self
+                .catalog
+                .canonical_standalone_member(&root.selection().outline.parse.profile)?
+                .is_none()
+        {
+            return Err(fail());
+        }
+        let sources = root.captured_declaration_sources()?;
+        let mut actual: Vec<_> = sources
+            .iter()
+            .map(|source| {
+                (
+                    source.selection().location_identity(),
+                    QueryKey::Outline(source.selection().outline.clone()).fingerprint(),
+                )
+            })
+            .collect();
+        actual.sort();
+        if actual.as_slice() != self.catalog_sources.as_ref() {
+            return Err(fail());
+        }
+        for source in facade.sources() {
+            if !source.same_publication(root)
+                || actual
+                    .binary_search(&(
+                        source.selection().location_identity(),
+                        QueryKey::Outline(source.selection().outline.clone()).fingerprint(),
+                    ))
+                    .is_err()
+            {
+                return Err(fail());
+            }
+        }
+        Ok(sources)
+    }
+    pub(crate) fn impl_catalog_generation(&self) -> Digest {
+        self.generation
     }
     /// Keep already admitted include captures available on both success and
     /// failure. An attachment error never replaces the primary discovery fault.

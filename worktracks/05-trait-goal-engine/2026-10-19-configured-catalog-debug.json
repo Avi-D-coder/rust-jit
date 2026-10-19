@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "source evidence for the failing unchanged nested impl matrix; not an acceptance subset",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries"
+  ]
+}

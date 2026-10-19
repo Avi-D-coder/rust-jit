@@ -685,6 +685,7 @@ pub struct SourceDiscovery {
         Vec<super::source_declarative::SourceDeclarative>,
     )>,
     compiler_profiles: Option<compiler_profiles::PreparedSourceCompilerFacets>,
+    impl_catalog_plan: Option<std::sync::Arc<impl_catalog::ImplCatalogPlan>>,
     calls: BTreeMap<Digest, (usize, crate::syntax::outline::ItemInvocation)>,
     frontier_producers: BTreeMap<(ScopeKey, Digest), BTreeSet<Digest>>,
     nested_argument_summaries: BTreeMap<
@@ -1320,6 +1321,7 @@ impl SourceDiscovery {
             started: false,
             declarative: None,
             compiler_profiles: None,
+            impl_catalog_plan: None,
             calls,
             frontier_producers,
             nested_argument_summaries: BTreeMap::new(),
@@ -9023,8 +9025,8 @@ impl SourceDiscovery {
                 value_binding_preludes.push(proof);
             }
         }
-        db.publish_discovery(
-            crate::db::seals::DiscoveryInput {
+        let mut publication = crate::db::seals::DiscoveryInput {
+                impl_catalog: None,
                 type_scopes,
                 value_scopes,
                 value_binding_preludes,
@@ -9064,7 +9066,14 @@ impl SourceDiscovery {
                     .map(|(id, proof)| (*id, proof.clone()))
                     .collect(),
                 scope,
-            },
+            };
+        if let Some(plan) = &self.impl_catalog_plan {
+            publication.impl_catalog = Some(plan.complete(self, &mut publication, db)?);
+        } else if matches!(seal.domain(), SealDomain::ImplCatalog { .. }) {
+            return Err(fault("ImplCatalog publication lacks actual configured source-world preparation"));
+        }
+        db.publish_discovery(
+            publication,
             &outputs,
             &modules,
             &ordinary_modules,

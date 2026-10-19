@@ -1,0 +1,11 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "M019 genuine configured standalone global source closure and common header inventory only; no typed solver/guest execution",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+    "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+    "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+    "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+    "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness"
+  ]
+}

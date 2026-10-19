@@ -373,10 +373,10 @@ impl Provider for SyntaxProvider {
                 };
             }
             QueryKey::ScopeDeclarationInventory(key) => {
-                if !matches!(&key.domain, super::seals::SealDomain::Scope { .. }) {
+                if !matches!(&key.domain, super::seals::SealDomain::Scope { .. } | super::seals::SealDomain::ImplCatalog { .. }) {
                     return Provided::error(
                         "LRR-E-QUERY-REQUEST",
-                        "declaration inventory requires a scope certificate",
+                        "declaration inventory requires a source scope or genuine impl catalog",
                     );
                 }
                 match db.fetch(self, QueryKey::DiscoverySeal(key.clone())) {
@@ -398,6 +398,10 @@ impl Provider for SyntaxProvider {
                         "declaration inventory input absent after verification",
                     );
                 };
+                if matches!(&key.domain, super::seals::SealDomain::ImplCatalog { .. })
+                    && input.impl_catalog.is_none() {
+                    return Provided::error("LRR-E-QUERY-REQUEST", "impl catalog has no actual source completion");
+                }
                 QueryValue::ScopeDeclarationInventory {
                     key: key.clone(),
                     inventory: input.declaration_inventory.clone(),

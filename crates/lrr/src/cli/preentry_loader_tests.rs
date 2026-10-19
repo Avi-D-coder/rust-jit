@@ -1383,3 +1383,353 @@ fn mixed_edition_capture_keeps_actual_facade_owning_profile_separate_from_consum
         assert!(live.live_units().len() >= 2);
     }
 }
+
+fn configured_impl_catalog_world(
+    path: &std::path::Path,
+    edition: u16,
+) -> Result<
+    (
+        crate::db::memo::Database,
+        crate::db::seals::SealKey,
+        crate::syntax::outline::ScopeKey,
+    ),
+    crate::core::diagnostic::Diagnostic,
+> {
+    use crate::{
+        core::profile::ProfileIdentity,
+        db::memo::Database,
+        expand::source_discovery::{SourceCompilerPreparation, SourceDiscovery},
+    };
+    let profile = ProfileIdentity {
+        edition,
+        ..ProfileIdentity::current()
+    };
+    let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(
+        path,
+        false,
+        edition,
+        &super::crate_graph::ExternCrates::default(),
+        crate::source::embedded_crates::standard_facade_crates(&profile),
+        None,
+    )?;
+    let (compiler, inputs, source, _) =
+        super::compile_inputs::PreparedCompileInputs::prepare(path, inputs, source, sources)?;
+    let root = source.outline().root_scope.clone();
+    let mut db = Database::default();
+    inputs.publish(&mut db)?;
+    db.begin_expansion_epoch(1)?;
+    let mut discovery = match SourceDiscovery::for_impl_catalog(&compiler, &source, 1, &db)? {
+        SourceCompilerPreparation::Ready(discovery) => discovery,
+        SourceCompilerPreparation::NeedModule { demand, .. } => return Err(demand.diagnostic()),
+    };
+    if let Err(error) = compiler.discover(&mut discovery, &mut db) {
+        for row in discovery.catalog_pending_source_evidence() {
+            eprintln!("{row}");
+        }
+        if let Ok(crate::expand::source_discovery::SourceDiscoveryStep::Incomplete {
+            blocked,
+            ..
+        }) = discovery.poll()
+        {
+            eprintln!("blocked source jobs: {blocked:?}");
+        }
+        return Err(error);
+    }
+    discovery.publish(&mut db)?;
+    Ok((db, discovery.key().clone(), root))
+}
+
+#[test]
+fn unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries() {
+    use crate::{
+        core::digest::StableEncode,
+        db::{
+            dependency::{InputKey, InputValue},
+            key::QueryKey,
+            poll::QueryPoll,
+            provider::SyntaxProvider,
+            seals::SealDomain,
+            value::QueryValue,
+        },
+    };
+    fn ready<T>(poll: QueryPoll<T>) -> T {
+        match poll {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => panic!("{error}"),
+            QueryPoll::NeedInput(input) => panic!("actual catalog input pending: {input:?}"),
+        }
+    }
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let mut failed = Vec::new();
+    let mut passed = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for case in [
+            "tests/ui/traits/safety-ok.rs",
+            "tests/ui/methods/method-self-arg-trait.rs",
+            "tests/ui/coherence/coherence-impl-in-fn.rs",
+        ] {
+            let (mut db, seal, scope) =
+                match configured_impl_catalog_world(&root.join(case), edition) {
+                    Ok(world) => world,
+                    Err(error) => {
+                        eprintln!("FAILED global source catalog {case}, edition{edition}: {error}");
+                        failed.push((case, edition, error.code));
+                        continue;
+                    }
+                };
+            assert!(matches!(seal.domain, SealDomain::ImplCatalog { .. }));
+            let input = db.input(&InputKey::DiscoverySeal(seal.clone())).unwrap();
+            let InputValue::DiscoverySeal(publication) = input.as_ref() else {
+                panic!()
+            };
+            assert!(publication.scope.is_none());
+            assert!(publication.impl_catalog.is_some());
+            publication.require_scope_certificate_layout().unwrap();
+            assert_eq!(
+                crate::traits::upstream::check_completed_source_catalog(publication).unwrap(),
+                publication.seal.fingerprint()
+            );
+            assert!(publication.sources.len() >= 67);
+            let mut changed = publication.as_ref().clone();
+            changed.sources.pop();
+            assert_eq!(
+                changed.require_scope_certificate_layout().unwrap_err().code,
+                "LRR-E-IMPL-CATALOG-WORLD"
+            );
+            let mut unproved = publication.as_ref().clone();
+            unproved.impl_catalog = None;
+            assert_eq!(
+                unproved
+                    .require_scope_certificate_layout()
+                    .unwrap_err()
+                    .code,
+                "LRR-E-CALL-CONTEXT"
+            );
+            db.trace.detailed = true;
+            let start = db.trace.events.len();
+            let key = QueryKey::PreparedScopeImplHeaders(seal.clone());
+            let first = ready(db.fetch(&SyntaxProvider, key.clone()));
+            let second = ready(db.fetch(&SyntaxProvider, key));
+            assert!(std::sync::Arc::ptr_eq(&first.value, &second.value));
+            let QueryValue::PreparedScopeImplHeaders(headers) = first.value.as_ref() else {
+                panic!()
+            };
+            assert_eq!(headers.key(), &seal);
+            assert!(!headers.is_empty());
+            let mut original = 0;
+            let mut generated = 0;
+            let mut nested = 0;
+            for raw in headers.inventory_root().headers() {
+                let header = headers.header(raw.identity).unwrap();
+                assert!(headers.canonical_owner(raw.identity).is_some());
+                if raw.scope.crate_key == scope.crate_key {
+                    if header.source().generated_origin().is_some() {
+                        generated += 1;
+                    } else {
+                        original += 1;
+                    }
+                    if !raw.containers.is_empty() {
+                        nested += 1;
+                    }
+                }
+            }
+            assert!(original > 0, "missing actual root impl: {case}");
+            if case.ends_with("method-self-arg-trait.rs")
+                || case.ends_with("coherence-impl-in-fn.rs")
+            {
+                assert!(generated > 0, "missing actual derived impl: {case}");
+            }
+            if case.ends_with("coherence-impl-in-fn.rs") {
+                assert!(nested > 0, "missing impl inside main");
+            }
+            assert!(db.trace.events[start..].iter().all(|event| !matches!(
+                event.key,
+                QueryKey::BodyStructure(_)
+                    | QueryKey::Thunk(_)
+                    | QueryKey::PatternPlan(_)
+                    | QueryKey::FunctionSignature(_)
+            )));
+            passed += 1;
+            eprintln!(
+                "global source catalog {case}, edition{edition}: {} headers; original{original}/generated{generated}/nested{nested}; no guest execution",
+                headers.len()
+            );
+        }
+    }
+    eprintln!(
+        "global source matrix: {passed}/12 source worlds; failed={failed:?}; no guest runtime acceptance"
+    );
+    assert!(
+        failed.is_empty(),
+        "global source catalog obligations remain: {failed:?}"
+    );
+}
+
+#[test]
+fn global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion() {
+    use crate::{core::profile::ProfileIdentity, expand::source_discovery::SourceDiscovery};
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/traits/safety-ok.rs");
+    let profile = ProfileIdentity::current();
+    let capture = || {
+        let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(
+            &path,
+            false,
+            profile.edition,
+            &super::crate_graph::ExternCrates::default(),
+            crate::source::embedded_crates::standard_facade_crates(&profile),
+            None,
+        )
+        .unwrap();
+        super::compile_inputs::PreparedCompileInputs::prepare(&path, inputs, source, sources)
+            .unwrap()
+    };
+    let (compiler, inputs, _, _) = capture();
+    let (_, _, foreign, _) = capture();
+    let mut db = crate::db::memo::Database::default();
+    inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(1).unwrap();
+    match SourceDiscovery::for_impl_catalog(&compiler, &foreign, 1, &db) {
+        Err(error) => assert_eq!(error.code, "LRR-E-IMPL-CATALOG-WORLD"),
+        Ok(_) => panic!("foreign prepared source accepted as this configured catalog"),
+    }
+}
+
+#[test]
+fn global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies() {
+    use crate::{
+        core::profile::ProfileIdentity,
+        db::{dependency::InputKey, memo::Database},
+        expand::source_discovery::{SourceCompilerPreparation, SourceDiscovery},
+    };
+    let original =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/traits/safety-ok.rs");
+    for (label, addition, fails) in [
+        (
+            "unknown",
+            "\nfn cold_catalog_frontier(){ unresolved_catalog_producer!(); }\n",
+            true,
+        ),
+        (
+            "disabled",
+            "\n#[cfg(any())] fn cold_catalog_frontier(){ unresolved_catalog_producer!(); }\n",
+            false,
+        ),
+        (
+            "ordinary",
+            "\nfn cold_catalog_frontier(){ unentered_unknown_function(); }\n",
+            false,
+        ),
+    ] {
+        let path = temporary_source(
+            &format!("impl-catalog-{label}"),
+            &format!("{original}{addition}"),
+        );
+        let profile = ProfileIdentity::current();
+        let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(
+            &path,
+            false,
+            profile.edition,
+            &super::crate_graph::ExternCrates::default(),
+            crate::source::embedded_crates::standard_facade_crates(&profile),
+            None,
+        )
+        .unwrap();
+        let (compiler, inputs, source, _) =
+            super::compile_inputs::PreparedCompileInputs::prepare(&path, inputs, source, sources)
+                .unwrap();
+        let mut db = Database::default();
+        inputs.publish(&mut db).unwrap();
+        db.begin_expansion_epoch(1).unwrap();
+        let mut discovery =
+            match SourceDiscovery::for_impl_catalog(&compiler, &source, 1, &db).unwrap() {
+                SourceCompilerPreparation::Ready(discovery) => discovery,
+                SourceCompilerPreparation::NeedModule { demand, .. } => {
+                    panic!("{}", demand.diagnostic())
+                }
+            };
+        let key = discovery.key().clone();
+        let outcome = compiler.discover(&mut discovery, &mut db);
+        if fails {
+            assert_eq!(outcome.unwrap_err().code, "LRR-E-CATALOG-INCOMPLETE");
+            assert!(discovery.publish(&mut db).is_err());
+            assert!(db.input(&InputKey::DiscoverySeal(key)).is_none());
+        } else {
+            outcome.unwrap();
+            discovery.publish(&mut db).unwrap();
+            assert!(db.input(&InputKey::DiscoverySeal(key)).is_some());
+        }
+        assert!(
+            !db.trace
+                .counts
+                .keys()
+                .any(|label| label.starts_with("Thunk:"))
+        );
+    }
+}
+
+#[test]
+fn global_catalog_rejects_changed_owning_compiler_input_before_publication() {
+    use crate::{
+        core::profile::{GUEST_TARGET, ProfileIdentity},
+        db::{
+            dependency::{InputKey, InputValue},
+            memo::Database,
+        },
+        expand::{
+            builtins::FrozenCompileEnvironment,
+            source_discovery::{SourceCompilerPreparation, SourceDiscovery},
+        },
+        project::tool_manifest::CompileEnv,
+    };
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/traits/safety-ok.rs");
+    let profile = ProfileIdentity::current();
+    let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(
+        &path,
+        false,
+        profile.edition,
+        &super::crate_graph::ExternCrates::default(),
+        crate::source::embedded_crates::standard_facade_crates(&profile),
+        None,
+    )
+    .unwrap();
+    let (compiler, inputs, source, _) =
+        super::compile_inputs::PreparedCompileInputs::prepare(&path, inputs, source, sources)
+            .unwrap();
+    let mut db = Database::default();
+    inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(1).unwrap();
+    let mut discovery = match SourceDiscovery::for_impl_catalog(&compiler, &source, 1, &db).unwrap()
+    {
+        SourceCompilerPreparation::Ready(discovery) => discovery,
+        SourceCompilerPreparation::NeedModule { demand, .. } => panic!("{}", demand.diagnostic()),
+    };
+    compiler.discover(&mut discovery, &mut db).unwrap();
+    let unit = source.selection().outline.crate_key;
+    let changed = CompileEnv {
+        unit,
+        host: GUEST_TARGET.into(),
+        target: GUEST_TARGET.into(),
+        cfg: source.captured_macro_cfg().unwrap().clone(),
+        cargo: Default::default(),
+        rustc_env: std::collections::BTreeMap::from([("LRR_CATALOG_CHANGED".into(), "yes".into())]),
+        declared: Default::default(),
+        out_dir: None,
+    };
+    let changed = std::sync::Arc::new(FrozenCompileEnvironment::new(unit, &changed).unwrap());
+    db.publish_inputs(std::collections::BTreeMap::from([(
+        InputKey::UnitCompileEnv(unit),
+        InputValue::UnitCompileEnv(changed),
+    )]))
+    .unwrap();
+    assert_eq!(
+        discovery.publish(&mut db).unwrap_err().code,
+        "LRR-E-IMPL-CATALOG-WORLD"
+    );
+    assert!(
+        db.input(&InputKey::DiscoverySeal(discovery.key().clone()))
+            .is_none()
+    );
+}

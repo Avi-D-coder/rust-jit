@@ -1,0 +1,297 @@
+//! Actual standalone source-world preparation and ordinary catalog closure.
+//! Neither this source certificate nor its locators supplies typed solver facts.
+use super::PreparedLiveImplCatalogSources;
+use crate::{
+    core::{
+        diagnostic::Diagnostic,
+        digest::{Digest, StableEncode, StableEncoder},
+    },
+    db::{
+        key::QueryKey,
+        seals::{DiscoveryInput, SealDomain, SealKey},
+    },
+    expand::source_discovery::{SourceCompilerPreparation, SourceDiscovery},
+    service::source_preparation::PreparedCompileInputs,
+    source::{changes::SourceSelection, manifest::Namespace},
+};
+use std::sync::Arc;
+fn fault(message: &str) -> Diagnostic {
+    Diagnostic::new("LRR-E-IMPL-CATALOG-WORLD", message.into())
+}
+
+#[derive(Debug)]
+pub(crate) struct ImplCatalogPlan {
+    key: SealKey,
+    root: SourceSelection,
+    originals: Arc<[SourceSelection]>,
+    generation: Digest,
+    environment: Digest,
+    engine: Digest,
+    compiler: Digest,
+}
+impl StableEncode for ImplCatalogPlan {
+    const DOMAIN: &'static str = "lrr/v1/configured-standalone-impl-catalog-plan";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.record(&self.key);
+        e.record(&QueryKey::Outline(self.root.outline.clone()));
+        e.string(self.root.path.as_str());
+        e.sequence(&self.originals, |e, source| {
+            e.string(source.path.as_str());
+            e.record(&QueryKey::Outline(source.outline.clone()));
+        });
+        e.digest(self.generation);
+        e.digest(self.environment);
+        e.digest(self.engine);
+        e.digest(self.compiler);
+    }
+}
+
+/// Private completion fields bind a real configured source plan to the common
+/// discovery fixed point and entire actual immutable publication payload.
+#[derive(Debug, Clone)]
+pub(crate) struct ImplCatalogCompletion {
+    plan: Arc<ImplCatalogPlan>,
+    parent: Digest,
+    payload: Digest,
+}
+impl ImplCatalogCompletion {
+    pub(crate) fn require_publication(&self, input: &DiscoveryInput) -> Result<(), Diagnostic> {
+        if input.seal.key() != self.plan.key
+            || input.seal.fingerprint() != self.parent
+            || input.catalog_payload_fingerprint() != self.payload
+        {
+            return Err(fault(
+                "source catalog completion differs from its actual publication",
+            ));
+        }
+        Ok(())
+    }
+}
+impl StableEncode for ImplCatalogCompletion {
+    const DOMAIN: &'static str = "lrr/v1/impl-catalog-source-completion";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.record(self.plan.as_ref());
+        e.digest(self.parent);
+        e.digest(self.payload);
+    }
+}
+impl ImplCatalogPlan {
+    pub(in crate::expand::source_discovery) fn complete(
+        self: &Arc<Self>,
+        discovery: &SourceDiscovery,
+        input: &mut DiscoveryInput,
+        db: &crate::db::memo::Database,
+    ) -> Result<ImplCatalogCompletion, Diagnostic> {
+        let Some((environment, engine, _)) = &discovery.declarative else {
+            return Err(fault("source catalog compiler routes are not prepared"));
+        };
+        if discovery.key != self.key
+            || input.seal.key() != self.key
+            || discovery.seal.as_ref().map(StableEncode::fingerprint)
+                != Some(input.seal.fingerprint())
+            || *environment != self.environment
+            || *engine != self.engine
+            || discovery.compiler_profiles.is_none()
+            || !discovery.producers.is_empty()
+            || discovery.nested_sources.iter().any(|(ordinal, index)| {
+                !discovery.macro_export_sources.contains_key(ordinal) && !index.is_complete()
+            })
+            || discovery
+                .completed_argument_indexes
+                .iter()
+                .any(|index| !index.is_complete())
+            || !discovery.imports.pending.is_empty()
+            || !discovery.imports.missing.is_empty()
+            || !discovery.imports.inaccessible.is_empty()
+            || !discovery.imports.ambiguous.is_empty()
+        {
+            return Err(fault(
+                "source catalog retains an unprepared configured world or producer frontier",
+            ));
+        }
+        // Even a catalog with no compiler macro invocation depends on the
+        // actual owning environment. Bind its real published input stamp once.
+        let key = crate::db::dependency::InputKey::UnitCompileEnv(self.root.outline.crate_key);
+        let (value, stamp) = db
+            .published_input(&key)
+            .ok_or_else(|| fault("owning compiler environment is not published"))?;
+        let crate::db::dependency::InputValue::UnitCompileEnv(environment) = value else {
+            return Err(fault("owning compiler environment input differs"));
+        };
+        if environment.unit() != self.root.outline.crate_key
+            || environment.fingerprint() != self.environment
+        {
+            return Err(fault(
+                "owning compiler environment changed before catalog publication",
+            ));
+        }
+        if input.compiler_inputs.get(&key) != Some(&stamp) {
+            return Err(fault(
+                "observed compiler input conflicts with the prepared catalog",
+            ));
+        }
+        // All originally prepared units/files must remain in the actual final
+        // closure. Additional module/include/generated sources enter only via
+        // ordinary discovery's validated producer/publication mechanisms.
+        let original: std::collections::BTreeSet<_> = input
+            .sources
+            .iter()
+            .map(|source| {
+                (
+                    source.location_identity(),
+                    QueryKey::Outline(source.outline.clone()).fingerprint(),
+                )
+            })
+            .collect();
+        for source in self.originals.iter() {
+            if !original.contains(&(
+                source.location_identity(),
+                QueryKey::Outline(source.outline.clone()).fingerprint(),
+            )) {
+                return Err(fault("source catalog omits an actual configured source"));
+            }
+        }
+        Ok(ImplCatalogCompletion {
+            plan: self.clone(),
+            parent: input.seal.fingerprint(),
+            payload: input.catalog_payload_fingerprint(),
+        })
+    }
+}
+impl SourceDiscovery {
+    /// Start a fresh global work ledger over the actual explicitly prepared
+    /// standalone world. No prior Scope or TestCatalog certificate is consumed.
+    /// Common compiler/module preparation can still return NeedModule here.
+    pub(crate) fn for_impl_catalog(
+        compiler: &PreparedCompileInputs,
+        root: &crate::source::changes::PreparedSourceView,
+        epoch: u64,
+        db: &crate::db::memo::Database,
+    ) -> Result<SourceCompilerPreparation, Diagnostic> {
+        let prepared = PreparedLiveImplCatalogSources::capture(
+            root,
+            root.source_dependencies()?.fingerprint(),
+            epoch,
+        )?;
+        let super::LiveImplCatalogPreparation::NeedConfiguredWorld {
+            captured: live,
+            trait_facade: super::MandatoryTraitFacade::NeedHeaders { captured: facade },
+        } = prepared
+        else {
+            return Err(fault(
+                "actual source units or mandatory facade files are still missing",
+            ));
+        };
+        let sources = compiler.impl_catalog_sources(&live, &facade)?;
+        let root = sources
+            .iter()
+            .find(|source| source.selection() == live.selected_root())
+            .ok_or_else(|| fault("configured source catalog root is absent"))?;
+        let scope = root.outline().root_scope.clone();
+        let root_unit = root.selection().outline.crate_key;
+        let mut originals: Vec<_> = sources
+            .iter()
+            .map(|source| source.selection().clone())
+            .collect();
+        originals.sort_by_key(|source| {
+            (
+                source.location_identity(),
+                QueryKey::Outline(source.outline.clone()).fingerprint(),
+            )
+        });
+        let environment = compiler.environment_identity();
+        let generation = compiler.impl_catalog_generation();
+        let engine = crate::expand::source_declarative::engine_version();
+        let compiler_id = compiler.catalog.owning_profile_identity()?;
+        let mut graph = StableEncoder::new("lrr/v1/standalone-impl-catalog-unit-graph");
+        graph.digest(live.source_dependencies().fingerprint());
+        graph.sequence(&originals, |e, source| {
+            e.string(source.path.as_str());
+            e.record(&source.outline);
+        });
+        let unit_graph = graph.finish();
+        let mut identity = StableEncoder::new("lrr/v1/configured-impl-catalog-identity");
+        identity.digest(unit_graph);
+        identity.digest(generation);
+        identity.digest(environment);
+        identity.digest(engine);
+        identity.digest(compiler_id);
+        identity.digest(facade.fingerprint());
+        let key = SealKey {
+            domain: SealDomain::ImplCatalog {
+                id: identity.finish(),
+            },
+            unit_graph,
+            epoch: live.graph_epoch().1,
+        };
+        key.validate()?;
+        let plan = Arc::new(ImplCatalogPlan {
+            key: key.clone(),
+            root: live.selected_root().clone(),
+            originals: originals.into(),
+            generation,
+            environment,
+            engine,
+            compiler: compiler_id,
+        });
+        let mut discovery = Self::new_domain(
+            sources,
+            scope,
+            Namespace::Value,
+            unit_graph,
+            key.epoch,
+            key.domain,
+            false,
+        )?;
+        discovery.impl_catalog_plan = Some(plan);
+        // The common ParseSource completion records prepared input stamps in
+        // the ledger. Register this before polling, never append dependencies
+        // to an already completed seal at publication.
+        let input_key = crate::db::dependency::InputKey::UnitCompileEnv(root_unit);
+        let (input, stamp) = db
+            .published_input(&input_key)
+            .ok_or_else(|| fault("actual owning compiler input is not published"))?;
+        if !matches!(input, crate::db::dependency::InputValue::UnitCompileEnv(actual) if actual.unit() == root_unit && actual.fingerprint() == environment)
+        {
+            return Err(fault(
+                "actual owning compiler input differs from preparation",
+            ));
+        }
+        discovery.compiler_inputs.insert(input_key, stamp);
+        discovery.prepare_with_declarative_compiler(environment, engine, compiler.catalog.clone())
+    }
+}
+
+#[cfg(test)]
+impl SourceDiscovery {
+    /// Source-only failure evidence; no alternate resolution or execution.
+    pub(crate) fn catalog_pending_source_evidence(&self) -> Vec<String> {
+        let mut rows = vec![format!(
+            "ordinary producers={:?}; pending={:?}",
+            self.producers,
+            self.pending_nested.as_ref().map(|ticket| ticket.job())
+        )];
+        for (ordinal, index) in &self.nested_sources {
+            if !index.is_complete() {
+                rows.push(format!(
+                    "incomplete source ordinal{ordinal} path={:?} producers={:?}",
+                    index.scan().path(),
+                    index.scan().producers()
+                ));
+            }
+        }
+        for (job, ordinal) in &self.nested_jobs {
+            if self
+                .sources
+                .get(*ordinal)
+                .is_some_and(|source| source.outline().root_scope.crate_key == self.scope.crate_key)
+            {
+                rows.push(format!(
+                    "root job={job:?} source={ordinal} completed={}",
+                    self.nested_completed.contains_key(job)
+                ));
+            }
+        }
+        rows
+    }
+}

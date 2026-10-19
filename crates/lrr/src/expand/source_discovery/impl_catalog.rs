@@ -18,6 +18,11 @@ use std::{collections::BTreeSet, sync::Arc};
 mod trait_facade_sources;
 pub(crate) use trait_facade_sources::CapturedTraitFacadeSources;
 
+#[path = "configured_catalog.rs"]
+mod configured_catalog;
+pub(crate) use configured_catalog::ImplCatalogCompletion;
+pub(super) use configured_catalog::ImplCatalogPlan;
+
 /// Missing contributions are preparation demands, never complete empty catalogs.
 /// No Ready/Sealed variant exists before configured-world, exact header parity
 /// and the common nested producer closure are actually complete.
@@ -72,9 +77,24 @@ impl SourceDiscovery {
         if owners.any(|source| !source.same_publication(owner)) {
             return Err(fault("selected live unit has conflicting publications"));
         }
+        PreparedLiveImplCatalogSources::capture(owner, self.key.unit_graph, self.key.epoch)
+    }
+}
+impl PreparedLiveImplCatalogSources {
+    /// Actual captured membership without first planning a throwaway scope
+    /// discovery. Existing scope metadata and the global builder share this
+    /// same source/graph/facade preparation route.
+    pub(crate) fn capture(
+        owner: &PreparedSourceView,
+        unit_graph: Digest,
+        epoch: u64,
+    ) -> Result<LiveImplCatalogPreparation, Diagnostic> {
+        if epoch == 0 {
+            return Err(fault("source catalog expansion epoch must be nonzero"));
+        }
         let dependencies = owner.source_dependencies()?;
         let selected = dependencies
-            .root(self.scope.crate_key)
+            .root(owner.selection().outline.crate_key)
             .ok_or_else(|| fault("selected unit is absent from its actual source graph"))?;
         let mut sources = owner.captured_declaration_sources()?;
         if sources.iter().any(|s| !s.same_publication(owner)) {
@@ -106,8 +126,8 @@ impl SourceDiscovery {
         }
         // The retained dependency graph already owns indexed adjacency. Visit
         // each reached unit once; no alias-map copies or resource counters.
-        let mut reached = BTreeSet::from([self.scope.crate_key]);
-        let mut pending = vec![self.scope.crate_key];
+        let mut reached = BTreeSet::from([owner.selection().outline.crate_key]);
+        let mut pending = vec![owner.selection().outline.crate_key];
         while let Some(unit) = pending.pop() {
             let root = dependencies
                 .root(unit)
@@ -159,8 +179,8 @@ impl SourceDiscovery {
         let profiles: Vec<_> = unique_profiles.into_iter().cloned().collect();
         let fingerprint = encode_membership(
             selected,
-            self.key.unit_graph,
-            self.key.epoch,
+            unit_graph,
+            epoch,
             &dependencies,
             &units,
             &sources,
@@ -168,8 +188,8 @@ impl SourceDiscovery {
         );
         let live = PreparedLiveImplCatalogSources {
             selected: selected.clone(),
-            unit_graph: self.key.unit_graph,
-            epoch: self.key.epoch,
+            unit_graph: unit_graph,
+            epoch: epoch,
             dependencies: Arc::clone(&dependencies),
             units,
             sources,
@@ -185,8 +205,6 @@ impl SourceDiscovery {
             trait_facade,
         })
     }
-}
-impl PreparedLiveImplCatalogSources {
     pub(crate) fn selected_root(&self) -> &SourceSelection {
         &self.selected
     }

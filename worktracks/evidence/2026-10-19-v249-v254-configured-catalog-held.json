@@ -1,0 +1,730 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T12:31:32.031339+00:00",
+  "parent": "f190de999239fe0991544d5b66677372b0c59e31",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held",
+  "scope": "V249\u2013V254 HELD partial M019/M020 source-catalog candidate: actual standalone compiler/source-world binding, fresh common global discovery and private full-payload completion receipt now publish genuine source catalogs through the ordinary inventory/locator memo. Root compiler input is bound before ledger completion and rechecked at publication. Final library/CLI builds pass; controls pass 4/5. The unchanged global source matrix is FAILED with 8/12 source worlds successful: safety-ok and method-self-arg-trait in all four editions; coherence-impl-in-fn fails all four on the local enum derive producer. No fixture is excluded or counted passed from partial execution. Required next repair is the common retained original local-item annotation target/append route, not a Copy/Clone shortcut. Foreign source, changed compiler input, cold macro/cfg/unentered-call and prior Scope controls pass. Source/HEAD/binary guards pass. Zero new runtime/full-fixture passes; full M019/M020, origin/milestone/interpreter/JIT gates remain open.",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-configured-impl-catalog.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-controls.json",
+  "selection_sha256": "039cbfc1897df0eb4ea320fefe169153aa8f7183ba8e6a5896a4d6e9e24b5cb1",
+  "selection_scope": "final V254 selection; earlier cohorts retain actual exact selectors/argv",
+  "cohorts": {
+    "249": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:58:02.995126+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "c3cf78c18c023e1065469b0917a0299ada960cc1bf35902a635c8d23e7b65e57",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:00:58.409589+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "c3cf78c18c023e1065469b0917a0299ada960cc1bf35902a635c8d23e7b65e57",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": false,
+        "session": 30945,
+        "exit": 101,
+        "errors": [
+          {
+            "code": "E0624",
+            "message": "method `complete` is private",
+            "spans": [
+              {
+                "file": "crates/lrr/src/expand/source_discovery.rs",
+                "line": 9071
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "99a947f7e1ad2f882e0d4fcff6fe0c2012d18871f003037a069fbe5372ebc404"
+      }
+    },
+    "250": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:04:06.126613+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "7ddcbb0c2456e20dd2ce6965e56af338c72ad15d43402bfd1ed609fcc00cf9fe",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:06:56.666792+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "7ddcbb0c2456e20dd2ce6965e56af338c72ad15d43402bfd1ed609fcc00cf9fe",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "34685d307de9b3be10b9f0ba1ad6105375e83e12af103cf6d11c0c9c5bc3ee18"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "37ed3865b06360aa2c7ab5e848cc73d9cbf2928568cf4b1ac7013118e08bcbc4"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:08:39.530472+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "7ddcbb0c2456e20dd2ce6965e56af338c72ad15d43402bfd1ed609fcc00cf9fe",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "34685d307de9b3be10b9f0ba1ad6105375e83e12af103cf6d11c0c9c5bc3ee18"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "37ed3865b06360aa2c7ab5e848cc73d9cbf2928568cf4b1ac7013118e08bcbc4"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 74897,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "4d6830c94d481f256ab6775089ae1c093b99dc557a7f38775b55923526af1bb0"
+      },
+      "cli_build": {
+        "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "success": true,
+        "session": 63836,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "db68c7e0b7bc71b3272dbbcb2b8a481d555459d4113b36a2f33df7f47cde7dd0"
+      },
+      "host_controls": {
+        "command": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v250 worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-controls.json",
+        "session": 63461,
+        "exit": 1,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 101,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": false,
+            "seconds": 10.38,
+            "log": "control-0.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 1.097,
+            "log": "control-1.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 9.524,
+            "log": "control-2.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 21.747,
+            "log": "control-3.log"
+          }
+        ],
+        "exact_selectors_at_run": [
+          "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+          "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+          "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+          "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness"
+        ]
+      }
+    },
+    "251": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:10:28.518748+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "854ff9d0e290a942b4e93b2c04099d4e7ac3bf8b0ed74366fc48607baf66e697",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:11:57.886839+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "854ff9d0e290a942b4e93b2c04099d4e7ac3bf8b0ed74366fc48607baf66e697",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": false,
+        "session": 2225,
+        "exit": 101,
+        "errors": [
+          {
+            "code": "E0596",
+            "message": "cannot borrow `*db` as mutable, as it is behind a `&` reference",
+            "spans": [
+              {
+                "file": "crates/lrr/src/expand/source_discovery/configured_catalog.rs",
+                "line": 108
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "b2e3f09e1565305f8b2ed08f21ef4ad0f3b666a6f68fb688574dc43b8b4fb719"
+      },
+      "unexecuted_driver_attempt": {
+        "after_build_with_cargo_messages_exit": 2,
+        "reason": "failed build has no executable; after-build binary selection failed",
+        "run_controls_exit": 1,
+        "reason_controls": "missing after-build manifest; zero Rust tests executed; no fallback binary used"
+      }
+    },
+    "252": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:11:58.361524+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "07001c9cae53ff37f46c4da1ffaba8d27ff5750d9c21e81f43ff9a1801966c67",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:12:55.390545+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "07001c9cae53ff37f46c4da1ffaba8d27ff5750d9c21e81f43ff9a1801966c67",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "319786b6a645f0c26d023256fe79be81bc04a4de1fee5fc2bc65bb0805631a67"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:13:38.945197+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "07001c9cae53ff37f46c4da1ffaba8d27ff5750d9c21e81f43ff9a1801966c67",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "319786b6a645f0c26d023256fe79be81bc04a4de1fee5fc2bc65bb0805631a67"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 15631,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "8c57b567d18dbb1cbdf7fdd921fa2cea923f16a6ec52ab764d52178c7a2a91a9"
+      },
+      "host_controls": {
+        "command": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v252 worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-debug.json",
+        "session": 1817,
+        "exit": 1,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 101,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": false,
+            "seconds": 2.476,
+            "log": "control-0.log"
+          }
+        ],
+        "exact_selectors_at_run": [
+          "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries"
+        ]
+      }
+    },
+    "253": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:15:00.367781+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "947e05a1c8d7fc8973c867d8083bb922c4a7c6c5afc50ff8144516ab6138f347",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:16:01.326913+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "947e05a1c8d7fc8973c867d8083bb922c4a7c6c5afc50ff8144516ab6138f347",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "f736e4bbf72922429d138893c4b2254b042e5ac2a6acc21abd3a1c45ca6e009e"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:17:30.660653+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "947e05a1c8d7fc8973c867d8083bb922c4a7c6c5afc50ff8144516ab6138f347",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "f736e4bbf72922429d138893c4b2254b042e5ac2a6acc21abd3a1c45ca6e009e"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 64461,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "a9854c42a74ab97ef87c1b10e0076a308e35fa600f1e7f055bb6d5ab7dda4663"
+      },
+      "host_controls": {
+        "command": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v253 worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-debug.json",
+        "session": 45963,
+        "exit": 1,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 101,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": false,
+            "seconds": 11.277,
+            "log": "control-0.log"
+          }
+        ],
+        "exact_selectors_at_run": [
+          "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries"
+        ]
+      }
+    },
+    "254": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:22:56.309383+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "e304e606fee5eae32e1469c96f247fd881bd25f60a80305d61e4162e197bf01a",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:27:11.067955+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "e304e606fee5eae32e1469c96f247fd881bd25f60a80305d61e4162e197bf01a",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "243b960a085f5c4c4de9a1f9ab33f39902a4eec947ddb6a84ae9caa003cd1193"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "73b374283bb2e134893957a3d1dfb4f30449808177da1ff2eb750cbec8a896ed"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T12:29:38.796964+00:00",
+          "head": "f190de999239fe0991544d5b66677372b0c59e31",
+          "file_count": 8475,
+          "source_sha256": "e304e606fee5eae32e1469c96f247fd881bd25f60a80305d61e4162e197bf01a",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "243b960a085f5c4c4de9a1f9ab33f39902a4eec947ddb6a84ae9caa003cd1193"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "73b374283bb2e134893957a3d1dfb4f30449808177da1ff2eb750cbec8a896ed"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 89045,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "8d22c28465c44ca9282aacac5d6f9c5c83e024924171a10ddad95e29f0187aa8"
+      },
+      "cli_build": {
+        "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "success": true,
+        "session": 15256,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "d640f495f274d70a6537091be6b839c82538bedc5594fe423a30bde0e02ea542"
+      },
+      "host_controls": {
+        "command": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v254 worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-controls.json",
+        "session": 88714,
+        "exit": 1,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 101,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": false,
+            "seconds": 33.681,
+            "log": "control-0.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 1.165,
+            "log": "control-1.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 2.462,
+            "log": "control-2.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 9.51,
+            "log": "control-3.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 21.859,
+            "log": "control-4.log"
+          }
+        ],
+        "exact_selectors_at_run": [
+          "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+          "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+          "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+          "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+          "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness"
+        ]
+      }
+    }
+  },
+  "unchanged_fixtures": [
+    {
+      "path": "tests/ui/traits/safety-ok.rs",
+      "sha256": "a3be42a53118893e31d5b29c824d0843b639f0f164f24b321483c8cea3360e1a",
+      "unchanged_from_pin": true,
+      "scope": "source catalog only; no guest runtime/full fixture"
+    },
+    {
+      "path": "tests/ui/methods/method-self-arg-trait.rs",
+      "sha256": "51b379109a3aaf3ebd0523202a3784a441b3ce88e8d4b735f2da48f210b761f0",
+      "unchanged_from_pin": true,
+      "scope": "source catalog only; no guest runtime/full fixture"
+    },
+    {
+      "path": "tests/ui/coherence/coherence-impl-in-fn.rs",
+      "sha256": "7560f0f60706b7b9600f8599e52b57a125c56212153e21ea1555abce8631f172",
+      "unchanged_from_pin": true,
+      "scope": "source catalog only; no guest runtime/full fixture"
+    }
+  ],
+  "final_source_worlds": [
+    {
+      "case": "tests/ui/traits/safety-ok.rs",
+      "edition": 2015,
+      "headers": 995,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/methods/method-self-arg-trait.rs",
+      "edition": 2015,
+      "headers": 998,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/traits/safety-ok.rs",
+      "edition": 2018,
+      "headers": 995,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/methods/method-self-arg-trait.rs",
+      "edition": 2018,
+      "headers": 998,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/traits/safety-ok.rs",
+      "edition": 2021,
+      "headers": 995,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/methods/method-self-arg-trait.rs",
+      "edition": 2021,
+      "headers": 998,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/traits/safety-ok.rs",
+      "edition": 2024,
+      "headers": 995,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/methods/method-self-arg-trait.rs",
+      "edition": 2024,
+      "headers": 998,
+      "source_closure": "pass",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/coherence/coherence-impl-in-fn.rs",
+      "edition": 2015,
+      "source_closure": "fail",
+      "code": "LRR-E-CATALOG-INCOMPLETE",
+      "reason": "unresolved original local enum derive producer",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/coherence/coherence-impl-in-fn.rs",
+      "edition": 2018,
+      "source_closure": "fail",
+      "code": "LRR-E-CATALOG-INCOMPLETE",
+      "reason": "unresolved original local enum derive producer",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/coherence/coherence-impl-in-fn.rs",
+      "edition": 2021,
+      "source_closure": "fail",
+      "code": "LRR-E-CATALOG-INCOMPLETE",
+      "reason": "unresolved original local enum derive producer",
+      "guest_runtime": "unexecuted"
+    },
+    {
+      "case": "tests/ui/coherence/coherence-impl-in-fn.rs",
+      "edition": 2024,
+      "source_closure": "fail",
+      "code": "LRR-E-CATALOG-INCOMPLETE",
+      "reason": "unresolved original local enum derive producer",
+      "guest_runtime": "unexecuted"
+    }
+  ],
+  "final_matrix_passed": false,
+  "new_distinct_upstream_runtime_passes": 0,
+  "guest_runtime_executions": 0,
+  "upstream_solver_invocations": 0,
+  "full_fixtures_passed": 0,
+  "suite_total_refreshed": false,
+  "known_blocker": {
+    "source": "tests/ui/coherence/coherence-impl-in-fn.rs",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "producer": "#[derive(Copy, Clone)] on enum x inside main",
+    "range": [
+      89,
+      108
+    ],
+    "grammar": "Statements",
+    "job_edition2015": "f761724115f618b8a45d805d86b032827ea2a6c12371afe7073fc6161ac0ff78",
+    "actual_route_gap": "cold procedural attributes/function-like requests vs module-only original item annotation group",
+    "required_shared_repair": [
+      "retained original item/annotation target with actual canonical declaration/body-scope identity",
+      "same target/selection/append route for module/body items and builtin/user derives/attributes",
+      "remove source_derives prepare_group reparsing in favor of retained parser",
+      "ordinary generated output attachment/indexing/revalidation in the true caller body"
+    ],
+    "prohibited": [
+      "Copy/Clone special execution",
+      "synthetic callable wrapper",
+      "fake expansion/source record",
+      "second parser/evaluator",
+      "blanket no-item proof",
+      "fixture exclusion"
+    ]
+  },
+  "milestone_gate": "not run/closed: failed required source matrix, partial held candidate",
+  "required_open": [
+    "common local original-item annotation prerequisite",
+    "general Cargo/hybrid/native/macro-host world assignment",
+    "pinned facade header semantic parity and complete canonical source/type/binder/member facts",
+    "global scoped Type/Value facet joins",
+    "actual SourceFacts/inference/delegate/root solving",
+    "rollback/roundtrip/currentness/continuations and origin/runtime/milestone gates before JIT"
+  ]
+}
