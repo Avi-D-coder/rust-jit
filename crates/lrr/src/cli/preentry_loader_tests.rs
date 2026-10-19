@@ -1760,13 +1760,13 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
     }
 }
 
-fn configured_impl_catalog_world(
+fn configured_impl_catalog_discovery(
     path: &std::path::Path,
     edition: u16,
 ) -> Result<
     (
         crate::db::memo::Database,
-        crate::db::seals::SealKey,
+        crate::expand::source_discovery::SourceDiscovery,
         crate::syntax::outline::ScopeKey,
     ),
     crate::core::diagnostic::Diagnostic,
@@ -1811,6 +1811,14 @@ fn configured_impl_catalog_world(
         }
         return Err(error);
     }
+    Ok((db, discovery, root))
+}
+
+fn configured_impl_catalog_world(
+    path: &std::path::Path, edition: u16,
+) -> Result<(crate::db::memo::Database, crate::db::seals::SealKey,
+    crate::syntax::outline::ScopeKey), crate::core::diagnostic::Diagnostic> {
+    let (mut db, discovery, root) = configured_impl_catalog_discovery(path, edition)?;
     discovery.publish(&mut db)?;
     Ok((db, discovery.key().clone(), root))
 }
@@ -1863,8 +1871,27 @@ fn unchanged_catalog_completed_annotations_publish_actual_local_declarations() {
         assert!(declarations >= 4, "actual enum, impl and both methods are published");
         assert_eq!(annotated, 1);
         let key = QueryKey::PreparedScopeImplHeaders(seal);
-        assert!(matches!(db.fetch(&SyntaxProvider, key),
-            QueryPoll::Ready(Ok(ref value)) if matches!(value.value.as_ref(), QueryValue::PreparedScopeImplHeaders(_))));
+        let headers = match db.fetch(&SyntaxProvider, key) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            other => panic!("actual local catalog headers: {other:?}"),
+        };
+        let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { panic!() };
+        let mut generated = 0;
+        let mut generated_definitions = Vec::new();
+        for raw in headers.inventory_root().headers().iter().filter(|raw| raw.scope.crate_key == root_scope.crate_key) {
+            if headers.header(raw.identity).unwrap().source().generated_origin().is_none() { continue; }
+            let definition = headers.canonical_owner(raw.identity).unwrap().identity();
+            assert!(matches!(crate::frontend::source_locals::cold_declarations::declaration(&mut db, definition),
+                QueryPoll::Ready(Ok(None))), "an original cold input must defer to the genuine generated source service");
+            generated_definitions.push(definition);
+            generated += 1;
+        }
+        assert_eq!(generated, 2, "both actual derived declarations retain their own source route");
+        db.begin_expansion_epoch(2).unwrap();
+        for definition in generated_definitions {
+            assert!(matches!(crate::frontend::source_locals::cold_declarations::declaration(&mut db, definition),
+                QueryPoll::Ready(Ok(None))), "an unrelated stale original receipt must not block generated source selection");
+        }
         assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
             QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
         eprintln!("completed original annotations edition{edition}: {declarations} actual local declaration rows, {annotated} annotated enum; no body preparation or guest execution");
@@ -2280,4 +2307,101 @@ fn global_catalog_rejects_changed_owning_compiler_input_before_publication() {
         db.input(&InputKey::DiscoverySeal(discovery.key().clone()))
             .is_none()
     );
+}
+
+#[test]
+fn unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions() {
+    use ra_ap_syntax::{AstNode, ast};
+    use crate::{
+        core::digest::StableEncode,
+        db::{dependency::{InputKey, InputValue}, key::QueryKey, poll::QueryPoll,
+            provider::SyntaxProvider, value::QueryValue},
+        frontend::impl_head_types::ImplHeadTypeResult,
+        traits::header_syntax::ImplHeaderSyntaxKey,
+    };
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, discovery, root) = configured_impl_catalog_discovery(&path, edition).unwrap();
+        discovery.publish(&mut db).unwrap();
+        db.trace.detailed = true;
+        let start = db.trace.events.len();
+        let headers = match db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(discovery.key().clone())) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            other => panic!("actual cold catalog demand: {other:?}"),
+        };
+        let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { panic!() };
+        let raw = headers.inventory_root().headers().iter().find(|header|
+            header.scope.crate_key == root.crate_key && !header.containers.is_empty()).unwrap();
+        let owner = headers.canonical_owner(raw.identity).unwrap().identity();
+        let context = db.input(&InputKey::DeclarationContext(owner)).unwrap();
+        let InputValue::DeclarationContext(context) = context.as_ref() else { panic!() };
+        assert!(context.scope.owner.is_some());
+        let input_key = InputKey::DeclarationNames(context.scope.clone());
+        let input = db.input(&input_key).unwrap();
+        let InputValue::DeclarationNames(prepared) = input.as_ref() else { panic!() };
+        prepared.require_current(&mut db).unwrap();
+        assert!(input.matches(&input_key));
+        let mut wrong = context.scope.clone(); wrong.owner = Some(Digest([0; 32]));
+        assert!(!input.matches(&InputKey::DeclarationNames(wrong)));
+        let revision = db.revision();
+        discovery.publish(&mut db).unwrap();
+        let again = db.input(&input_key).unwrap();
+        let InputValue::DeclarationNames(again) = again.as_ref() else { panic!() };
+        assert!(std::sync::Arc::ptr_eq(prepared, again), "same actual immutable plan is reused");
+        // The cold input itself is idempotent; unrelated existing publication
+        // work may still advance the coordinator's revision.
+        assert!(db.revision() >= revision);
+        let removed = db.take_cold_declaration_names_for_control(&context.scope).unwrap();
+        let head_key = QueryKey::ImplHeadTypes(Box::new(ImplHeaderSyntaxKey {
+            inventory: discovery.key().clone(), implementation: raw.identity,
+        }));
+        let missing = match db.fetch(&SyntaxProvider, head_key.clone()) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            other => panic!("actual missing name input: {other:?}"),
+        };
+        let QueryValue::ImplHeadTypes(missing) = missing.as_ref() else { panic!() };
+        assert!(matches!(missing.result(), ImplHeadTypeResult::Pending(_)));
+        let before = db.revision();
+        assert!(db.publish_inputs(std::collections::BTreeMap::from([
+            (input_key.clone(), removed.as_ref().clone()),
+        ])).is_err(), "base inputs cannot inject a derived name receipt");
+        assert_eq!(db.revision(), before);
+        discovery.publish(&mut db).unwrap();
+        let ready = match db.fetch(&SyntaxProvider, head_key.clone()) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            other => panic!("actual restored cold name input: {other:?}"),
+        };
+        let QueryValue::ImplHeadTypes(head) = ready.as_ref() else { panic!() };
+        assert!(matches!(head.result(), ImplHeadTypeResult::Resolved { .. }),
+            "cold local Foo/Drop head remains incomplete: {:?}", head.result());
+        let repeat = match db.fetch(&SyntaxProvider, head_key) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            other => panic!("actual retained head: {other:?}"),
+        };
+        assert!(std::sync::Arc::ptr_eq(&ready, &repeat));
+        let syntax = head.syntax();
+        let implementation = ast::Impl::cast(syntax.parsed().syntax_at(context.range,
+            |node| ast::Impl::can_cast(node.kind())).unwrap().unwrap()).unwrap();
+        let name = implementation.self_ty().unwrap().syntax().descendants().find_map(ast::NameRef::cast).unwrap();
+        let current = db.input(&input_key).unwrap();
+        let InputValue::DeclarationNames(current) = current.as_ref() else { panic!() };
+        let header = db.input(&InputKey::DefinitionHeader(owner)).unwrap();
+        let InputValue::DefinitionHeader(header) = header.as_ref() else { panic!() };
+        assert!(matches!(prepared.lookup(&mut db, crate::frontend::type_name_namespace::SourceTypeOwner {
+            definition: owner, scope: &context.scope, header,
+        }, &name), QueryPoll::Ready(Err(_))), "a replaced opaque name handle cannot authorize lookup");
+        assert!(matches!(current.lookup(&mut db, crate::frontend::type_name_namespace::SourceTypeOwner {
+            definition: owner, scope: &context.scope, header,
+        }, &name), QueryPoll::Ready(Ok(Some(crate::frontend::names::NameLookup::Defined(_))))));
+        let mut wrong_header = header.clone(); wrong_header.tokens.clear();
+        assert!(matches!(current.lookup(&mut db, crate::frontend::type_name_namespace::SourceTypeOwner {
+            definition: owner, scope: &context.scope, header: &wrong_header,
+        }, &name), QueryPoll::Ready(Err(_))));
+        db.begin_expansion_epoch(2).unwrap();
+        assert!(current.require_current(&mut db).is_err(), "old epoch cannot authorize cold lookup");
+        assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+            QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+        eprintln!("cold original Type input edition{edition}: actual local Foo/Drop head resolved after observed absence; memo reused, wrong scope/header/epoch and raw publication refused; no executable preparation or guest execution");
+    }
 }

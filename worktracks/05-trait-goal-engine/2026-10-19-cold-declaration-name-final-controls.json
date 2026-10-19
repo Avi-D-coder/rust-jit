@@ -1,0 +1,8 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Final source after removal of new accounting and source-kind deferral review: cold input/cache and actual generated-source fallback controls. Broader V293 evidence remains source-bound.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions",
+    "cli::preentry_loader_tests::unchanged_catalog_completed_annotations_publish_actual_local_declarations"
+  ]
+}

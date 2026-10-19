@@ -22,6 +22,8 @@ use std::{
 #[path = "source_local_plan.rs"]
 pub(crate) mod owned_plan;
 pub use owned_plan::PreparedSourceLocalPlan;
+#[path = "cold_declaration_names.rs"]
+pub(crate) mod cold_declarations;
 #[path = "local_declaration_names.rs"]
 mod declaration_names;
 use declaration_names::{DeclarationNameIndex, DeclarationNameTables};

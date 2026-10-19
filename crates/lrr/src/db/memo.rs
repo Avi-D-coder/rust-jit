@@ -52,6 +52,8 @@ mod retained_call_transition;
 pub(crate) use retained_call_transition::RetainedCallBodyTransition;
 #[path = "body_environment_inputs.rs"]
 pub(crate) mod body_environment_inputs;
+#[path = "cold_declaration_name_inputs.rs"]
+mod cold_declaration_name_inputs;
 #[path = "local_declaration_inputs.rs"]
 mod local_declaration_inputs;
 pub(crate) use local_declaration_inputs::LocalDeclarationPublication;
@@ -1108,7 +1110,8 @@ impl Database {
         if inputs.values().any(|value| {
             matches!(
                 value,
-                InputValue::LocalDeclarationOwner(_)
+                InputValue::DeclarationNames(_)
+                    | InputValue::LocalDeclarationOwner(_)
                     | InputValue::BodyEnvironment(_)
                     | InputValue::CompletedSourceSyntax(_)
                     | InputValue::ExpansionRecord(_)

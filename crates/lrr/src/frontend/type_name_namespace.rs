@@ -159,6 +159,17 @@ pub(crate) fn resolve_declaration_name_at(
     use super::signature_names::{declaration_type_name_local, declaration_type_name_with_lookup};
     match declaration_type_name_local(declaration.definition, declaration.scope,
         declaration.header.profile.edition, generics, name.text()) {
+        Ok(Some(local @ super::signature_names::SignatureName::NeedOwnerContext(_)))
+            if declaration.scope.owner.is_some() && name.text() != "Self" => {
+            return match super::source_locals::cold_declarations::lookup(db, declaration, name) {
+                QueryPoll::Ready(Ok(Some(found))) => QueryPoll::Ready(
+                    super::signature_names::classify_completed_type_lookup(name.text(),
+                        declaration.header.profile.edition, found)),
+                QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(local)),
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            };
+        }
         Ok(Some(local)) => return QueryPoll::Ready(Ok(local)),
         Ok(None) => {},
         Err(error) => return QueryPoll::Ready(Err(error)),

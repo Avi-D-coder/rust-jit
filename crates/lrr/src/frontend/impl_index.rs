@@ -325,7 +325,36 @@ pub struct DeclarationMacroIndex {
     >,
     pending: std::collections::BTreeSet<crate::core::digest::Digest>,
 }
+/// Actual original root/name comparison from the pinned coordinator index.
+/// The private fields prevent a raw root digest from masquerading as this source.
+pub(crate) struct OriginalDeclarationNameContext {
+    source: crate::source::changes::SourceSelection,
+    root: crate::syntax::token_wire::Key,
+    comparison: crate::syntax::token_wire::NameContextKey,
+    scan: crate::core::digest::Digest,
+}
+impl OriginalDeclarationNameContext {
+    pub(crate) fn require_source(&self, source: &crate::source::changes::PreparedSourceView) -> Result<(), Diagnostic> {
+        source.require_original_hygiene()?;
+        if source.selection() != &self.source { return Err(fault()); }
+        Ok(())
+    }
+    pub(crate) fn scan(&self) -> crate::core::digest::Digest { self.scan }
+    pub(crate) fn root(&self) -> crate::syntax::token_wire::Key { self.root }
+    pub(crate) fn comparison(&self) -> crate::syntax::token_wire::NameContextKey { self.comparison }
+}
 impl DeclarationMacroIndex {
+    pub(crate) fn original_name_context(
+        &self, source: &crate::source::changes::PreparedSourceView,
+    ) -> Result<OriginalDeclarationNameContext, Diagnostic> {
+        source.require_original_hygiene()?;
+        let actual = source.declaration_inventory(crate::syntax::declaration_scan::DeclarationScanLimits::default())?;
+        if actual.fingerprint() != self.scan.fingerprint() || self.scan.generated_origin().is_some() {
+            return Err(fault());
+        }
+        Ok(OriginalDeclarationNameContext { source: source.selection().clone(),
+            root: self.context, comparison: self.facts.name_item(self.context)?, scan: self.scan.fingerprint() })
+    }
     pub fn new(scan: Arc<DeclarationScan>) -> Result<Self, Diagnostic> {
         use crate::expand::scopes::{MacroDefinition, MacroName, TextualScopes};
         if scan.generated_origin().is_some() {

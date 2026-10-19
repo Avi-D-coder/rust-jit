@@ -1,0 +1,32 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Cold declaration name input and real source Type-head integration; complete annotated/generated head gap remains enabled, runtime and source evidence separate.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions",
+    "frontend::source_locals::owned_plan::tests::unchanged_local_record_name_selects_its_actual_declared_type",
+    "frontend::source_locals::owned_plan::tests::unchanged_local_import_requires_its_actual_dependency_before_module_tail",
+    "frontend::source_locals::owned_plan::tests::unchanged_box_local_type_keeps_its_actual_unfinished_macro_frontier",
+    "frontend::source_locals::owned_plan::tests::unchanged_const_module_tail_demands_its_actual_current_type_bucket",
+    "frontend::source_locals::owned_plan::tests::pinned_opaque_outer_mark_never_falls_back_to_lexical_module_membership",
+    "cli::type_preparation::tests::unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_editions",
+    "cli::crate_graph::local_item_tests::block_level_glob_imports_do_not_block_later_macros",
+    "cli::crate_graph::local_item_tests::block_level_named_imports_select_variants_and_functions",
+    "cli::crate_graph::local_item_tests::block_level_imports_of_enums_modules_and_renamed_functions",
+    "cli::crate_graph::tests::chained_and_cyclic_globs_import_their_source_members",
+    "frontend::source_locals::owned_plan::field_types::tests::ordinary_local_callable_tests::ordinary_entered_callable_proofs_share_value_goals_all_editions_and_source_modes",
+    "cli::preentry_loader_tests::unchanged_catalog_completed_annotations_publish_actual_local_declarations",
+    "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+    "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+    "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+    "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+    "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+    "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_type_declaration_lookup_requires_the_actual_memo_header_and_scope",
+    "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals",
+    "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_foreign_template_checks_the_actual_definer_type_scope",
+    "db::memo::local_declaration_inputs::tests::unchanged_cold_impl_scopes_publish_headers_without_entering_enclosing_functions",
+    "db::memo::local_declaration_inputs::tests::cold_declaration_publication_rejects_changed_parent_before_any_child_input",
+    "db::memo::local_declaration_inputs::tests::local_attribute_producer_does_not_publish_unexpanded_header",
+    "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+    "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions"
+  ]
+}

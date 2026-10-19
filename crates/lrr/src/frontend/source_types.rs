@@ -1992,6 +1992,13 @@ pub(super) fn nominal_definition(
             return Ok(item.def_key.clone());
         }
     }
+    match super::source_locals::cold_declarations::declaration(db, identity) {
+        QueryPoll::Ready(Ok(Some(local)))
+            if matches!(local.lookup, super::names::NameLookup::Defined(ref selected) if selected.identity == identity) =>
+                return Ok(local.definition),
+        QueryPoll::Ready(Err(error)) => return Err(error),
+        _ => {},
+    }
     let source = db
         .input(&InputKey::DefinitionSource(identity))
         .ok_or_else(|| fault("selected nominal source absent"))?;

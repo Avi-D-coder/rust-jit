@@ -1,0 +1,884 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T16:09:09.026454+00:00",
+  "parent": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "integration_status": "held",
+  "scope": "V296 HELD M019/M020 cold declaration-name integration: actual coordinator inputs connect unentered original local declarations to the same lexical Type lookup and canonical alias/nominal services used by ordinary source. Genuine name/source/epoch/dependency identity retained without body entry or a second evaluator. Final macOS Rust1.99.0 library and CLI builds succeed; two targeted controls pass: Foo/Drop head input/cache/currentness control in all four editions, and actual annotated/generated canonical-source deferral including an unrelated stale original receipt. Unchanged zero-size-type-destructors main/assertion completes all four editions (141/141 operations each). V294 removes new size accounting; V296 defers other sources before original owner/epoch checks. Broader V293 24/26 results remain attached to their earlier exact source: complete annotated/generated head control20/32 and the preexisting wider import failure remain open, not rerun or claimed repaired. Zero measured new distinct stock gains; no refreshed suite total. Genuine producer/output-name and generated occurrence joins, local import/alias/owner coverage, full source-facts/inference/delegate and actual upstream next-solver invocation remain incomplete. No M019/M020/interpreter/JIT completion.",
+  "new_distinct_stock_runtime_gains": 0,
+  "prior_broader_source_bound_evidence": "worktracks/evidence/2026-10-19-v289-v293-cold-declaration-names.json",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-cold-declaration-name-input.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-cold-declaration-name-review.md",
+  "attempts": {
+    "294": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T15:59:08.044975+00:00",
+          "head": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+          "file_count": 8483,
+          "source_sha256": "b6c95066464ffdb436a103f4488eaa7e79ee5e8aa7f2274c5e981faa2e49584e",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T16:01:01.848327+00:00",
+          "head": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+          "file_count": 8483,
+          "source_sha256": "b6c95066464ffdb436a103f4488eaa7e79ee5e8aa7f2274c5e981faa2e49584e",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "7c097c1a5ef785d725f3f33de25b35bb024643ce0f6a40fcdad0a61c7551d057"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "a6e49cf628043b8a49fd5b94780cce210bcb2d23f7efaac2069e18a5548376ea"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 51257,
+          "exit": 0,
+          "cargo_build_finished_success": true,
+          "messages_sha256": "31e664ed6f5c0acc704c59db6fce7159cdefa436a2a447c21f85b483036cac7e",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.18s\n"
+        },
+        "cli": {
+          "session": 55594,
+          "exit": 0,
+          "cargo_build_finished_success": true,
+          "messages_sha256": "7632f11c76682a66d7cdddf6223de6acb07286f94f39264ec42d8192f74260d8",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.92s\n"
+        }
+      },
+      "scope": "Build-only; no runtime."
+    },
+    "295": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T16:01:55.620834+00:00",
+          "head": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+          "file_count": 8483,
+          "source_sha256": "f121e7250a4ead99c7cd09f167d993c84b36013193da84060605912fa1c428fc",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T16:03:21.515986+00:00",
+          "head": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+          "file_count": 8483,
+          "source_sha256": "f121e7250a4ead99c7cd09f167d993c84b36013193da84060605912fa1c428fc",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "ceec9f785c662dab09f7b3ab5aefb6e0315bdf62d404c175021fbfc2c3c5b852"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 39391,
+          "exit": 0,
+          "cargo_build_finished_success": true,
+          "messages_sha256": "6d499c9c63baf173dabf2b99bcd1d99f3805e15b1152fc75d9ba7c3c202a5184",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.11s\n"
+        }
+      },
+      "scope": "Build-only; no runtime."
+    },
+    "296": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T16:03:22.111055+00:00",
+          "head": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+          "file_count": 8483,
+          "source_sha256": "ced0733afdf3e427af853c9047f1d79b91497c057689c42f4d9303c8ac52c0a1",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T16:07:43.401257+00:00",
+          "head": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+          "file_count": 8483,
+          "source_sha256": "ced0733afdf3e427af853c9047f1d79b91497c057689c42f4d9303c8ac52c0a1",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "26d746178a3716b7e0601817915293fb2ddda085e04116427a69dd335e61b433"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "565cffcbc3263c6c83b1d41e10b76995038f4508d89ac212a7b0f064adfc9977"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T16:08:23.314783+00:00",
+          "head": "c7e03ebd70af31bbe80f3287b71861abf106a841",
+          "file_count": 8483,
+          "source_sha256": "ced0733afdf3e427af853c9047f1d79b91497c057689c42f4d9303c8ac52c0a1",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "26d746178a3716b7e0601817915293fb2ddda085e04116427a69dd335e61b433"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "565cffcbc3263c6c83b1d41e10b76995038f4508d89ac212a7b0f064adfc9977"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 24028,
+          "exit": null,
+          "cargo_build_finished_success": true,
+          "messages_sha256": "48119b8b3b34db63775f7aa368cde06551dc4b7aaa93735baf6626373c699558",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.30s\n",
+          "terminal_scope": "Process handle was unavailable after context recovery; Cargo JSON build-finished success and Finished test terminal observed. Shell exit was not separately recovered."
+        },
+        "cli": {
+          "session": 22863,
+          "exit": 0,
+          "cargo_build_finished_success": true,
+          "messages_sha256": "eb7d9a5d5b86e39f00e43a606d830e22c8ce051c7d26814819c6c3c838113e4e",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.53s\n"
+        }
+      },
+      "scope": "Final two targeted controls and unchanged upstream runtime4editions."
+    }
+  },
+  "final_controls": [
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 10.133,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_catalog_completed_annotations_publish_actual_local_declarations",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::unchanged_catalog_completed_annotations_publish_actual_local_declarations",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 10.841,
+      "log": "control-1.log"
+    }
+  ],
+  "control_session": 15601,
+  "control_exit": 0,
+  "stock_session": 68043,
+  "stock_exit": 0,
+  "stock_runtime": [
+    {
+      "case": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+      "manifest_case": {
+        "path": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "lrr_acceptance": "pending",
+        "native_acceptance": "unexecuted"
+      },
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "fixture_sha256": "34adb67b8cf73f5558f1fe1a8e0ce62ed6b9dd132a2c0dec6aa99a3564ea2453",
+      "edition": 2015,
+      "source_sha256": "ced0733afdf3e427af853c9047f1d79b91497c057689c42f4d9303c8ac52c0a1",
+      "binary_sha256": "565cffcbc3263c6c83b1d41e10b76995038f4508d89ac212a7b0f064adfc9977",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "41ae8c95ccc3bbc6076a2ec244928ca0cb128c770720b8ff73b2db312226dcbf"
+      ],
+      "exit": 0,
+      "seconds": 5.337,
+      "source_head_binary_unchanged": true,
+      "runtime_contract_pass": true,
+      "stderr": "",
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 150,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 1,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 115,
+          "vm_outcomes": 115
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "terminal": {
+        "installed_lrir_bytes": 1504468,
+        "installed_recipes": 85,
+        "live_edition": 2015,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 43,
+          "exits_completed": 111,
+          "fuel_used": 295,
+          "operations_completed": 141,
+          "operations_started": 141,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 6,
+          "started_by_opcode": [
+            5,
+            7,
+            9,
+            9,
+            26,
+            21,
+            0,
+            1,
+            0,
+            6,
+            1,
+            1,
+            0,
+            12,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            2,
+            5,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            7,
+            0,
+            0,
+            0,
+            3,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "stdout_sha256": "9091dff050e7d8b1bca02fb48b78b9600b7367ed521606459aab84b8ab0cf1b2",
+      "scope": "Unchanged upstream run-pass main/assertion execution. Capture covers dispatcher external effects, not a complete memory trace. No measured new distinct stock gain or full-fixture/tooling claim."
+    },
+    {
+      "case": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+      "manifest_case": {
+        "path": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "lrr_acceptance": "pending",
+        "native_acceptance": "unexecuted"
+      },
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "fixture_sha256": "34adb67b8cf73f5558f1fe1a8e0ce62ed6b9dd132a2c0dec6aa99a3564ea2453",
+      "edition": 2018,
+      "source_sha256": "ced0733afdf3e427af853c9047f1d79b91497c057689c42f4d9303c8ac52c0a1",
+      "binary_sha256": "565cffcbc3263c6c83b1d41e10b76995038f4508d89ac212a7b0f064adfc9977",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2018",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "84da47503f80f44bb298ec8b7daac9f9ada47a52f22ba77b1f0db68ba43257aa"
+      ],
+      "exit": 0,
+      "seconds": 4.384,
+      "source_head_binary_unchanged": true,
+      "runtime_contract_pass": true,
+      "stderr": "",
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 150,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 1,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 115,
+          "vm_outcomes": 115
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "terminal": {
+        "installed_lrir_bytes": 1504468,
+        "installed_recipes": 85,
+        "live_edition": 2018,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 43,
+          "exits_completed": 111,
+          "fuel_used": 295,
+          "operations_completed": 141,
+          "operations_started": 141,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 6,
+          "started_by_opcode": [
+            5,
+            7,
+            9,
+            9,
+            26,
+            21,
+            0,
+            1,
+            0,
+            6,
+            1,
+            1,
+            0,
+            12,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            2,
+            5,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            7,
+            0,
+            0,
+            0,
+            3,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "stdout_sha256": "36bcd19e30c56ee31e8c8b908037dbd85cc47c1bd9ded3adcebc8cd588358b71",
+      "scope": "Unchanged upstream run-pass main/assertion execution. Capture covers dispatcher external effects, not a complete memory trace. No measured new distinct stock gain or full-fixture/tooling claim."
+    },
+    {
+      "case": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+      "manifest_case": {
+        "path": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "lrr_acceptance": "pending",
+        "native_acceptance": "unexecuted"
+      },
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "fixture_sha256": "34adb67b8cf73f5558f1fe1a8e0ce62ed6b9dd132a2c0dec6aa99a3564ea2453",
+      "edition": 2021,
+      "source_sha256": "ced0733afdf3e427af853c9047f1d79b91497c057689c42f4d9303c8ac52c0a1",
+      "binary_sha256": "565cffcbc3263c6c83b1d41e10b76995038f4508d89ac212a7b0f064adfc9977",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2021",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "8dcb9cc7332bdf0772d3af38ff49a2379c56413f2ff0a073e11b779e851f2570"
+      ],
+      "exit": 0,
+      "seconds": 4.404,
+      "source_head_binary_unchanged": true,
+      "runtime_contract_pass": true,
+      "stderr": "",
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 150,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 1,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 115,
+          "vm_outcomes": 115
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "terminal": {
+        "installed_lrir_bytes": 1512164,
+        "installed_recipes": 85,
+        "live_edition": 2021,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 43,
+          "exits_completed": 111,
+          "fuel_used": 295,
+          "operations_completed": 141,
+          "operations_started": 141,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 6,
+          "started_by_opcode": [
+            5,
+            7,
+            9,
+            9,
+            26,
+            21,
+            0,
+            1,
+            0,
+            6,
+            1,
+            1,
+            0,
+            12,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            2,
+            5,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            7,
+            0,
+            0,
+            0,
+            3,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "stdout_sha256": "350127771dbb43d75d558bf52686463b2c164e7cce95a34e3ab14338e488f335",
+      "scope": "Unchanged upstream run-pass main/assertion execution. Capture covers dispatcher external effects, not a complete memory trace. No measured new distinct stock gain or full-fixture/tooling claim."
+    },
+    {
+      "case": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+      "manifest_case": {
+        "path": "tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "lrr_acceptance": "pending",
+        "native_acceptance": "unexecuted"
+      },
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "fixture_sha256": "34adb67b8cf73f5558f1fe1a8e0ce62ed6b9dd132a2c0dec6aa99a3564ea2453",
+      "edition": 2024,
+      "source_sha256": "ced0733afdf3e427af853c9047f1d79b91497c057689c42f4d9303c8ac52c0a1",
+      "binary_sha256": "565cffcbc3263c6c83b1d41e10b76995038f4508d89ac212a7b0f064adfc9977",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/zero-sized/zero-size-type-destructors.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "180c884290299b06785b08c025adf107d6a18a387b67178ba2d88bbc9582a318"
+      ],
+      "exit": 0,
+      "seconds": 4.424,
+      "source_head_binary_unchanged": true,
+      "runtime_contract_pass": true,
+      "stderr": "",
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 150,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 1,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 115,
+          "vm_outcomes": 115
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "terminal": {
+        "installed_lrir_bytes": 1512164,
+        "installed_recipes": 85,
+        "live_edition": 2024,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 43,
+          "exits_completed": 111,
+          "fuel_used": 295,
+          "operations_completed": 141,
+          "operations_started": 141,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 6,
+          "started_by_opcode": [
+            5,
+            7,
+            9,
+            9,
+            26,
+            21,
+            0,
+            1,
+            0,
+            6,
+            1,
+            1,
+            0,
+            12,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            2,
+            5,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            7,
+            0,
+            0,
+            0,
+            3,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "stdout_sha256": "810a8ddd41303961e36f88a5942f97cef7678295032d0e75b8f14765e2aae450",
+      "scope": "Unchanged upstream run-pass main/assertion execution. Capture covers dispatcher external effects, not a complete memory trace. No measured new distinct stock gain or full-fixture/tooling claim."
+    }
+  ],
+  "logs": {
+    "control-0.log": {
+      "sha256": "9e0c0d2eb6dc2ce6641f30707e6cc9a552bf41b467cc3a264d0c27e9daa4508b",
+      "terminal": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions ... cold original Type input edition2015: actual local Foo/Drop head resolved after observed absence; memo reused, wrong scope/header/epoch and raw publication refused; no executable preparation or guest execution\ncold original Type input edition2018: actual local Foo/Drop head resolved after observed absence; memo reused, wrong scope/header/epoch and raw publication refused; no executable preparation or guest execution\ncold original Type input edition2021: actual local Foo/Drop head resolved after observed absence; memo reused, wrong scope/header/epoch and raw publication refused; no executable preparation or guest execution\ncold original Type input edition2024: actual local Foo/Drop head resolved after observed absence; memo reused, wrong scope/header/epoch and raw publication refused; no executable preparation or guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1746 filtered out; finished in 9.74s\n\n"
+    },
+    "control-1.log": {
+      "sha256": "06391898109de5d2a93edb081e4ef43272daf50b9499ae9449549fbfba5d3a40",
+      "terminal": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_catalog_completed_annotations_publish_actual_local_declarations ... completed original annotations edition2015: 4 actual local declaration rows, 1 annotated enum; no body preparation or guest execution\ncompleted original annotations edition2018: 4 actual local declaration rows, 1 annotated enum; no body preparation or guest execution\ncompleted original annotations edition2021: 4 actual local declaration rows, 1 annotated enum; no body preparation or guest execution\ncompleted original annotations edition2024: 4 actual local declaration rows, 1 annotated enum; no body preparation or guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1746 filtered out; finished in 10.47s\n\n"
+    }
+  },
+  "acceptance_scope": {
+    "final_targeted_controls_passed": 2,
+    "final_targeted_controls_selected": 2,
+    "cold_original_header_editions": 4,
+    "actual_generated_source_deferral_definitions_per_edition": 2,
+    "actual_generated_source_deferral_editions": 4,
+    "stock_runtime_roots": 1,
+    "stock_runtime_editions": 4,
+    "new_distinct_stock_runtime_gains": 0,
+    "full_milestone_executed": false,
+    "full_fixture_compatibility": false,
+    "upstream_solver_invoked": false,
+    "prior_broader_control_passed": 24,
+    "prior_broader_control_selected": 26,
+    "prior_broader_source_sha256": "04d8338307459f42a7f1d5e8cba1580c2cb324f21640ac013a637bb71e490fd3",
+    "prior_complete_head_control_ready": 20,
+    "prior_complete_head_control_demanded": 32,
+    "prior_failures_repaired": false
+  },
+  "reproduction": {
+    "build_library": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "build_cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v296 worktracks/05-trait-goal-engine/2026-10-19-cold-declaration-name-final-controls.json",
+    "stock": "After building and capturing source/binary manifests, run each exact stock_runtime argv with its recorded environment; validate unchanged licensed fixture pin/hash/directives and compare before/after source, HEAD and binary hashes. Actual argv, status, assertion-containing original main and capture terminal are retained here. No rustc comparison or live native compilation was used."
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual cold local Foo/Drop source-head and missing-input publication witness; no guest runtime acceptance.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions"
+  ]
+}

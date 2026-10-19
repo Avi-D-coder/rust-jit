@@ -107,7 +107,29 @@ pub(crate) struct CapturedDeclarationScope<'a> {
     parent: &'a ItemOutline,
     plan: &'a Arc<crate::syntax::declaration_scope_plan::DeclarationScopePlan>,
 }
+/// Owned retained declaration metadata, never an entered executable context.
+pub(crate) struct RetainedDeclarationScope {
+    source: PreparedSourceView,
+    parent: ItemOutline,
+    plan: Arc<crate::syntax::declaration_scope_plan::DeclarationScopePlan>,
+}
+impl RetainedDeclarationScope {
+    pub(crate) fn item_at(&self, range: SourceRange) -> Option<&crate::syntax::body_items::BodyItem> {
+        self.plan.item_at(range)
+    }
+    pub(crate) fn captured(&self) -> CapturedDeclarationScope<'_> {
+        CapturedDeclarationScope { source: &self.source, parent: &self.parent, plan: &self.plan }
+    }
+}
 impl CapturedDeclarationScope<'_> {
+    pub(crate) fn fingerprint(&self) -> Digest { self.plan.fingerprint() }
+    pub(crate) fn item_at(&self, range: SourceRange) -> Option<&crate::syntax::body_items::BodyItem> {
+        self.plan.item_at(range)
+    }
+    pub(crate) fn retain(&self) -> RetainedDeclarationScope {
+        RetainedDeclarationScope { source: self.source.share(), parent: self.parent.clone(), plan: Arc::clone(self.plan) }
+    }
+
     pub(crate) fn source(&self) -> &PreparedSourceView {
         self.source
     }

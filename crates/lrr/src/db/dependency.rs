@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum InputKey {
+    DeclarationNames(ScopeKey),
     CompletedSourceSyntax(Digest),
     LocalDeclarationOwner(Digest),
     BodyEnvironment(crate::source::manifest::BodyKey),
@@ -37,6 +38,7 @@ pub enum InputKey {
 }
 #[derive(Debug, Clone)]
 pub enum InputValue {
+    DeclarationNames(Arc<crate::frontend::source_locals::cold_declarations::ColdDeclarationNames>),
     CompletedSourceSyntax(Arc<super::memo::source_syntax_inputs::CompletedSourceSyntaxInput>),
     LocalDeclarationOwner(crate::source::manifest::BodyKey),
     BodyEnvironment(Arc<super::BodyEnvironmentInput>),
@@ -109,6 +111,7 @@ impl InputValue {
             Ok::<_, crate::core::diagnostic::Diagnostic>(())
         };
         match self {
+            Self::DeclarationNames(_) => {} // shared opaque preparation; no byte accounting
             Self::CompletedSourceSyntax(_) => {} // actual opaque inner allocation is a retained source artifact
             Self::BodyEnvironment(_) => {} // actual inner allocation is a retained source artifact
             Self::MacroExportSource(receipt) => add(receipt.metadata_bytes())?,
@@ -153,6 +156,9 @@ impl InputValue {
         Ok(bytes)
     }
     pub fn matches(&self, k: &InputKey) -> bool {
+        if let (Self::DeclarationNames(input), InputKey::DeclarationNames(scope)) = (self, k) {
+            return input.supports(scope);
+        }
         if let (Self::CompletedSourceSyntax(input), InputKey::CompletedSourceSyntax(plan)) =
             (self, k)
         {
@@ -227,6 +233,7 @@ impl InputValue {
             _ => "lrr/v2/input-value",
         });
         match self {
+            Self::DeclarationNames(input) => { e.u32(35); e.digest(input.identity()); }
             Self::CompletedSourceSyntax(input) => {
                 e.u32(34);
                 e.digest(input.fingerprint());
@@ -389,6 +396,7 @@ impl StableEncode for InputKey {
     const DOMAIN: &'static str = "lrr/v2/input-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::DeclarationNames(scope) => { e.u32(35); e.record(scope); }
             Self::CompletedSourceSyntax(plan) => {
                 e.u32(34);
                 e.digest(*plan);

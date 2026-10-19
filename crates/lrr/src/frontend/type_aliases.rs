@@ -41,6 +41,7 @@ pub enum AliasTarget {
     },
 }
 struct AliasDeclaration {
+    local_lookup: Option<NameLookup>,
     definition: DefKey,
     scope: ScopeKey,
     header: HeaderRecipe,
@@ -74,10 +75,20 @@ impl<'a> AliasNormalizer<'a> {
                 )));
             }
             return QueryPoll::Ready(Ok(AliasDeclaration {
+                local_lookup: None,
                 definition: item.def_key.clone(),
                 scope: item.scope.clone(),
                 header: item.header.clone(),
             }));
+        }
+        match super::source_locals::cold_declarations::declaration(db, identity) {
+            QueryPoll::Ready(Ok(Some(local))) => return QueryPoll::Ready(Ok(AliasDeclaration {
+                definition: local.definition, scope: local.scope, header: local.header,
+                local_lookup: Some(local.lookup),
+            })),
+            QueryPoll::Ready(Ok(None)) => {},
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
         let Some(source) = db.input(&InputKey::DefinitionSource(identity)) else {
             return QueryPoll::Ready(Err(fault(
@@ -131,6 +142,7 @@ impl<'a> AliasNormalizer<'a> {
             return QueryPoll::Ready(Err(fault("generated alias declaration context differs")));
         }
         QueryPoll::Ready(Ok(AliasDeclaration {
+            local_lookup: None,
             definition: definition.clone(),
             scope: context.scope.clone(),
             header: header.clone(),
@@ -208,10 +220,10 @@ impl<'a> AliasNormalizer<'a> {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-            if item.scope.owner.is_some() {
+            if item.scope.owner.is_some() && item.local_lookup.is_none() {
                 return QueryPoll::Ready(Ok(AliasTarget::NeedOwnerContext(item.scope.clone())));
             }
-            let selected = match lookup_declaration_name(
+            let selected = if let Some(lookup) = item.local_lookup { lookup } else { match lookup_declaration_name(
                 db,
                 SourceTypeOwner {
                     definition,
@@ -224,7 +236,7 @@ impl<'a> AliasNormalizer<'a> {
                 QueryPoll::Ready(Ok(value)) => value,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
-            };
+            }};
             match selected {
                 NameLookup::Defined(selected) if selected.identity == definition => {}
                 NameLookup::NeedInput(producer) => {

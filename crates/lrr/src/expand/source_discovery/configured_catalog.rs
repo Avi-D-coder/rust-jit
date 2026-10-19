@@ -298,6 +298,10 @@ impl SourceDiscovery {
                     QueryPoll::Ready(Err(error)) => return Err(error),
                     QueryPoll::NeedInput(_) => return Err(fault("cold catalog declaration input remains pending")),
                 }
+                let parent = self.nested_sources.get(&ordinal)
+                    .ok_or_else(|| fault("cold declaration namespace parent absent"))?;
+                let seal = self.seal.as_ref().ok_or_else(|| fault("cold declaration namespace seal absent"))?;
+                db.publish_cold_declaration_names(&scope, parent, seal)?;
             }
         }
         Ok(())

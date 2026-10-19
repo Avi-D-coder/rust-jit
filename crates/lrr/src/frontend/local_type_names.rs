@@ -310,6 +310,22 @@ impl LocalTypeNames {
         }
         Ok(())
     }
+    pub(in crate::frontend::source_locals) fn prepare_captured(
+        scope: &crate::frontend::associated_declarations::CapturedDeclarationScope<'_>,
+        context: &crate::frontend::impl_index::OriginalDeclarationNameContext,
+    ) -> Result<Self, Diagnostic> {
+        context.require_source(scope.source())?;
+        let parsed = scope.parsed()?;
+        let capture = |name: ast::Name| -> Result<DeclarationName, Diagnostic> {
+            let actual = range(name.syntax().text_range());
+            let edition = parsed.token_edition(actual)?;
+            Ok(DeclarationName { name: MacroName::parse(name.text(), edition)?,
+                context: context.comparison(), raw: context.root(), edition, range: actual })
+        };
+        let mut items = BTreeMap::new();
+        Self::capture_items(parsed, scope.facts(), &capture, &mut items)?;
+        Self::finish(scope.fingerprint(), items, Vec::new(), false)
+    }
     fn finish(
         owner: Digest,
         items: BTreeMap<Digest, DeclarationName>,
