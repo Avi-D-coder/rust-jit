@@ -109,3 +109,104 @@
  }
  
  fn concat_bytes_expand(
+@@ -654,6 +725,11 @@
+     tt: &tt::TopSubtree,
+     call_site: Span,
+ ) -> ExpandResult<tt::TopSubtree> {
++    concat_bytes_tokens(tt, call_site)
++}
++
++/// Syntax-only compiler byte concatenation; no HIR call or source query.
++pub fn concat_bytes_tokens(tt: &tt::TopSubtree, call_site: Span) -> ExpandResult<tt::TopSubtree> {
+     let mut bytes = String::new();
+     let mut err = None;
+     let mut span: Option<Span> = None;
+@@ -714,35 +790,65 @@
+     }
+ }
+ 
++fn concat_bytes_array_literal(lit: &tt::Literal) -> Result<String, ExpandError> {
++    let byte = match lit.kind {
++        tt::LitKind::Byte => unescape_byte(lit.text())
++            .map_err(|_| ExpandError::other(lit.span, "invalid byte literal"))?,
++        tt::LitKind::Integer if matches!(lit.text_and_suffix().1, "" | "u8") => {
++            concat_number_text(lit)?.parse::<u8>()
++                .map_err(|_| ExpandError::other(lit.span, "array byte is out of range"))?
++        }
++        _ => return Err(ExpandError::other(lit.span, "expected array byte literal")),
++    };
++    Ok(byte.escape_ascii().map(char::from).collect())
++}
++
+ fn concat_bytes_expand_subtree(
+     tree_iter: TtIter<'_>,
+     bytes: &mut String,
+     mut record_span: impl FnMut(Span),
+     err_span: Span,
+ ) -> Result<(), ExpandError> {
+-    for (ti, tt) in tree_iter.enumerate() {
+-        match tt {
+-            TtElement::Leaf(tt::Leaf::Literal(
+-                lit @ tt::Literal { span, kind: tt::LitKind::Byte, .. },
+-            )) => {
+-                if let Ok(b) = unescape_byte(lit.text()) {
+-                    bytes.extend(b.escape_ascii().filter_map(|it| char::from_u32(it as u32)));
+-                }
+-                record_span(span);
+-            }
+-            TtElement::Leaf(tt::Leaf::Literal(
+-                lit @ tt::Literal { span, kind: tt::LitKind::Integer, .. },
+-            )) => {
+-                record_span(span);
+-                if let Ok(b) = lit.text().parse::<u8>() {
+-                    bytes.extend(b.escape_ascii().filter_map(|it| char::from_u32(it as u32)));
+-                }
+-            }
+-            TtElement::Leaf(tt::Leaf::Punct(punct)) if ti % 2 == 1 && punct.char == ',' => (),
+-            _ => {
+-                return Err(ExpandError::other(err_span, "unexpected token"));
+-            }
+-        }
++    let mut iter = tree_iter;
++    let Some(first) = iter.next() else { return Ok(()) };
++    let TtElement::Leaf(tt::Leaf::Literal(first)) = first else {
++        return Err(ExpandError::other(err_span, "expected array byte literal"));
++    };
++    let element = concat_bytes_array_literal(&first)?;
++    record_span(first.span);
++    let next = iter.next();
++    if matches!(&next, Some(TtElement::Leaf(tt::Leaf::Punct(p))) if p.char == ';') {
++        let Some(TtElement::Leaf(tt::Leaf::Literal(count))) = iter.next() else {
++            return Err(ExpandError::other(err_span, "expected literal repeat count"));
++        };
++        if count.kind != tt::LitKind::Integer
++            || matches!(count.text_and_suffix().1, "f32" | "f64")
++            || iter.next().is_some()
++        {
++            return Err(ExpandError::other(count.span, "expected literal repeat count"));
++        }
++        let count = concat_number_text(&count)?.parse::<usize>()
++            .map_err(|_| ExpandError::other(count.span, "repeat count exceeds host size"))?;
++        let additional = element.len().checked_mul(count)
++            .and_then(|n| bytes.len().checked_add(n))
++            .ok_or_else(|| ExpandError::other(err_span, "byte string size overflow"))?;
++        bytes.reserve(additional - bytes.len());
++        for _ in 0..count { bytes.push_str(&element); }
++        return Ok(());
++    }
++    bytes.push_str(&element);
++    let mut separator = next;
++    while let Some(token) = separator {
++        if !matches!(token, TtElement::Leaf(tt::Leaf::Punct(p)) if p.char == ',') {
++            return Err(ExpandError::other(err_span, "expected array comma"));
++        }
++        let Some(token) = iter.next() else { break };
++        let TtElement::Leaf(tt::Leaf::Literal(lit)) = token else {
++            return Err(ExpandError::other(err_span, "expected array byte literal"));
++        };
++        bytes.push_str(&concat_bytes_array_literal(&lit)?);
++        record_span(lit.span);
++        separator = iter.next();
+     }
+     Ok(())
+ }

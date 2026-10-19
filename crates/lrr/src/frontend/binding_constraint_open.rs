@@ -414,6 +414,33 @@ fn names_parameter(term: &TyTerm, key: &ParamKey) -> bool {
     found.contains(key)
 }
 
+/// The common relation demand for one structural projection of an expression.
+/// Generic arguments and empty array elements use the same solver and guards.
+fn solve_projection(
+    db: &mut Database,
+    key: &PcKey,
+    plan: &SourceConstraintPlan,
+    node: NodeId,
+    steps: Vec<Step>,
+    deciding: &[NodeId],
+) -> QueryPoll<Option<TyTerm>> {
+    let mut component = Component::new(key, plan, false);
+    component.open = true;
+    component.deciding = deciding.to_vec();
+    component.deciding.push(node);
+    let via = Via {
+        strict: steps.is_empty(),
+        steps,
+    };
+    component.expression_via(Some(node), via);
+    match component.solve(db) {
+        QueryPoll::Ready(Ok(())) => {}
+        QueryPoll::Ready(Err(_)) => return QueryPoll::Ready(Ok(None)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    }
+    closed_answer(db, key, plan, &component, &mut Vec::new())
+}
+
 /// Each open parameter of `shape`, the declared Type of the call or
 /// constructor `node`, decided by the expression's later uses. `deciding`
 /// holds the expressions whose Types are being decided further up: one of
@@ -431,21 +458,7 @@ fn solve_shape(
         let Some(steps) = parameter_paths(&shape.term, open).into_iter().next() else {
             return QueryPoll::Ready(Ok(None));
         };
-        let mut component = Component::new(key, plan, false);
-        component.open = true;
-        component.deciding = deciding.to_vec();
-        component.deciding.push(node);
-        let via = Via {
-            strict: steps.is_empty(),
-            steps,
-        };
-        component.expression_via(Some(node), via);
-        match component.solve(db) {
-            QueryPoll::Ready(Ok(())) => {}
-            QueryPoll::Ready(Err(_)) => return QueryPoll::Ready(Ok(None)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        }
-        let answer = ready!(closed_answer(db, key, plan, &component, &mut Vec::new()));
+        let answer = ready!(solve_projection(db, key, plan, node, steps, deciding));
         let Some(answer) = answer else {
             return QueryPoll::Ready(Ok(None));
         };
@@ -536,12 +549,27 @@ pub(super) fn prepare_expression(
     probe.deciding.push(node);
     // Detection is speculative: an expression it cannot state has no open
     // arguments as far as this demand is concerned.
-    let shape = match probe.open_shape(db, node) {
-        QueryPoll::Ready(Ok(Some(shape))) => shape,
-        QueryPoll::Ready(Ok(None)) | QueryPoll::Ready(Err(_)) => {
+    let shape = if plan.fact(node).is_some_and(|fact| {
+        fact.kind() == crate::syntax::source_constraints::FactKind::Array
+            && fact.operands().is_empty()
+    })
+    {
+        let Some(element) = ready!(solve_projection(db, key, plan, node, vec![Step::Element], &[])) else {
             return QueryPoll::Ready(Ok(result));
+        };
+        OpenShape {
+            term: TyTerm::Array(Box::new(element), crate::traits::term::ConstTerm::Value(0)),
+            keys: Vec::new(),
+            callee: None,
         }
-        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    } else {
+        match probe.open_shape(db, node) {
+            QueryPoll::Ready(Ok(Some(shape))) => shape,
+            QueryPoll::Ready(Ok(None)) | QueryPoll::Ready(Err(_)) => {
+                return QueryPoll::Ready(Ok(result));
+            }
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
     };
     let solved = ready!(solve_shape(db, key, plan, node, &shape, &[]));
     let Some(solved) = solved else {

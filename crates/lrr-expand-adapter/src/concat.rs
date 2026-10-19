@@ -40,3 +40,21 @@ pub fn literal_value(
     }
     Ok(value)
 }
+
+/// The pinned compiler hook produces owned byte-string tokens, not a guest value.
+pub fn byte_output(input: &TokenForest, call_site: Key) -> Result<TokenForest, AdapterError> {
+    let mut store = SpanStore::default();
+    let tokens = store.import(input)?;
+    let call_site = store.span(call_site)?;
+    let expanded = hir_expand::builtin::concat_bytes_tokens(&tokens, call_site);
+    if let Some(error) = expanded.err {
+        return Err(AdapterError {
+            code: "LRR-E-COMPILE-INPUT",
+            message: match error.kind() {
+                hir_expand::ExpandErrorKind::Other(message) => message.to_string(),
+                _ => "unsupported pinned byte concat diagnostic kind".into(),
+            },
+        });
+    }
+    store.export(&expanded.value)
+}

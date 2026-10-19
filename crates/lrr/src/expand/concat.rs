@@ -97,3 +97,37 @@ pub fn literal_value(
         tokens: Digest::of_bytes(&bytes),
     })
 }
+
+/// Both compiler concatenation facets materialize tokens for the ordinary
+/// consuming grammar. Neither path executes guest expressions.
+pub(crate) fn literal_output(
+    descriptor: &CompileInputDescriptor,
+    input: &TokenForest,
+    site: Key,
+    max_input_bytes: usize,
+    max_output_bytes: usize,
+    max_wire_bytes: usize,
+) -> Result<TokenForest, Diagnostic> {
+    let fault = |error: lrr_expand_adapter::AdapterError| Diagnostic::new(error.code, error.message);
+    let wire = input.encode().map_err(|e| Diagnostic::new("LRR-E-COMPILE-INPUT", e.to_string()))?;
+    let tokens = lrr_expand_adapter::token_wire::TokenForest::decode(&wire)
+        .map_err(|e| Diagnostic::new(e.code, e.message))?;
+    let output = match descriptor.kind() {
+        CompileInputKind::Concat => {
+            let value = literal_value(descriptor, input, site, max_input_bytes, max_output_bytes)?;
+            lrr_expand_adapter::string_output::emit(
+                &tokens,
+                lrr_expand_adapter::token_wire::Key(site.0),
+                value.value(),
+                max_wire_bytes,
+            ).map_err(fault)?
+        }
+        CompileInputKind::ConcatBytes => lrr_expand_adapter::concat::byte_output(
+            &tokens,
+            lrr_expand_adapter::token_wire::Key(site.0),
+        ).map_err(fault)?,
+        _ => return Err(Diagnostic::new("LRR-E-COMPILE-INPUT", "selected compiler facet is not concatenation".into())),
+    };
+    TokenForest::decode(&output.encode().map_err(|e| Diagnostic::new(e.code, e.message))?)
+        .map_err(|e| Diagnostic::new("LRR-E-COMPILE-INPUT", e.to_string()))
+}

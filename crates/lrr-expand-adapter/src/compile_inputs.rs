@@ -12,6 +12,7 @@ pub enum CompileInputKind {
     Include,
     IncludeStr,
     IncludeBytes,
+    ConcatBytes,
 }
 impl CompileInputKind {
     pub fn tag(self) -> u8 {
@@ -22,6 +23,7 @@ impl CompileInputKind {
             Self::Include => 3,
             Self::IncludeStr => 4,
             Self::IncludeBytes => 5,
+            Self::ConcatBytes => 6,
         }
     }
 }
@@ -60,6 +62,7 @@ pub fn descriptor(name: &str) -> Result<Option<CompileInputDescriptor>, AdapterE
         EagerExpander::Env => ("env", CompileInputKind::Env),
         EagerExpander::OptionEnv => ("option_env", CompileInputKind::OptionEnv),
         EagerExpander::Concat => ("concat", CompileInputKind::Concat),
+        EagerExpander::ConcatBytes => ("concat_bytes", CompileInputKind::ConcatBytes),
         EagerExpander::Include => ("include", CompileInputKind::Include),
         EagerExpander::IncludeStr => ("include_str", CompileInputKind::IncludeStr),
         EagerExpander::IncludeBytes => ("include_bytes", CompileInputKind::IncludeBytes),

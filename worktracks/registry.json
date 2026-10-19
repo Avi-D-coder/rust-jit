@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T03:18:00.909103+00:00",
+  "updated_at": "2026-10-19T03:37:32.476247+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -747,21 +747,21 @@
     "scope": "User-requested outgoing handoff. Final source compilePASS, 2 focused componentPASS/2 preparationFAIL; no new stock/fullfixture/architecture/milestone/JIT acceptance. SDK admission/namespace projection and reached module runtime integration held. LOCAL-024/035 released; inherited reservations preserved. Source-only implementation branch checkpoint, not merged."
   },
   "current_checkpoint": {
-    "baseline_git_head": "d6787895736d9d48d7f2245d833ba23c1beeb3d7",
+    "baseline_git_head": "6fa83ce235ef917a1238192104caa010a4b94cea",
     "working_tree": "solo_held_source_checkpoint_after_collected_async_validation",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "70d6a9a720b89ed863a272a97a61c6799664e82cc23a12f0e91ccecb6b30ba8c",
     "imported_cases": 2808,
     "imported_files": 3480,
     "claims_are_not_acceptance": true,
-    "validation": "V147 solo held M011/M007 compiler output grammar repair: compiler token outputs retain their actual grammar and join ordinary generated syntax/pattern plans; expression-only policy checks removed. One measured new distinct unchanged runtime gain, concat-rpass, completes all4editions (2634VMoperations/182source calls/cleanup). Both builds,7/7focused bodies including12origin/edition worlds and3/4selected stock runtime contracts pass. concat-bytes remains failed before VM, not exempted. No refreshed suite total/full fixture or full architecture/interpreter/JIT gate closure.",
+    "validation": "V150 solo held M011/M007/T040 byte compiler preparation and ordinary empty-array context: one measured new unchanged upstream runtime gain, concat-bytes, completes all4editions (1248VMoperations/49source calls/cleanup). Existing eager operand/record path and pinned compiler hook emit real byte-string syntax; ordinary lexical byte-array Types and shared projection solver supply element context, and structural preflight consumes its retained own-result hint. Both builds,17/17focused bodies and4/5selected unchanged stock runtime contracts pass; the non-Eq nominal empty-array pattern remains failed. Exact vendor reconstruction/5proof checks pass. No refreshed suite total or full architecture/milestone/interpreter/JIT closure.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 33,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 34,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": true,
+    "source_checkpoint_pushed": false,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v145-v147-compiler-grammar.json",
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v148-v150-concat-bytes.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
@@ -772,10 +772,10 @@
       "worktracks/evidence/2026-10-18-interpreter-v129-v133-hygienic-captures.json",
       "worktracks/evidence/2026-10-18-interpreter-v134-v137-builtin-locations.json",
       "worktracks/evidence/2026-10-18-interpreter-v138-v144-common-includes.json",
-      "worktracks/evidence/2026-10-18-interpreter-v145-v147-compiler-grammar.json"
+      "worktracks/evidence/2026-10-18-interpreter-v145-v147-compiler-grammar.json",
+      "worktracks/evidence/2026-10-18-interpreter-v148-v150-concat-bytes.json"
     ],
-    "source_checkpoint_note": "V147 reviewed and targeted-validated source WIP pushed to codex/lrr-implementation (98943/ba01a0/0). One measured distinct upstream runtime gain all4editions,7focused bodies and3/4selected stock pass; concat-bytes remains failed. Full architecture/interpreter/JIT gates remain incomplete.",
-    "previous_source_checkpoint_commit": "10d27d6792082f71d118353e27dafef871800a83",
-    "source_checkpoint_commit": "9a10f652cbefee686fa8daa444d988fa153b8355"
+    "source_checkpoint_note": "V150 source reviewed and targeted validated; publication pending.",
+    "previous_source_checkpoint_commit": "9a10f652cbefee686fa8daa444d988fa153b8355"
   }
 }

@@ -14,38 +14,32 @@ impl RunMachine {
         id: super::super::install::RecipeId,
         contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
     ) -> QueryPoll<()> {
+        // An inferred result is retained in this installed recipe before its
+        // ConstructStart. Preflight reads the fact without executing SetHint,
+        // for structural and nominal constructors through the same admission.
+        let stated = match self.installed.get_current(db, id) {
+            Ok(recipe) => {
+                let result = self.frame.body.nodes()
+                    .get(self.frame.pc().node as usize)
+                    .and_then(|node| node.value);
+                recipe.recipe().operations.iter()
+                    .skip(self.frame.resume_operation_index())
+                    .take_while(|op| !matches!(op, Op::ConstructStart { .. }))
+                    .find_map(|op| match op {
+                        Op::SetHint {
+                            child,
+                            hint: crate::ir::op::HintRecipe::Written(written),
+                        } if Some(*child) == result => Some(Arc::clone(written)),
+                        _ => None,
+                    })
+            }
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
         match self.installed.prepared_constructor(db, id) {
             Ok(Some(source)) => {
-                // The recipe may state its own inferred result before its
-                // constructor operation. Read that retained source fact just
-                // as value-path preparation does; do not execute the hint.
-                let stated = match self.installed.get_current(db, id) {
-                    Ok(recipe) => {
-                        let result = self
-                            .frame
-                            .body
-                            .nodes()
-                            .get(self.frame.pc().node as usize)
-                            .and_then(|node| node.value);
-                        recipe
-                            .recipe()
-                            .operations
-                            .iter()
-                            .skip(self.frame.resume_operation_index())
-                            .take_while(|op| !matches!(op, Op::ConstructStart { .. }))
-                            .find_map(|op| match op {
-                                Op::SetHint {
-                                    child,
-                                    hint: crate::ir::op::HintRecipe::Written(written),
-                                } if Some(*child) == result => Some(Arc::clone(written)),
-                                _ => None,
-                            })
-                    }
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                };
                 self.prepare_installed_record_template(db, source, stated.as_deref())
             }
-            Ok(None) => self.prepare_constructor(db, contexts),
+            Ok(None) => self.prepare_constructor_with_stated(db, contexts, stated.as_deref()),
             Err(error) => QueryPoll::Ready(Err(error)),
         }
     }
@@ -147,6 +141,14 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
+    ) -> QueryPoll<()> {
+        self.prepare_constructor_with_stated(db, contexts, None)
+    }
+    fn prepare_constructor_with_stated(
+        &mut self,
+        db: &mut Database,
+        contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
+        stated: Option<&crate::ir::written_type::WrittenType>,
     ) -> QueryPoll<()> {
         let outcome = match db.fetch(
             &SyntaxProvider,
@@ -272,7 +274,10 @@ impl RunMachine {
                     None => {
                         // A closed structural source context (a declared tuple/
                         // array result or parameter) fixes the descriptor.
-                        let mut written = self.frame.source_view(result)?;
+                        let mut written = self.frame.source_view(result)?.or_else(|| {
+                            stated.and_then(|written| written.source())
+                                .map(|term| self.frame.bound_view(&term, &self.store))
+                        });
                         // An array literal expected like an unsized `[T]`
                         // (`&[1, 2]` at `&[T]`) is `[T; N]` for its own
                         // element count, then unsized where it is borrowed.

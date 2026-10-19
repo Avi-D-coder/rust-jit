@@ -247,6 +247,14 @@ impl<'a> Component<'a> {
             }
             // `bool`, `char` and byte literals have their lexical Type; a
             // string literal is `&'static str`.
+            FactKind::Literal if fact.byte_length().is_some() => Some(TyTerm::Ref(
+                RegionTerm::Static,
+                false,
+                Box::new(TyTerm::Array(
+                    Box::new(TyTerm::Primitive(PrimitiveType::U8)),
+                    crate::traits::term::ConstTerm::Value(fact.byte_length().expect("matched byte length")),
+                )),
+            )),
             FactKind::Literal => match (fact.suffix(), fact.flag()) {
                 (Some(primitive), _) => Some(TyTerm::Primitive(primitive)),
                 (None, true) => Some(TyTerm::Ref(

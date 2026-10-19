@@ -61,9 +61,6 @@ impl CompileInputCatalog {
     ) -> Result<Self, Diagnostic> {
         let mut definitions = BTreeMap::new();
         for descriptor in descriptors {
-            if definitions.len() >= 6 {
-                return Err(fault("compile-input builtin descriptor count limit"));
-            }
             let mut e = StableEncoder::new("lrr/v2/compile-input-definition");
             e.digest(unit);
             e.u32(u32::from(edition));
@@ -169,12 +166,13 @@ impl CompileInputCatalog {
     pub fn standalone(profile: &crate::core::profile::ProfileIdentity) -> Result<Self, Diagnostic> {
         let mut descriptors = Vec::new();
         descriptors
-            .try_reserve_exact(6)
+            .try_reserve_exact(7)
             .map_err(|_| fault("compiler descriptor inventory allocation"))?;
         for name in [
             "env",
             "option_env",
             "concat",
+            "concat_bytes",
             "include",
             "include_str",
             "include_bytes",

@@ -537,3 +537,32 @@ fn main() {
         }
     }
 }
+
+#[test]
+fn compiler_byte_literals_use_shared_values_and_patterns_across_origins() {
+    // LRR route/exact-once control; upstream concat-bytes.rs is kept unchanged.
+    const SOURCE: &str = r##"
+macro_rules! bytes { () => { concat_bytes!(b'A', br"\", [0x0_u8, 0b1000_0000, 255u8], [b'X'; 0]) } }
+macro_rules! wrapper { () => { bytes!() } }
+fn value() -> &'static [u8] { println!("bytes"); wrapper!() }
+fn cold() -> bool { ().unsupported_method_xyz() }
+fn main() {
+    assert_eq!(bytes!(), b"A\\\0\x80\xff");
+    assert!(match value() { bytes!() => true, _ => false });
+    assert!(if let concat_bytes!(bytes!()) = value() { true } else { false });
+    let concat_bytes!(bytes!()) = value() else { panic!("unmatched") };
+    let mut selected = false;
+    while let wrapper!() = value() { selected = true; break; }
+    assert!(selected);
+    assert!(if false { cold() } else { true });
+}
+"##;
+    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! outer {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nouter! {{ {SOURCE} }}");
+    for edition in [2015, 2018, 2021, 2024] {
+        for text in [SOURCE, &emitted, &wrapped] {
+            let report = completed_with_standard_facade(text, edition);
+            assert_eq!(report.output.stdout, "bytes\nbytes\nbytes\nbytes\n");
+        }
+    }
+}

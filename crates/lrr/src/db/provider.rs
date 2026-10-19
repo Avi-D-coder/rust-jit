@@ -1216,13 +1216,11 @@ impl Provider for SyntaxProvider {
                         Ok(recipe) => {
                             if pc.phase
                                 == crate::ir::pc::Phase::Entry.code().expect("entry encoding")
-                                && matches!(
-                                    plan.kind(),
-                                    crate::syntax::constructors::ConstructorKind::Record {
-                                        rest: None,
-                                        ..
-                                    }
-                                )
+                                && match plan.kind() {
+                                    crate::syntax::constructors::ConstructorKind::Record { rest: None, .. } => true,
+                                    crate::syntax::constructors::ConstructorKind::Array(fields) => fields.is_empty(),
+                                    _ => false,
+                                }
                                 && !matches!(
                                     recipe.recipe().exit,
                                     crate::ir::recipe::RecipeExit::Fault(_)

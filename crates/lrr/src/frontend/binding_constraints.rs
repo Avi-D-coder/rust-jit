@@ -1859,7 +1859,7 @@ impl<'a> Component<'a> {
         }
         match fact.kind() {
             // A lexically typed literal states its Type (above) and nothing else.
-            FactKind::Literal if self.open && (fact.suffix().is_some() || fact.flag()) => {}
+            FactKind::Literal if self.open && (fact.suffix().is_some() || fact.flag() || fact.byte_length().is_some()) => {}
             FactKind::Integer | FactKind::Float if scalar && self.open => {
                 self.literal_reached(fact.kind() == FactKind::Float)
             }
@@ -3098,6 +3098,9 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
         FactKind::Float => (true, Start::Literal(NodeId(key.node))),
         // A call or fieldless constructor whose type arguments no argument
         // fixes: later code decides them.
+        FactKind::Array if fact.operands().is_empty() => {
+            return open::prepare_expression(db, key, plan, result);
+        }
         FactKind::Path | FactKind::Call | FactKind::MethodCall | FactKind::Record => {
             return open::prepare_expression(db, key, plan, result);
         }

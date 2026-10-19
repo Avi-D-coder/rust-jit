@@ -50,16 +50,11 @@ pub fn parse(input: &TokenForest) -> Result<Vec<ConcatOperand>, AdapterError> {
         if !parsed.errors().is_empty() {
             return Err(fault("invalid concat operand expression"));
         }
+        crate::grammar::validate_complete_syntax(&parsed.syntax_node())?;
         let owned = store.export(&tokens)?;
         let nested = if ast::MacroExpr::cast(parsed.syntax_node()).is_some() {
             Some(crate::nested_string::parse(&owned)?)
         } else {
-            crate::concat::literal_value(
-                &owned,
-                store.owned_span_key(first)?,
-                usize::MAX,
-                usize::MAX,
-            )?;
             None
         };
         let bytes = owned.allocated_bytes().map_err(|e| fault(&e.to_string()))?;

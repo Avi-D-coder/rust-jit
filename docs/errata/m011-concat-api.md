@@ -17,3 +17,22 @@ The actual `concat!(0x10)` native comparison confirms a numeric-spelling gap:
 pinned output is `0x10` and native output is `16`. See
 [E-M011-002](m011-concat-numeric-spelling.md). The pinned numeric correction has native matrix acceptance; complete literal/error
 semantics remain pending. API extraction itself changes no source-query semantics.
+
+## Syntax-only byte concatenation (October 18, 2026)
+
+The same adapter boundary now exposes `concat_bytes_tokens`; the original pinned
+RA compiler dispatch delegates to that hook. The archived byte expander handled
+literal arrays but omitted repeat arrays and silently omitted radix or suffixed
+integer elements. Its corrected compiler array helper uses the existing literal
+number conversion and byte unescaper, checks host-size arithmetic, and emits the
+same byte-string token representation. The governing Rust contract is the pinned
+`rustc_builtin_macros/src/concat_bytes.rs` `handle_array_element` and
+`expand_concat_bytes` implementation; the unchanged `tests/ui/macros/concat-bytes.rs`
+is the primary runtime witness. This remains explicit compiler preparation;
+returned tokens enter the ordinary source grammar and VM. It is not a general
+expression evaluator or macro-specific runtime path.
+
+The existing archive-derived patches for fn_macro.rs and builtin.rs are regenerated
+in full with exact preimage/postimage receipts. The pinned archive, commit and
+inventory stay unchanged. Validation is pending until recorded in the bounded
+worktrack evidence; no complete diagnostics, byte-macro or interpreter gate claim.

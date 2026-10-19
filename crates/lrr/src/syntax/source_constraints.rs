@@ -23,7 +23,7 @@ use ra_ap_syntax::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 12;
+pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 13;
 fn overflow() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-METADATA-LIMIT",
@@ -215,6 +215,8 @@ pub(crate) struct SourceFact {
     numeric_prefix: bool,
     // A literal suffix is lexical (rustc's LitIntType/LitFloatType), not a name.
     suffix: Option<PrimitiveType>,
+    // The decoded lexical length of a byte string, for its array Type.
+    byte_length: Option<u64>,
     // Path and binding-pattern spelling row; candidate filter only.
     name: Option<u32>,
     // Field: the written tuple position.
@@ -325,6 +327,9 @@ impl SourceFact {
     pub(crate) fn numeric_prefix(&self) -> bool {
         self.numeric_prefix
     }
+    pub(crate) fn byte_length(&self) -> Option<u64> {
+        self.byte_length
+    }
     pub(crate) fn suffix(&self) -> Option<PrimitiveType> {
         self.suffix
     }
@@ -361,6 +366,7 @@ impl SourceFact {
             operation: None,
             numeric_prefix: false,
             suffix: None,
+            byte_length: None,
             name: None,
             field: None,
             member: None,
@@ -1310,6 +1316,13 @@ fn classify(
                     fact.flag = true;
                     FactKind::Literal
                 }
+                SyntaxKind::BYTE_STRING => {
+                    let bytes = ast::ByteString::cast(literal.token())
+                        .ok_or_else(|| invalid("byte string token kind differs"))?;
+                    let value = bytes.value().map_err(|_| invalid("invalid byte string literal"))?;
+                    fact.byte_length = Some(u64::try_from(value.len()).map_err(|_| overflow())?);
+                    FactKind::Literal
+                }
                 _ => FactKind::Literal,
             }
         }
@@ -1595,6 +1608,7 @@ impl StableEncode for SourceConstraintPlan {
             e.option(&fact.operation, |e, op| e.u8(op.tag()));
             e.bool(fact.numeric_prefix);
             e.option(&fact.suffix, |e, primitive| e.u32(primitive.tag()));
+            e.option(&fact.byte_length, |e, length| e.u64(*length));
             e.option(&fact.name, |e, row| e.u32(*row));
             e.option(&fact.field, |e, position| e.u32(*position));
             e.option(&fact.member, |e, row| e.u32(*row));

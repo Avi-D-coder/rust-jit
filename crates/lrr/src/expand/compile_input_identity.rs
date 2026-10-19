@@ -8,6 +8,7 @@ pub enum CompileInputKind {
     Include,
     IncludeStr,
     IncludeBytes,
+    ConcatBytes,
 }
 #[derive(Debug, Clone)]
 pub struct CompileInputDescriptor {
@@ -41,6 +42,7 @@ pub fn descriptor(name: &str) -> Result<Option<CompileInputDescriptor>, Diagnost
                     K::Include => CompileInputKind::Include,
                     K::IncludeStr => CompileInputKind::IncludeStr,
                     K::IncludeBytes => CompileInputKind::IncludeBytes,
+                    K::ConcatBytes => CompileInputKind::ConcatBytes,
                 },
             })
         })

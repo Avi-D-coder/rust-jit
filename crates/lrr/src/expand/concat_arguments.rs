@@ -72,7 +72,10 @@ impl ConcatArguments {
         descriptor: &CompileInputDescriptor,
         input: &TokenForest,
     ) -> Result<Self, Diagnostic> {
-        if descriptor.kind() != CompileInputKind::Concat {
+        if !matches!(
+            descriptor.kind(),
+            CompileInputKind::Concat | CompileInputKind::ConcatBytes
+        ) {
             return Err(fault("selected builtin is not concat"));
         }
         let wire = input.encode().map_err(|e| fault(e.to_string()))?;
@@ -267,7 +270,10 @@ impl ConcatArguments {
                 .catalog
                 .select(request.selected)?
                 .ok_or_else(|| fault("eager concat requires a compiler-facet definition"))?;
-            if descriptor.kind() != CompileInputKind::Concat
+            if !matches!(
+                descriptor.kind(),
+                CompileInputKind::Concat | CompileInputKind::ConcatBytes
+            )
                 || self.definition != descriptor.definition_identity()
                 || request.key.input_tokens != self.original
                 || request.key.definition_edition != request.selected.definition_edition
@@ -318,27 +324,14 @@ impl ConcatArguments {
                 }
                 ConcatMaterializationPoll::Ready(result) => result?,
             };
-            let value = crate::expand::concat::literal_value(
+            let output = crate::expand::concat::literal_output(
                 descriptor,
                 &joined,
                 request.site,
                 request.max_input_bytes,
                 request.max_output_bytes,
-            )?;
-            let original = lrr_expand_adapter::token_wire::TokenForest::decode(
-                &request
-                    .original
-                    .encode()
-                    .map_err(|e| fault(e.to_string()))?,
-            )
-            .map_err(|e| fault(e.to_string()))?;
-            let output = lrr_expand_adapter::string_output::emit(
-                &original,
-                lrr_expand_adapter::token_wire::Key(request.site.0),
-                value.value(),
                 request.max_wire_bytes,
-            )
-            .map_err(|e| Diagnostic::new(e.code, e.message))?;
+            )?;
             let wire = output.encode().map_err(|e| fault(e.to_string()))?;
             Ok(ConcatExpansionPoll::Ready(
                 crate::expand::record::ExpansionRecord::from_wire(request.key.clone(), wire),

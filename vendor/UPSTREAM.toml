@@ -82,18 +82,18 @@ erratum = "docs/errata/m009-explicit-protocol.md"
 id = "E-M011-001-API"
 path = "crates/hir-expand/src/builtin/fn_macro.rs"
 patch = "concat-value-api.patch"
-sha256 = "5daac26851f0e32118a6bd8f101a991e9639e2a46fca1fd2523bc2621e8bf4ff"
+sha256 = "454db79fc89d0a7713f976a5ec3fd29ea6333f051a6d0e51c9a7f091211751c6"
 preimage_sha256 = "29b073077d2a28d60297bfc55c4ae7704d10daa365fb836f704de259a75d1d22"
-postimage_sha256 = "1675505c67ef73c4cc99a3c1a3c88807b1c3f610ab8320872f3bd71e90596f08"
+postimage_sha256 = "67117e24178e151a0a2d971cab287950ea71cdfb4941f2470d4d25a61b4a935d"
 erratum = "docs/errata/m011-concat-api.md"
 
 [[rust_analyzer_macros.patches]]
 id = "E-M011-001-EXPORT"
 path = "crates/hir-expand/src/builtin.rs"
 patch = "concat-value-export.patch"
-sha256 = "f7f62b74b58f67ad68d9d320d0e2ca9ede23a881373e6db32a8dee82451a3dbd"
+sha256 = "85d8c794dfdca8ef57b541110c8bff5ec2b53cde20f8c2f4d6449d85d1d09431"
 preimage_sha256 = "0aeacc0947fc53868001ef610131414c9e5309b8b63be14e670213145615f72e"
-postimage_sha256 = "e26986c1a6b7c19e9e1a3467c9c4793e8433835745e3c7b8ec1b181c858af3c5"
+postimage_sha256 = "8725cef0abecb9335f22d0469c57368a74f9b5b65e18827b8628cc74dd9d29c3"
 erratum = "docs/errata/m011-concat-api.md"
 
 [[rust_analyzer_macros.patches]]

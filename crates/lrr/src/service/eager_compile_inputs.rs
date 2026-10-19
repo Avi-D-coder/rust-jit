@@ -163,7 +163,7 @@ impl Frame {
             return Err(fault("eager call parent context mismatch"));
         }
         let plan = match descriptor.kind() {
-            CompileInputKind::Concat => {
+            CompileInputKind::Concat | CompileInputKind::ConcatBytes => {
                 Plan::Concat(ConcatArguments::parse(descriptor, &original)?)
             }
             CompileInputKind::Env | CompileInputKind::OptionEnv => {
