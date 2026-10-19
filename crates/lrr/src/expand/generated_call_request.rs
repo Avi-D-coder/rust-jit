@@ -225,6 +225,64 @@ impl GeneratedCallRequest {
             enclosing: None,
         })
     }
+    pub(crate) fn with_builtin_derive(
+        mut self,
+        kind: lrr_expand_adapter::builtin_macros::BuiltinDeriveKind,
+        facts: lrr_expand_adapter::builtin_macros::DeriveContainerFacts,
+    ) -> Result<Self, Diagnostic> {
+        let (input, site, _) = self
+            .derive
+            .as_ref()
+            .ok_or_else(|| fault("builtin derive input absent"))?;
+        self.key.macro_identity = MacroIdentity::BuiltinDerive {
+            definition: self.definition.identity,
+        };
+        let encoded = input.encode().map_err(|e| fault(&e.message))?;
+        self.key.input_tokens = super::builtin_derives::input_identity(&encoded, facts)?;
+        self.key.validate()?;
+        let location = input
+            .spans()
+            .iter()
+            .find(|span| span.key() == *site)
+            .ok_or_else(|| fault("builtin derive origin site absent"))?;
+        self.diagnostic_origin = Some(Arc::new(crate::syntax::origin::MacroOrigin {
+            invocation_identity: self.key.invocation,
+            invocation: Some(crate::syntax::origin::SourceOrigin {
+                source: location.source.clone(),
+                range: crate::syntax::spans::SourceRange::checked(location.start, location.end)?,
+            }),
+            definition: None,
+            failure_kind: None,
+            failure_span_key: None,
+            failure_span: None,
+            parents: Vec::new(),
+        }));
+        let input = lrr_expand_adapter::token_wire::TokenForest::decode(&encoded)
+            .map_err(|e| fault(&e.message))?;
+        self.enclosing = Some(Box::new(
+            super::source_declarative::SourceDeclarativeRequest::builtin_derive(
+                self.key.clone(),
+                input,
+                lrr_expand_adapter::token_wire::Key(site.0),
+                self.definition.defining_unit,
+                kind,
+                facts,
+            )?,
+        ));
+        Ok(self)
+    }
+    pub(crate) fn is_builtin_derive(&self) -> bool {
+        self.derive.is_some()
+            && self.enclosing.is_some()
+            && matches!(self.key.macro_identity, MacroIdentity::BuiltinDerive { definition } if definition == self.definition.identity)
+    }
+    pub(crate) fn builtin_derive_request(
+        &self,
+    ) -> Option<&super::source_declarative::SourceDeclarativeRequest> {
+        self.is_builtin_derive()
+            .then(|| self.enclosing.as_deref())
+            .flatten()
+    }
     pub(crate) fn derive_location(&self) -> Result<(usize, usize), Diagnostic> {
         self.derive_location
             .ok_or_else(|| fault("derive location absent"))
@@ -724,6 +782,9 @@ impl GeneratedCallRequest {
         ))
     }
     pub fn expand(&self) -> Result<ExpansionRecord, Diagnostic> {
+        if self.is_builtin_derive() {
+            return self.enclosing.as_ref().ok_or_else(|| fault("builtin derive request absent"))?.expand();
+        }
         if self.procedural.is_some() || self.attribute.is_some() || self.derive.is_some() {
             return Err(Diagnostic::new(
                 "LRR-E-MACRO-PERMISSION",

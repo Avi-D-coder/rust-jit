@@ -466,7 +466,7 @@ impl RunMachine {
         path: &str,
         stated: Option<&crate::ir::written_type::WrittenType>,
     ) -> QueryPoll<()> {
-        let explicit = match self.owner_arguments(db) {
+        let explicit = match self.constructor_arguments(db) {
             QueryPoll::Ready(Ok(Some(arguments))) => {
                 match arguments.value_descriptors(&self.frame, &mut self.store) {
                     Ok(arguments) => Some(arguments),
@@ -660,8 +660,19 @@ impl RunMachine {
         if let Err(error) = bound.require_current(db) {
             return QueryPoll::Ready(Err(error));
         }
+        let explicit = match self.constructor_arguments(db) {
+            QueryPoll::Ready(Ok(Some(arguments))) => {
+                match arguments.value_descriptors(&self.frame, &mut self.store) {
+                    Ok(arguments) => Some(Arc::from(arguments)),
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            }
+            QueryPoll::Ready(Ok(None)) => None,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         self.frame
-            .select_constructor_call(site, Arc::clone(bound.variant()));
+            .select_constructor_call(site, Arc::clone(bound.variant()), explicit);
         QueryPoll::Ready(Ok(true))
     }
     /// The written callee of a `Root::member` call whose root a block-level
@@ -819,23 +830,7 @@ impl RunMachine {
                 "written argument count differs from the constructor fields".into(),
             ));
         }
-        // A generic declaration's parameter-typed fields are hinted only when
-        // the call's result context already fixes its type arguments.
-        let result = self
-            .frame
-            .body
-            .nodes()
-            .get(site as usize)
-            .and_then(|node| node.value)
-            .ok_or_else(|| call_fault("constructor call result slot absent"))?;
-        let args = self.frame.nominal_hint_args(result, &bound, &self.store)?;
-        // A partial result context (`Result<_, u32>`) fixes some arguments.
-        let seeded = match &args {
-            Some(_) => None,
-            None => self
-                .frame
-                .partial_nominal_args(result, &bound, &mut self.store)?,
-        };
+        let seeded = self.frame.constructor_type_arguments(site, &mut self.store)?;
         let mut hints = Vec::new();
         hints
             .try_reserve_exact(arguments.len())
@@ -843,14 +838,7 @@ impl RunMachine {
         for (slot, field) in arguments.iter().zip(bound.fields()) {
             // A field naming one of the declaration's parameters is hinted
             // only once the call's context fixes the type arguments.
-            let descriptor = match (&args, &seeded) {
-                (Some(args), _) => Some(field.materialize(&mut self.store, args)?),
-                (None, Some(seeded)) if field.generic() => {
-                    field.materialize_partial(&mut self.store, seeded)?
-                }
-                (None, _) if field.generic() => None,
-                (None, _) => Some(field.materialize(&mut self.store, &[])?),
-            };
+            let descriptor = field.materialize_partial(&mut self.store, &seeded)?;
             let source = match field.concrete().map(|source| source.source()) {
                 Some(source @ crate::traits::term::TyTerm::Primitive(_))
                 | Some(source @ crate::traits::term::TyTerm::Nominal(_, _)) => Some(source.clone()),

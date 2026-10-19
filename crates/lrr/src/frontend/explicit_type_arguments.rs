@@ -35,6 +35,9 @@ use crate::{
 };
 use ra_ap_syntax::{AstNode, ast};
 use std::sync::Arc;
+#[path = "explicit_path_arguments.rs"]
+mod paths;
+pub(crate) use paths::{PathArgumentPosition, select_path_arguments};
 const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
 macro_rules! ready {
     ($value:expr) => {

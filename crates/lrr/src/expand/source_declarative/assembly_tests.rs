@@ -706,3 +706,47 @@ fn unowned_structural_calls_cannot_disappear_from_the_pending_result() {
 
 #[path = "retained_child_readiness_tests.rs"]
 mod retained_child_readiness_tests;
+
+#[test]
+fn compiler_derive_receipt_binds_item_input_and_container_facts() {
+    use crate::expand::identity::MacroIdentity;
+    use lrr_expand_adapter::builtin_macros::{BuiltinDeriveKind, DeriveContainerFacts};
+    for edition in [2015, 2018, 2021, 2024] {
+        let (provider, index, _) = world(
+            "macro_rules! item { ($($t:tt)*) => { $($t)* } } item! { struct S; }",
+            edition,
+        );
+        let issued = request(&provider, &index);
+        let facts = DeriveContainerFacts {
+            derives_copy: true,
+            derives_ord: true,
+        };
+        let mut key = issued.key().clone();
+        key.macro_identity = MacroIdentity::BuiltinDerive {
+            definition: Digest([211; 32]),
+        };
+        key.grammar = GrammarSlot::Items;
+        key.input_tokens =
+            crate::expand::builtin_derives::input_identity(&issued.input.encode().unwrap(), facts)
+                .unwrap();
+        let make = |key, facts| {
+            SourceDeclarativeRequest::builtin_derive(
+                key,
+                issued.input.clone(),
+                issued.site,
+                issued.owner,
+                BuiltinDeriveKind::Copy,
+                facts,
+            )
+        };
+        let derive = make(key.clone(), facts).unwrap();
+        let receipt = SyntaxRequestReceipt::capture(&derive).unwrap();
+        assert!(
+            receipt.require_call_roots(&issued.input).is_err(),
+            "an item transform cannot authorize a delimited call"
+        );
+        assert!(make(key.clone(), DeriveContainerFacts::default()).is_err());
+        key.input_tokens = Digest::default();
+        assert!(make(key, facts).is_err());
+    }
+}

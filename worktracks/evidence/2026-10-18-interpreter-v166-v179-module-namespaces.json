@@ -1,0 +1,713 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-19T04:58:59.167215+00:00",
+  "scope": "Solo held M007 source-module/policy prerequisite, not integration or feature/runtime/JIT gate closure",
+  "parent_head": "548d9d1b190d9d7e03e5067cd3c71fa0e9d24ea4",
+  "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "review": "worktracks/08-macros-editions/2026-10-18-derived-enum-local-bindings.md",
+  "cohorts": [
+    {
+      "cohort": "V174",
+      "source_sha256": "b278a397cdc058d99bb9cf20b34c8e1ffb88de7e69825ab136469ed3cc4cdca0",
+      "frozen_after_runtime": true,
+      "source_manifest_sha256": "6536d3e3d738871e6ff8dff1279f86ae0627b4db7b6a519562a105ba9002a1fb",
+      "after_manifest_sha256": "fa9ed5153e56c061083c6b8b1447989013a39072fd5a92af422a58e439ca13ba",
+      "build_log": {
+        "path": "artifacts/validation-resume-2026-10-18/v174/lib-build.log",
+        "sha256": "bae7fa36388ea0889287dbea3930ca7b8086df5eedb0811cf9675aae8fceb43a",
+        "cargo_finished": true
+      },
+      "controls": [
+        {
+          "selector": "frontend::module_aliases::resolution_receipt_tests::resolved_module_import_requires_the_full_source_leaf_and_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.107,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-0.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::actual_import_routes_and_original_origin_retained_exactly_once",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-1.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::competing_private_import_does_not_grant_outside_access",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-2.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::compiler_alias_and_declaration_provenance_are_still_strict",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-3.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::completed_source_routes_to_one_module_keep_both_imports",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.335,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-4.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::differing_visibility_for_same_import_route_retains_both_records",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-5.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::imported_alias_still_checks_original_target_reexport_width",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-6.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::root_extern_prelude_is_shared_by_file_catalogs_and_local_modules_still_win",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.013,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-7.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 10.457,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v174/control-8.log"
+        }
+      ]
+    },
+    {
+      "cohort": "V175",
+      "source_sha256": "8f9a5f919cb589b0c31da4307a43a18905731faaf7f74803e4d90fce0f916e19",
+      "frozen_after_runtime": true,
+      "source_manifest_sha256": "8a7018d744358f1d47d54f709f10a8b2fcd52dd9e883e7e6c94d87f5f391f06f",
+      "after_manifest_sha256": "78383aa2884fe05b53586b2768321ddfa5e36e3697f71b6a852948f28449d33b",
+      "build_log": {
+        "path": "artifacts/validation-resume-2026-10-18/v175/lib-build.log",
+        "sha256": "afdd9be7db01c1397f55b3420e6af327289a0884dd9c919cedef6f35e3104260",
+        "cargo_finished": true
+      },
+      "controls": [
+        {
+          "selector": "frontend::module_aliases::resolution_receipt_tests::resolved_module_import_requires_the_full_source_leaf_and_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 1.816,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-0.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::actual_import_routes_and_original_origin_retained_exactly_once",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-1.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::competing_private_import_does_not_grant_outside_access",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-2.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::compiler_alias_and_declaration_provenance_are_still_strict",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-3.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::completed_source_routes_to_one_module_keep_both_imports",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.336,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-4.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::differing_visibility_for_same_import_route_retains_both_records",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.008,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-5.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::imported_alias_still_checks_original_target_reexport_width",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-6.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::root_extern_prelude_is_shared_by_file_catalogs_and_local_modules_still_win",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.013,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-7.log"
+        },
+        {
+          "selector": "expand::source_declarative::macro_export_role_tests::no_core_suppresses_library_injection_but_preserves_explicit_extern_prelude",
+          "exit": 0,
+          "one_body": false,
+          "seconds": 0.006,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-8.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 11.499,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v175/control-9.log"
+        }
+      ]
+    },
+    {
+      "cohort": "V176",
+      "source_sha256": "2d59db8f99a0a50552d9e28edec158a40d55c505d2b9324f07cab89a9bc24025",
+      "frozen_after_runtime": true,
+      "source_manifest_sha256": "ebdc995ad69e67f7903e11bfa4496f4161e82b66be8ea092425f97cb3d54412c",
+      "after_manifest_sha256": "1646ab7b08e32996a2cca7703b216fcdd12e3b0a24a60065135c7242f1b1d9c8",
+      "build_log": {
+        "path": "artifacts/validation-resume-2026-10-18/v176/lib-build.log",
+        "sha256": "48cb687466a163cc7eb6f621bfb9e306019c6dc415129391875ce6c854af7d01",
+        "cargo_finished": true
+      },
+      "controls": [
+        {
+          "selector": "expand::source_declarative::macro_exports::tests::role_tests::no_core_suppresses_library_injection_but_preserves_explicit_extern_prelude",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.118,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-0.log"
+        },
+        {
+          "selector": "frontend::module_aliases::resolution_receipt_tests::resolved_module_import_requires_the_full_source_leaf_and_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.089,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-1.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::actual_import_routes_and_original_origin_retained_exactly_once",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-2.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::competing_private_import_does_not_grant_outside_access",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.006,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-3.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::compiler_alias_and_declaration_provenance_are_still_strict",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.005,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-4.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::completed_source_routes_to_one_module_keep_both_imports",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.324,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-5.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::differing_visibility_for_same_import_route_retains_both_records",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.006,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-6.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::imported_alias_still_checks_original_target_reexport_width",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.006,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-7.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::root_extern_prelude_is_shared_by_file_catalogs_and_local_modules_still_win",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 0.008,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-8.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 10.844,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v176/control-9.log"
+        }
+      ]
+    },
+    {
+      "cohort": "V177",
+      "source_sha256": "d54090455dd84d816df12bdddc3b6b30d112509dff4c740b1611abd7ebc351fc",
+      "frozen_after_runtime": true,
+      "source_manifest_sha256": "148e11af39f080d2136eab37dde3e33d298beebc21b9743caa173ab75b323672",
+      "after_manifest_sha256": "91c56b201f8e3cd2910a6f2093a7553d01e3851d166ab032898f1d8e805c7e39",
+      "build_log": {
+        "path": "artifacts/validation-resume-2026-10-18/v177/lib-build.log",
+        "sha256": "f4133933962a4c9f18f5ba3b056dd7d4244165a7d479d198459f320b422cc0b5",
+        "cargo_finished": true
+      },
+      "diagnostic_probe": {
+        "path": "artifacts/validation-resume-2026-10-18/v177/core-probe.log",
+        "sha256": "95f693805b5ffec650ac52f77a98abb238397d1f1314c6460791493295168983",
+        "terminal": "failed; exact call-site trace only"
+      }
+    },
+    {
+      "cohort": "V178",
+      "source_sha256": "b9d6f8c808e903717d4208aaf293e318e238eb66e97276bec71e8afe47756b17",
+      "frozen_after_runtime": true,
+      "source_manifest_sha256": "e9fbe6a38e20a0dbc4f82244bcd52075378191a63b7c5198355f30536e2f1367",
+      "after_manifest_sha256": "7b78604ff9468a57ef5cef588e992b9a7d1114c0f74762ba0c7df9e52e8b1e1c",
+      "build_log": {
+        "path": "artifacts/validation-resume-2026-10-18/v178/lib-build.log",
+        "sha256": "f51d531ee8f3b7a724f4baf1d29310a170757542d23599c55ae10daa7b9ca804",
+        "cargo_finished": true
+      },
+      "controls": [
+        {
+          "selector": "expand::source_declarative::macro_exports::tests::role_tests::no_core_suppresses_library_injection_but_preserves_explicit_extern_prelude",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.112,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v178/control-0.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::root_extern_prelude_is_shared_by_file_catalogs_and_local_modules_still_win",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.011,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v178/control-1.log"
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::glob_imported_crate_root_alias_retains_its_target_and_frontier",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v178/control-2.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 79.628,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v178/control-3.log"
+        }
+      ]
+    },
+    {
+      "cohort": "V179",
+      "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+      "frozen_after_runtime": true,
+      "source_manifest_sha256": "2f86be550061eec19a332bd9edcb5f48b1af38b96d1625135bda688902afa0d0",
+      "after_manifest_sha256": "19df785faf49d2d2b943c1f3c9668db79f791c478ab9896c4b0cde285fc52d1a",
+      "build_log": {
+        "path": "artifacts/validation-resume-2026-10-18/v179/lib-build.log",
+        "sha256": "f48cbcac10c3c95bc7bc11b673816bf0359efc03a1abb6bc452a9d8a74d1d6df",
+        "cargo_finished": true
+      },
+      "controls": [
+        {
+          "selector": "expand::source_declarative::macro_exports::tests::role_tests::no_core_suppresses_library_injection_but_preserves_explicit_extern_prelude",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.121,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-0.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::std_root_reexports_resolve_through_the_ordinary_macro_graph",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.089,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-1.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::unchanged_library_sources_export_real_std_macro_definitions",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.321,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-2.log"
+        },
+        {
+          "selector": "frontend::module_aliases::resolution_receipt_tests::resolved_module_import_requires_the_full_source_leaf_and_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.09,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-3.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::actual_import_routes_and_original_origin_retained_exactly_once",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.006,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-4.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::competing_private_import_does_not_grant_outside_access",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.005,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-5.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::compiler_alias_and_declaration_provenance_are_still_strict",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.005,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-6.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::completed_source_routes_to_one_module_keep_both_imports",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.334,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-7.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::differing_visibility_for_same_import_route_retains_both_records",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.006,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-8.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::imported_alias_still_checks_original_target_reexport_width",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.006,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-9.log"
+        },
+        {
+          "selector": "frontend::module_paths::module_paths_import_tests::root_extern_prelude_is_shared_by_file_catalogs_and_local_modules_still_win",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.011,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-10.log"
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::genuine_unknown_producer_on_either_import_route_remains_need_input",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-11.log"
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::glob_imported_crate_root_alias_retains_its_target_and_frontier",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.008,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-12.log"
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::qualified_imported_module_prefix_is_typed_ambiguous_not_first_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.008,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-13.log"
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::repeated_source_import_fixed_point_retains_routes_once",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.008,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-14.log"
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::unchanged_distinct_module_imports_preserve_value_and_type_ambiguities_all_editions",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.012,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-15.log"
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::unresolved_original_import_does_not_become_completed_destination_ambiguity",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.007,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-16.log"
+        },
+        {
+          "selector": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 83.165,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v179/control-17.log"
+        }
+      ]
+    }
+  ],
+  "cli_build": {
+    "path": "artifacts/validation-resume-2026-10-18/v179/cli-build.log",
+    "sha256": "06dac63a48cbf0ad08027f54d079f56a2573ff94d1e87903bb95992241baf50e",
+    "cargo_finished": true
+  },
+  "binaries": {
+    "test_binary": {
+      "path": "target/debug/deps/lrr-3b8db33db37431d2",
+      "sha256": "df5d68587ec3e09be74793cc862ade7c34c65ba397739b30c817c38b59d5d752"
+    },
+    "cli_binary": {
+      "path": "target/debug/lrr",
+      "sha256": "bafcc9a56d96e3ade6ff4508539444abd2ce225602f1718e8752dda7e1c1577d"
+    }
+  },
+  "stock": [
+    {
+      "path": "tests/ui/imports/use-mod.rs",
+      "sha256": "69caca9b884b4ecd7d23ef08ddaf48990d1bfddc9f28ece728fce279ff571866",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "bafcc9a56d96e3ade6ff4508539444abd2ce225602f1718e8752dda7e1c1577d",
+      "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "seconds": 4.773,
+      "code": null,
+      "message": null,
+      "status": "completed",
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 22,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 18,
+        "vm_outcomes": 18
+      },
+      "stdout_sha256": "1ccf8fa568760e46bddcd8e3c0b107060db893fa4026fe6fc11b6d3997e34cb4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tests/ui/imports/extern-crate-self/extern-crate-self-macro-alias.rs",
+      "sha256": "f7ce39b68eeadda5fd1e78b72f3143d279637fbcb5861e2903192fcffe07d075",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "bafcc9a56d96e3ade6ff4508539444abd2ce225602f1718e8752dda7e1c1577d",
+      "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "seconds": 4.219,
+      "code": null,
+      "message": null,
+      "status": "completed",
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 71,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 51,
+        "vm_outcomes": 51
+      },
+      "stdout_sha256": "86097d9cb9aaebcc738aedc4e75c0aff8500bf851793dd698cf58072680d8706",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tests/ui/imports/extern-crate-self/extern-crate-self-macro-self.rs",
+      "sha256": "f02ef568489babb2a1c26dff43d0b605ce1c02bf17786f28fb67901792e27b77",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "bafcc9a56d96e3ade6ff4508539444abd2ce225602f1718e8752dda7e1c1577d",
+      "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "seconds": 4.116,
+      "code": null,
+      "message": null,
+      "status": "completed",
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 71,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 51,
+        "vm_outcomes": 51
+      },
+      "stdout_sha256": "7891a2fb5813a6dc28ee8f476fc11f4a71973cd9defcdc5ebc1c7254750bf362",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tests/ui/derives/eq-ord/derive-partial-ord-discriminant.rs",
+      "sha256": "7eaad7291877dc39e258563e4c71743895486c64fa4e90d2224f8caa1f56770b",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "bafcc9a56d96e3ade6ff4508539444abd2ce225602f1718e8752dda7e1c1577d",
+      "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+      "exit": 0,
+      "runtime_contract_pass": true,
+      "seconds": 9.218,
+      "code": null,
+      "message": null,
+      "status": "completed",
+      "capture_complete": true,
+      "facts": {
+        "classified_operation_candidates": 1397,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 27,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 967,
+        "vm_outcomes": 967
+      },
+      "stdout_sha256": "0920cb8885cdb310c2df458462ace05bb892a837ebcf0464f5bee9905a9eb21a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tests/ui/derives/clone-copy/derive-clone-basic.rs",
+      "sha256": "bdbb0e130683592880aceb704537f0fcd3f25b0173caf8fe0db7c6e368022a86",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "bafcc9a56d96e3ade6ff4508539444abd2ce225602f1718e8752dda7e1c1577d",
+      "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+      "exit": 2,
+      "runtime_contract_pass": false,
+      "seconds": 8.326,
+      "code": "LRR-E-TYPE-CONTEXT",
+      "message": "generic type argument is not determined by any constructor argument",
+      "status": "fault",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 33,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 24,
+        "vm_outcomes": 24
+      },
+      "stdout_sha256": "35b4166c01957ff80ad98f7dbd06468751fb344dea063564f60415f956bdd4fe",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tests/ui/derives/debug/derive-debug.rs",
+      "sha256": "75d773c7d8f95915e1389cda5b39760167cab6b9c186c3304f7ca22e1df0aec9",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "binary_sha256": "bafcc9a56d96e3ade6ff4508539444abd2ce225602f1718e8752dda7e1c1577d",
+      "source_sha256": "b3e9f84421468bfdb269b2d85d4fe2aa0194f7b2fe1356174ba4ec1675c07386",
+      "exit": 2,
+      "runtime_contract_pass": false,
+      "seconds": 12.049,
+      "code": "LRR-E-NAME-MISSING",
+      "message": "reached direct function identity is absent before argument evaluation (value path `__self_0`)",
+      "status": "fault",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 9866,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 446,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 6816,
+        "vm_outcomes": 6816
+      },
+      "stdout_sha256": "38ad56e80fb28f1ce68cb8d5bff6068a09d11497294bdc961c2ecf3321fbb18e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "summary": {
+    "focused_control_bodies_pass": 17,
+    "actual_core_namespace_probe_fail": 1,
+    "selected_upstream_runtime_pass": 4,
+    "selected_upstream_runtime_fail": 2,
+    "newly_measured_distinct_upstream_gains": 0,
+    "full_fixture_passes_claimed": 0,
+    "suite_total_refreshed": false,
+    "guest_jit": "blocked"
+  },
+  "holds": [
+    "real core metadata compilation-input capture/adoption and complete seal",
+    "separate actual library definition namespace receipt plus runtime query/coordinator integration",
+    "derived enum __self_0 runtime failure",
+    "explicit constructor generic argument join",
+    "full context/currentness/cleanup architecture matrix and integrated milestone"
+  ],
+  "prior_failed_probes": "V166 stock baselines and V167-V173 tracing/builds remain local; V166 initial clone-basic stdout was overwritten by second enum selection, exact first terminal preserved separately; no first stdout provenance claimed. V171 empty-selector run and V175 wrong selector executed zero bodies and are not counted."
+}

@@ -154,13 +154,36 @@ fn actual_library_definition_value_namespace_requires_source_module_closure() {
     let mut metadata = Database::default();
     inputs.publish(&mut metadata).unwrap();
     metadata.begin_expansion_epoch(1).unwrap();
-    let discovery = SourceDiscovery::new(
+    let discovery = SourceDiscovery::new_deferred_imports(
         sources, declaration.scope.clone(), Namespace::Value,
         Digest::of_bytes(b"actual library definition source namespace"), 1,
     ).unwrap();
-    let _discovery = discovery.with_declarative_compiler(
+    let mut discovery = discovery.with_declarative_compiler(
         Digest::of_bytes(b"actual library definition compile context"),
         source_declarative::engine_version(),
         Arc::new(CompileInputCatalog::standalone(&profile).unwrap()),
     ).expect("real library definition namespace source/module preparation");
+    // Construction alone is not a namespace receipt. Drive the ordinary
+    // preparation coordinator; missing dependencies remain real failures.
+    loop {
+        use crate::expand::source_discovery::SourceDiscoveryStep;
+        match discovery.poll().expect("actual library definition namespace discovery") {
+            SourceDiscoveryStep::Sealed(_) => {
+                discovery.publish(&mut metadata).unwrap();
+                break;
+            }
+            SourceDiscoveryStep::NeedExpansion { request } => {
+                let record = request.expand().expect("actual library source macro expansion");
+                discovery.admit_expansion(Arc::new(record)).unwrap();
+            }
+            SourceDiscoveryStep::NeedGeneratedExpansion { request } => {
+                let record = request.expand().expect("actual library generated macro expansion");
+                discovery.admit_expansion(Arc::new(record)).unwrap();
+            }
+            SourceDiscoveryStep::Incomplete { diagnostic, blocked } => {
+                panic!("actual library namespace incomplete: {diagnostic:?}; {blocked:?}");
+            }
+            _ => panic!("actual library namespace needs an unestablished preparation dependency"),
+        }
+    }
 }

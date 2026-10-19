@@ -840,7 +840,7 @@ fn generated_helpers_refuse_missing_wrong_or_sibling_receipts_and_preserve_lexic
 
 #[test]
 fn generated_derive_requests_bind_ordered_occurrences_exact_helpers_and_item_tokens() {
-    let source = "#[derive(Empty,Empty)] #[empty_helper] struct S { #[empty_helper] field:u8 }";
+    let source = r##"#[derive(Empty,Empty)] #[empty_helper("quoted", br#"raw"#)] struct S { #[empty_helper(b'x')] field:[u8; 1usize] } const C:u8=1u8;"##;
     let (items, index, helpers) = helper_case(source, &["Empty"], &["empty_helper"]);
     let cfg = CfgSet::guest_default();
     let catalog = catalog(&["Empty"], ProceduralKind::Derive);

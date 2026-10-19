@@ -111,8 +111,17 @@ impl GeneratedDeriveHelpers {
         catalog: &PreparedProcCatalog,
         receipts: &BTreeMap<Digest, Arc<PreparedDeriveDeclaration>>,
     ) -> Result<GeneratedHelperPoll, Diagnostic> {
-        let mut providers: BTreeMap<(String, NameContextKey), Vec<(usize, Digest)>> =
-            BTreeMap::new();
+        Self::resolve_with_catalog(plan, items, index, exports, Some(catalog), receipts)
+    }
+    pub(crate) fn resolve_with_catalog(
+        plan: GeneratedDerivePlan,
+        items: &GeneratedItems,
+        index: usize,
+        exports: &GeneratedDeriveExports,
+        catalog: Option<&PreparedProcCatalog>,
+        receipts: &BTreeMap<Digest, Arc<PreparedDeriveDeclaration>>,
+    ) -> Result<GeneratedHelperPoll, Diagnostic> {
+        let mut providers: BTreeMap<(String, NameContextKey), Vec<(usize, Digest)>> = BTreeMap::new();
         let hygiene = items.hygiene_facts();
         let mut receipt_ids = Vec::new();
         let mut definitions = Vec::new();
@@ -139,19 +148,26 @@ impl GeneratedDeriveHelpers {
                 if row.occurrence() != path.identity {
                     return Err(fault("helper plan/export occurrence differs"));
                 }
-                let Some(demand) = row.helper_demand() else {
-                    return Ok(GeneratedHelperPoll::NeedInput(
-                        exports
-                            .row_demand(row_index)?
-                            .ok_or_else(|| fault("helper export unresolved without demand"))?,
-                    ));
+                let (definition, helper_names, receipt_id) = if let Some(selected) = row.selected()
+                    && let Some(builtin) = selected.builtin()
+                {
+                    (selected.definition().identity,
+                        builtin.helpers.iter().map(|name| (*name).to_owned()).collect::<Vec<_>>(),
+                        builtin.receipt)
+                } else {
+                    let Some(demand) = row.helper_demand() else {
+                        return Ok(GeneratedHelperPoll::NeedInput(exports.row_demand(row_index)?
+                            .ok_or_else(|| fault("helper export unresolved without demand"))?));
+                    };
+                    let catalog = catalog.ok_or_else(|| fault("procedural derive helper catalog absent"))?;
+                    let request = exports.declaration_request(row_index, catalog)?;
+                    let Some(receipt) = receipts.get(&demand) else {
+                        return Ok(GeneratedHelperPoll::NeedInput(demand));
+                    };
+                    receipt.validate_request(&request)?;
+                    (request.definition.identity, receipt.helpers().to_vec(), receipt.fingerprint())
                 };
-                let request = exports.declaration_request(row_index, catalog)?;
-                let Some(receipt) = receipts.get(&demand) else {
-                    return Ok(GeneratedHelperPoll::NeedInput(demand));
-                };
-                receipt.validate_request(&request)?;
-                definitions.push(request.definition.identity);
+                definitions.push(definition);
                 let span = path
                     .tokens()
                     .spans()
@@ -159,7 +175,7 @@ impl GeneratedDeriveHelpers {
                     .find(|s| s.key() == path.last_span)
                     .ok_or_else(|| fault("helper introduction context absent"))?;
                 let class = hygiene.name_item(span.context)?;
-                for name in receipt.helpers() {
+                for name in &helper_names {
                     bytes = bytes
                         .checked_add(name.len())
                         .and_then(|n| n.checked_add(256))
@@ -177,7 +193,7 @@ impl GeneratedDeriveHelpers {
                     .and_then(|n| n.checked_mul(std::mem::size_of::<Digest>()))
                     .and_then(|n| bytes.checked_add(n))
                     .ok_or_else(limit)?;
-                receipt_ids.push(receipt.fingerprint());
+                receipt_ids.push(receipt_id);
                 row_index += 1;
             }
         }
@@ -189,7 +205,7 @@ impl GeneratedDeriveHelpers {
             plan,
             receipts: receipt_ids,
             definitions,
-            catalog: catalog.fingerprint(),
+            catalog: exports.catalog_identity(),
             providers: BTreeMap::new(),
             outer: BTreeMap::new(),
             members: BTreeMap::new(),

@@ -50,25 +50,26 @@ pub(super) fn publish(
     db.publish_macro_export_sources(facets).unwrap();
 }
 #[test]
-fn no_core_disables_implicit_prelude_without_promoting_macro_only_source() {
+fn no_core_suppresses_library_injection_but_preserves_explicit_extern_prelude() {
     let (manifest, unit, inputs, root_selection, child_selection) = core_sources();
     let root = select(&inputs, &root_selection);
     assert_eq!(root.captured_macro_blob().unwrap().bytes(), ROOT);
     let facts = root.macro_prelude_facts().unwrap();
     assert!(facts.no_core);
     assert!(!facts.standard);
-    assert!(facts.disabled.contains(&vec![]));
+    assert!(!facts.disabled.contains(&vec![]));
     let child = select(&inputs, &child_selection);
     let inherited = child.macro_prelude_policy().unwrap();
     assert!(inherited.no_core && !inherited.standard);
-    assert!(inherited.disabled.contains(&vec![]));
+    assert!(!inherited.disabled.contains(&vec![]));
     let ordinary_policy = root.macro_prelude_policy().unwrap();
     assert!(ordinary_policy.no_core && !ordinary_policy.standard);
-    assert!(ordinary_policy.disabled.contains(&vec![]));
+    assert!(!ordinary_policy.disabled.contains(&vec![]));
     let mut ordinary = SourceDeclarative::new(root.share()).unwrap();
     let compiler =
         Arc::new(CompileInputCatalog::standalone(&root_selection.outline.parse.profile).unwrap());
     ordinary.compiler = Some(Arc::clone(&compiler));
+    assert!(compiler.injected_import(&root).unwrap().is_none());
     let (implicit, available) = ordinary.route_dependency_sets().unwrap();
     assert!(implicit.is_empty(), "no_core must not inject compiler crate dependencies");
     assert!(!available.is_empty(), "explicit extern crate routes remain available");
@@ -104,7 +105,7 @@ fn no_core_disables_implicit_prelude_without_promoting_macro_only_source() {
     assert!(available.is_empty());
     let routes = provider.routes_in(&[]).unwrap();
     assert!(
-        routes[0]
+        !routes[0]
             .implicit_disabled
             .contains(&root.outline().root_scope)
     );

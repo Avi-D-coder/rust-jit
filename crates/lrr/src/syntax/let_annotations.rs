@@ -17,7 +17,7 @@ use crate::{
 };
 use ra_ap_syntax::{
     AstNode, AstToken, SyntaxKind,
-    ast::{self, HasGenericArgs},
+    ast::{self},
 };
 
 /// The written structure around the annotation's named leaves.
@@ -88,6 +88,11 @@ impl ParsedFile {
         else {
             return Ok(None);
         };
+        if statement.initializer().is_none()
+            && matches!(statement.pat(), Some(ast::Pat::WildcardPat(_)))
+        {
+            return Ok(None);
+        }
         let Some(ty) = statement.ty() else {
             return Ok(None);
         };
@@ -143,10 +148,10 @@ impl ParsedFile {
                 // declaration kernel as an argument-free qualified Type.
                 let arguments = written
                     .segment()
-                    .and_then(|segment| segment.generic_arg_list());
+                    .and_then(|segment| crate::syntax::ast_adapter::nonempty_generic_arguments(&segment));
                 if std::iter::successors(written.qualifier(), |path| path.qualifier()).any(|path| {
                     path.segment()
-                        .is_none_or(|segment| segment.generic_arg_list().is_some())
+                        .is_none_or(|segment| crate::syntax::ast_adapter::nonempty_generic_arguments(&segment).is_some())
                 }) {
                     return Ok(None);
                 }

@@ -332,95 +332,36 @@ fn prepare_arguments(
     key: &PcKey,
     plan: &ConstructorPlan,
 ) -> QueryPoll<Box<[Option<super::explicit_type_arguments::ExplicitType>]>> {
-    use ra_ap_syntax::{AstNode, ast, ast::HasGenericArgs};
-    macro_rules! ready {
-        ($poll:expr) => {
-            match $poll {
-                QueryPoll::Ready(Ok(value)) => value,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            }
-        };
-    }
-    let source = owner.context().source();
-    let syntax =
-        match source
-            .parsed()
-            .entered_node_syntax(source.body(), source.index(), plan.node())
-        {
-            Ok(syntax) => syntax,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-    let path = syntax
-        .and_then(ast::RecordExpr::cast)
-        .and_then(|record| record.path());
-    if path.as_ref().is_some_and(|path| {
-        std::iter::successors(path.qualifier(), |path| path.qualifier()).any(|path| {
-            path.segment()
-                .is_some_and(|segment| segment.generic_arg_list().is_some())
-        })
-    }) {
-        return QueryPoll::Ready(Err(Diagnostic::new(
-            "LRR-E-UNSUPPORTED",
-            "record owner Type arguments require their indexed owner context integration".into(),
-        )));
-    }
-    let list = path
-        .and_then(|path| path.segment())
-        .and_then(|segment| segment.generic_arg_list());
-    let Some(list) = list else {
-        return QueryPoll::Ready(Ok(Box::new([])));
+    let site = match owner
+        .context()
+        .source()
+        .index()
+        .pc(plan.node(), crate::ir::pc::Phase::Entry)
+    {
+        Ok(site) if site.body == key.body => site,
+        Ok(_) => {
+            return QueryPoll::Ready(Err(fault("record path arguments belong to another body")));
+        }
+        Err(error) => return QueryPoll::Ready(Err(error)),
     };
-    let mut arguments = Vec::new();
-    for argument in list.generic_args() {
-        let ty = match argument {
-            ast::GenericArg::LifetimeArg(_) => continue,
-            ast::GenericArg::TypeArg(argument) => match argument.ty() {
-                Some(ty) => ty,
-                None => return QueryPoll::Ready(Err(fault("record Type argument syntax absent"))),
-            },
-            _ => {
-                return QueryPoll::Ready(Err(Diagnostic::new(
-                    "LRR-E-UNSUPPORTED",
-                    "record const or associated argument requires its typed source goal".into(),
-                )));
-            }
-        };
-        let range = crate::syntax::ast_adapter::range(ty.syntax().text_range());
-        let relative = match (
-            range.start.checked_sub(source.body().range.start),
-            range.end.checked_sub(source.body().range.start),
-        ) {
-            (Some(start), Some(end)) => crate::syntax::spans::SourceRange { start, end },
-            _ => return QueryPoll::Ready(Err(fault("record Type argument escapes its body"))),
-        };
-        let Some(node) = source
-            .index()
-            .nodes_at_range(relative)
-            .find(|node| node.role == crate::syntax::body_index::NodeRole::Syntax)
-        else {
-            return QueryPoll::Ready(Err(fault("record Type argument indexed occurrence absent")));
-        };
-        let site = match source.index().pc(node.id, crate::ir::pc::Phase::Entry) {
-            Ok(site) => site,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let selected = ready!(super::explicit_type_arguments::select_argument(
-            db, owner, key, &site, range
-        ));
-        arguments.push(match selected {
-            Some(selected) => {
-                for guard in &selected.guards {
-                    if let Err(error) = guard.require_current(db) {
-                        return QueryPoll::Ready(Err(error));
-                    }
+    match super::explicit_type_arguments::select_path_arguments(
+        db,
+        owner,
+        &site,
+        super::explicit_type_arguments::PathArgumentPosition::Constructor,
+    ) {
+        QueryPoll::Ready(Ok(Some(selected))) => {
+            for guard in &selected.guards {
+                if let Err(error) = guard.require_current(db) {
+                    return QueryPoll::Ready(Err(error));
                 }
-                Some(selected.source)
             }
-            None => None,
-        });
+            QueryPoll::Ready(Ok(selected.arguments.into_boxed_slice()))
+        }
+        QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(Box::new([]))),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
     }
-    QueryPoll::Ready(Ok(arguments.into_boxed_slice()))
 }
 
 impl RecordConstructorDemand {

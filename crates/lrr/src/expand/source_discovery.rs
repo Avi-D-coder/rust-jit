@@ -4438,7 +4438,7 @@ impl SourceDiscovery {
             .pending_generated
             .as_ref()
             .ok_or_else(|| fault("derive output demand absent"))?;
-        if !self.admitting_procedural || !request.is_derive() || request.key() != record.key() {
+        if (!self.admitting_procedural && !request.is_builtin_derive()) || !request.is_derive() || request.key() != record.key() {
             return Err(fault("derive output requires exact adopted native request"));
         }
         let id = record.key().fingerprint();
@@ -4633,13 +4633,12 @@ impl SourceDiscovery {
             let Some(catalog) = provider.compiler.as_ref() else {
                 continue;
             };
-            let runtime_unit = if provider.macro_export_source_role().is_some() {
+            let policy = provider.module_source().macro_prelude_policy()?;
+            let runtime_unit = if provider.macro_export_source_role().is_some() || policy.no_core {
                 None
             } else {
                 catalog.install_injected_import(namespaces, provider.module_source())?;
-                Some(catalog.runtime_prelude_unit(
-                    provider.module_source().macro_prelude_policy()?.standard,
-                ))
+                Some(catalog.runtime_prelude_unit(policy.standard))
             };
             let identity = catalog.owning_profile_identity()?;
             if !globals_by_identity.contains_key(&identity) {
@@ -10928,6 +10927,17 @@ impl SourceDiscovery {
                                 match demand {
                                     crate::frontend::generated_macros::GeneratedCallDemand::NeedDeriveExecution {..}=>return Err(fault("uncached generated helper scope escaped catalog")),
                                     crate::frontend::generated_macros::GeneratedCallDemand::Append {request,record}=>{
+                                        if request.is_builtin_derive() {
+                                            // Compiler output is already retained by this exact
+                                            // pending occurrence; append through the ordinary path.
+                                            self.pending_generated = Some((ticket, request));
+                                            self.admitting_append = true;
+                                            let appended = self.admit_generated_expansion(record);
+                                            self.admitting_append = false;
+                                            if let Err(error) = &appended { self.failed = Some(error.clone()); }
+                                            appended?;
+                                            continue;
+                                        }
                                         self.pending_append=Some((ticket,request.clone(),record.clone()));return Ok(SourceDiscoveryStep::NeedDeriveAppend {request,record});
                                     }
                                     crate::frontend::generated_macros::GeneratedCallDemand::NeedDeclaration(request)=>{

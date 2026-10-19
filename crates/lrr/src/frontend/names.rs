@@ -323,7 +323,10 @@ pub struct NameNamespaces {
     >,
     candidate_globs: std::collections::BTreeSet<Digest>,
     macro_import_facets: std::collections::BTreeMap<Digest, NameDefinition>,
-    glob_module_links: std::collections::BTreeMap<NamePath, std::collections::BTreeSet<NamePath>>,
+    glob_module_links: std::collections::BTreeMap<
+        NamePath,
+        std::collections::BTreeSet<super::module_paths::ModulePath>,
+    >,
     /// Enum variant member identities admitted beneath their enum's module-like
     /// path. Variants are not outline items and own no source inputs; their
     /// declaration facts stay with the owning enum's schema.
@@ -2158,7 +2161,7 @@ impl NameNamespaces {
             self.glob_module_links
                 .entry(NamePath::new(destination.unit, destination.names.clone())?)
                 .or_default()
-                .insert(NamePath::new(target.unit, target.names.clone())?);
+                .insert(target.clone());
         }
         self.source_glob_items = next_items;
         self.source_glob_modules = next_modules;
@@ -2447,16 +2450,14 @@ impl NameNamespaces {
                         unit: alias.unit,
                         names: alias.components().to_vec(),
                     });
-                if !strong && let Some(targets) = self.glob_module_links.get(&alias) {
-                    for target in targets {
-                        let mut names = target.components().to_vec();
-                        names.extend_from_slice(&path.components()[length..]);
-                        stack.push(NamePath::new(target.unit, names)?);
-                    }
-                }
                 for target in self.module_aliases.get(&alias).into_iter().chain(
                     self.named_module_links
                         .get(&alias)
+                        .into_iter()
+                        .flat_map(|targets| targets.iter()),
+                ).chain(
+                    self.glob_module_links.get(&alias)
+                        .filter(|_| !strong)
                         .into_iter()
                         .flat_map(|targets| targets.iter()),
                 ) {
@@ -3013,6 +3014,11 @@ impl NameNamespaces {
         for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
             names.extend(self.table(namespace).scoped_member_names(scope, edition)?);
         }
+        let module = super::module_paths::ModulePath {
+            unit: scope.crate_key,
+            names: super::source_macro_routes::module_names(&scope.module_path, edition).ok()?,
+        };
+        names.extend(self.types.module_paths.scoped_member_names(&module).ok()?);
         Some(names)
     }
     /// Module member first, then an explicitly supplied prelude scope. Locals

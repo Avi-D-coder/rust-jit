@@ -58,7 +58,8 @@ impl ParsedFile {
     /// carries them as its explicit arguments (`Op::CallSeal::explicit`), so
     /// the Value goal selects the declaration by the module path alone, as it
     /// does for a single-name callee. Generic arguments on any other segment
-    /// stay refused.
+    /// remain attached to their indexed source occurrences for the ordinary
+    /// owner/constructor argument service.
     pub(crate) fn written_callee_spelling(
         &self,
         path: &ast::PathExpr,
@@ -106,8 +107,12 @@ impl ParsedFile {
             // no runtime effect: the variant is selected by identity against
             // the scrutinee's own reached Type. An expression's arguments are
             // explicit type arguments of its value and are never dropped.
+            // Associated callee owner application still requires its typed
+            // owner/member packet before this ordinary direct-call query can
+            // select a signature. Value constructors consume that packet at
+            // entry through the common indexed argument service.
             let explicit_arguments = (callee || lexical_value)
-                && final_segment
+                && (!callee || final_segment)
                 && matches!(part.kind(), Some(ast::PathSegmentKind::Name(_)));
             final_segment = false;
             if part.generic_arg_list().is_some()

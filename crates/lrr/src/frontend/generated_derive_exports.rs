@@ -28,6 +28,7 @@ fn fault(code: &'static str, message: &str) -> Diagnostic {
 pub struct SelectedDeriveExport {
     definition: MacroDefinition,
     identity: MacroIdentity,
+    builtin: Option<crate::expand::builtin_derives::BuiltinDeriveExport>,
 }
 impl SelectedDeriveExport {
     pub fn definition(&self) -> &MacroDefinition {
@@ -35,6 +36,9 @@ impl SelectedDeriveExport {
     }
     pub fn identity(&self) -> &MacroIdentity {
         &self.identity
+    }
+    pub(crate) fn builtin(&self) -> Option<&crate::expand::builtin_derives::BuiltinDeriveExport> {
+        self.builtin.as_ref()
     }
 }
 pub struct GeneratedDeriveExportRow {
@@ -71,16 +75,37 @@ impl GeneratedDeriveExports {
         names: &MacroNamespaces,
         catalog: &PreparedProcCatalog,
     ) -> Result<Self, Diagnostic> {
-        if scope.crate_key != catalog.consumer()
-            || items.epoch() != catalog.epoch()
-            || items.record().key().consumer_compile_env != catalog.environment()
-        {
+        Self::resolve_with_compiler(plan, items, scope, names, Some(catalog), None)
+    }
+    pub(crate) fn resolve_with_compiler(
+        plan: &GeneratedDerivePlan,
+        items: &GeneratedItems,
+        scope: ScopeKey,
+        names: &MacroNamespaces,
+        catalog: Option<&PreparedProcCatalog>,
+        compiler: Option<&crate::frontend::compile_input_catalog::CompileInputCatalog>,
+    ) -> Result<Self, Diagnostic> {
+        if catalog.is_some_and(|catalog| {
+            scope.crate_key != catalog.consumer()
+                || items.epoch() != catalog.epoch()
+                || items.record().key().consumer_compile_env != catalog.environment()
+        }) {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "generated derive catalog consumer/environment/epoch differs",
             ));
         }
-        let catalog_id = catalog.fingerprint();
+        let catalog_id = match catalog {
+            Some(catalog) => catalog.fingerprint(),
+            None => {
+                // A helper context, not a fabricated procedural catalogue or grant.
+                let mut key = StableEncoder::new("lrr/v2/compiler-generated-derive-helper-context");
+                key.record(&scope);
+                key.record(items.record().key());
+                key.digest(plan.item_identity());
+                key.finish()
+            }
+        };
         let mut e = StableEncoder::new("lrr/v2/generated-derive-export-context");
         e.record(&scope);
         e.record(items.record().key());
@@ -131,33 +156,55 @@ impl GeneratedDeriveExports {
                     }),
                     _ => Some(128),
                 };
-                bytes = extra
-                    .and_then(|n| bytes.checked_add(n))
-                    .ok_or_else(|| {
-                        fault(
-                            "LRR-E-DISCOVERY-LIMIT",
-                            "generated derive export metadata limit",
-                        )
-                    })?;
-                let selected = match &candidate {
-                    PathLookup::Defined(definition) => catalog
-                        .select(definition, ProceduralKind::Derive)?
-                        .map(|export| SelectedDeriveExport {
+                bytes = extra.and_then(|n| bytes.checked_add(n)).ok_or_else(|| {
+                    fault(
+                        "LRR-E-DISCOVERY-LIMIT",
+                        "generated derive export metadata limit",
+                    )
+                })?;
+                let selected = if let PathLookup::Defined(definition) = &candidate {
+                    let builtin = compiler
+                        .map(|compiler| {
+                            crate::expand::builtin_derives::BuiltinDeriveExport::select(
+                                compiler,
+                                definition,
+                                path.identity,
+                            )
+                        })
+                        .transpose()?
+                        .flatten();
+                    if let Some(builtin) = builtin {
+                        Some(SelectedDeriveExport {
                             definition: definition.clone(),
-                            identity: export.identity().clone(),
-                        }),
-                    _ => None,
+                            identity: MacroIdentity::BuiltinDerive {
+                                definition: definition.identity,
+                            },
+                            builtin: Some(builtin),
+                        })
+                    } else {
+                        catalog
+                            .map(|catalog| catalog.select(definition, ProceduralKind::Derive))
+                            .transpose()?
+                            .flatten()
+                            .map(|export| SelectedDeriveExport {
+                                definition: definition.clone(),
+                                identity: export.identity().clone(),
+                                builtin: None,
+                            })
+                    }
+                } else {
+                    None
                 };
-                let helper_demand = if let Some(export) = &selected {
+                let helper_demand = if let Some(export) = &selected
+                    && export.builtin.is_none()
+                {
                     if let MacroIdentity::Procedural { export: name, .. } = &export.identity {
-                        bytes = bytes
-                            .checked_add(name.capacity())
-                            .ok_or_else(|| {
-                                fault(
-                                    "LRR-E-DISCOVERY-LIMIT",
-                                    "generated derive export name retention limit",
-                                )
-                            })?;
+                        bytes = bytes.checked_add(name.capacity()).ok_or_else(|| {
+                            fault(
+                                "LRR-E-DISCOVERY-LIMIT",
+                                "generated derive export name retention limit",
+                            )
+                        })?;
                     }
                     let mut e =
                         StableEncoder::new("lrr/v2/generated-derive-helper-declaration-demand");
@@ -244,6 +291,7 @@ impl GeneratedDeriveExports {
             preparation: catalog.preparation(),
         })
     }
+    pub(crate) fn catalog_identity(&self) -> Digest { self.catalog }
     pub fn rows(&self) -> &[GeneratedDeriveExportRow] {
         &self.rows
     }
@@ -265,6 +313,7 @@ impl GeneratedDeriveExports {
                 "generated derive path is inaccessible",
             )),
             PathLookup::NeedInput(input) => Ok(Some(*input)),
+            _ if row.selected.as_ref().is_some_and(|selected| selected.builtin.is_some()) => Ok(None),
             _ => Ok(Some(row.helper_demand.unwrap_or(row.occurrence))),
         }
     }

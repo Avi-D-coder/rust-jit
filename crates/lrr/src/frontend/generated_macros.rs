@@ -2457,11 +2457,6 @@ impl GeneratedMacroCatalog {
             .as_ref()
             .and_then(|c| c.attribute_catalog())
             .ok_or_else(|| fault("derive replay compiler facet absent"))?;
-        let catalog = context
-            .provider
-            .procedural
-            .as_ref()
-            .ok_or_else(|| fault("derive replay catalog absent"))?;
         let selected = super::generated_derives::GeneratedDeriveResolution::resolve(
             &self.items,
             item,
@@ -2470,50 +2465,100 @@ impl GeneratedMacroCatalog {
             &names,
             builtin,
         )?;
-        let exports = selected.exports(&self.items, item, &self.cfg, &names, builtin, catalog)?;
-        let definition = exports
-            .rows()
-            .get(ordinal)
-            .and_then(|r| r.selected())
-            .ok_or_else(|| fault("derive replay selection unresolved"))?
-            .definition()
-            .clone();
-        let super::generated_derive_helpers::GeneratedHelperPoll::Ready(helpers) = selected
-            .helpers(
+        let plan = selected.plan(&self.items, item, &self.cfg)?;
+        let exports =
+            super::generated_derive_exports::GeneratedDeriveExports::resolve_with_compiler(
+                &plan,
+                &self.items,
+                scope.clone(),
+                &names,
+                context.provider.procedural.as_deref(),
+                context.provider.compiler.as_deref(),
+            )?;
+        let super::generated_derive_helpers::GeneratedHelperPoll::Ready(helpers) =
+            super::generated_derive_helpers::GeneratedDeriveHelpers::resolve_with_catalog(
+                plan,
                 &self.items,
                 item,
-                &self.cfg,
-                &names,
-                builtin,
-                &super::generated_derive_helpers::GeneratedHelperDeclarations {
-                    catalog,
-                    receipts: &self.helper_receipts,
-                },
+                &exports,
+                context.provider.procedural.as_deref(),
+                &self.helper_receipts,
             )?
         else {
             return Err(fault("derive replay helpers unresolved"));
         };
-        let count = context
-            .owners
-            .len()
-            .checked_add(1)
-            .ok_or_else(|| fault("derive replay provider count limit"))?;
-        let mut providers = Vec::new();
-        providers
-            .try_reserve_exact(count)
-            .map_err(|_| fault("derive replay provider allocation"))?;
-        providers.push(context.provider);
-        providers.extend(context.owners.iter());
-        crate::expand::generated_call_request::GeneratedCallRequest::prepare_derive(
+        self.prepare_derive_execution(item, ordinal, helpers, &exports, context, ancestors)
+    }
+    /// Initial execution and replay use the same selected export, helper input,
+    /// compiler container facts and procedural authority boundary.
+    fn prepare_derive_execution(
+        &self,
+        item: usize,
+        ordinal: usize,
+        helpers: Arc<super::generated_derive_helpers::GeneratedDeriveHelpers>,
+        exports: &super::generated_derive_exports::GeneratedDeriveExports,
+        context: CapturedMacroContext<'_>,
+        ancestors: &[&Self],
+    ) -> Result<crate::expand::generated_call_request::GeneratedCallRequest, Diagnostic> {
+        let selected = exports
+            .rows()
+            .get(ordinal)
+            .and_then(|row| row.selected())
+            .ok_or_else(|| fault("derive export selection absent"))?;
+        let request = crate::expand::generated_call_request::GeneratedCallRequest::prepare_derive(
             self.items.clone(),
             item,
             &self.cfg,
             ordinal,
-            definition,
+            selected.definition().clone(),
             helpers,
-        )?
-        .with_procedural(catalog, scope, &providers)?
-        .with_diagnostic_parents(self.diagnostic_origin_parents(context, ancestors)?)
+        )?;
+        let request = if let Some(builtin) = selected.builtin() {
+            use lrr_expand_adapter::builtin_macros::{BuiltinDeriveKind, DeriveContainerFacts};
+            let mut facts = DeriveContainerFacts::default();
+            for kind in exports.rows().iter().filter_map(|row| {
+                row.selected()
+                    .and_then(|selected| selected.builtin())
+                    .map(|export| export.kind)
+            }) {
+                match kind {
+                    BuiltinDeriveKind::Copy => facts.derives_copy = true,
+                    BuiltinDeriveKind::Ord => facts.derives_ord = true,
+                    _ => {}
+                }
+            }
+            request.with_builtin_derive(builtin.kind, facts)?
+        } else {
+            let catalog = context
+                .provider
+                .procedural
+                .as_deref()
+                .ok_or_else(|| fault("procedural derive catalog absent"))?;
+            let id = self
+                .items
+                .items()
+                .get(item)
+                .ok_or_else(|| fault("derive execution item absent"))?
+                .key
+                .fingerprint();
+            let scope = self
+                .call_scopes
+                .get(&id)
+                .ok_or_else(|| fault("derive execution scope absent"))?;
+            let count = context
+                .owners
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| fault("derive provider count overflow"))?;
+            let mut providers = Vec::new();
+            providers
+                .try_reserve_exact(count)
+                .map_err(|_| fault("derive provider allocation"))?;
+            providers.push(context.provider);
+            providers.extend(context.owners.iter());
+            request.with_procedural(catalog, scope, &providers)?
+        };
+        request.with_diagnostic_parents(self.diagnostic_origin_parents(context, ancestors)?)
     }
     pub(crate) fn settled_derive_items(&self) -> &std::collections::BTreeSet<Digest> {
         &self.settled_derive_items
@@ -3059,9 +3104,7 @@ impl GeneratedMacroCatalog {
         let Some(context) = enclosing else {
             return Ok(GeneratedCallDemand::NeedInput(identity));
         };
-        let Some(procedural) = &context.provider.procedural else {
-            return Ok(GeneratedCallDemand::NeedInput(identity));
-        };
+        let procedural = context.provider.procedural.as_deref();
         let skipped = self.consumed_attribute_indices(identity);
         let mut inert = self.inert_attribute_indices(identity)?;
         let compiler_tests = self
@@ -3104,11 +3147,14 @@ impl GeneratedMacroCatalog {
                     &names,
                     builtin,
                 )?;
-                let exports =
-                    selected.exports(&self.items, index, &self.cfg, &names, builtin, procedural)?;
+                let plan = selected.plan(&self.items, index, &self.cfg)?;
+                let exports = super::generated_derive_exports::GeneratedDeriveExports::resolve_with_compiler(
+                    &plan, &self.items, scope.clone(), &names, procedural, context.provider.compiler.as_deref(),
+                )?;
                 for (at, row) in exports.rows().iter().enumerate() {
                     if let Some(demand) = row.helper_demand() {
-                        let request = exports.declaration_request(at, procedural)?;
+                        let request = exports.declaration_request(at, procedural
+                            .ok_or_else(|| fault("procedural derive declaration catalog absent"))?)?;
                         if let Some(receipt) = self.helper_receipts.get(&demand) {
                             receipt.validate_request(&request)?;
                         } else {
@@ -3119,16 +3165,8 @@ impl GeneratedMacroCatalog {
                     }
                 }
                 if let Some(row) = exports.rows().first() {
-                    let helpers = match selected.helpers(
-                        &self.items,
-                        index,
-                        &self.cfg,
-                        &names,
-                        builtin,
-                        &super::generated_derive_helpers::GeneratedHelperDeclarations {
-                            catalog: procedural,
-                            receipts: &self.helper_receipts,
-                        },
+                    let helpers = match super::generated_derive_helpers::GeneratedDeriveHelpers::resolve_with_catalog(
+                        plan, &self.items, index, &exports, procedural, &self.helper_receipts,
                     )? {
                         super::generated_derive_helpers::GeneratedHelperPoll::Ready(helpers) => {
                             helpers
@@ -3164,26 +3202,9 @@ impl GeneratedMacroCatalog {
                         {
                             None
                         } else {
-                            let definition = next
-                                .selected()
-                                .ok_or_else(|| fault("derive export selection absent"))?
-                                .definition()
-                                .clone();
-                            let mut providers = Vec::new();
-                            providers
-                                .try_reserve_exact(
-                                    context
-                                        .owners
-                                        .len()
-                                        .checked_add(1)
-                                        .ok_or_else(|| fault("derive provider count limit"))?,
-                                )
-                                .map_err(|_| fault("derive provider allocation"))?;
-                            providers.push(context.provider);
-                            providers.extend(context.owners.iter());
-                            Some(Arc::new(crate::expand::generated_call_request::GeneratedCallRequest::prepare_derive(
-                                self.items.clone(),index,&self.cfg,at,definition,helpers.clone()
-                            )?.with_procedural(procedural,scope,&providers)?.with_diagnostic_parents(self.diagnostic_origin_parents(context, ancestors)?)?))
+                            Some(Arc::new(self.prepare_derive_execution(
+                                index, at, helpers.clone(), &exports, context, ancestors,
+                            )?))
                         }
                     } else {
                         None
@@ -3196,6 +3217,9 @@ impl GeneratedMacroCatalog {
                     });
                 }
             }
+            return Ok(GeneratedCallDemand::NeedInput(identity));
+        };
+        let Some(procedural) = procedural else {
             return Ok(GeneratedCallDemand::NeedInput(identity));
         };
         let site = input

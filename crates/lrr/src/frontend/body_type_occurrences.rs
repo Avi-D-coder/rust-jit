@@ -21,7 +21,7 @@ use crate::{
 };
 use ra_ap_syntax::{
     AstNode,
-    ast::{self, HasGenericArgs},
+    ast::{self},
 };
 
 /// Expansion order is distinct from a token's diagnostic origin or raw context.
@@ -509,7 +509,7 @@ impl PreparedBodyTypeOccurrences {
                 let segment = current
                     .segment()
                     .ok_or_else(|| fault("body Type path segment absent"))?;
-                if segment.generic_arg_list().is_some() && shape == BodyTypeShape::Named {
+                if crate::syntax::ast_adapter::nonempty_generic_arguments(&segment).is_some() && shape == BodyTypeShape::Named {
                     shape = BodyTypeShape::NeedGenericArguments;
                 }
                 let owned = match segment.kind() {

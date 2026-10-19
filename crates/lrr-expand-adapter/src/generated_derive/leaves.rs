@@ -125,7 +125,10 @@ fn flatten(
                         if i.is_raw.yes() { "r#" } else { "" },
                         i.sym.as_str()
                     ),
-                    tt::Leaf::Literal(l) => l.text().to_string(),
+                    // Match the pinned syntax bridge's spelling, including the
+                    // literal kind's delimiters/prefix and any numeric suffix.
+                    // The retained leaf below still owns the original span.
+                    tt::Leaf::Literal(l) => l.to_string(),
                     tt::Leaf::Punct(p) => p.char.to_string(),
                 };
                 push(units, bytes, text, Some(leaf.clone()))?;

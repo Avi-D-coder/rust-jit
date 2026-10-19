@@ -28,12 +28,17 @@ use std::{collections::BTreeMap, sync::Arc};
 #[derive(Default)]
 pub(crate) struct NominalFacts {
     /// Constructor calls selected in this activation, keyed like facade calls.
-    calls: BTreeMap<super::super::call::CallIdentity, Arc<BoundNominalVariant>>,
+    calls: BTreeMap<super::super::call::CallIdentity, SelectedNominalCall>,
     /// The sealed constructor call (with its type arguments) awaiting its
     /// Call exit.
     sealed: Option<(Arc<BoundNominalVariant>, Vec<TypeId>, u32)>,
     /// Dispatcher-bound unit constructor for the value path at this exact PC.
     value: Option<(PcKey, Arc<BoundNominalVariant>, TypeId, Vec<TypeId>)>,
+}
+
+struct SelectedNominalCall {
+    bound: Arc<BoundNominalVariant>,
+    arguments: Option<Arc<[Option<TypeId>]>>,
 }
 
 impl Frame {
@@ -107,46 +112,12 @@ impl Frame {
             .get(self.pc.node as usize)
             .and_then(|node| node.value)
             .ok_or_else(|| invalid("value path result slot absent"))?;
-        let context = match self.nominal_hint_args(result, &bound, store)? {
-            Some(args) => Some(args),
-            // The context the value's own recipe states ahead of this
-            // operation (a Type decided from the value's later uses).
-            None => match stated {
-                Some(written) => match written.materialize(store)? {
-                    Some(descriptor) => Self::nominal_descriptor_args(descriptor, &bound, store)?,
-                    None => None,
-                },
-                None => None,
-            },
-        };
-        let args = match explicit {
-            Some(explicit) => {
-                let count = bound.type_parameters() as usize;
-                if explicit.len() > count {
-                    return Err(Diagnostic::new(
-                        "LRR-E-GENERIC-BINDING",
-                        "constructor Type argument count differs from the declaration".into(),
-                    ));
-                }
-                let mut fixed: Vec<Option<TypeId>> = match context {
-                    Some(args) => args.into_iter().map(Some).collect(),
-                    None => vec![None; count],
-                };
-                for (slot, actual) in fixed.iter_mut().zip(explicit) {
-                    if let Some(actual) = actual {
-                        *slot = Some(*actual);
-                    }
-                }
-                fixed.into_iter().collect::<Option<Vec<_>>>()
-            }
-            None => context,
-        }
-        .ok_or_else(|| {
-            Diagnostic::new(
+        let args = self.nominal_type_arguments(result, &bound, stated, explicit, store)?
+            .into_iter().collect::<Option<Vec<_>>>()
+            .ok_or_else(|| Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",
                 "generic unit variant requires its type context".into(),
-            )
-        })?;
+            ))?;
         let ty = store.intern_nominal_with(&bound, &args)?;
         self.nominal.value = Some((self.pc.clone(), bound, ty, args));
         Ok(())
@@ -191,12 +162,88 @@ impl Frame {
         let source = self.constructed_source(ty, store);
         self.set_source_view(destination, source)
     }
-    pub(crate) fn select_constructor_call(&mut self, site: u32, bound: Arc<BoundNominalVariant>) {
+    /// One seed operation for nominal values, argument hints and call sealing.
+    /// Source selection is already complete; only activation descriptors live here.
+    fn nominal_type_arguments(
+        &self,
+        result: SlotId,
+        bound: &BoundNominalVariant,
+        stated: Option<&crate::ir::written_type::WrittenType>,
+        explicit: Option<&[Option<TypeId>]>,
+        store: &mut GuestStore,
+    ) -> Result<Vec<Option<TypeId>>, Diagnostic> {
+        let context = match self.nominal_hint_args(result, bound, store)? {
+            Some(args) => Some(args),
+            None => match stated {
+                Some(written) => match written.materialize(store)? {
+                    Some(descriptor) => Self::nominal_descriptor_args(descriptor, bound, store)?,
+                    None => None,
+                },
+                None => None,
+            },
+        };
+        let count = bound.type_parameters() as usize;
+        let mut fixed = match context {
+            Some(args) => args.into_iter().map(Some).collect(),
+            None => self
+                .partial_nominal_args(result, bound, store)?
+                .unwrap_or_else(|| vec![None; count]),
+        };
+        if let Some(explicit) = explicit {
+            if explicit.len() > count {
+                return Err(Diagnostic::new(
+                    "LRR-E-GENERIC-BINDING",
+                    "constructor Type argument count differs from the declaration".into(),
+                ));
+            }
+            for (slot, argument) in fixed.iter_mut().zip(explicit) {
+                if let Some(argument) = argument {
+                    *slot = Some(*argument);
+                }
+            }
+        }
+        Ok(fixed)
+    }
+    pub(crate) fn select_constructor_call(
+        &mut self,
+        site: u32,
+        bound: Arc<BoundNominalVariant>,
+        arguments: Option<Arc<[Option<TypeId>]>>,
+    ) {
         let identity = self.call_identity(site);
-        self.nominal.calls.insert(identity, bound);
+        self.nominal
+            .calls
+            .insert(identity, SelectedNominalCall { bound, arguments });
     }
     pub(crate) fn selected_constructor_call(&self, site: u32) -> Option<&Arc<BoundNominalVariant>> {
-        self.nominal.calls.get(&self.call_identity(site))
+        self.nominal
+            .calls
+            .get(&self.call_identity(site))
+            .map(|selected| &selected.bound)
+    }
+    pub(crate) fn constructor_type_arguments(
+        &self,
+        site: u32,
+        store: &mut GuestStore,
+    ) -> Result<Vec<Option<TypeId>>, Diagnostic> {
+        let selected = self
+            .nominal
+            .calls
+            .get(&self.call_identity(site))
+            .ok_or_else(|| invalid("constructor Type arguments lack their selection"))?;
+        let result = self
+            .body
+            .nodes()
+            .get(site as usize)
+            .and_then(|node| node.value)
+            .ok_or_else(|| invalid("constructor call result slot absent"))?;
+        self.nominal_type_arguments(
+            result,
+            &selected.bound,
+            None,
+            selected.arguments.as_deref(),
+            store,
+        )
     }
     /// Seal the evaluated arguments of a selected constructor call. Concrete
     /// fields require their bound Types; a generic declaration's parameter is
@@ -219,20 +266,7 @@ impl Frame {
                 "evaluated written argument count differs from the constructor fields".into(),
             ));
         }
-        let result = self
-            .body
-            .nodes()
-            .get(site as usize)
-            .and_then(|node| node.value)
-            .ok_or_else(|| invalid("constructor call result slot absent"))?;
-        let mut args: Vec<Option<TypeId>> = match self.nominal_hint_args(result, &bound, store)? {
-            Some(args) => args.into_iter().map(Some).collect(),
-            // A partial result context fixes the arguments it knows.
-            None => match self.partial_nominal_args(result, &bound, store)? {
-                Some(seeded) => seeded,
-                None => vec![None; bound.type_parameters() as usize],
-            },
-        };
+        let mut args = self.constructor_type_arguments(site, store)?;
         let mut cells = Vec::new();
         let mut types = Vec::new();
         cells

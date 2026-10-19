@@ -36,7 +36,9 @@ impl ParsedFile {
         let mut policy = MacroPreludePolicy {
             standard: !no_core && !root_flags.iter().any(|s| s == "no_std"),
             no_core,
-            disabled: if no_core || root_flags.iter().any(|s| s == "no_implicit_prelude") {
+            // no_core suppresses automatic library injection, not explicit extern
+            // prelude entries (rustc_resolve::Resolver::new / build_extern_prelude).
+            disabled: if root_flags.iter().any(|s| s == "no_implicit_prelude") {
                 vec![vec![]]
             } else {
                 vec![]

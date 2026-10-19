@@ -3,16 +3,12 @@
 //! the owner type, `<W<u8>>::f()`, and bind the parameters of the impl that
 //! provides the selected associated function.
 //!
-//! Whether a call writes any is read from the executing body's cached parse
-//! and index (`DefinitionSource`, `DefinitionBody`, `entered_node_syntax`),
-//! once per call site; a call that writes none costs no source plan. Written
-//! arguments of an original-source body are selected at their own indexed
-//! Type occurrences by the service that selects a call's explicit Type
-//! arguments (`explicit_type_arguments::select_argument`): named leaves
-//! through the entered Type service, with the written structure around them.
-//! A macro-generated body has no published body environment: its arguments
-//! resolve in the body's declaring signature context, as the generic bounds
-//! and parameter types of the same declaration do (`resolve_written_type`).
+//! Admitted bodies retain final/owner Type occurrences in SourceConstraints.
+//! The shared explicit path argument selector uses the same SourceLocalPlan and
+//! entered Type service as constructor constraints and record preparation. Each
+//! source PC/position keeps immutable arguments and guards; descriptor bindings
+//! stay local to an activation. Bodies without an admitted environment retain
+//! the older signature-context route as held migration debt below.
 //! The bindings join the call's explicit Type arguments
 //! (`SelectedArgumentCall::explicit`), the route `f::<u8>()` binds the
 //! function's own parameters through; the callee, its argument hints and its
@@ -20,9 +16,8 @@
 use super::*;
 use crate::{
     db::dependency::{InputKey, InputValue},
-    frontend::explicit_type_arguments::{ExplicitType, select_argument},
+    frontend::explicit_type_arguments::ExplicitType,
     ir::pc::Phase,
-    syntax::body_index::NodeRole,
     traits::term::{GenericArg, TyTerm},
 };
 use ra_ap_syntax::{AstNode, ast, ast::HasGenericArgs};
@@ -34,6 +29,7 @@ pub(super) struct OwnerArguments {
     /// The certified inputs the selections depend on.
     guards: Vec<Arc<crate::db::memo::PreparedInputGuard>>,
 }
+pub(super) use crate::frontend::explicit_type_arguments::PathArgumentPosition as ArgumentPosition;
 /// One written owner Type argument.
 pub(super) enum OwnerArgument {
     /// Selected at its indexed Type occurrence of an original-source body.
@@ -143,6 +139,19 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
     ) -> QueryPoll<Option<Arc<OwnerArguments>>> {
+        self.path_arguments(db, ArgumentPosition::Owner)
+    }
+    pub(super) fn constructor_arguments(
+        &mut self,
+        db: &mut Database,
+    ) -> QueryPoll<Option<Arc<OwnerArguments>>> {
+        self.path_arguments(db, ArgumentPosition::Constructor)
+    }
+    fn path_arguments(
+        &mut self,
+        db: &mut Database,
+        position: ArgumentPosition,
+    ) -> QueryPoll<Option<Arc<OwnerArguments>>> {
         macro_rules! ready {
             ($e:expr) => {
                 match $e {
@@ -165,7 +174,8 @@ impl RunMachine {
                 .body
                 .pc(NodeId(self.frame.pc().node), Phase::Entry)
         );
-        if let Some(cached) = self.owner_arguments.get(&key) {
+        let cache_key = (key.clone(), position);
+        if let Some(cached) = self.owner_arguments.get(&cache_key) {
             return QueryPoll::Ready(match cached {
                 None => Ok(None),
                 Some(found) => found
@@ -174,6 +184,32 @@ impl RunMachine {
                     .try_for_each(|guard| guard.require_current(db))
                     .map(|()| Some(Arc::clone(found))),
             });
+        }
+        // Admitted source uses the retained syntax plan shared with source
+        // constraints and records. No AST/list walk is repeated at call phases.
+        if db.input(&InputKey::BodyEnvironment(key.body.clone())).is_some() {
+            let plan_key = QueryKey::SourceLocalPlan(key.body.clone());
+            let value = poll!(db.fetch(&SyntaxProvider, plan_key.clone()));
+            let QueryValue::SourceLocalPlan(plan) = value.value.as_ref() else {
+                return QueryPoll::Ready(Err(call_fault("path argument source plan differs")));
+            };
+            let selected = poll!(crate::frontend::explicit_type_arguments::select_path_arguments(
+                db, plan, &key, position));
+            let found = match selected {
+                None => None,
+                Some(selected) => {
+                    let guard = poll!(db.prepare_input_guard(&SyntaxProvider, &plan_key, value.fingerprint));
+                    let mut guards = selected.guards;
+                    guards.push(Arc::new(guard));
+                    Some(Arc::new(OwnerArguments {
+                        arguments: selected.arguments.into_iter()
+                            .map(|argument| argument.map(OwnerArgument::Entered)).collect(),
+                        guards,
+                    }))
+                }
+            };
+            self.owner_arguments.insert(cache_key, found.clone());
+            return QueryPoll::Ready(Ok(found));
         }
         // The written Type arguments of the callee path's owner segment, from
         // the executing body's cached parse: no source plan is prepared for a
@@ -201,20 +237,27 @@ impl RunMachine {
         // A constructor value states arguments on its final segment, just as
         // an associated call states them on its owner segment. Both consume
         // the same indexed Type-argument service below.
-        let list = match value_path.as_ref() {
-            Some(path) => path.path().and_then(|path| path.segment()),
+        let path = match value_path.as_ref() {
+            Some(path) => path.path(),
             None => syntax
                 .and_then(ast::CallExpr::cast)
                 .and_then(|call| match call.expr() {
                     Some(ast::Expr::PathExpr(path)) => path.path(),
                     _ => None,
-                })
-                .and_then(|path| path.qualifier())
-                .and_then(|owner| owner.segment()),
-        }
-        .and_then(|segment| segment.generic_arg_list());
+                }),
+        };
+        let list = path.and_then(|path| {
+            let final_arguments = || path.segment().and_then(|s| s.generic_arg_list());
+            let owner_arguments = || path.qualifier().and_then(|p| p.segment())
+                .and_then(|s| s.generic_arg_list());
+            match position {
+                ArgumentPosition::Constructor => final_arguments().or_else(owner_arguments),
+                ArgumentPosition::Owner if value_path.is_some() => final_arguments(),
+                ArgumentPosition::Owner => owner_arguments(),
+            }
+        });
         let Some(list) = list else {
-            self.owner_arguments.insert(key, None);
+            self.owner_arguments.insert(cache_key, None);
             return QueryPoll::Ready(Ok(None));
         };
         let mut types = Vec::new();
@@ -234,14 +277,7 @@ impl RunMachine {
                 }
             }
         }
-        let found = if db
-            .input(&InputKey::BodyEnvironment(key.body.clone()))
-            .is_some()
-        {
-            poll!(self.entered_owner_arguments(db, &key, &types))
-        } else if value_path.is_none() {
-            // Existing legacy call-owner route is held migration debt; a
-            // constructor value must retain its actual indexed environment.
+        let found = if value_path.is_none() && position == ArgumentPosition::Owner {
             poll!(self.signature_owner_arguments(db, parsed, &key, &types))
         } else {
             return QueryPoll::Ready(Err(call_fault(
@@ -249,89 +285,8 @@ impl RunMachine {
             )));
         };
         let found = Arc::new(found);
-        self.owner_arguments.insert(key, Some(Arc::clone(&found)));
+        self.owner_arguments.insert(cache_key, Some(Arc::clone(&found)));
         QueryPoll::Ready(Ok(Some(found)))
-    }
-
-    /// The written owner arguments of an original-source body, each selected
-    /// at its indexed Type occurrence by the entered Type service.
-    fn entered_owner_arguments(
-        &mut self,
-        db: &mut Database,
-        key: &PcKey,
-        types: &[ast::Type],
-    ) -> QueryPoll<OwnerArguments> {
-        macro_rules! ready {
-            ($e:expr) => {
-                match $e {
-                    Ok(value) => value,
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                }
-            };
-        }
-        let plan_key = QueryKey::SourceLocalPlan(key.body.clone());
-        let (plan, source_guard) = {
-            let value = match db.fetch(&SyntaxProvider, plan_key.clone()) {
-                QueryPoll::Ready(Ok(value)) => value,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
-            let QueryValue::SourceLocalPlan(plan) = value.value.as_ref() else {
-                return QueryPoll::Ready(Err(call_fault("owner Type plan variant differs")));
-            };
-            if !value.cacheable {
-                return QueryPoll::Ready(Err(call_fault("owner Type source plan is not retained")));
-            }
-            let guard = match db.prepare_input_guard(&SyntaxProvider, &plan_key, value.fingerprint)
-            {
-                QueryPoll::Ready(Ok(guard)) => guard,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
-            (Arc::clone(plan), Arc::new(guard))
-        };
-        let owner = plan.context().source();
-        let index = owner.index();
-        let mut arguments = Vec::new();
-        let mut guards = vec![source_guard];
-        for ty in types {
-            let range = crate::syntax::ast_adapter::range(ty.syntax().text_range());
-            let relative = ready!(crate::syntax::spans::SourceRange::checked(
-                ready!(
-                    range
-                        .start
-                        .checked_sub(owner.body().range.start)
-                        .ok_or_else(|| call_fault("owner Type argument escapes its body"))
-                ),
-                ready!(
-                    range
-                        .end
-                        .checked_sub(owner.body().range.start)
-                        .ok_or_else(|| call_fault("owner Type argument escapes its body"))
-                ),
-            ));
-            let Some(node) = index
-                .nodes_at_range(relative)
-                .find(|node| node.role == NodeRole::Syntax)
-            else {
-                return QueryPoll::Ready(Err(call_fault(
-                    "owner Type argument has no indexed Type occurrence",
-                )));
-            };
-            let site = ready!(index.pc(node.id, Phase::Entry));
-            match match select_argument(db, &plan, key, &site, range) {
-                QueryPoll::Ready(Ok(selected)) => selected,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            } {
-                Some(selected) => {
-                    guards.extend(selected.guards);
-                    arguments.push(Some(OwnerArgument::Entered(selected.source)));
-                }
-                None => arguments.push(None),
-            }
-        }
-        QueryPoll::Ready(Ok(OwnerArguments { arguments, guards }))
     }
 
     /// The written owner arguments of a macro-generated body, which has no

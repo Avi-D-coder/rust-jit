@@ -41,7 +41,7 @@ impl StandaloneRuntimeMacros {
         let policy = source.macro_prelude_policy()?;
         let root_disabled = policy.disabled.iter().any(Vec::is_empty);
         let mut dependencies = BTreeMap::new();
-        if !root_disabled {
+        if !root_disabled && !policy.no_core {
             dependencies.insert(MacroName::parse("core", profile.edition)?, core);
             if policy.standard {
                 dependencies.insert(MacroName::parse("std", profile.edition)?, standard);
@@ -96,7 +96,9 @@ impl StandaloneRuntimeMacros {
             .keys()
             .filter(|scope| scope.owner.is_none())
         {
-            namespaces.set_prelude(scope.clone(), if policy.standard { standard } else { core })?;
+            if !policy.no_core {
+                namespaces.set_prelude(scope.clone(), if policy.standard { standard } else { core })?;
+            }
         }
         for path in policy.disabled {
             namespaces.disable_implicit(crate::syntax::outline::ScopeKey {

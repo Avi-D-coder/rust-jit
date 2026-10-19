@@ -143,3 +143,40 @@ fn unresolved_original_import_does_not_become_completed_destination_ambiguity() 
         NameLookup::NeedInput(_)
     ));
 }
+
+#[test]
+fn glob_imported_crate_root_alias_retains_its_target_and_frontier() {
+    let source = "pub const VALUE: u8 = 1; mod a { pub use crate as root; } mod b { pub use crate::a::*; } fn main() {}";
+    for edition in [2015, 2018, 2021, 2024] {
+        let (outline, mut names) = graph(source, edition);
+        let resolution = names.resolve_imports().unwrap();
+        assert!(resolution.pending.is_empty(), "{edition}");
+        assert!(resolution.missing.is_empty(), "{edition}");
+        let unit = outline.root_scope.crate_key;
+        let alias = NameNamespaces::path(unit, &["b", "root"], edition).unwrap();
+        assert!(names.glob_module_links[&alias].contains(
+            &super::super::module_paths::ModulePath {
+                unit,
+                names: vec![]
+            }
+        ));
+        let value = NameNamespaces::path(unit, &["b", "root", "VALUE"], edition).unwrap();
+        assert!(
+            matches!(
+                names
+                    .lookup(Namespace::Value, &value, &outline.root_scope)
+                    .unwrap(),
+                NameLookup::Defined(_)
+            ),
+            "{edition}"
+        );
+        let producer = Digest::of_bytes(b"actual root namespace producer");
+        names
+            .reserve_generated_frontier(outline.root_scope.clone(), producer)
+            .unwrap();
+        assert!(
+            matches!(names.lookup(Namespace::Value, &value, &outline.root_scope).unwrap(), NameLookup::NeedInput(actual) if actual == producer),
+            "{edition}"
+        );
+    }
+}

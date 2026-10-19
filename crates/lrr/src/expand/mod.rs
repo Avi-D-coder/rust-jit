@@ -20,6 +20,7 @@ pub mod worklist;
 pub mod member_cfg;
 
 pub mod builtin_attributes;
+pub(crate) mod builtin_derives;
 pub mod derive_declaration;
 pub(crate) mod nested_inert;
 

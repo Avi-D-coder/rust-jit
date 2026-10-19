@@ -986,6 +986,35 @@ impl<'a> Component<'a> {
         constructed: &Constructed,
         operands: &[(u32, NodeId)],
     ) -> QueryPoll<()> {
+        // The written constructor application constrains its fields before
+        // numeric fallback, using the SAME indexed Type arguments call entry
+        // consumes. No constructor/macro spelling chooses numeric semantics.
+        if constructed.type_parameter_count() != 0 {
+            let plan = ready!(db.fetch(&SyntaxProvider,
+                QueryKey::SourceLocalPlan(self.key.body.clone())));
+            let QueryValue::SourceLocalPlan(plan) = plan.value.as_ref() else {
+                return QueryPoll::Ready(Err(fault("constructor argument source plan differs")));
+            };
+            if let Some(selected) = ready!(super::super::explicit_type_arguments::select_path_arguments(
+                db, plan, &entry(self.key, node),
+                super::super::explicit_type_arguments::PathArgumentPosition::Constructor,
+            )) {
+                for guard in &selected.guards {
+                    if let Err(error) = guard.require_current(db) {
+                        return QueryPoll::Ready(Err(error));
+                    }
+                }
+                let mut arguments = self.dependent_arguments(node, constructed);
+                for (argument, selected) in arguments.iter_mut().zip(&selected.arguments) {
+                    if let Some(selected) = selected {
+                        *argument = GenericArg::Type(selected.source().clone());
+                    }
+                }
+                ready!(self.constrain_term(db, node,
+                    &TyTerm::Nominal(constructed.definition, arguments),
+                    ConstraintDemand::SelectedDeclaration));
+            }
+        }
         // A constructed value is not a reference; autoderef selects it.
         let mut via = self.via.clone();
         if via.steps.first() == Some(&Step::AutoDeref) {

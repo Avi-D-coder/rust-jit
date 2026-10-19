@@ -122,6 +122,8 @@ pub(crate) enum ModuleResolution {
 #[derive(Clone)]
 struct Alias {
     target: ModulePath,
+    // Only an actual completed source-import worklist can supply this.
+    canonical: Option<ModulePath>,
     visibility: VisibilityScope,
     origin: ScopeKey,
 }
@@ -250,7 +252,14 @@ impl ModulePaths {
                 Binding::Alias(old) if old.target == target && old.visibility == visibility => {
                     Ok(())
                 }
-                _ => Err(error("conflicting module alias provenance")),
+                _ => {
+                    let previous = match old {
+                        Binding::Declared(visibility) => format!("declaration {visibility:?}"),
+                        Binding::Alias(alias) => format!("alias {:?} {:?}", alias.target, alias.visibility),
+                        Binding::ImportedAliases(aliases) => format!("{} imported aliases", aliases.len()),
+                    };
+                    Err(error(&format!("conflicting module alias provenance at {path:?}: existing {previous}; incoming {target:?} {visibility:?}")))
+                }
             };
         }
         self.charge(&path)?;
@@ -270,6 +279,7 @@ impl ModulePaths {
             path,
             Binding::Alias(Alias {
                 target,
+                canonical: None,
                 visibility,
                 origin,
             }),
@@ -285,6 +295,29 @@ impl ModulePaths {
         target: ModulePath,
         visibility: VisibilityScope,
     ) -> Result<(), Diagnostic> {
+        self.imported_alias_inner(path, target, visibility, None)
+    }
+    pub(super) fn imported_source_alias(
+        &mut self,
+        source: &crate::syntax::imports::SourceImport,
+        resolved: &super::module_aliases::ResolvedModuleImport,
+        path: ModulePath,
+        target: ModulePath,
+        visibility: VisibilityScope,
+    ) -> Result<(), Diagnostic> {
+        if origin(&path) != source.scope {
+            return Err(error("resolved module import destination scope differs"));
+        }
+        let canonical = resolved.canonical(source, &target)?.clone();
+        self.imported_alias_inner(path, target, visibility, Some(canonical))
+    }
+    fn imported_alias_inner(
+        &mut self,
+        path: ModulePath,
+        target: ModulePath,
+        visibility: VisibilityScope,
+        canonical: Option<ModulePath>,
+    ) -> Result<(), Diagnostic> {
         ModulePath::validate_components(&path.names)?;
         ModulePath::validate_components(&target.names)?;
         if path.names.is_empty() {
@@ -299,12 +332,12 @@ impl ModulePaths {
             }
             Some(Binding::ImportedAliases(aliases)) => {
                 if aliases.iter().any(|old| {
-                    old.target == target && old.visibility == visibility && old.origin == owner
+                    old.target == target
+                        && old.visibility == visibility
+                        && old.origin == owner
+                        && old.canonical == canonical
                 }) {
                     return Ok(());
-                }
-                if aliases.iter().any(|old| old.target == target) {
-                    return Err(error("conflicting imported module alias provenance"));
                 }
             }
             None => {}
@@ -316,6 +349,9 @@ impl ModulePaths {
         let mut budget = Self::default();
         budget.charge(&path)?;
         budget.charge(&target)?;
+        if let Some(canonical) = &canonical {
+            budget.charge(canonical)?;
+        }
         budget.charge_visibility(&visibility)?;
         let mut added = budget
             .bytes
@@ -333,6 +369,7 @@ impl ModulePaths {
             .ok_or_else(|| error("imported module alias metadata budget exceeded"))?;
         let alias = Alias {
             target,
+            canonical,
             visibility,
             origin: owner,
         };
@@ -358,6 +395,36 @@ impl ModulePaths {
         self.bytes = bytes;
         self.imported_aliases = count;
         Ok(())
+    }
+    /// Cold import planning candidates, including module-only aliases and weak
+    /// reexports. Each candidate still needs the ordinary resolution checks.
+    pub(crate) fn scoped_member_names(
+        &self,
+        scope: &ModulePath,
+    ) -> Result<BTreeSet<MacroName>, Diagnostic> {
+        ModulePath::validate_components(&scope.names)?;
+        let mut names = BTreeSet::new();
+        for path in self
+            .bindings
+            .range(scope.clone()..)
+            .map(|(path, _)| path)
+            .take_while(|path| path.unit == scope.unit && path.names.starts_with(&scope.names))
+            .chain(
+                self.weak
+                    .range(scope.clone()..)
+                    .map(|(path, _)| path)
+                    .take_while(|path| {
+                        path.unit == scope.unit && path.names.starts_with(&scope.names)
+                    }),
+            )
+        {
+            if path.names.len() == scope.names.len() + 1 {
+                if let Some(name) = path.names.last() {
+                    names.insert(name.clone());
+                }
+            }
+        }
+        Ok(names)
     }
     pub(crate) fn member_candidates(
         &self,
@@ -623,28 +690,28 @@ impl ModulePaths {
                 }
                 Binding::Alias(alias) => alias,
                 Binding::ImportedAliases(aliases) => {
-                    let mut selected = None;
-                    let mut visible = Vec::new();
-                    let mut budget = Self::default();
+                    let mut visible: BTreeMap<&ModulePath, &Alias> = BTreeMap::new();
                     for alias in aliases {
                         reads.scope(crate::source::manifest::Namespace::Type, &alias.origin)?;
                         reads.module(&alias.target)?;
+                        let target = alias.canonical.as_ref().unwrap_or(&alias.target);
+                        reads.module(target)?;
                         if let Some(caller) = frame.caller
                             && !alias.visibility.allows(caller)?
                         {
                             continue;
                         }
-                        budget.charge(&alias.target)?;
-                        visible.try_reserve_exact(1).map_err(|_| {
-                            error("ambiguous imported module path allocation failed")
-                        })?;
-                        visible.push(alias.target.clone());
-                        selected = Some(alias);
+                        let selected = visible.entry(target).or_insert(alias);
+                        if alias.visibility.permits_reexport_as(&selected.visibility) {
+                            *selected = alias;
+                        }
                     }
                     if visible.len() > 1 {
-                        return Ok(ModuleResolution::Ambiguous(visible));
+                        return Ok(ModuleResolution::Ambiguous(
+                            visible.keys().map(|path| (*path).clone()).collect(),
+                        ));
                     }
-                    let Some(alias) = selected else {
+                    let Some((_, alias)) = visible.pop_first() else {
                         return Ok(ModuleResolution::Denied(key.clone()));
                     };
                     alias

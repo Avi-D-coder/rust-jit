@@ -489,7 +489,10 @@ pub struct RunMachine {
     ordinary_call_paths: std::collections::BTreeSet<(PcKey, u32)>,
     /// Type arguments written on a call path's owner segment, selected once
     /// per call site (`None`: the site writes none).
-    owner_arguments: BTreeMap<PcKey, Option<Arc<owner_arguments::OwnerArguments>>>,
+    owner_arguments: BTreeMap<
+        (PcKey, owner_arguments::ArgumentPosition),
+        Option<Arc<owner_arguments::OwnerArguments>>,
+    >,
     /// The impl function selected among impls of one trait that differ by
     /// the trait's arguments, per (call site, reached argument Types).
     argument_selections:

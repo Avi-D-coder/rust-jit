@@ -594,7 +594,7 @@ pub fn engine_version() -> Digest {
     e.digest(Digest(
         lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0,
     ));
-    e.u32(11); // Shared eager compiler byte concatenation and retained operand syntax.
+    e.u32(13); // Source module imports retain proven canonical identities/root externs.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {
@@ -4080,6 +4080,9 @@ impl SourceDeclarativeRequest {
         if !matches!(key.macro_identity, MacroIdentity::BuiltinDerive { .. })
             || key.grammar != GrammarSlot::Items
             || !input.spans().iter().any(|span| span.key() == site)
+            || key.input_tokens != super::builtin_derives::input_identity(
+                &input.encode().map_err(adapter)?, facts,
+            )?
         {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",

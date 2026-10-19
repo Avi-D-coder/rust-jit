@@ -3,7 +3,7 @@ use super::spans::SourceRange;
 use crate::core::digest::{StableEncode, StableEncoder};
 use ra_ap_syntax::{
     AstNode, Edition, SyntaxNode, TextRange,
-    ast::{self, HasModuleItem, HasName},
+    ast::{self, HasGenericArgs, HasModuleItem, HasName},
 };
 use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
@@ -19,6 +19,15 @@ impl StableEncode for TokenRecipe {
         e.u16(self.kind);
         e.string(&self.text);
     }
+}
+/// Empty angle brackets apply no arguments (`T<>` and `T` are equivalent).
+/// Keep the actual syntax tree; only semantic shape classification uses this.
+pub(crate) fn nonempty_generic_arguments(
+    segment: &ast::PathSegment,
+) -> Option<ast::GenericArgList> {
+    segment
+        .generic_arg_list()
+        .filter(|list| list.generic_args().next().is_some())
 }
 pub(crate) fn range(range: TextRange) -> SourceRange {
     SourceRange {

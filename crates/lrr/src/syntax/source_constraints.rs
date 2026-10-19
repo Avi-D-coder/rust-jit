@@ -23,7 +23,7 @@ use ra_ap_syntax::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 13;
+pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 14;
 fn overflow() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-METADATA-LIMIT",
@@ -404,6 +404,16 @@ impl SourceName {
 
 /// Owned compact facts, with no parser/index/environment Arc to deep-copy or
 /// retire. Real source dependencies are retained by the existing query memo.
+#[derive(Clone, Debug)]
+pub(crate) enum PathTypeArguments {
+    Types(Box<[NodeId]>),
+    Unsupported,
+}
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SourcePathArguments {
+    pub(crate) final_segment: Option<PathTypeArguments>,
+    pub(crate) owner_segment: Option<PathTypeArguments>,
+}
 #[derive(Debug, Clone)]
 pub(crate) struct SourceConstraintPlan {
     body: BodyKey,
@@ -416,6 +426,7 @@ pub(crate) struct SourceConstraintPlan {
     trees: BTreeMap<NodeId, Arc<PatternTree>>,
     occurrences: BTreeMap<NodeId, PatternOccurrence>,
     type_shapes: BTreeMap<NodeId, TypeShape>,
+    path_arguments: BTreeMap<NodeId, SourcePathArguments>,
     // Sorted written field names (field accesses, record expressions and
     // record patterns); facts refer to rows. Candidate spelling only.
     members: Vec<String>,
@@ -487,6 +498,9 @@ impl SourceConstraintPlan {
         self.trees.get(&root).map(Arc::as_ref)
     }
     /// The written structure of an annotation Type node, if structural.
+    pub(crate) fn path_arguments(&self, node: NodeId) -> Option<&SourcePathArguments> {
+        self.path_arguments.get(&node)
+    }
     pub(crate) fn type_shape(&self, node: NodeId) -> Option<&TypeShape> {
         self.type_shapes.get(&node)
     }
@@ -649,6 +663,16 @@ impl SourceConstraintPlan {
                             .saturating_mul(std::mem::size_of::<NodeId>()),
                     )
             }));
+        let bytes = written.path_arguments.values().fold(bytes, |bytes, arguments| {
+            [arguments.final_segment.as_ref(), arguments.owner_segment.as_ref()]
+                .into_iter().flatten().fold(bytes.saturating_add(
+                    std::mem::size_of::<(NodeId, SourcePathArguments)>()).saturating_add(128),
+                    |bytes, argument| match argument {
+                        PathTypeArguments::Types(nodes) => bytes.saturating_add(
+                            nodes.len().saturating_mul(std::mem::size_of::<NodeId>())),
+                        PathTypeArguments::Unsupported => bytes,
+                    })
+        });
         // Owner root patterns: a `let` pattern, every match-arm pattern and a
         // `for` pattern (whose tree is the loop's `Some(PAT)` test).
         let roots: Vec<(NodeId, bool, bool)> = facts
@@ -809,6 +833,7 @@ impl SourceConstraintPlan {
             trees,
             occurrences,
             type_shapes,
+            path_arguments: written.path_arguments,
             members,
             record_fields,
             structural,
@@ -817,6 +842,31 @@ impl SourceConstraintPlan {
     }
 }
 
+fn capture_path_arguments(
+    body: &BodyHandle,
+    index: &BodyIndex,
+    list: Option<ast::GenericArgList>,
+) -> Result<Option<PathTypeArguments>, Diagnostic> {
+    let Some(list) = list else { return Ok(None) };
+    let mut nodes = Vec::new();
+    for argument in list.generic_args() {
+        let ty = match argument {
+            ast::GenericArg::LifetimeArg(_) => continue,
+            ast::GenericArg::TypeArg(argument) => argument.ty(),
+            _ => return Ok(Some(PathTypeArguments::Unsupported)),
+        };
+        let Some(node) = ty
+            .as_ref()
+            .map(|ty| type_node(body, index, ty))
+            .transpose()?
+            .flatten()
+        else {
+            return Ok(Some(PathTypeArguments::Unsupported));
+        };
+        nodes.push(node);
+    }
+    Ok(Some(PathTypeArguments::Types(nodes.into_boxed_slice())))
+}
 fn canonical(raw: &str) -> String {
     raw.strip_prefix("r#").unwrap_or(raw).to_owned()
 }
@@ -1016,7 +1066,7 @@ fn annotate(
                     .as_ref()
                     .filter(|written| written.qualifier().is_none())
                     .and_then(|written| written.segment())
-                    .and_then(|segment| segment.generic_arg_list());
+                    .and_then(|segment| super::ast_adapter::nonempty_generic_arguments(&segment));
                 match arguments {
                     Some(arguments) => {
                         let mut nodes = Vec::new();
@@ -1223,6 +1273,7 @@ fn classify_pattern(
 /// Written field names gathered while classifying, before the member table.
 #[derive(Default)]
 struct WrittenMembers {
+    path_arguments: BTreeMap<NodeId, SourcePathArguments>,
     fields: Vec<(NodeId, String)>,
     records: Vec<(NodeId, Vec<String>)>,
 }
@@ -1259,6 +1310,22 @@ fn classify(
     let Some(expression) = ast::Expr::cast(syntax) else {
         return Ok(());
     };
+    let path = match &expression {
+        ast::Expr::PathExpr(value) => value.path(),
+        ast::Expr::RecordExpr(record) => record.path(),
+        _ => None,
+    };
+    if let Some(path) = path {
+        let final_segment = path.segment().and_then(|p| p.generic_arg_list());
+        let owner_segment = path.qualifier().and_then(|p| p.segment())
+            .and_then(|p| p.generic_arg_list());
+        if final_segment.is_some() || owner_segment.is_some() {
+            written.path_arguments.insert(node, SourcePathArguments {
+                final_segment: capture_path_arguments(body, index, final_segment)?,
+                owner_segment: capture_path_arguments(body, index, owner_segment)?,
+            });
+        }
+    }
     match expression {
         ast::Expr::ClosureExpr(closure) => {
             fact.kind = FactKind::Closure;
@@ -1690,6 +1757,19 @@ impl StableEncode for SourceConstraintPlan {
                 }
             },
         );
+        e.sequence(&self.path_arguments.iter().collect::<Vec<_>>(), |e, (node, args)| {
+            e.u32(node.0);
+            for list in [&args.final_segment, &args.owner_segment] {
+                match list {
+                    None => e.u8(0),
+                    Some(PathTypeArguments::Unsupported) => e.u8(2),
+                    Some(PathTypeArguments::Types(nodes)) => {
+                        e.u8(1);
+                        e.sequence(nodes, |e, node| e.u32(node.0));
+                    }
+                }
+            }
+        });
         e.sequence(&self.members, |e, member| e.string(member));
         e.sequence(
             &self.record_fields.iter().collect::<Vec<_>>(),

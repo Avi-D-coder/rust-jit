@@ -84,12 +84,15 @@ impl ModulePreparationDemand {
         Diagnostic::new(
             "LRR-E-MACRO-SCOPE",
             format!(
-                "glob module scope remains unresolved: import {} leaf {} at {}..{}; missing unit {} membership {}",
+                "glob module scope remains unresolved: import {} leaf {} at {}..{} in {:?} via {:?}; missing unit {} path {:?} membership {}",
                 self.import.identity.hex(),
                 self.import.leaf_ordinal,
                 self.import.range.start,
                 self.import.range.end,
+                self.import.scope.module_path,
+                self.import.path,
                 self.missing.unit.hex(),
+                self.missing.names,
                 module_demand_parts(self.missing.unit, &self.missing.names).hex(),
             ),
         )
@@ -120,6 +123,27 @@ impl Budget {
                 .ok_or_else(|| error("module alias metadata budget exceeded"))?;
         }
         Ok(())
+    }
+}
+/// Produced only by this completed source-import worklist. Consumers retain
+/// the written route as well as the module identity already resolved here.
+pub(super) struct ResolvedModuleImport {
+    source: Digest,
+    written: super::module_paths::ModulePath,
+    canonical: super::module_paths::ModulePath,
+}
+impl ResolvedModuleImport {
+    pub(super) fn canonical(
+        &self,
+        source: &SourceImport,
+        written: &super::module_paths::ModulePath,
+    ) -> Result<&super::module_paths::ModulePath, Diagnostic> {
+        if self.source != crate::core::digest::StableEncode::fingerprint(source)
+            || &self.written != written
+        {
+            return Err(error("resolved module import source/route differs"));
+        }
+        Ok(&self.canonical)
     }
 }
 struct Job<'a> {
@@ -197,6 +221,7 @@ fn reference(
     source: &SourceImport,
     catalog: &SourceMacroRoutes,
     known: &BTreeSet<ModuleKey>,
+    externs: &BTreeMap<ModuleKey, (Digest, ModuleKey)>,
 ) -> Result<ModuleKey, Diagnostic> {
     let edition = catalog.edition;
     let mut unit = source.scope.crate_key;
@@ -211,11 +236,14 @@ fn reference(
         if !catalog.extern_prelude_enabled(&source.scope) {
             return Err(error("absolute dependency is outside the implicit prelude"));
         }
-        unit = *catalog
-            .dependencies
-            .get(&MacroName::parse(alias, edition)?)
+        let alias = MacroName::parse(alias, edition)?;
+        let selected = externs
+            .get(&(unit, vec![alias.clone()]))
+            .map(|(_, target)| target.clone())
+            .or_else(|| catalog.dependencies.get(&alias).map(|unit| (*unit, vec![])))
             .ok_or_else(|| error("unknown absolute dependency alias"))?;
-        names.clear();
+        unit = selected.0;
+        names = selected.1;
     } else {
         if edition == 2015 && matches!(segments.peek(), Some(ImportSegment::Name(_))) {
             names.clear();
@@ -232,13 +260,17 @@ fn reference(
                 let first = MacroName::parse(first, edition)?;
                 let mut local = names.clone();
                 local.push(first.clone());
-                if !known.contains(&(unit, local))
-                    && catalog.extern_prelude_enabled(&source.scope)
-                    && let Some(provider) = catalog.dependencies.get(&first)
+                if !known.contains(&(unit, local)) && catalog.extern_prelude_enabled(&source.scope)
                 {
-                    unit = *provider;
-                    names.clear();
-                    segments.next();
+                    let selected = externs
+                        .get(&(unit, vec![first.clone()]))
+                        .map(|(_, target)| target.clone())
+                        .or_else(|| catalog.dependencies.get(&first).map(|unit| (*unit, vec![])));
+                    if let Some((provider, prefix)) = selected {
+                        unit = provider;
+                        names = prefix;
+                        segments.next();
+                    }
                 }
             }
             _ => {}
@@ -416,7 +448,7 @@ pub(super) fn prepare_graph_with_compiler_imports(
             if !matches!(source.kind, ImportKind::Named { .. }) {
                 continue;
             }
-            let target = reference(source, catalog, &modules.known)?;
+            let target = reference(source, catalog, &modules.known, &modules.externs)?;
             let destination = destination(source, catalog.edition)?;
             modules.budget.key(&target)?;
             modules.budget.key(&destination)?;
@@ -480,7 +512,12 @@ pub(super) fn prepare_graph_with_compiler_imports(
             )?;
         }
         for route in catalog.imports() {
-            let (unit, names) = reference(&route.source, catalog, &modules.known)?;
+            let (unit, names) = reference(&route.source, catalog, &modules.known, &modules.externs)?;
+            // A completed import of the crate root is a module alias, not a
+            // macro name. Its real module edge is retained by module_registry.
+            if names.is_empty() {
+                continue;
+            }
             let original_target = MacroPath::new(unit, names)?;
             let target = match modules.macro_target(&original_target)? {
                 MacroTarget::Known(target) => target,
@@ -518,17 +555,17 @@ pub(super) fn prepare_graph_with_compiler_imports(
                 continue;
             }
             let source = &deferred.source;
-            let target = reference(source, catalog, &modules.known)?;
+            let target = reference(source, catalog, &modules.known, &modules.externs)?;
             if deferred.reason == DeferredImportReason::ModuleAlias {
                 // `use a::Enum::{self}` names a non-module item: it binds only
                 // the type namespace and never a macro or module alias here.
-                if !completed.contains(&(source.identity, source.leaf_ordinal))
+                if !completed.contains_key(&(source.identity, source.leaf_ordinal))
                     && source.path.len() > 1
                     && source.path.last() == Some(&ImportSegment::SelfModule)
                 {
                     continue;
                 }
-                if !completed.contains(&(source.identity, source.leaf_ordinal)) {
+                if !completed.contains_key(&(source.identity, source.leaf_ordinal)) {
                     return Err(error(&format!(
                         "module alias cycle or unresolved target: use {}{} in {}",
                         if source.absolute { "::" } else { "" },
@@ -609,7 +646,7 @@ pub(super) fn prepare_graph_with_compiler_imports(
                 .checked_add(1)
                 .ok_or_else(|| error("source import edge limit exceeded"))?;
             let source = &deferred.source;
-            let (unit, parts) = reference(source, catalog, &modules.known)?;
+            let (unit, parts) = reference(source, catalog, &modules.known, &modules.externs)?;
             if let Resolution::Wait(missing) = modules.resolve(unit, &parts)? {
                 modules.budget.key(&missing)?;
                 modules.budget.bytes = modules
@@ -681,10 +718,10 @@ fn named_modules(
     jobs: &[Job<'_>],
     modules: &mut Modules,
     steps: &mut usize,
-) -> Result<BTreeSet<(Digest, u32)>, Diagnostic> {
+) -> Result<BTreeMap<(Digest, u32), ResolvedModuleImport>, Diagnostic> {
     let mut ready: BTreeSet<_> = (0..jobs.len()).collect();
     let mut waiting: BTreeMap<ModuleKey, BTreeSet<usize>> = BTreeMap::new();
-    let mut completed = BTreeSet::new();
+    let mut completed = BTreeMap::new();
 
     while let Some(index) = ready.pop_first() {
         *steps = steps
@@ -714,12 +751,27 @@ fn named_modules(
                 } else {
                     modules.budget.key(&job.destination)?;
                     modules.budget.key(&target)?;
-                    modules.aliases.insert(job.destination.clone(), target);
+                    modules
+                        .aliases
+                        .insert(job.destination.clone(), target.clone());
                     if let Some(wake) = waiting.remove(&job.destination) {
                         ready.extend(wake);
                     }
                 }
-                completed.insert((job.source.identity, job.source.leaf_ordinal));
+                completed.insert(
+                    (job.source.identity, job.source.leaf_ordinal),
+                    ResolvedModuleImport {
+                        source: crate::core::digest::StableEncode::fingerprint(job.source),
+                        written: super::module_paths::ModulePath {
+                            unit: job.target.0,
+                            names: job.target.1.clone(),
+                        },
+                        canonical: super::module_paths::ModulePath {
+                            unit: target.0,
+                            names: target.1,
+                        },
+                    },
+                );
             }
         }
     }
@@ -727,7 +779,7 @@ fn named_modules(
 }
 fn module_registry(
     catalogs: &[&SourceMacroRoutes],
-    completed: &BTreeSet<(Digest, u32)>,
+    completed: &BTreeMap<(Digest, u32), ResolvedModuleImport>,
     modules: &Modules,
 ) -> Result<MacroNamespaces, Diagnostic> {
     let mut graph = MacroNamespaces::default();
@@ -798,12 +850,18 @@ fn module_registry(
     }
     for catalog in catalogs {
         for source in &catalog.source_imports {
-            if !completed.contains(&(source.identity, source.leaf_ordinal)) {
+            if !completed.contains_key(&(source.identity, source.leaf_ordinal)) {
                 continue;
             }
             let (unit, names) = destination(source, catalog.edition)?;
-            let (target_unit, target_names) = reference(source, catalog, &modules.known)?;
-            graph.module_paths.alias(
+            let (target_unit, target_names) =
+                reference(source, catalog, &modules.known, &modules.externs)?;
+            let resolved = completed
+                .get(&(source.identity, source.leaf_ordinal))
+                .ok_or_else(|| error("completed module import proof absent"))?;
+            graph.module_paths.imported_source_alias(
+                source,
+                resolved,
                 super::module_paths::ModulePath { unit, names },
                 super::module_paths::ModulePath {
                     unit: target_unit,
@@ -926,7 +984,7 @@ fn glob_modules(
             *steps = steps
                 .checked_add(1)
                 .ok_or_else(|| error("module glob work limit exceeded"))?;
-            let (unit, names) = reference(source, catalog, &modules.known)?;
+            let (unit, names) = reference(source, catalog, &modules.known, &modules.externs)?;
             let ModuleResolution::Known { path: selected, .. } = graph
                 .module_paths
                 .resolve_module(&ModulePath { unit, names }, Some(&source.scope))?
@@ -993,4 +1051,51 @@ fn glob_modules(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod resolution_receipt_tests {
+    use super::*;
+    #[test]
+    fn resolved_module_import_requires_the_full_source_leaf_and_route() {
+        let (provider, _, _) = crate::expand::source_declarative::assembly::tests::world(
+            "pub mod target {} use crate::target as chosen; fn main() {}",
+            2024,
+        );
+        let source = &provider.module_source().outline().imports[0];
+        let unit = source.scope.crate_key;
+        let target = (unit, vec![MacroName::parse("target", 2024).unwrap()]);
+        let mut modules = Modules {
+            known: BTreeSet::from([(unit, vec![]), target.clone()]),
+            aliases: BTreeMap::new(),
+            externs: BTreeMap::new(),
+            injections: BTreeMap::new(),
+            weak: BTreeMap::new(),
+            budget: Budget::default(),
+        };
+        let jobs = [Job {
+            source,
+            target: target.clone(),
+            destination: (unit, vec![MacroName::parse("chosen", 2024).unwrap()]),
+        }];
+        let completed = named_modules(&jobs, &mut modules, &mut 0).unwrap();
+        let proof = &completed[&(source.identity, source.leaf_ordinal)];
+        let written = super::super::module_paths::ModulePath {
+            unit,
+            names: target.1,
+        };
+        assert_eq!(proof.canonical(source, &written).unwrap(), &written);
+        let mut changed = source.clone();
+        changed.kind = ImportKind::Named {
+            alias: Some("different".into()),
+        };
+        assert_eq!(changed.identity, source.identity);
+        assert_eq!(changed.leaf_ordinal, source.leaf_ordinal);
+        assert!(proof.canonical(&changed, &written).is_err());
+        let wrong = super::super::module_paths::ModulePath {
+            unit,
+            names: vec![],
+        };
+        assert!(proof.canonical(source, &wrong).is_err());
+    }
 }

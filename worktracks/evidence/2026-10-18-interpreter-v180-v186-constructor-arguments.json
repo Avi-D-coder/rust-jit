@@ -1,0 +1,1370 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-19T05:26:15.504579+00:00",
+  "scope": "Solo held common constructor/Type argument component; not integrated task, full macro feature or runtime/JIT gate acceptance",
+  "parent_head": "548d9d1b190d9d7e03e5067cd3c71fa0e9d24ea4",
+  "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "review": "worktracks/04-calls-source-views/2026-10-18-constructor-explicit-arguments.md",
+  "cohorts": [
+    {
+      "cohort": "V180",
+      "source_sha256": "58b02adb7a9179a86b4f3ed64b6c80ec980efa41ee85a5b6eec635efa8592230",
+      "source_manifest_sha256": "abcd13e4333643f34da4c86971d0c2f74c8b964c6661786f483836239179d954",
+      "frozen_after_record": true,
+      "library_build": "pass",
+      "library_log_sha256": "b383cf9b32756c0fd5ceb6da296103e27e8ff3bba64562bcfff7b4cd26665c39",
+      "runtime_attempted": true,
+      "cli_build": "pass",
+      "cli_log_sha256": "f7bf6f931102960fb614121b8697ecf1415b67b7be462650a443470846e3fcf9",
+      "controls": [
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 5.59,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-0.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_bind_the_impl_parameters",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 7.127,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-1.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_in_macro_generated_bodies_use_the_declaring_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 6.338,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-2.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::generic_nominal_values_infer_arguments_from_fields_or_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.592,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-3.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::macro_emitted_constructors_share_the_handwritten_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.293,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-4.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::unit_and_tuple_struct_values_construct_project_and_move",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.404,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-5.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.458,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-6.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.101,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v180/control-7.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/derives/clone-copy/derive-clone-basic.rs",
+          "edition": 2015,
+          "source_sha256": "58b02adb7a9179a86b4f3ed64b6c80ec980efa41ee85a5b6eec635efa8592230",
+          "binary_sha256": "b1d687dccfc46a4329e112e9061a2a8ac286aa63cc0d17458f60b697a1a21d01",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 8.952,
+          "fixture_sha256": "bdbb0e130683592880aceb704537f0fcd3f25b0173caf8fe0db7c6e368022a86",
+          "code": "LRR-E-INTERNAL-IR",
+          "message": "literal recipe conflicts with the reached parent hint",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 33,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 24,
+            "vm_outcomes": 23
+          }
+        },
+        {
+          "path": "tests/ui/binding/if-let.rs",
+          "edition": 2015,
+          "source_sha256": "58b02adb7a9179a86b4f3ed64b6c80ec980efa41ee85a5b6eec635efa8592230",
+          "binary_sha256": "b1d687dccfc46a4329e112e9061a2a8ac286aa63cc0d17458f60b697a1a21d01",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.715,
+          "fixture_sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 2208,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 37,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1278,
+            "vm_outcomes": 1278
+          }
+        },
+        {
+          "path": "tests/ui/let-else/let-else-bindings.rs",
+          "edition": 2015,
+          "source_sha256": "58b02adb7a9179a86b4f3ed64b6c80ec980efa41ee85a5b6eec635efa8592230",
+          "binary_sha256": "b1d687dccfc46a4329e112e9061a2a8ac286aa63cc0d17458f60b697a1a21d01",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 5.303,
+          "fixture_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "code": "LRR-E-USE-AFTER-MOVE",
+          "message": "owning read uses a moved guest location",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 1046,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 36,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 660,
+            "vm_outcomes": 659
+          }
+        }
+      ]
+    },
+    {
+      "cohort": "V181",
+      "source_sha256": "1827c3b1bcd47f963e695abdb041c730db21df69afd10e4e19bfb2690c5883b7",
+      "source_manifest_sha256": "6eb8d25fe14776bae34187bf845b8cb58ca01d0c63546511153cc21773a8ed6a",
+      "frozen_after_record": true,
+      "library_build": "pass",
+      "library_log_sha256": "f2a0d2da99c424b17c71ed6e5c273d0ad010e2a646d68da92423c7edd02b1718",
+      "runtime_attempted": true,
+      "cli_build": "pass",
+      "cli_log_sha256": "a88e3b28db2d006ebee73fb88873a6127546a921a043ecc4bc528365e3e3d88b",
+      "controls": [
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 25.394,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-0.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_bind_the_impl_parameters",
+          "exit": 101,
+          "one_body": true,
+          "seconds": 7.281,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-1.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_in_macro_generated_bodies_use_the_declaring_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 6.314,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-2.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::generic_nominal_values_infer_arguments_from_fields_or_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.612,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-3.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::macro_emitted_constructors_share_the_handwritten_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.288,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-4.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::unit_and_tuple_struct_values_construct_project_and_move",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.395,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-5.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.44,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-6.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.099,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-7.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.093,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-8.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::retention_tests::retained_prepared_query_handle_is_charged_after_real_memo_replacement_until_release",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.094,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-9.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.513,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v181/control-10.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/derives/clone-copy/derive-clone-basic.rs",
+          "edition": 2015,
+          "source_sha256": "1827c3b1bcd47f963e695abdb041c730db21df69afd10e4e19bfb2690c5883b7",
+          "binary_sha256": "6628253d463f0c9d741c74fd4cfa09d9f0f08889d81d9f1244de3c01454050bf",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 9.728,
+          "fixture_sha256": "bdbb0e130683592880aceb704537f0fcd3f25b0173caf8fe0db7c6e368022a86",
+          "code": "LRR-E-NAME-MISSING",
+          "message": "reached direct function identity is absent before argument evaluation (value path `__self_0`)",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 54,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 37,
+            "vm_outcomes": 37
+          }
+        },
+        {
+          "path": "tests/ui/binding/if-let.rs",
+          "edition": 2015,
+          "source_sha256": "1827c3b1bcd47f963e695abdb041c730db21df69afd10e4e19bfb2690c5883b7",
+          "binary_sha256": "6628253d463f0c9d741c74fd4cfa09d9f0f08889d81d9f1244de3c01454050bf",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 6.068,
+          "fixture_sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 2208,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 37,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1278,
+            "vm_outcomes": 1278
+          }
+        },
+        {
+          "path": "tests/ui/let-else/let-else-bindings.rs",
+          "edition": 2015,
+          "source_sha256": "1827c3b1bcd47f963e695abdb041c730db21df69afd10e4e19bfb2690c5883b7",
+          "binary_sha256": "6628253d463f0c9d741c74fd4cfa09d9f0f08889d81d9f1244de3c01454050bf",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 5.329,
+          "fixture_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "code": "LRR-E-USE-AFTER-MOVE",
+          "message": "owning read uses a moved guest location",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 1046,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 36,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 660,
+            "vm_outcomes": 659
+          }
+        }
+      ]
+    },
+    {
+      "cohort": "V182",
+      "source_sha256": "aad8649547b79af584e4843c6fc1bb30498c0524cf16ebd9225b9571a5149edf",
+      "source_manifest_sha256": "f487b3ee5eef1af7bc3059077cf6274d410a139c8890c0dd267293686024b5c5",
+      "frozen_after_record": true,
+      "library_build": "pass",
+      "library_log_sha256": "11a25861753466a41dd63543e4d36ea0326f11faecdb62ea7ca53e7021c49dbb",
+      "runtime_attempted": true,
+      "cli_build": "pass",
+      "cli_log_sha256": "ba83f27344c7c1ebeb2b63f3fae3a70254096e093a1c24d69bbdbe9f4005b9da",
+      "controls": [
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 25.26,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-0.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_bind_the_impl_parameters",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 7.003,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-1.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_in_macro_generated_bodies_use_the_declaring_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 6.496,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-2.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::generic_nominal_values_infer_arguments_from_fields_or_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.638,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-3.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::macro_emitted_constructors_share_the_handwritten_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.306,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-4.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::unit_and_tuple_struct_values_construct_project_and_move",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.441,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-5.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.478,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-6.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.106,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-7.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.099,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-8.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::retention_tests::retained_prepared_query_handle_is_charged_after_real_memo_replacement_until_release",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.101,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-9.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.576,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v182/control-10.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2015,
+          "source_sha256": "aad8649547b79af584e4843c6fc1bb30498c0524cf16ebd9225b9571a5149edf",
+          "binary_sha256": "66217dc0e9e05699e62cd2ac6888c287588df7e3f49f39f0561752f18eb22d31",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 4.76,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "generic Type occurrence requires further source resolution",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 42,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 32,
+            "vm_outcomes": 32
+          }
+        },
+        {
+          "path": "tests/ui/derives/clone-copy/derive-clone-basic.rs",
+          "edition": 2015,
+          "source_sha256": "aad8649547b79af584e4843c6fc1bb30498c0524cf16ebd9225b9571a5149edf",
+          "binary_sha256": "66217dc0e9e05699e62cd2ac6888c287588df7e3f49f39f0561752f18eb22d31",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 8.548,
+          "fixture_sha256": "bdbb0e130683592880aceb704537f0fcd3f25b0173caf8fe0db7c6e368022a86",
+          "code": "LRR-E-NAME-MISSING",
+          "message": "reached direct function identity is absent before argument evaluation (value path `__self_0`)",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 54,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 37,
+            "vm_outcomes": 37
+          }
+        },
+        {
+          "path": "tests/ui/derives/eq-ord/derive-partial-ord-discriminant.rs",
+          "edition": 2015,
+          "source_sha256": "aad8649547b79af584e4843c6fc1bb30498c0524cf16ebd9225b9571a5149edf",
+          "binary_sha256": "66217dc0e9e05699e62cd2ac6888c287588df7e3f49f39f0561752f18eb22d31",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 8.867,
+          "fixture_sha256": "7eaad7291877dc39e258563e4c71743895486c64fa4e90d2224f8caa1f56770b",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1397,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 27,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 967,
+            "vm_outcomes": 967
+          }
+        },
+        {
+          "path": "tests/ui/binding/if-let.rs",
+          "edition": 2015,
+          "source_sha256": "aad8649547b79af584e4843c6fc1bb30498c0524cf16ebd9225b9571a5149edf",
+          "binary_sha256": "66217dc0e9e05699e62cd2ac6888c287588df7e3f49f39f0561752f18eb22d31",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.765,
+          "fixture_sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 2208,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 37,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1278,
+            "vm_outcomes": 1278
+          }
+        },
+        {
+          "path": "tests/ui/let-else/let-else-bindings.rs",
+          "edition": 2015,
+          "source_sha256": "aad8649547b79af584e4843c6fc1bb30498c0524cf16ebd9225b9571a5149edf",
+          "binary_sha256": "66217dc0e9e05699e62cd2ac6888c287588df7e3f49f39f0561752f18eb22d31",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 5.284,
+          "fixture_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "code": "LRR-E-USE-AFTER-MOVE",
+          "message": "owning read uses a moved guest location",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 1046,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 36,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 660,
+            "vm_outcomes": 659
+          }
+        }
+      ]
+    },
+    {
+      "cohort": "V183",
+      "source_sha256": "8a5464f2437a8b5c7105f9021a719d18a86b3a7d540f0f2242d693f0bffa5201",
+      "source_manifest_sha256": "0f1bfe197f2e4d7905fd3c045e17608665bec5ac5285d60bc6b873c21fcd49ef",
+      "frozen_after_record": true,
+      "library_build": "fail",
+      "library_log_sha256": "f86198dbbf2988b1d87fe2ef353e1a9ce791e4130e55e3f75655561fc39f0c80",
+      "runtime_attempted": false,
+      "stock": []
+    },
+    {
+      "cohort": "V184",
+      "source_sha256": "22d4f6041dd2e87caf458dbc0d6cc75d90373bb6edbd134d8ea6aba5cb459bcb",
+      "source_manifest_sha256": "86c57d4588b9d430a06e5cbf6fe26de02250d301391715f0f8b8ed37df90b383",
+      "frozen_after_record": true,
+      "library_build": "pass",
+      "library_log_sha256": "fbce6a1a902ca373ec23cdb7dcd2011bcb181b006f1567cf939058028af1a50b",
+      "runtime_attempted": false,
+      "stock": []
+    },
+    {
+      "cohort": "V185",
+      "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+      "source_manifest_sha256": "358cf288a83e60035e36899e72ec13e07db9c4ca6cfd9599c239a7c12b6aae83",
+      "frozen_after_record": true,
+      "library_build": "pass",
+      "library_log_sha256": "941f1891fe22bd96999cb6ab558d45789c71b24cf0ff15180820b6cdf0269f35",
+      "runtime_attempted": true,
+      "cli_build": "pass",
+      "cli_log_sha256": "0a381ce28f197f3cbde1d8a16457d21fbd63f645b8bf3edf6f3fa3d0a83b9df4",
+      "controls": [
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 26.247,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-0.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_bind_the_impl_parameters",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 7.099,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-1.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_in_macro_generated_bodies_use_the_declaring_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 6.17,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-2.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::generic_nominal_values_infer_arguments_from_fields_or_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.598,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-3.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::macro_emitted_constructors_share_the_handwritten_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.289,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-4.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::unit_and_tuple_struct_values_construct_project_and_move",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.396,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-5.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.443,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-6.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.101,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-7.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.093,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-8.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::retention_tests::retained_prepared_query_handle_is_charged_after_real_memo_replacement_until_release",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.095,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-9.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.521,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v185/control-10.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2015,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 4.863,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "wildcard declaration requires an initializer",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 44,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 1,
+            "vm_dispatches": 33,
+            "vm_outcomes": 32
+          }
+        },
+        {
+          "path": "tests/ui/derives/clone-copy/derive-clone-basic.rs",
+          "edition": 2015,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 8.612,
+          "fixture_sha256": "bdbb0e130683592880aceb704537f0fcd3f25b0173caf8fe0db7c6e368022a86",
+          "code": "LRR-E-NAME-MISSING",
+          "message": "reached direct function identity is absent before argument evaluation (value path `__self_0`)",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 54,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 37,
+            "vm_outcomes": 37
+          }
+        },
+        {
+          "path": "tests/ui/derives/eq-ord/derive-partial-ord-discriminant.rs",
+          "edition": 2015,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 8.904,
+          "fixture_sha256": "7eaad7291877dc39e258563e4c71743895486c64fa4e90d2224f8caa1f56770b",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1397,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 27,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 967,
+            "vm_outcomes": 967
+          }
+        },
+        {
+          "path": "tests/ui/binding/if-let.rs",
+          "edition": 2015,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.764,
+          "fixture_sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 2208,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 37,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1278,
+            "vm_outcomes": 1278
+          }
+        },
+        {
+          "path": "tests/ui/let-else/let-else-bindings.rs",
+          "edition": 2015,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 5.513,
+          "fixture_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "code": "LRR-E-USE-AFTER-MOVE",
+          "message": "owning read uses a moved guest location",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 1046,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 36,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 660,
+            "vm_outcomes": 659
+          }
+        }
+      ],
+      "editions": [
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2018,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 4.793,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "wildcard declaration requires an initializer",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 44,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 1,
+            "vm_dispatches": 33,
+            "vm_outcomes": 32
+          }
+        },
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2021,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 3.974,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "wildcard declaration requires an initializer",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 44,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 1,
+            "vm_dispatches": 33,
+            "vm_outcomes": 32
+          }
+        },
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2024,
+          "source_sha256": "7f50ca7fca4b4ce5ae55cb178eb71e7ac6de2f4a3be12138e71184a78fcd1336",
+          "binary_sha256": "6981c54fde5efbe2f552e71693c33b9eecf2f702a66a2377f623fe46d020eb4b",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 4.004,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "wildcard declaration requires an initializer",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 44,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 1,
+            "vm_dispatches": 33,
+            "vm_outcomes": 32
+          }
+        }
+      ]
+    },
+    {
+      "cohort": "V186",
+      "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+      "source_manifest_sha256": "e76ece97d673cc8901f0966a12c3924730ce02ce94d76ce9898d29225223f17f",
+      "frozen_after_record": true,
+      "library_build": "pass",
+      "library_log_sha256": "af66a5f2cd61f0970f19e88592356f54644e3f530b34c4b4602254475fc7ab16",
+      "runtime_attempted": true,
+      "cli_build": "pass",
+      "cli_log_sha256": "fb048c4f8cca66fcad2cddf3da11c296d43d5c51712aad2a85f79ec7b33cbca0",
+      "controls": [
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 27.968,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-0.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_bind_the_impl_parameters",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 7.174,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-1.log"
+        },
+        {
+          "selector": "cli::crate_graph::trait_path_call_tests::owner_type_arguments_in_macro_generated_bodies_use_the_declaring_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 6.334,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-2.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::generic_nominal_values_infer_arguments_from_fields_or_context",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.624,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-3.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::macro_emitted_constructors_share_the_handwritten_route",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.304,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-4.log"
+        },
+        {
+          "selector": "cli::nominal_value_tests::unit_and_tuple_struct_values_construct_project_and_move",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.423,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-5.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.466,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-6.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.104,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-7.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.097,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-8.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::retention_tests::retained_prepared_query_handle_is_charged_after_real_memo_replacement_until_release",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.099,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-9.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+          "exit": 0,
+          "one_body": true,
+          "seconds": 0.549,
+          "log": "/Users/avi/Code/rust-jit/artifacts/validation-resume-2026-10-18/v186/control-10.log"
+        }
+      ],
+      "stock": [
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2015,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 4.888,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 45,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 34,
+            "vm_outcomes": 34
+          }
+        },
+        {
+          "path": "tests/ui/derives/clone-copy/derive-clone-basic.rs",
+          "edition": 2015,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 8.627,
+          "fixture_sha256": "bdbb0e130683592880aceb704537f0fcd3f25b0173caf8fe0db7c6e368022a86",
+          "code": "LRR-E-NAME-MISSING",
+          "message": "reached direct function identity is absent before argument evaluation (value path `__self_0`)",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 54,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 37,
+            "vm_outcomes": 37
+          }
+        },
+        {
+          "path": "tests/ui/derives/eq-ord/derive-partial-ord-discriminant.rs",
+          "edition": 2015,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 9.399,
+          "fixture_sha256": "7eaad7291877dc39e258563e4c71743895486c64fa4e90d2224f8caa1f56770b",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1397,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 27,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 967,
+            "vm_outcomes": 967
+          }
+        },
+        {
+          "path": "tests/ui/binding/if-let.rs",
+          "edition": 2015,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 5.916,
+          "fixture_sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 2208,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 37,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1278,
+            "vm_outcomes": 1278
+          }
+        },
+        {
+          "path": "tests/ui/let-else/let-else-bindings.rs",
+          "edition": 2015,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 2,
+          "runtime_contract_pass": false,
+          "seconds": 5.304,
+          "fixture_sha256": "f22f9ad35970c371eb8cdad1beebbf2d3c4a19624842a1b5bb1c4f0799ba522d",
+          "code": "LRR-E-USE-AFTER-MOVE",
+          "message": "owning read uses a moved guest location",
+          "status": "fault",
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 1046,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 36,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 660,
+            "vm_outcomes": 659
+          }
+        }
+      ],
+      "editions": [
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2018,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 4.729,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 45,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 34,
+            "vm_outcomes": 34
+          }
+        },
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2021,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.913,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 45,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 34,
+            "vm_outcomes": 34
+          }
+        },
+        {
+          "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "edition": 2024,
+          "source_sha256": "8e3de2ddde3401173ee6d5406c17e60256fac099ba27767b77c7e4100b4a4d18",
+          "binary_sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184",
+          "exit": 0,
+          "runtime_contract_pass": true,
+          "seconds": 3.957,
+          "fixture_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+          "code": null,
+          "message": null,
+          "status": "completed",
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 45,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 34,
+            "vm_outcomes": 34
+          }
+        }
+      ]
+    }
+  ],
+  "binaries": {
+    "test_binary": {
+      "path": "target/debug/deps/lrr-3b8db33db37431d2",
+      "sha256": "bf10b25a945293a66bc1ef52ca5224a6674b3b3b0c293b1ae608ec8fba0361f5"
+    },
+    "cli_binary": {
+      "path": "target/debug/lrr",
+      "sha256": "0c680314981f43db8759572cae6b4376dacc5f81dd2b07846b875a2b8c575184"
+    }
+  },
+  "historical_runtime_failure": {
+    "path": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+    "artifact": "artifacts/runs/inventory/raw-v16-facade.json",
+    "artifact_sha256": "3535f0644b8ea743c3a0e8a35420344e1c843fda7ea69bb14ab1cd07936afe91",
+    "binary_sha256": "732aec123f8f5de8cf465c9c5ccd757970908ae62bba3dfd68f61a260b27650b",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "plain": {
+      "argv": [
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/empty-generic-brackets-equiv.rs"
+      ],
+      "exit_code": 2,
+      "timed_out": false,
+      "elapsed": 1.851,
+      "stderr": "LRR-E-UNSUPPORTED: generic value path requires generic context integration\n",
+      "stdout_head": ""
+    },
+    "capture": {
+      "argv": [
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/empty-generic-brackets-equiv.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "6d8d6fab4ed5580ac938f8d6144743fab7c59583a99075c83218900c67b614b4"
+      ],
+      "exit_code": 2,
+      "timed_out": false,
+      "elapsed": 1.849,
+      "stderr": "",
+      "stdout_head": "{\"schema\":\"lrr/v5/standalone-runtime-capture/v1\",\"transport_stdout_role\":\"protocol_json_not_guest_stdout\",\"host_preparation_streams\":\"outside_guest_capture_no_macro_host_or_build_output_promotion\",\"request_context\":\"6d8d6fab4ed5580ac938f8d6144743fab7c59583a99075c83218900c67b614b4\",\"process_id\":96044,\"snapshot\":{\"identity\":\"4a5563dd80ca98a9a8790f0c92572c621dfd684f645705bc434258333d27ad86\",\"owning_edition\":2015,\"root_source\":\"empty-generic-brackets-equiv.rs\",\"root_crate\":\"a1e15a689b830216b1b82c9faa86e879a6185e27b83b0131b8a2d4b326bf892d\",\"root_cfg\":\"5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561\",\"files\":[{\"path\":\"empty-generic-brackets-equiv.rs\",\"content\":\"f29db53b5ab46f0d0dea823f694348b1ca32d0e729da0ae0990819b3e5da9f96\",\"bytes\":599}]},\"entry_body\":{\"definition\":\"fdf9ee1bbd4fee7aa4cbadb904785a130269dd8196c19ad0d2f78312525fc37b\",\"exact_body_bytes\":\"fffd016bc13a3c915f4ad7c009378b2d47b2a5542b8f67430e4c1077ccc36a2e\"},\"terminal\":{\"code\":\"LRR-E-UNSUPPORTED\",\"diagnostic\":{\"code\":\"LRR-E-UNSUPPORTED\",\"generated_origin\":null,\"guest_stack\":{\"frames\":[{\"body\":{\"body_key\":{\"definition\":\"fdf9ee1bbd4fee7aa4cbadb904785a130269dd8196c19ad0d2f78312525fc37b\",\"exact_body_bytes\":\"fffd016bc13a3c915f4ad7c009378b2d47b2a5542b8f67430e4c1077ccc36a2e\"},\"relative_end\":18,\"relative_start\":13},\"locations\":[],\"pc\":\"3aedab5221ac99e533e111e43d441bfd5bd884932c34890b07c4d55993bafc9c\"}],\"omitted_frames\":0},\"macro_origin\":null,\"message\":\"generic value path requires generic context integration\",\"ori"
+    }
+  },
+  "summary": {
+    "focused_bodies_pass": 11,
+    "selected_unchanged_stock_pass": 3,
+    "selected_unchanged_stock_fail": 2,
+    "additional_owning_editions_pass": 3,
+    "new_distinct_unchanged_runtime_gains": 1,
+    "new_case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+    "new_case_editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "full_fixture_passes_claimed": 0,
+    "suite_total_refreshed": false,
+    "interpreter_gate": "incomplete",
+    "guest_jit": "blocked"
+  },
+  "holds": [
+    "derived enum actual definition-site namespace bridge (__self_0); unchanged clone-basic advances from24 to37VMdispatches but fails",
+    "unchanged let-else-bindings moved-location fault",
+    "general associated owner-query source/member packet and legacy no-environment owner lane",
+    "complete context/verifier/currentness/suspension/cleanup architecture matrix and integrated milestone",
+    "compiler warning/diagnostic fixture contract separate; no rustc oracle is interpreter evidence"
+  ],
+  "commands": [
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "test binary exact selectors plus unchanged root runtime-capture and editions, all asynchronously with frozen sources"
+  ]
+}

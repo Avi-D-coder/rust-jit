@@ -31,6 +31,7 @@ pub(crate) struct BindingPreludePolicies {
     source: crate::syntax::parse::ParseKey,
     cfg: Digest,
     standard: bool,
+    no_core: bool,
     disabled: Vec<Vec<String>>,
 }
 impl BindingPreludePolicies {
@@ -45,7 +46,7 @@ impl BindingPreludePolicies {
         }
         Ok(BindingPreludePolicy {
             standard: self.standard,
-            disabled: self
+            disabled: self.no_core || self
                 .disabled
                 .iter()
                 .any(|prefix| scope.module_path.starts_with(prefix)),
@@ -112,6 +113,7 @@ impl ParsedFile {
             source: self.key(),
             cfg: cfg.fingerprint(),
             standard: policy.standard,
+            no_core: policy.no_core,
             disabled: policy.disabled.into_iter().map(|suffix| {
                 module_path.iter().cloned().chain(suffix).collect()
             }).collect(),

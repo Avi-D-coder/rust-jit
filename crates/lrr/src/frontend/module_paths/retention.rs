@@ -3,6 +3,9 @@ use super::*;
 use crate::frontend::names::retention::Size;
 fn alias(s: &mut Size, row: &Alias) -> Result<(), Diagnostic> {
     s.module(&row.target)?;
+    if let Some(canonical) = &row.canonical {
+        s.module(canonical)?;
+    }
     s.visibility(&row.visibility)?;
     s.scope(&row.origin)
 }

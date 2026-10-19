@@ -31,11 +31,18 @@ impl SyntaxRequestReceipt {
             request.site,
             request.owner,
             request.procedural_request(),
+            match &request.body {
+                super::super::DeclarativeBody::BuiltinDerive { facts, .. } => Some(*facts),
+                _ => None,
+            },
         )
     }
     pub(crate) fn capture_generated(
         request: &crate::expand::generated_call_request::GeneratedCallRequest,
     ) -> Result<Self, Diagnostic> {
+        if let Some(request) = request.builtin_derive_request() {
+            return Self::capture(request);
+        }
         let (owner, input, site) = request.syntax_input()?;
         Self::capture_parts(
             request.key(),
@@ -43,6 +50,7 @@ impl SyntaxRequestReceipt {
             site,
             owner,
             request.procedural_request(),
+            None,
         )
     }
     fn capture_parts(
@@ -51,6 +59,7 @@ impl SyntaxRequestReceipt {
         site: Key,
         owner: Digest,
         procedural: Option<&lrr_expand_adapter::proc_client::ProcInvocation>,
+        builtin_derive: Option<lrr_expand_adapter::builtin_macros::DeriveContainerFacts>,
     ) -> Result<Self, Diagnostic> {
         key.validate()?;
         let bytes = actual_input.encode().map_err(adapter)?;
@@ -72,6 +81,14 @@ impl SyntaxRequestReceipt {
             (
                 input,
                 crate::service::macro_session::procedural_input_fingerprint(procedural)?,
+            )
+        } else if let Some(facts) = builtin_derive {
+            if !matches!(key.macro_identity, MacroIdentity::BuiltinDerive { .. }) {
+                return Err(fault("issued compiler derive syntax request kind differs"));
+            }
+            (
+                SyntaxInput::ItemTransform,
+                crate::expand::builtin_derives::input_identity(&bytes, facts)?,
             )
         } else {
             (SyntaxInput::DelimitedCall, Digest::of_bytes(&bytes))

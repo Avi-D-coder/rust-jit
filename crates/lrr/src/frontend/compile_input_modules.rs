@@ -45,7 +45,7 @@ impl CompileInputCatalog {
             ));
         }
         let policy = source.macro_prelude_policy()?;
-        if policy.disabled.iter().any(Vec::is_empty) {
+        if policy.no_core || policy.disabled.iter().any(Vec::is_empty) {
             return Ok(None);
         }
         let name = if policy.standard { "std" } else { "core" };

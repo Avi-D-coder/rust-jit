@@ -2914,7 +2914,14 @@ impl ParsedFile {
                 }
                 if matches!(statement.pat(), Some(ast::Pat::WildcardPat(_))) {
                     let Some(initializer) = statement.initializer() else {
-                        return unsupported("wildcard declaration requires an initializer");
+                        // An uninitialized wildcard declares no local, owns no
+                        // value and has no runtime annotation/effect to perform.
+                        if phase != Phase::Entry {
+                            return unsupported("invalid wildcard declaration phase");
+                        }
+                        let (ops, next) =
+                            next_phase_operations(index, body, statement.syntax(), vec![])?;
+                        return draft(index, key, ops, RecipeExit::Next(next));
                     };
                     // A wildcard does not move a place into a new local. A local
                     // path or a field chain of one has no runtime effect; a

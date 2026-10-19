@@ -172,12 +172,14 @@ impl NameNamespaces {
             }
         }
         s.tree::<(Digest, NameDefinition)>(self.macro_import_facets.len())?;
-        s.tree::<(NamePath, BTreeSet<NamePath>)>(self.glob_module_links.len())?;
+        s.tree::<(NamePath, BTreeSet<super::super::module_paths::ModulePath>)>(
+            self.glob_module_links.len(),
+        )?;
         for (p, rows) in &self.glob_module_links {
             s.path(p)?;
-            s.tree::<NamePath>(rows.len())?;
+            s.tree::<super::super::module_paths::ModulePath>(rows.len())?;
             for p in rows {
-                s.path(p)?;
+                s.module(p)?;
             }
         }
         // The graph owns these opaque declaration receipts. They have no

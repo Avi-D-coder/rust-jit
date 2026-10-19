@@ -543,29 +543,17 @@ impl SourceGroups<'_> {
             let site = crate::syntax::token_wire::Key(path.last_span.0);
             // A library `#[rustc_builtin_macro]` derive: compiler-owned helper
             // metadata, expanded in process by the pinned adapter.
-            if let Some(kind) = self
-                .compiler
-                .and_then(|compiler| compiler.builtin_derive(&selected))
+            if let Some(export) = self.compiler
+                .map(|compiler| super::builtin_derives::BuiltinDeriveExport::select(compiler, &selected, occurrence))
+                .transpose()?.flatten()
             {
-                let descriptor = lrr_expand_adapter::builtin_derives::descriptor(kind.name())
-                    .map_err(|e| Diagnostic::new(e.code, e.message))?
-                    .ok_or_else(|| fault("builtin derive descriptor absent"))?;
-                let mut demand = StableEncoder::new("lrr/v2/source-builtin-derive-helper-demand");
-                demand.digest(occurrence);
-                demand.digest(selected.identity);
-                demand.digest(selected.defining_unit);
-                let demand = demand.finish();
-                let mut receipt = StableEncoder::new("lrr/v2/builtin-derive-helper-receipt");
-                receipt.digest(demand);
-                receipt.bytes(&descriptor.definition_identity().0);
-                receipt.sequence(descriptor.helpers(), |e, name| e.string(name));
                 rows.push(SourceRow {
                     kind: SourceRowKind::Builtin {
                         definition: selected,
-                        kind,
-                        demand,
-                        receipt: receipt.finish(),
-                        helpers: descriptor.helpers(),
+                        kind: export.kind,
+                        demand: export.demand,
+                        receipt: export.receipt,
+                        helpers: export.helpers,
                     },
                     site,
                 });

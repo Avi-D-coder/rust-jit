@@ -171,3 +171,59 @@ fn main() {
         "ok\n",
     );
 }
+
+#[test]
+fn unchanged_copy_contract_survives_generated_derives_all_origins_and_editions() {
+    const ORIGINAL: &str =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/expr/copy.rs");
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {ORIGINAL} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {ORIGINAL} }}"
+    );
+    for text in [ORIGINAL, &emitted, &wrapped] {
+        prints("stock-copy-origins", text, &[2015, 2018, 2021, 2024], "");
+    }
+}
+
+// LRR route control for the constructor prerequisite exposed by unchanged
+// derive-clone-basic.rs. This does not replace that original or prove derives.
+#[test]
+fn explicit_constructor_arguments_share_context_and_activation_across_origins() {
+    prints(
+        "constructor-type-arguments",
+        r#"
+enum G<T, U> { A(T), B(U), C }
+struct S<T>(T);
+macro_rules! emit { ($value:expr) => { $value }; }
+macro_rules! wrapper { ($value:expr) => { emit!($value) }; }
+fn touch(n: &mut i32) -> u8 { *n += 1; 3 }
+fn make<T>(value: T) -> G<T, bool> { G::A::<T, bool>(value) }
+fn take_u8(_value: u8) {}
+fn take_u16(_value: u16) {}
+fn main() {
+    let mut n = 0i32;
+    let ordinary = G::A::<u8, bool>(touch(&mut n));
+    match ordinary { G::A(value) => take_u8(value), _ => panic!() }
+    let emitted = emit!(G::A::<u8, bool>(touch(&mut n)));
+    match emitted { G::A(value) => take_u8(value), _ => panic!() }
+    let wrapped = wrapper!(G::<u8, bool>::A(touch(&mut n)));
+    match wrapped { G::A(value) => take_u8(value), _ => panic!() }
+    assert!(match wrapper!(G::A::<u8, bool>(touch(&mut n))) {
+        G::A(value) => value == 3u8, _ => false
+    });
+    assert!(n == 4i32);
+    let unit = G::<u16, bool>::C;
+    match unit { G::C => (), _ => panic!() }
+    let S(value) = S::<u16>(9);
+    take_u16(value);
+    let first = make::<u8>(1);
+    match first { G::A(value) => take_u8(value), _ => panic!() }
+    let second = make::<u16>(2);
+    match second { G::A(value) => take_u16(value), _ => panic!() }
+}
+"#,
+        &[2015, 2018, 2021, 2024],
+        "",
+    );
+}

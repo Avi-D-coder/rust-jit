@@ -30,28 +30,6 @@ macro_rules! ready {
     };
 }
 
-/// The written Type of a constant/static header: the tokens after its
-/// top-level `:` up to its `=` (or a declaration-only `;`).
-fn declared_type_tokens(
-    tokens: &[crate::syntax::ast_adapter::TokenRecipe],
-) -> Option<Vec<crate::syntax::ast_adapter::TokenRecipe>> {
-    let mut depth = 0i32;
-    let mut start = None;
-    for (index, token) in tokens.iter().enumerate() {
-        match token.text.as_str() {
-            "<" | "(" | "[" => depth += 1,
-            ">" | ")" | "]" => depth -= 1,
-            ":" if depth == 0 && start.is_none() => start = Some(index + 1),
-            "=" | ";" if depth == 0 => {
-                let start = start?;
-                return (index > start).then(|| tokens[start..index].to_vec());
-            }
-            _ => {}
-        }
-    }
-    let start = start?;
-    (tokens.len() > start).then(|| tokens[start..].to_vec())
-}
 /// A part of a static Type that only inference decides.
 pub(super) fn open() -> TyTerm {
     TyTerm::Infer(InferVarKey {
@@ -707,8 +685,8 @@ impl<'a> Component<'a> {
     /// A constant's or static's declared Type: the written Type of its
     /// header (`const NAME: Type = ..`, `static NAME: Type = ..`, an
     /// associated `const NAME: Type`), resolved in its declaration scope as
-    /// any written Type is. A module item is read from its source outline, a
-    /// block-local one from the entered plan's item rows.
+    /// any written Type is. Consume the actual selected declaration and the
+    /// shared initializer result goal for original and generated source.
     pub(super) fn declared_item_type(
         &mut self,
         db: &mut Database,
@@ -719,55 +697,60 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(None));
         };
         let sources: Vec<_> = environment.sources().iter().collect();
-        let item = sources
-            .iter()
-            .find_map(|source| source.outline_item(identity))
-            .cloned()
-            .or_else(|| {
-                goal.retained_plan()
-                    .context()
-                    .facts()
-                    .items
-                    .iter()
-                    .find(|row| {
-                        crate::core::digest::StableEncode::fingerprint(&row.item.def_key)
-                            == identity
-                    })
-                    .map(|row| row.item.clone())
-            });
-        let Some(item) = item else {
+        use crate::db::dependency::{InputKey, InputValue};
+        use ra_ap_syntax::{AstNode, ast};
+        let Some(selected) = goal
+            .declaration()
+            .filter(|selected| selected.identity() == identity)
+        else {
             return QueryPoll::Ready(Ok(None));
         };
-        if !matches!(
-            item.def_key.item_kind,
-            ItemKind::Constant | ItemKind::Static
-        ) {
+        let source = db.input(&InputKey::DefinitionSource(identity));
+        let header = db.input(&InputKey::DefinitionHeader(identity));
+        let context = db.input(&InputKey::DeclarationContext(identity));
+        let (Some(source), Some(header), Some(context)) = (source, header, context) else {
             return QueryPoll::Ready(Ok(None));
+        };
+        let (
+            InputValue::DefinitionSource(source),
+            InputValue::DefinitionHeader(header),
+            InputValue::DeclarationContext(context),
+        ) = (source.as_ref(), header.as_ref(), context.as_ref())
+        else {
+            return QueryPoll::Ready(Err(fault("selected constant Type input variants differ")));
+        };
+        if source != selected.source()
+            || context != selected.context()
+            || crate::core::digest::StableEncode::fingerprint(header) != selected.header()
+        {
+            return QueryPoll::Ready(Err(fault(
+                "selected constant Type source/header/context differs",
+            )));
         }
-        let Some(written) = declared_type_tokens(&item.header.tokens) else {
-            return QueryPoll::Ready(Ok(None));
+        let parsed = ready!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(source.clone())));
+        let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("selected constant Type parse variant differs")));
         };
-        let signature = crate::syntax::signatures::FunctionSignature {
-            definition: identity,
-            scope: item.scope.clone(),
-            header: item.header.clone(),
-            generics: Vec::new(),
-            parameters: Vec::new(),
-            result: Vec::new(),
-            result_symbolic: None,
-            predicates: Vec::new(),
+        match parsed.syntax_at(context.range, |node| {
+            ast::Const::can_cast(node.kind()) || ast::Static::can_cast(node.kind())
+        }) {
+            Ok(Some(_)) => {}
+            Ok(None) => return QueryPoll::Ready(Ok(None)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        match crate::frontend::source_types::resolve_written_type(
+        // The existing signature query also owns actual Const/Static result
+        // annotations. Its local and module paths retain their real Type
+        // occurrences; do not fabricate a function or reparse header text.
+        match ready!(crate::frontend::source_return_goals::prepare(
             db,
             environment.names(),
             &sources,
-            &signature,
-            &written,
-        ) {
-            QueryPoll::Ready(Ok(term)) => QueryPoll::Ready(Ok(term)),
-            QueryPoll::Ready(Err(error)) if super::not_closed(&error) => QueryPoll::Ready(Ok(None)),
-            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            identity,
+        )) {
+            crate::frontend::source_return_goals::ReturnTypeGoal::Ready(result) => {
+                QueryPoll::Ready(Ok(Some(result.source().clone())))
+            }
+            _ => QueryPoll::Ready(Ok(None)),
         }
     }
     /// A local's Type: its owner pattern's matched Type (a `let`

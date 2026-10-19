@@ -224,17 +224,15 @@ impl SourceDeriveSelection {
             spans.into_values().collect(),
         )
         .map_err(|e| fault(&e.message))?;
-        let encoded = input.encode().map_err(|e| fault(&e.message))?;
-        let mut tokens = StableEncoder::new("lrr/v2/builtin-derive-input");
-        tokens.bytes(&encoded);
-        tokens.u8(u8::from(facts.derives_copy));
-        tokens.u8(u8::from(facts.derives_ord));
+        let input_identity = crate::expand::builtin_derives::input_identity(
+            &input.encode().map_err(|e| fault(&e.message))?, *facts,
+        )?;
         let key = crate::expand::identity::ExpansionKey {
             macro_identity: MacroIdentity::BuiltinDerive {
                 definition: self.definition.identity,
             },
             invocation: self.input.identity(),
-            input_tokens: tokens.finish(),
+            input_tokens: input_identity,
             consumer_compile_env: compile_env,
             parent_context: Digest(site.context.0),
             definition_edition: self.definition.definition_edition,
