@@ -1486,5 +1486,13 @@
     "Other legacy macro-specific runtime paths, generic/trait/async/closure/interpreter correctness/runtime acceptance and current milestone remain incomplete.",
     "Diagnostic/tooling/full_suite compatibility and guest JIT gates remain open; no Linux or performance claim."
   ],
-  "acceptance_scope": "Source WIP only; no task/milestone/integration/release/JIT or full NoSandbox closure. Only the explicitly counted actual runtime contracts and focused test bodies passed."
+  "acceptance_scope": "Source WIP only; no task/milestone/integration/release/JIT or full NoSandbox closure. Only the explicitly counted actual runtime contracts and focused test bodies passed.",
+  "publication": {
+    "source_commit": "10d27d6792082f71d118353e27dafef871800a83",
+    "branch": "codex/lrr-implementation",
+    "remote": "https://github.com/Avi-D-coder/rust-jit.git",
+    "push_terminal": "63427/471be2/0",
+    "source_guard_terminal": "4b959d/0",
+    "scope": "Source WIP only; no integration, milestone or release closure"
+  }
 }
